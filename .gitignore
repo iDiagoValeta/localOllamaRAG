@@ -12,8 +12,8 @@ llama.cpp/
 llama-bin/
 
 # Modelo fusionado (generado por merge_lora.py, muy pesado)
-models/merged-model/llama-3.1
-models/merged-model/qwen-2.5
+models/merged-model/*
+!models/merged-model/.gitkeep
 
 # Artefactos de entrenamiento — Llama 3.1
 training-output/llama-3.1/*
