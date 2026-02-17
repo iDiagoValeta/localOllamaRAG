@@ -148,6 +148,7 @@ Evaluación objetiva del sistema RAG con 5 métricas (RAGAS v0.2+): `faithfulnes
 cd evaluation
 pip install -r requirements.txt
 python run_eval.py> **Nota:** Para la evaluación se usó **Gemini 2.0 Flash** como juez (`evaluator_llm`) debido a su ventana de contexto y capacidad de razonamiento.
+```
 
 ### Comparativa: Llama 3.1 8B vs. Qwen 2.5 14B
 
