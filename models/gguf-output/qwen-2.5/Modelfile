@@ -1,0 +1,62 @@
+# =============================================================================
+# MODELFILE DE DESPLIEGUE EN OLLAMA (TFG)
+# =============================================================================
+# Configuración de inferencia para el modelo Qwen-2.5-14B Teacher cuantizado a
+# Q4_K_M, entrenado para generación fundamentada en contexto (RAG).
+# =============================================================================
+
+# =============================================================================
+# SECCIÓN 1: ARTEFACTO BASE GGUF
+# =============================================================================
+# Define el archivo GGUF cuantizado que se registrará como modelo Ollama.
+# =============================================================================
+
+FROM ./Qwen-2.5-14B-Teacher-Q4_K_M.gguf
+
+# =============================================================================
+# SECCIÓN 2: SYSTEM PROMPT ALINEADO CON FINE-TUNING
+# =============================================================================
+# Mantiene coherencia entre entrenamiento e inferencia para preservar el
+# comportamiento de respuesta anclada al contexto documental.
+# =============================================================================
+
+SYSTEM """Eres un asistente que responde preguntas basándote EXCLUSIVAMENTE en el contexto proporcionado.
+
+REGLAS ESTRICTAS:
+1. Responde SOLO con información que esté contenida en el contexto dentro de <contexto>...</contexto>.
+2. No inventes, no uses conocimiento externo. Si la respuesta no está en el contexto, indícalo claramente.
+3. Cita o parafrasea el material del contexto cuando sea útil.
+4. Responde en el mismo idioma que use el usuario (español, catalán o inglés).
+5. Sé claro, conciso y estructurado."""
+
+# =============================================================================
+# SECCIÓN 3: HIPERPARÁMETROS DE GENERACIÓN
+# =============================================================================
+# Ajustes de decodificación orientados a fidelidad contextual y estabilidad.
+# =============================================================================
+
+PARAMETER temperature 0.15
+PARAMETER repeat_penalty 1.15
+PARAMETER top_p 0.9
+PARAMETER num_ctx 8192
+
+# =============================================================================
+# SECCIÓN 4: TOKENS DE PARADA
+# =============================================================================
+# Delimita correctamente los turnos de chat y evita generación fuera de formato.
+# =============================================================================
+
+PARAMETER stop "<|im_start|>"
+PARAMETER stop "<|im_end|>"
+
+# =============================================================================
+# SECCIÓN 5: TEMPLATE CONVERSACIONAL QWEN 2.5
+# =============================================================================
+# Replica la estructura de mensajes usada durante entrenamiento para mantener
+# consistencia entre prompt de entrada y salida del asistente.
+# =============================================================================
+
+TEMPLATE """{{ if .System }}<|im_start|>system
+{{ .System }}<|im_end|>{{ end }}{{ if .Prompt }}<|im_start|>user
+{{ .Prompt }}<|im_end|>{{ end }}<|im_start|>assistant
+{{ .Response }}<|im_end|>"""

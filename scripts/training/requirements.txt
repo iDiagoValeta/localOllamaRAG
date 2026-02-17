@@ -1,0 +1,26 @@
+# =============================================================================
+# Dependencias de entrenamiento LoRA — Llama 3.1 Teacher (TFG)
+# =============================================================================
+# Entorno reproducido en clúster HPC de la UPV (1× GPU, CUDA 12.4).
+# Versiones fijadas según el entorno TFG2526 utilizado en el entrenamiento final.
+#
+# Instalación:
+#   pip install -r requirements.txt
+# =============================================================================
+
+# --- Core: modelo y entrenamiento ---
+torch==2.6.0
+transformers==4.57.6
+peft==0.18.1
+datasets==4.3.0
+accelerate==1.12.0
+
+# --- Optimización de memoria GPU ---
+bitsandbytes==0.49.1
+
+# --- Visualización de curvas (plot_training.py) ---
+matplotlib>=3.7.0
+
+# --- Fusión LoRA → modelo base (merge_lora.py) ---
+# (torch, transformers, peft ya listados arriba)
+safetensors==0.7.0

@@ -1,0 +1,6 @@
+ragas>=0.2.0
+datasets>=2.14.0
+python-dotenv>=1.0.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+google-genai>=1.0.0

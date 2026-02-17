@@ -1,0 +1,75 @@
+# Modelos y pesos (archivos grandes)
+*.gguf
+*.safetensors
+*.pt
+*.bin
+*.pth
+
+# llama.cpp (clonar como submódulo o por separado)
+llama.cpp/
+
+# Binarios descargados (quantize_to_q4km.ps1)
+llama-bin/
+
+# Modelo fusionado (generado por merge_lora.py, muy pesado)
+models/merged-model/
+
+# Artefactos de entrenamiento — Llama 3.1
+training-output/llama-3.1/*
+!training-output/llama-3.1/.gitkeep
+!training-output/llama-3.1/training_stats.json
+!training-output/llama-3.1/generated_samples.json
+
+# Artefactos de entrenamiento — Qwen 2.5
+training-output/qwen-2.5/*
+!training-output/qwen-2.5/.gitkeep
+!training-output/qwen-2.5/training_stats.json
+!training-output/qwen-2.5/generated_samples.json
+
+# GGUF output — Llama 3.1 (solo Modelfile)
+models/gguf-output/llama-3.1/*
+!models/gguf-output/llama-3.1/.gitkeep
+!models/gguf-output/llama-3.1/Modelfile
+
+# GGUF output — Qwen 2.5 (solo Modelfile)
+models/gguf-output/qwen-2.5/*
+!models/gguf-output/qwen-2.5/.gitkeep
+!models/gguf-output/qwen-2.5/Modelfile
+
+# Logs
+*.log
+salida_*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+.venv/
+*.egg-info/
+.eggs/
+
+# RAG — archivos generados y materiales
+rag/mi_vector_db/
+rag/pdfs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Historial del chat y debug
+historial_chat.json
+rag/debug_rag/
+
+# Variables de entorno (API keys)
+.env
+
+# Resultados de la evaluación con RAGAS
+ragas_scores.csv

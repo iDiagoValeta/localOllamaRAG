@@ -1,0 +1,24 @@
+# =============================================================================
+# Dependencias del sistema RAG — Llama 3.1 Teacher (TFG)
+# =============================================================================
+# No requiere GPU: funciona con CPU + Ollama para embeddings e inferencia.
+#
+# Requisitos externos (no pip):
+#   - Ollama con los modelos `teacher-q4km` y `nomic-embed-text` cargados.
+#
+# Instalación:
+#   pip install -r requirements.txt
+# =============================================================================
+
+# --- Cliente LLM local ---
+ollama>=0.4.0
+
+# --- Base de datos vectorial ---
+chromadb>=0.4.0
+
+# --- Extracción de PDFs ---
+pymupdf4llm>=0.0.5          # Extractor Markdown (preferente)
+pypdf>=3.0.0                # Fallback texto plano
+
+# --- Reranking con Cross-Encoder (opcional pero recomendado) ---
+sentence-transformers>=2.2.0

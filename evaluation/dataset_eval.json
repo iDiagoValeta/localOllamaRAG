@@ -1,0 +1,22 @@
+[
+  {
+    "question": "What is the primary motivation for scaling the dot products by 1/√dk in the Scaled Dot-Product Attention mechanism?",
+    "ground_truth": "The dot-product attention is scaled by $1/sqrt{d_k}$ to prevent large magnitudes from pushing the softmax function into regions with extremely small gradients as the dimension $d_k$ increases, thereby mitigating the vanishing gradient problem and ensuring effective model training."
+  },
+  {
+    "question": "How many parallel attention layers (heads) does the Transformer employ, and what are the dimensions for the keys and values in each head?",
+    "ground_truth": "The Transformer architecture utilizes 8 parallel attention heads with key and value dimensions ($d_k$, $d_v$) of 64, calculated by dividing the model dimension ($d_{model} = 512$) by the number of heads ($h = 8$), ensuring that the total computational cost remains comparable to that of a single-head attention mechanism with full dimensionality."
+  },
+  {
+    "question": "What specific functions are used for the positional encodings in the Transformer, and why were they chosen over learned embeddings?",
+    "ground_truth": "The Transformer architecture utilizes fixed sinusoidal positional encodings—specifically sine and cosine functions of varying frequencies—to enable the model to learn relative positions and extrapolate to sequence lengths longer than those encountered during training, while maintaining performance parity with learned embeddings."
+  },
+  {
+    "question": "How does the architecture of the decoder stack differ from that of the encoder stack?",
+    "ground_truth": "While both consist of $N=6$ identical layers, the decoder is distinguished from the encoder by an additional encoder-decoder attention sub-layer and a masked self-attention mechanism that ensures the auto-regressive property by preventing positions from attending to subsequent outputs."
+  },
+  {
+    "question": "What is the computational complexity per layer for a Self-Attention layer compared to a Recurrent layer?",
+    "ground_truth": "Self-attention layers have a computational complexity per layer of $O(n^2 cdot d)$ and $O(1)$ sequential operations, making them more efficient than recurrent layers ($O(n cdot d^2)$ with $O(n)$ sequential operations) when the sequence length $n$ is smaller than the representation dimensionality $d$ and significantly improving parallelization."
+  }
+]
