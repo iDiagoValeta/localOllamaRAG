@@ -4,9 +4,9 @@ Teacher - Sistema RAG Dual para consulta de PDFs (TFG)
 
 Aplicación interactiva con dos modos de operación:
 
-  - **Modo CHAT**: Conversación libre con el modelo base (llama3.1:8b).
+  - **Modo CHAT**: Conversación libre con el modelo base (configurable).
     Mantiene historial multi-turno persistente y conoce la identidad del
-    proyecto Teacher. Ideal para preguntas generales y charla.
+    proyecto MonkeyGrab. Ideal para preguntas generales y charla.
 
   - **Modo RAG**: Retrieval-Augmented Generation con el modelo fine-tuneado
     (teacher-q4km). Consulta documentos PDF mediante búsqueda híbrida y
@@ -14,7 +14,7 @@ Aplicación interactiva con dos modos de operación:
 
 Pipeline de recuperación (modo RAG):
   1. Indexación de PDFs con chunking Markdown y embeddings (configurable).
-  2. Descomposición de consulta con modelo base (llama3.1:8b).
+  2. Descomposición de consulta con modelo base (configurable).
   3. Búsqueda híbrida: semántica multi-query + keywords + exhaustiva.
   4. Fusión RRF (Reciprocal Rank Fusion) + reranking con Cross-Encoder.
   5. Generación de respuesta con streaming, usando el formato de prompt
@@ -63,6 +63,15 @@ import chromadb
 from pypdf import PdfReader
 
 # =============================================================================
+# SOPORTE DE COLORES MULTIPLATAFORMA
+# =============================================================================
+try:
+    from colorama import init
+    init()
+except ImportError:
+    pass  # Si no está instalado, los colores ANSI aún funcionarán en la mayoría de terminales
+
+# =============================================================================
 # SECCIÓN 2: CARGA CONDICIONAL DE COMPONENTES OPCIONALES
 # =============================================================================
 # Propósito:
@@ -86,14 +95,12 @@ try:
     PYMUPDF_AVAILABLE = True
 except ImportError:
     PYMUPDF_AVAILABLE = False
-    print("pymupdf4llm no disponible, usando pypdf (menor calidad)")
 
 try:
     from sentence_transformers import CrossEncoder
     RERANKER_AVAILABLE = True
 except ImportError:
     RERANKER_AVAILABLE = False
-    print("sentence-transformers no disponible, reranking desactivado")
 
 # =============================================================================
 # SECCIÓN 3: CONFIGURACIÓN DE RUNTIME Y PARÁMETROS GLOBALES
@@ -125,6 +132,32 @@ if hasattr(sys.stderr, "reconfigure"):
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "teacher-q4km:latest")
 MODELO_AUXILIAR = os.getenv("OLLAMA_AUX_MODEL", "qwen2.5:14b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
+
+# ---------------------------------------------------------------------------
+# Descripción legible del modelo base (se infiere automáticamente del nombre)
+# ---------------------------------------------------------------------------
+_MODELO_FAMILIAS = {
+    "qwen":    "Qwen 2.5",
+    "llama":   "Llama 3.1"
+}
+
+def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
+    """Devuelve un nombre legible a partir del slug de Ollama."""
+    nombre_lower = nombre_modelo.lower()
+    slug = nombre_lower.split(":")[0]
+    for clave, desc in _MODELO_FAMILIAS.items():
+        if clave in slug:
+            # Extraer tamaño de slug o tag (ej. "14b", "8b")
+            import re as _re
+            match = _re.search(r'(\d+\.?\d*b)', nombre_lower)
+            size = f" {match.group(1).upper()}" if match else ""
+            return f"{desc}{size}"
+    return nombre_modelo.split(":")[0]
+
+MODELO_DESC = os.getenv(
+    "MODELO_DESC",
+    _inferir_descripcion_modelo(MODELO_AUXILIAR)
+)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -187,6 +220,13 @@ logging.basicConfig(
     format='%(levelname)s: %(message)s'
 )
 
+# Suprimir logs HTTP internos de chromadb/httpx/urllib3
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("chromadb").setLevel(logging.WARNING)
+logging.getLogger("chromadb.telemetry").setLevel(logging.ERROR)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("requests").setLevel(logging.WARNING)
+
 
 # =============================================================================
 # SECCIÓN 4: INTERFAZ Y MENSAJERÍA DEL ASISTENTE
@@ -204,74 +244,141 @@ logging.basicConfig(
 
 class EstiloUI:
     """Configuración de estilos y mensajes para la interfaz de usuario."""
-    
-    LINEA_DOBLE = "═"
+
+    RESET       = "\033[0m"
+    NEGRITA     = "\033[1m"
+    DIM         = "\033[2m"
+    SUBRAYADO   = "\033[4m"
+
+    # Gradiente cálido para el mono: Amarillo → Naranja → Rojo → Marrón
+    BRILLO      = "\033[38;5;226m"   # Amarillo brillante (zonas iluminadas)
+    CUERPO      = "\033[38;5;208m"   # Naranja brillante (cuerpo principal)
+    SOMBRA      = "\033[38;5;166m"   # Naranja-rojizo (sombras medias)
+    OSCURO      = "\033[38;5;130m"   # Marrón oscuro (zonas más oscuras)
+
+    # Acentos fríos para contraste
+    ACENTO      = "\033[38;5;39m"    # Cyan-azul brillante (extremidades)
+    AZUL        = "\033[38;5;27m"    # Azul puro
+    CYAN        = "\033[38;5;39m"    # Alias de ACENTO para compatibilidad
+
+    # Colores UI
+    MAGENTA     = "\033[38;5;201m"   # Magenta neón
+    VERDE       = "\033[38;5;82m"    # Verde lima
+    AMARILLO    = "\033[38;5;220m"   # Amarillo cálido
+    ROJO        = "\033[38;5;160m"   # Rojo estándar
+    ROJO_OSCURO = "\033[38;5;88m"    # Rojo oscuro (mensajes pipeline RAG)
+    GRIS        = "\033[38;5;250m"   # Gris claro
+    BLANCO      = "\033[38;5;231m"   # Blanco puro
+
+    BG_AZUL     = "\033[44m"
+    BG_VERDE    = "\033[42m"
+
+    ICONO_DOCUMENTO   = f"{CYAN}  -{RESET}"
+    ICONO_BUSQUEDA    = f"{VERDE} >>{RESET}"
+    ICONO_EXITO       = f"{VERDE}  +{RESET}"
+    ICONO_ADVERTENCIA = f"{AMARILLO}  !{RESET}"
+    ICONO_ERROR       = f"{ROJO}  x{RESET}"
+    ICONO_INFO        = f"{AZUL}  .{RESET}"
+    ICONO_CHAT        = f"{MAGENTA}chat{RESET}"
+    ICONO_ROBOT       = f"{CYAN}  ~{RESET}"
+    ICONO_LIBRO       = f"{AZUL} rag{RESET}"
+    ICONO_CARPETA     = f"{CYAN}  -{RESET}"
+    ICONO_ENGRANAJE   = f"{AMARILLO}  *{RESET}"
+    ICONO_ESTADISTICA = f"{VERDE}  #{RESET}"
+    ICONO_CITA        = f"{DIM}  >{RESET}"
+    ICONO_PAGINA      = f"{CYAN}  -{RESET}"
+
+    LINEA_DOBLE  = "═"
     LINEA_SIMPLE = "─"
-    ANCHO = 70
-    
-    RESET = "\033[0m"
-    NEGRITA = "\033[1m"
-    
-    ICONO_DOCUMENTO = "📄"
-    ICONO_BUSQUEDA = "🔍"
-    ICONO_EXITO = "✅"
-    ICONO_ADVERTENCIA = "⚠️"
-    ICONO_ERROR = "❌"
-    ICONO_INFO = "💡"
-    ICONO_CHAT = "💬"
-    ICONO_ROBOT = "🤖"
-    ICONO_LIBRO = "📚"
-    ICONO_CARPETA = "📁"
-    ICONO_ENGRANAJE = "⚙️"
-    ICONO_ESTADISTICA = "📊"
-    ICONO_CITA = "📌"
-    ICONO_PAGINA = "📃"
+
+    ANCHO = 72
+
+    @staticmethod
+    def get_ancho_terminal() -> int:
+        """Obtiene el ancho actual de la terminal dinámicamente."""
+        try:
+            return os.get_terminal_size().columns
+        except Exception:
+            return 100  # fallback seguro
+
+    @classmethod
+    def get_linea(cls, estilo: str = "doble") -> str:
+        """Genera una línea que abarca toda la terminal."""
+        ancho = cls.get_ancho_terminal()
+        char = cls.LINEA_DOBLE if estilo == "doble" else cls.LINEA_SIMPLE
+        return char * ancho
 
 MENSAJES = {
     "info_no_encontrada": (
-        "Lo siento, no he encontrado información específica sobre tu pregunta en los "
-        "documentos disponibles. Esto puede deberse a que:\n\n"
-        "  • La información no está contenida en los documentos indexados\n"
-        "  • La pregunta podría formularse de manera diferente\n"
-        "  • El tema está fuera del alcance de los documentos\n\n"
-        "💡 **Sugerencia**: Intenta reformular tu pregunta o pregunta sobre los "
-        "temas principales de los documentos."
+        "No se encontró información específica sobre tu pregunta en los "
+        "documentos disponibles. Posibles causas:\n\n"
+        "  - La información no está en los documentos indexados\n"
+        "  - La pregunta podría formularse de otra manera\n"
+        "  - El tema está fuera del alcance del corpus\n\n"
+        "Sugerencia: reformula la pregunta o escribe '/temas' para explorar contenidos."
     ),
-    
+
     "fuera_de_ambito": (
-        "Esta pregunta parece estar fuera del ámbito de los documentos disponibles.\n\n"
-        "💡 **Sugerencia**: Escribe '/temas' para ver un resumen de los contenidos "
-        "disponibles, o '/docs' para ver la lista de documentos."
+        "La pregunta parece estar fuera del ámbito de los documentos disponibles.\n\n"
+        "Sugerencia: escribe '/temas' para ver los contenidos disponibles, "
+        "o '/docs' para listar los documentos."
     ),
-    
+
     "bienvenida": (
-        "¡Bienvenido a Teacher, tu asistente inteligente de documentos!\n\n"
-        "🤖 Tienes dos modos de interacción:\n\n"
-        "  💬 **Modo CHAT** (activo por defecto):\n"
-        "     Conversación libre conmigo. Puedo responder preguntas generales,\n"
-        "     explicarte quién soy, o simplemente charlar.\n\n"
-        "  📚 **Modo RAG** (recuperación de documentos):\n"
-        "     Respuestas precisas basadas en los documentos académicos indexados,\n"
-        "     con citas y fuentes verificables.\n\n"
-        "📝 **Comandos disponibles** (todos empiezan por /):\n"
-        "  • /rag      - Activar modo RAG (consulta de documentos)\n"
-        "  • /chat     - Activar modo CHAT (conversación libre)\n"
-        "  • /limpiar  - Limpiar historial de conversación\n"
-        "  • /stats    - Ver estadísticas de la base de datos\n"
-        "  • /docs     - Ver lista de documentos indexados\n"
-        "  • /temas    - Ver resumen de contenidos disponibles\n"
-        "  • /reindex  - Forzar re-indexación de documentos\n"
-        "  • /ayuda    - Mostrar esta ayuda\n"
-        "  • /salir    - Terminar la sesión\n\n"
-        f"🚀 **Mejoras activas**: Chunks {CHUNK_SIZE} chars, {_EMBED_PREFIX_DESC} ✓, "
-        f"{'pymupdf4llm ✓' if PYMUPDF_AVAILABLE else 'pypdf ⚠'}, "
-        f"{'Reranker quality ✓' if USAR_RERANKER else 'Sin reranker ⚠'}, "
-        f"{'Híbrida ✓' if USAR_BUSQUEDA_HIBRIDA else 'Solo semántica'}, "
-        f"{'LLM decomp ✓' if USAR_LLM_QUERY_DECOMPOSITION else 'Sin decomp'}"
+        "Dos modos de interacción disponibles:\n\n"
+        "  [chat]  Modo CHAT (activo por defecto)\n"
+        "          Conversación libre. Preguntas generales, explicaciones, charla.\n\n"
+        "  [rag]   Modo RAG (recuperación de documentos)\n"
+        "          Respuestas precisas con citas de los documentos académicos indexados.\n\n"
+        "Comandos disponibles:\n"
+        "  /rag      Activar modo RAG\n"
+        "  /chat     Activar modo CHAT\n"
+        "  /limpiar  Limpiar historial\n"
+        "  /stats    Estadísticas de la base de datos\n"
+        "  /docs     Lista de documentos indexados\n"
+        "  /temas    Resumen de contenidos\n"
+        "  /reindex  Forzar re-indexación\n"
+        "  /ayuda    Mostrar esta ayuda\n"
+        "  /salir    Terminar la sesión\n\n"
+        f"Config: chunks={CHUNK_SIZE}c  overlap={CHUNK_OVERLAP}c  "
+        f"extractor={'pymupdf4llm' if PYMUPDF_AVAILABLE else 'pypdf'}  "
+        f"reranker={'on' if USAR_RERANKER else 'off'}  "
+        f"hibrid={'on' if USAR_BUSQUEDA_HIBRIDA else 'off'}  "
+        f"llm-decomp={'on' if USAR_LLM_QUERY_DECOMPOSITION else 'off'}"
     ),
-    
-    "despedida": "¡Hasta luego! Gracias por usar Teacher. 👋"
+
+    "despedida": "Hasta luego. Fin de sesion."
 }
+
+# =============================================================================
+# Logo ASCII para mostrar al iniciar la aplicación
+# =============================================================================
+LOGO = f"""
+{EstiloUI.OSCURO}                __------__{EstiloUI.RESET}
+{EstiloUI.CUERPO}              /~{EstiloUI.BRILLO}          {EstiloUI.CUERPO}~\\{EstiloUI.RESET}
+{EstiloUI.CUERPO}             |  {EstiloUI.BRILLO}  //^\\\\//^\\{EstiloUI.CUERPO}|{EstiloUI.RESET}
+{EstiloUI.CUERPO}           /~~\\  ||{EstiloUI.BRILLO} o{EstiloUI.CUERPO}| |{EstiloUI.BRILLO}o{EstiloUI.CUERPO}|:~\\{EstiloUI.RESET}
+{EstiloUI.CUERPO}          | |6   ||{EstiloUI.OSCURO}___|_|_|{EstiloUI.CUERPO}||:|{EstiloUI.RESET}
+{EstiloUI.CUERPO}           \\__.  /{EstiloUI.BRILLO}      o  {EstiloUI.CUERPO}\\/{EstiloUI.RESET}'
+{EstiloUI.SOMBRA}            |   ({EstiloUI.BRILLO}       O   {EstiloUI.SOMBRA}){EstiloUI.RESET}
+{EstiloUI.OSCURO}   /~~~~\\{EstiloUI.OSCURO}    `\\  \\         /{EstiloUI.RESET}
+{EstiloUI.OSCURO}  | |~~\\ |{EstiloUI.CUERPO}     )  ~------~`\\{EstiloUI.RESET}
+{EstiloUI.OSCURO} /' |  | |{EstiloUI.CUERPO}   /     ____ /~~~)\\{EstiloUI.RESET}
+{EstiloUI.OSCURO}(_/'   | | |{EstiloUI.CUERPO}     /'    |    ( |{EstiloUI.RESET}
+{EstiloUI.OSCURO}       | | |     \\    /   __)/ \\{EstiloUI.RESET}
+{EstiloUI.OSCURO}       \\  \\ \\      \\/    /' \\   `\\{EstiloUI.RESET}
+{EstiloUI.SOMBRA}         \\  \\|\\        /   | |\\___|{EstiloUI.RESET}
+{EstiloUI.SOMBRA}           \\ |  \\____/     | |{EstiloUI.RESET}
+{EstiloUI.SOMBRA}           /^~>  \\{EstiloUI.OSCURO}        _/ <{EstiloUI.RESET}
+{EstiloUI.CUERPO}          |  |         \\       \\{EstiloUI.RESET}
+{EstiloUI.CUERPO}          |  | \\        \\        \\{EstiloUI.RESET}
+{EstiloUI.CUERPO}          -^-\\  \\{EstiloUI.OSCURO}       |        ){EstiloUI.RESET}
+{EstiloUI.OSCURO}               `\\_______/^\\______/{EstiloUI.RESET}
+
+{EstiloUI.NEGRITA}{EstiloUI.BLANCO}              M O N K E Y G R A B{EstiloUI.RESET}
+{EstiloUI.DIM}{EstiloUI.GRIS}         RAG Dual  ·  {EstiloUI.BLANCO}{MODELO_DESC}{EstiloUI.GRIS}   Fine-tuned{EstiloUI.RESET}
+{EstiloUI.BLANCO}     Modo CHAT{EstiloUI.RESET}{EstiloUI.BLANCO} (libre) + {EstiloUI.BLANCO}Modo RAG{EstiloUI.RESET}{EstiloUI.BLANCO} (fine-tuned){EstiloUI.RESET}
+"""
 
 # =============================================================================
 # System prompt para modo RAG (modelo teacher fine-tuneado)
@@ -288,13 +395,13 @@ REGLAS ESTRICTAS:
 5. Sé claro, conciso y estructurado."""
 
 # =============================================================================
-# System prompt para modo CHAT (modelo base llama3.1)
+# System prompt para modo CHAT (modelo auxiliar configurable)
 # Proporciona identidad del proyecto y comportamiento conversacional.
 # =============================================================================
-SYSTEM_PROMPT_CHAT = """Eres Teacher, un asistente inteligente desarrollado como parte de un Trabajo de Fin de Grado (TFG) sobre Inteligencia Artificial aplicada a la educación.
+SYSTEM_PROMPT_CHAT = f"""Eres MonkeyGrab, un asistente inteligente desarrollado como parte de un Trabajo de Fin de Grado (TFG) sobre Inteligencia Artificial aplicada a la educación.
 
 SOBRE TI:
-- Tu nombre es Teacher y estás basado en el modelo Llama 3.1 8B, fine-tuneado con LoRA para responder preguntas fundamentadas en documentos académicos.
+- Tu nombre es MonkeyGrab y estás basado en el modelo {MODELO_DESC}, fine-tuneado con LoRA para responder preguntas fundamentadas en documentos académicos.
 - Formas parte de un sistema RAG (Retrieval-Augmented Generation) que permite consultar documentos PDF de forma inteligente.
 - Has sido entrenado con el dataset RAG_Multilingual (42.303 ejemplos en español, catalán e inglés).
 - Tu despliegue es completamente local mediante Ollama y ChromaDB como base de datos vectorial.
@@ -326,26 +433,32 @@ TU COMPORTAMIENTO EN MODO CHAT:
 # - Presentación uniforme de fuentes y bloques informativos en todo el sistema.
 # =============================================================================
 
-def mostrar_banner(titulo: str, estilo: str = "doble") -> None:
+def mostrar_banner(titulo: str, estilo: str = "doble", color: str = None) -> None:
     """
-    Muestra un banner visual para separar secciones.
-    
+    Muestra un banner visual con ancho dinámico de terminal.
+
     Args:
         titulo: Texto a mostrar en el banner
         estilo: 'doble' para líneas dobles, 'simple' para líneas simples
+        color: Código de color ANSI opcional
     """
+    ancho = EstiloUI.get_ancho_terminal()
     char = EstiloUI.LINEA_DOBLE if estilo == "doble" else EstiloUI.LINEA_SIMPLE
-    ancho = EstiloUI.ANCHO
-    
-    print(f"\n{char * ancho}")
-    print(f"  {titulo}")
-    print(f"{char * ancho}")
+    linea = char * ancho
+
+    color = color or EstiloUI.ROJO_OSCURO
+
+    print(f"\n{color}{linea}{EstiloUI.RESET}")
+    print(f"{color}  {EstiloUI.NEGRITA}{titulo}{EstiloUI.RESET}")
+    print(f"{color}{linea}{EstiloUI.RESET}")
 
 
-def mostrar_separador(estilo: str = "simple") -> None:
-    """Muestra una línea separadora."""
+def mostrar_separador(estilo: str = "simple", color: str = None) -> None:
+    """Muestra una línea separadora con ancho dinámico."""
+    ancho = EstiloUI.get_ancho_terminal()
     char = EstiloUI.LINEA_DOBLE if estilo == "doble" else EstiloUI.LINEA_SIMPLE
-    print(char * EstiloUI.ANCHO)
+    color = color or EstiloUI.DIM
+    print(f"{color}{char * ancho}{EstiloUI.RESET}")
 
 
 def formatear_cita(documento: str, pagina: int, fragmento: Optional[int] = None) -> str:
@@ -360,9 +473,9 @@ def formatear_cita(documento: str, pagina: int, fragmento: Optional[int] = None)
     Returns:
         Cita formateada
     """
-    cita = f"📄 {documento} | Página {pagina + 1}"
+    cita = f"  [{documento} | p.{pagina + 1}]"
     if fragmento is not None:
-        cita += f" | Fragmento {fragmento + 1}"
+        cita += f" frag.{fragmento + 1}"
     return cita
 
 
@@ -390,9 +503,9 @@ def formatear_fuentes_respuesta(fragmentos: List[Dict]) -> str:
     lineas = []
     for doc, paginas in sorted(fuentes_unicas.items()):
         paginas_str = ", ".join(str(p) for p in sorted(paginas))
-        lineas.append(f"  {EstiloUI.ICONO_DOCUMENTO} {doc}")
-        lineas.append(f"     Páginas consultadas: {paginas_str}")
-    
+        lineas.append(f"  - {doc}")
+        lineas.append(f"    paginas: {paginas_str}")
+
     return "\n".join(lineas)
 
 
@@ -864,9 +977,9 @@ def busqueda_por_keywords(
     metricas['resultados_totales'] = len(resultados_keyword)
     
     if keywords_encontradas:
-        print(f"   {EstiloUI.ICONO_EXITO} Keywords encontradas: {', '.join(list(keywords_encontradas)[:10])}")
+        print(f"   + keywords: {', '.join(list(keywords_encontradas)[:10])}")
     else:
-        print(f"   {EstiloUI.ICONO_INFO} No se encontraron coincidencias directas por keywords")
+        print(f"   . sin coincidencias directas por keywords")
     
     if LOGGING_METRICAS:
         logging.info(f"Búsqueda keywords: {metricas['keywords_encontradas']}/{metricas['keywords_totales']} encontradas, {metricas['resultados_totales']} resultados")
@@ -1000,8 +1113,8 @@ def obtener_modelo_reranker():
             
             device = _detectar_dispositivo_reranker()
             
-            print(f"\n{EstiloUI.ICONO_ENGRANAJE} Cargando modelo de reranking: {modelo_nombre}...")
-            print(f"   Dispositivo: {device.upper()}" + (" (FP16)" if device == "cuda" else ""))
+            print(f"\n  * Cargando reranker: {modelo_nombre}")
+            print(f"    dispositivo: {device.upper()}" + (" (FP16)" if device == "cuda" else ""))
 
             model_kwargs = {"torch_dtype": "float16"} if device == "cuda" else {}
             _reranker_model = CrossEncoder(
@@ -1009,8 +1122,8 @@ def obtener_modelo_reranker():
                 device=device,
                 model_kwargs=model_kwargs,
             )
-            
-            print(f"   {EstiloUI.ICONO_EXITO} Modelo cargado correctamente en {device.upper()}")
+
+            print(f"    + reranker cargado en {device.upper()}")
         except Exception as e:
             logging.error(f"Error cargando modelo de reranking: {e}")
             return None
@@ -1095,7 +1208,7 @@ def generar_queries_con_llm(pregunta: str) -> List[str]:
     """
     Usa el modelo auxiliar (base) para generar consultas de búsqueda diversas.
     
-    NOTA: Se usa MODELO_AUXILIAR (llama3.1:8b) en lugar del modelo fine-tuneado
+    NOTA: Se usa MODELO_AUXILIAR ({MODELO_DESC}) en lugar del modelo fine-tuneado
     (teacher) porque el teacher fue entrenado para responder con contexto, no para
     generar queries de búsqueda. El modelo base es más adecuado para esta tarea
     de generación libre de consultas diversas.
@@ -1171,7 +1284,7 @@ def realizar_busqueda_hibrida(
     Returns:
         Tupla de (fragmentos_rankeados, mejor_score, métricas_totales)
     """
-    mostrar_banner("FASE 1: BÚSQUEDA INTELIGENTE", "simple")
+    mostrar_banner("BUSQUEDA", "simple", color=EstiloUI.ROJO_OSCURO)
     
     metricas_totales = {
         'fase_semantica': {},
@@ -1184,12 +1297,12 @@ def realizar_busqueda_hibrida(
 
     llm_queries = []
     if USAR_LLM_QUERY_DECOMPOSITION and len(pregunta) > 60:
-        print(f"\n{EstiloUI.ICONO_BUSQUEDA} [0/4] Descomponiendo pregunta con LLM...")
+        print(f"\n{EstiloUI.ROJO_OSCURO} >> [0/4] descomponiendo pregunta...{EstiloUI.RESET}")
         llm_queries = generar_queries_con_llm(pregunta)
         if llm_queries:
-            print(f"   {EstiloUI.ICONO_EXITO} {len(llm_queries)} sub-queries generadas")
-    
-    print(f"\n{EstiloUI.ICONO_BUSQUEDA} [1/4] Búsqueda semántica...")
+            print(f"   + {len(llm_queries)} sub-queries generadas")
+
+    print(f"\n{EstiloUI.ROJO_OSCURO} >> [1/4] busqueda semantica...{EstiloUI.RESET}")
 
     queries = [pregunta]
 
@@ -1208,7 +1321,7 @@ def realizar_busqueda_hibrida(
         if lq not in queries:
             queries.append(lq)
     
-    print(f"   Analizando {len(queries)} variantes de la pregunta")
+    print(f"   . {len(queries)} variante(s) de la pregunta")
 
     all_semantic_results = {}
     
@@ -1251,18 +1364,19 @@ def realizar_busqueda_hibrida(
         'fragmentos_unicos': len(all_semantic_results)
     }
     
-    print(f"   {EstiloUI.ICONO_EXITO} {len(all_semantic_results)} fragmentos únicos encontrados")
-    
+    print(f"   + {len(all_semantic_results)} fragmentos unicos")
+
     results_keyword = []
     metricas_keywords = {}
     if USAR_BUSQUEDA_HIBRIDA:
-        print(f"\n{EstiloUI.ICONO_BUSQUEDA} [2/4] Búsqueda por palabras clave...")
+        print(f"\n{EstiloUI.ROJO_OSCURO} >> [2/4] busqueda por keywords...{EstiloUI.RESET}")
         keywords = extraer_keywords(pregunta)
-        print(f"   Keywords detectadas: {', '.join(keywords[:10])}...")
+        if keywords:
+            print(f"   . detectadas: {', '.join(keywords[:8])}")
         results_keyword, metricas_keywords = busqueda_por_keywords(pregunta, collection)
         metricas_totales['fase_keywords'] = metricas_keywords
 
-    print(f"\n{EstiloUI.ICONO_BUSQUEDA} [3/4] Combinando resultados...")
+    print(f"\n{EstiloUI.ROJO_OSCURO} >> [3/4] fusionando resultados...{EstiloUI.RESET}")
     
     fragmentos_data = all_semantic_results.copy()
     
@@ -1292,7 +1406,7 @@ def realizar_busqueda_hibrida(
     
     metricas_exhaustiva = {}
     if terminos_criticos:
-        print(f"\n{EstiloUI.ICONO_BUSQUEDA} Búsqueda profunda para: {', '.join(terminos_criticos[:6])}")
+        print(f"\n{EstiloUI.ROJO_OSCURO} >> busqueda profunda: {', '.join(terminos_criticos[:6])}{EstiloUI.RESET}")
         resultados_exhaustivos, metricas_exhaustiva = busqueda_exhaustiva_texto(
             terminos_criticos, collection, max_results=30
         )
@@ -1331,16 +1445,16 @@ def realizar_busqueda_hibrida(
 
     if USAR_RERANKER and fragmentos_ranked:
         n_candidatos = min(TOP_K_RERANK_CANDIDATES, len(fragmentos_ranked))
-        print(f"\n{EstiloUI.ICONO_BUSQUEDA} [4/4] [RERANKING] Refinando los mejores {n_candidatos} candidatos...")
-        
+        print(f"\n{EstiloUI.ROJO_OSCURO} >> [4/4] reranking top {n_candidatos} candidatos...{EstiloUI.RESET}")
+
         candidatos_rerank = fragmentos_ranked[:TOP_K_RERANK_CANDIDATES]
         fragmentos_ranked, metricas_rerank = rerank_resultados(
-            pregunta, 
-            candidatos_rerank, 
+            pregunta,
+            candidatos_rerank,
             top_k=TOP_K_AFTER_RERANK
         )
         metricas_totales['fase_reranking'] = metricas_rerank
-        print(f"   {EstiloUI.ICONO_EXITO} Top {len(fragmentos_ranked)} resultados tras reranking")
+        print(f"   + top {len(fragmentos_ranked)} tras reranking")
     
     mejor_score = fragmentos_ranked[0]['score_final'] if fragmentos_ranked else 0
     metricas_totales['resultados_finales'] = len(fragmentos_ranked)
@@ -1685,15 +1799,15 @@ def generar_respuesta(
     Returns:
         Texto completo de la respuesta generada (para persistencia)
     """
-    mostrar_banner("RESPUESTA DEL ASISTENTE", "doble")
+    mostrar_banner("RESPUESTA", "doble")
 
     contexto_str = construir_contexto_para_modelo(fragmentos)
 
     mensaje_usuario = f"{pregunta}\n\n<contexto>{contexto_str}</contexto>"
-    
-    print(f"\n{EstiloUI.ICONO_ROBOT} Analizando {len(fragmentos)} fragmentos relevantes...\n")
+
+    print(f"  {len(fragmentos)} fragmento(s) de contexto  |  modelo: {MODELO_CHAT}")
     mostrar_separador()
-    
+
     stream = ollama.chat(
         model=MODELO_CHAT,
         messages=[
@@ -1703,7 +1817,7 @@ def generar_respuesta(
         stream=True,
         options={"temperature": 0.15, "top_p": 0.85, "repeat_penalty": 1.15, "num_ctx": 8192}
     )
-    
+
     respuesta_completa = ""
     print()
     for chunk in stream:
@@ -1712,9 +1826,9 @@ def generar_respuesta(
             print(content, end='', flush=True)
             respuesta_completa += content
     print()
-    
+
     mostrar_separador()
-    print(f"\n{EstiloUI.ICONO_LIBRO} **FUENTES CONSULTADAS**:\n")
+    print("\n  FUENTES:\n")
     print(formatear_fuentes_respuesta(fragmentos))
     print()
     
@@ -1813,7 +1927,7 @@ def responder_en_modo_chat(
     Genera respuesta en modo conversacional usando el modelo base (auxiliar).
     
     Envía el historial completo de la conversación para mantener coherencia
-    multi-turno. El modelo base (llama3.1:8b) conoce la identidad del proyecto
+    multi-turno. El modelo auxiliar (MODELO_AUXILIAR) conoce la identidad del proyecto
     y puede responder preguntas generales, explicar conceptos o mantener
     una conversación natural.
     
@@ -1824,25 +1938,24 @@ def responder_en_modo_chat(
     Returns:
         Texto completo de la respuesta generada
     """
-    mostrar_banner("TEACHER - MODO CONVERSACIÓN", "doble")
-    
+    mostrar_banner("CHAT", "doble")
+
     messages = [{"role": "system", "content": SYSTEM_PROMPT_CHAT}]
 
     mensajes_recientes = historial_chat[-(MAX_HISTORIAL_MENSAJES):]
     messages.extend(mensajes_recientes)
-    
+
     messages.append({"role": "user", "content": pregunta})
-    
-    print()
+
     mostrar_separador()
-    
+
     stream = ollama.chat(
         model=MODELO_AUXILIAR,
         messages=messages,
         stream=True,
         options={"temperature": 0.7, "top_p": 0.9, "num_ctx": 8192}
     )
-    
+
     respuesta_completa = ""
     print()
     for chunk in stream:
@@ -1851,7 +1964,7 @@ def responder_en_modo_chat(
             print(content, end='', flush=True)
             respuesta_completa += content
     print()
-    
+
     mostrar_separador()
     print()
     
@@ -1895,16 +2008,14 @@ def indexar_documentos(
     archivos_pdf = [f for f in os.listdir(carpeta) if f.endswith('.pdf')]
     
     if not archivos_pdf:
-        print(f"{EstiloUI.ICONO_ADVERTENCIA} No se encontraron archivos PDF en la carpeta")
+        print("  ! no se encontraron archivos PDF en la carpeta")
         return 0
-    
-    mostrar_banner("PROCESANDO DOCUMENTOS", "doble")
-    print(f"\n{EstiloUI.ICONO_ENGRANAJE} Configuración de indexación:")
-    print(f"   • Extractor: {'pymupdf4llm (Markdown)' if PYMUPDF_AVAILABLE else 'pypdf (básico)'}")
-    print(f"   • Tamaño de fragmento: {CHUNK_SIZE} caracteres")
-    print(f"   • Solapamiento: {CHUNK_OVERLAP} caracteres")
-    print(f"   • Máx. para embedding: {MAX_CHARS_EMBED} caracteres")
-    print(f"   • Longitud mínima: {MIN_CHUNK_LENGTH} caracteres\n")
+
+    mostrar_banner("INDEXANDO DOCUMENTOS", "doble")
+    print(f"\n  extractor : {'pymupdf4llm (Markdown)' if PYMUPDF_AVAILABLE else 'pypdf (texto plano)'}")
+    print(f"  chunk     : {CHUNK_SIZE} chars  overlap: {CHUNK_OVERLAP} chars")
+    print(f"  embed max : {MAX_CHARS_EMBED} chars  min chunk: {MIN_CHUNK_LENGTH} chars")
+    print()
     
     total_chunks = 0
     
@@ -1956,32 +2067,32 @@ def indexar_documentos(
             return False
     
     for archivo in archivos_pdf:
-        print(f"\n{EstiloUI.ICONO_DOCUMENTO} Procesando: {archivo}")
+        print(f"  - {archivo}")
         usar_pypdf_fallback = False
-        
+
         try:
             ruta_pdf = os.path.join(carpeta, archivo)
-            
+
             if PYMUPDF_AVAILABLE:
                 try:
                     page_chunks = pymupdf4llm.to_markdown(ruta_pdf, page_chunks=True)
-                    print(f"   Páginas: {len(page_chunks)}")
-                    
+                    print(f"    {len(page_chunks)} paginas")
+
                     for page_info in page_chunks:
                         i = page_info['metadata']['page']
                         texto = page_info['text']
-                        
+
                         if not texto or len(texto) < MIN_CHUNK_LENGTH:
                             continue
-                        
+
                         chunks = dividir_en_chunks(texto)
-                        
+
                         for chunk_idx, chunk_info in enumerate(chunks):
                             chunk_text = chunk_info['text'] if isinstance(chunk_info, dict) else chunk_info
                             chunk_header = chunk_info.get('header', '') if isinstance(chunk_info, dict) else ''
-                            
+
                             id_doc = f"{archivo}_pag{i}_chunk{chunk_idx}"
-                            
+
                             metadata = {
                                 "source": archivo,
                                 "page": i,
@@ -1990,34 +2101,36 @@ def indexar_documentos(
                                 "format": "markdown",
                                 "section_header": chunk_header
                             }
-                            
+
                             if _indexar_chunk(id_doc, chunk_text, chunk_text, metadata, collection):
                                 total_chunks += 1
-                        
-                        print(f"   ✓ Página {i + 1}: {len(chunks)} fragmentos")
-                    
+
+                        print(f"    p.{i + 1}: {len(chunks)} fragmentos", end='\r')
+
+                    print(f"    + {total_chunks} fragmentos indexados hasta ahora")
+
                 except Exception as e:
                     logging.error(f"Error con pymupdf4llm en {archivo}: {e}, usando pypdf fallback")
                     usar_pypdf_fallback = True
 
             if not PYMUPDF_AVAILABLE or usar_pypdf_fallback:
                 reader = PdfReader(ruta_pdf)
-                print(f"   Páginas: {len(reader.pages)}")
-                
+                print(f"    {len(reader.pages)} paginas")
+
                 for i, page in enumerate(reader.pages):
                     texto = page.extract_text()
-                    
+
                     if not texto or len(texto) < MIN_CHUNK_LENGTH:
                         continue
-                    
+
                     chunks = dividir_en_chunks(texto)
-                    
+
                     for chunk_idx, chunk_info in enumerate(chunks):
                         chunk_text = chunk_info['text'] if isinstance(chunk_info, dict) else chunk_info
                         chunk_header = chunk_info.get('header', '') if isinstance(chunk_info, dict) else ''
-                        
+
                         id_doc = f"{archivo}_pag{i}_chunk{chunk_idx}"
-                        
+
                         metadata = {
                             "source": archivo,
                             "page": i,
@@ -2026,15 +2139,17 @@ def indexar_documentos(
                             "format": "plain_text",
                             "section_header": chunk_header
                         }
-                        
+
                         if _indexar_chunk(id_doc, chunk_text, chunk_text, metadata, collection):
                             total_chunks += 1
-                    
-                    print(f"   ✓ Página {i + 1}: {len(chunks)} fragmentos")
-                        
+
+                    print(f"    p.{i + 1}: {len(chunks)} fragmentos", end='\r')
+
+                print(f"    + {total_chunks} fragmentos indexados hasta ahora")
+
         except Exception as e:
             logging.error(f"Error procesando {archivo}: {e}")
-            print(f"   {EstiloUI.ICONO_ERROR} Error: {e}")
+            print(f"  x error en {archivo}: {e}")
     
     return total_chunks
 
@@ -2077,19 +2192,18 @@ def obtener_documentos_indexados(collection: chromadb.Collection) -> List[str]:
 
 def mostrar_estadisticas(collection: chromadb.Collection) -> None:
     """Muestra estadísticas de la base de datos."""
-    mostrar_banner("ESTADÍSTICAS DEL SISTEMA", "doble")
-    
+    mostrar_banner("ESTADISTICAS", "doble")
+
     docs = obtener_documentos_indexados(collection)
-    
-    print(f"\n{EstiloUI.ICONO_ESTADISTICA} **Base de datos vectorial**:")
-    print(f"   • Fragmentos totales indexados: {collection.count()}")
-    print(f"   • Documentos únicos: {len(docs)}")
-    
+
+    print(f"\n  fragmentos indexados : {collection.count()}")
+    print(f"  documentos unicos    : {len(docs)}")
+
     if docs:
-        print(f"\n{EstiloUI.ICONO_DOCUMENTO} **Documentos indexados**:")
+        print(f"\n  documentos:")
         for doc in docs:
-            print(f"   • {doc}")
-    
+            print(f"    - {doc}")
+
     print()
 
 def mostrar_ayuda() -> None:
@@ -2099,17 +2213,17 @@ def mostrar_ayuda() -> None:
 
 def mostrar_documentos(collection: chromadb.Collection) -> None:
     """Muestra la lista de documentos indexados."""
-    mostrar_banner("DOCUMENTOS DISPONIBLES", "simple")
-    
+    mostrar_banner("DOCUMENTOS INDEXADOS", "simple")
+
     docs = obtener_documentos_indexados(collection)
-    
+
     if docs:
-        print(f"\n{EstiloUI.ICONO_CARPETA} Se encontraron {len(docs)} documento(s):\n")
+        print(f"\n  {len(docs)} documento(s):\n")
         for i, doc in enumerate(docs, 1):
-            print(f"   {i}. {doc}")
+            print(f"   {i:>2}. {doc}")
     else:
-        print(f"\n{EstiloUI.ICONO_ADVERTENCIA} No hay documentos indexados.")
-    
+        print("\n  ! no hay documentos indexados.")
+
     print()
 
 def mostrar_temas(collection: chromadb.Collection) -> None:
@@ -2117,59 +2231,58 @@ def mostrar_temas(collection: chromadb.Collection) -> None:
     Muestra un resumen de los temas/contenidos de los documentos indexados.
     Extrae muestras representativas de cada documento.
     """
-    mostrar_banner("RESUMEN DE CONTENIDOS DISPONIBLES", "doble")
-    
+    mostrar_banner("CONTENIDOS DISPONIBLES", "doble")
+
     docs = obtener_documentos_indexados(collection)
-    
+
     if not docs:
-        print(f"\n{EstiloUI.ICONO_ADVERTENCIA} No hay documentos indexados.")
+        print("\n  ! no hay documentos indexados.")
         print()
         return
-    
-    print(f"\n{EstiloUI.ICONO_LIBRO} **Documentos indexados**: {len(docs)}\n")
-    
+
+    print(f"\n  {len(docs)} documento(s) indexado(s)\n")
+
     for doc_name in docs:
-        print(f"{EstiloUI.LINEA_SIMPLE * EstiloUI.ANCHO}")
-        print(f"{EstiloUI.ICONO_DOCUMENTO} **{doc_name}**\n")
-        
+        print(f"{EstiloUI.DIM}{EstiloUI.get_linea('simple')}{EstiloUI.RESET}")
+        print(f"  {EstiloUI.ROJO_OSCURO}{doc_name}{EstiloUI.RESET}\n")
+
         try:
             all_data = collection.get(
                 where={"source": doc_name},
                 include=['documents', 'metadatas'],
                 limit=100
             )
-            
+
             if all_data['documents']:
                 paginas_unicas = {meta['page'] for meta in all_data['metadatas']}
-                print(f"   📃 Páginas indexadas: {len(paginas_unicas)}")
-                print(f"   📊 Fragmentos totales: {len(all_data['documents'])}")
-                
+                print(f"  paginas    : {len(paginas_unicas)}")
+                print(f"  fragmentos : {len(all_data['documents'])}")
+
                 texto_completo = " ".join(all_data['documents'][:20])
                 palabras = texto_completo.split()
-                
+
                 palabras_significativas = [
-                    p.strip('.,;:()[]{}"\'-').lower() 
-                    for p in palabras 
+                    p.strip('.,;:()[]{}"\'-').lower()
+                    for p in palabras
                     if len(p) > 5 and p.strip('.,;:()[]{}"\'-').lower() not in STOPWORDS
                 ]
-                
+
                 frecuencias = Counter(palabras_significativas)
                 top_palabras = [palabra for palabra, _ in frecuencias.most_common(10)]
-                
+
                 if top_palabras:
-                    print(f"\n   🏷️  **Términos frecuentes**: {', '.join(top_palabras)}")
-                
+                    print(f"  terminos   : {', '.join(top_palabras)}")
+
                 primer_fragmento = all_data['documents'][0][:300]
-                print(f"\n   📝 **Muestra de contenido**:")
-                print(f"      \"{primer_fragmento}...\"")
-                
+                print(f"\n  muestra    : \"{primer_fragmento}...\"")
+
         except Exception as e:
-            print(f"   {EstiloUI.ICONO_ERROR} Error al obtener información: {e}")
-        
+            print(f"  x error al obtener informacion: {e}")
+
         print()
-    
-    print(f"{EstiloUI.LINEA_SIMPLE * EstiloUI.ANCHO}")
-    print(f"\n{EstiloUI.ICONO_INFO} Escribe tu pregunta sobre cualquiera de estos temas.\n")
+
+    print(f"{EstiloUI.DIM}{EstiloUI.get_linea('simple')}{EstiloUI.RESET}")
+    print("\n  Escribe tu pregunta sobre cualquiera de estos temas.\n")
 
 def _procesar_pregunta_rag(
     pregunta: str, 
@@ -2186,20 +2299,19 @@ def _procesar_pregunta_rag(
         collection: Colección de ChromaDB
     """
     if len(pregunta.strip()) < MIN_LONGITUD_PREGUNTA_RAG:
-        print(f"\n{EstiloUI.ICONO_INFO} Tu mensaje es demasiado corto para una consulta documental.")
-        print(f"   En modo RAG necesito una pregunta concreta sobre el contenido de los documentos.")
-        print(f"   Si quieres conversar libremente, escribe '/chat'.")
+        print("\n  . pregunta demasiado corta para consulta documental.")
+        print("    Formula una pregunta concreta o escribe '/chat' para conversar.")
         return
     
     fragmentos_ranked, mejor_score, metricas = realizar_busqueda_hibrida(pregunta, collection)
 
     if not fragmentos_ranked:
-        print(f"\n{EstiloUI.ICONO_INFO} {MENSAJES['info_no_encontrada']}")
+        print(f"\n  . {MENSAJES['info_no_encontrada']}")
         return
-    
+
     if mejor_score < UMBRAL_RELEVANCIA:
-        print(f"\n{EstiloUI.ICONO_INFO} {MENSAJES['fuera_de_ambito']}")
-        print(f"   Mejor score: {mejor_score:.4f} (umbral: {UMBRAL_RELEVANCIA})")
+        print(f"\n  . {MENSAJES['fuera_de_ambito']}")
+        print(f"    score: {mejor_score:.4f}  umbral: {UMBRAL_RELEVANCIA}")
         return
 
     if USAR_RERANKER:
@@ -2212,8 +2324,8 @@ def _procesar_pregunta_rag(
             logging.info(f"Filtro reranker: {n_descartados} fragmentos descartados (score < {UMBRAL_SCORE_RERANKER})")
         
         if not fragmentos_filtrados:
-            print(f"\n{EstiloUI.ICONO_INFO} {MENSAJES['info_no_encontrada']}")
-            print(f"   Ningún fragmento superó el umbral de relevancia del reranker ({UMBRAL_SCORE_RERANKER}).")
+            print(f"\n  . {MENSAJES['info_no_encontrada']}")
+            print(f"    umbral reranker: {UMBRAL_SCORE_RERANKER}")
             return
         
         fragmentos_ranked = fragmentos_filtrados
@@ -2277,7 +2389,7 @@ def _procesar_pregunta_rag(
             logging.info(f"Contexto truncado: {n_eliminados} fragmentos eliminados para respetar {MAX_CONTEXTO_CHARS} chars")
         fragmentos_finales = fragmentos_truncados
     
-    print(f"\n{EstiloUI.ICONO_EXITO} Contexto preparado: {len(fragmentos_finales)} fragmentos relevantes")
+    print(f"\n  + contexto listo: {len(fragmentos_finales)} fragmento(s)")
 
     respuesta = generar_respuesta(pregunta, fragmentos_finales)
 
@@ -2289,7 +2401,7 @@ def ejecutar_chat(collection: chromadb.Collection) -> None:
     Ejecuta el bucle principal del chat interactivo con soporte dual:
     
     - **Modo CHAT** (por defecto): Conversación libre con el modelo base
-      (llama3.1:8b). Mantiene historial multi-turno y conoce la identidad
+      (modelo auxiliar). Mantiene historial multi-turno y conoce la identidad
       del proyecto Teacher.
     - **Modo RAG**: Consulta de documentos académicos con el modelo teacher
       fine-tuneado. Cada pregunta es independiente (sin historial multi-turno)
@@ -2303,31 +2415,25 @@ def ejecutar_chat(collection: chromadb.Collection) -> None:
     Args:
         collection: Colección de ChromaDB con documentos indexados
     """
-    mostrar_banner("TEACHER - ASISTENTE INTELIGENTE", "doble")
     print(MENSAJES['bienvenida'])
 
     historial_chat = cargar_historial()
-    
+
     if historial_chat:
         n_chat = len(historial_chat)
-        print(f"\n{EstiloUI.ICONO_INFO} Historial cargado: {n_chat} mensajes de conversación previos.")
+        print(f"  . historial: {n_chat} mensaje(s) de sesion anterior")
 
     modo_actual = "chat"
-    print(f"\n{EstiloUI.ICONO_CHAT} Modo activo: **CHAT** (conversación libre con Teacher)")
-    print(f"   Escribe '/rag' para consultar documentos académicos.")
-    
+    print(f"\n  modo activo: chat  (escribe '/rag' para consultar documentos)")
+
     while True:
-        print(f"\n{EstiloUI.LINEA_SIMPLE * EstiloUI.ANCHO}")
-        
-        if modo_actual == "chat":
-            icono_prompt = EstiloUI.ICONO_CHAT
-            etiqueta = "CHAT"
-        else:
-            icono_prompt = EstiloUI.ICONO_LIBRO
-            etiqueta = "RAG"
-        
+        print(f"\n{EstiloUI.DIM}{EstiloUI.LINEA_SIMPLE * EstiloUI.get_ancho_terminal()}{EstiloUI.RESET}")
+
+        etiqueta = "chat" if modo_actual == "chat" else "rag"
+        color_etiqueta = EstiloUI.MAGENTA if modo_actual == "chat" else EstiloUI.ROJO_OSCURO
+
         try:
-            pregunta = input(f"{icono_prompt} [{etiqueta}] Tú: ").strip()
+            pregunta = input(f"\n{color_etiqueta}{EstiloUI.NEGRITA} {etiqueta} > {EstiloUI.RESET}").strip()
         except (EOFError, KeyboardInterrupt):
             print(f"\n{MENSAJES['despedida']}")
             guardar_historial(historial_chat)
@@ -2340,77 +2446,73 @@ def ejecutar_chat(collection: chromadb.Collection) -> None:
 
         if pregunta.lower() == '/rag':
             modo_actual = "rag"
-            print(f"\n{EstiloUI.ICONO_LIBRO} Modo cambiado a **RAG** (consulta de documentos)")
-            print(f"   Las preguntas se responderán con fragmentos de los documentos indexados.")
-            print(f"   Modelo: {MODELO_CHAT}")
-            print(f"   Escribe '/chat' para volver a conversación libre.")
+            print(f"  {EstiloUI.ROJO_OSCURO}modo: rag{EstiloUI.RESET}  |  modelo: {MODELO_CHAT}")
+            print(f"  escribe '{EstiloUI.ROJO_OSCURO}/chat{EstiloUI.RESET}' para volver a conversacion libre")
             continue
-        
+
         if pregunta.lower() == '/chat':
             modo_actual = "chat"
-            print(f"\n{EstiloUI.ICONO_CHAT} Modo cambiado a **CHAT** (conversación libre)")
-            print(f"   Puedes preguntarme lo que quieras. Mantendré el contexto de la conversación.")
-            print(f"   Modelo: {MODELO_AUXILIAR}")
-            print(f"   Escribe '/rag' para consultar documentos académicos.")
+            print(f"  {EstiloUI.ROJO_OSCURO}modo: chat{EstiloUI.RESET}  |  modelo: {MODELO_AUXILIAR}")
+            print(f"  escribe '{EstiloUI.ROJO_OSCURO}/rag{EstiloUI.RESET}' para consultar documentos")
             continue
-        
+
         if pregunta.lower() in ['/limpiar', '/clear']:
             limpiar_historial(historial_chat)
-            print(f"\n{EstiloUI.ICONO_EXITO} Historial de conversación limpiado.")
+            print("  + historial limpiado")
             continue
 
         if pregunta.lower() == '/stats':
             mostrar_estadisticas(collection)
             continue
-        
+
         if pregunta.lower() in ['/ayuda', '/help']:
             mostrar_ayuda()
             continue
-        
+
         if pregunta.lower() == '/docs':
             mostrar_documentos(collection)
             continue
-        
+
         if pregunta.lower() == '/temas':
             mostrar_temas(collection)
             continue
-        
+
         if pregunta.lower() == '/reindex':
-            print(f"\n{EstiloUI.ICONO_ENGRANAJE} Forzando re-indexación...")
-            print(f"   Esto eliminará la base de datos actual y la reconstruirá.")
-            print(f"   Por favor, reinicia el programa después de la re-indexación.\n")
-            
+            print("\n  * reindexando documentos...")
+            print("    se eliminara la base de datos actual y se reconstruira")
+            print("    reinicia el programa tras completar\n")
+
             import shutil
             try:
                 if os.path.exists(PATH_DB):
                     shutil.rmtree(PATH_DB)
-                    print(f"   {EstiloUI.ICONO_EXITO} Base de datos anterior eliminada")
-                
+                    print("  + base de datos anterior eliminada")
+
                 client_new = chromadb.PersistentClient(path=PATH_DB)
                 collection_new = client_new.get_or_create_collection(name=COLLECTION_NAME)
-                
+
                 total = indexar_documentos(CARPETA_DOCS, collection_new)
-                print(f"\n{EstiloUI.ICONO_EXITO} Re-indexación completada: {total} fragmentos")
-                print(f"\n{EstiloUI.ICONO_ADVERTENCIA} Reinicia el programa para usar la nueva base de datos.")
+                print(f"\n  + reindexacion completada: {total} fragmentos")
+                print("\n  ! reinicia el programa para usar la nueva base de datos")
                 guardar_historial(historial_chat)
                 return
             except Exception as e:
-                print(f"   {EstiloUI.ICONO_ERROR} Error durante re-indexación: {e}")
+                print(f"  x error durante reindexacion: {e}")
             continue
-        
+
         if not pregunta:
             continue
 
         if pregunta.startswith('/'):
-            print(f"\n{EstiloUI.ICONO_ADVERTENCIA} Comando no reconocido: {pregunta}")
-            print(f"   Escribe '/ayuda' para ver los comandos disponibles.")
+            print(f"  ! comando no reconocido: {pregunta}")
+            print("    escribe '/ayuda' para ver los comandos disponibles")
             continue
 
         if modo_actual == "rag":
             _procesar_pregunta_rag(pregunta, collection)
         else:
             respuesta = responder_en_modo_chat(pregunta, historial_chat)
-            
+
             historial_chat.append({"role": "user", "content": pregunta})
             historial_chat.append({"role": "assistant", "content": respuesta})
             guardar_historial(historial_chat)
@@ -2433,54 +2535,52 @@ def ejecutar_chat(collection: chromadb.Collection) -> None:
 
 def main():
     """Función principal del programa."""
-    mostrar_banner("INICIALIZANDO TEACHER - SISTEMA RAG", "doble")
-    print(f"\n{EstiloUI.ICONO_CARPETA} Carpeta de ejecución (cwd): {os.getcwd()}")
-    print(f"{EstiloUI.ICONO_CARPETA} Carpeta PDFs: {CARPETA_DOCS}")
-    print(f"{EstiloUI.ICONO_CARPETA} DB vectorial: {PATH_DB}")
-    print(f"{EstiloUI.ICONO_CARPETA} Historial: {HISTORIAL_PATH}")
-    print(f"\n{EstiloUI.ICONO_ENGRANAJE} **MODELOS**:")
-    print(f"   • RAG (teacher fine-tuneado): {MODELO_CHAT}")
-    print(f"   • Chat / Auxiliar (base):     {MODELO_AUXILIAR}")
-    print(f"   • Embeddings:                 {MODELO_EMBEDDING}")
-    print(f"\n{EstiloUI.ICONO_EXITO} **MEJORAS ACTIVAS**:")
-    print(f"   • Modelo embeddings: {MODELO_EMBEDDING.split(':')[0]} ({_EMBED_PREFIX_DESC} ✓)")
-    print(f"   • Chunking: {CHUNK_SIZE} chars (estructura Markdown, overlap {CHUNK_OVERLAP})")
-    print(f"   • Embedding capacity: {MAX_CHARS_EMBED} chars")
-    print(f"   • Extracción PDF: {'pymupdf4llm (Markdown) ✓' if PYMUPDF_AVAILABLE else 'pypdf (básico) ⚠️'}")
-    print(f"   • Búsqueda: {'Híbrida (semántica + keywords) ✓' if USAR_BUSQUEDA_HIBRIDA else 'Solo semántica'}")
-    print(f"   • LLM query decomposition: {'Activado ✓ (modelo: ' + MODELO_AUXILIAR + ')' if USAR_LLM_QUERY_DECOMPOSITION else 'Desactivado'}")
-    print(f"   • Reranker: {'CrossEncoder ✓' if USAR_RERANKER else 'Desactivado ⚠️'}")
+    print(LOGO)
+    mostrar_banner("INICIALIZANDO", "simple")
+    print(f"\n  cwd      : {os.getcwd()}")
+    print(f"  pdfs     : {CARPETA_DOCS}")
+    print(f"  db       : {PATH_DB}")
+    print(f"  historial: {HISTORIAL_PATH}")
+    print(f"\n  modelos:")
+    print(f"    rag / finetuned : {MODELO_CHAT}")
+    print(f"    chat / auxiliar : {MODELO_AUXILIAR}")
+    print(f"    embeddings      : {MODELO_EMBEDDING}")
+    print(f"\n  pipeline:")
+    print(f"    extractor  : {'pymupdf4llm' if PYMUPDF_AVAILABLE else 'pypdf (fallback)'}")
+    print(f"    busqueda   : {'hibrida (semantica + keywords)' if USAR_BUSQUEDA_HIBRIDA else 'solo semantica'}")
+    print(f"    llm-decomp : {'on' if USAR_LLM_QUERY_DECOMPOSITION else 'off'}  modelo: {MODELO_AUXILIAR}")
+    print(f"    reranker   : {'on' if USAR_RERANKER else 'off'}")
     if USAR_RERANKER:
         _reranker_device = _detectar_dispositivo_reranker()
-        print(f"     └─ Modelo: {'BAAI/bge-reranker-v2-m3 (multilingual quality)' if RERANKER_MODEL_QUALITY == 'quality' else 'ms-marco-MiniLM-L-6-v2 (fast)'}")
-        print(f"     └─ Dispositivo: {_reranker_device.upper()}" + (" (FP16)" if _reranker_device == "cuda" else " (considerar GPU para acelerar)"))
-    print(f"   • Persistencia de historial: Activada ✓")
-    print(f"   • Modo dual: Chat (base) + RAG (teacher) ✓")
-    print(f"   • DB versión: {_DB_VERSION}")
-    print(f"   • Logging métricas: {'Activado' if LOGGING_METRICAS else 'Desactivado'}")
-    
+        modelo_rr = 'BAAI/bge-reranker-v2-m3' if RERANKER_MODEL_QUALITY == 'quality' else 'ms-marco-MiniLM-L-6-v2'
+        print(f"      modelo   : {modelo_rr}")
+        print(f"      device   : {_reranker_device.upper()}" + (" (FP16)" if _reranker_device == "cuda" else ""))
+    print(f"    chunks     : {CHUNK_SIZE}c  overlap: {CHUNK_OVERLAP}c  embed-max: {MAX_CHARS_EMBED}c")
+    print(f"    embed-pfx  : {_EMBED_PREFIX_DESC}")
+    print(f"    db-version : {_DB_VERSION}")
+
     client = chromadb.PersistentClient(path=PATH_DB)
     collection = client.get_or_create_collection(name=COLLECTION_NAME)
-    
+
     archivos_pdf = []
     try:
         archivos_pdf = [f for f in os.listdir(CARPETA_DOCS) if f.lower().endswith('.pdf')]
     except FileNotFoundError:
-        print(f"{EstiloUI.ICONO_ADVERTENCIA} No existe la carpeta de PDFs: {CARPETA_DOCS}")
-    print(f"{EstiloUI.ICONO_DOCUMENTO} PDFs detectados: {len(archivos_pdf)}")
+        print(f"\n  ! no existe la carpeta de PDFs: {CARPETA_DOCS}")
+    print(f"\n  PDFs detectados: {len(archivos_pdf)}")
 
     if collection.count() == 0:
         total_chunks = indexar_documentos(CARPETA_DOCS, collection)
-        
+
         if total_chunks > 0:
-            mostrar_banner("INDEXACIÓN COMPLETADA", "doble")
-            print(f"\n{EstiloUI.ICONO_EXITO} Total de fragmentos indexados: {total_chunks}")
-            print(f"{EstiloUI.ICONO_ESTADISTICA} Documentos en la colección: {collection.count()}")
+            mostrar_banner("INDEXACION COMPLETADA", "doble")
+            print(f"\n  + fragmentos indexados: {total_chunks}")
+            print(f"  + documentos en coleccion: {collection.count()}")
         else:
-            print(f"\n{EstiloUI.ICONO_ADVERTENCIA} No se indexaron documentos.")
+            print("\n  ! no se indexaron documentos.")
             return
     else:
-        print(f"\n{EstiloUI.ICONO_EXITO} Base de datos cargada: {collection.count()} fragmentos indexados")
+        print(f"  base de datos: {collection.count()} fragmentos cargados")
 
     ejecutar_chat(collection)
 
