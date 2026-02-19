@@ -63,13 +63,18 @@ import chromadb
 from pypdf import PdfReader
 
 # =============================================================================
-# SOPORTE DE COLORES MULTIPLATAFORMA
 # =============================================================================
-try:
-    from colorama import init
-    init()
-except ImportError:
-    pass  # Si no está instalado, los colores ANSI aún funcionarán en la mayoría de terminales
+# CLI — Interfaz de usuario (importada desde rag.cli)
+# =============================================================================
+# Asegurar que el directorio raíz del proyecto esté en sys.path
+# para que 'rag' sea importable cuando se ejecuta directamente.
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
+from rag.cli.theme import Theme
+from rag.cli import renderer
+
 
 # =============================================================================
 # SECCIÓN 2: CARGA CONDICIONAL DE COMPONENTES OPCIONALES
@@ -213,172 +218,31 @@ MAX_HISTORIAL_MENSAJES = 40
 CARPETA_DEBUG_RAG = os.path.join(BASE_DIR, "debug_rag")
 
 LOGGING_METRICAS = True
-LOG_LEVEL = logging.INFO
+LOG_LEVEL = logging.ERROR
 
 logging.basicConfig(
     level=LOG_LEVEL,
     format='%(levelname)s: %(message)s'
 )
 
-# Suprimir logs HTTP internos de chromadb/httpx/urllib3
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("chromadb").setLevel(logging.WARNING)
-logging.getLogger("chromadb.telemetry").setLevel(logging.ERROR)
-logging.getLogger("urllib3").setLevel(logging.WARNING)
-logging.getLogger("requests").setLevel(logging.WARNING)
+# Suprimir logs de librerías externas
+for _logger_name in (
+    "httpx", "chromadb", "chromadb.telemetry", "urllib3", "requests",
+    "sentence_transformers", "transformers", "huggingface_hub",
+    "tqdm", "filelock",
+):
+    logging.getLogger(_logger_name).setLevel(logging.CRITICAL)
+
+# Suprimir warnings de HuggingFace y tqdm en stderr
+import warnings
+warnings.filterwarnings("ignore", message=".*HF_TOKEN.*")
+warnings.filterwarnings("ignore", message=".*huggingface.*")
+
+# Variable de entorno para desactivar barras tqdm en sentence-transformers
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
 
-# =============================================================================
-# SECCIÓN 4: INTERFAZ Y MENSAJERÍA DEL ASISTENTE
-# =============================================================================
-# Propósito:
-# - Definir una capa de presentación homogénea para mejorar UX y legibilidad
-#   durante sesiones de consulta documental en terminal.
-# Tecnologías implicadas:
-# - ANSI escape codes para formato visual (negrita, reset, separación).
-# - Diccionario de mensajes para respuestas de estado, ayuda y control de flujo.
-# - Iconografía Unicode para identificar fases del pipeline de forma intuitiva.
-# Resultado esperado:
-# - Interacción consistente, clara y mantenible sin duplicación de textos UI.
-# =============================================================================
-
-class EstiloUI:
-    """Configuración de estilos y mensajes para la interfaz de usuario."""
-
-    RESET       = "\033[0m"
-    NEGRITA     = "\033[1m"
-    DIM         = "\033[2m"
-    SUBRAYADO   = "\033[4m"
-
-    # Gradiente cálido para el mono: Amarillo → Naranja → Rojo → Marrón
-    BRILLO      = "\033[38;5;226m"   # Amarillo brillante (zonas iluminadas)
-    CUERPO      = "\033[38;5;208m"   # Naranja brillante (cuerpo principal)
-    SOMBRA      = "\033[38;5;166m"   # Naranja-rojizo (sombras medias)
-    OSCURO      = "\033[38;5;130m"   # Marrón oscuro (zonas más oscuras)
-
-    # Acentos fríos para contraste
-    ACENTO      = "\033[38;5;39m"    # Cyan-azul brillante (extremidades)
-    AZUL        = "\033[38;5;27m"    # Azul puro
-    CYAN        = "\033[38;5;39m"    # Alias de ACENTO para compatibilidad
-
-    # Colores UI
-    MAGENTA     = "\033[38;5;201m"   # Magenta neón
-    VERDE       = "\033[38;5;82m"    # Verde lima
-    AMARILLO    = "\033[38;5;220m"   # Amarillo cálido
-    ROJO        = "\033[38;5;160m"   # Rojo estándar
-    ROJO_OSCURO = "\033[38;5;88m"    # Rojo oscuro (mensajes pipeline RAG)
-    GRIS        = "\033[38;5;250m"   # Gris claro
-    BLANCO      = "\033[38;5;231m"   # Blanco puro
-
-    BG_AZUL     = "\033[44m"
-    BG_VERDE    = "\033[42m"
-
-    ICONO_DOCUMENTO   = f"{CYAN}  -{RESET}"
-    ICONO_BUSQUEDA    = f"{VERDE} >>{RESET}"
-    ICONO_EXITO       = f"{VERDE}  +{RESET}"
-    ICONO_ADVERTENCIA = f"{AMARILLO}  !{RESET}"
-    ICONO_ERROR       = f"{ROJO}  x{RESET}"
-    ICONO_INFO        = f"{AZUL}  .{RESET}"
-    ICONO_CHAT        = f"{MAGENTA}chat{RESET}"
-    ICONO_ROBOT       = f"{CYAN}  ~{RESET}"
-    ICONO_LIBRO       = f"{AZUL} rag{RESET}"
-    ICONO_CARPETA     = f"{CYAN}  -{RESET}"
-    ICONO_ENGRANAJE   = f"{AMARILLO}  *{RESET}"
-    ICONO_ESTADISTICA = f"{VERDE}  #{RESET}"
-    ICONO_CITA        = f"{DIM}  >{RESET}"
-    ICONO_PAGINA      = f"{CYAN}  -{RESET}"
-
-    LINEA_DOBLE  = "═"
-    LINEA_SIMPLE = "─"
-
-    ANCHO = 72
-
-    @staticmethod
-    def get_ancho_terminal() -> int:
-        """Obtiene el ancho actual de la terminal dinámicamente."""
-        try:
-            return os.get_terminal_size().columns
-        except Exception:
-            return 100  # fallback seguro
-
-    @classmethod
-    def get_linea(cls, estilo: str = "doble") -> str:
-        """Genera una línea que abarca toda la terminal."""
-        ancho = cls.get_ancho_terminal()
-        char = cls.LINEA_DOBLE if estilo == "doble" else cls.LINEA_SIMPLE
-        return char * ancho
-
-MENSAJES = {
-    "info_no_encontrada": (
-        "No se encontró información específica sobre tu pregunta en los "
-        "documentos disponibles. Posibles causas:\n\n"
-        "  - La información no está en los documentos indexados\n"
-        "  - La pregunta podría formularse de otra manera\n"
-        "  - El tema está fuera del alcance del corpus\n\n"
-        "Sugerencia: reformula la pregunta o escribe '/temas' para explorar contenidos."
-    ),
-
-    "fuera_de_ambito": (
-        "La pregunta parece estar fuera del ámbito de los documentos disponibles.\n\n"
-        "Sugerencia: escribe '/temas' para ver los contenidos disponibles, "
-        "o '/docs' para listar los documentos."
-    ),
-
-    "bienvenida": (
-        "Dos modos de interacción disponibles:\n\n"
-        "  [chat]  Modo CHAT (activo por defecto)\n"
-        "          Conversación libre. Preguntas generales, explicaciones, charla.\n\n"
-        "  [rag]   Modo RAG (recuperación de documentos)\n"
-        "          Respuestas precisas con citas de los documentos académicos indexados.\n\n"
-        "Comandos disponibles:\n"
-        "  /rag      Activar modo RAG\n"
-        "  /chat     Activar modo CHAT\n"
-        "  /limpiar  Limpiar historial\n"
-        "  /stats    Estadísticas de la base de datos\n"
-        "  /docs     Lista de documentos indexados\n"
-        "  /temas    Resumen de contenidos\n"
-        "  /reindex  Forzar re-indexación\n"
-        "  /ayuda    Mostrar esta ayuda\n"
-        "  /salir    Terminar la sesión\n\n"
-        f"Config: chunks={CHUNK_SIZE}c  overlap={CHUNK_OVERLAP}c  "
-        f"extractor={'pymupdf4llm' if PYMUPDF_AVAILABLE else 'pypdf'}  "
-        f"reranker={'on' if USAR_RERANKER else 'off'}  "
-        f"hibrid={'on' if USAR_BUSQUEDA_HIBRIDA else 'off'}  "
-        f"llm-decomp={'on' if USAR_LLM_QUERY_DECOMPOSITION else 'off'}"
-    ),
-
-    "despedida": "Hasta luego. Fin de sesion."
-}
-
-# =============================================================================
-# Logo ASCII para mostrar al iniciar la aplicación
-# =============================================================================
-LOGO = f"""
-{EstiloUI.OSCURO}                __------__{EstiloUI.RESET}
-{EstiloUI.CUERPO}              /~{EstiloUI.BRILLO}          {EstiloUI.CUERPO}~\\{EstiloUI.RESET}
-{EstiloUI.CUERPO}             |  {EstiloUI.BRILLO}  //^\\\\//^\\{EstiloUI.CUERPO}|{EstiloUI.RESET}
-{EstiloUI.CUERPO}           /~~\\  ||{EstiloUI.BRILLO} o{EstiloUI.CUERPO}| |{EstiloUI.BRILLO}o{EstiloUI.CUERPO}|:~\\{EstiloUI.RESET}
-{EstiloUI.CUERPO}          | |6   ||{EstiloUI.OSCURO}___|_|_|{EstiloUI.CUERPO}||:|{EstiloUI.RESET}
-{EstiloUI.CUERPO}           \\__.  /{EstiloUI.BRILLO}      o  {EstiloUI.CUERPO}\\/{EstiloUI.RESET}'
-{EstiloUI.SOMBRA}            |   ({EstiloUI.BRILLO}       O   {EstiloUI.SOMBRA}){EstiloUI.RESET}
-{EstiloUI.OSCURO}   /~~~~\\{EstiloUI.OSCURO}    `\\  \\         /{EstiloUI.RESET}
-{EstiloUI.OSCURO}  | |~~\\ |{EstiloUI.CUERPO}     )  ~------~`\\{EstiloUI.RESET}
-{EstiloUI.OSCURO} /' |  | |{EstiloUI.CUERPO}   /     ____ /~~~)\\{EstiloUI.RESET}
-{EstiloUI.OSCURO}(_/'   | | |{EstiloUI.CUERPO}     /'    |    ( |{EstiloUI.RESET}
-{EstiloUI.OSCURO}       | | |     \\    /   __)/ \\{EstiloUI.RESET}
-{EstiloUI.OSCURO}       \\  \\ \\      \\/    /' \\   `\\{EstiloUI.RESET}
-{EstiloUI.SOMBRA}         \\  \\|\\        /   | |\\___|{EstiloUI.RESET}
-{EstiloUI.SOMBRA}           \\ |  \\____/     | |{EstiloUI.RESET}
-{EstiloUI.SOMBRA}           /^~>  \\{EstiloUI.OSCURO}        _/ <{EstiloUI.RESET}
-{EstiloUI.CUERPO}          |  |         \\       \\{EstiloUI.RESET}
-{EstiloUI.CUERPO}          |  | \\        \\        \\{EstiloUI.RESET}
-{EstiloUI.CUERPO}          -^-\\  \\{EstiloUI.OSCURO}       |        ){EstiloUI.RESET}
-{EstiloUI.OSCURO}               `\\_______/^\\______/{EstiloUI.RESET}
-
-{EstiloUI.NEGRITA}{EstiloUI.BLANCO}              M O N K E Y G R A B{EstiloUI.RESET}
-{EstiloUI.DIM}{EstiloUI.GRIS}         RAG Dual  ·  {EstiloUI.BLANCO}{MODELO_DESC}{EstiloUI.GRIS}   Fine-tuned{EstiloUI.RESET}
-{EstiloUI.BLANCO}     Modo CHAT{EstiloUI.RESET}{EstiloUI.BLANCO} (libre) + {EstiloUI.BLANCO}Modo RAG{EstiloUI.RESET}{EstiloUI.BLANCO} (fine-tuned){EstiloUI.RESET}
-"""
 
 # =============================================================================
 # System prompt para modo RAG (modelo teacher fine-tuneado)
@@ -418,95 +282,6 @@ TU COMPORTAMIENTO EN MODO CHAT:
 - Responde en el mismo idioma que use el usuario (español, catalán o inglés).
 - Sé conciso pero completo en tus respuestas."""
 
-
-# =============================================================================
-# SECCIÓN 5: UTILIDADES DE PRESENTACIÓN Y FORMATEO
-# =============================================================================
-# Propósito:
-# - Proveer utilidades reutilizables para renderizar salidas estructuradas en
-#   consola y estandarizar la representación de evidencias documentales.
-# Tecnologías implicadas:
-# - Funciones helper de impresión para banners/separadores orientados a CLI.
-# - Formateo de citas con metadatos (documento, página, fragmento) para
-#   transparencia y verificabilidad de respuestas RAG.
-# Resultado esperado:
-# - Presentación uniforme de fuentes y bloques informativos en todo el sistema.
-# =============================================================================
-
-def mostrar_banner(titulo: str, estilo: str = "doble", color: str = None) -> None:
-    """
-    Muestra un banner visual con ancho dinámico de terminal.
-
-    Args:
-        titulo: Texto a mostrar en el banner
-        estilo: 'doble' para líneas dobles, 'simple' para líneas simples
-        color: Código de color ANSI opcional
-    """
-    ancho = EstiloUI.get_ancho_terminal()
-    char = EstiloUI.LINEA_DOBLE if estilo == "doble" else EstiloUI.LINEA_SIMPLE
-    linea = char * ancho
-
-    color = color or EstiloUI.ROJO_OSCURO
-
-    print(f"\n{color}{linea}{EstiloUI.RESET}")
-    print(f"{color}  {EstiloUI.NEGRITA}{titulo}{EstiloUI.RESET}")
-    print(f"{color}{linea}{EstiloUI.RESET}")
-
-
-def mostrar_separador(estilo: str = "simple", color: str = None) -> None:
-    """Muestra una línea separadora con ancho dinámico."""
-    ancho = EstiloUI.get_ancho_terminal()
-    char = EstiloUI.LINEA_DOBLE if estilo == "doble" else EstiloUI.LINEA_SIMPLE
-    color = color or EstiloUI.DIM
-    print(f"{color}{char * ancho}{EstiloUI.RESET}")
-
-
-def formatear_cita(documento: str, pagina: int, fragmento: Optional[int] = None) -> str:
-    """
-    Formatea una cita de manera consistente.
-    
-    Args:
-        documento: Nombre del documento fuente
-        pagina: Número de página (0-indexed, se mostrará +1)
-        fragmento: Número de fragmento opcional
-    
-    Returns:
-        Cita formateada
-    """
-    cita = f"  [{documento} | p.{pagina + 1}]"
-    if fragmento is not None:
-        cita += f" frag.{fragmento + 1}"
-    return cita
-
-
-def formatear_fuentes_respuesta(fragmentos: List[Dict]) -> str:
-    """
-    Genera una lista formateada de fuentes para mostrar al usuario.
-    
-    Args:
-        fragmentos: Lista de fragmentos con metadata
-    
-    Returns:
-        Texto formateado con las fuentes
-    """
-    fuentes_unicas = {}
-    
-    for frag in fragmentos:
-        meta = frag['metadata']
-        doc = meta['source']
-        pagina = meta['page'] + 1
-        
-        if doc not in fuentes_unicas:
-            fuentes_unicas[doc] = set()
-        fuentes_unicas[doc].add(pagina)
-    
-    lineas = []
-    for doc, paginas in sorted(fuentes_unicas.items()):
-        paginas_str = ", ".join(str(p) for p in sorted(paginas))
-        lineas.append(f"  - {doc}")
-        lineas.append(f"    paginas: {paginas_str}")
-
-    return "\n".join(lineas)
 
 
 # =============================================================================
@@ -1117,11 +892,14 @@ def obtener_modelo_reranker():
             print(f"    dispositivo: {device.upper()}" + (" (FP16)" if device == "cuda" else ""))
 
             model_kwargs = {"torch_dtype": "float16"} if device == "cuda" else {}
-            _reranker_model = CrossEncoder(
-                modelo_nombre,
-                device=device,
-                model_kwargs=model_kwargs,
-            )
+            # Suprimir barras de progreso de tqdm durante la carga
+            import io, contextlib
+            with contextlib.redirect_stderr(io.StringIO()):
+                _reranker_model = CrossEncoder(
+                    modelo_nombre,
+                    device=device,
+                    model_kwargs=model_kwargs,
+                )
 
             print(f"    + reranker cargado en {device.upper()}")
         except Exception as e:
@@ -1173,12 +951,15 @@ def rerank_resultados(
 
         textos_documentos = [doc['doc'] for doc in documentos_recuperados]
 
-        ranks = reranker.rank(
-            pregunta, 
-            textos_documentos, 
-            top_k=min(top_k, len(textos_documentos)),
-            return_documents=False
-        )
+        # Suprimir barras de progreso tqdm durante reranking
+        import io, contextlib
+        with contextlib.redirect_stderr(io.StringIO()):
+            ranks = reranker.rank(
+                pregunta, 
+                textos_documentos, 
+                top_k=min(top_k, len(textos_documentos)),
+                return_documents=False
+            )
 
         documentos_reordenados = []
         for rank_info in ranks:
@@ -1284,7 +1065,7 @@ def realizar_busqueda_hibrida(
     Returns:
         Tupla de (fragmentos_rankeados, mejor_score, métricas_totales)
     """
-    mostrar_banner("BUSQUEDA", "simple", color=EstiloUI.ROJO_OSCURO)
+    renderer.render_banner("BUSQUEDA", "simple", color=Theme.BLUE)
     
     metricas_totales = {
         'fase_semantica': {},
@@ -1297,12 +1078,12 @@ def realizar_busqueda_hibrida(
 
     llm_queries = []
     if USAR_LLM_QUERY_DECOMPOSITION and len(pregunta) > 60:
-        print(f"\n{EstiloUI.ROJO_OSCURO} >> [0/4] descomponiendo pregunta...{EstiloUI.RESET}")
+        print(f"\n{Theme.BLUE} >> [0/4] descomponiendo pregunta...{Theme.RESET}")
         llm_queries = generar_queries_con_llm(pregunta)
         if llm_queries:
             print(f"   + {len(llm_queries)} sub-queries generadas")
 
-    print(f"\n{EstiloUI.ROJO_OSCURO} >> [1/4] busqueda semantica...{EstiloUI.RESET}")
+    print(f"\n{Theme.BLUE} >> [1/4] busqueda semantica...{Theme.RESET}")
 
     queries = [pregunta]
 
@@ -1369,14 +1150,14 @@ def realizar_busqueda_hibrida(
     results_keyword = []
     metricas_keywords = {}
     if USAR_BUSQUEDA_HIBRIDA:
-        print(f"\n{EstiloUI.ROJO_OSCURO} >> [2/4] busqueda por keywords...{EstiloUI.RESET}")
+        print(f"\n{Theme.BLUE} >> [2/4] busqueda por keywords...{Theme.RESET}")
         keywords = extraer_keywords(pregunta)
         if keywords:
             print(f"   . detectadas: {', '.join(keywords[:8])}")
         results_keyword, metricas_keywords = busqueda_por_keywords(pregunta, collection)
         metricas_totales['fase_keywords'] = metricas_keywords
 
-    print(f"\n{EstiloUI.ROJO_OSCURO} >> [3/4] fusionando resultados...{EstiloUI.RESET}")
+    print(f"\n{Theme.BLUE} >> [3/4] fusionando resultados...{Theme.RESET}")
     
     fragmentos_data = all_semantic_results.copy()
     
@@ -1406,7 +1187,7 @@ def realizar_busqueda_hibrida(
     
     metricas_exhaustiva = {}
     if terminos_criticos:
-        print(f"\n{EstiloUI.ROJO_OSCURO} >> busqueda profunda: {', '.join(terminos_criticos[:6])}{EstiloUI.RESET}")
+        print(f"\n{Theme.BLUE} >> busqueda profunda: {', '.join(terminos_criticos[:6])}{Theme.RESET}")
         resultados_exhaustivos, metricas_exhaustiva = busqueda_exhaustiva_texto(
             terminos_criticos, collection, max_results=30
         )
@@ -1445,7 +1226,7 @@ def realizar_busqueda_hibrida(
 
     if USAR_RERANKER and fragmentos_ranked:
         n_candidatos = min(TOP_K_RERANK_CANDIDATES, len(fragmentos_ranked))
-        print(f"\n{EstiloUI.ROJO_OSCURO} >> [4/4] reranking top {n_candidatos} candidatos...{EstiloUI.RESET}")
+        print(f"\n{Theme.BLUE} >> [4/4] reranking top {n_candidatos} candidatos...{Theme.RESET}")
 
         candidatos_rerank = fragmentos_ranked[:TOP_K_RERANK_CANDIDATES]
         fragmentos_ranked, metricas_rerank = rerank_resultados(
@@ -1799,14 +1580,14 @@ def generar_respuesta(
     Returns:
         Texto completo de la respuesta generada (para persistencia)
     """
-    mostrar_banner("RESPUESTA", "doble")
+    renderer.render_banner("RESPUESTA", "doble")
 
     contexto_str = construir_contexto_para_modelo(fragmentos)
 
     mensaje_usuario = f"{pregunta}\n\n<contexto>{contexto_str}</contexto>"
 
     print(f"  {len(fragmentos)} fragmento(s) de contexto  |  modelo: {MODELO_CHAT}")
-    mostrar_separador()
+    renderer.render_separator()
 
     stream = ollama.chat(
         model=MODELO_CHAT,
@@ -1827,9 +1608,9 @@ def generar_respuesta(
             respuesta_completa += content
     print()
 
-    mostrar_separador()
+    renderer.render_separator()
     print("\n  FUENTES:\n")
-    print(formatear_fuentes_respuesta(fragmentos))
+    print(renderer.format_sources(fragmentos))
     print()
     
     # Guardar volcado de depuración para análisis
@@ -1919,56 +1700,6 @@ def evaluar_pregunta_rag(
         return (respuesta, contexts)
 
 
-def responder_en_modo_chat(
-    pregunta: str,
-    historial_chat: List[Dict[str, str]]
-) -> str:
-    """
-    Genera respuesta en modo conversacional usando el modelo base (auxiliar).
-    
-    Envía el historial completo de la conversación para mantener coherencia
-    multi-turno. El modelo auxiliar (MODELO_AUXILIAR) conoce la identidad del proyecto
-    y puede responder preguntas generales, explicar conceptos o mantener
-    una conversación natural.
-    
-    Args:
-        pregunta: Mensaje del usuario
-        historial_chat: Historial previo de mensajes [{"role": ..., "content": ...}]
-    
-    Returns:
-        Texto completo de la respuesta generada
-    """
-    mostrar_banner("CHAT", "doble")
-
-    messages = [{"role": "system", "content": SYSTEM_PROMPT_CHAT}]
-
-    mensajes_recientes = historial_chat[-(MAX_HISTORIAL_MENSAJES):]
-    messages.extend(mensajes_recientes)
-
-    messages.append({"role": "user", "content": pregunta})
-
-    mostrar_separador()
-
-    stream = ollama.chat(
-        model=MODELO_AUXILIAR,
-        messages=messages,
-        stream=True,
-        options={"temperature": 0.7, "top_p": 0.9, "num_ctx": 8192}
-    )
-
-    respuesta_completa = ""
-    print()
-    for chunk in stream:
-        content = chunk.get("message", {}).get("content", "") or chunk.get("content", "")
-        if content:
-            print(content, end='', flush=True)
-            respuesta_completa += content
-    print()
-
-    mostrar_separador()
-    print()
-    
-    return respuesta_completa
 
 
 # =============================================================================
@@ -2011,7 +1742,7 @@ def indexar_documentos(
         print("  ! no se encontraron archivos PDF en la carpeta")
         return 0
 
-    mostrar_banner("INDEXANDO DOCUMENTOS", "doble")
+    renderer.render_banner("INDEXANDO DOCUMENTOS", "doble")
     print(f"\n  extractor : {'pymupdf4llm (Markdown)' if PYMUPDF_AVAILABLE else 'pypdf (texto plano)'}")
     print(f"  chunk     : {CHUNK_SIZE} chars  overlap: {CHUNK_OVERLAP} chars")
     print(f"  embed max : {MAX_CHARS_EMBED} chars  min chunk: {MIN_CHUNK_LENGTH} chars")
@@ -2174,428 +1905,19 @@ def obtener_documentos_indexados(collection: chromadb.Collection) -> List[str]:
         return []
 
 
-# =============================================================================
-# SECCIÓN 12: INTERFAZ DUAL, COMANDOS Y EXPERIENCIA DE CHAT
-# =============================================================================
-# Propósito:
-# - Implementar el flujo conversacional interactivo con soporte dual:
-#   modo CHAT (conversación libre con modelo base) y modo RAG (consulta
-#   documental con modelo teacher fine-tuneado).
-# Tecnologías implicadas:
-# - Bucle CLI con parsing de comandos (/rag, /chat, /limpiar, stats, docs...).
-# - Integración del pipeline híbrido en modo RAG con enriquecimiento contextual.
-# - Conversación multi-turno con historial persistente en modo CHAT.
-# - Cambio dinámico de modo durante la sesión.
-# Resultado esperado:
-# - Sesión dual estable: charla libre + recuperación documental verificable.
-# =============================================================================
-
-def mostrar_estadisticas(collection: chromadb.Collection) -> None:
-    """Muestra estadísticas de la base de datos."""
-    mostrar_banner("ESTADISTICAS", "doble")
-
-    docs = obtener_documentos_indexados(collection)
-
-    print(f"\n  fragmentos indexados : {collection.count()}")
-    print(f"  documentos unicos    : {len(docs)}")
-
-    if docs:
-        print(f"\n  documentos:")
-        for doc in docs:
-            print(f"    - {doc}")
-
-    print()
-
-def mostrar_ayuda() -> None:
-    """Muestra la ayuda del sistema."""
-    mostrar_banner("AYUDA DEL SISTEMA", "doble")
-    print(MENSAJES['bienvenida'])
-
-def mostrar_documentos(collection: chromadb.Collection) -> None:
-    """Muestra la lista de documentos indexados."""
-    mostrar_banner("DOCUMENTOS INDEXADOS", "simple")
-
-    docs = obtener_documentos_indexados(collection)
-
-    if docs:
-        print(f"\n  {len(docs)} documento(s):\n")
-        for i, doc in enumerate(docs, 1):
-            print(f"   {i:>2}. {doc}")
-    else:
-        print("\n  ! no hay documentos indexados.")
-
-    print()
-
-def mostrar_temas(collection: chromadb.Collection) -> None:
-    """
-    Muestra un resumen de los temas/contenidos de los documentos indexados.
-    Extrae muestras representativas de cada documento.
-    """
-    mostrar_banner("CONTENIDOS DISPONIBLES", "doble")
-
-    docs = obtener_documentos_indexados(collection)
-
-    if not docs:
-        print("\n  ! no hay documentos indexados.")
-        print()
-        return
-
-    print(f"\n  {len(docs)} documento(s) indexado(s)\n")
-
-    for doc_name in docs:
-        print(f"{EstiloUI.DIM}{EstiloUI.get_linea('simple')}{EstiloUI.RESET}")
-        print(f"  {EstiloUI.ROJO_OSCURO}{doc_name}{EstiloUI.RESET}\n")
-
-        try:
-            all_data = collection.get(
-                where={"source": doc_name},
-                include=['documents', 'metadatas'],
-                limit=100
-            )
-
-            if all_data['documents']:
-                paginas_unicas = {meta['page'] for meta in all_data['metadatas']}
-                print(f"  paginas    : {len(paginas_unicas)}")
-                print(f"  fragmentos : {len(all_data['documents'])}")
-
-                texto_completo = " ".join(all_data['documents'][:20])
-                palabras = texto_completo.split()
-
-                palabras_significativas = [
-                    p.strip('.,;:()[]{}"\'-').lower()
-                    for p in palabras
-                    if len(p) > 5 and p.strip('.,;:()[]{}"\'-').lower() not in STOPWORDS
-                ]
-
-                frecuencias = Counter(palabras_significativas)
-                top_palabras = [palabra for palabra, _ in frecuencias.most_common(10)]
-
-                if top_palabras:
-                    print(f"  terminos   : {', '.join(top_palabras)}")
-
-                primer_fragmento = all_data['documents'][0][:300]
-                print(f"\n  muestra    : \"{primer_fragmento}...\"")
-
-        except Exception as e:
-            print(f"  x error al obtener informacion: {e}")
-
-        print()
-
-    print(f"{EstiloUI.DIM}{EstiloUI.get_linea('simple')}{EstiloUI.RESET}")
-    print("\n  Escribe tu pregunta sobre cualquiera de estos temas.\n")
-
-def _procesar_pregunta_rag(
-    pregunta: str, 
-    collection: chromadb.Collection
-) -> None:
-    """
-    Procesa una pregunta en modo RAG: búsqueda híbrida + generación con contexto.
-    
-    Ejecuta el pipeline completo de recuperación y genera respuesta con el modelo
-    teacher fine-tuneado. No persiste historial (cada consulta es independiente).
-    
-    Args:
-        pregunta: Pregunta del usuario
-        collection: Colección de ChromaDB
-    """
-    if len(pregunta.strip()) < MIN_LONGITUD_PREGUNTA_RAG:
-        print("\n  . pregunta demasiado corta para consulta documental.")
-        print("    Formula una pregunta concreta o escribe '/chat' para conversar.")
-        return
-    
-    fragmentos_ranked, mejor_score, metricas = realizar_busqueda_hibrida(pregunta, collection)
-
-    if not fragmentos_ranked:
-        print(f"\n  . {MENSAJES['info_no_encontrada']}")
-        return
-
-    if mejor_score < UMBRAL_RELEVANCIA:
-        print(f"\n  . {MENSAJES['fuera_de_ambito']}")
-        print(f"    score: {mejor_score:.4f}  umbral: {UMBRAL_RELEVANCIA}")
-        return
-
-    if USAR_RERANKER:
-        fragmentos_filtrados = [
-            f for f in fragmentos_ranked
-            if f.get('score_reranker', f.get('score_final', 0)) >= UMBRAL_SCORE_RERANKER
-        ]
-        n_descartados = len(fragmentos_ranked) - len(fragmentos_filtrados)
-        if n_descartados > 0 and LOGGING_METRICAS:
-            logging.info(f"Filtro reranker: {n_descartados} fragmentos descartados (score < {UMBRAL_SCORE_RERANKER})")
-        
-        if not fragmentos_filtrados:
-            print(f"\n  . {MENSAJES['info_no_encontrada']}")
-            print(f"    umbral reranker: {UMBRAL_SCORE_RERANKER}")
-            return
-        
-        fragmentos_ranked = fragmentos_filtrados
-
-    fragmentos_finales = fragmentos_ranked[:TOP_K_FINAL]
-    ids_usados = {f['id'] for f in fragmentos_finales}
-
-    if EXPANDIR_CONTEXTO and fragmentos_finales and 'chunk' in fragmentos_finales[0]['metadata']:
-        chunks_adicionales = []
-        errores_expansion = 0
-
-        for frag in fragmentos_finales[:N_TOP_PARA_EXPANSION]:
-            ids_vecinos = expandir_con_chunks_adyacentes(
-                frag['id'], 
-                frag['metadata'], 
-                n_vecinos=1
-            )
-            
-            if ids_vecinos:
-                try:
-                    vecinos = collection.get(
-                        ids=ids_vecinos,
-                        include=['documents', 'metadatas']
-                    )
-                    
-                    for v_doc, v_meta in zip(vecinos['documents'], vecinos['metadatas']):
-                        v_id = f"{v_meta['source']}_pag{v_meta['page']}_chunk{v_meta.get('chunk', 0)}"
-                        if v_id not in ids_usados:
-                            chunks_adicionales.append({
-                                'doc': v_doc,
-                                'metadata': v_meta,
-                                'distancia': float('inf'),
-                                'score_final': 0.0,
-                                'id': v_id
-                            })
-                            ids_usados.add(v_id)
-                except Exception as e:
-                    errores_expansion += 1
-                    logging.warning(f"Error expandiendo contexto para {frag['id']}: {e}")
-        
-        if chunks_adicionales:
-            fragmentos_finales.extend(chunks_adicionales)
-            if LOGGING_METRICAS:
-                logging.info(f"Contexto expandido: +{len(chunks_adicionales)} chunks adyacentes")
-        
-        if errores_expansion > 0:
-            logging.warning(f"Errores en expansión de contexto: {errores_expansion}")
-    
-    contexto_total = sum(len(f['doc']) for f in fragmentos_finales)
-    if contexto_total > MAX_CONTEXTO_CHARS:
-        fragmentos_truncados = []
-        chars_acum = 0
-        for f in fragmentos_finales:
-            if chars_acum + len(f['doc']) > MAX_CONTEXTO_CHARS:
-                break
-            fragmentos_truncados.append(f)
-            chars_acum += len(f['doc'])
-        
-        n_eliminados = len(fragmentos_finales) - len(fragmentos_truncados)
-        if n_eliminados > 0 and LOGGING_METRICAS:
-            logging.info(f"Contexto truncado: {n_eliminados} fragmentos eliminados para respetar {MAX_CONTEXTO_CHARS} chars")
-        fragmentos_finales = fragmentos_truncados
-    
-    print(f"\n  + contexto listo: {len(fragmentos_finales)} fragmento(s)")
-
-    respuesta = generar_respuesta(pregunta, fragmentos_finales)
-
-    # RAG no persiste historial: cada consulta es independiente
-
-
-def ejecutar_chat(collection: chromadb.Collection) -> None:
-    """
-    Ejecuta el bucle principal del chat interactivo con soporte dual:
-    
-    - **Modo CHAT** (por defecto): Conversación libre con el modelo base
-      (modelo auxiliar). Mantiene historial multi-turno y conoce la identidad
-      del proyecto Teacher.
-    - **Modo RAG**: Consulta de documentos académicos con el modelo teacher
-      fine-tuneado. Cada pregunta es independiente (sin historial multi-turno)
-      ya que el teacher fue entrenado para respuestas puntuales con contexto.
-    
-    Comandos (todos con prefijo /):
-      /rag, /chat, /limpiar  → Cambio de modo e historial
-      /stats, /docs, /temas  → Información del corpus
-      /reindex, /ayuda, /salir → Operativos
-    
-    Args:
-        collection: Colección de ChromaDB con documentos indexados
-    """
-    print(MENSAJES['bienvenida'])
-
-    historial_chat = cargar_historial()
-
-    if historial_chat:
-        n_chat = len(historial_chat)
-        print(f"  . historial: {n_chat} mensaje(s) de sesion anterior")
-
-    modo_actual = "chat"
-    print(f"\n  modo activo: chat  (escribe '/rag' para consultar documentos)")
-
-    while True:
-        print(f"\n{EstiloUI.DIM}{EstiloUI.LINEA_SIMPLE * EstiloUI.get_ancho_terminal()}{EstiloUI.RESET}")
-
-        etiqueta = "chat" if modo_actual == "chat" else "rag"
-        color_etiqueta = EstiloUI.MAGENTA if modo_actual == "chat" else EstiloUI.ROJO_OSCURO
-
-        try:
-            pregunta = input(f"\n{color_etiqueta}{EstiloUI.NEGRITA} {etiqueta} > {EstiloUI.RESET}").strip()
-        except (EOFError, KeyboardInterrupt):
-            print(f"\n{MENSAJES['despedida']}")
-            guardar_historial(historial_chat)
-            break
-
-        if pregunta.lower() in ['/salir', '/exit']:
-            guardar_historial(historial_chat)
-            print(f"\n{MENSAJES['despedida']}")
-            break
-
-        if pregunta.lower() == '/rag':
-            modo_actual = "rag"
-            print(f"  {EstiloUI.ROJO_OSCURO}modo: rag{EstiloUI.RESET}  |  modelo: {MODELO_CHAT}")
-            print(f"  escribe '{EstiloUI.ROJO_OSCURO}/chat{EstiloUI.RESET}' para volver a conversacion libre")
-            continue
-
-        if pregunta.lower() == '/chat':
-            modo_actual = "chat"
-            print(f"  {EstiloUI.ROJO_OSCURO}modo: chat{EstiloUI.RESET}  |  modelo: {MODELO_AUXILIAR}")
-            print(f"  escribe '{EstiloUI.ROJO_OSCURO}/rag{EstiloUI.RESET}' para consultar documentos")
-            continue
-
-        if pregunta.lower() in ['/limpiar', '/clear']:
-            limpiar_historial(historial_chat)
-            print("  + historial limpiado")
-            continue
-
-        if pregunta.lower() == '/stats':
-            mostrar_estadisticas(collection)
-            continue
-
-        if pregunta.lower() in ['/ayuda', '/help']:
-            mostrar_ayuda()
-            continue
-
-        if pregunta.lower() == '/docs':
-            mostrar_documentos(collection)
-            continue
-
-        if pregunta.lower() == '/temas':
-            mostrar_temas(collection)
-            continue
-
-        if pregunta.lower() == '/reindex':
-            print("\n  * reindexando documentos...")
-            print("    se eliminara la base de datos actual y se reconstruira")
-            print("    reinicia el programa tras completar\n")
-
-            import shutil
-            try:
-                if os.path.exists(PATH_DB):
-                    shutil.rmtree(PATH_DB)
-                    print("  + base de datos anterior eliminada")
-
-                client_new = chromadb.PersistentClient(path=PATH_DB)
-                collection_new = client_new.get_or_create_collection(name=COLLECTION_NAME)
-
-                total = indexar_documentos(CARPETA_DOCS, collection_new)
-                print(f"\n  + reindexacion completada: {total} fragmentos")
-                print("\n  ! reinicia el programa para usar la nueva base de datos")
-                guardar_historial(historial_chat)
-                return
-            except Exception as e:
-                print(f"  x error durante reindexacion: {e}")
-            continue
-
-        if not pregunta:
-            continue
-
-        if pregunta.startswith('/'):
-            print(f"  ! comando no reconocido: {pregunta}")
-            print("    escribe '/ayuda' para ver los comandos disponibles")
-            continue
-
-        if modo_actual == "rag":
-            _procesar_pregunta_rag(pregunta, collection)
-        else:
-            respuesta = responder_en_modo_chat(pregunta, historial_chat)
-
-            historial_chat.append({"role": "user", "content": pregunta})
-            historial_chat.append({"role": "assistant", "content": respuesta})
-            guardar_historial(historial_chat)
 
 
 # =============================================================================
-# SECCIÓN 13: ARRANQUE, INICIALIZACIÓN Y CICLO DE VIDA
-# =============================================================================
-# Propósito:
-# - Orquestar la secuencia de inicio del sistema desde configuración hasta
-#   disponibilidad completa del asistente para consulta.
-# Tecnologías implicadas:
-# - Inicialización de cliente persistente de ChromaDB y colección activa.
-# - Descubrimiento de PDFs en carpeta objetivo y indexación inicial condicional.
-# - Reporte de estado de componentes críticos (modelos, extractor, reranker,
-#   parámetros de chunking y métricas) para observabilidad operativa.
-# Resultado esperado:
-# - Arranque reproducible con diagnóstico claro antes de entrar al chat.
+# PUNTO DE ENTRADA
 # =============================================================================
 
 def main():
-    """Función principal del programa."""
-    print(LOGO)
-    mostrar_banner("INICIALIZANDO", "simple")
-    print(f"\n  cwd      : {os.getcwd()}")
-    print(f"  pdfs     : {CARPETA_DOCS}")
-    print(f"  db       : {PATH_DB}")
-    print(f"  historial: {HISTORIAL_PATH}")
-    print(f"\n  modelos:")
-    print(f"    rag / finetuned : {MODELO_CHAT}")
-    print(f"    chat / auxiliar : {MODELO_AUXILIAR}")
-    print(f"    embeddings      : {MODELO_EMBEDDING}")
-    print(f"\n  pipeline:")
-    print(f"    extractor  : {'pymupdf4llm' if PYMUPDF_AVAILABLE else 'pypdf (fallback)'}")
-    print(f"    busqueda   : {'hibrida (semantica + keywords)' if USAR_BUSQUEDA_HIBRIDA else 'solo semantica'}")
-    print(f"    llm-decomp : {'on' if USAR_LLM_QUERY_DECOMPOSITION else 'off'}  modelo: {MODELO_AUXILIAR}")
-    print(f"    reranker   : {'on' if USAR_RERANKER else 'off'}")
-    if USAR_RERANKER:
-        _reranker_device = _detectar_dispositivo_reranker()
-        modelo_rr = 'BAAI/bge-reranker-v2-m3' if RERANKER_MODEL_QUALITY == 'quality' else 'ms-marco-MiniLM-L-6-v2'
-        print(f"      modelo   : {modelo_rr}")
-        print(f"      device   : {_reranker_device.upper()}" + (" (FP16)" if _reranker_device == "cuda" else ""))
-    print(f"    chunks     : {CHUNK_SIZE}c  overlap: {CHUNK_OVERLAP}c  embed-max: {MAX_CHARS_EMBED}c")
-    print(f"    embed-pfx  : {_EMBED_PREFIX_DESC}")
-    print(f"    db-version : {_DB_VERSION}")
+    """Arranca la CLI profesional de MonkeyGrab."""
+    import rag.chat_pdfs as rag_engine
+    from rag.cli import MonkeyGrabCLI
+    cli = MonkeyGrabCLI(rag_engine)
+    cli.run()
 
-    client = chromadb.PersistentClient(path=PATH_DB)
-    collection = client.get_or_create_collection(name=COLLECTION_NAME)
-
-    archivos_pdf = []
-    try:
-        archivos_pdf = [f for f in os.listdir(CARPETA_DOCS) if f.lower().endswith('.pdf')]
-    except FileNotFoundError:
-        print(f"\n  ! no existe la carpeta de PDFs: {CARPETA_DOCS}")
-    print(f"\n  PDFs detectados: {len(archivos_pdf)}")
-
-    if collection.count() == 0:
-        total_chunks = indexar_documentos(CARPETA_DOCS, collection)
-
-        if total_chunks > 0:
-            mostrar_banner("INDEXACION COMPLETADA", "doble")
-            print(f"\n  + fragmentos indexados: {total_chunks}")
-            print(f"  + documentos en coleccion: {collection.count()}")
-        else:
-            print("\n  ! no se indexaron documentos.")
-            return
-    else:
-        print(f"  base de datos: {collection.count()} fragmentos cargados")
-
-    ejecutar_chat(collection)
-
-
-# =============================================================================
-# SECCIÓN 14: EJECUCIÓN COMO SCRIPT
-# =============================================================================
-# Propósito:
-# - Habilitar ejecución directa del módulo como aplicación CLI autónoma.
-# Tecnologías implicadas:
-# - Convención estándar de Python __main__ para punto de entrada ejecutable.
-# Resultado esperado:
-# - Inicio del sistema con `python chat_pdfs.py` sin dependencias externas de
-#   orquestación adicional.
-# =============================================================================
 
 if __name__ == "__main__":
     main()
