@@ -4,7 +4,7 @@
 # No requiere GPU: funciona con CPU + Ollama para embeddings e inferencia.
 #
 # Requisitos externos (no pip):
-#   - Ollama con los modelos `teacher-q4km` y `nomic-embed-text` cargados.
+#   - Ollama con los modelos `Qwen-2.5-FineTuned` y `nomic-embed-text` cargados.
 #
 # Instalación:
 #   pip install -r requirements.txt

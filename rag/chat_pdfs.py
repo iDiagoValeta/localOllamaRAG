@@ -9,7 +9,7 @@ Aplicación interactiva con dos modos de operación:
     proyecto MonkeyGrab. Ideal para preguntas generales y charla.
 
   - **Modo RAG**: Retrieval-Augmented Generation con el modelo fine-tuneado
-    (teacher-q4km). Consulta documentos PDF mediante búsqueda híbrida y
+    (Qwen-2.5-FineTuned). Consulta documentos PDF mediante búsqueda híbrida y
     genera respuestas verificables con citas de fuentes.
 
 Pipeline de recuperación (modo RAG):
@@ -134,7 +134,7 @@ if hasattr(sys.stderr, "reconfigure"):
     except Exception:
         pass
 
-MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "teacher-q4km:latest")
+MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "Qwen-2.5-FineTuned:latest")
 MODELO_AUXILIAR = os.getenv("OLLAMA_AUX_MODEL", "qwen2.5:14b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 

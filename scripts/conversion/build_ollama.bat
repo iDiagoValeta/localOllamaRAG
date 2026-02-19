@@ -87,13 +87,13 @@ if %errorlevel% neq 0 (
 REM =============================================================================
 REM SECCIÓN 5: REGISTRO DEL MODELO EN OLLAMA
 REM =============================================================================
-REM Crea/actualiza el modelo `teacher-q4km` a partir del Modelfile.
+REM Crea/actualiza el modelo `Qwen-2.5-FineTuned` a partir del Modelfile.
 REM =============================================================================
 
 echo.
 echo [4/4] Creando modelo en Ollama...
 cd /d "%GGUF_PATH%"
-ollama create teacher-q4km -f Modelfile
+ollama create Qwen-2.5-FineTuned -f Modelfile
 if %errorlevel% neq 0 (
     echo ERROR: Fallo en ollama create
     pause
@@ -102,6 +102,6 @@ if %errorlevel% neq 0 (
 
 echo.
 echo ========================================
-echo Completado. Modelo 'teacher-q4km' en Ollama.
+echo Completado. Modelo 'Qwen-2.5-FineTuned' en Ollama.
 echo ========================================
 pause

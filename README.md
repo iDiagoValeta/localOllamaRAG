@@ -98,7 +98,7 @@ python plot_training.py
 Pipeline automático que convierte el adaptador LoRA a un modelo cuantizado Q4_K_M registrado en Ollama. Cada modelo tiene su propio directorio de salida (`models/gguf-output/<modelo>/`):
 
 ```
-Fusión LoRA → GGUF F16 → Q4_K_M → ollama create teacher-q4km
+Fusión LoRA → GGUF F16 → Q4_K_M → ollama create Qwen-2.5-FineTuned
 ```
 
 ```bash
@@ -109,7 +109,7 @@ scripts\conversion\build_ollama.bat
 python scripts/conversion/merge_lora.py
 python llama.cpp/convert_hf_to_gguf.py models/merged-model/qwen-2.5 --outfile models/gguf-output/qwen-2.5/Qwen-2.5-14B-Teacher-f16.gguf --outtype f16
 .\scripts\conversion\quantize_to_q4km.ps1 <input.gguf> <output.gguf>
-cd models/gguf-output/qwen-2.5 && ollama create teacher-q4km -f Modelfile
+cd models/gguf-output/qwen-2.5 && ollama create Qwen-2.5-FineTuned -f Modelfile
 ```
 
 El `Modelfile` de cada modelo replica el system prompt y template de chat usados durante su entrenamiento para mantener coherencia train/inference. Parámetros de generación: `temperature=0.15`, `repeat_penalty=1.15`, `top_p=0.9`, `num_ctx=8192`.
@@ -126,7 +126,7 @@ Chat interactivo para consulta de PDFs con búsqueda híbrida:
 | Vector store | ChromaDB (persistente) |
 | Búsqueda | Semántica multi-query + keywords + exhaustiva, fusión RRF |
 | Reranking | BAAI/bge-reranker-v2-m3 (cross-encoder multilingual) |
-| LLM | teacher-q4km vía Ollama |
+| LLM | Qwen-2.5-FineTuned vía Ollama |
 | Generación | temperature=0.15, repeat_penalty=1.15, top_p=0.85 |
 
 **Pipeline por pregunta:** descomposición LLM → búsqueda semántica multi-query → keywords → fusión RRF → reranking cross-encoder → generación con contexto.
@@ -177,7 +177,7 @@ La migración a Qwen 2.5 14B (cuantizado a Q4_K_M) ha supuesto una mejora consis
 | RAG | CPU suficiente, Ollama | `pip install -r rag/requirements.txt` |
 | Evaluación | `GEMINI_API_KEY` configurada | `pip install -r evaluation/requirements.txt` |
 
-El sistema RAG requiere que Ollama tenga cargados los modelos `teacher-q4km` y `embeddinggemma`.
+El sistema RAG requiere que Ollama tenga cargados los modelos `Qwen-2.5-FineTuned` y `embeddinggemma`.
 
 ## Licencia
 
