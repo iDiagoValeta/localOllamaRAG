@@ -1,4 +1,4 @@
-# Teacher — Fine-tuning para RAG Contextual
+# MonkeyGrab — Fine-tuning para RAG Contextual
 
 Trabajo de Fin de Grado — **Universitat Politècnica de València**
 
@@ -107,7 +107,7 @@ scripts\conversion\build_ollama.bat
 
 # O paso a paso:
 python scripts/conversion/merge_lora.py
-python llama.cpp/convert_hf_to_gguf.py models/merged-model/qwen-2.5 --outfile models/gguf-output/qwen-2.5/Qwen-2.5-14B-Teacher-f16.gguf --outtype f16
+python llama.cpp/convert_hf_to_gguf.py models/merged-model/qwen-2.5 --outfile models/gguf-output/qwen-2.5/Qwen-2.5-14B-MonkeyGrab-f16.gguf --outtype f16
 .\scripts\conversion\quantize_to_q4km.ps1 <input.gguf> <output.gguf>
 cd models/gguf-output/qwen-2.5 && ollama create Qwen-2.5-FineTuned -f Modelfile
 ```
