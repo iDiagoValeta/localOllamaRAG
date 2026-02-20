@@ -194,13 +194,9 @@ def build_prompt(mode: str, model: str = "") -> str:
 # PANTALLA DE BIENVENIDA
 # ─────────────────────────────────────────────────────────────────────
 
-def render_welcome(config: Dict[str, Any]) -> None:
+def render_welcome() -> None:
     """
     Muestra la pantalla de bienvenida con comandos disponibles.
-
-    Args:
-        config: Dict con claves chunk_size, chunk_overlap, extractor,
-                reranker, hybrid, llm_decomp
     """
     T = Theme
 
@@ -230,18 +226,8 @@ def render_welcome(config: Dict[str, Any]) -> None:
     print(f"  {T.TEXT}Comandos:{T.RESET}\n")
     for cmd, desc in commands:
         print(f"    {T.BRAND}{cmd:<10}{T.RESET} {T.TEXT_DIM}{desc}{T.RESET}")
-
-    # Config footer
-    print(f"\n  {T.BORDER}{Theme.BOX_H * (Theme.terminal_width() - 4)}{T.RESET}")
-    cfg_parts = [
-        f"chunks={config.get('chunk_size', '?')}c",
-        f"overlap={config.get('chunk_overlap', '?')}c",
-        f"extractor={config.get('extractor', '?')}",
-        f"reranker={'on' if config.get('reranker') else 'off'}",
-        f"hybrid={'on' if config.get('hybrid') else 'off'}",
-        f"llm-decomp={'on' if config.get('llm_decomp') else 'off'}",
-    ]
-    print(f"  {T.TEXT_DIM}{' · '.join(cfg_parts)}{T.RESET}")
+        
+    print()
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -252,7 +238,7 @@ def render_help() -> None:
     """Muestra la ayuda completa del sistema."""
     T = Theme
     render_banner("AYUDA", "simple", color=T.BRAND_DIM)
-    render_welcome({})  # Se rellenará en runtime
+    render_welcome()
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -268,37 +254,43 @@ def render_init_info(info: Dict[str, Any]) -> None:
               modelo_chat, modelo_auxiliar, modelo_embedding,
               extractor, busqueda, llm_decomp, reranker, reranker_model,
               reranker_device, chunk_size, chunk_overlap, embed_max,
-              embed_prefix_desc, db_version
+              embed_prefix_desc, db_version, total_documentos, total_fragmentos
     """
     T = Theme
+    L_WIDTH = 18  # Ancho fijo para las etiquetas
 
     render_banner("INICIALIZANDO", "simple", color=T.BORDER)
 
-    print(f"\n  {T.TEXT_DIM}cwd{T.RESET}       {T.TEXT_MUTED}{info.get('cwd', '')}{T.RESET}")
-    print(f"  {T.TEXT_DIM}pdfs{T.RESET}      {T.TEXT_MUTED}{info.get('pdfs_path', '')}{T.RESET}")
-    print(f"  {T.TEXT_DIM}db{T.RESET}        {T.TEXT_MUTED}{info.get('db_path', '')}{T.RESET}")
-    print(f"  {T.TEXT_DIM}historial{T.RESET} {T.TEXT_MUTED}{info.get('historial_path', '')}{T.RESET}")
-
     print(f"\n  {T.TEXT}modelos:{T.RESET}")
-    print(f"    {T.CYAN}rag / finetuned{T.RESET}  {T.TEXT_MUTED}{info.get('modelo_chat', '')}{T.RESET}")
-    print(f"    {T.PURPLE}chat / auxiliar{T.RESET}  {T.TEXT_MUTED}{info.get('modelo_auxiliar', '')}{T.RESET}")
-    print(f"    {T.TEXT_DIM}embeddings{T.RESET}      {T.TEXT_MUTED}{info.get('modelo_embedding', '')}{T.RESET}")
+    print(f"    {T.CYAN}{'rag / finetuned':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('modelo_chat', '')}{T.RESET}")
+    print(f"    {T.PURPLE}{'chat / base':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('modelo_auxiliar', '')}{T.RESET}")
+    print(f"    {T.TEXT_DIM}{'embeddings':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('modelo_embedding', '')}{T.RESET}")
 
     print(f"\n  {T.TEXT}pipeline:{T.RESET}")
-    print(f"    {T.TEXT_DIM}extractor{T.RESET}   {T.TEXT_MUTED}{info.get('extractor', '')}{T.RESET}")
-    print(f"    {T.TEXT_DIM}búsqueda{T.RESET}    {T.TEXT_MUTED}{info.get('busqueda', '')}{T.RESET}")
-    print(f"    {T.TEXT_DIM}llm-decomp{T.RESET}  {T.TEXT_MUTED}{info.get('llm_decomp', '')}{T.RESET}")
-    print(f"    {T.TEXT_DIM}reranker{T.RESET}    {T.TEXT_MUTED}{info.get('reranker', '')}{T.RESET}")
+    print(f"    {T.TEXT_DIM}{'extractor':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('extractor', '')}{T.RESET}")
+    print(f"    {T.TEXT_DIM}{'búsqueda':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('busqueda', '')}{T.RESET}")
+    print(f"    {T.TEXT_DIM}{'llm-decomp':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('llm_decomp', '')}{T.RESET}")
+    
+    # Flatten reranker
+    if info.get('reranker') == 'on':
+        rr_model = info.get('reranker_model', '')
+        rr_device = info.get('reranker_device', '')
+        print(f"    {T.TEXT_DIM}{'reranker':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}on ({rr_model} - {rr_device}){T.RESET}")
+    else:
+        print(f"    {T.TEXT_DIM}{'reranker':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}off{T.RESET}")
 
-    if info.get('reranker_model'):
-        print(f"      {T.TEXT_DIM}modelo{T.RESET}    {T.TEXT_MUTED}{info['reranker_model']}{T.RESET}")
-        print(f"      {T.TEXT_DIM}device{T.RESET}    {T.TEXT_MUTED}{info.get('reranker_device', '')}{T.RESET}")
+    # Flatten chunks
+    chunk_str = f"{info.get('chunk_size', '')}c (overlap: {info.get('chunk_overlap', '')}c)"
+    print(f"    {T.TEXT_DIM}{'chunks':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{chunk_str}{T.RESET}")
+    print(f"    {T.TEXT_DIM}{'embed-max':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('embed_max', '')}c{T.RESET}")
+    print(f"    {T.TEXT_DIM}{'embed-pfx':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('embed_prefix_desc', '')}{T.RESET}")
+    print(f"    {T.TEXT_DIM}{'db-version':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('db_version', '')}{T.RESET}")
 
-    print(f"    {T.TEXT_DIM}chunks{T.RESET}      {T.TEXT_MUTED}{info.get('chunk_size', '')}c  "
-          f"overlap: {info.get('chunk_overlap', '')}c  "
-          f"embed-max: {info.get('embed_max', '')}c{T.RESET}")
-    print(f"    {T.TEXT_DIM}embed-pfx{T.RESET}   {T.TEXT_MUTED}{info.get('embed_prefix_desc', '')}{T.RESET}")
-    print(f"    {T.TEXT_DIM}db-version{T.RESET}  {T.TEXT_MUTED}{info.get('db_version', '')}{T.RESET}")
+    print(f"\n  {T.TEXT}estado:{T.RESET}")
+    doc_count = info.get('total_documentos', 0)
+    frag_count = info.get('total_fragmentos', 0)
+    print(f"    {T.TEXT_DIM}{'documentos':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{doc_count} PDF(s) detectados{T.RESET}")
+    print(f"    {T.TEXT_DIM}{'fragmentos index.':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{frag_count} en base de datos{T.RESET}")
 
 
 # ─────────────────────────────────────────────────────────────────────

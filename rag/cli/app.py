@@ -61,9 +61,6 @@ class MonkeyGrabCLI:
         # Logo
         print(get_logo(self.rag.MODELO_DESC))
 
-        # Info de inicialización
-        self._show_init_info()
-
         # Base de datos
         client = chromadb.PersistentClient(path=self.rag.PATH_DB)
         self.collection = client.get_or_create_collection(
@@ -78,11 +75,18 @@ class MonkeyGrabCLI:
                 if f.lower().endswith('.pdf')
             ]
         except FileNotFoundError:
-            print(f"\n  {Theme.YELLOW}{Theme.ICON_WARN}{Theme.RESET} "
-                  f"{Theme.TEXT_DIM}No existe la carpeta de PDFs: "
-                  f"{self.rag.CARPETA_DOCS}{Theme.RESET}")
+            pass
 
-        print(f"\n  {Theme.TEXT_DIM}PDFs detectados: {len(archivos_pdf)}{Theme.RESET}")
+        pdfs_count = len(archivos_pdf)
+        db_count = self.collection.count()
+
+        # Info de inicialización
+        self._show_init_info(pdfs_count, db_count)
+
+        if not archivos_pdf:
+            print(f"\n  {Theme.YELLOW}{Theme.ICON_WARN}{Theme.RESET} "
+                  f"{Theme.TEXT_DIM}No existe la carpeta de PDFs o está vacía: "
+                  f"{self.rag.CARPETA_DOCS}{Theme.RESET}")
 
         # Indexar si está vacía
         if self.collection.count() == 0:
@@ -99,12 +103,9 @@ class MonkeyGrabCLI:
                 print(f"\n  {Theme.YELLOW}{Theme.ICON_WARN}{Theme.RESET} "
                       f"{Theme.TEXT_DIM}No se indexaron documentos.{Theme.RESET}")
                 return
-        else:
-            print(f"  {Theme.TEXT_DIM}base de datos: {self.collection.count()} "
-                  f"fragmentos cargados{Theme.RESET}")
 
         # Bienvenida
-        renderer.render_welcome(self._get_config())
+        renderer.render_welcome()
 
         # Historial
         self.historial_chat = self.rag.cargar_historial()
@@ -204,6 +205,8 @@ class MonkeyGrabCLI:
 
     def _process_rag(self, pregunta: str) -> None:
         """Procesa una pregunta en modo RAG."""
+        renderer.render_response_header("rag", self.rag.MODELO_CHAT)
+
         if len(pregunta.strip()) < self.rag.MIN_LONGITUD_PREGUNTA_RAG:
             print(MESSAGES['question_too_short'])
             return
@@ -321,7 +324,7 @@ class MonkeyGrabCLI:
 
     def _cmd_help(self) -> bool:
         renderer.render_banner("AYUDA", "simple", color=Theme.BRAND_DIM)
-        renderer.render_welcome(self._get_config())
+        renderer.render_welcome()
         return False
 
     def _cmd_docs(self) -> bool:
@@ -375,7 +378,7 @@ class MonkeyGrabCLI:
             'llm_decomp': self.rag.USAR_LLM_QUERY_DECOMPOSITION,
         }
 
-    def _show_init_info(self) -> None:
+    def _show_init_info(self, total_documentos: int = 0, total_fragmentos: int = 0) -> None:
         """Recopila y muestra info de inicialización."""
         rag = self.rag
 
@@ -414,6 +417,8 @@ class MonkeyGrabCLI:
             'embed_max': rag.MAX_CHARS_EMBED,
             'embed_prefix_desc': rag._EMBED_PREFIX_DESC,
             'db_version': rag._DB_VERSION,
+            'total_documentos': total_documentos,
+            'total_fragmentos': total_fragmentos,
         })
 
     def _show_topics(self) -> None:

@@ -752,9 +752,9 @@ def busqueda_por_keywords(
     metricas['resultados_totales'] = len(resultados_keyword)
     
     if keywords_encontradas:
-        print(f"   + keywords: {', '.join(list(keywords_encontradas)[:10])}")
+        print(f"        {Theme.BLUE}+{Theme.RESET} {'keywords:':<33}{', '.join(list(keywords_encontradas)[:10])}")
     else:
-        print(f"   . sin coincidencias directas por keywords")
+        print(f"        {Theme.BLUE}·{Theme.RESET} {'sin coincidencias directas por keywords':<33}")
     
     if LOGGING_METRICAS:
         logging.info(f"Búsqueda keywords: {metricas['keywords_encontradas']}/{metricas['keywords_totales']} encontradas, {metricas['resultados_totales']} resultados")
@@ -888,8 +888,8 @@ def obtener_modelo_reranker():
             
             device = _detectar_dispositivo_reranker()
             
-            print(f"\n  * Cargando reranker: {modelo_nombre}")
-            print(f"    dispositivo: {device.upper()}" + (" (FP16)" if device == "cuda" else ""))
+            print(f"\n        {Theme.TEXT_DIM}* Cargando reranker: {modelo_nombre}{Theme.RESET}")
+            print(f"          {Theme.TEXT_DIM} dispositivo: {device.upper()}" + (" (FP16)" if device == "cuda" else "") + f"{Theme.RESET}")
 
             model_kwargs = {"torch_dtype": "float16"} if device == "cuda" else {}
             # Suprimir barras de progreso de tqdm durante la carga
@@ -901,7 +901,7 @@ def obtener_modelo_reranker():
                     model_kwargs=model_kwargs,
                 )
 
-            print(f"    + reranker cargado en {device.upper()}")
+            print(f"        {Theme.BLUE}+{Theme.RESET} {f'reranker cargado en {device.upper()}':<33}")
         except Exception as e:
             logging.error(f"Error cargando modelo de reranking: {e}")
             return None
@@ -1081,7 +1081,7 @@ def realizar_busqueda_hibrida(
         print(f"\n{Theme.BLUE} >> [0/4] descomponiendo pregunta...{Theme.RESET}")
         llm_queries = generar_queries_con_llm(pregunta)
         if llm_queries:
-            print(f"   + {len(llm_queries)} sub-queries generadas")
+            print(f"        {Theme.BLUE}+{Theme.RESET} {len(llm_queries):<2} {'sub-queries generadas':<30}")
 
     print(f"\n{Theme.BLUE} >> [1/4] busqueda semantica...{Theme.RESET}")
 
@@ -1102,7 +1102,7 @@ def realizar_busqueda_hibrida(
         if lq not in queries:
             queries.append(lq)
     
-    print(f"   . {len(queries)} variante(s) de la pregunta")
+    print(f"        {Theme.BLUE}·{Theme.RESET} {len(queries):<2} {'variante(s) de la pregunta':<30}")
 
     all_semantic_results = {}
     
@@ -1145,7 +1145,7 @@ def realizar_busqueda_hibrida(
         'fragmentos_unicos': len(all_semantic_results)
     }
     
-    print(f"   + {len(all_semantic_results)} fragmentos unicos")
+    print(f"        {Theme.BLUE}+{Theme.RESET} {len(all_semantic_results):<2} {'fragmentos unicos':<30}")
 
     results_keyword = []
     metricas_keywords = {}
@@ -1153,7 +1153,7 @@ def realizar_busqueda_hibrida(
         print(f"\n{Theme.BLUE} >> [2/4] busqueda por keywords...{Theme.RESET}")
         keywords = extraer_keywords(pregunta)
         if keywords:
-            print(f"   . detectadas: {', '.join(keywords[:8])}")
+            print(f"        {Theme.BLUE}·{Theme.RESET} {'detectadas:':<33}{', '.join(keywords[:8])}")
         results_keyword, metricas_keywords = busqueda_por_keywords(pregunta, collection)
         metricas_totales['fase_keywords'] = metricas_keywords
 
@@ -1187,7 +1187,7 @@ def realizar_busqueda_hibrida(
     
     metricas_exhaustiva = {}
     if terminos_criticos:
-        print(f"\n{Theme.BLUE} >> busqueda profunda: {', '.join(terminos_criticos[:6])}{Theme.RESET}")
+        print(f"\n{Theme.BLUE} >> busqueda profunda:{Theme.RESET} {', '.join(terminos_criticos[:6])}")
         resultados_exhaustivos, metricas_exhaustiva = busqueda_exhaustiva_texto(
             terminos_criticos, collection, max_results=30
         )
@@ -1235,7 +1235,7 @@ def realizar_busqueda_hibrida(
             top_k=TOP_K_AFTER_RERANK
         )
         metricas_totales['fase_reranking'] = metricas_rerank
-        print(f"   + top {len(fragmentos_ranked)} tras reranking")
+        print(f"        {Theme.BLUE}+{Theme.RESET} {'top ' + str(len(fragmentos_ranked)):<33} tras reranking")
     
     mejor_score = fragmentos_ranked[0]['score_final'] if fragmentos_ranked else 0
     metricas_totales['resultados_finales'] = len(fragmentos_ranked)
@@ -1586,7 +1586,7 @@ def generar_respuesta(
 
     mensaje_usuario = f"{pregunta}\n\n<contexto>{contexto_str}</contexto>"
 
-    print(f"  {len(fragmentos)} fragmento(s) de contexto  |  modelo: {MODELO_CHAT}")
+    print(f"  {Theme.TEXT_DIM}{len(fragmentos)} fragmento(s) de contexto  {Theme.BORDER}│{Theme.RESET}  {Theme.TEXT_DIM}modelo: {MODELO_CHAT}{Theme.RESET}")
     renderer.render_separator()
 
     stream = ollama.chat(

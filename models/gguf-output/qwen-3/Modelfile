@@ -1,0 +1,14 @@
+# =============================================================================
+# MODELFILE: Qwen3-14B sin modo thinking
+# =============================================================================
+# Modelo derivado de qwen3:14b con thinking desactivado por defecto.
+# El template inyecta /no_think en cada mensaje del usuario.
+# =============================================================================
+
+FROM qwen3:14b
+
+TEMPLATE """{{ if .System }}<|im_start|>system
+{{ .System }}<|im_end|>{{ end }}<|im_start|>user
+/no_think
+{{ .Prompt }}<|im_end|><|im_start|>assistant
+{{ .Response }}<|im_end|>"""

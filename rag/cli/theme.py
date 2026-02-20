@@ -164,8 +164,7 @@ def get_logo(modelo_desc: str = "") -> str:
 {T.MONO_BODY}          -^-\\  \\{T.MONO_DARK}       |        ){T.RESET}
 {T.MONO_DARK}               `\\_______/^\\______/{T.RESET}
 
-{T.BOLD}{T.BRAND}              M O N K E Y G R A B{T.RESET}
-{T.TEXT_DIM}         RAG Dual  {T.BORDER}·{T.TEXT_DIM}  {T.TEXT_MUTED}{modelo_desc}{T.TEXT_DIM}  {T.BORDER}·{T.TEXT_DIM}  Fine-tuned{T.RESET}"""
+{T.BOLD}{T.BRAND}              M O N K E Y G R A B{T.RESET}"""
 
     return logo
 
