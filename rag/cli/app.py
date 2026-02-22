@@ -1,20 +1,22 @@
 """
-MonkeyGrab CLI — App
-=====================
+MonkeyGrab CLI — App (UI v2)
+==============================
 
 Bucle principal de la interfaz interactiva. Orquesta el prompt,
 el dispatch de comandos y la integración con el motor RAG.
+
+Usa la clase Display (rich) para toda la salida visual.
 """
 
 import os
 import shutil
+import time
 from typing import List, Dict, Any, Optional
 from collections import Counter
 
 import chromadb
 
-from rag.cli.theme import Theme, get_logo, MESSAGES
-from rag.cli import renderer
+from rag.cli.display import ui
 
 
 class MonkeyGrabCLI:
@@ -59,7 +61,7 @@ class MonkeyGrabCLI:
     def run(self) -> None:
         """Punto de entrada principal. Inicializa y arranca el bucle."""
         # Logo
-        print(get_logo(self.rag.MODELO_DESC))
+        ui.logo()
 
         # Base de datos
         client = chromadb.PersistentClient(path=self.rag.PATH_DB)
@@ -84,36 +86,29 @@ class MonkeyGrabCLI:
         self._show_init_info(pdfs_count, db_count)
 
         if not archivos_pdf:
-            print(f"\n  {Theme.YELLOW}{Theme.ICON_WARN}{Theme.RESET} "
-                  f"{Theme.TEXT_DIM}No existe la carpeta de PDFs o está vacía: "
-                  f"{self.rag.CARPETA_DOCS}{Theme.RESET}")
+            ui.no_pdfs(self.rag.CARPETA_DOCS)
 
         # Indexar si está vacía
         if self.collection.count() == 0:
             total_chunks = self.rag.indexar_documentos(
                 self.rag.CARPETA_DOCS, self.collection
             )
-            if total_chunks > 0:
-                renderer.render_banner("INDEXACIÓN COMPLETADA", "doble", color=Theme.GREEN_DIM)
-                print(f"\n  {Theme.GREEN}{Theme.ICON_OK}{Theme.RESET} "
-                      f"{Theme.TEXT}fragmentos indexados: {total_chunks}{Theme.RESET}")
-                print(f"  {Theme.TEXT_DIM}documentos en colección: "
-                      f"{self.collection.count()}{Theme.RESET}")
-            else:
-                print(f"\n  {Theme.YELLOW}{Theme.ICON_WARN}{Theme.RESET} "
-                      f"{Theme.TEXT_DIM}No se indexaron documentos.{Theme.RESET}")
+            if total_chunks == 0:
+                ui.warning("No se indexaron documentos.")
                 return
+            else:
+                ui.success(f"{total_chunks} fragmentos indexados")
 
         # Bienvenida
-        renderer.render_welcome()
+        ui.welcome()
 
         # Historial
         self.historial_chat = self.rag.cargar_historial()
         if self.historial_chat:
-            renderer.render_history_loaded(len(self.historial_chat))
+            ui.history_loaded(len(self.historial_chat))
 
-        print(f"\n  {Theme.TEXT_DIM}modo activo: {Theme.PURPLE}chat{Theme.RESET}  "
-              f"{Theme.TEXT_DIM}(usa {Theme.CYAN}/rag{Theme.TEXT_DIM} para consultar documentos){Theme.RESET}")
+        # El modo inicial es chat, pero lo mantenemos en silencio
+        # ui.mode_change("chat", self.rag.MODELO_AUXILIAR)
 
         # Bucle principal
         self._loop()
@@ -128,12 +123,12 @@ class MonkeyGrabCLI:
             # Mostrar prompt
             model = (self.rag.MODELO_AUXILIAR if self.mode == "chat"
                      else self.rag.MODELO_CHAT)
-            prompt_str = renderer.build_prompt(self.mode, model)
+            prompt_str = ui.prompt(self.mode, model)
 
             try:
                 pregunta = input(prompt_str).strip()
             except (EOFError, KeyboardInterrupt):
-                print(f"\n{MESSAGES['farewell']}")
+                ui.farewell()
                 self.rag.guardar_historial(self.historial_chat)
                 break
 
@@ -150,7 +145,7 @@ class MonkeyGrabCLI:
 
             # Comando desconocido
             if pregunta.startswith('/'):
-                renderer.render_unknown_command(pregunta)
+                ui.unknown_command(pregunta)
                 continue
 
             # Procesar pregunta según modo
@@ -165,11 +160,11 @@ class MonkeyGrabCLI:
 
     def _process_chat(self, pregunta: str) -> None:
         """Procesa una pregunta en modo chat."""
-        renderer.render_response_header("chat", self.rag.MODELO_AUXILIAR)
+        ui.response_header("chat", self.rag.MODELO_AUXILIAR)
 
         respuesta = self._chat_stream(pregunta)
 
-        renderer.render_response_footer()
+        ui.response_footer()
 
         self.historial_chat.append({"role": "user", "content": pregunta})
         self.historial_chat.append({"role": "assistant", "content": respuesta})
@@ -197,7 +192,7 @@ class MonkeyGrabCLI:
             content = (chunk.get("message", {}).get("content", "")
                        or chunk.get("content", ""))
             if content:
-                renderer.stream_token(content)
+                ui.stream_token(content)
                 respuesta += content
         print()
 
@@ -205,27 +200,47 @@ class MonkeyGrabCLI:
 
     def _process_rag(self, pregunta: str) -> None:
         """Procesa una pregunta en modo RAG."""
-        renderer.render_response_header("rag", self.rag.MODELO_CHAT)
-
         if len(pregunta.strip()) < self.rag.MIN_LONGITUD_PREGUNTA_RAG:
-            print(MESSAGES['question_too_short'])
+            ui.question_too_short()
+            self.rag.guardar_debug_rag(
+                pregunta,
+                motivo_interrupcion="Pregunta demasiado corta.",
+                metricas={"longitud": len(pregunta.strip()), "min_requerido": self.rag.MIN_LONGITUD_PREGUNTA_RAG}
+            )
             return
+
+        # Pipeline RAG con spinner
+        status = ui.pipeline_start("Buscando conceptos en los documentos...")
 
         # Búsqueda híbrida
         fragmentos_ranked, mejor_score, metricas = \
             self.rag.realizar_busqueda_hibrida(pregunta, self.collection)
 
         if not fragmentos_ranked:
-            print(f"\n{MESSAGES['no_results']}")
+            ui.pipeline_stop()
+            ui.no_results()
+            self.rag.guardar_debug_rag(
+                pregunta,
+                fragmentos=[],
+                motivo_interrupcion="No se encontraron fragmentos.",
+                metricas=metricas
+            )
             return
 
         if mejor_score < self.rag.UMBRAL_RELEVANCIA:
-            print(f"\n{MESSAGES['out_of_scope']}")
-            print(f"    {Theme.TEXT_DIM}score: {mejor_score:.4f}  "
-                  f"umbral: {self.rag.UMBRAL_RELEVANCIA}{Theme.RESET}")
+            ui.pipeline_stop()
+            ui.out_of_scope(mejor_score, self.rag.UMBRAL_RELEVANCIA)
+            self.rag.guardar_debug_rag(
+                pregunta,
+                fragmentos=fragmentos_ranked,
+                motivo_interrupcion=f"Score insuficiente: {mejor_score:.4f}",
+                metricas={**metricas, "mejor_score": mejor_score}
+            )
             return
 
         # Filtro reranker
+        ui.pipeline_update("Re-ordenando resultados...")
+
         if self.rag.USAR_RERANKER:
             fragmentos_filtrados = [
                 f for f in fragmentos_ranked
@@ -233,7 +248,14 @@ class MonkeyGrabCLI:
                    >= self.rag.UMBRAL_SCORE_RERANKER
             ]
             if not fragmentos_filtrados:
-                print(f"\n{MESSAGES['no_results']}")
+                ui.pipeline_stop()
+                ui.no_results()
+                self.rag.guardar_debug_rag(
+                    pregunta,
+                    fragmentos=fragmentos_ranked,
+                    motivo_interrupcion="Reranker filtró todos los candidatos.",
+                    metricas={**metricas, "umbral_reranker": self.rag.UMBRAL_SCORE_RERANKER}
+                )
                 return
             fragmentos_ranked = fragmentos_filtrados
 
@@ -257,12 +279,16 @@ class MonkeyGrabCLI:
                 chars_acum += len(f['doc'])
             fragmentos_finales = fragmentos_truncados
 
-        renderer.render_success(
-            f"contexto listo: {len(fragmentos_finales)} fragmento(s)"
-        )
+        ui.pipeline_update("Generando respuesta...")
+        ui.pipeline_stop()
 
         # Generar respuesta
+        ui.response_header("rag", self.rag.MODELO_CHAT)
         self.rag.generar_respuesta(pregunta, fragmentos_finales)
+
+        # Panel de fuentes
+        ui.sources_panel(fragmentos_finales)
+        ui.response_footer()
 
     def _expand_context(self, fragmentos: list, ids_usados: set) -> None:
         """Expande contexto con chunks adyacentes."""
@@ -304,32 +330,31 @@ class MonkeyGrabCLI:
 
     def _cmd_rag(self) -> bool:
         self.mode = "rag"
-        renderer.render_mode_change("rag", self.rag.MODELO_CHAT)
+        ui.mode_change("rag", self.rag.MODELO_CHAT)
         return False
 
     def _cmd_chat(self) -> bool:
         self.mode = "chat"
-        renderer.render_mode_change("chat", self.rag.MODELO_AUXILIAR)
+        ui.mode_change("chat", self.rag.MODELO_AUXILIAR)
         return False
 
     def _cmd_clear(self) -> bool:
         self.rag.limpiar_historial(self.historial_chat)
-        renderer.render_history_cleared()
+        ui.history_cleared()
         return False
 
     def _cmd_stats(self) -> bool:
         docs = self.rag.obtener_documentos_indexados(self.collection)
-        renderer.render_stats(self.collection.count(), docs)
+        ui.stats_table(self.collection.count(), docs)
         return False
 
     def _cmd_help(self) -> bool:
-        renderer.render_banner("AYUDA", "simple", color=Theme.BRAND_DIM)
-        renderer.render_welcome()
+        ui.welcome()
         return False
 
     def _cmd_docs(self) -> bool:
         docs = self.rag.obtener_documentos_indexados(self.collection)
-        renderer.render_docs(docs)
+        ui.docs_table(docs)
         return False
 
     def _cmd_topics(self) -> bool:
@@ -337,11 +362,11 @@ class MonkeyGrabCLI:
         return False
 
     def _cmd_reindex(self) -> bool:
-        renderer.render_reindex_start()
+        ui.reindex_start()
         try:
             if os.path.exists(self.rag.PATH_DB):
                 shutil.rmtree(self.rag.PATH_DB)
-                renderer.render_success("base de datos anterior eliminada")
+                ui.success("base de datos anterior eliminada")
 
             client_new = chromadb.PersistentClient(path=self.rag.PATH_DB)
             collection_new = client_new.get_or_create_collection(
@@ -350,33 +375,21 @@ class MonkeyGrabCLI:
             total = self.rag.indexar_documentos(
                 self.rag.CARPETA_DOCS, collection_new
             )
-            renderer.render_reindex_complete(total)
+            ui.reindex_complete(total)
             self.rag.guardar_historial(self.historial_chat)
             return True  # Exit after reindex
         except Exception as e:
-            renderer.render_error(f"error durante reindexación: {e}")
+            ui.error(f"error durante reindexación: {e}")
             return False
 
     def _cmd_exit(self) -> bool:
         self.rag.guardar_historial(self.historial_chat)
-        print(f"\n{MESSAGES['farewell']}")
+        ui.farewell()
         return True
 
     # ─────────────────────────────────────────────────────────────
     # HELPERS
     # ─────────────────────────────────────────────────────────────
-
-    def _get_config(self) -> Dict[str, Any]:
-        """Construye dict de configuración para render_welcome."""
-        return {
-            'chunk_size': self.rag.CHUNK_SIZE,
-            'chunk_overlap': self.rag.CHUNK_OVERLAP,
-            'extractor': ('pymupdf4llm'
-                          if self.rag.PYMUPDF_AVAILABLE else 'pypdf'),
-            'reranker': self.rag.USAR_RERANKER,
-            'hybrid': self.rag.USAR_BUSQUEDA_HIBRIDA,
-            'llm_decomp': self.rag.USAR_LLM_QUERY_DECOMPOSITION,
-        }
 
     def _show_init_info(self, total_documentos: int = 0, total_fragmentos: int = 0) -> None:
         """Recopila y muestra info de inicialización."""
@@ -393,11 +406,7 @@ class MonkeyGrabCLI:
             reranker_device = (reranker_device_val.upper()
                                + (' (FP16)' if reranker_device_val == 'cuda' else ''))
 
-        renderer.render_init_info({
-            'cwd': os.getcwd(),
-            'pdfs_path': rag.CARPETA_DOCS,
-            'db_path': rag.PATH_DB,
-            'historial_path': rag.HISTORIAL_PATH,
+        ui.init_panel({
             'modelo_chat': rag.MODELO_CHAT,
             'modelo_auxiliar': rag.MODELO_AUXILIAR,
             'modelo_embedding': rag.MODELO_EMBEDDING,
@@ -406,16 +415,11 @@ class MonkeyGrabCLI:
             'busqueda': ('híbrida (semántica + keywords)'
                          if rag.USAR_BUSQUEDA_HIBRIDA
                          else 'solo semántica'),
-            'llm_decomp': (f"on  modelo: {rag.MODELO_AUXILIAR}"
-                           if rag.USAR_LLM_QUERY_DECOMPOSITION
-                           else 'off'),
             'reranker': reranker_info,
             'reranker_model': reranker_model,
             'reranker_device': reranker_device,
             'chunk_size': rag.CHUNK_SIZE,
             'chunk_overlap': rag.CHUNK_OVERLAP,
-            'embed_max': rag.MAX_CHARS_EMBED,
-            'embed_prefix_desc': rag._EMBED_PREFIX_DESC,
             'db_version': rag._DB_VERSION,
             'total_documentos': total_documentos,
             'total_fragmentos': total_fragmentos,
@@ -426,7 +430,7 @@ class MonkeyGrabCLI:
         docs = self.rag.obtener_documentos_indexados(self.collection)
 
         if not docs:
-            renderer.render_topics([])
+            ui.topics_display([])
             return
 
         docs_data = []
@@ -455,10 +459,9 @@ class MonkeyGrabCLI:
                     frecuencias = Counter(significativas)
                     top = [w for w, _ in frecuencias.most_common(10)]
                     doc_info['terms'] = ', '.join(top) if top else None
-                    doc_info['sample'] = all_data['documents'][0][:300]
             except Exception:
                 pass
 
             docs_data.append(doc_info)
 
-        renderer.render_topics(docs_data)
+        ui.topics_display(docs_data)

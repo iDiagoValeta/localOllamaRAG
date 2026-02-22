@@ -74,3 +74,6 @@ rag/debug_rag/
 
 # Resultados de la evaluación con RAGAS
 ragas_scores.csv
+
+models/gguf-output/qwen3-4b
+models/gguf-output/qwen3-14b
