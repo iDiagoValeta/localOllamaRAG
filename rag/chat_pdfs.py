@@ -1569,9 +1569,9 @@ def guardar_debug_rag(
             f.write("─" * 80 + "\n")
             f.write("  CONFIGURACIÓN DEL PIPELINE\n")
             f.write("─" * 80 + "\n")
-            f.write(f"Modelo Chat (Teacher): {MODELO_CHAT}\n")
-            f.write(f"Contextual Retrieval (Indexación): {'SÍ (qwen3-14b)' if USAR_CONTEXTUAL_RETRIEVAL else 'NO'}\n")
-            f.write(f"RECOMP Synthesis (Generación): {'SÍ (qwen3-4b)' if USAR_RECOMP_SYNTHESIS else 'NO'}\n\n")
+            f.write(f"Modelo RAG: {_inferir_descripcion_modelo(MODELO_CHAT)}\n")
+            f.write(f"Contextual Retrieval (Indexación): {'SÍ (' + _inferir_descripcion_modelo(MODELO_CONTEXTUAL) + ')' if USAR_CONTEXTUAL_RETRIEVAL else 'NO'}\n")
+            f.write(f"RECOMP Synthesis (Generación): {'SÍ (' + _inferir_descripcion_modelo(MODELO_RECOMP) + ')' if USAR_RECOMP_SYNTHESIS else 'NO'}\n\n")
             
             f.write("─" * 80 + "\n")
             f.write("  PREGUNTA ORIGINAL\n")
@@ -1606,7 +1606,7 @@ def guardar_debug_rag(
             f.write(f"{respuesta or '(no generada)'}\n\n")
             
             f.write("─" * 80 + "\n")
-            f.write(f"  FRAGMENTOS RECUPERADOS ({len(fragmentos)}) - Pueden incluir Contextual Retrieval prependeado\n")
+            f.write(f"  FRAGMENTOS RECUPERADOS ({len(fragmentos)})\n")
             f.write("─" * 80 + "\n")
             for i, frag in enumerate(fragmentos, 1):
                 meta = frag.get('metadata', {})
@@ -1617,7 +1617,13 @@ def guardar_debug_rag(
                 f.write(f"Fuente: {meta.get('source', '?')}, pág. {pag + 1 if isinstance(pag, int) else pag}\n")
                 f.write(f"Score final: {score}  |  Score reranker: {score_rr}\n")
                 f.write(f"Sección: {meta.get('section_header', '(sin header)')}\n")
-                f.write(f"Texto original (con Contextual Retrieval si estaba activo al indexar):\n{frag.get('doc', '')}\n")
+                doc_text = frag.get('doc', '')
+                if '\\n\\n' in doc_text:
+                    ctx_part, orig_part = doc_text.split('\\n\\n', 1)
+                    f.write(f"[Contextual Retrieval]:\n{ctx_part}\n\n")
+                    f.write(f"[Texto del documento]:\n{orig_part}\n")
+                else:
+                    f.write(f"[Texto del documento]:\n{doc_text}\n")
         
         logging.info(f"Debug RAG guardado: {ruta}")
         
@@ -1641,22 +1647,23 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
     contexto_raw = "\n\n".join(textos_preparados)
 
     system_prompt = (
-        "You are a precise technical editor. Your task is to consolidate text fragments "
-        "into a comprehensive summary that PRESERVES ALL specific information.\n"
-        "ABSOLUTE RULES:\n"
-        "1. Extract and include EVERY named concept, technique, method, term, and "
-        "definition from EVERY fragment. Do NOT skip any fragment.\n"
+        "You are a context synthesizer. Your task is to distill the key concepts "
+        "from text fragments into a clear, concise summary.\n"
+        "RULES:\n"
+        "1. Extract ONLY the crucial concepts, definitions, and technical details "
+        "that directly answer the user's question.\n"
         "2. ONLY use information EXPLICITLY written in the fragments. "
-        "NEVER add information from your own knowledge.\n"
-        "3. Preserve all citations, references, numbers and formulas exactly.\n"
-        "4. If fragments contain DIFFERENT information, include ALL of it. "
-        "Fragments may come from different pages of the same document.\n"
-        "5. Output in the same language as the input fragments."
+        "NEVER add external knowledge.\n"
+        "3. Do NOT cite or reference fragment numbers, sources, pages, "
+        "or any document metadata. Write as continuous prose.\n"
+        "4. Preserve technical terms, formulas, and numerical values exactly.\n"
+        "5. Be concise: include only what is essential to understand the concepts.\n"
+        "6. Output in the same language as the input fragments."
     )
 
     focus_instruction = (
         f"Focus specifically on information answering: '{query_usuario}'. "
-        "Include ALL relevant details from ALL fragments."
+        "Include only the essential details."
         if query_usuario else 
         "Summarize the key technical definitions and comparisons."
     )
@@ -1664,7 +1671,7 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
     user_prompt = (
         f"{focus_instruction}\n\n"
         f"--- INPUT FRAGMENTS ---\n{contexto_raw}\n-----------------------\n\n"
-        "Detailed Summary (with citations):"
+        "Concise synthesis:"
     )
     
     try:
@@ -1676,7 +1683,7 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
             ],
             options={
                 "temperature": 0.1,
-                "num_predict": 2048,
+                "num_predict": 1024,
                 "top_p": 0.9,
                 "repeat_penalty": 1.15,
                 "num_ctx": 8192
@@ -1886,7 +1893,7 @@ def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
                 {"role": "system", "content": system_prompt},
                 {"role": "user",   "content": user_prompt}
             ],
-            options={"temperature": 0.2, "num_predict": 200}
+            options={"temperature": 0.2, "num_predict": 250}
         )
         contexto = response['message']['content'].strip()
         if contexto:
