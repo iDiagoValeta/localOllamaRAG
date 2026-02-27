@@ -101,6 +101,7 @@ SAMPLES_AINA = 14000
 # --- Evaluation ---
 EVAL_SAMPLES_PER_DATASET = 200
 MAX_NEW_TOKENS = 2048  # ~1500 words; allows fully detailed NotebookLM-style answers
+EVAL_MAX_NEW_TOKENS = 512  # reduced for eval to avoid OOM; sufficient to measure F1/completeness
 
 # --- Tokenization ---
 # MAX_LENGTH: total sequence length in training (prompt + context + response).
@@ -206,6 +207,7 @@ def generate_response(model, tokenizer, instruction, context, max_new_tokens=MAX
     """
     Generates an inference response using the same prompt format as training.
     Uses deterministic (greedy) decoding with thinking disabled.
+    Context is truncated to MAX_CONTEXT_TOKENS to mirror training and avoid OOM.
 
     Args:
         model: The model (base or adapted).
@@ -218,7 +220,11 @@ def generate_response(model, tokenizer, instruction, context, max_new_tokens=MAX
         Response text string.
     """
     ctx = (context or "").strip()
+
+    # Truncate context to MAX_CONTEXT_TOKENS (mirrors format_and_tokenize)
     if ctx:
+        ctx_ids = tokenizer(ctx, add_special_tokens=False, truncation=True, max_length=MAX_CONTEXT_TOKENS)["input_ids"]
+        ctx = tokenizer.decode(ctx_ids, skip_special_tokens=True)
         user_msg = f"{instruction}\n\n<context>{ctx}</context>"
     else:
         user_msg = instruction
@@ -274,6 +280,7 @@ def evaluate_on_datasets(model, tokenizer, eval_datasets, label="MODEL"):
     all_results = {}
 
     model.eval()
+    torch.cuda.empty_cache()
 
     for ds_name, ds in eval_datasets.items():
         results = []
@@ -287,7 +294,7 @@ def evaluate_on_datasets(model, tokenizer, eval_datasets, label="MODEL"):
             context = example["context"]
             ground_truth = example["response"]
 
-            pred = generate_response(model, tokenizer, instruction, context)
+            pred = generate_response(model, tokenizer, instruction, context, max_new_tokens=EVAL_MAX_NEW_TOKENS)
 
             f1 = compute_f1(pred, ground_truth)
             total_f1 += f1
@@ -667,10 +674,8 @@ def format_and_tokenize(examples):
             continue
 
         # Truncate context by tokens (more precise than by characters)
-        ctx_ids = tokenizer(ctx, add_special_tokens=False, truncation=False)["input_ids"]
-        if len(ctx_ids) > MAX_CONTEXT_TOKENS:
-            ctx_ids = ctx_ids[:MAX_CONTEXT_TOKENS]
-            ctx = tokenizer.decode(ctx_ids, skip_special_tokens=True)
+        ctx_ids = tokenizer(ctx, add_special_tokens=False, truncation=True, max_length=MAX_CONTEXT_TOKENS)["input_ids"]
+        ctx = tokenizer.decode(ctx_ids, skip_special_tokens=True)
         user_msg = f"{instruction}\n\n<context>{ctx}</context>"
 
         # Build prompt using apply_chat_template with thinking disabled
