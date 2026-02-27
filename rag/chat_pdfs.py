@@ -18,8 +18,6 @@ Pipeline RAG (etapas activables por flags):
 
 Uso:
     python chat_pdfs.py
-    set DOCS_FOLDER=C:\\ruta\\pdfs && python chat_pdfs.py   # Windows
-    DOCS_FOLDER=/ruta/pdfs python chat_pdfs.py               # Linux/macOS
 """
 
 # =============================================================================
