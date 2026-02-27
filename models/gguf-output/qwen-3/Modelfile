@@ -1,11 +1,60 @@
 # =============================================================================
-# MODELFILE: Qwen3-14B sin modo thinking
+# MODELFILE DE DESPLIEGUE EN OLLAMA (TFG)
 # =============================================================================
-# Modelo derivado de qwen3:14b con thinking desactivado por defecto.
-# El template inyecta /no_think en cada mensaje del usuario.
+# Configuración de inferencia para el modelo Qwen3-14B cuantizado a
+# Q4_K_M, entrenado para generación fundamentada en contexto (RAG).
+#
+# El modelo fue entrenado en modo no-thinking (enable_thinking=False), por lo
+# que el template inyecta /no_think en cada turno de usuario para mantener
+# coherencia entre entrenamiento e inferencia.
 # =============================================================================
 
-FROM qwen3:14b
+# =============================================================================
+# SECCIÓN 1: ARTEFACTO BASE GGUF
+# =============================================================================
+# Define el archivo GGUF cuantizado que se registrará como modelo Ollama.
+# =============================================================================
+
+FROM ./Qwen3-14B-Teacher-Q4_K_M.gguf
+
+# =============================================================================
+# SECCIÓN 2: SYSTEM PROMPT ALINEADO CON FINE-TUNING
+# =============================================================================
+# Reproduce exactamente el system prompt usado durante el entrenamiento
+# (train.py, líneas 406-412) para preservar el comportamiento aprendido
+# de respuesta anclada al contexto documental.
+# =============================================================================
+
+SYSTEM """You are a helpful assistant. Answer questions based EXCLUSIVELY on the provided context.
+Rules: Use ONLY the <context> content. Do NOT fabricate information. If the answer is not in the context, state it clearly. Be clear, concise, and well-structured."""
+
+# =============================================================================
+# SECCIÓN 3: HIPERPARÁMETROS DE GENERACIÓN
+# =============================================================================
+# Ajustes de decodificación orientados a fidelidad contextual y estabilidad.
+# =============================================================================
+
+PARAMETER temperature 0.15
+PARAMETER repeat_penalty 1.15
+PARAMETER top_p 0.9
+PARAMETER num_ctx 8192
+
+# =============================================================================
+# SECCIÓN 4: TOKENS DE PARADA
+# =============================================================================
+# Delimita correctamente los turnos de chat y evita generación fuera de formato.
+# =============================================================================
+
+PARAMETER stop "<|im_start|>"
+PARAMETER stop "<|im_end|>"
+
+# =============================================================================
+# SECCIÓN 5: TEMPLATE CONVERSACIONAL QWEN3 (NO-THINKING)
+# =============================================================================
+# Replica la estructura de mensajes usada durante entrenamiento con
+# enable_thinking=False. Se inyecta /no_think al inicio de cada mensaje
+# de usuario para desactivar el modo de razonamiento interno del modelo.
+# =============================================================================
 
 TEMPLATE """{{ if .System }}<|im_start|>system
 {{ .System }}<|im_end|>{{ end }}<|im_start|>user
