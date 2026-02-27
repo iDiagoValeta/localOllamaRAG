@@ -43,6 +43,11 @@ models/gguf-output/qwen-2.5/*
 !models/gguf-output/qwen-2.5/.gitkeep
 !models/gguf-output/qwen-2.5/Modelfile
 
+# GGUF output — Qwen 3 (solo Modelfile)
+models/gguf-output/qwen-3/*
+!models/gguf-output/qwen-3/.gitkeep
+!models/gguf-output/qwen-3/Modelfile
+
 # Logs
 *.log
 salida_*
