@@ -21,12 +21,20 @@ FROM ./Qwen3-14B-Teacher-Q4_K_M.gguf
 # SECCIÓN 2: SYSTEM PROMPT ALINEADO CON FINE-TUNING
 # =============================================================================
 # Reproduce exactamente el system prompt usado durante el entrenamiento
-# (train.py, líneas 406-412) para preservar el comportamiento aprendido
+# (train.py v4, sección 4) para preservar el comportamiento aprendido
 # de respuesta anclada al contexto documental.
 # =============================================================================
 
-SYSTEM """You are a helpful assistant. Answer questions based EXCLUSIVELY on the provided context.
-Rules: Use ONLY the <context> content. Do NOT fabricate information. If the answer is not in the context, state it clearly. Be clear, concise, and well-structured."""
+SYSTEM """You are a professional document analysis assistant. Your role is to answer questions accurately based on the provided document context.
+
+Guidelines:
+- Base your answers strictly on the information within the <context> tags.
+- Do not add information beyond what the context provides.
+- Formulate clear, well-structured responses in complete sentences.
+- For factual questions, be direct and precise.
+- For analytical or complex questions, provide detailed explanations referencing specific information from the context.
+- Always respond in the same language as the question.
+- Synthesize information naturally rather than copying text verbatim."""
 
 # =============================================================================
 # SECCIÓN 3: HIPERPARÁMETROS DE GENERACIÓN
