@@ -143,7 +143,7 @@ system_prompt = (
 print(f"\n--> [SECTION 2] Loading base model: {model_name}")
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
-    torch_dtype=torch.bfloat16,
+    dtype=torch.bfloat16,
     device_map="auto",
     trust_remote_code=True,
     attn_implementation="sdpa",
@@ -332,14 +332,15 @@ def evaluate_on_datasets(model, tokenizer, eval_datasets, label="MODEL"):
 # =============================================================================
 # Loads 4 RAG-native datasets with separate train and eval portions:
 #
-#   1. NarrativeQA     — train split for training, test split for evaluation
+#   1. NarrativeQA     — single split, partitioned into non-overlapping portions
 #   2. Neural-Bridge    — train split for training, test split for evaluation
 #   3. Dolly closed QA  — single split, partitioned into non-overlapping portions
 #   4. Aina RAG         — train split for training, test split for evaluation
 #
-# For Dolly (no dedicated test split), the eval portion is taken from
-# indices AFTER the training portion using the same shuffle seed,
-# guaranteeing zero overlap.
+# For datasets without a dedicated test split (NarrativeQA, Dolly), the
+# train loader reserves EVAL_SAMPLES_PER_DATASET samples and the eval
+# loader takes those reserved samples via index-offset with the same
+# shuffle seed (42), guaranteeing zero overlap.
 #
 # Each dataset is normalized to (instruction, context, response) format.
 # =============================================================================
@@ -405,13 +406,16 @@ def _filter_valid(example):
 # --- Train dataset loaders ---
 
 def load_narrativeqa_train(n_samples):
-    """NarrativeQA train split for training."""
+    """NarrativeQA train portion — reserves EVAL_SAMPLES_PER_DATASET for eval."""
     print(f"    Loading NarrativeQA train, target: {n_samples}...")
     ds = load_dataset("meithnav/narrativeqa", split="train")
     ds = ds.map(_normalize_narrativeqa, remove_columns=ds.column_names)
     ds = ds.filter(_filter_valid)
-    ds = ds.shuffle(seed=42).select(range(min(n_samples, len(ds))))
-    print(f"    NarrativeQA train: {len(ds)} samples")
+    ds = ds.shuffle(seed=42)
+    max_train = max(0, len(ds) - EVAL_SAMPLES_PER_DATASET)
+    actual = min(n_samples, max_train)
+    ds = ds.select(range(actual))
+    print(f"    NarrativeQA train: {len(ds)} samples (reserved {EVAL_SAMPLES_PER_DATASET} for eval)")
     return ds
 
 
@@ -427,13 +431,16 @@ def load_neural_bridge_train(n_samples):
 
 
 def load_dolly_train(n_samples):
-    """Dolly train portion (context-grounded subset)."""
+    """Dolly train portion — reserves EVAL_SAMPLES_PER_DATASET for eval."""
     print(f"    Loading Dolly QA train, target: {n_samples}...")
     ds = load_dataset("databricks/databricks-dolly-15k", split="train")
     ds = ds.map(_normalize_dolly, remove_columns=ds.column_names)
     ds = ds.filter(_filter_valid)
-    ds = ds.shuffle(seed=42).select(range(min(n_samples, len(ds))))
-    print(f"    Dolly QA train: {len(ds)} samples (context-grounded)")
+    ds = ds.shuffle(seed=42)
+    max_train = max(0, len(ds) - EVAL_SAMPLES_PER_DATASET)
+    actual = min(n_samples, max_train)
+    ds = ds.select(range(actual))
+    print(f"    Dolly QA train: {len(ds)} samples (reserved {EVAL_SAMPLES_PER_DATASET} for eval)")
     return ds
 
 
@@ -452,14 +459,22 @@ def load_aina_train(n_samples):
 
 # --- Eval dataset loaders ---
 
-def load_narrativeqa_eval(n_samples):
-    """NarrativeQA test split for evaluation."""
-    print(f"    Loading NarrativeQA test, target: {n_samples}...")
-    ds = load_dataset("meithnav/narrativeqa", split="test")
+def load_narrativeqa_eval(n_samples, train_size=SAMPLES_NARRATIVEQA):
+    """
+    NarrativeQA eval portion — indices AFTER the training portion.
+    meithnav/narrativeqa has no test split, so eval samples are taken
+    from indices [split_point, split_point + n_samples) of the shuffled
+    train split, guaranteeing zero overlap with training data.
+    """
+    print(f"    Loading NarrativeQA eval, target: {n_samples}...")
+    ds = load_dataset("meithnav/narrativeqa", split="train")
     ds = ds.map(_normalize_narrativeqa, remove_columns=ds.column_names)
     ds = ds.filter(_filter_valid)
-    ds = ds.shuffle(seed=42).select(range(min(n_samples, len(ds))))
-    print(f"    NarrativeQA test: {len(ds)} samples")
+    ds = ds.shuffle(seed=42)
+    split_point = min(train_size, max(0, len(ds) - n_samples))
+    end = min(split_point + n_samples, len(ds))
+    ds = ds.select(range(split_point, end))
+    print(f"    NarrativeQA eval: {len(ds)} samples (indices {split_point}–{end - 1})")
     return ds
 
 
@@ -478,18 +493,19 @@ def load_dolly_eval(n_samples, train_size=SAMPLES_DOLLY):
     """
     Dolly eval portion — indices AFTER the training portion.
     Dolly has no dedicated test split, so eval samples are taken from
-    indices [train_size, train_size + n_samples) of the shuffled train
+    indices [split_point, split_point + n_samples) of the shuffled train
     split, guaranteeing zero overlap with training data.
+    split_point is capped to always leave room for n_samples eval samples.
     """
     print(f"    Loading Dolly QA eval, target: {n_samples}...")
     ds = load_dataset("databricks/databricks-dolly-15k", split="train")
     ds = ds.map(_normalize_dolly, remove_columns=ds.column_names)
     ds = ds.filter(_filter_valid)
     ds = ds.shuffle(seed=42)
-    start = min(train_size, len(ds))
-    end = min(start + n_samples, len(ds))
-    ds = ds.select(range(start, end))
-    print(f"    Dolly QA eval: {len(ds)} samples (indices {start}–{end - 1})")
+    split_point = min(train_size, max(0, len(ds) - n_samples))
+    end = min(split_point + n_samples, len(ds))
+    ds = ds.select(range(split_point, end))
+    print(f"    Dolly QA eval: {len(ds)} samples (indices {split_point}–{end - 1})")
     return ds
 
 
@@ -830,7 +846,7 @@ trainer = Trainer(
     train_dataset=tokenized_dataset,
     eval_dataset=tokenized_eval,
     data_collator=data_collator,
-    tokenizer=tokenizer,
+    processing_class=tokenizer,
     callbacks=[LightEarlyStoppingCallback(patience=3)],
 )
 
