@@ -1,6 +1,6 @@
 @echo off
 REM =============================================================================
-REM SCRIPT ORQUESTADOR DE CONVERSIÓN Y DESPLIEGUE (TFG)
+REM SCRIPT ORQUESTADOR DE CONVERSIÓN Y DESPLIEGUE QWEN-3 (TFG)
 REM =============================================================================
 REM Pipeline completo:
 REM   1) Fusión LoRA + modelo base.
@@ -62,7 +62,8 @@ REM ============================================================================
 echo.
 echo [2/4] Convirtiendo a GGUF F16...
 if not exist "%GGUF_PATH%" mkdir "%GGUF_PATH%"
-python "%PROJECT_ROOT%\llama.cpp\convert_hf_to_gguf.py" "%MERGED_PATH%" --outfile "%GGUF_PATH%\Llama-3.1-8B-Teacher-f16.gguf" --outtype f16
+if not exist "%GGUF_PATH%\qwen-3" mkdir "%GGUF_PATH%\qwen-3"
+python "%PROJECT_ROOT%\llama.cpp\convert_hf_to_gguf.py" "%MERGED_PATH%\qwen-3" --outfile "%GGUF_PATH%\qwen-3\Qwen3-14B-Teacher-f16.gguf" --outtype f16
 if %errorlevel% neq 0 (
     echo ERROR: Fallo en conversion GGUF F16
     pause
@@ -87,13 +88,13 @@ if %errorlevel% neq 0 (
 REM =============================================================================
 REM SECCIÓN 5: REGISTRO DEL MODELO EN OLLAMA
 REM =============================================================================
-REM Crea/actualiza el modelo `Qwen-2.5-FineTuned` a partir del Modelfile.
+REM Crea/actualiza el modelo `Qwen3-FineTuned` a partir del Modelfile.
 REM =============================================================================
 
 echo.
 echo [4/4] Creando modelo en Ollama...
-cd /d "%GGUF_PATH%"
-ollama create Qwen-2.5-FineTuned -f Modelfile
+cd /d "%GGUF_PATH%\qwen-3"
+ollama create Qwen3-FineTuned -f Modelfile
 if %errorlevel% neq 0 (
     echo ERROR: Fallo en ollama create
     pause
@@ -102,6 +103,6 @@ if %errorlevel% neq 0 (
 
 echo.
 echo ========================================
-echo Completado. Modelo 'Qwen-2.5-FineTuned' en Ollama.
+echo Completado. Modelo 'Qwen3-FineTuned' en Ollama.
 echo ========================================
 pause

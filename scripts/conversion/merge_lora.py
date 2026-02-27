@@ -23,8 +23,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # =============================================================================
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-LORA_PATH = os.path.join(PROJECT_ROOT, "training-output", "qwen-2.5")
-MERGED_PATH = os.path.join(PROJECT_ROOT, "models", "merged-model", "qwen-2.5")
+LORA_PATH = os.path.join(PROJECT_ROOT, "training-output", "qwen-3")
+MERGED_PATH = os.path.join(PROJECT_ROOT, "models", "merged-model", "qwen-3")
 
 if not os.path.exists(os.path.join(LORA_PATH, "adapter_config.json")):
     raise FileNotFoundError(
