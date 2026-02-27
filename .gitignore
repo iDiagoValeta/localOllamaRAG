@@ -27,6 +27,12 @@ training-output/qwen-2.5/*
 !training-output/qwen-2.5/training_stats.json
 !training-output/qwen-2.5/generated_samples.json
 
+# Artefactos de entrenamiento — Qwen 3
+training-output/qwen-3/*
+!training-output/qwen-3/.gitkeep
+!training-output/qwen-3/training_stats.json
+!training-output/qwen-3/generated_samples.json
+
 # GGUF output — Llama 3.1 (solo Modelfile)
 models/gguf-output/llama-3.1/*
 !models/gguf-output/llama-3.1/.gitkeep
@@ -55,6 +61,9 @@ venv/
 rag/mi_vector_db/
 rag/pdfs/
 
+# Interfaz web local (aún no subir)
+web/
+
 # IDE
 .idea/
 .vscode/
@@ -77,3 +86,5 @@ ragas_scores.csv
 
 models/gguf-output/qwen3-4b
 models/gguf-output/qwen3-14b
+
+scripts/evaluation/

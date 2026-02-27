@@ -19,7 +19,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=48G
 #SBATCH --time=48:00:00
-#SBATCH --job-name=LlamaFinal
+#SBATCH --job-name=Qwen3RAG
 #SBATCH -o salida_%j.log
 
 # =============================================================================
