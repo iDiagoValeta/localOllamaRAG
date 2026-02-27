@@ -100,11 +100,21 @@ SAMPLES_AINA = 14000
 
 # --- Evaluation ---
 EVAL_SAMPLES_PER_DATASET = 200
-MAX_NEW_TOKENS = 256
+MAX_NEW_TOKENS = 2048  # ~1500 words; allows fully detailed NotebookLM-style answers
 
 # --- Tokenization ---
-MAX_LENGTH = 2048
-MAX_CONTEXT_TOKENS = 1500
+# MAX_LENGTH: total sequence length in training (prompt + context + response).
+# Budget breakdown (based on real RAG pipeline debug logs):
+#   - System prompt + ChatML overhead:   ~210 tokens
+#   - User question:                     ~30-80 tokens
+#   - RAG context (4-15 fragments w/     ~1,500-4,000 tokens
+#     Contextual Retrieval metadata):
+#   - Detailed response:                 ~500-1,500 tokens
+#   - Worst-case total:                  ~5,800 tokens
+# 8192 provides comfortable headroom for the worst case.
+# Qwen3-14B supports up to 128k; 8192 is well within its capacity.
+MAX_LENGTH = 8192
+MAX_CONTEXT_TOKENS = 4096  # fits 15 RAG fragments with Contextual Retrieval headers
 
 # --- System prompt (shared between training and evaluation) ---
 system_prompt = (
