@@ -1,105 +1,112 @@
 """
-MonkeyGrab - Sistema RAG para consulta de PDFs
-======================================================
+MonkeyGrab — Sistema RAG para consulta de PDFs
+==============================================
 
-Aplicación interactiva con dos modos de operación:
+Aplicación interactiva con dos modos:
 
-  - Modo CHAT: Conversación libre con el modelo base (configurable).
-    Mantiene historial multi-turno persistente y conoce la identidad del
-    proyecto MonkeyGrab. Ideal para preguntas generales y charla.
+    CHAT  Conversación libre con modelo base, historial persistente e identidad del proyecto.
+    RAG   Consulta documental sobre PDFs indexados, recuperación híbrida y respuestas con fuentes.
 
-  - Modo RAG: Retrieval-Augmented Generation con el modelo fine-tuneado.
-    Consulta documentos PDF mediante búsqueda híbrida y genera respuestas 
-    verificables con citas de fuentes.
-
-Pipeline de recuperación (modo RAG):
-  1. Indexación enriquecida: chunking Markdown, embeddings y Contextual Retrieval.
-  2. Descomposición de consulta con modelo base (configurable).
-  3. Búsqueda híbrida: semántica multi-query + keywords + exhaustiva.
-  4. Fusión RRF (Reciprocal Rank Fusion) + reranking con Cross-Encoder.
-  5. Síntesis de contexto interactiva mediante RECOMP.
-  6. Generación de respuesta con streaming, usando el formato de prompt
-     alineado con el fine-tuning del modelo Teacher (ver train.py).
-
-Características principales:
-  - Modo dual: conversación libre (chat) + consulta documental (RAG).
-  - Persistencia de historial entre sesiones (JSON).
-  - Separación de modelos: base para chat/queries, contextual, recomp y teacher.
-  - Generación de Contexto Situacional (Anthropic-style) en la indexación.
-  - Síntesis de contexto densa (RECOMP) antes de la generación.
-  - Búsqueda híbrida (semántica + palabras clave) con reranking.
-  - Chunking con solapamiento para mejor contexto documental.
-  - Citas precisas con documento y página exacta.
-  - Base de datos vectorial persistente con ChromaDB.
+Pipeline RAG (etapas activables por flags):
+    1. Indexación      chunking + embeddings + contextual retrieval (opc.)
+    2. Recuperación    semántica + descomposición (opc.) + keywords
+    3. Profundización  búsqueda exhaustiva por términos críticos
+    4. Ranking         fusión RRF + reranking Cross-Encoder (opc.)
+    5. Contexto        expansión de adyacentes + optimización
+    6. Generación      síntesis RECOMP (opc.) + streaming
+    7. Observabilidad  métricas y dumps de debug
 
 Uso:
     python chat_pdfs.py
-    DOCS_FOLDER=/ruta/pdfs python chat_pdfs.py
+    set DOCS_FOLDER=C:\\ruta\\pdfs && python chat_pdfs.py   # Windows
+    DOCS_FOLDER=/ruta/pdfs python chat_pdfs.py               # Linux/macOS
 """
 
 # =============================================================================
-# SECCIÓN 1: IMPORTACIONES Y DEPENDENCIAS
+# MAPA DEL MÓDULO — Índice de secciones
 # =============================================================================
-# Propósito:
-# - Declarar de forma explícita todas las dependencias del sistema RAG para
-#   asegurar trazabilidad técnica y reproducibilidad en el entorno del TFG.
-# Tecnologías implicadas:
-# - Librerías estándar de Python: gestión de rutas, regex, tipado y logging.
-# - Ollama: inferencia local para generación de respuesta y embeddings.
-# - ChromaDB: base de datos vectorial persistente para recuperación semántica.
-# - pypdf: extracción de texto base como fallback robusto para PDFs.
-# Resultado esperado:
-# - Entorno de ejecución con imports organizados por responsabilidad funcional.
+#
+#  CONFIGURACIÓN (arranque)
+#  ├── 1. Importaciones     stdlib → terceros (ollama, chromadb, pypdf) → locales
+#  ├── 2. Dependencias opc. pymupdf4llm (PDF), CrossEncoder (reranking)
+#  └── 3. Configuración global
+#       ├── 3.1 Runtime terminal (UTF-8)
+#       ├── 3.2 Modelos Ollama (RAG, CHAT, embedding, contextual, RECOMP)
+#       ├── 3.3 Flags del pipeline (toggle por etapa)
+#       ├── 3.4 Rutas y persistencia (DB, historial, debug)
+#       ├── 3.5 Parámetros recuperación/generación
+#       └── 3.6 Logging y entorno
+#
+#  LÓGICA DE NEGOCIO
+#  ├── 4. Prompts del sistema    RAG (vacío), CHAT (identidad + idioma)
+#  ├── 5. Persistencia historial  JSON local modo CHAT
+#  ├── 6. Preprocesado y chunking texto → chunks Markdown con overlap
+#  ├── 7. Keywords y búsqueda léxica  siglas, bigramas, where_document
+#  ├── 8. Reranking semántico    CrossEncoder singleton, CUDA/CPU
+#  ├── 9. Pipeline recuperación  semántica + keywords + exhaustiva → RRF → rerank
+#  ├──10. Contexto y generación
+#  │      ├── 10.1 Optimización texto PDF (artefactos, footers, párrafos)
+#  │      ├── 10.2 Construcción contexto (raw o síntesis RECOMP)
+#  │      ├── 10.3 Debug         volcado interacción en debug_rag/
+#  │      ├── 10.4 Generación    streaming Ollama, formato <contexto>
+#  │      └── 10.5 Evaluación    pipeline silencioso para RAGAS
+#  └──11. Indexación y colección
+#       ├── 11.1 Contextual retrieval  enriquecimiento chunk con LLM
+#       ├── 11.2 Indexación           PDFs → pymupdf4llm/pypdf → ChromaDB
+#       └── 11.3 Gestión colección    listar documentos indexados
+#
+#  ENTRADA
+#  └──12. Punto de entrada   main() → MonkeyGrabCLI.run()
+#
 # =============================================================================
 
+
+# =============================================================================
+# SECCIÓN 1: IMPORTACIONES
+# =============================================================================
+# Organizadas por responsabilidad: stdlib → terceros → locales.
+# =============================================================================
+
+
+# --- 1.1 Librería estándar ---
+
+import io
+import json
+import logging
 import os
 import re
 import sys
-import json
-import logging
+import warnings
 from collections import Counter
-from typing import List, Dict, Any, Optional, Tuple
+from contextlib import redirect_stderr, redirect_stdout
+from typing import Any, Dict, List, Optional, Tuple
 
-import ollama
+# --- 1.2 Terceros (Ollama, ChromaDB, pypdf) ---
+
 import chromadb
-
+import ollama
 from pypdf import PdfReader
 
-# =============================================================================
-# SECCIÓN 1B: CLI — Interfaz de usuario
-# CLI — Interfaz de usuario (importada desde rag.cli)
-# =============================================================================
-# Asegurar que el directorio raíz del proyecto esté en sys.path
-# para que 'rag' sea importable cuando se ejecuta directamente.
-# =============================================================================
+# --- 1.3 Bootstrap: path del proyecto ---
 
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
+# --- 1.4 Locales ---
+
 from rag.cli.display import ui
 
 
 # =============================================================================
-# SECCIÓN 2: CARGA CONDICIONAL DE COMPONENTES OPCIONALES
+# SECCIÓN 2: DEPENDENCIAS OPCIONALES
 # =============================================================================
-# Propósito:
-# - Activar capacidades avanzadas de forma progresiva sin romper la ejecución
-#   cuando ciertas dependencias no están instaladas en el sistema.
-# Tecnologías implicadas:
-# - pymupdf4llm: extracción en formato Markdown con mejor preservación de
-#   estructura documental (encabezados, tablas y segmentación por página).
-# - sentence-transformers (CrossEncoder): reranking neural para mejorar
-#   precisión del top final frente a ranking solo por embedding.
-# Resultado esperado:
-# - Detección de disponibilidad en runtime y degradación controlada (fallback)
-#   con mensajes informativos para diagnóstico del usuario.
+# pymupdf4llm (extracción PDF) y CrossEncoder (reranking).
 # =============================================================================
 
+
 try:
-    import io
-    import contextlib
-    with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+    with redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
         import pymupdf4llm
     PYMUPDF_AVAILABLE = True
 except ImportError:
@@ -111,21 +118,13 @@ try:
 except ImportError:
     RERANKER_AVAILABLE = False
 
+
 # =============================================================================
-# SECCIÓN 3: CONFIGURACIÓN DE RUNTIME Y PARÁMETROS GLOBALES
+# SECCIÓN 3: CONFIGURACIÓN GLOBAL
 # =============================================================================
-# Propósito:
-# - Centralizar la configuración experimental y operativa del asistente para
-#   facilitar ajustes, comparativas y repetibilidad de resultados.
-# Tecnologías implicadas:
-# - Variables de entorno para selección dinámica de modelos Ollama.
-# - Configuración UTF-8 para salida robusta en terminal Windows/Linux/macOS.
-# - Parámetros del pipeline: chunking, top-k, umbrales, estrategia híbrida,
-#   descomposición de consulta y activación de métricas.
-# Resultado esperado:
-# - Un único bloque de hiperparámetros que controla comportamiento, coste y
-#   calidad de recuperación/generación del sistema.
-# =============================================================================
+
+
+# --- 3.1 Runtime terminal (encoding UTF-8) ---
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -138,51 +137,54 @@ if hasattr(sys.stderr, "reconfigure"):
     except Exception:
         pass
 
-MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "Qwen-2.5-FineTuned:latest")
-MODELO_AUXILIAR = os.getenv("OLLAMA_AUX_MODEL", "gemma3:4b")
+# --- 3.2 Modelos Ollama ---
+
+MODELO_RAG = os.getenv("OLLAMA_CHAT_MODEL", "Qwen-2.5-FineTuned:latest")
+MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:4b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma3:4b")
 MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma3:4b")
 
-USAR_CONTEXTUAL_RETRIEVAL = True
-USAR_RECOMP_SYNTHESIS = True
-
-_MODELO_FAMILIAS = {
-    "qwen":    "Qwen 2.5",
-    "llama":   "Llama 3.1",
-    "gemma":   "Gemma 3"
-}
 
 def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
-    """Devuelve un nombre legible a partir del slug de Ollama."""
-    nombre_lower = nombre_modelo.lower()
-    slug = nombre_lower.split(":")[0]
-    for clave, desc in _MODELO_FAMILIAS.items():
-        if clave in slug:
-            match = re.search(r'(\d+\.?\d*b)', nombre_lower)
-            size = f" {match.group(1).upper()}" if match else ""
-            return f"{desc}{size}"
     return nombre_modelo.split(":")[0]
 
-MODELO_DESC = os.getenv(
-    "MODELO_DESC",
-    _inferir_descripcion_modelo(MODELO_AUXILIAR)
-)
+
+MODELO_DESC = os.getenv("MODELO_DESC", _inferir_descripcion_modelo(MODELO_RAG))
+
+# --- 3.3 Flags del pipeline (toggle por etapa) ---
+
+USAR_CONTEXTUAL_RETRIEVAL = True
+USAR_LLM_QUERY_DECOMPOSITION = True
+USAR_BUSQUEDA_HIBRIDA = True
+USAR_BUSQUEDA_EXHAUSTIVA = True
+USAR_RERANKER = RERANKER_AVAILABLE
+EXPANDIR_CONTEXTO = True
+USAR_OPTIMIZACION_CONTEXTO = True
+USAR_RECOMP_SYNTHESIS = True
+LOGGING_METRICAS = True
+GUARDAR_DEBUG_RAG = True
+
+# --- 3.4 Rutas y persistencia ---
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
 CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "pdfs"))
 
 _carpeta_nombre = os.path.basename(os.path.abspath(CARPETA_DOCS))
 _embed_slug = MODELO_EMBEDDING.split(":")[0].replace("/", "_")
-
 _DB_VERSION = "v4"
 
 PATH_DB = os.path.join(BASE_DIR, "mi_vector_db", f"{_carpeta_nombre}_{_embed_slug}_{_DB_VERSION}")
 COLLECTION_NAME = f"docs_{_carpeta_nombre}"
 
-_embed_name_lower = MODELO_EMBEDDING.lower().split(":")[0]
+HISTORIAL_PATH = os.path.join(BASE_DIR, "historial_chat.json")
+MAX_HISTORIAL_MENSAJES = 40
 
+CARPETA_DEBUG_RAG = os.path.join(BASE_DIR, "debug_rag")
+
+# --- 3.5 Parámetros de recuperación y generación ---
+
+_embed_name_lower = MODELO_EMBEDDING.lower().split(":")[0]
 if "nomic" in _embed_name_lower:
     EMBED_PREFIX_QUERY = "search_query: "
     EMBED_PREFIX_DOC = "search_document: "
@@ -202,33 +204,20 @@ N_RESULTADOS_KEYWORD = 40
 TOP_K_RERANK_CANDIDATES = 200
 TOP_K_AFTER_RERANK = 15
 TOP_K_FINAL = 6
-EXPANDIR_CONTEXTO = True
 N_TOP_PARA_EXPANSION = 3
-USAR_BUSQUEDA_HIBRIDA = True
-USAR_RERANKER = RERANKER_AVAILABLE
 
 RERANKER_MODEL_QUALITY = os.getenv("RERANKER_QUALITY", "quality")
+UMBRAL_RELEVANCIA = 0.50
+UMBRAL_SCORE_RERANKER = 0.40
 
-UMBRAL_RELEVANCIA = 0.10
-UMBRAL_SCORE_RERANKER = 0.15
 MIN_LONGITUD_PREGUNTA_RAG = 10
+MAX_CONTEXTO_CHARS = 8192
 
-MAX_CONTEXTO_CHARS = 8000
+# --- 3.6 Logging y entorno ---
 
-USAR_LLM_QUERY_DECOMPOSITION = True
-
-HISTORIAL_PATH = os.path.join(BASE_DIR, "historial_chat.json")
-MAX_HISTORIAL_MENSAJES = 40
-
-CARPETA_DEBUG_RAG = os.path.join(BASE_DIR, "debug_rag")
-
-LOGGING_METRICAS = True
 LOG_LEVEL = logging.ERROR
 
-logging.basicConfig(
-    level=LOG_LEVEL,
-    format='%(levelname)s: %(message)s'
-)
+logging.basicConfig(level=LOG_LEVEL, format="%(levelname)s: %(message)s")
 
 for _logger_name in (
     "httpx", "chromadb", "chromadb.telemetry", "urllib3", "requests",
@@ -237,7 +226,6 @@ for _logger_name in (
 ):
     logging.getLogger(_logger_name).setLevel(logging.CRITICAL)
 
-import warnings
 warnings.filterwarnings("ignore", message=".*HF_TOKEN.*")
 warnings.filterwarnings("ignore", message=".*huggingface.*")
 
@@ -246,67 +234,26 @@ os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
 
 # =============================================================================
-# System prompt para modo RAG (modelo teacher fine-tuneado)
-# CRÍTICO: Debe ser IDÉNTICO al system_prompt de train.py para evitar
-# distribution shift. Cualquier cambio aquí degrada la calidad del modelo.
+# SECCIÓN 4: PROMPTS DEL SISTEMA
 # =============================================================================
-SYSTEM_PROMPT_RAG = """Eres un asistente que responde preguntas basándote EXCLUSIVAMENTE en el contexto proporcionado.
-
-REGLAS ESTRICTAS:
-1. Responde SOLO con información que esté contenida en el contexto dentro de <contexto>...</contexto>.
-2. No inventes, no uses conocimiento externo. Si la respuesta no está en el contexto, indícalo claramente.
-3. Cita o parafrasea el material del contexto cuando sea útil.
-4. Responde en el mismo idioma que use el usuario (español, catalán o inglés).
-5. Sé claro, conciso y estructurado."""
-
+# Define la identidad y comportamiento del modelo en cada modo.
 # =============================================================================
-# System prompt para modo CHAT (modelo auxiliar configurable)
-# Proporciona identidad del proyecto y comportamiento conversacional.
-# =============================================================================
-SYSTEM_PROMPT_CHAT = f"""Eres MonkeyGrab, un asistente inteligente desarrollado como parte de un Trabajo de Fin de Grado (TFG) sobre Inteligencia Artificial aplicada a la educación.
 
-SOBRE TI:
-- Tu nombre es MonkeyGrab y estás basado en el modelo {MODELO_DESC}, fine-tuneado con LoRA para responder preguntas fundamentadas en documentos académicos.
-- Formas parte de un sistema RAG (Retrieval-Augmented Generation) que permite consultar documentos PDF de forma inteligente.
-- Has sido entrenado con el dataset RAG_Multilingual (42.303 ejemplos en español, catalán e inglés).
-- Tu despliegue es completamente local mediante Ollama y ChromaDB como base de datos vectorial.
 
-SOBRE EL PROYECTO:
-- Este TFG demuestra cómo los modelos de lenguaje pueden asistir en el estudio de material académico universitario.
-- El sistema indexa PDFs, realiza búsqueda híbrida (semántica + keywords) con reranking neural, y genera respuestas verificables con citas de fuentes.
-- El pipeline técnico incluye: chunking Markdown, embeddings con modelo vectorial (embeddinggemma/nomic), fusión RRF (Reciprocal Rank Fusion) y Cross-Encoder multilingüe.
+SYSTEM_PROMPT_RAG = ""
 
-TU COMPORTAMIENTO EN MODO CHAT:
-- Mantén una conversación natural, amable y útil con el usuario.
-- Puedes responder preguntas generales, explicar conceptos, ayudar con dudas y ser conversacional.
-- Si el usuario quiere consultar los documentos académicos indexados, indícale que escriba '/rag' para activar el modo de recuperación de documentos.
-- Responde en el mismo idioma que use el usuario (español, catalán o inglés).
-- Sé conciso pero completo en tus respuestas."""
+SYSTEM_PROMPT_CHAT = ""
 
 
 # =============================================================================
-# SECCIÓN 5b: PERSISTENCIA DEL HISTORIAL DE CONVERSACIÓN
+# SECCIÓN 5: PERSISTENCIA DEL HISTORIAL
 # =============================================================================
-# Propósito:
-# - Mantener el historial de conversación entre sesiones para continuidad UX.
-# Tecnologías implicadas:
-# - Almacenamiento en JSON local con separación por modo (chat / rag).
-# Resultado esperado:
-# - El usuario retoma la conversación donde la dejó al reiniciar el programa.
+# JSON local para modo CHAT. RAG no persiste (consultas independientes).
 # =============================================================================
 
 
 def cargar_historial() -> List[Dict[str, str]]:
-    """
-    Carga el historial de conversación del modo CHAT desde disco.
-    
-    Solo el modo CHAT tiene persistencia. El modo RAG no guarda historial
-    porque cada consulta es independiente (el teacher fue entrenado para
-    respuestas puntuales con contexto, no para conversación multi-turno).
-    
-    Returns:
-        Lista de mensajes [{"role": "user"|"assistant", "content": "..."}]
-    """
+    """Carga historial CHAT desde disco. Retorna [] si no existe o falla."""
     try:
         if os.path.exists(HISTORIAL_PATH):
             with open(HISTORIAL_PATH, 'r', encoding='utf-8') as f:
@@ -322,15 +269,7 @@ def cargar_historial() -> List[Dict[str, str]]:
 
 
 def guardar_historial(historial: List[Dict[str, str]]) -> None:
-    """
-    Guarda el historial de conversación del modo CHAT a disco.
-    
-    Mantiene solo los últimos MAX_HISTORIAL_MENSAJES mensajes para
-    evitar crecimiento descontrolado del archivo.
-    
-    Args:
-        historial: Lista de mensajes del chat
-    """
+    """Guarda historial CHAT a disco (últimos MAX_HISTORIAL_MENSAJES)."""
     try:
         historial_recortado = historial[-MAX_HISTORIAL_MENSAJES:]
         with open(HISTORIAL_PATH, 'w', encoding='utf-8') as f:
@@ -340,44 +279,20 @@ def guardar_historial(historial: List[Dict[str, str]]) -> None:
 
 
 def limpiar_historial(historial: List[Dict[str, str]]) -> None:
-    """
-    Limpia el historial de conversación del chat y lo persiste vacío.
-    
-    Args:
-        historial: Lista de mensajes del chat (se modifica in-place)
-    """
+    """Vacía el historial in-place y persiste."""
     historial.clear()
     guardar_historial(historial)
 
 
 # =============================================================================
-# SECCIÓN 6: PREPROCESADO DOCUMENTAL Y CHUNKING
+# SECCIÓN 6: PREPROCESADO Y CHUNKING
 # =============================================================================
-# Propósito:
-# - Transformar texto bruto en unidades semánticas aptas para embeddings,
-#   conservando contexto estructural de documentos académicos extensos.
-# Tecnologías implicadas:
-# - Regex para detección de headers Markdown y jerarquía de secciones.
-# - Chunking recursivo con separadores jerárquicos y overlap controlado.
-# - Expansión por vecindad (chunks adyacentes) para aumentar coherencia local
-#   del contexto enviado al modelo generativo.
-# Resultado esperado:
-# - Fragmentos balanceados en tamaño/relevancia, con trazabilidad de sección y
-#   menor pérdida de continuidad temática entre bloques.
+# Texto → chunks semánticos con headers Markdown, overlap y expansión adyacente.
 # =============================================================================
 
 
 def extraer_header_markdown(texto: str) -> str:
-    """
-    Extrae el último encabezado Markdown visible antes del contenido.
-    Útil para dar contexto a cada chunk (ej: "## 3.2 Optimización local").
-    
-    Args:
-        texto: Texto en formato Markdown
-    
-    Returns:
-        Último header encontrado, o cadena vacía
-    """
+    """Extrae el último header Markdown (#...#) del texto. Vacío si no hay."""
     headers = re.findall(r'^(#{1,4}\s+.+)$', texto, re.MULTILINE)
     return headers[-1].strip() if headers else ""
 
@@ -387,23 +302,7 @@ def dividir_en_chunks(
     chunk_size: int = CHUNK_SIZE, 
     overlap: int = CHUNK_OVERLAP
 ) -> List[Dict[str, str]]:
-    """
-    Divide el texto en fragmentos (chunks) con solapamiento correcto.
-    
-    Estrategia mejorada para documentos académicos en Markdown:
-    1. Respeta encabezados Markdown (##, ###) como límites de sección
-    2. Dentro de cada sección, divide por párrafos y frases
-    3. Aplica solapamiento CORRECTO entre chunks consecutivos
-    4. Prepende el encabezado de sección a cada chunk para contexto
-    
-    Args:
-        texto: Texto completo a dividir (puede ser Markdown)
-        chunk_size: Tamaño máximo de cada fragmento en caracteres
-        overlap: Cantidad de caracteres de solapamiento entre fragmentos
-    
-    Returns:
-        Lista de dicts con 'text' y 'header' por cada chunk
-    """
+    """Divide texto en chunks por secciones Markdown, con overlap. Retorna [{"text", "header"}]. """
     if not texto or not texto.strip():
         return []
     
@@ -524,21 +423,7 @@ def expandir_con_chunks_adyacentes(
     metadata: Dict[str, Any], 
     n_vecinos: int = 1
 ) -> List[str]:
-    """
-    Genera IDs de chunks adyacentes para proporcionar más contexto.
-    
-    Incluye expansión CROSS-PAGE: si el chunk es el último de su página,
-    también incluye chunk 0 de la página siguiente. Si es el primero,
-    incluye el último chunk de la página anterior (si se conoce).
-    
-    Args:
-        chunk_id: ID del chunk actual
-        metadata: Metadata del chunk con información de página y posición
-        n_vecinos: Número de vecinos a cada lado
-    
-    Returns:
-        Lista de IDs de chunks adyacentes
-    """
+    """IDs de chunks vecinos (misma página y cross-page) para contexto expandido."""
     archivo = metadata['source']
     pagina = metadata['page']
     chunk_num = metadata.get('chunk', 0)
@@ -569,62 +454,62 @@ def expandir_con_chunks_adyacentes(
 
 
 # =============================================================================
-# SECCIÓN 7: EXTRACCIÓN DE KEYWORDS Y BÚSQUEDA LEXICAL
+# SECCIÓN 7: KEYWORDS Y BÚSQUEDA LÉXICA
 # =============================================================================
-# Propósito:
-# - Complementar la recuperación semántica con señales léxicas explícitas para
-#   mejorar recall en términos técnicos, siglas y expresiones específicas.
-# Tecnologías implicadas:
-# - Stopwords multilingües (ES/EN) para filtrado de ruido lingüístico.
-# - Heurísticas de extracción: siglas, bigramas, términos entre paréntesis,
-#   tokens técnicos (mayúsculas internas, guiones y dígitos).
-# - Búsqueda textual en ChromaDB mediante where_document y escaneo exhaustivo
-#   por lotes cuando la señal semántica es insuficiente.
-# Resultado esperado:
-# - Recuperación más robusta ante consultas especializadas o altamente técnicas.
+# Complementa la semántica con búsqueda por términos (siglas, bigramas, where_document).
 # =============================================================================
 
+
 STOPWORDS = {
-    'el', 'la', 'de', 'en', 'y', 'a', 'los', 'las', 'un', 'una', 'por', 'para',
-    'con', 'del', 'que', 'es', 'son', 'se', 'al', 'como', 'más', 'su', 'me',
-    'está', 'hay', 'tiene', 'puede', 'ser', 'sobre', 'entre', 'también',
-    'podrías', 'decirme', 'cuáles', 'cómo', 'qué', 'indica', 'indicar', 'puedes',
-    'tres', 'dos', 'estas', 'estos', 'principales', 'llaman', 'partes',
-    'pero', 'sino', 'desde', 'hasta', 'cuando', 'donde', 'este', 'esta',
-    'ese', 'esa', 'aquí', 'ahí', 'allí', 'así', 'cada', 'todo', 'toda',
-    'todos', 'todas', 'otro', 'otra', 'otros', 'otras', 'mismo', 'misma',
-    'cual', 'quien', 'cuyo', 'cuya', 'muy', 'poco', 'mucho', 'algo', 'nada',
-    'uno', 'dos', 'tres', 'siempre', 'nunca', 'después', 'antes', 'durante',
-    'mediante', 'según', 'hacia', 'tanto', 'tan', 'sin', 'contra', 'ya',
-    'fue', 'sido', 'siendo', 'han', 'haber', 'hacer', 'tener', 'ir',
-    'explica', 'explicar', 'describe', 'describir', 'detalla', 'detallar',
-    'respuesta', 'pregunta', 'siguientes', 'siguiente', 'puntos', 'punto',
-    'ejemplo', 'manera', 'forma', 'tipo', 'tipos', 'parte', 'primer', 'primera',
-    'segundo', 'segunda', 'tercer', 'tercera',
-    'the', 'in', 'and', 'of', 'to', 'a', 'is', 'for', 'on', 'with', 'as', 'are',
-    'this', 'that', 'it', 'be', 'or', 'an', 'by', 'from', 'at', 'which',
-    'how', 'what', 'when', 'where', 'who', 'why', 'does', 'do', 'did',
+    # Castellano
+    'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'de', 'del', 'en', 'a', 'al',
+    'por', 'para', 'con', 'sin', 'sobre', 'entre', 'hacia', 'desde', 'hasta', 'durante', 'mediante',
+    'según', 'contra', 'que', 'quien', 'cual', 'cuales', 'cuyo', 'cuya', 'cuyos', 'cuyas',
+    'este', 'esta', 'estos', 'estas', 'ese', 'esa', 'esos', 'esas', 'aquel', 'aquella', 'aquellos', 'aquellas',
+    'esto', 'eso', 'aquello', 'y', 'o', 'pero', 'sino', 'aunque', 'si', 'porque', 'cuando', 'donde',
+    'como', 'más', 'menos', 'muy', 'poco', 'mucho', 'algo', 'nada', 'todo', 'toda', 'todos', 'todas',
+    'cada', 'otro', 'otra', 'otros', 'otras', 'mismo', 'misma', 'mismos', 'mismas',
+    'es', 'son', 'está', 'están', 'era', 'eran', 'fue', 'fueron', 'ser', 'estar',
+    'hay', 'había', 'han', 'haber', 'tiene', 'tienen', 'tenía', 'tener', 'puede', 'pueden', 'poder',
+    'se', 'me', 'te', 'nos', 'os', 'le', 'lo', 'les', 'su', 'sus', 'mi', 'tu', 'nuestro', 'vuestro',
+    'aquí', 'ahí', 'allí', 'así', 'ya', 'también', 'solo', 'sólo', 'siempre', 'nunca', 'después', 'antes',
+    'explica', 'explicar', 'describe', 'describir', 'detalla', 'detallar', 'indica', 'indicar',
+    'respuesta', 'pregunta', 'preguntas', 'siguientes', 'siguiente', 'puntos', 'punto', 'ejemplo',
+    'manera', 'forma', 'tipo', 'tipos', 'parte', 'partes', 'primer', 'primera', 'segundo', 'segunda',
+    'tercer', 'tercera', 'uno', 'dos', 'tres', 'cuáles', 'cómo', 'qué', 'podrías', 'decirme', 'puedes',
+    'principales', 'llaman', 'tanto', 'tan', 'fue', 'sido', 'siendo', 'hacer', 'ir',
+    # English
+    'the', 'a', 'an', 'and', 'or', 'but', 'if', 'then', 'else', 'when', 'at', 'by', 'for', 'with',
+    'about', 'against', 'between', 'into', 'through', 'during', 'before', 'after', 'above', 'below',
+    'to', 'from', 'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further',
+    'here', 'there', 'where', 'why', 'how', 'all', 'each', 'few', 'more', 'most', 'other', 'some',
+    'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just', 'now',
+    'is', 'are', 'was', 'were', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+    'would', 'could', 'should', 'may', 'might', 'must', 'shall', 'can', 'will', 'this', 'that',
+    'it', 'its', 'they', 'them', 'their', 'we', 'our', 'you', 'your', 'he', 'she', 'him', 'her',
+    'what', 'which', 'who', 'whom', 'whose',
+    # Valencià
+    'els', 'les', 'uns', 'unes', 'dels', 'als',
+    'per', 'per a', 'amb', 'sense', 'des de', 'fins a', 'fins', 'dins', 'envers',
+    'que', 'qui', 'qual', 'quals', 'què', 'aquest', 'aquesta', 'aquests', 'aquestes',
+    'aquell', 'aquella', 'aquells', 'aquelles', 'això', 'allò', 'i', 'o', 'però', 'sinó',
+    'perquè', 'quan', 'com', 'més', 'menys', 'molt', 'poc', 'res', 'tot', 'tota', 'tots', 'totes',
+    'cada', 'altre', 'altra', 'altres', 'mateix', 'mateixa', 'mateixos', 'mateixes',
+    'és', 'són', 'està', 'estan', 'era', 'eren', 'ha', 'han', 'hi ha', 'hi havia',
+    'pot', 'poden', 'ser', 'estar', 'tenir', 'fer', 'anar', 'dir', 'veure',
+    'aquí', 'allà', 'així', 'ja', 'també', 'només', 'sempre', 'mai', 'després', 'abans',
+    'explica', 'explicar', 'descriu', 'detalla', 'detallar', 'indica', 'indicar',
+    'resposta', 'pregunta', 'preguntes', 'següents', 'següent', 'punts', 'punt', 'exemple',
+    'manera', 'forma', 'tipus', 'part', 'parts', 'primer', 'primera', 'segon', 'segona',
+    'tercer', 'tercera', 'un', 'dos', 'tres', 'quins', 'quines', 'quin', 'quina',
 }
+
 
 TERMINOS_EXPANSION = {}
 
 
 def extraer_keywords(texto: str) -> List[str]:
-    """
-    Extrae keywords importantes de la pregunta para búsqueda híbrida.
-    
-    Mejoras:
-    - Detecta términos multi-palabra entre paréntesis o mayúsculas consecutivas
-    - Identifica siglas (GDA, RISC, CISC, etc.)
-    - Filtra stopwords y palabras genéricas con mayor precisión
-    - Extrae N-gramas técnicos (ej: "bloque básico", "código intermedio")
-    
-    Args:
-        texto: Texto del cual extraer keywords
-    
-    Returns:
-        Lista de keywords extraídas (términos técnicos primero)
-    """
+    """Extrae siglas, bigramas, términos entre paréntesis y tokens técnicos. Filtra stopwords."""
     keywords = set()
     
     siglas = re.findall(r'\b[A-ZÁÉÍÓÚÑ]{2,}\b', texto)
@@ -697,20 +582,7 @@ def busqueda_por_keywords(
     collection: chromadb.Collection,
     n_results: int = N_RESULTADOS_KEYWORD
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
-    """
-    Realiza búsqueda por palabras clave usando collection.get() con where_document.
-    
-    NOTA: Usa get() en lugar de query() para evitar el problema de dimensiones
-    de embeddings. get() filtra por contenido textual sin necesidad de embeddings.
-    
-    Args:
-        pregunta: Pregunta del usuario
-        collection: Colección de ChromaDB
-        n_results: Número máximo de resultados por keyword
-    
-    Returns:
-        Tupla de (lista de resultados, métricas de búsqueda)
-    """
+    """Búsqueda por where_document (get, no query). Retorna (resultados, métricas)."""
     keywords = extraer_keywords(pregunta)
     
     metricas = {
@@ -787,19 +659,7 @@ def busqueda_exhaustiva_texto(
     collection: chromadb.Collection,
     max_results: int = 20
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
-    """
-    Búsqueda exhaustiva en todos los documentos por términos críticos.
-    
-    Útil cuando la búsqueda semántica falla para términos técnicos específicos.
-    
-    Args:
-        terminos_criticos: Lista de términos a buscar
-        collection: Colección de ChromaDB
-        max_results: Número máximo de resultados
-    
-    Returns:
-        Tupla de (lista de documentos que contienen los términos, métricas)
-    """
+    """Escaneo por lotes de todos los docs. Retorna los que contienen los términos, ordenados por matches."""
     resultados = []
     total_docs = collection.count()
     batch_size = 100
@@ -855,30 +715,17 @@ def busqueda_exhaustiva_texto(
 
 
 # =============================================================================
-# SECCIÓN 8: RERANKING SEMÁNTICO CON CROSS-ENCODER
+# SECCIÓN 8: RERANKING SEMÁNTICO
 # =============================================================================
-# Propósito:
-# - Refinar el orden de candidatos recuperados para priorizar evidencia más
-#   relevante antes de la fase de generación de respuesta.
-# Tecnologías implicadas:
-# - CrossEncoder de sentence-transformers con carga lazy (singleton).
-# - Detección de hardware (CUDA/CPU) para optimizar latencia de inferencia.
-# - Estrategia configurable de modelos (quality vs fast) según coste-tiempo.
-# Resultado esperado:
-# - Mayor precisión en top-k final y reducción de contexto irrelevante.
+# CrossEncoder (singleton, CUDA/CPU). Reordena candidatos por relevancia pregunta-doc.
 # =============================================================================
+
+
 _reranker_model = None
 
+
 def _detectar_dispositivo_reranker() -> str:
-    """
-    Detecta el mejor dispositivo disponible para el Cross-Encoder.
-
-    Prioridad: CUDA > CPU. Se importa torch de forma segura ya que
-    sentence-transformers lo incluye como dependencia.
-
-    Returns:
-        String con el dispositivo: 'cuda' o 'cpu'.
-    """
+    """Devuelve 'cuda' si está disponible, si no 'cpu'."""
     try:
         import torch
         if torch.cuda.is_available():
@@ -889,12 +736,7 @@ def _detectar_dispositivo_reranker() -> str:
 
 
 def obtener_modelo_reranker():
-    """
-    Obtiene el modelo de reranking (singleton pattern).
-
-    Carga el Cross-Encoder en GPU con FP16 cuando CUDA está disponible,
-    lo que reduce el tiempo de reranking de ~2-3 minutos a segundos.
-    """
+    """Singleton del Cross-Encoder. Carga lazy, FP16 en CUDA si hay GPU."""
     global _reranker_model
     
     if not USAR_RERANKER:
@@ -934,21 +776,7 @@ def rerank_resultados(
     documentos_recuperados: List[Dict[str, Any]], 
     top_k: int = TOP_K_AFTER_RERANK
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """
-    Reordena los resultados usando un Cross-Encoder.
-    
-    El Cross-Encoder evalúa cada par (pregunta, documento) de forma precisa,
-    asignando un score de relevancia. Esto mejora significativamente la calidad
-    de los resultados finales comparado con solo usar embeddings.
-    
-    Args:
-        pregunta: Pregunta del usuario
-        documentos_recuperados: Lista de documentos candidatos
-        top_k: Número de documentos a retornar tras reranking
-    
-    Returns:
-        Tupla de (lista reordenada de top_k documentos, métricas)
-    """
+    """Reordena candidatos con Cross-Encoder. Retorna (top_k docs con score_reranker, métricas)."""
     metricas = {
         'candidatos_entrada': len(documentos_recuperados),
         'resultados_salida': 0,
@@ -1007,20 +835,7 @@ def rerank_resultados(
 
 
 def generar_queries_con_llm(pregunta: str) -> List[str]:
-    """
-    Usa el modelo auxiliar (base) para generar consultas de búsqueda diversas.
-    
-    NOTA: Se usa MODELO_AUXILIAR ({MODELO_DESC}) en lugar del modelo fine-tuneado
-    (teacher) porque el teacher fue entrenado para responder con contexto, no para
-    generar queries de búsqueda. El modelo base es más adecuado para esta tarea
-    de generación libre de consultas diversas.
-    
-    Args:
-        pregunta: Pregunta original del usuario
-    
-    Returns:
-        Lista de 3 queries de búsqueda generadas por el LLM
-    """
+    """Genera 3 queries de búsqueda con un modelo auxiliar. Mismo idioma que la pregunta."""
     try:
         prompt = (
             "Generate exactly 3 search queries to retrieve relevant content "
@@ -1035,10 +850,10 @@ def generar_queries_con_llm(pregunta: str) -> List[str]:
         )
 
         response = ollama.generate(
-            model=MODELO_AUXILIAR,
+            model=MODELO_CHAT,
             prompt=prompt,
             options={
-                "temperature": 0.3,
+                "temperature": 0.5,
                 "num_predict": 200,
                 "stop": ["\n\n\n"],
             }
@@ -1053,48 +868,22 @@ def generar_queries_con_llm(pregunta: str) -> List[str]:
         return queries[:3]
 
     except Exception as e:
-        logging.warning(f"Error generando queries con LLM ({MODELO_AUXILIAR}): {e}")
+        logging.warning(f"Error generando queries con LLM ({MODELO_CHAT}): {e}")
         return []
 
 
 # =============================================================================
 # SECCIÓN 9: PIPELINE DE RECUPERACIÓN HÍBRIDA
 # =============================================================================
-# Propósito:
-# - Coordinar de extremo a extremo la recuperación de evidencia documental
-#   combinando múltiples estrategias complementarias.
-# Tecnologías implicadas:
-# - Ollama embeddings para búsqueda semántica multi-query.
-# - Descomposición de pregunta con LLM para aumentar cobertura (recall).
-# - Fusión de scores semánticos y léxicos + búsqueda exhaustiva por términos
-#   críticos + reranking neural sobre candidatos finales.
-# Resultado esperado:
-# - Conjunto de fragmentos ordenados por relevancia con métricas de cada fase,
-#   listo para construir contexto de generación.
+# Semántica multi-query + keywords + exhaustiva → fusión RRF → reranking.
 # =============================================================================
+
 
 def realizar_busqueda_hibrida(
     pregunta: str,
     collection: chromadb.Collection
 ) -> Tuple[List[Dict[str, Any]], float, Dict[str, Any]]:
-    """
-    Ejecuta búsqueda híbrida combinando semántica, keywords, exhaustiva y reranking.
-    
-    Pipeline mejorado:
-    1. (Opcional) Descomposición de pregunta con LLM → sub-queries
-    2. Búsqueda semántica multi-query con prefijos de embedding (recupera candidatos)
-    3. Búsqueda por keywords con collection.get() (aumenta recall)
-    4. Búsqueda exhaustiva por términos críticos (máximo recall)
-    5. Fusión híbrida con RRF (Reciprocal Rank Fusion)
-    6. Reranking con Cross-Encoder multilingual (precisión final)
-    
-    Args:
-        pregunta: Pregunta del usuario
-        collection: Colección de ChromaDB
-    
-    Returns:
-        Tupla de (fragmentos_rankeados, mejor_score, métricas_totales)
-    """
+    """Orquesta semántica, keywords, exhaustiva, fusión y reranking. Retorna (fragmentos, mejor_score, métricas)."""
     ui.debug("Iniciando búsqueda híbrida...")
     
     metricas_totales = {
@@ -1216,7 +1005,7 @@ def realizar_busqueda_hibrida(
     terminos_criticos = [k for k in keywords_expandidas[:12] if len(k) > 3]
     
     metricas_exhaustiva = {}
-    if terminos_criticos:
+    if USAR_BUSQUEDA_EXHAUSTIVA and terminos_criticos:
         ui.debug(f"busqueda profunda: {', '.join(terminos_criticos[:6])}")
         resultados_exhaustivos, metricas_exhaustiva = busqueda_exhaustiva_texto(
             terminos_criticos, collection, max_results=30
@@ -1284,36 +1073,16 @@ def realizar_busqueda_hibrida(
 
 
 # =============================================================================
-# SECCIÓN 10: CONSTRUCCIÓN DE CONTEXTO Y GENERACIÓN DE RESPUESTA
+# SECCIÓN 10: CONTEXTO Y GENERACIÓN
 # =============================================================================
-# Propósito:
-# - Convertir fragmentos recuperados en un prompt alineado con el formato del
-#   fine-tuning para maximizar fidelidad al contexto documental.
-# Tecnologías implicadas:
-# - Plantilla con etiqueta <contexto>...</contexto> consistente con train.py.
-# - Llamada de chat en streaming con Ollama para salida incremental en consola.
-# - Mensaje de sistema restrictivo para minimizar alucinaciones y forzar
-#   respuestas basadas únicamente en evidencia recuperada.
-# Resultado esperado:
-# - Respuesta trazable, en tiempo real y con fuentes explícitas al usuario.
+# Fragmentos → prompt <contexto>...</contexto> → streaming Ollama. Formato alineado con train.py.
 # =============================================================================
 
+
+# --- 10.1 Optimización de texto PDF ---
+
 def _es_continuacion_parrafo(linea_previa: str, linea_actual: str) -> bool:
-    """
-    Detecta si linea_actual es continuación del párrafo de linea_previa.
-    
-    Los PDFs extraídos a Markdown insertan líneas en blanco entre cada
-    línea de texto (doble espaciado), rompiendo párrafos continuos en
-    fragmentos inconexos. Esta heurística detecta esas roturas para
-    poder re-unir el texto original.
-    
-    Criterios de continuación:
-    - La línea previa NO termina en finalizador de frase (. ? !)
-    - La línea actual NO inicia un bloque nuevo (lista, header, bold)
-    - La línea actual empieza en minúscula (continuación clara) O
-      la previa termina en , ; ) ] (continuación fuerte) O
-      la previa acaba con una palabra cortada (típico de line wrap del PDF)
-    """
+    """Heurística: detecta si la línea actual continúa el párrafo (evita roturas por doble espaciado PDF)."""
     if not linea_previa or not linea_actual:
         return False
     
@@ -1347,20 +1116,9 @@ def _es_continuacion_parrafo(linea_previa: str, linea_actual: str) -> bool:
     
     return False
 
+
 def _reunir_parrafos(texto: str) -> str:
-    """
-    Re-une líneas de párrafos que fueron separadas por la extracción del PDF.
-    
-    El problema: pymupdf4llm y otros extractores convierten el doble
-    espaciado del PDF en líneas en blanco entre cada línea de texto,
-    haciendo que un párrafo de 3 líneas ocupe 5-7 líneas. Esto
-    desperdicia ~30-50% de los caracteres del contexto.
-    
-    Solución: al encontrar una línea en blanco, mirar hacia adelante
-    (look-ahead) para ver si la siguiente línea con contenido es
-    continuación del párrafo actual. Si lo es, saltar las líneas vacías
-    y unir. Si no, cerrar el párrafo y empezar uno nuevo.
-    """
+    """Re-une líneas separadas por extracción PDF (look-ahead para continuaciones)."""
     lines = texto.split('\n')
     result = []
     buffer = ""
@@ -1407,28 +1165,7 @@ def _reunir_parrafos(texto: str) -> str:
 
 
 def optimizar_texto_contexto(texto: str) -> str:
-    """
-    Optimiza el texto extraído de PDFs eliminando ruido y desperdicio de caracteres.
-    
-    Los PDFs convertidos a Markdown suelen tener:
-    - Líneas en blanco entre cada línea de texto (doble espaciado del PDF)
-    - Múltiples saltos de línea consecutivos sin contenido
-    - Artefactos de Markdown vacíos como '## □' o '□'
-    - Footers de página (autor, universidad, número de página)
-    - Marcadores de solución de exámenes tipo '**Solución:** La X'
-    - Espacios múltiples dentro de las líneas
-    
-    El ahorro típico es del 30-50%, permitiendo que el mismo límite de
-    MAX_CONTEXTO_CHARS contenga significativamente más información
-    relevante para el modelo.
-    
-    Args:
-        texto: Texto crudo extraído del PDF
-    
-    Returns:
-        Texto compactado conservando la estructura semántica
-    """
-
+    """Elimina ruido PDF (artefactos □, footers, doble espaciado). Ahorro típico 30-50% chars."""
     texto = re.sub(r'#{1,6}\s*□', '', texto)
     texto = re.sub(r'^□\s*$', '', texto, flags=re.MULTILINE)
 
@@ -1455,30 +1192,11 @@ def optimizar_texto_contexto(texto: str) -> str:
     
     return texto.strip()
 
+
+# --- 10.2 Construcción de contexto ---
+
 def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
-    """
-    Construye el contexto formateado para enviar al modelo LLM.
-    
-    CRÍTICO: El formato debe ser texto puro sin metadatos inyectados, alineado
-    con el dataset RAG_Multilingual usado en el fine-tuning (train.py).
-    
-    Durante el entrenamiento, el contexto era simplemente el texto del campo
-    "context" del dataset, sin cabeceras como "[Fragmento X | archivo.pdf...]".
-    Inyectar metadatos causa distribution shift y degrada la calidad.
-    
-    Las fuentes se muestran al usuario de forma separada (formatear_fuentes_respuesta),
-    no dentro del contexto que recibe el modelo.
-    
-    Cada fragmento se optimiza con optimizar_texto_contexto() para eliminar
-    ruido del PDF (líneas vacías, artefactos, footers) y aprovechar mejor
-    el límite de MAX_CONTEXTO_CHARS.
-    
-    Args:
-        fragmentos: Lista de fragmentos seleccionados
-    
-    Returns:
-        Contexto formateado como string (texto puro optimizado)
-    """
+    """Texto puro sin metadatos (alineado con RAG_Multilingual). Separa con '...'. Opcional: optimizar_texto_contexto."""
     fragmentos_ordenados = sorted(
         fragmentos,
         key=lambda f: (f['metadata']['source'], f['metadata']['page'], f['metadata'].get('chunk', 0))
@@ -1487,10 +1205,14 @@ def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
     textos_originales = [frag['doc'] for frag in fragmentos_ordenados]
     chars_original = sum(len(t) for t in textos_originales)
     
-    contextos_texto = [
-        optimizar_texto_contexto(frag['doc'])
-        for frag in fragmentos_ordenados
-    ]
+    contextos_texto = []
+    if USAR_OPTIMIZACION_CONTEXTO:
+        contextos_texto = [
+            optimizar_texto_contexto(frag['doc'])
+            for frag in fragmentos_ordenados
+        ]
+    else:
+        contextos_texto = [frag['doc'] for frag in fragmentos_ordenados]
     
     contextos_texto = [t for t in contextos_texto if t]
     
@@ -1507,135 +1229,9 @@ def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
     
     return resultado
 
-def guardar_debug_rag(
-    pregunta: str,
-    system_prompt: str = "",
-    mensaje_usuario: str = "",
-    respuesta: str = "",
-    fragmentos: Optional[List[Dict[str, Any]]] = None,
-    motivo_interrupcion: Optional[str] = None,
-    metricas: Optional[Dict[str, Any]] = None
-) -> None:
-    """
-    Guarda un volcado completo de la interacción RAG para análisis y depuración.
-    
-    Crea un archivo de texto legible por cada consulta con timestamp, que incluye:
-    - La pregunta original del usuario
-    - El system prompt enviado al modelo
-    - El mensaje de usuario completo (pregunta + instrucción idioma + contexto)
-    - La respuesta generada por el modelo
-    - Metadatos de los fragmentos recuperados
-    
-    Los archivos se guardan en la carpeta debug_rag/ con nombre basado en timestamp.
-    
-    En casos de interrupción temprana (sin resultados, fuera de alcance, etc.),
-    se pueden pasar motivo_interrupcion y metricas para registrar el fallo.
-    
-    Args:
-        pregunta: Pregunta original del usuario
-        system_prompt: System prompt enviado al modelo (vacío si no se llegó a generar)
-        mensaje_usuario: Mensaje de usuario completo enviado al modelo (vacío si no)
-        respuesta: Respuesta generada por el modelo (vacía si no se generó)
-        fragmentos: Fragmentos de contexto recuperados (puede ser lista vacía)
-        motivo_interrupcion: Motivo por el que no se generó respuesta (opcional)
-        metricas: Métricas de búsqueda para casos de fallo (opcional)
-    """
-    fragmentos = fragmentos or []
-    
-    try:
-        os.makedirs(CARPETA_DEBUG_RAG, exist_ok=True)
-        
-        import time
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        # Primeras palabras de la pregunta como parte del nombre
-        slug = re.sub(r'[^\w\s]', '', pregunta)[:40].strip().replace(' ', '_')
-        nombre_archivo = f"{timestamp}_{slug}.txt"
-        ruta = os.path.join(CARPETA_DEBUG_RAG, nombre_archivo)
-        
-        with open(ruta, 'w', encoding='utf-8') as f:
-            f.write("=" * 80 + "\n")
-            f.write(f"  DEBUG RAG - {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write("=" * 80 + "\n\n")
-
-            if motivo_interrupcion:
-                f.write("─" * 80 + "\n")
-                f.write("  ⚠ INTERRUPCIÓN TEMPRANA\n")
-                f.write("─" * 80 + "\n")
-                f.write(f"{motivo_interrupcion}\n\n")
-                if metricas:
-                    f.write("Métricas de búsqueda:\n")
-                    f.write(json.dumps(metricas, indent=2, ensure_ascii=False) + "\n\n")
-
-            f.write("─" * 80 + "\n")
-            f.write("  CONFIGURACIÓN DEL PIPELINE\n")
-            f.write("─" * 80 + "\n")
-            f.write(f"Modelo RAG: {_inferir_descripcion_modelo(MODELO_CHAT)}\n")
-            f.write(f"Contextual Retrieval (Indexación): {'SÍ (' + _inferir_descripcion_modelo(MODELO_CONTEXTUAL) + ')' if USAR_CONTEXTUAL_RETRIEVAL else 'NO'}\n")
-            f.write(f"RECOMP Synthesis (Generación): {'SÍ (' + _inferir_descripcion_modelo(MODELO_RECOMP) + ')' if USAR_RECOMP_SYNTHESIS else 'NO'}\n\n")
-            
-            f.write("─" * 80 + "\n")
-            f.write("  PREGUNTA ORIGINAL\n")
-            f.write("─" * 80 + "\n")
-            f.write(f"{pregunta}\n\n")
-            
-            f.write("─" * 80 + "\n")
-            f.write("  SYSTEM PROMPT\n")
-            f.write("─" * 80 + "\n")
-            f.write(f"{system_prompt or '(no enviado)'}\n\n")
-            
-            # Extraer el contexto real enviado
-            context_match = re.search(r'<contexto>(.*?)</contexto>', mensaje_usuario, re.DOTALL)
-            contexto_enviado = context_match.group(1).strip() if context_match else "(vacío)"
-            
-            f.write("─" * 80 + "\n")
-            if USAR_RECOMP_SYNTHESIS:
-                f.write("  SÍNTESIS RECOMP ENVIADA AL MODELO FINAL (en vez de raw chunks)\n")
-            else:
-                f.write("  CONTEXTO RAW ENVIADO AL MODELO FINAL\n")
-            f.write("─" * 80 + "\n")
-            f.write(f"{contexto_enviado}\n\n")
-            
-            f.write("─" * 80 + "\n")
-            f.write("  MENSAJE DE USUARIO (Prompt real completo)\n")
-            f.write("─" * 80 + "\n")
-            f.write(f"{mensaje_usuario or '(no enviado al modelo)'}\n\n")
-            
-            f.write("─" * 80 + "\n")
-            f.write("  RESPUESTA DEL MODELO\n")
-            f.write("─" * 80 + "\n")
-            f.write(f"{respuesta or '(no generada)'}\n\n")
-            
-            f.write("─" * 80 + "\n")
-            f.write(f"  FRAGMENTOS RECUPERADOS ({len(fragmentos)})\n")
-            f.write("─" * 80 + "\n")
-            for i, frag in enumerate(fragmentos, 1):
-                meta = frag.get('metadata', {})
-                score = frag.get('score_final', 'N/A')
-                score_rr = frag.get('score_reranker', 'N/A')
-                f.write(f"\n--- Fragmento {i} ---\n")
-                pag = meta.get('page', 0)
-                f.write(f"Fuente: {meta.get('source', '?')}, pág. {pag + 1 if isinstance(pag, int) else pag}\n")
-                f.write(f"Score final: {score}  |  Score reranker: {score_rr}\n")
-                f.write(f"Sección: {meta.get('section_header', '(sin header)')}\n")
-                doc_text = frag.get('doc', '')
-                if '\\n\\n' in doc_text:
-                    ctx_part, orig_part = doc_text.split('\\n\\n', 1)
-                    f.write(f"[Contextual Retrieval]:\n{ctx_part}\n\n")
-                    f.write(f"[Texto del documento]:\n{orig_part}\n")
-                else:
-                    f.write(f"[Texto del documento]:\n{doc_text}\n")
-        
-        logging.info(f"Debug RAG guardado: {ruta}")
-        
-    except Exception as e:
-        logging.warning(f"Error guardando debug RAG: {e}")
-
 
 def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: str = "") -> str:
-    """
-    Sintetiza fragmentos usando RECOMP (Qwen 2.5 3B), preservando citas 
-    y precisión técnica (fórmulas O(n), etc).
-    """
+    """Síntesis con MODELO_RECOMP. Si falla o está desactivado, usa construir_contexto_para_modelo."""
     if not USAR_RECOMP_SYNTHESIS or not fragmentos:
         return construir_contexto_para_modelo(fragmentos)
         
@@ -1683,7 +1279,7 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
             ],
             options={
                 "temperature": 0.1,
-                "num_predict": 1024,
+                "num_predict": 2048,
                 "top_p": 0.9,
                 "repeat_penalty": 1.15,
                 "num_ctx": 8192
@@ -1701,25 +1297,118 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
         logging.warning(f"Error crítico en síntesis RECOMP ({MODELO_RECOMP}): {e}")
         return construir_contexto_para_modelo(fragmentos)
 
+
+# --- 10.3 Debug ---
+
+def guardar_debug_rag(
+    pregunta: str,
+    system_prompt: str = "",
+    mensaje_usuario: str = "",
+    respuesta: str = "",
+    fragmentos: Optional[List[Dict[str, Any]]] = None,
+    motivo_interrupcion: Optional[str] = None,
+    metricas: Optional[Dict[str, Any]] = None
+) -> None:
+    """Volcado de interacción RAG en debug_rag/ (timestamp + slug). Soporta motivo_interrupcion."""
+    fragmentos = fragmentos or []
+    
+    if not GUARDAR_DEBUG_RAG:
+        return
+    
+    try:
+        os.makedirs(CARPETA_DEBUG_RAG, exist_ok=True)
+        
+        import time
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        slug = re.sub(r'[^\w\s]', '', pregunta)[:40].strip().replace(' ', '_')
+        nombre_archivo = f"{timestamp}_{slug}.txt"
+        ruta = os.path.join(CARPETA_DEBUG_RAG, nombre_archivo)
+        
+        with open(ruta, 'w', encoding='utf-8') as f:
+            f.write("=" * 80 + "\n")
+            f.write(f"  DEBUG RAG - {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write("=" * 80 + "\n\n")
+
+            if motivo_interrupcion:
+                f.write("─" * 80 + "\n")
+                f.write("  ⚠ INTERRUPCIÓN TEMPRANA\n")
+                f.write("─" * 80 + "\n")
+                f.write(f"{motivo_interrupcion}\n\n")
+                if metricas:
+                    f.write("Métricas de búsqueda:\n")
+                    f.write(json.dumps(metricas, indent=2, ensure_ascii=False) + "\n\n")
+
+            f.write("─" * 80 + "\n")
+            f.write("  CONFIGURACIÓN DEL PIPELINE\n")
+            f.write("─" * 80 + "\n")
+            f.write(f"Modelo RAG: {_inferir_descripcion_modelo(MODELO_RAG)}\n")
+            f.write(f"Contextual Retrieval (Indexación): {'SÍ (' + _inferir_descripcion_modelo(MODELO_CONTEXTUAL) + ')' if USAR_CONTEXTUAL_RETRIEVAL else 'NO'}\n")
+            f.write(f"RECOMP Synthesis (Generación): {'SÍ (' + _inferir_descripcion_modelo(MODELO_RECOMP) + ')' if USAR_RECOMP_SYNTHESIS else 'NO'}\n\n")
+            
+            f.write("─" * 80 + "\n")
+            f.write("  PREGUNTA ORIGINAL\n")
+            f.write("─" * 80 + "\n")
+            f.write(f"{pregunta}\n\n")
+            
+            f.write("─" * 80 + "\n")
+            f.write("  SYSTEM PROMPT\n")
+            f.write("─" * 80 + "\n")
+            f.write(f"{system_prompt or '(no enviado)'}\n\n")
+            
+            context_match = re.search(r'<contexto>(.*?)</contexto>', mensaje_usuario, re.DOTALL)
+            contexto_enviado = context_match.group(1).strip() if context_match else "(vacío)"
+            
+            f.write("─" * 80 + "\n")
+            if USAR_RECOMP_SYNTHESIS:
+                f.write("  SÍNTESIS RECOMP ENVIADA AL MODELO FINAL (en vez de raw chunks)\n")
+            else:
+                f.write("  CONTEXTO RAW ENVIADO AL MODELO FINAL\n")
+            f.write("─" * 80 + "\n")
+            f.write(f"{contexto_enviado}\n\n")
+            
+            f.write("─" * 80 + "\n")
+            f.write("  MENSAJE DE USUARIO (Prompt real completo)\n")
+            f.write("─" * 80 + "\n")
+            f.write(f"{mensaje_usuario or '(no enviado al modelo)'}\n\n")
+            
+            f.write("─" * 80 + "\n")
+            f.write("  RESPUESTA DEL MODELO\n")
+            f.write("─" * 80 + "\n")
+            f.write(f"{respuesta or '(no generada)'}\n\n")
+            
+            f.write("─" * 80 + "\n")
+            f.write(f"  FRAGMENTOS RECUPERADOS ({len(fragmentos)})\n")
+            f.write("─" * 80 + "\n")
+            for i, frag in enumerate(fragmentos, 1):
+                meta = frag.get('metadata', {})
+                score = frag.get('score_final', 'N/A')
+                score_rr = frag.get('score_reranker', 'N/A')
+                f.write(f"\n--- Fragmento {i} ---\n")
+                pag = meta.get('page', 0)
+                f.write(f"Fuente: {meta.get('source', '?')}, pág. {pag + 1 if isinstance(pag, int) else pag}\n")
+                f.write(f"Score final: {score}  |  Score reranker: {score_rr}\n")
+                f.write(f"Sección: {meta.get('section_header', '(sin header)')}\n")
+                doc_text = frag.get('doc', '')
+                if '\\n\\n' in doc_text:
+                    ctx_part, orig_part = doc_text.split('\\n\\n', 1)
+                    f.write(f"[Contextual Retrieval]:\n{ctx_part}\n\n")
+                    f.write(f"[Texto del documento]:\n{orig_part}\n")
+                else:
+                    f.write(f"[Texto del documento]:\n{doc_text}\n")
+        
+        logging.info(f"Debug RAG guardado: {ruta}")
+        
+    except Exception as e:
+        logging.warning(f"Error guardando debug RAG: {e}")
+
+
+# --- 10.4 Generación de respuesta ---
+
 def generar_respuesta(
     pregunta: str, 
     fragmentos: List[Dict[str, Any]]
 ) -> str:
-    """
-    Genera y muestra la respuesta del asistente RAG con streaming.
-    
-    IMPORTANTE: Usa el formato exacto del entrenamiento:
-    - System prompt alineado con el Modelfile del teacher.
-    - Pregunta del usuario seguida de: "\\n\\n<contexto>{contenido}</contexto>"
-    - Esto coincide con el dataset RAG_Multilingual usado en el fine-tuning.
-    
-    Args:
-        pregunta: Pregunta del usuario
-        fragmentos: Fragmentos de contexto relevantes del RAG
-    
-    Returns:
-        Texto completo de la respuesta generada (para persistencia)
-    """
+    """Streaming con MODELO_RAG. Formato: pregunta + <contexto>...</contexto>. Guarda debug."""
     if USAR_RECOMP_SYNTHESIS:
         ui.debug("sintetizando contexto con RECOMP...")
         contexto_str = sintetizar_contexto_recomp(fragmentos, query_usuario=pregunta)
@@ -1729,7 +1418,7 @@ def generar_respuesta(
     mensaje_usuario = f"{pregunta}\n\n<contexto>{contexto_str}</contexto>"
 
     stream = ollama.chat(
-        model=MODELO_CHAT,
+        model=MODELO_RAG,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT_RAG},
             {"role": "user", "content": mensaje_usuario}
@@ -1756,26 +1445,14 @@ def generar_respuesta_silenciosa(
     pregunta: str,
     fragmentos: List[Dict[str, Any]]
 ) -> str:
-    """
-    Genera la respuesta RAG sin streaming ni salida visual.
-    
-    Variante silenciosa de generar_respuesta() para evaluación
-    automatizada (RAGAS) y tests sin interacción de consola.
-    
-    Args:
-        pregunta: Pregunta del usuario
-        fragmentos: Fragmentos de contexto relevantes
-    
-    Returns:
-        Texto completo de la respuesta generada
-    """
+    """Sin streaming ni salida. Para RAGAS y tests automatizados."""
     if USAR_RECOMP_SYNTHESIS:
         contexto_str = sintetizar_contexto_recomp(fragmentos, query_usuario=pregunta)
     else:
         contexto_str = construir_contexto_para_modelo(fragmentos)
     mensaje_usuario = f"{pregunta}\n\n<contexto>{contexto_str}</contexto>"
     stream = ollama.chat(
-        model=MODELO_CHAT,
+        model=MODELO_RAG,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT_RAG},
             {"role": "user", "content": mensaje_usuario}
@@ -1791,15 +1468,13 @@ def generar_respuesta_silenciosa(
     return respuesta_completa
 
 
+# --- 10.5 Evaluación (RAGAS) ---
+
 def evaluar_pregunta_rag(
     pregunta: str,
     collection: chromadb.Collection
 ) -> Tuple[str, List[str]]:
-    """
-    Ejecuta el pipeline RAG completo sin imprimir. Para evaluación con RAGAS.
-    Returns:
-        (respuesta, lista de contextos usados)
-    """
+    """Pipeline completo silencioso: búsqueda → filtrado → expansión → generación. Retorna (respuesta, contextos)."""
     import io
     import contextlib
     if len(pregunta.strip()) < MIN_LONGITUD_PREGUNTA_RAG:
@@ -1850,25 +1525,16 @@ def evaluar_pregunta_rag(
 
 
 # =============================================================================
-# SECCIÓN 11: INDEXACIÓN DE PDFS Y OPERACIONES DE COLECCIÓN
+# SECCIÓN 11: INDEXACIÓN Y COLECCIÓN
 # =============================================================================
-# Propósito:
-# - Construir y mantener el índice vectorial a partir de PDFs para habilitar
-#   recuperación semántica persistente entre ejecuciones.
-# Tecnologías implicadas:
-# - Extracción dual: pymupdf4llm (preferente) y pypdf (fallback).
-# - Embeddings locales con Ollama + prefijos dinámicos para doc/query alignment.
-# - Persistencia en ChromaDB con metadatos enriquecidos (source, page, chunk,
-#   formato, encabezado de sección) y control de errores/reintentos.
-# Resultado esperado:
-# - Colección vectorial consistente, auditable y utilizable por el chat RAG.
+# PDFs → pymupdf4llm/pypdf → chunks → embeddings Ollama → ChromaDB.
 # =============================================================================
 
+
+# --- 11.1 Contextual retrieval ---
+
 def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
-    """
-    Usa un LLM para generar contexto situacional (Contextual Retrieval) para un chunk.
-    Anthropic (2024): enriquece el chunk con 2-3 frases de resumen global + contexto situacional.
-    """
+    """2-3 frases de resumen global + contexto situacional. Usa MODELO_CONTEXTUAL."""
     if not USAR_CONTEXTUAL_RETRIEVAL:
         return ""
         
@@ -1893,7 +1559,7 @@ def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
                 {"role": "system", "content": system_prompt},
                 {"role": "user",   "content": user_prompt}
             ],
-            options={"temperature": 0.2, "num_predict": 250}
+            options={"temperature": 0.1, "num_predict": 250}
         )
         contexto = response['message']['content'].strip()
         if contexto:
@@ -1902,23 +1568,14 @@ def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
         logging.warning(f"Error generando contexto situacional: {e}")
     return ""
 
+
+# --- 11.2 Indexación ---
+
 def indexar_documentos(
     carpeta: str, 
     collection: chromadb.Collection
 ) -> int:
-    """
-    Indexa todos los PDFs de una carpeta en la colección de ChromaDB.
-    
-    Usa pymupdf4llm para mejor extracción (preserva tablas, estructura, formato).
-    Si no está disponible, usa pypdf como fallback.
-    
-    Args:
-        carpeta: Ruta a la carpeta con PDFs
-        collection: Colección de ChromaDB
-    
-    Returns:
-        Número total de fragmentos indexados
-    """
+    """Indexa PDFs de carpeta. pymupdf4llm preferente, pypdf fallback. Retorna total de chunks."""
     global PYMUPDF_AVAILABLE
     
     archivos_pdf = [f for f in os.listdir(carpeta) if f.endswith('.pdf')]
@@ -1933,19 +1590,7 @@ def indexar_documentos(
     
     def _indexar_chunk(id_doc: str, chunk_text: str, chunk_doc_text: str, 
                        metadata: Dict, collection_ref: chromadb.Collection) -> bool:
-        """
-        Embeddea e indexa un chunk individual con prefijo de embedding y reintentos.
-        
-        Args:
-            id_doc: ID único del chunk
-            chunk_text: Texto a embeddear (puede ser truncado)
-            chunk_doc_text: Texto completo a almacenar en la DB
-            metadata: Metadatos del chunk
-            collection_ref: Colección ChromaDB
-        
-        Returns:
-            True si se indexó correctamente
-        """
+        """Embedding + add a ChromaDB. Reintento con truncado si falla por longitud."""
         text_to_embed = f"{EMBED_PREFIX_DOC}{chunk_text[:MAX_CHARS_EMBED]}"
         
         try:
@@ -2074,16 +1719,11 @@ def indexar_documentos(
     ui.pipeline_stop()
     return total_chunks
 
+
+# --- 11.3 Gestión de colección ---
+
 def obtener_documentos_indexados(collection: chromadb.Collection) -> List[str]:
-    """
-    Obtiene la lista de documentos únicos indexados.
-    
-    Args:
-        collection: Colección de ChromaDB
-    
-    Returns:
-        Lista de nombres de documentos únicos
-    """
+    """Lista de nombres únicos (source) en la colección."""
     try:
         all_metadata = collection.get(include=['metadatas'])
         documentos = set()
@@ -2095,14 +1735,14 @@ def obtener_documentos_indexados(collection: chromadb.Collection) -> List[str]:
         return []
 
 
-
-
 # =============================================================================
-# PUNTO DE ENTRADA
+# SECCIÓN 12: PUNTO DE ENTRADA
+# =============================================================================
+# main() → MonkeyGrabCLI.run()
 # =============================================================================
 
 def main():
-    """Arranca la CLI profesional de MonkeyGrab."""
+    """Arranca MonkeyGrabCLI."""
     import rag.chat_pdfs as rag_engine
     from rag.cli import MonkeyGrabCLI
     cli = MonkeyGrabCLI(rag_engine)
