@@ -93,3 +93,5 @@ models/gguf-output/qwen3-4b
 models/gguf-output/qwen3-14b
 
 scripts/evaluation/
+
+.pytest_cache/

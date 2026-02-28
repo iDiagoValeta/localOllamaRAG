@@ -15,7 +15,7 @@
 # Define el archivo GGUF cuantizado que se registrará como modelo Ollama.
 # =============================================================================
 
-FROM ./Qwen3-14B-Teacher-Q4_K_M.gguf
+FROM ./Qwen3-14B-Q4_K_M.gguf
 
 # =============================================================================
 # SECCIÓN 2: SYSTEM PROMPT ALINEADO CON FINE-TUNING

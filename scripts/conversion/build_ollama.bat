@@ -63,7 +63,7 @@ echo.
 echo [2/4] Convirtiendo a GGUF F16...
 if not exist "%GGUF_PATH%" mkdir "%GGUF_PATH%"
 if not exist "%GGUF_PATH%\qwen-3" mkdir "%GGUF_PATH%\qwen-3"
-python "%PROJECT_ROOT%\llama.cpp\convert_hf_to_gguf.py" "%MERGED_PATH%\qwen-3" --outfile "%GGUF_PATH%\qwen-3\Qwen3-14B-Teacher-f16.gguf" --outtype f16
+python "%PROJECT_ROOT%\llama.cpp\convert_hf_to_gguf.py" "%MERGED_PATH%\qwen-3" --outfile "%GGUF_PATH%\qwen-3\Qwen3-14B-f16.gguf" --outtype f16
 if %errorlevel% neq 0 (
     echo ERROR: Fallo en conversion GGUF F16
     pause
