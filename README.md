@@ -2,7 +2,7 @@
   <img src="logo.png" alt="MonkeyGrab Logo" width="180" />
 </p>
 
-<h1 align="center">🐒 MonkeyGrab</h1>
+<h1 align="center">MonkeyGrab</h1>
 
 <p align="center">
   <strong>Asistente local de consulta documental con RAG académico</strong><br>
