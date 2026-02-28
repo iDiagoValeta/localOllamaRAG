@@ -1,184 +1,79 @@
-# MonkeyGrab — Fine-tuning para RAG Contextual
-
-Trabajo de Fin de Grado — **Universitat Politècnica de València**
-
-Fine-tuning con LoRA para generación fundamentada en contexto (RAG). El modelo aprende a responder exclusivamente a partir de fragmentos documentales proporcionados entre etiquetas `<contexto>...</contexto>`, minimizando alucinaciones. Se despliega localmente con Ollama y se integra con un sistema RAG de consulta de PDFs académicos.
-
-## Evolución del modelo
-
-El proyecto siguió un enfoque iterativo de refinamiento:
-
-1. **Llama 3.1 8B** — Primera iteración. Se obtuvo un modelo funcional pero con limitaciones en faithfulness (0.84) y answer_correctness (0.53), insuficientes para un asistente académico fiable.
-2. **Qwen 2.5 14B** — Modelo actual. La mayor capacidad del modelo (14B vs 8B) y la arquitectura Qwen permiten respuestas más precisas y fieles al contexto proporcionado.
-
-Ambos modelos entrenados se conservan en el repositorio para documentar la progresión experimental del TFG.
-
-## Estructura del proyecto
-
-```
-├── scripts/
-│   ├── training/
-│   │   ├── train.py                    # Entrenamiento LoRA (Qwen 2.5)
-│   │   ├── plot_training.py            # Visualización de curvas
-│   │   ├── run.sh                      # Lanzador SLURM/HPC
-│   │   └── requirements.txt
-│   └── conversion/
-│       ├── merge_lora.py               # Fusión LoRA + modelo base
-│       ├── quantize_to_q4km.ps1        # Cuantización GGUF → Q4_K_M
-│       └── build_ollama.bat            # Pipeline completo → Ollama
-├── training-output/
-│   ├── llama-3.1/                      # Adaptadores y métricas (histórico)
-│   └── qwen-2.5/                       # Adaptadores y métricas (actual)
-├── models/
-│   ├── gguf-output/
-│   │   ├── llama-3.1/                  # Modelfile + GGUF (histórico)
-│   │   └── qwen-2.5/                   # Modelfile + GGUF (actual)
-│   └── merged-model/                   # Modelos fusionados (generados)
-├── rag/                                # Sistema RAG
-│   ├── chat_pdfs.py                    # Pipeline completo
-│   └── requirements.txt
-├── evaluation/                         # Evaluación RAGAS
-│   ├── run_eval.py                     # Script de evaluación
-│   ├── dataset_eval.json               # Dataset de preguntas
-│   └── requirements.txt
-├── imgs/                               # Curvas y capturas para documentación
-└── llama.cpp/                          # Herramientas de conversión GGUF
-```
-
-## 1. Entrenamiento
-
-Ambos modelos comparten la misma configuración base de LoRA y el mismo dataset multilingüe, permitiendo una comparación directa del impacto del modelo base en las métricas finales.
-
-### Iteración 1: Llama 3.1 8B
-
-| Parámetro | Valor |
-|---|---|
-| Modelo base | `unsloth/Meta-Llama-3.1-8B-Instruct` |
-| Dataset | [`projecte-aina/RAG_Multilingual`](https://huggingface.co/datasets/projecte-aina/RAG_Multilingual) (42 303 ejemplos, ES/CA/EN) |
-| LoRA | r=64, alpha=128, dropout=0.05, 7 módulos target |
-| Batch efectivo | 32 (batch=2 × grad_accum=16) |
-| Learning rate | 2e-4, cosine scheduler, warmup 5% |
-| Precisión | BF16 |
-| Épocas | 1 (1 322 steps) |
-| Loss final | ~0.55 |
-
 <p align="center">
-  <img src="imgs/training_curves_llama.png" alt="Curvas de entrenamiento Llama 3.1" width="700">
+  <img src="logo.png" alt="MonkeyGrab Logo" width="180" />
 </p>
 
-### Iteración 2: Qwen 2.5 14B (Actual)
-
-| Parámetro | Valor |
-|---|---|
-| Modelo base | `Qwen/Qwen2.5-14B-Instruct` |
-| Dataset | [`projecte-aina/RAG_Multilingual`](https://huggingface.co/datasets/projecte-aina/RAG_Multilingual) (42 303 ejemplos, ES/CA/EN) |
-| LoRA | r=64, alpha=128, dropout=0.05, 7 módulos target |
-| Batch efectivo | 32 (batch=2 × grad_accum=16) |
-| Learning rate | 2e-4, cosine scheduler, warmup 5% |
-| Precisión | BF16 |
-| Épocas | 1 (1 322 steps) |
-| Perplexity | 1.60 |
+<h1 align="center">🐒 MonkeyGrab</h1>
 
 <p align="center">
-  <img src="imgs/training_curves_qwen.png" alt="Curvas de entrenamiento Qwen 2.5" width="700">
+  <strong>Asistente local de consulta documental con RAG académico</strong><br>
+  Conversación inteligente sobre PDFs indexados · 100% local · Sin APIs externas
 </p>
 
-```bash
-# Entrenamiento (requiere GPU con CUDA)
-cd scripts/training
-pip install -r requirements.txt
-python train.py
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/Ollama-Local%20LLM-000000?style=for-the-badge" alt="Ollama">
+  <img src="https://img.shields.io/badge/ChromaDB-Vector%20Store-FF6B35?style=for-the-badge" alt="ChromaDB">
+  <img src="https://img.shields.io/badge/RAG-Híbrido-28A745?style=for-the-badge" alt="RAG">
+  <img src="https://img.shields.io/badge/Licencia-MIT-6B4C9A?style=for-the-badge" alt="License">
+</p>
 
-# Visualizar curvas
-python plot_training.py
-```
+---
 
-## 2. Conversión y despliegue
+## ¿Qué es MonkeyGrab?
 
-Pipeline automático que convierte el adaptador LoRA a un modelo cuantizado Q4_K_M registrado en Ollama. Cada modelo tiene su propio directorio de salida (`models/gguf-output/<modelo>/`):
+MonkeyGrab es un sistema RAG (Retrieval-Augmented Generation) local diseñado para consulta académica de documentos PDF. Combina recuperación híbrida, reranking y enriquecimiento general del contexto orquestando diversos modelos ejecutados localmente mediante Ollama.
 
-```
-Fusión LoRA → GGUF F16 → Q4_K_M → ollama create Qwen-2.5-FineTuned
-```
+## Modos de uso
 
-```bash
-# Pipeline automático
-scripts\conversion\build_ollama.bat
+- `CHAT` — Conversación general, guía y soporte operativo
+- `RAG`  — Respuestas fundamentadas en PDFs indexados
 
-# O paso a paso:
-python scripts/conversion/merge_lora.py
-python llama.cpp/convert_hf_to_gguf.py models/merged-model/qwen-2.5 --outfile models/gguf-output/qwen-2.5/Qwen-2.5-14B-MonkeyGrab-f16.gguf --outtype f16
-.\scripts\conversion\quantize_to_q4km.ps1 <input.gguf> <output.gguf>
-cd models/gguf-output/qwen-2.5 && ollama create Qwen-2.5-FineTuned -f Modelfile
-```
 
-El `Modelfile` de cada modelo replica el system prompt y template de chat usados durante su entrenamiento para mantener coherencia train/inference. Parámetros de generación: `temperature=0.15`, `repeat_penalty=1.15`, `top_p=0.9`, `num_ctx=8192`.
-
-## 3. Sistema RAG
-
-Chat interactivo para consulta de PDFs con búsqueda híbrida:
-
-| Componente | Tecnología |
-|---|---|
-| Extracción PDF | pymupdf4llm (Markdown) / pypdf (fallback) |
-| Chunking | Structure-aware, 1 200 chars, overlap 200 |
-| Embeddings | embeddinggemma (768d, 2K tokens, multilingüe 100+ idiomas) |
-| Vector store | ChromaDB (persistente) |
-| Búsqueda | Semántica multi-query + keywords + exhaustiva, fusión RRF |
-| Reranking | BAAI/bge-reranker-v2-m3 (cross-encoder multilingual) |
-| LLM | Qwen-2.5-FineTuned vía Ollama |
-| Generación | temperature=0.15, repeat_penalty=1.15, top_p=0.85 |
-
-**Pipeline por pregunta:** descomposición LLM → búsqueda semántica multi-query → keywords → fusión RRF → reranking cross-encoder → generación con contexto.
+## Ejecución (CLI)
 
 ```bash
 cd rag
-pip install -r requirements.txt
-# Colocar PDFs en rag/pdfs/
 python chat_pdfs.py
 ```
 
-Comandos del chat: `stats`, `docs`, `temas`, `reindex`, `salir`.
+Comandos principales en la CLI:
 
-## 4. Evaluación con RAGAS
+- `/rag`
+- `/chat`
+- `/docs`
+- `/temas`
+- `/stats`
+- `/reindex`
+- `/help`
+- `/salir`
 
-Evaluación objetiva del sistema RAG con 5 métricas (RAGAS v0.2+): `faithfulness`, `answer_relevancy`, `context_precision`, `context_recall` y `answer_correctness`. Utiliza Gemini 2.0 Flash como LLM juez y HuggingFace embeddings locales.
+## Pipeline RAG
 
-```bash
-cd evaluation
-pip install -r requirements.txt
-python run_eval.py> **Nota:** Para la evaluación se usó **Gemini 2.0 Flash** como juez (`evaluator_llm`) debido a su ventana de contexto y capacidad de razonamiento.
-```
+1. Extracción y chunking de PDFs → embeddings → ChromaDB
+2. Recuperación: semántica y búsqueda léxica
+3. Fusión RRF → Reranking
+4. Expansión de contexto y síntesis RECOMP
+5. Inferencia final con LLM
 
-### Comparativa: Llama 3.1 8B vs. Qwen 2.5 14B
+## Obligatorio vs Opcionales
 
-La migración a Qwen 2.5 14B (cuantizado a Q4_K_M) ha supuesto una mejora consistente en todas las métricas dependientes del generador, manteniendo la eficacia del sistema de recuperación.
+Obligatorio (mínimo para que el sistema funcione como RAG):
 
-| Métrica | Definición | Llama 3.1 8B (Baseline) | Qwen 2.5 14B (SFT) | Mejora |
-| :--- | :--- | :---: | :---: | :---: |
-| **Faithfulness** | ¿La respuesta se basa en el contexto recuperado? | 0.8400 | **0.8890** | +5.8% 🟢 |
-| **Answer Relevancy** | ¿La respuesta es pertinente a la pregunta? | 0.8285 | **0.8604** | +3.9% 🟢 |
-| **Answer Correctness** | Exactitud semántica vs. ground truth | 0.5294 | **0.5977** | +12.9% 🟢 |
-| **Context Recall** | ¿Se recuperó toda la información necesaria? | 0.9474 | 0.9474 | = |
-| **Context Precision** | ¿Los fragmentos relevantes están bien rankeados? | 0.8947 | 0.8947 | = |
-| **Score Global** | Promedio de todas las métricas | 0.8080 | **0.8378** | +3.7% 🟢 |
+- Indexación básica: extracción de texto y `dividir_en_chunks()` → embeddings (`ollama.embeddings`) y persistencia en ChromaDB.
+- Recuperación semántica: consultas vectoriales (`collection.query`) en `realizar_busqueda_hibrida`.
+- Generación con LLM RAG: usar `MODELO_RAG` para producir la respuesta final basada en el contexto recuperado.
 
-**Conclusiones de la evaluación:**
-1. **Menos alucinaciones:** El aumento en `faithfulness` a casi **0.89** indica que el modelo respeta mucho mejor los límites del contexto proporcionado, crucial para un sistema RAG académico.
-2. **Mejor redacción:** La mejora en `answer_correctness` y `answer_relevancy` sugiere que Qwen 2.5 genera respuestas más precisas y mejor estructuradas.
-3. **Recuperación sólida:** Las métricas de contexto (`recall` y `precision`) se mantienen idénticas y muy altas (>0.90), confirmando que la estrategia de embeddings híbrida (ChromaDB + BM25 + Reranker) es robusta., cuya evaluación RAGAS se incluirá tras la fase de validación.
+Opcionales (activables por flags o que requieren dependencias externas):
 
-## Requisitos
+- `USAR_CONTEXTUAL_RETRIEVAL`: enriquece chunks con un modelo contextual al indexar.
+- `USAR_LLM_QUERY_DECOMPOSITION`: genera sub-queries con un LLM auxiliar para ampliar la cobertura de búsqueda.
+- `USAR_BUSQUEDA_HIBRIDA`: añade búsqueda por keywords/where_document junto a la búsqueda semántica.
+- `USAR_BUSQUEDA_EXHAUSTIVA`: escaneo profundo por términos críticos.
+- `USAR_RERANKER`: reranking mediante Cross-Encoder.
+- `USAR_OPTIMIZACION_CONTEXTO`: limpieza y normalización de texto extraído antes de generar la respuesta.
+- `USAR_RECOMP_SYNTHESIS`: síntesis RECOMP para resumir contextos antes de la generación.
+- `EXPANDIR_CONTEXTO`: recuperar chunks vecinos para dar contexto continuo al LLM.
 
-| Componente | Entorno | Dependencias |
-|---|---|---|
-| Entrenamiento | GPU (CUDA), Python 3.10+ | `pip install -r scripts/training/requirements.txt` |
-| Conversión | [llama.cpp](https://github.com/ggml-org/llama.cpp) + Ollama | Clonar llama.cpp en la raíz del proyecto |
-| RAG | CPU suficiente, Ollama | `pip install -r rag/requirements.txt` |
-| Evaluación | `GEMINI_API_KEY` configurada | `pip install -r evaluation/requirements.txt` |
+Muchas de las opciones opcionales mejoran la calidad pero añaden coste computacional o dependencias (GPU, `sentence-transformers`, `pymupdf4llm`, etc.).
 
-El sistema RAG requiere que Ollama tenga cargados los modelos `Qwen-2.5-FineTuned` y `embeddinggemma`.
-
-## Licencia
-
-Sujeto a las licencias de [Meta Llama 3.1](https://llama.meta.com/llama3/license/), [Qwen 2.5](https://huggingface.co/Qwen/Qwen2.5-14B-Instruct/blob/main/LICENSE) y del dataset [RAG_Multilingual](https://huggingface.co/datasets/projecte-aina/RAG_Multilingual) (projecte-aina).
+<p align="center">Hecho con 🐒 para el TFG · UPV · 2025–2026</p>

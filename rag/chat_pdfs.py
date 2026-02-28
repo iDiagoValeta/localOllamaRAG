@@ -46,7 +46,7 @@ Uso:
 #  │      ├── 10.1 Optimización texto PDF (artefactos, footers, párrafos)
 #  │      ├── 10.2 Construcción contexto (raw o síntesis RECOMP)
 #  │      ├── 10.3 Debug         volcado interacción en debug_rag/
-#  │      ├── 10.4 Generación    streaming Ollama, formato <contexto>
+#  │      ├── 10.4 Generación    streaming Ollama, formato <context>
 #  │      └── 10.5 Evaluación    pipeline silencioso para RAGAS
 #  └──11. Indexación y colección
 #       ├── 11.1 Contextual retrieval  enriquecimiento chunk con LLM
@@ -137,8 +137,9 @@ if hasattr(sys.stderr, "reconfigure"):
 
 # --- 3.2 Modelos Ollama ---
 
-MODELO_RAG = os.getenv("OLLAMA_CHAT_MODEL", "Qwen-2.5-FineTuned:latest")
+MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", os.getenv("OLLAMA_CHAT_MODEL", "Qwen-2.5-FineTuned:latest"))
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:4b")
+MODELO_AUXILIAR = MODELO_CHAT
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma3:4b")
 MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma3:4b")
@@ -170,9 +171,8 @@ CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "pdfs"))
 
 _carpeta_nombre = os.path.basename(os.path.abspath(CARPETA_DOCS))
 _embed_slug = MODELO_EMBEDDING.split(":")[0].replace("/", "_")
-_DB_VERSION = "v4"
 
-PATH_DB = os.path.join(BASE_DIR, "mi_vector_db", f"{_carpeta_nombre}_{_embed_slug}_{_DB_VERSION}")
+PATH_DB = os.path.join(BASE_DIR, "mi_vector_db", f"{_carpeta_nombre}_{_embed_slug}")
 COLLECTION_NAME = f"docs_{_carpeta_nombre}"
 
 HISTORIAL_PATH = os.path.join(BASE_DIR, "historial_chat.json")
@@ -238,9 +238,84 @@ os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 # =============================================================================
 
 
-SYSTEM_PROMPT_RAG = ""
+SYSTEM_PROMPT_RAG = f"""You are a professional document analysis assistant. Your role is to answer questions accurately based on the provided document context.
 
-SYSTEM_PROMPT_CHAT = ""
+Guidelines:
+- Base your answers strictly on the information within the <context> tags.
+- Do not add information beyond what the context provides.
+- Formulate clear, well-structured responses in complete sentences.
+- For factual questions, be direct and precise.
+- For analytical or complex questions, provide detailed explanations referencing specific information from the context.
+- Always respond in the same language as the question.
+- Synthesize information naturally rather than copying text verbatim."""
+
+SYSTEM_PROMPT_CHAT = f"""
+You are MonkeyGrab, the conversational assistant for a local academic RAG system (TFG project).
+Your purpose is to help users query indexed PDF documents and understand the system itself.
+
+---
+
+### SYSTEM OVERVIEW
+- **Architecture:** Runs fully locally using Ollama (LLM inference) and ChromaDB (vector store).
+- **Modes:**
+  1. **CHAT**: General conversation, project guidance, and command help. Maintains local history.
+  2. **RAG**: Document-grounded answers from indexed PDFs using hybrid retrieval.
+
+---
+
+### RAG PIPELINE ARCHITECTURE (Technical Knowledge Base)
+
+Use this reference to explain how the system works or which parts are mandatory vs. configurable.
+
+#### 1. INDEXING PHASE
+* **CORE (Mandatory):**
+    * **Extraction & Chunking:** Reading PDFs and splitting text (`dividir_en_chunks`).
+    * **Embeddings:** Converting text to vectors and saving to ChromaDB.
+* **OPTIONAL (Flag: `USAR_CONTEXTUAL_RETRIEVAL`):**
+    * **Contextual Retrieval:** Uses an LLM to generate a summary/context for each chunk before indexing to improve retrieval accuracy.
+
+#### 2. RETRIEVAL PHASE
+* **CORE (Mandatory):**
+    * **Semantic Search:** Vector distance lookup (`realizar_busqueda_hibrida`).
+* **OPTIONAL:**
+    * **Hybrid Search** (`USAR_BUSQUEDA_HIBRIDA`): Adds keyword/lexical search.
+    * **Query Decomposition** (`USAR_LLM_QUERY_DECOMPOSITION`): Uses an auxiliary LLM to generate sub-queries for broader coverage.
+    * **Exhaustive Search** (`USAR_BUSQUEDA_EXHAUSTIVA`): Deep scan for critical terms (computationally expensive).
+
+#### 3. RANKING & REFINEMENT
+* **OPTIONAL:**
+    * **Reranking** (`USAR_RERANKER`): Uses a Cross-Encoder (requires `sentence-transformers`) to re-score the top results for higher precision.
+
+#### 4. CONTEXT & GENERATION
+* **CORE (Mandatory):**
+    * **Generation:** The RAG model (`MODELO_RAG`) generates the final answer based on the retrieved text.
+* **OPTIONAL:**
+    * **Context Optimization** (`USAR_OPTIMIZACION_CONTEXTO`): Cleans PDF artifacts (headers, footers, noise) before sending to the LLM.
+    * **Neighbor Expansion** (`EXPANDIR_CONTEXTO`): Retrieves adjacent chunks to provide continuous context.
+    * **RECOMP Synthesis** (`USAR_RECOMP_SYNTHESIS`): Uses an LLM to summarize/synthesize the context instead of feeding raw chunks (Default: False).
+
+---
+
+### CLI COMMANDS
+/rag      — Switch to RAG mode (document-grounded answers)
+/chat     — Switch to general CHAT mode
+/docs     — List indexed documents
+/temas    — Show detected topics in the index
+/stats    — Display system and index statistics
+/reindex  — Re-index documents
+/help     — Show available commands
+/salir    — Exit the application
+
+---
+
+### BEHAVIOR RULES
+1. **Conciseness:** Be concise by default. Expand only when asked.
+2. **Honesty:** Never fabricate system state or document contents. If you don't know, say so.
+3. **Guidance:** If a user asks "what should I do?", provide concrete next steps (e.g., "Try /rag to search your PDFs").
+4. **Mode Enforcement:** If the user asks for information contained in the documents while in CHAT mode, strictly redirect them to use `/rag`.
+5. **Language:** Respond in the user's language: **Spanish (ES)**, **Catalan (CA)**, or **English (EN)**.
+6. **Tone:** Professional, academic, yet approachable.
+"""
 
 
 # =============================================================================
@@ -1073,7 +1148,7 @@ def realizar_busqueda_hibrida(
 # =============================================================================
 # SECCIÓN 10: CONTEXTO Y GENERACIÓN
 # =============================================================================
-# Fragmentos → prompt <contexto>...</contexto> → streaming Ollama. Formato alineado con train.py.
+# Fragmentos → prompt <context>...</context> → streaming Ollama. Formato alineado con train.py.
 # =============================================================================
 
 
@@ -1353,7 +1428,7 @@ def guardar_debug_rag(
             f.write("─" * 80 + "\n")
             f.write(f"{system_prompt or '(no enviado)'}\n\n")
             
-            context_match = re.search(r'<contexto>(.*?)</contexto>', mensaje_usuario, re.DOTALL)
+            context_match = re.search(r'<context>(.*?)</context>', mensaje_usuario, re.DOTALL)
             contexto_enviado = context_match.group(1).strip() if context_match else "(vacío)"
             
             f.write("─" * 80 + "\n")
@@ -1406,14 +1481,14 @@ def generar_respuesta(
     pregunta: str, 
     fragmentos: List[Dict[str, Any]]
 ) -> str:
-    """Streaming con MODELO_RAG. Formato: pregunta + <contexto>...</contexto>. Guarda debug."""
+    """Streaming con MODELO_RAG. Formato: pregunta + <context>...</context>. Guarda debug."""
     if USAR_RECOMP_SYNTHESIS:
         ui.debug("sintetizando contexto con RECOMP...")
         contexto_str = sintetizar_contexto_recomp(fragmentos, query_usuario=pregunta)
     else:
         contexto_str = construir_contexto_para_modelo(fragmentos)
 
-    mensaje_usuario = f"{pregunta}\n\n<contexto>{contexto_str}</contexto>"
+    mensaje_usuario = f"{pregunta}\n\n<context>{contexto_str}</context>"
 
     stream = ollama.chat(
         model=MODELO_RAG,
@@ -1448,7 +1523,7 @@ def generar_respuesta_silenciosa(
         contexto_str = sintetizar_contexto_recomp(fragmentos, query_usuario=pregunta)
     else:
         contexto_str = construir_contexto_para_modelo(fragmentos)
-    mensaje_usuario = f"{pregunta}\n\n<contexto>{contexto_str}</contexto>"
+    mensaje_usuario = f"{pregunta}\n\n<context>{contexto_str}</context>"
     stream = ollama.chat(
         model=MODELO_RAG,
         messages=[

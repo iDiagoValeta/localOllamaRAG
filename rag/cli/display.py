@@ -77,7 +77,7 @@ _MONKEY_MINI = r'''
        /  .'   `\   \_/
       |_ /       |  |\\
      /  _)       /  / ||
-jgs /  /       _/  /  //
+    /  /       _/  /  //
     \_/       ( `-/  ||
               /  /   \\ .-.
               \_/     \'-'/
@@ -125,8 +125,8 @@ class Display:
         models.add_column("key", style="dim", width=16)
         models.add_column("val", style="muted")
 
-        models.add_row("rag / finetuned", info.get("modelo_chat", ""))
-        models.add_row("chat / base", info.get("modelo_auxiliar", ""))
+        models.add_row("rag / finetuned", info.get("modelo_rag", ""))
+        models.add_row("chat / base", info.get("modelo_chat", ""))
         models.add_row("embeddings", info.get("modelo_embedding", ""))
 
         pipeline = Table(show_header=False, box=None, padding=(0, 1), expand=True)
@@ -144,7 +144,6 @@ class Display:
 
         chunk_str = f"{info.get('chunk_size', '')}c (overlap {info.get('chunk_overlap', '')}c)"
         pipeline.add_row("chunks", chunk_str)
-        pipeline.add_row("db-version", info.get("db_version", ""))
 
         grid = Table.grid(expand=True)
         grid.add_column(ratio=1)

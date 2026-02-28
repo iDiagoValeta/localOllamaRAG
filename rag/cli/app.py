@@ -108,8 +108,8 @@ class MonkeyGrabCLI:
     def _loop(self) -> None:
         """Bucle de lectura → dispatch → respuesta."""
         while True:
-            model = (self.rag.MODELO_AUXILIAR if self.mode == "chat"
-                     else self.rag.MODELO_CHAT)
+            model = (self.rag.MODELO_CHAT if self.mode == "chat"
+                     else self.rag.MODELO_RAG)
             prompt_str = ui.prompt(self.mode, model)
 
             try:
@@ -144,7 +144,7 @@ class MonkeyGrabCLI:
 
     def _process_chat(self, pregunta: str) -> None:
         """Procesa una pregunta en modo chat."""
-        ui.response_header("chat", self.rag.MODELO_AUXILIAR)
+        ui.response_header("chat", self.rag.MODELO_CHAT)
 
         respuesta = self._chat_stream(pregunta)
 
@@ -155,7 +155,7 @@ class MonkeyGrabCLI:
         self.rag.guardar_historial(self.historial_chat)
 
     def _chat_stream(self, pregunta: str) -> str:
-        """Ejecuta streaming del modo chat usando el modelo auxiliar."""
+        """Ejecuta streaming del modo chat usando el modelo chat."""
         import ollama
 
         messages = [{"role": "system", "content": self.rag.SYSTEM_PROMPT_CHAT}]
@@ -164,7 +164,7 @@ class MonkeyGrabCLI:
         messages.append({"role": "user", "content": pregunta})
 
         stream = ollama.chat(
-            model=self.rag.MODELO_AUXILIAR,
+            model=self.rag.MODELO_CHAT,
             messages=messages,
             stream=True,
             options={"temperature": 0.7, "top_p": 0.9, "num_ctx": 8192}
@@ -261,7 +261,7 @@ class MonkeyGrabCLI:
         ui.pipeline_update("Generando respuesta...")
         ui.pipeline_stop()
 
-        ui.response_header("rag", self.rag.MODELO_CHAT)
+        ui.response_header("rag", self.rag.MODELO_RAG)
         self.rag.generar_respuesta(pregunta, fragmentos_finales)
 
         ui.sources_panel(fragmentos_finales)
@@ -307,12 +307,12 @@ class MonkeyGrabCLI:
 
     def _cmd_rag(self) -> bool:
         self.mode = "rag"
-        ui.mode_change("rag", self.rag.MODELO_CHAT)
+        ui.mode_change("rag", self.rag.MODELO_RAG)
         return False
 
     def _cmd_chat(self) -> bool:
         self.mode = "chat"
-        ui.mode_change("chat", self.rag.MODELO_AUXILIAR)
+        ui.mode_change("chat", self.rag.MODELO_CHAT)
         return False
 
     def _cmd_clear(self) -> bool:
@@ -384,8 +384,8 @@ class MonkeyGrabCLI:
                                + (' (FP16)' if reranker_device_val == 'cuda' else ''))
 
         ui.init_panel({
+            'modelo_rag': rag.MODELO_RAG,
             'modelo_chat': rag.MODELO_CHAT,
-            'modelo_auxiliar': rag.MODELO_AUXILIAR,
             'modelo_embedding': rag.MODELO_EMBEDDING,
             'extractor': ('pymupdf4llm' if rag.PYMUPDF_AVAILABLE
                           else 'pypdf (fallback)'),
@@ -397,7 +397,6 @@ class MonkeyGrabCLI:
             'reranker_device': reranker_device,
             'chunk_size': rag.CHUNK_SIZE,
             'chunk_overlap': rag.CHUNK_OVERLAP,
-            'db_version': rag._DB_VERSION,
             'total_documentos': total_documentos,
             'total_fragmentos': total_fragmentos,
         })

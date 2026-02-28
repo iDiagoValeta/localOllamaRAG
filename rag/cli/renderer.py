@@ -237,10 +237,10 @@ def render_init_info(info: Dict[str, Any]) -> None:
 
     Args:
         info: Dict con cwd, pdfs_path, db_path, historial_path,
-              modelo_chat, modelo_auxiliar, modelo_embedding,
+              modelo_chat, modelo_chat, modelo_embedding,
               extractor, busqueda, llm_decomp, reranker, reranker_model,
               reranker_device, chunk_size, chunk_overlap, embed_max,
-              embed_prefix_desc, db_version, total_documentos, total_fragmentos
+              embed_prefix_desc, total_documentos, total_fragmentos
     """
     T = Theme
     L_WIDTH = 18
@@ -248,8 +248,8 @@ def render_init_info(info: Dict[str, Any]) -> None:
     render_banner("INICIALIZANDO", "simple", color=T.BORDER)
 
     print(f"\n  {T.TEXT}modelos:{T.RESET}")
-    print(f"    {T.CYAN}{'rag / finetuned':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('modelo_chat', '')}{T.RESET}")
-    print(f"    {T.PURPLE}{'chat / base':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('modelo_auxiliar', '')}{T.RESET}")
+    print(f"    {T.CYAN}{'rag / finetuned':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('modelo_rag', '')}{T.RESET}")
+    print(f"    {T.PURPLE}{'chat / base':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('modelo_chat', '')}{T.RESET}")
     print(f"    {T.TEXT_DIM}{'embeddings':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('modelo_embedding', '')}{T.RESET}")
 
     print(f"\n  {T.TEXT}pipeline:{T.RESET}")
@@ -268,7 +268,6 @@ def render_init_info(info: Dict[str, Any]) -> None:
     print(f"    {T.TEXT_DIM}{'chunks':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{chunk_str}{T.RESET}")
     print(f"    {T.TEXT_DIM}{'embed-max':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('embed_max', '')}c{T.RESET}")
     print(f"    {T.TEXT_DIM}{'embed-pfx':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('embed_prefix_desc', '')}{T.RESET}")
-    print(f"    {T.TEXT_DIM}{'db-version':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('db_version', '')}{T.RESET}")
 
     print(f"\n  {T.TEXT}estado:{T.RESET}")
     doc_count = info.get('total_documentos', 0)

@@ -1,5 +1,5 @@
 # =============================================================================
-# MODELFILE DE DESPLIEGUE EN OLLAMA (TFG)
+# MODELFILE DE DESPLIEGUE EN OLLAMA
 # =============================================================================
 # Configuración de inferencia para el modelo Qwen3-14B cuantizado a
 # Q4_K_M, entrenado para generación fundamentada en contexto (RAG).
