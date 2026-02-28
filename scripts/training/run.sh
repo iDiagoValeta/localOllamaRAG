@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =============================================================================
-# SCRIPT DE EJECUCIÓN EN SLURM (TFG)
+# SCRIPT DE EJECUCIÓN EN SLURM
 # =============================================================================
 # Lanzador de entrenamiento para entorno HPC con 1 GPU.
 # Define recursos, activa entorno Python del proyecto y ejecuta `train.py`
@@ -17,8 +17,8 @@
 #SBATCH -p long
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=48G
-#SBATCH --time=48:00:00
+#SBATCH --mem=96G
+#SBATCH --time=70:00:00
 #SBATCH --job-name=Qwen3RAG
 #SBATCH -o salida_%j.log
 
