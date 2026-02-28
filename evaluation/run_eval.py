@@ -1,19 +1,12 @@
-#!/usr/bin/env python3
 """
-Evaluación con RAGAS v0.2+ del sistema Teacher RAG.
-====================================================
+Evaluación con RAGAS del pipeline RAG.
 
 Métricas evaluadas:
-  - answer_correctness: Calidad global de la respuesta (similitud semántica + overlap factual vs ground truth).
-  - faithfulness: ¿La respuesta se basa en los contextos recuperados?
-  - answer_relevancy: ¿La respuesta es relevante a la pregunta?
-  - context_precision: ¿Los contextos relevantes están bien rankeados?
-  - context_recall: ¿Se recuperaron todos los contextos necesarios?
-
-Uso:
-    python evaluation/run_eval.py
-    python evaluation/run_eval.py --dataset evaluation/dataset_eval.json
-    python evaluation/run_eval.py --dataset mi_dataset.xlsx --verbose
+    - answer_correctness: Calidad global de la respuesta (similitud semántica + overlap factual vs ground truth).
+    - faithfulness: ¿La respuesta se basa en los contextos recuperados?
+    - answer_relevancy: ¿La respuesta es relevante a la pregunta?
+    - context_precision: ¿Los contextos relevantes están bien rankeados?
+    - context_recall: ¿Se recuperaron todos los contextos necesarios?
 """
 
 import os
@@ -25,6 +18,7 @@ import time
 # ---------------------------------------------------------------------------
 # Entorno
 # ---------------------------------------------------------------------------
+
 try:
     from dotenv import load_dotenv
     _env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
@@ -103,19 +97,17 @@ def configurar_llm_evaluacion():
     eval_llm = None
     eval_embeddings = None
 
-    # --- Embeddings locales (siempre, evita problemas de API) ---
     try:
         from langchain_community.embeddings import HuggingFaceEmbeddings
         from ragas.embeddings import LangchainEmbeddingsWrapper
 
         hf_embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         eval_embeddings = LangchainEmbeddingsWrapper(hf_embeddings)
-        print("✅ Embeddings de evaluación: HuggingFace (all-MiniLM-L6-v2, local)")
+        print("Embeddings de evaluación: HuggingFace (all-MiniLM-L6-v2, local)")
     except ImportError as err:
-        print(f"⚠️  No se pudo cargar embeddings locales: {err}")
+        print(f"No se pudo cargar embeddings locales: {err}")
         print("   Instala con: pip install sentence-transformers langchain-community")
 
-    # --- LLM de evaluación ---
     gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if gemini_key:
         try:
@@ -128,30 +120,29 @@ def configurar_llm_evaluacion():
                 provider="google",
                 client=client,
             )
-            print("✅ LLM de evaluación: Gemini 2.0 Flash (GEMINI_API_KEY)")
+            print("LLM de evaluación: Gemini 2.0 Flash (GEMINI_API_KEY)")
         except ImportError as err:
-            print(f"⚠️  GEMINI_API_KEY detectado pero google-genai no instalado: {err}")
+            print(f"GEMINI_API_KEY detectado pero google-genai no instalado: {err}")
             print("   Instala con: pip install google-genai")
     elif os.getenv("OPENAI_API_KEY"):
         try:
             from ragas.llms import llm_factory
 
             eval_llm = llm_factory("gpt-4o-mini")
-            print("✅ LLM de evaluación: OpenAI gpt-4o-mini (OPENAI_API_KEY)")
+            print("LLM de evaluación: OpenAI gpt-4o-mini (OPENAI_API_KEY)")
         except ImportError as err:
-            print(f"⚠️  OPENAI_API_KEY detectado pero openai no instalado: {err}")
+            print(f"OPENAI_API_KEY detectado pero openai no instalado: {err}")
     else:
-        print("❌ Sin GEMINI_API_KEY ni OPENAI_API_KEY.")
-        print("   RAGAS necesita un LLM externo para calcular métricas.")
-        print("   Configura una variable de entorno con tu API key.")
+        print("No se encontró GEMINI_API_KEY ni OPENAI_API_KEY.")
+        print("RAGAS necesita un LLM externo para calcular métricas.")
+        print("Configura una variable de entorno con tu API key.")
         raise SystemExit(1)
 
     if eval_llm is None:
-        print("❌ No se pudo configurar el LLM de evaluación.")
+        print("No se pudo configurar el LLM de evaluación.")
         raise SystemExit(1)
 
     return eval_llm, eval_embeddings
-
 
 # ---------------------------------------------------------------------------
 # Formateo de resultados
@@ -173,17 +164,15 @@ METRIC_DESCRIPTIONS = {
     "context_recall":     "Cobertura de contextos necesarios",
 }
 
-
 def imprimir_resultados(df_scores: pd.DataFrame, questions: list[str]):
     """Imprime resultados detallados por pregunta y medias globales."""
 
     metric_cols = [c for c in METRIC_NAMES if c in df_scores.columns]
     if not metric_cols:
-        print("\n⚠️  No se encontraron columnas de métricas en los resultados.")
+        print("\nNo se encontraron columnas de métricas en los resultados.")
         print(f"   Columnas disponibles: {list(df_scores.columns)}")
         return
 
-    # --- Media global ---
     print("\n" + "═" * 70)
     print("  📊 RESULTADOS RAGAS — MEDIAS GLOBALES")
     print("═" * 70)
@@ -194,17 +183,16 @@ def imprimir_resultados(df_scores: pd.DataFrame, questions: list[str]):
         if pd.isna(v):
             print(f"  {m:25s}  {'N/A':>8s}   {desc}")
         else:
-            barra = "█" * int(v * 20) + "░" * (20 - int(v * 20))
-            print(f"  {m:25s}  {v:8.4f}   {barra}  {desc}")
+            print(f"  {m:25s}  {v:8.4f}   {desc}")
+
 
     media_global = medias.dropna().mean()
     if not pd.isna(media_global):
         print(f"\n  {'SCORE MEDIO GLOBAL':25s}  {media_global:8.4f}")
 
-    # --- Detalle por pregunta ---
-    print("\n" + "═" * 70)
-    print("  📝 DETALLE POR PREGUNTA")
-    print("═" * 70)
+    print("\n" + "=" * 70)
+    print("  DETALLE POR PREGUNTA")
+    print("=" * 70)
 
     for i, row in df_scores.iterrows():
         q = questions[i] if i < len(questions) else "?"
@@ -221,10 +209,9 @@ def imprimir_resultados(df_scores: pd.DataFrame, questions: list[str]):
         print(f"\n  [{i+1}] {q_short}")
         print(f"      {scores_str}")
         if not pd.isna(media_q):
-            print(f"      → Score medio: {media_q:.4f}")
+            print(f"      Score medio: {media_q:.4f}")
 
-    print("\n" + "═" * 70)
-
+    print("\n" + "=" * 70)
 
 # ---------------------------------------------------------------------------
 # Main
@@ -254,6 +241,7 @@ def main():
     # ------------------------------------------------------------------
     # 1. Importar métricas RAGAS v0.2+
     # ------------------------------------------------------------------
+
     try:
         from ragas import evaluate
         from ragas.metrics import (
@@ -266,19 +254,21 @@ def main():
         from ragas.dataset_schema import SingleTurnSample, EvaluationDataset
         from ragas.run_config import RunConfig
     except ImportError as e:
-        print("❌ Instala RAGAS y dependencias:")
+        print("Instala RAGAS y dependencias:")
         print("   pip install -r evaluation/requirements.txt")
         raise SystemExit(1) from e
 
     # ------------------------------------------------------------------
     # 2. Configurar LLM de evaluación
     # ------------------------------------------------------------------
+
     eval_llm, eval_embeddings = configurar_llm_evaluacion()
 
     # ------------------------------------------------------------------
     # 3. Cargar dataset
     # ------------------------------------------------------------------
-    print("\n📂 Cargando dataset...")
+
+    print(f"\nCargando dataset...")
     df = cargar_dataset(args.dataset)
     df = normalizar_columnas(df)
     questions = df["question"].tolist()
@@ -292,7 +282,8 @@ def main():
     # ------------------------------------------------------------------
     # 4. Conectar a ChromaDB
     # ------------------------------------------------------------------
-    print(f"\n🗄️  Conectando a ChromaDB: {PATH_DB}")
+
+    print(f"\nConectando a ChromaDB: {PATH_DB}")
     client = chromadb.PersistentClient(path=PATH_DB)
     collection = client.get_or_create_collection(name=COLLECTION_NAME)
 
@@ -306,7 +297,8 @@ def main():
     # ------------------------------------------------------------------
     # 5. Ejecutar pipeline RAG para cada pregunta
     # ------------------------------------------------------------------
-    print("\n🔄 Ejecutando pipeline RAG por cada pregunta...")
+
+    print("\nEjecutando pipeline RAG por cada pregunta...")
     answers = []
     contexts_list = []
     t_start = time.time()
@@ -324,7 +316,8 @@ def main():
     # ------------------------------------------------------------------
     # 6. Construir EvaluationDataset con SingleTurnSample
     # ------------------------------------------------------------------
-    print("\n📦 Construyendo EvaluationDataset para RAGAS...")
+
+    print("\nConstruyendo EvaluationDataset para RAGAS...")
     samples = []
     for i in range(len(questions)):
         sample = SingleTurnSample(
@@ -340,8 +333,7 @@ def main():
     # ------------------------------------------------------------------
     # 7. Configurar métricas (usando objetos pre-instanciados y parcheando LLM)
     # ------------------------------------------------------------------
-    # Asignar LLM y embeddings explícitamente a las métricas para evitar 
-    # problemas de defaults o deprecación
+
     faithfulness.llm = eval_llm
     answer_relevancy.llm = eval_llm
     answer_relevancy.embeddings = eval_embeddings
@@ -355,7 +347,6 @@ def main():
         context_recall,
     ]
 
-    # answer_correctness requiere embeddings para similitud
     if tiene_ground_truth:
         ac = AnswerCorrectness(llm=eval_llm, embeddings=eval_embeddings)
         metrics.insert(0, ac)
@@ -363,12 +354,10 @@ def main():
     # ------------------------------------------------------------------
     # 8. Ejecutar evaluación RAGAS
     # ------------------------------------------------------------------
-    print("\n⏳ Ejecutando evaluación RAGAS (esto puede tardar unos minutos)...")
+
+    print("\nEjecutando evaluación RAGAS (esto puede tardar unos minutos)...")
     t_eval_start = time.time()
 
-    # Timeout alto (600s) para evitar TimeoutError con Gemini 2.5 Flash
-    # que usa "thinking" mode y tarda más en responder.
-    # max_retries=15 para reintentar en caso de errores transitorios.
     eval_run_config = RunConfig(timeout=600, max_retries=15)
 
     result = evaluate(
@@ -383,12 +372,14 @@ def main():
     # ------------------------------------------------------------------
     # 9. Resultados
     # ------------------------------------------------------------------
+
     df_scores = result.to_pandas()
     imprimir_resultados(df_scores, questions)
 
     # ------------------------------------------------------------------
     # 10. Guardar CSV
     # ------------------------------------------------------------------
+    
     out_path = args.output
     if not out_path:
         out_path = os.path.join(
@@ -396,7 +387,7 @@ def main():
             "ragas_scores.csv",
         )
     df_scores.to_csv(out_path, index=False, encoding="utf-8")
-    print(f"\n💾 Resultados guardados en: {out_path}")
+    print(f"\nResultados guardados en: {out_path}")
 
 
 if __name__ == "__main__":
