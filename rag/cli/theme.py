@@ -20,10 +20,9 @@ try:
 except ImportError:
     pass
 
-
-# =====================================================================
+# ─────────────────────────────────────────────────────────────────────
 # CLASE THEME — Paleta de colores dark profesional
-# =====================================================================
+# ─────────────────────────────────────────────────────────────────────
 
 class Theme:
     """
@@ -33,63 +32,54 @@ class Theme:
     secuencias de escape ANSI 256-color para máxima compatibilidad.
     """
 
-    # ── Resets & Modificadores ──────────────────────────────────────
     RESET       = "\033[0m"
     BOLD        = "\033[1m"
     DIM         = "\033[2m"
     ITALIC      = "\033[3m"
     UNDERLINE   = "\033[4m"
 
-    # ── Colores primarios de la interfaz ────────────────────────────
-    # Texto principal: blanco suave, nunca blanco puro
     TEXT         = "\033[38;5;253m"
     TEXT_MUTED   = "\033[38;5;245m"
     TEXT_DIM     = "\033[38;5;240m"
 
-    # Fondos y líneas
     BG_DARK      = "\033[38;5;236m"
     BG_MEDIUM    = "\033[38;5;238m"
     BORDER       = "\033[38;5;240m"
 
-    # ── Acentos de marca (MonkeyGrab) ──────────────────────────────
-    BRAND        = "\033[38;5;172m"    # Ámbar profundo — color principal
-    BRAND_LIGHT  = "\033[38;5;179m"    # Ámbar claro
-    BRAND_DIM    = "\033[38;5;130m"    # Ámbar oscuro
+    BRAND        = "\033[38;5;172m"
+    BRAND_LIGHT  = "\033[38;5;179m"
+    BRAND_DIM    = "\033[38;5;130m"
 
-    # ── Colores funcionales ────────────────────────────────────────
-    PURPLE       = "\033[38;5;141m"    # Modo chat
-    PURPLE_DIM   = "\033[38;5;97m"     # Prompt chat atenuado
-    CYAN         = "\033[38;5;73m"     # Modo RAG
-    CYAN_DIM     = "\033[38;5;66m"     # Prompt RAG atenuado
-    GREEN        = "\033[38;5;71m"     # Éxito, confirmaciones
-    GREEN_DIM    = "\033[38;5;65m"     # Éxito atenuado
-    RED          = "\033[38;5;167m"    # Errores
-    RED_DIM      = "\033[38;5;131m"    # Errores atenuados
-    YELLOW       = "\033[38;5;178m"    # Advertencias
-    YELLOW_DIM   = "\033[38;5;136m"    # Advertencias atenuadas
-    BLUE         = "\033[38;5;67m"     # Info, pipeline
-    BLUE_DIM     = "\033[38;5;60m"     # Info atenuada
+    PURPLE       = "\033[38;5;141m"
+    PURPLE_DIM   = "\033[38;5;97m"
+    CYAN         = "\033[38;5;73m"
+    CYAN_DIM     = "\033[38;5;66m"
+    GREEN        = "\033[38;5;71m"
+    GREEN_DIM    = "\033[38;5;65m"
+    RED          = "\033[38;5;167m"
+    RED_DIM      = "\033[38;5;131m"
+    YELLOW       = "\033[38;5;178m"
+    YELLOW_DIM   = "\033[38;5;136m"
+    BLUE         = "\033[38;5;67m"
+    BLUE_DIM     = "\033[38;5;60m"
 
-    # ── Colores del logo (gradiente mono) ──────────────────────────
-    MONO_BRIGHT  = "\033[38;5;179m"    # Zonas iluminadas
-    MONO_BODY    = "\033[38;5;172m"    # Cuerpo principal
-    MONO_SHADOW  = "\033[38;5;130m"    # Sombras medias
-    MONO_DARK    = "\033[38;5;94m"     # Zonas oscuras
-    MONO_ACCENT  = "\033[38;5;73m"     # Extremidades (frío)
+    MONO_BRIGHT  = "\033[38;5;179m"
+    MONO_BODY    = "\033[38;5;172m"
+    MONO_SHADOW  = "\033[38;5;130m"
+    MONO_DARK    = "\033[38;5;94m"
+    MONO_ACCENT  = "\033[38;5;73m"
 
-    # ── Caracteres de dibujo ───────────────────────────────────────
-    BOX_H        = "─"     # Horizontal
-    BOX_H_BOLD   = "━"     # Horizontal gruesa
-    BOX_V        = "│"     # Vertical
-    BOX_TL       = "╭"     # Top-left corner
-    BOX_TR       = "╮"     # Top-right corner
-    BOX_BL       = "╰"     # Bottom-left corner
-    BOX_BR       = "╯"     # Bottom-right corner
-    BOX_TEE_R    = "├"     # Tee right
-    BOX_TEE_L    = "┤"     # Tee left
-    BOX_DOUBLE_H = "═"     # Double horizontal
+    BOX_H        = "─"
+    BOX_H_BOLD   = "━"
+    BOX_V        = "│"
+    BOX_TL       = "╭"
+    BOX_TR       = "╮"
+    BOX_BL       = "╰"
+    BOX_BR       = "╯"
+    BOX_TEE_R    = "├"
+    BOX_TEE_L    = "┤"
+    BOX_DOUBLE_H = "═"
 
-    # ── Iconos ─────────────────────────────────────────────────────
     ICON_OK      = "✓"
     ICON_FAIL    = "✗"
     ICON_WARN    = "!"
@@ -103,7 +93,6 @@ class Theme:
     ICON_RAG     = "◇"
     ICON_SPARK   = "✦"
 
-    # Spinner frames
     SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
     @staticmethod
@@ -128,10 +117,9 @@ class Theme:
         prefix = "".join(styles)
         return f"{prefix}{text}{cls.RESET}"
 
-
-# =====================================================================
+# ─────────────────────────────────────────────────────────────────────
 # LOGO ASCII — MonkeyGrab
-# =====================================================================
+# ─────────────────────────────────────────────────────────────────────
 
 def get_logo(modelo_desc: str = "") -> str:
     """
@@ -140,7 +128,7 @@ def get_logo(modelo_desc: str = "") -> str:
     Args:
         modelo_desc: Descripción del modelo base para mostrar en el subtítulo
     """
-    T = Theme  # alias corto
+    T = Theme
 
     logo = f"""
 {T.MONO_DARK}                __------__{T.RESET}
@@ -169,9 +157,9 @@ def get_logo(modelo_desc: str = "") -> str:
     return logo
 
 
-# =====================================================================
+# ─────────────────────────────────────────────────────────────────────
 # MENSAJES DEL SISTEMA
-# =====================================================================
+# ─────────────────────────────────────────────────────────────────────
 
 MESSAGES = {
     "farewell": f"{Theme.TEXT_DIM}Hasta luego. Sesión finalizada.{Theme.RESET}",

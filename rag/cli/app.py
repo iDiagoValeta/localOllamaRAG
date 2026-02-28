@@ -1,5 +1,5 @@
 """
-MonkeyGrab CLI — App (UI v2)
+MonkeyGrab CLI
 ==============================
 
 Bucle principal de la interfaz interactiva. Orquesta el prompt,
@@ -38,7 +38,6 @@ class MonkeyGrabCLI:
         self.collection = None
         self.historial_chat: List[Dict[str, str]] = []
 
-        # Dispatch table de comandos
         self._commands = {
             "/rag":     self._cmd_rag,
             "/chat":    self._cmd_chat,
@@ -60,16 +59,13 @@ class MonkeyGrabCLI:
 
     def run(self) -> None:
         """Punto de entrada principal. Inicializa y arranca el bucle."""
-        # Logo
         ui.logo()
 
-        # Base de datos
         client = chromadb.PersistentClient(path=self.rag.PATH_DB)
         self.collection = client.get_or_create_collection(
             name=self.rag.COLLECTION_NAME
         )
 
-        # PDFs disponibles
         archivos_pdf = []
         try:
             archivos_pdf = [
@@ -82,13 +78,11 @@ class MonkeyGrabCLI:
         pdfs_count = len(archivos_pdf)
         db_count = self.collection.count()
 
-        # Info de inicialización
         self._show_init_info(pdfs_count, db_count)
 
         if not archivos_pdf:
             ui.no_pdfs(self.rag.CARPETA_DOCS)
 
-        # Indexar si está vacía
         if self.collection.count() == 0:
             total_chunks = self.rag.indexar_documentos(
                 self.rag.CARPETA_DOCS, self.collection
@@ -99,18 +93,12 @@ class MonkeyGrabCLI:
             else:
                 ui.success(f"{total_chunks} fragmentos indexados")
 
-        # Bienvenida
         ui.welcome()
 
-        # Historial
         self.historial_chat = self.rag.cargar_historial()
         if self.historial_chat:
             ui.history_loaded(len(self.historial_chat))
 
-        # El modo inicial es chat, pero lo mantenemos en silencio
-        # ui.mode_change("chat", self.rag.MODELO_AUXILIAR)
-
-        # Bucle principal
         self._loop()
 
     # ─────────────────────────────────────────────────────────────
@@ -120,7 +108,6 @@ class MonkeyGrabCLI:
     def _loop(self) -> None:
         """Bucle de lectura → dispatch → respuesta."""
         while True:
-            # Mostrar prompt
             model = (self.rag.MODELO_AUXILIAR if self.mode == "chat"
                      else self.rag.MODELO_CHAT)
             prompt_str = ui.prompt(self.mode, model)
@@ -135,7 +122,6 @@ class MonkeyGrabCLI:
             if not pregunta:
                 continue
 
-            # Verificar si es un comando
             cmd_lower = pregunta.lower()
             if cmd_lower in self._commands:
                 should_exit = self._commands[cmd_lower]()
@@ -143,12 +129,10 @@ class MonkeyGrabCLI:
                     break
                 continue
 
-            # Comando desconocido
             if pregunta.startswith('/'):
                 ui.unknown_command(pregunta)
                 continue
 
-            # Procesar pregunta según modo
             if self.mode == "rag":
                 self._process_rag(pregunta)
             else:
@@ -209,10 +193,8 @@ class MonkeyGrabCLI:
             )
             return
 
-        # Pipeline RAG con spinner
         status = ui.pipeline_start("Buscando conceptos en los documentos...")
 
-        # Búsqueda híbrida
         fragmentos_ranked, mejor_score, metricas = \
             self.rag.realizar_busqueda_hibrida(pregunta, self.collection)
 
@@ -238,7 +220,6 @@ class MonkeyGrabCLI:
             )
             return
 
-        # Filtro reranker
         ui.pipeline_update("Re-ordenando resultados...")
 
         if self.rag.USAR_RERANKER:
@@ -262,12 +243,10 @@ class MonkeyGrabCLI:
         fragmentos_finales = fragmentos_ranked[:self.rag.TOP_K_FINAL]
         ids_usados = {f['id'] for f in fragmentos_finales}
 
-        # Expansión de contexto
         if (self.rag.EXPANDIR_CONTEXTO and fragmentos_finales
                 and 'chunk' in fragmentos_finales[0]['metadata']):
             self._expand_context(fragmentos_finales, ids_usados)
 
-        # Truncar si excede límite
         contexto_total = sum(len(f['doc']) for f in fragmentos_finales)
         if contexto_total > self.rag.MAX_CONTEXTO_CHARS:
             fragmentos_truncados = []
@@ -282,11 +261,9 @@ class MonkeyGrabCLI:
         ui.pipeline_update("Generando respuesta...")
         ui.pipeline_stop()
 
-        # Generar respuesta
         ui.response_header("rag", self.rag.MODELO_CHAT)
         self.rag.generar_respuesta(pregunta, fragmentos_finales)
 
-        # Panel de fuentes
         ui.sources_panel(fragmentos_finales)
         ui.response_footer()
 
@@ -377,7 +354,7 @@ class MonkeyGrabCLI:
             )
             ui.reindex_complete(total)
             self.rag.guardar_historial(self.historial_chat)
-            return True  # Exit after reindex
+            return True
         except Exception as e:
             ui.error(f"error durante reindexación: {e}")
             return False

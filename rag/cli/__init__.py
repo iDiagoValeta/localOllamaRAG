@@ -1,9 +1,9 @@
 """
-MonkeyGrab CLI — Interfaz profesional de terminal (v2)
+MonkeyGrab CLI
 =======================================================
 
-Paquete que encapsula toda la capa de presentación CLI del sistema
-RAG dual MonkeyGrab. Usa `rich` para renderizado visual.
+Paquete que encapsula toda la capa de presentación CLI del sistema.
+Usa `rich` para renderizado visual.
 
 Módulos:
     display  — Clase Display con Rich (singleton `ui`)

@@ -1,5 +1,5 @@
 """
-Visualización de métricas de entrenamiento (TFG)
+Visualización de métricas de entrenamiento
 ===============================================
 
 Este script genera curvas de entrenamiento a partir de `training_stats.json`

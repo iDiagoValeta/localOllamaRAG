@@ -1,16 +1,11 @@
 """
-MonkeyGrab CLI — Display (UI v2 con Rich)
+MonkeyGrab CLI
 ===========================================
 
 Clase centralizada que encapsula toda la salida visual del sistema
 usando la librería `rich`. Reemplaza los prints ANSI manuales por
 componentes semánticos: paneles, tablas, spinners, markdown y progreso.
 
-Uso:
-    from rag.cli.display import ui
-    ui.logo()
-    ui.pipeline_step("Buscando en documentos...")
-    ui.success("4 fragmentos recuperados")
 """
 
 import os
@@ -18,7 +13,6 @@ import sys
 import time
 from typing import List, Dict, Any, Optional
 
-# Habilita secuencias ANSI (VT100) en Windows cmd.exe clásico
 if os.name == 'nt':
     os.system('')
 
@@ -34,9 +28,9 @@ from rich.status import Status
 from rich import box
 
 
-# =====================================================================
+# ─────────────────────────────────────────────────────────────
 # TEMA GLOBAL — Paleta MonkeyGrab
-# =====================================================================
+# ─────────────────────────────────────────────────────────────
 
 MONKEYGRAB_THEME = RichTheme({
     # Marca
@@ -64,9 +58,9 @@ MONKEYGRAB_THEME = RichTheme({
 })
 
 
-# =====================================================================
+# ─────────────────────────────────────────────────────────────
 # LOGO COMPACTO
-# =====================================================================
+# ─────────────────────────────────────────────────────────────
 
 _MONKEY_MINI = r'''
                .-"""-.
@@ -90,9 +84,9 @@ jgs /  /       _/  /  //
                        `"`'''
 
 
-# =====================================================================
+# ─────────────────────────────────────────────────────────────
 # CLASE DISPLAY — Singleton de salida visual
-# =====================================================================
+# ─────────────────────────────────────────────────────────────
 
 class Display:
     """
@@ -127,7 +121,6 @@ class Display:
         Muestra panel de inicialización con información del sistema
         en dos columnas: Modelos y Pipeline.
         """
-        # Columna izquierda: Modelos
         models = Table(show_header=False, box=None, padding=(0, 1), expand=True)
         models.add_column("key", style="dim", width=16)
         models.add_column("val", style="muted")
@@ -136,7 +129,6 @@ class Display:
         models.add_row("chat / base", info.get("modelo_auxiliar", ""))
         models.add_row("embeddings", info.get("modelo_embedding", ""))
 
-        # Columna derecha: Pipeline
         pipeline = Table(show_header=False, box=None, padding=(0, 1), expand=True)
         pipeline.add_column("key", style="dim", width=16)
         pipeline.add_column("val", style="muted")
@@ -154,7 +146,6 @@ class Display:
         pipeline.add_row("chunks", chunk_str)
         pipeline.add_row("db-version", info.get("db_version", ""))
 
-        # Combinar en un panel
         grid = Table.grid(expand=True)
         grid.add_column(ratio=1)
         grid.add_column(ratio=1)
@@ -163,7 +154,6 @@ class Display:
             Panel(pipeline, title="[info]Pipeline[/]", border_style="dim", box=box.ROUNDED),
         )
 
-        # Estado
         doc_count = info.get("total_documentos", 0)
         frag_count = info.get("total_fragmentos", 0)
         status_line = f"[dim]{doc_count} PDF(s) detectados · {frag_count} fragmentos indexados[/]"
@@ -173,7 +163,7 @@ class Display:
         self.console.print()
 
     # ─────────────────────────────────────────────────────────────
-    # WELCOME Y AYUDA
+    # BIENVENIDA Y AYUDA
     # ─────────────────────────────────────────────────────────────
 
     def welcome(self) -> None:
@@ -236,7 +226,7 @@ class Display:
             self.console.print(f"  [dim]⊡ {msg}[/]")
 
     # ─────────────────────────────────────────────────────────────
-    # PIPELINE RAG — Status spinner dinámico
+    # PIPELINE RAG
     # ─────────────────────────────────────────────────────────────
 
     def pipeline_start(self, message: str = "Buscando en documentos...") -> Status:
@@ -271,7 +261,7 @@ class Display:
             self._status = None
 
     # ─────────────────────────────────────────────────────────────
-    # PROMPT DE ENTRADA (Powerline)
+    # PROMPT DE ENTRADA
     # ─────────────────────────────────────────────────────────────
 
     def prompt(self, mode: str, model: str = "") -> str:
@@ -289,7 +279,6 @@ class Display:
             mode_color = "mode.rag"
             mode_label = "rag"
 
-        # Calcular relleno
         visible_len = len(f" monkeygrab -- {mode_label} -- {model_short} ")
         padding = max(0, width - visible_len - 4)
 
@@ -305,8 +294,6 @@ class Display:
         self.console.print()
         self.console.print(top)
 
-        # La línea de input se devuelve como string plano con ANSI para `input()`
-        # (rich no controla `input()` directamente)
         mode_ansi = "\033[38;5;141m" if mode == "chat" else "\033[38;5;73m"
         reset = "\033[0m"
         dim = "\033[38;5;240m"
@@ -378,7 +365,7 @@ class Display:
         self.console.print()
 
     # ─────────────────────────────────────────────────────────────
-    # STATS, DOCS, TEMAS — Tablas Rich
+    # STATS, DOCS, TEMAS
     # ─────────────────────────────────────────────────────────────
 
     def stats_table(self, total_fragments: int, docs: List[str]) -> None:
@@ -473,7 +460,6 @@ class Display:
         pass
 
     def history_loaded(self, n: int) -> None:
-        # Silenciado para reducir ruido visual, se puede re-activar si se desea
         pass
 
     def history_cleared(self) -> None:
@@ -533,9 +519,8 @@ class Display:
     def no_pdfs(self, folder: str) -> None:
         self.warning(f"No existe la carpeta de PDFs o está vacía: {folder}")
 
-
-# =====================================================================
+# ─────────────────────────────────────────────────────────────
 # SINGLETON — Instancia global
-# =====================================================================
+# ─────────────────────────────────────────────────────────────
 
 ui = Display()

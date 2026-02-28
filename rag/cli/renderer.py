@@ -14,10 +14,9 @@ from typing import List, Dict, Any, Optional
 
 from rag.cli.theme import Theme, MESSAGES
 
-
-# =====================================================================
+# ─────────────────────────────────────────────────────────────
 # SPINNER — Indicador de progreso animado
-# =====================================================================
+# ─────────────────────────────────────────────────────────────
 
 class Spinner:
     """
@@ -55,7 +54,6 @@ class Spinner:
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=1)
-        # Limpiar línea
         width = Theme.terminal_width()
         sys.stdout.write(f"\r{' ' * width}\r")
         sys.stdout.flush()
@@ -72,10 +70,9 @@ class Spinner:
         sys.stdout.write(f"  {color}{icon}{Theme.RESET} {Theme.TEXT_MUTED}{message}{Theme.RESET}\n")
         sys.stdout.flush()
 
-
-# =====================================================================
+# ─────────────────────────────────────────────────────────────
 # FUNCIONES DE RENDERIZADO
-# =====================================================================
+# ─────────────────────────────────────────────────────────────
 
 def render_banner(title: str, style: str = "simple", color: str = None) -> None:
     """
@@ -137,7 +134,6 @@ def render_error(message: str) -> None:
     """Muestra un mensaje de error."""
     print(f"      {Theme.RED}{Theme.ICON_FAIL}{Theme.RESET} {Theme.TEXT_MUTED}{message}{Theme.RESET}")
 
-
 # ─────────────────────────────────────────────────────────────────────
 # PROMPT DE ENTRADA
 # ─────────────────────────────────────────────────────────────────────
@@ -157,7 +153,6 @@ def build_prompt(mode: str, model: str = "") -> str:
     T = Theme
     width = T.terminal_width()
 
-    # Colores según modo
     if mode == "chat":
         mode_color = T.PURPLE
         mode_label = "chat"
@@ -165,11 +160,9 @@ def build_prompt(mode: str, model: str = "") -> str:
         mode_color = T.CYAN
         mode_label = "rag"
 
-    # Línea superior del prompt
     model_short = model.split(":")[0] if model else ""
     header_content = f" monkeygrab {T.BORDER}{T.BOX_H}{T.BOX_H} {mode_color}{mode_label}{T.BORDER} {T.BOX_H}{T.BOX_H} {T.TEXT_DIM}{model_short}"
 
-    # Calcular relleno (aprox, sin contar escapes ANSI)
     visible_len = len(f" monkeygrab -- {mode_label} -- {model_short} ")
     padding = max(0, width - visible_len - 4)
 
@@ -183,12 +176,10 @@ def build_prompt(mode: str, model: str = "") -> str:
         f"{T.BORDER}{T.BOX_H * max(0, padding)}{T.BOX_TR}{T.RESET}"
     )
 
-    # Línea del cursor
     bottom_line = f"{T.BORDER}{T.BOX_BL}{T.BOX_H}{T.RESET} {mode_color}{T.ICON_ARROW}{T.RESET} "
 
     print(f"\n{top_line}")
     return bottom_line
-
 
 # ─────────────────────────────────────────────────────────────────────
 # PANTALLA DE BIENVENIDA
@@ -202,15 +193,12 @@ def render_welcome() -> None:
 
     print(f"\n  {T.TEXT}Dos modos de interacción disponibles:{T.RESET}\n")
 
-    # Modo CHAT
     print(f"  {T.PURPLE}{T.ICON_CHAT}{T.RESET}  {T.BOLD}{T.TEXT}Modo CHAT{T.RESET} {T.TEXT_DIM}(activo por defecto){T.RESET}")
     print(f"      {T.TEXT_DIM}Conversación libre. Preguntas generales, explicaciones.{T.RESET}\n")
 
-    # Modo RAG
     print(f"  {T.CYAN}{T.ICON_RAG}{T.RESET}  {T.BOLD}{T.TEXT}Modo RAG{T.RESET} {T.TEXT_DIM}(recuperación de documentos){T.RESET}")
     print(f"      {T.TEXT_DIM}Respuestas con citas de los documentos académicos indexados.{T.RESET}\n")
 
-    # Tabla de comandos
     commands = [
         ("/rag",     "Activar modo RAG"),
         ("/chat",    "Activar modo CHAT"),
@@ -229,7 +217,6 @@ def render_welcome() -> None:
         
     print()
 
-
 # ─────────────────────────────────────────────────────────────────────
 # PANTALLA DE AYUDA
 # ─────────────────────────────────────────────────────────────────────
@@ -239,7 +226,6 @@ def render_help() -> None:
     T = Theme
     render_banner("AYUDA", "simple", color=T.BRAND_DIM)
     render_welcome()
-
 
 # ─────────────────────────────────────────────────────────────────────
 # INICIALIZACIÓN
@@ -257,7 +243,7 @@ def render_init_info(info: Dict[str, Any]) -> None:
               embed_prefix_desc, db_version, total_documentos, total_fragmentos
     """
     T = Theme
-    L_WIDTH = 18  # Ancho fijo para las etiquetas
+    L_WIDTH = 18
 
     render_banner("INICIALIZANDO", "simple", color=T.BORDER)
 
@@ -270,8 +256,7 @@ def render_init_info(info: Dict[str, Any]) -> None:
     print(f"    {T.TEXT_DIM}{'extractor':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('extractor', '')}{T.RESET}")
     print(f"    {T.TEXT_DIM}{'búsqueda':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('busqueda', '')}{T.RESET}")
     print(f"    {T.TEXT_DIM}{'llm-decomp':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('llm_decomp', '')}{T.RESET}")
-    
-    # Flatten reranker
+
     if info.get('reranker') == 'on':
         rr_model = info.get('reranker_model', '')
         rr_device = info.get('reranker_device', '')
@@ -279,7 +264,6 @@ def render_init_info(info: Dict[str, Any]) -> None:
     else:
         print(f"    {T.TEXT_DIM}{'reranker':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}off{T.RESET}")
 
-    # Flatten chunks
     chunk_str = f"{info.get('chunk_size', '')}c (overlap: {info.get('chunk_overlap', '')}c)"
     print(f"    {T.TEXT_DIM}{'chunks':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{chunk_str}{T.RESET}")
     print(f"    {T.TEXT_DIM}{'embed-max':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{info.get('embed_max', '')}c{T.RESET}")
@@ -291,7 +275,6 @@ def render_init_info(info: Dict[str, Any]) -> None:
     frag_count = info.get('total_fragmentos', 0)
     print(f"    {T.TEXT_DIM}{'documentos':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{doc_count} PDF(s) detectados{T.RESET}")
     print(f"    {T.TEXT_DIM}{'fragmentos index.':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{frag_count} en base de datos{T.RESET}")
-
 
 # ─────────────────────────────────────────────────────────────────────
 # ESTADÍSTICAS, DOCUMENTOS, TEMAS
@@ -364,7 +347,6 @@ def render_topics(docs_data: List[Dict[str, Any]]) -> None:
     print(f"  {T.BORDER}{Theme.BOX_H * (Theme.terminal_width() - 4)}{T.RESET}")
     print(f"\n  {T.TEXT_DIM}Escribe tu pregunta sobre cualquiera de estos temas.{T.RESET}\n")
 
-
 # ─────────────────────────────────────────────────────────────────────
 # STREAMING DE RESPUESTA
 # ─────────────────────────────────────────────────────────────────────
@@ -399,7 +381,6 @@ def render_response_footer(sources: Optional[str] = None) -> None:
         print(sources)
 
     print()
-
 
 # ─────────────────────────────────────────────────────────────────────
 # FORMATEO DE FUENTES Y CITAS
@@ -446,7 +427,6 @@ def format_sources(fragments: List[Dict]) -> str:
         lines.append(f"      {T.TEXT_DIM}páginas: {pages_str}{T.RESET}")
 
     return "\n".join(lines)
-
 
 # ─────────────────────────────────────────────────────────────────────
 # MENSAJES DE MODO
