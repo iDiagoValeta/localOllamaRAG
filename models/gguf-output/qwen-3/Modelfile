@@ -1,29 +1,18 @@
-# =============================================================================
-# MODELFILE DE DESPLIEGUE EN OLLAMA
-# =============================================================================
-# Configuración de inferencia para el modelo Qwen3-14B cuantizado a
-# Q4_K_M, entrenado para generación fundamentada en contexto (RAG).
-#
-# El modelo fue entrenado en modo no-thinking (enable_thinking=False), por lo
-# que el template inyecta /no_think en cada turno de usuario para mantener
-# coherencia entre entrenamiento e inferencia.
-# =============================================================================
+FROM C:\Users\nadiv\.ollama\models\blobs\sha256-98e5996c676ddd22549a314e4147e58b8ba0f6f42094a05dbdef2e0e314afa93
 
-# =============================================================================
-# SECCIÓN 1: ARTEFACTO BASE GGUF
-# =============================================================================
-# Define el archivo GGUF cuantizado que se registrará como modelo Ollama.
-# =============================================================================
-
-FROM ./Qwen3-14B-Q4_K_M.gguf
-
-# =============================================================================
-# SECCIÓN 2: SYSTEM PROMPT ALINEADO CON FINE-TUNING
-# =============================================================================
-# Reproduce exactamente el system prompt usado durante el entrenamiento
-# (train.py v4, sección 4) para preservar el comportamiento aprendido
-# de respuesta anclada al contexto documental.
-# =============================================================================
+TEMPLATE """{{- if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end -}}<|im_start|>user
+{{ .Prompt }}<|im_end|>
+<|im_start|>assistant
+{{- if .Thinking }}
+<think>
+{{ .Thinking }}</think>
+{{- else }}
+<think>
+</think>
+{{- end }}
+{{ .Response }}"""
 
 SYSTEM """You are a professional document analysis assistant. Your role is to answer questions accurately based on the provided document context.
 
@@ -33,39 +22,12 @@ Guidelines:
 - Formulate clear, well-structured responses in complete sentences.
 - For factual questions, be direct and precise.
 - For analytical or complex questions, provide detailed explanations referencing specific information from the context.
-- Always respond in the same language as the question.
+- Always respond in the same language as the context (English, Spanish/Castellano, or Catalan/Català).
 - Synthesize information naturally rather than copying text verbatim."""
 
-# =============================================================================
-# SECCIÓN 3: HIPERPARÁMETROS DE GENERACIÓN
-# =============================================================================
-# Ajustes de decodificación orientados a fidelidad contextual y estabilidad.
-# =============================================================================
-
-PARAMETER temperature 0.15
-PARAMETER repeat_penalty 1.15
-PARAMETER top_p 0.9
 PARAMETER num_ctx 8192
-
-# =============================================================================
-# SECCIÓN 4: TOKENS DE PARADA
-# =============================================================================
-# Delimita correctamente los turnos de chat y evita generación fuera de formato.
-# =============================================================================
-
-PARAMETER stop "<|im_start|>"
-PARAMETER stop "<|im_end|>"
-
-# =============================================================================
-# SECCIÓN 5: TEMPLATE CONVERSACIONAL QWEN3 (NO-THINKING)
-# =============================================================================
-# Replica la estructura de mensajes usada durante entrenamiento con
-# enable_thinking=False. Se inyecta /no_think al inicio de cada mensaje
-# de usuario para desactivar el modo de razonamiento interno del modelo.
-# =============================================================================
-
-TEMPLATE """{{ if .System }}<|im_start|>system
-{{ .System }}<|im_end|>{{ end }}<|im_start|>user
-/no_think
-{{ .Prompt }}<|im_end|><|im_start|>assistant
-{{ .Response }}<|im_end|>"""
+PARAMETER repeat_penalty 1.15
+PARAMETER stop <|im_start|>
+PARAMETER stop <|im_end|>
+PARAMETER temperature 0.15
+PARAMETER top_p 0.9

@@ -1,65 +1,122 @@
 """
-LoRA Training Script for Qwen3-14B (TFG) — v6
-==============================================
+train.py — Fine-tuning LoRA de Qwen3-14B para RAG (TFG) — v7.2
+===============================================================
 
-This script implements an end-to-end fine-tuning AND evaluation pipeline:
-1) Loading the base model Qwen/Qwen3-14B.
-2) Evaluating the base model on held-out test splits (pre-training baseline).
-3) Applying LoRA adapter and fine-tuning on 4 RAG-native sources
-   (NarrativeQA, Neural-Bridge RAG, Dolly closed QA, and Aina RAG).
-4) Evaluating the adapted model on the same test splits (post-training).
-5) Producing a comparative summary: Base vs Adapted with per-dataset metrics.
+Pipeline de entrenamiento y evaluación comparativa en 5 etapas:
+  1. Cargar modelo base Qwen/Qwen3-14B.
+  2. Evaluar el modelo base sobre un test set congelado (baseline).
+  3. Aplicar adaptador LoRA y fine-tunear sobre 3 datasets RAG nativos.
+  4. Evaluar el modelo adaptado sobre el MISMO test set.
+  5. Generar resumen comparativo con métricas específicas de RAG.
 
-Target behavior: NotebookLM-style document Q&A — strict context adherence,
-professional well-structured answers adapted to question complexity.
+Objetivo: asistente de Q&A documental con adherencia estricta al contexto
+recuperado. Responde en el idioma del contexto (EN, ES o CA).
 
-All training samples include document context wrapped in <context> tags.
-The pipeline always provides context at inference time (embedding threshold
-gates the response protocol), so context-free samples are excluded.
-
-Design principle: The RAG retriever guarantees relevant context by filtering
-with a similarity threshold. The model should ALWAYS answer from the provided
-context and never abstain. Abstention training was removed because it caused
-false negatives (refusing to answer despite having the correct fragment).
-
-Metrics (RAG-relevant, zero additional dependencies):
-- Token F1 (Counter-based, SQuAD-standard): content overlap with gold answer.
-- Avg Response Length (in words): detects conciseness/verbosity bias.
-- Sentence Completeness %: detects span-copying (incomplete fragment answers).
-
-Changes vs v5:
-- Integrated evaluation: base model evaluated BEFORE training, adapted model
-  AFTER training, producing a single comparative JSON report
-- Removed dependency on separate evaluate_lora.py script
-- Added test split loaders for all 4 training datasets
-- Metrics redesigned for RAG relevance: Token F1, response length analysis,
-  sentence completeness (removed Exact Match and abstention metrics)
-- Added tqdm progress bars for evaluation loops
-
-Changes vs v4:
-- Removed DROP, SQuAD v1, SQuAD v2 (span-copying)
-- Added Dolly closed QA (instruction-following with reference text)
-- 100% RAG-format training data
-- System prompt redesigned for always-answer behavior
-
-Changes vs v3:
-- Added neural-bridge/rag-dataset-12000 (EN professional RAG QA)
-
-Changes vs v2:
-- Removed Natural Questions, OpenbookQA
-
-Changes vs v1:
-- 3 epochs, EarlyStoppingCallback, interleave_datasets, token-based truncation
+Uso:
+    python train.py
 """
+
+# =============================================================================
+# MAPA DEL MÓDULO — Índice de secciones
+# =============================================================================
+#
+#  CONFIGURACIÓN
+#  |-- 1. Entorno y constantes   variables de entorno CUDA, limites de tokens
+#  |        1.1 Tamaños de dataset   caps de train/val por fuente
+#  |        1.2 System prompt        alineado con SYSTEM_PROMPT_RAG de chat_pdfs
+#  `-- 2. Carga del modelo base  AutoModelForCausalLM + tokenizador Qwen3-14B
+#
+#  EVALUACIÓN Y MÉTRICAS
+#  `-- 3. Métricas e inferencia
+#           3.1 Normalización de texto   (EN/ES/CA, sin artículos ni puntuación)
+#           3.2 Token F1                 overlap con gold answer (SQuAD-estandar)
+#           3.3 Context Faithfulness     métrica primaria del TFG
+#           3.4 Generación              apply_chat_template + enable_thinking=False
+#           3.5 Bucle de evaluación     loop sobre eval_datasets congelado
+#
+#  DATOS
+#  `-- 4. Carga de datasets
+#           4.1 Normalizadores          mapeo de esquemas -> instruction/context/response
+#           4.2 Filtros compartidos     valid, long_response, dolly_rag
+#           4.3 Neural-Bridge RAG       9 600 train / 2 400 test
+#           4.4 Dolly QA                15 000 -> filtrado RAG -> split 80/10/10
+#           4.5 Aina RAG Multilingual   42 300 train / 8 460 val / 5 640 test
+#           4.6 Conjunto de train       interleaving round-robin proporcional
+#           4.7 Conjunto de validación  Trainer (loss monitoring / early stopping)
+#           4.8 Test set congelado      FROZEN — mismo para BASE y ADAPTADO
+#
+#  PIPELINE
+#  |-- 5. Evaluación modelo base    baseline pre-entrenamiento
+#  |-- 6. Adaptador LoRA            r=64, alpha=128, 7 módulos target
+#  |-- 7. Tokenización              ChatML + máscara de pérdida en prompt
+#  |-- 8. Configuración Trainer     hiperparámetros, early stopping, checkpoints
+#  |-- 9. Bucle de entrenamiento    Trainer.train()
+#  |--10. Exportación del modelo    save_pretrained (mejor checkpoint)
+#  |--11. Evaluación adaptado       mismo test set congelado que sección 5
+#  |--12. Resumen comparativo       deltas por dataset + agregado ponderado
+#  `--13. Guardado de artefactos    training_stats.json, evaluation_comparison.json
+#
+# =============================================================================
+
+# =============================================================================
+# HISTORIAL DE VERSIONES
+# =============================================================================
+#
+# v7.2 vs v7.1
+#   - Eliminado QASPER (muy pocas muestras tras filtrado).
+#   - Corregidos mapeos de columnas: Neural-Bridge y Aina usan question/answer
+#     en HuggingFace (no instruction/response); antes producían campos vacíos.
+#   - Dolly filtrado a categorías RAG relevantes con contexto no vacío
+#     (closed_qa, information_extraction, summarization).
+#   - Añadida métrica Context Faithfulness (evidencia principal del TFG):
+#     % de tokens únicos de la respuesta que aparecen en el contexto.
+#   - Test set cargado UNA vez y compartido por BASE y ADAPTADO.
+#   - Simplificado a 3 datasets con interleaving balanceado.
+#
+# v7.1 vs v7
+#   - Corregidos tamaños reales de splits en HuggingFace.
+#   - Cada dataset usa su split natural (train/val/test). Sin data leakage.
+#   - Interleaving con probabilidades proporcionales al tamaño.
+#
+# v7 vs v6
+#   - NarrativeQA reemplazado por QASPER (contextos de papers científicos).
+#   - LR: 1e-4 → 5e-5 (v6 mostraba colapso agresivo en los primeros 75 pasos).
+#   - warmup_ratio: 0.10 → 0.05. Early stopping patience: 3 → 5.
+#   - save_strategy: "no" → "steps" con load_best_model_at_end=True.
+#   - EVAL_MAX_NEW_TOKENS: 1024 → 2048 (evitaba truncación en evaluación).
+#   - System prompt: responder en el idioma del CONTEXTO (EN/ES/CA).
+#
+# v6 vs v5
+#   - Evaluación integrada: BASE antes del entrenamiento, ADAPTADO después.
+#   - Eliminada dependencia de evaluate_lora.py.
+#   - Métricas rediseñadas para RAG: Token F1, longitud de respuesta,
+#     completitud de frases (eliminados Exact Match y métricas de abstención).
+#   - Añadidas barras de progreso tqdm.
+#
+# v5 vs v4
+#   - Eliminados DROP, SQuAD v1 y v2 (comportamiento de span-copying).
+#   - Añadido Dolly closed QA (instruction-following con texto de referencia).
+#   - 100% datos en formato RAG. System prompt rediseñado para always-answer.
+#
+# v4 vs v3
+#   - Añadido neural-bridge/rag-dataset-12000 (QA RAG profesional EN).
+#
+# v3 vs v2
+#   - Eliminados Natural Questions y OpenbookQA.
+#
+# v2 vs v1
+#   - 3 épocas, EarlyStoppingCallback, interleave_datasets,
+#     truncación basada en tokens (antes por caracteres).
+#
+# =============================================================================
 
 import os
 import re
 import json
 import math
 import torch
-import bitsandbytes as bnb
 from collections import Counter
-from datasets import load_dataset, Dataset, interleave_datasets
+from datasets import load_dataset, interleave_datasets, concatenate_datasets
 from peft import LoraConfig, get_peft_model, TaskType
 from tqdm import tqdm
 from transformers import (
@@ -67,18 +124,15 @@ from transformers import (
     AutoTokenizer,
     Trainer,
     TrainingArguments,
-    TrainerCallback,
+    EarlyStoppingCallback,
     DataCollatorForSeq2Seq,
 )
 
 
 # =============================================================================
-# SECTION 1: ENVIRONMENT, CONSTANTS & SYSTEM PROMPT
+# SECCIÓN 1: ENTORNO Y CONSTANTES
 # =============================================================================
-# Global configuration used across training and evaluation.
-# The system prompt is defined here because it must be identical in:
-#   - format_and_tokenize (training)
-#   - generate_response (evaluation & inference)
+# Variables de entorno CUDA, rutas de salida, caps de dataset y system prompt.
 # =============================================================================
 
 os.environ["TORCH_COMPILE_DISABLE"] = "1"
@@ -89,36 +143,25 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 output_dir = os.path.join(os.getcwd(), "training-output")
 os.makedirs(output_dir, exist_ok=True)
 
-# --- Model ---
 model_name = "Qwen/Qwen3-14B"
 
-# --- Training dataset sizes ---
-SAMPLES_NARRATIVEQA = 8000
-SAMPLES_NEURAL_BRIDGE = 10000
-SAMPLES_DOLLY = 5000
-SAMPLES_AINA = 14000
+SAMPLES_NEURAL_BRIDGE_TRAIN = 8000
+SAMPLES_DOLLY_TRAIN         = 10000
+SAMPLES_AINA_TRAIN          = 10000
 
-# --- Evaluation ---
+SAMPLES_NEURAL_BRIDGE_VAL   = 300
+SAMPLES_DOLLY_VAL           = 1000
+SAMPLES_AINA_VAL            = 500
+
 EVAL_SAMPLES_PER_DATASET = 200
-MAX_NEW_TOKENS = 2048  # ~1500 words; allows fully detailed NotebookLM-style answers
-EVAL_MAX_NEW_TOKENS = 512  # reduced for eval to avoid OOM; sufficient to measure F1/completeness
 
-# --- Tokenization ---
-# MAX_LENGTH: total sequence length in training (prompt + context + response).
-# Budget breakdown (based on real RAG pipeline debug logs):
-#   - System prompt + ChatML overhead:   ~210 tokens
-#   - User question:                     ~30-80 tokens
-#   - RAG context (4-15 fragments w/     ~1,500-4,000 tokens
-#     Contextual Retrieval metadata):
-#   - Detailed response:                 ~500-1,500 tokens
-#   - Worst-case total:                  ~5,800 tokens
-# 8192 provides comfortable headroom for the worst case.
-# Qwen3-14B supports up to 128k; 8192 is well within its capacity.
-MAX_LENGTH = 8192
-MAX_CONTEXT_TOKENS = 4096  # fits 15 RAG fragments with Contextual Retrieval headers
+MAX_NEW_TOKENS      = 2048
+EVAL_MAX_NEW_TOKENS = 2048
 
-# --- System prompt (shared between training and evaluation) ---
-system_prompt = (
+MAX_LENGTH         = 4096
+MAX_CONTEXT_TOKENS = 2048
+
+SYSTEM_PROMPT = (
     "You are a professional document analysis assistant. Your role is to answer "
     "questions accurately based on the provided document context.\n\n"
     "Guidelines:\n"
@@ -128,20 +171,19 @@ system_prompt = (
     "- For factual questions, be direct and precise.\n"
     "- For analytical or complex questions, provide detailed explanations "
     "referencing specific information from the context.\n"
-    "- Always respond in the same language as the question.\n"
+    "- Always respond in the same language as the context "
+    "(English, Spanish/Castellano, or Catalan/Català).\n"
     "- Synthesize information naturally rather than copying text verbatim."
 )
 
 
 # =============================================================================
-# SECTION 2: BASE MODEL LOADING
+# SECCIÓN 2: CARGA DEL MODELO BASE
 # =============================================================================
-# Loads the base model and tokenizer WITHOUT LoRA adapter.
-# The base model is evaluated first (Section 5) to establish a pre-training
-# baseline before the adapter is applied for fine-tuning.
+# AutoModelForCausalLM en bfloat16 con device_map="auto" + SDPA attention.
 # =============================================================================
 
-print(f"\n--> [SECTION 2] Loading base model: {model_name}")
+print(f"\n--> [2] Cargando modelo base: {model_name}")
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
     dtype=torch.bfloat16,
@@ -149,99 +191,107 @@ model = AutoModelForCausalLM.from_pretrained(
     trust_remote_code=True,
     attn_implementation="sdpa",
 )
-
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.pad_token_id = tokenizer.eos_token_id
 tokenizer.padding_side = "right"
-
-print("--> Base model loaded (no adapter applied).")
+print("--> Base model loaded.")
 
 
 # =============================================================================
-# SECTION 3: EVALUATION METRICS & INFERENCE
+# SECCIÓN 3: MÉTRICAS E INFERENCIA
 # =============================================================================
-# Defines metrics relevant for RAG pipeline evaluation:
+# Cuatro métricas RAG sin dependencias externas.
 #
-# - Token F1: Counter-based token overlap (SQuAD-standard). Measures how
-#   much of the gold answer content appears in the prediction.
+# Primaria (evidencia principal del TFG):
+#   Context Faithfulness — % de tipos de token de la respuesta que aparecen
+#     en el contexto. Incremento post-fine-tuning demuestra que el modelo
+#     sintetiza desde el documento en lugar de usar conocimiento previo.
 #
-# - Avg Response Length: Mean word count of generated responses. Detects
-#   conciseness bias (too terse) or verbosity bias (too verbose).
-#
-# - Sentence Completeness: Percentage of responses that end with sentence-
-#   ending punctuation (. ! ?). Low values indicate span-copying behavior
-#   (e.g. answering "30" instead of "There are 30 boards.").
-#
-# These metrics require zero additional dependencies.
+# Secundarias:
+#   Token F1              — overlap con gold answer, estandar SQuAD.
+#   Avg Response Length   — detecta cambios de verbosidad.
+#   Sentence Completeness — detecta respuestas fragmentadas (span-copying).
 # =============================================================================
+
+DOLLY_RAG_CATEGORIES = {"closed_qa", "information_extraction", "summarization"}
+
 
 def normalize_text(text: str) -> str:
-    """Lowercase, remove punctuation, articles (EN/ES/CA) and extra whitespace."""
+    """Lowercase, strip articles (EN/ES/CA) and punctuation."""
     text = str(text).lower()
-    text = re.sub(r'\b(a|an|the|el|la|los|las|un|una|unos|unas|les|els)\b', ' ', text)
+    text = re.sub(
+        r'\b(a|an|the|el|la|los|las|un|una|unos|unas|les|els|uns|unes)\b',
+        ' ', text
+    )
     text = re.sub(r'[^\w\s]', '', text)
     return " ".join(text.split())
 
 
 def compute_f1(prediction: str, ground_truth: str) -> float:
-    """Token-level F1 score using Counter (SQuAD-standard)."""
-    pred_tokens = normalize_text(prediction).split()
-    truth_tokens = normalize_text(ground_truth).split()
-
-    if len(pred_tokens) == 0 or len(truth_tokens) == 0:
-        return 1.0 if pred_tokens == truth_tokens else 0.0
-
-    common = Counter(pred_tokens) & Counter(truth_tokens)
-    num_common = sum(common.values())
-    if num_common == 0:
+    """Token-level F1 (SQuAD-standard)."""
+    pred_tok  = normalize_text(prediction).split()
+    truth_tok = normalize_text(ground_truth).split()
+    if not pred_tok or not truth_tok:
+        return 1.0 if pred_tok == truth_tok else 0.0
+    common = Counter(pred_tok) & Counter(truth_tok)
+    n = sum(common.values())
+    if n == 0:
         return 0.0
+    prec = n / len(pred_tok)
+    rec  = n / len(truth_tok)
+    return 2 * prec * rec / (prec + rec)
 
-    prec = num_common / len(pred_tokens)
-    rec = num_common / len(truth_tokens)
-    return 2 * (prec * rec) / (prec + rec)
 
-
-def generate_response(model, tokenizer, instruction, context, max_new_tokens=MAX_NEW_TOKENS):
+def compute_context_faithfulness(prediction: str, context: str) -> float:
     """
-    Generates an inference response using the same prompt format as training.
-    Uses deterministic (greedy) decoding with thinking disabled.
-    Context is truncated to MAX_CONTEXT_TOKENS to mirror training and avoid OOM.
+    Context Faithfulness: fraction of unique prediction word-types that
+    also appear in the context.
 
-    Args:
-        model: The model (base or adapted).
-        tokenizer: The tokenizer.
-        instruction: User question.
-        context: Retrieved context from the RAG pipeline.
-        max_new_tokens: Maximum tokens to generate.
+    Interpretation:
+        > 0.70  Strongly grounded — almost all content comes from context.
+        0.50-0.70  Adequately grounded.
+        < 0.50  Possible hallucination or excessive prior-knowledge use.
 
-    Returns:
-        Response text string.
+    Expected behaviour:
+        BASE model:    lower score (uses world knowledge freely).
+        ADAPTED model: higher score (learned to stay in context).
+    """
+    pred_types = set(normalize_text(prediction).split())
+    ctx_types  = set(normalize_text(context).split())
+    if not pred_types:
+        return 0.0
+    return len(pred_types & ctx_types) / len(pred_types)
+
+
+def generate_response(
+    model, tokenizer, instruction: str, context: str,
+    max_new_tokens: int = MAX_NEW_TOKENS,
+) -> str:
+    """
+    Inference using the same prompt format as training.
+    Context is truncated to MAX_CONTEXT_TOKENS (mirrors format_and_tokenize).
     """
     ctx = (context or "").strip()
-
-    # Truncate context to MAX_CONTEXT_TOKENS (mirrors format_and_tokenize)
     if ctx:
-        ctx_ids = tokenizer(ctx, add_special_tokens=False, truncation=True, max_length=MAX_CONTEXT_TOKENS)["input_ids"]
-        ctx = tokenizer.decode(ctx_ids, skip_special_tokens=True)
+        ctx_ids = tokenizer(ctx, add_special_tokens=False)["input_ids"]
+        if len(ctx_ids) > MAX_CONTEXT_TOKENS:
+            ctx = tokenizer.decode(ctx_ids[:MAX_CONTEXT_TOKENS], skip_special_tokens=True)
         user_msg = f"{instruction}\n\n<context>{ctx}</context>"
     else:
         user_msg = instruction
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_msg},
-    ]
     prompt = tokenizer.apply_chat_template(
-        messages,
+        [
+            {"role": "system",    "content": SYSTEM_PROMPT},
+            {"role": "user",      "content": user_msg},
+        ],
         tokenize=False,
         add_generation_prompt=True,
         enable_thinking=False,
     )
-
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
@@ -250,375 +300,315 @@ def generate_response(model, tokenizer, instruction, context, max_new_tokens=MAX
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.encode("<|im_end|>", add_special_tokens=False)[0],
         )
-
-    response = tokenizer.decode(
+    return tokenizer.decode(
         outputs[0][inputs["input_ids"].shape[1]:],
-        skip_special_tokens=True
-    )
-    return response.strip()
+        skip_special_tokens=True,
+    ).strip()
 
 
-def evaluate_on_datasets(model, tokenizer, eval_datasets, label="MODEL"):
+def evaluate_on_datasets(model, tokenizer, eval_datasets: dict, label: str = "MODEL") -> tuple:
     """
-    Evaluates a model on multiple datasets and returns per-dataset metrics.
+    Evaluate a model on the provided eval_datasets dict.
 
-    Metrics computed per dataset:
-    - Token F1 (average)
-    - Average response length (words)
-    - Sentence completeness (% of responses ending with . ! or ?)
-
-    Args:
-        model: The model to evaluate.
-        tokenizer: The tokenizer.
-        eval_datasets: Dict of {dataset_name: HuggingFace Dataset}.
-        label: Label for display (e.g., "BASE", "ADAPTED").
+    IMPORTANT: eval_datasets must be the same frozen object for BASE and
+    ADAPTED evaluations so that both models answer identical questions on
+    identical contexts. This is enforced by the caller — see Section 5 and 11.
 
     Returns:
-        Tuple of (all_metrics: dict, all_results: dict with per-sample details).
+        all_metrics  dict[ds_name → metric dict]
+        all_results  dict[ds_name → list of per-sample dicts]
+
+    Metrics (per dataset):
+        Token_F1                    answer relevance vs gold (%)
+        Context_Faithfulness_Pct    grounding in provided context (%)
+        Avg_Response_Length_Words   mean word count
+        Sentence_Completeness_Pct   % responses ending with . ! ?
     """
     all_metrics = {}
     all_results = {}
-
     model.eval()
     torch.cuda.empty_cache()
 
     for ds_name, ds in eval_datasets.items():
-        results = []
-        total_f1 = 0.0
-        total_response_words = 0
-        complete_sentences = 0
+        total_f1         = 0.0
+        total_faith      = 0.0
+        total_words      = 0
+        n_complete       = 0
+        results          = []
         n = len(ds)
 
         for example in tqdm(ds, desc=f"{label} | {ds_name}"):
-            instruction = example["instruction"]
-            context = example["context"]
+            instruction  = example["instruction"]
+            context      = example["context"]
             ground_truth = example["response"]
 
-            pred = generate_response(model, tokenizer, instruction, context, max_new_tokens=EVAL_MAX_NEW_TOKENS)
+            pred = generate_response(
+                model, tokenizer, instruction, context,
+                max_new_tokens=EVAL_MAX_NEW_TOKENS,
+            )
 
-            f1 = compute_f1(pred, ground_truth)
-            total_f1 += f1
+            f1    = compute_f1(pred, ground_truth)
+            faith = compute_context_faithfulness(pred, context)
+            words = len(pred.split())
+            is_complete = bool(pred.rstrip()) and pred.rstrip()[-1] in ".!?"
 
-            pred_words = len(pred.split())
-            total_response_words += pred_words
-
-            # Sentence completeness: response ends with sentence-ending punctuation
-            stripped = pred.rstrip()
-            if stripped and stripped[-1] in ".!?":
-                complete_sentences += 1
+            total_f1    += f1
+            total_faith += faith
+            total_words += words
+            if is_complete:
+                n_complete += 1
 
             results.append({
-                "instruction": instruction,
-                "context": context[:200] + "..." if len(context) > 200 else context,
+                "instruction":  instruction,
+                "context":      context[:200] + "..." if len(context) > 200 else context,
                 "ground_truth": ground_truth,
-                "prediction": pred,
-                "f1": round(f1, 4),
-                "response_words": pred_words,
+                "prediction":   pred,
+                "f1":           round(f1,    4),
+                "faithfulness": round(faith, 4),
+                "words":        words,
             })
 
         metrics = {
-            "n_samples": n,
-            "Token_F1": round((total_f1 / n) * 100, 2) if n > 0 else 0,
-            "Avg_Response_Length_Words": round(total_response_words / n, 1) if n > 0 else 0,
-            "Sentence_Completeness_Pct": round((complete_sentences / n) * 100, 1) if n > 0 else 0,
+            "n_samples":                   n,
+            "Token_F1":                    round((total_f1    / n) * 100, 2) if n else 0.0,
+            "Context_Faithfulness_Pct":    round((total_faith / n) * 100, 2) if n else 0.0,
+            "Avg_Response_Length_Words":   round( total_words / n,         1) if n else 0.0,
+            "Sentence_Completeness_Pct":   round((n_complete  / n) * 100, 1) if n else 0.0,
         }
-
         all_metrics[ds_name] = metrics
         all_results[ds_name] = results
 
         print(f"\n  {ds_name} ({n} samples):")
-        print(f"    Token F1:              {metrics['Token_F1']:.2f}%")
+        print(f"    Token F1:               {metrics['Token_F1']:.2f}%")
+        print(f"    Context Faithfulness:   {metrics['Context_Faithfulness_Pct']:.2f}%")
         print(f"    Avg Response Length:    {metrics['Avg_Response_Length_Words']:.1f} words")
-        print(f"    Sentence Completeness: {metrics['Sentence_Completeness_Pct']:.1f}%")
+        print(f"    Sentence Completeness:  {metrics['Sentence_Completeness_Pct']:.1f}%")
 
     return all_metrics, all_results
 
 
 # =============================================================================
-# SECTION 4: DATASET LOADING (TRAIN + EVAL)
+# SECCIÓN 4: CARGA DE DATASETS
 # =============================================================================
-# Loads 4 RAG-native datasets with separate train and eval portions:
+# Uso de splits:
+#   train -> SFT (interleaving round-robin proporcional)
+#   val   -> eval_dataset del Trainer (loss monitoring / early stopping)
+#   test  -> set congelado, cargado UNA vez, compartido por BASE y ADAPTADO
 #
-#   1. NarrativeQA     — single split, partitioned into non-overlapping portions
-#   2. Neural-Bridge    — train split for training, test split for evaluation
-#   3. Dolly closed QA  — single split, partitioned into non-overlapping portions
-#   4. Aina RAG         — train split for training, test split for evaluation
-#
-# For datasets without a dedicated test split (NarrativeQA, Dolly), the
-# train loader reserves EVAL_SAMPLES_PER_DATASET samples and the eval
-# loader takes those reserved samples via index-offset with the same
-# shuffle seed (42), guaranteeing zero overlap.
-#
-# Each dataset is normalized to (instruction, context, response) format.
+# Esquemas normalizados a: instruction | context | response
+#   Neural-Bridge: context | question | answer
+#   Dolly:         instruction | context | response | category
+#   Aina:          instruction | context | response
 # =============================================================================
 
-print("\n--> [SECTION 4] Loading datasets (train + eval splits)...")
+print("\n--> [4] Cargando datasets...")
 
 
-# --- Shared normalizer functions ---
-
-def _normalize_narrativeqa(example):
-    """Normalize NarrativeQA example to (instruction, context, response)."""
-    context = ""
-    for key in ["summary", "document", "context", "text"]:
-        if key in example and example[key]:
-            context = str(example[key]).strip()
-            if context:
-                break
-
-    question = ""
-    for key in ["question", "query"]:
-        if key in example and example[key]:
-            question = str(example[key]).strip()
-            if question:
-                break
-
-    answer = ""
-    for key in ["answer", "answer1", "response"]:
-        if key in example and example[key]:
-            answer = str(example[key]).strip()
-            if answer:
-                break
-
-    return {"instruction": question, "context": context, "response": answer}
-
-
-def _normalize_neural_bridge(example):
-    """Normalize Neural-Bridge RAG example."""
+def _normalize_nb(example):
+    """Neural-Bridge: question→instruction, context, answer→response."""
     return {
         "instruction": (example.get("question") or "").strip(),
-        "context": (example.get("context") or "").strip(),
-        "response": (example.get("answer") or "").strip(),
+        "context":     (example.get("context")  or "").strip(),
+        "response":    (example.get("answer")   or "").strip(),
     }
 
 
 def _normalize_dolly(example):
-    """Normalize Dolly example."""
+    """
+    Dolly: instruction, context, response.
+    Only RAG-relevant categories with non-empty context are kept.
+    Filtering happens AFTER normalisation via _filter_dolly_rag.
+    """
     return {
         "instruction": (example.get("instruction") or "").strip(),
-        "context": (example.get("context") or "").strip(),
-        "response": (example.get("response") or "").strip(),
+        "context":     (example.get("context")     or "").strip(),
+        "response":    (example.get("response")    or "").strip(),
+        "category":    (example.get("category")    or "").strip(),
     }
 
 
-def _filter_valid(example):
-    """Keep only samples with non-empty instruction, context, and response."""
+def _normalize_aina(example):
+    """
+    Aina RAG Multilingual actual columns (verified from HuggingFace):
+      id | instruction | context | response | category | lang | extractive
+    Maps directly to instruction/context/response (same schema as Dolly).
+    """
+    return {
+        "instruction": (example.get("instruction") or "").strip(),
+        "context":     (example.get("context")     or "").strip(),
+        "response":    (example.get("response")    or "").strip(),
+    }
+
+
+def _filter_valid(ex):
     return (
-        bool(example["instruction"].strip())
-        and bool(example["context"].strip())
-        and bool(example["response"].strip())
+        bool(ex["instruction"].strip())
+        and bool(ex["context"].strip())
+        and bool(ex["response"].strip())
     )
 
 
-# --- Train dataset loaders ---
-
-def load_narrativeqa_train(n_samples):
-    """NarrativeQA train portion — reserves EVAL_SAMPLES_PER_DATASET for eval."""
-    print(f"    Loading NarrativeQA train, target: {n_samples}...")
-    ds = load_dataset("meithnav/narrativeqa", split="train")
-    ds = ds.map(_normalize_narrativeqa, remove_columns=ds.column_names)
-    ds = ds.filter(_filter_valid)
-    ds = ds.shuffle(seed=42)
-    max_train = max(0, len(ds) - EVAL_SAMPLES_PER_DATASET)
-    actual = min(n_samples, max_train)
-    ds = ds.select(range(actual))
-    print(f"    NarrativeQA train: {len(ds)} samples (reserved {EVAL_SAMPLES_PER_DATASET} for eval)")
-    return ds
+def _filter_long_response(ex, min_words: int = 15):
+    """Keep only responses with at least min_words words."""
+    return len(ex["response"].split()) >= min_words
 
 
-def load_neural_bridge_train(n_samples):
-    """Neural-Bridge train portion (first N from shuffled train split)."""
-    print(f"    Loading Neural-Bridge RAG train, target: {n_samples}...")
-    ds = load_dataset("neural-bridge/rag-dataset-12000", split="train")
-    ds = ds.map(_normalize_neural_bridge, remove_columns=ds.column_names)
-    ds = ds.filter(_filter_valid)
-    ds = ds.shuffle(seed=42).select(range(min(n_samples, len(ds))))
-    print(f"    Neural-Bridge train: {len(ds)} samples")
-    return ds
+def _filter_dolly_rag(ex):
+    """Keep only Dolly rows that are RAG-relevant (non-empty context + correct category)."""
+    return (
+        ex["category"] in DOLLY_RAG_CATEGORIES
+        and bool(ex["context"].strip())
+    )
 
 
-def load_dolly_train(n_samples):
-    """Dolly train portion — reserves EVAL_SAMPLES_PER_DATASET for eval."""
-    print(f"    Loading Dolly QA train, target: {n_samples}...")
-    ds = load_dataset("databricks/databricks-dolly-15k", split="train")
-    ds = ds.map(_normalize_dolly, remove_columns=ds.column_names)
-    ds = ds.filter(_filter_valid)
-    ds = ds.shuffle(seed=42)
-    max_train = max(0, len(ds) - EVAL_SAMPLES_PER_DATASET)
-    actual = min(n_samples, max_train)
-    ds = ds.select(range(actual))
-    print(f"    Dolly QA train: {len(ds)} samples (reserved {EVAL_SAMPLES_PER_DATASET} for eval)")
-    return ds
+print("  Neural-Bridge RAG...")
+_nb_train_full = (
+    load_dataset("neural-bridge/rag-dataset-12000", split="train")
+    .map(_normalize_nb, remove_columns=["context", "question", "answer"])
+    .filter(_filter_valid)
+    .filter(_filter_long_response)
+    .shuffle(seed=42)
+)
+nb_n = len(_nb_train_full)
+nb_val_start = nb_n - SAMPLES_NEURAL_BRIDGE_VAL
+nb_train = _nb_train_full.select(range(min(SAMPLES_NEURAL_BRIDGE_TRAIN, nb_val_start)))
+nb_val   = _nb_train_full.select(range(nb_val_start, nb_n))
+nb_test  = (
+    load_dataset("neural-bridge/rag-dataset-12000", split="test")
+    .map(_normalize_nb, remove_columns=["context", "question", "answer"])
+    .filter(_filter_valid)
+    .shuffle(seed=42)
+)
+print(f"    train={len(nb_train)}, val={len(nb_val)}, test={len(nb_test)}")
 
 
-def load_aina_train(n_samples):
-    """Aina RAG Multilingual train split."""
-    print(f"    Loading Aina RAG train, target: {n_samples}...")
-    ds = load_dataset("projecte-aina/RAG_Multilingual", split="train")
-    cols_to_keep = ["instruction", "context", "response"]
-    cols_to_remove = [c for c in ds.column_names if c not in cols_to_keep]
-    ds = ds.remove_columns(cols_to_remove)
-    ds = ds.filter(lambda x: (x["instruction"] or "").strip() and (x["response"] or "").strip())
-    ds = ds.shuffle(seed=42).select(range(min(n_samples, len(ds))))
-    print(f"    Aina RAG train: {len(ds)} samples")
-    return ds
+print("  Dolly QA (RAG-relevant categories only, manual 80/10/10)...")
+_dolly_all = (
+    load_dataset("databricks/databricks-dolly-15k", split="train")
+    .map(_normalize_dolly, remove_columns=["instruction", "context", "response", "category"])
+    .filter(_filter_dolly_rag)
+    .filter(_filter_valid)
+    .filter(_filter_long_response)
+    .shuffle(seed=42)
+    .remove_columns(["category"])
+)
+nd = len(_dolly_all)
+nd_train = int(nd * 0.80)
+nd_val   = int(nd * 0.10)
+dolly_train = _dolly_all.select(range(min(SAMPLES_DOLLY_TRAIN, nd_train)))
+dolly_val   = _dolly_all.select(range(nd_train, nd_train + nd_val))
+dolly_test  = _dolly_all.select(range(nd_train + nd_val, nd))
+print(f"    RAG rows total: {nd}")
+print(f"    train={len(dolly_train)}, val={len(dolly_val)}, test={len(dolly_test)}")
 
 
-# --- Eval dataset loaders ---
-
-def load_narrativeqa_eval(n_samples, train_size=SAMPLES_NARRATIVEQA):
-    """
-    NarrativeQA eval portion — indices AFTER the training portion.
-    meithnav/narrativeqa has no test split, so eval samples are taken
-    from indices [split_point, split_point + n_samples) of the shuffled
-    train split, guaranteeing zero overlap with training data.
-    """
-    print(f"    Loading NarrativeQA eval, target: {n_samples}...")
-    ds = load_dataset("meithnav/narrativeqa", split="train")
-    ds = ds.map(_normalize_narrativeqa, remove_columns=ds.column_names)
-    ds = ds.filter(_filter_valid)
-    ds = ds.shuffle(seed=42)
-    split_point = min(train_size, max(0, len(ds) - n_samples))
-    end = min(split_point + n_samples, len(ds))
-    ds = ds.select(range(split_point, end))
-    print(f"    NarrativeQA eval: {len(ds)} samples (indices {split_point}–{end - 1})")
-    return ds
+print("  Aina RAG Multilingual...")
 
 
-def load_neural_bridge_eval(n_samples):
-    """Neural-Bridge RAG test split for evaluation."""
-    print(f"    Loading Neural-Bridge RAG test, target: {n_samples}...")
-    ds = load_dataset("neural-bridge/rag-dataset-12000", split="test")
-    ds = ds.map(_normalize_neural_bridge, remove_columns=ds.column_names)
-    ds = ds.filter(_filter_valid)
-    ds = ds.shuffle(seed=42).select(range(min(n_samples, len(ds))))
-    print(f"    Neural-Bridge test: {len(ds)} samples")
-    return ds
+_AINA_EXTRA_COLS = ["id", "category", "lang", "extractive"]
 
 
-def load_dolly_eval(n_samples, train_size=SAMPLES_DOLLY):
-    """
-    Dolly eval portion — indices AFTER the training portion.
-    Dolly has no dedicated test split, so eval samples are taken from
-    indices [split_point, split_point + n_samples) of the shuffled train
-    split, guaranteeing zero overlap with training data.
-    split_point is capped to always leave room for n_samples eval samples.
-    """
-    print(f"    Loading Dolly QA eval, target: {n_samples}...")
-    ds = load_dataset("databricks/databricks-dolly-15k", split="train")
-    ds = ds.map(_normalize_dolly, remove_columns=ds.column_names)
-    ds = ds.filter(_filter_valid)
-    ds = ds.shuffle(seed=42)
-    split_point = min(train_size, max(0, len(ds) - n_samples))
-    end = min(split_point + n_samples, len(ds))
-    ds = ds.select(range(split_point, end))
-    print(f"    Dolly QA eval: {len(ds)} samples (indices {split_point}–{end - 1})")
-    return ds
+def _load_aina(split):
+    ds = load_dataset("projecte-aina/RAG_Multilingual", split=split)
+    cols_to_remove = [c for c in _AINA_EXTRA_COLS if c in ds.column_names]
+    return (
+        ds
+        .map(_normalize_aina, remove_columns=cols_to_remove)
+        .filter(_filter_valid)
+        .filter(_filter_long_response)
+        .shuffle(seed=42)
+    )
 
 
-def load_aina_eval(n_samples):
-    """Aina RAG Multilingual test split for evaluation."""
-    print(f"    Loading Aina RAG test, target: {n_samples}...")
-    ds = load_dataset("projecte-aina/RAG_Multilingual", split="test")
-    cols_to_keep = ["instruction", "context", "response"]
-    cols_to_remove = [c for c in ds.column_names if c not in cols_to_keep]
-    ds = ds.remove_columns(cols_to_remove)
-    ds = ds.filter(lambda x: (x["instruction"] or "").strip() and (x["response"] or "").strip())
-    ds = ds.shuffle(seed=42).select(range(min(n_samples, len(ds))))
-    print(f"    Aina RAG test: {len(ds)} samples")
-    return ds
+_aina_train_full = _load_aina("train")
+aina_train = _aina_train_full.select(range(min(SAMPLES_AINA_TRAIN, len(_aina_train_full))))
+_aina_val_full = _load_aina("validation")
+aina_val   = _aina_val_full.select(range(min(SAMPLES_AINA_VAL, len(_aina_val_full))))
+aina_test  = _load_aina("test")
+print(f"    train={len(aina_train)}, val={len(aina_val)}, test={len(aina_test)}")
 
+_train_list  = [nb_train, dolly_train, aina_train]
+_train_sizes = [len(d) for d in _train_list]
+_total       = sum(_train_sizes)
+_probs       = [s / _total for s in _train_sizes]
 
-# --- Load all training datasets ---
+print("\n  Interleaving training datasets (round-robin, proportional probs):")
+for name, n, p in zip(["Neural-Bridge", "Dolly", "Aina"], _train_sizes, _probs):
+    print(f"    {name:16s}: {n:6d} samples  p={p:.3f}")
 
-print("\n  --- Training Datasets ---")
-all_datasets = []
-train_loaders = [
-    ("NarrativeQA", load_narrativeqa_train, SAMPLES_NARRATIVEQA),
-    ("Neural-Bridge RAG", load_neural_bridge_train, SAMPLES_NEURAL_BRIDGE),
-    ("Dolly QA", load_dolly_train, SAMPLES_DOLLY),
-    ("Aina RAG", load_aina_train, SAMPLES_AINA),
-]
+dataset = interleave_datasets(
+    _train_list,
+    probabilities=_probs,
+    seed=42,
+    stopping_strategy="all_exhausted",
+)
+print(f"--> Combined train dataset: {len(dataset)} samples")
 
-for name, loader_fn, n in train_loaders:
-    try:
-        ds = loader_fn(n)
-        all_datasets.append(ds)
-    except Exception as e:
-        print(f"    WARNING: Failed to load {name}: {e}")
-        print(f"    Continuing without {name}...")
+_val_raw       = concatenate_datasets([nb_val, dolly_val, aina_val]).shuffle(seed=42)
+eval_dataset_raw = _val_raw
+print(f"--> Validation (Trainer): {len(eval_dataset_raw)} samples")
+print(f"    NB={len(nb_val)}, Dolly={len(dolly_val)}, Aina={len(aina_val)}")
 
-# Interleave for balanced gradient updates across sources
-dataset = interleave_datasets(all_datasets, seed=42, stopping_strategy="all_exhausted")
-print(f"--> Combined train dataset: {len(dataset)} samples (interleaved, all_exhausted)")
-
-# Validation split for loss monitoring during training (NOT the eval datasets)
-eval_size = min(1000, int(len(dataset) * 0.03))
-splits = dataset.train_test_split(test_size=eval_size, seed=42)
-dataset = splits["train"]
-eval_dataset_raw = splits["test"]
-print(f"--> Train: {len(dataset)}, Validation (loss monitoring): {len(eval_dataset_raw)}")
-
-# --- Load all evaluation datasets ---
-
-print("\n  --- Evaluation Datasets (for Base vs Adapted comparison) ---")
+print("\n  Fixed Frozen Test Sets (Base vs Adapted):")
 eval_datasets = {}
-eval_loaders = [
-    ("NarrativeQA", load_narrativeqa_eval),
-    ("Neural-Bridge RAG", load_neural_bridge_eval),
-    ("Dolly QA", load_dolly_eval),
-    ("Aina RAG", load_aina_eval),
+for name, test_ds in [
+    ("Neural-Bridge RAG", nb_test),
+    ("Dolly QA",          dolly_test),
+    ("Aina RAG",          aina_test),
+]:
+    n = min(EVAL_SAMPLES_PER_DATASET, len(test_ds))
+    eval_datasets[name] = test_ds.select(range(n))
+    print(f"    {name}: {n} samples (FROZEN — same for BASE and ADAPTED)")
+
+print(f"--> Total evaluation samples: {sum(len(d) for d in eval_datasets.values())}")
+
+train_loaders = [
+    ("Neural-Bridge RAG", None, SAMPLES_NEURAL_BRIDGE_TRAIN),
+    ("Dolly QA",          None, SAMPLES_DOLLY_TRAIN),
+    ("Aina RAG",          None, SAMPLES_AINA_TRAIN),
 ]
 
-for name, loader_fn in eval_loaders:
-    try:
-        eval_datasets[name] = loader_fn(EVAL_SAMPLES_PER_DATASET)
-    except Exception as e:
-        print(f"    WARNING: Failed to load eval {name}: {e}")
-
-total_eval = sum(len(ds) for ds in eval_datasets.values())
-print(f"--> Total evaluation samples: {total_eval} across {len(eval_datasets)} datasets")
-
 
 # =============================================================================
-# SECTION 5: BASE MODEL EVALUATION
+# SECCIÓN 5: EVALUACIÓN DEL MODELO BASE (baseline pre-entrenamiento)
 # =============================================================================
-# Evaluates the base Qwen3-14B model (without LoRA) on the test splits
-# to establish pre-training baselines for comparison after fine-tuning.
-# Results are saved immediately in case training crashes later.
+# eval_datasets NO se modifica aqui. Se reutiliza tal cual en la sección 11.
 # =============================================================================
 
 print("\n" + "=" * 70)
-print("--> [SECTION 5] Evaluating BASE model (pre-training baseline)")
+print("--> [5] Evaluando modelo BASE (baseline pre-entrenamiento)")
+print("    (Mismo test set congelado que se usara en la seccion 11)")
 print("=" * 70)
 
 base_metrics, base_results = evaluate_on_datasets(
     model, tokenizer, eval_datasets, label="BASE"
 )
 
-# Save base results immediately (crash-safe)
 base_eval_path = os.path.join(output_dir, "eval_base.json")
 try:
     with open(base_eval_path, "w", encoding="utf-8") as f:
         json.dump(
-            {"metrics": base_metrics, "samples": {k: v[:10] for k, v in base_results.items()}},
+            {"metrics": base_metrics,
+             "samples": {k: v[:10] for k, v in base_results.items()}},
             f, indent=4, ensure_ascii=False,
         )
-    print(f"--> Base evaluation saved to: {base_eval_path}")
+    print(f"--> Base evaluation saved: {base_eval_path}")
 except Exception as e:
-    print(f"    Warning: Could not save base eval: {e}")
+    print(f"    Warning: could not save base eval: {e}")
+
+import gc
+gc.collect()
+torch.cuda.empty_cache()
+print("--> GPU cache cleared after base evaluation.")
 
 
 # =============================================================================
-# SECTION 6: LoRA ADAPTER APPLICATION
+# SECCIÓN 6: ADAPTADOR LoRA
 # =============================================================================
-# Applies the LoRA adapter to the base model for fine-tuning.
-# Gradient checkpointing is enabled here (needed for training, not for
-# the base evaluation above).
+# r=64, alpha=128, dropout=0.05. Target: q/k/v/o_proj + gate/up/down_proj.
 # =============================================================================
 
-print(f"\n--> [SECTION 6] Applying LoRA adapter...")
-
+print("\n--> [6] Aplicando adaptador LoRA...")
 model.gradient_checkpointing_enable()
 
 peft_config = LoraConfig(
@@ -627,207 +617,120 @@ peft_config = LoraConfig(
     lora_dropout=0.05,
     bias="none",
     task_type=TaskType.CAUSAL_LM,
-    target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                    "gate_proj", "up_proj", "down_proj"],
 )
-
 model = get_peft_model(model, peft_config)
 print("--> LoRA adapter applied.")
 model.print_trainable_parameters()
 
 
 # =============================================================================
-# SECTION 7: TOKENIZATION & PROMPT FORMATTING
+# SECCIÓN 7: TOKENIZACIÓN Y FORMATO DE PROMPT
 # =============================================================================
-# Prepares the combined dataset for supervised fine-tuning (SFT) with Qwen3's
-# ChatML format. Key design decisions:
-#
-# - Uses tokenizer.apply_chat_template(enable_thinking=False) to generate
-#   prompts WITHOUT <think> reasoning blocks.
-#
-# - Loss is masked on the prompt tokens (-100) so the model only learns to
-#   generate the assistant's response.
-#
-# - Context is wrapped in <context>...</context> tags within the user message.
+# Formato ChatML de Qwen3 via apply_chat_template(enable_thinking=False).
+# Mensaje usuario: f"{instruction}\n\n<context>{ctx}</context>"
+#   - identico al de generar_respuesta() en chat_pdfs.py.
+# Perdida enmascarada en tokens del prompt (-100): solo aprende la respuesta.
 # =============================================================================
 
 def format_and_tokenize(examples):
-    """
-    Converts a batch into Qwen3 causal format for SFT-RAG training.
-    Masks prompt tokens with -100 so loss is computed only on the response.
-    """
-    all_input_ids = []
-    all_labels = []
-    all_attention_mask = []
+    all_input_ids    = []
+    all_labels       = []
+    all_attention    = []
+
+    im_end_id = tokenizer.encode("<|im_end|>", add_special_tokens=False)
 
     for instruction, context, response in zip(
         examples["instruction"],
         examples["context"],
-        examples["response"]
+        examples["response"],
     ):
         ctx = (context or "").strip()
-
-        # Safeguard: skip samples without context
         if not ctx:
             all_input_ids.append([])
             all_labels.append([])
-            all_attention_mask.append([])
+            all_attention.append([])
             continue
 
-        # Truncate context by tokens (more precise than by characters)
-        ctx_ids = tokenizer(ctx, add_special_tokens=False, truncation=True, max_length=MAX_CONTEXT_TOKENS)["input_ids"]
-        ctx = tokenizer.decode(ctx_ids, skip_special_tokens=True)
-        user_msg = f"{instruction}\n\n<context>{ctx}</context>"
+        ctx_ids = tokenizer(ctx, add_special_tokens=False)["input_ids"]
+        if len(ctx_ids) > MAX_CONTEXT_TOKENS:
+            ctx = tokenizer.decode(ctx_ids[:MAX_CONTEXT_TOKENS], skip_special_tokens=True)
 
-        # Build prompt using apply_chat_template with thinking disabled
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_msg},
-        ]
+        user_msg = f"{instruction}\n\n<context>{ctx}</context>"
         prompt_text = tokenizer.apply_chat_template(
-            messages,
+            [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user",   "content": user_msg},
+            ],
             tokenize=False,
             add_generation_prompt=True,
             enable_thinking=False,
         )
 
-        response_text = f"{response}<|im_end|>"
-
-        prompt_ids = tokenizer(
-            prompt_text,
-            add_special_tokens=False,
-            truncation=False
-        )["input_ids"]
-
-        response_ids = tokenizer(
-            response_text,
-            add_special_tokens=False,
-            truncation=False
-        )["input_ids"]
-
-        full_ids = prompt_ids + response_ids
+        prompt_ids   = tokenizer(prompt_text,           add_special_tokens=False)["input_ids"]
+        response_ids = tokenizer(f"{response}<|im_end|>", add_special_tokens=False)["input_ids"]
+        full_ids     = prompt_ids + response_ids
 
         if len(full_ids) > MAX_LENGTH:
-            max_response_len = MAX_LENGTH - len(prompt_ids)
-
-            if max_response_len < 50:
+            max_resp_len = MAX_LENGTH - len(prompt_ids)
+            if max_resp_len < 50:
                 all_input_ids.append([])
                 all_labels.append([])
-                all_attention_mask.append([])
+                all_attention.append([])
                 continue
+            response_ids = response_ids[:max_resp_len - 1] + im_end_id
+            full_ids     = prompt_ids + response_ids
 
-            response_ids = response_ids[:max_response_len - 1]
-            im_end_id = tokenizer.encode("<|im_end|>", add_special_tokens=False)
-            if len(response_ids) > 0 and response_ids[-1:] != im_end_id:
-                response_ids = response_ids[:-1] + im_end_id
-
-            full_ids = prompt_ids + response_ids
-
-        labels = [-100] * len(prompt_ids) + response_ids
-
-        if len(full_ids) != len(labels):
-            all_input_ids.append([])
-            all_labels.append([])
-            all_attention_mask.append([])
-            continue
-
-        attention_mask = [1] * len(full_ids)
+        labels       = [-100] * len(prompt_ids) + response_ids
+        attention    = [1]    * len(full_ids)
 
         all_input_ids.append(full_ids)
         all_labels.append(labels)
-        all_attention_mask.append(attention_mask)
+        all_attention.append(attention)
 
     return {
-        "input_ids": all_input_ids,
-        "labels": all_labels,
-        "attention_mask": all_attention_mask,
+        "input_ids":      all_input_ids,
+        "labels":         all_labels,
+        "attention_mask": all_attention,
     }
 
 
-print("\n--> [SECTION 7] Tokenizing training dataset...")
-tokenized_dataset = dataset.map(
-    format_and_tokenize,
-    batched=True,
-    batch_size=1000,
-    remove_columns=dataset.column_names,
-    desc="Tokenizing train",
-)
+print("\n--> [7] Tokenizando datasets...")
+tokenized_train = dataset.map(
+    format_and_tokenize, batched=True, batch_size=1000,
+    remove_columns=dataset.column_names, desc="Tokenising train",
+).filter(lambda x: len(x["input_ids"]) > 0)
 
-original_len = len(tokenized_dataset)
-tokenized_dataset = tokenized_dataset.filter(
-    lambda x: len(x["input_ids"]) > 0,
-    desc="Filtering valid examples"
-)
-print(f"--> Train: {len(tokenized_dataset)} valid from {original_len} original")
-
-print("--> Tokenizing validation dataset...")
 tokenized_eval = eval_dataset_raw.map(
-    format_and_tokenize,
-    batched=True,
-    batch_size=1000,
-    remove_columns=eval_dataset_raw.column_names,
-    desc="Tokenizing eval",
-)
-tokenized_eval = tokenized_eval.filter(
-    lambda x: len(x["input_ids"]) > 0,
-    desc="Filtering valid (val)"
-)
-print(f"--> Validation: {len(tokenized_eval)} valid examples")
+    format_and_tokenize, batched=True, batch_size=1000,
+    remove_columns=eval_dataset_raw.column_names, desc="Tokenising val",
+).filter(lambda x: len(x["input_ids"]) > 0)
+
+print(f"--> Train: {len(tokenized_train)} | Val: {len(tokenized_eval)} tokenised samples")
 
 
 # =============================================================================
-# SECTION 8: TRAINING CONFIGURATION
+# SECCIÓN 8: CONFIGURACIÓN DEL ENTRENAMIENTO
 # =============================================================================
-# Hyperparameters for LoRA fine-tuning with early stopping.
+# LR 5e-5 cosine (1e-4 causo colapso en v6). Batch efectivo 16.
+# load_best_model_at_end=True: exporta el checkpoint con menor eval_loss.
 # =============================================================================
 
 data_collator = DataCollatorForSeq2Seq(
-    tokenizer=tokenizer,
-    padding=True,
-    pad_to_multiple_of=8,
+    tokenizer=tokenizer, padding=True, pad_to_multiple_of=8,
 )
-
-
-class LightEarlyStoppingCallback(TrainerCallback):
-    """
-    Lightweight early stopping (no disk checkpoints).
-    Monitors eval_loss, stops after `patience` evals without improvement.
-    """
-    def __init__(self, patience=3):
-        self.patience = patience
-        self.best_loss = float("inf")
-        self.no_improve_count = 0
-
-    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
-        current_loss = metrics.get("eval_loss")
-        if current_loss is None:
-            return
-
-        if current_loss < self.best_loss:
-            self.best_loss = current_loss
-            self.no_improve_count = 0
-            print(f"    [EarlyStopping] New best eval_loss: {current_loss:.4f}")
-        else:
-            self.no_improve_count += 1
-            print(
-                f"    [EarlyStopping] No improvement for {self.no_improve_count}/{self.patience} "
-                f"evals (best: {self.best_loss:.4f}, current: {current_loss:.4f})"
-            )
-
-        if self.no_improve_count >= self.patience:
-            print(f"    [EarlyStopping] Stopping: no improvement for {self.patience} evals.")
-            control.should_training_stop = True
-
 
 training_args = TrainingArguments(
     output_dir=output_dir,
     num_train_epochs=3,
-    learning_rate=1e-4,
+    learning_rate=5e-5,
     lr_scheduler_type="cosine",
-    warmup_ratio=0.10,
+    warmup_ratio=0.05,
     weight_decay=0.01,
     per_device_train_batch_size=1,
     per_device_eval_batch_size=1,
-    gradient_accumulation_steps=32,
+    gradient_accumulation_steps=16,
     gradient_checkpointing=True,
     bf16=True,
     tf32=True,
@@ -835,68 +738,67 @@ training_args = TrainingArguments(
     max_grad_norm=1.0,
     logging_steps=25,
     logging_first_step=True,
-    save_strategy="no",
+    save_strategy="steps",
+    save_steps=300,
+    save_total_limit=3,
     eval_strategy="steps",
-    eval_steps=100,
+    eval_steps=150,
+    load_best_model_at_end=True,
+    metric_for_best_model="eval_loss",
+    greater_is_better=False,
     report_to="none",
-    dataloader_num_workers=4,
+    dataloader_num_workers=2,
     dataloader_pin_memory=True,
     remove_unused_columns=False,
 )
 
-print("\n--> [SECTION 8] Initializing Trainer...")
+print("\n--> [8] Inicializando Trainer...")
 trainer = Trainer(
     model=model,
     args=training_args,
-    train_dataset=tokenized_dataset,
+    train_dataset=tokenized_train,
     eval_dataset=tokenized_eval,
     data_collator=data_collator,
     processing_class=tokenizer,
-    callbacks=[LightEarlyStoppingCallback(patience=3)],
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=5)],
 )
 
 
 # =============================================================================
-# SECTION 9: TRAINING LOOP
+# SECCIÓN 9: BUCLE DE ENTRENAMIENTO
 # =============================================================================
 
-print("\n--> [SECTION 9] Starting training...")
-print(f"    - Epochs: {training_args.num_train_epochs}")
-print(f"    - Effective batch: {training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps}")
-print(f"    - Learning rate: {training_args.learning_rate}")
-
+print("\n--> [9] Iniciando entrenamiento...")
+print(f"    Epochs:            {training_args.num_train_epochs}")
+print(f"    Batch efectivo:    {training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps}")
+print(f"    LR:                {training_args.learning_rate}  (cosine, patience=5)")
+print(f"    Mejor checkpoint: load_best_model_at_end=True")
 trainer.train()
 
 
 # =============================================================================
-# SECTION 10: MODEL EXPORT
+# SECCIÓN 10: EXPORTACIÓN DEL MODELO
 # =============================================================================
-# Saves the trained LoRA adapter and tokenizer.
+# Se guarda el checkpoint de menor eval_loss (no el ultimo paso).
 # =============================================================================
 
-print(f"\n--> [SECTION 10] Saving adapted model to {output_dir}")
+print(f"\n--> [10] Guardando modelo adaptado en {output_dir}")
 model.save_pretrained(output_dir)
 tokenizer.save_pretrained(output_dir)
 print("--> Adapter + tokenizer saved.")
 
 
 # =============================================================================
-# SECTION 11: ADAPTED MODEL EVALUATION & COMPARATIVE SUMMARY
+# SECCIÓN 11: EVALUACIÓN DEL MODELO ADAPTADO
 # =============================================================================
-# Evaluates the fine-tuned model on the same test splits used for the base
-# model (Section 5). Produces a per-dataset comparison table and saves a
-# comprehensive JSON report with:
-#   - Per-dataset metrics (Base vs Adapted)
-#   - Delta analysis
-#   - Qualitative sample pairs
-#   - Training summary (loss, steps, perplexity)
+# Mismo dict congelado que la sección 5 -> comparacion objetiva BASE vs ADAPTADO.
 # =============================================================================
 
 print("\n" + "=" * 70)
-print("--> [SECTION 11] Evaluating ADAPTED model (post-training)")
+print("--> [11] Evaluando modelo ADAPTADO")
+print("    (Mismo test set congelado que la seccion 5)")
 print("=" * 70)
 
-# Disable gradient checkpointing for clean inference
 model.gradient_checkpointing_disable()
 
 adapted_metrics, adapted_results = evaluate_on_datasets(
@@ -904,205 +806,193 @@ adapted_metrics, adapted_results = evaluate_on_datasets(
 )
 
 
-# --- Comparative Summary ---
+# =============================================================================
+# SECCIÓN 12: RESUMEN COMPARATIVO BASE vs ADAPTADO
+# =============================================================================
+# Deltas por dataset + agregado ponderado por numero de muestras.
+# =============================================================================
 
 print("\n" + "=" * 70)
-print("COMPARATIVE SUMMARY: BASE vs ADAPTED")
+print("RESUMEN COMPARATIVO: BASE vs ADAPTADO")
 print("=" * 70)
 
-comparison = {"per_dataset": {}, "aggregate": {}}
-agg_base_f1 = agg_adapted_f1 = 0.0
+METRIC_KEYS = [
+    ("Token_F1",               "Token F1",               "%"),
+    ("Context_Faithfulness_Pct","Context Faithfulness",   "%"),
+    ("Avg_Response_Length_Words","Avg Response Length",   "words"),
+    ("Sentence_Completeness_Pct","Sentence Completeness", "%"),
+]
+
+comparison  = {"per_dataset": {}, "aggregate": {}}
+agg_base_f1 = agg_adapted_f1 = agg_base_faith = agg_adapted_faith = 0.0
 agg_n = 0
 
 for ds_name in eval_datasets:
     b = base_metrics[ds_name]
     a = adapted_metrics[ds_name]
-    delta_f1 = a["Token_F1"] - b["Token_F1"]
     n = b["n_samples"]
-
-    agg_base_f1 += b["Token_F1"] * n
-    agg_adapted_f1 += a["Token_F1"] * n
     agg_n += n
 
-    print(f"\n  {ds_name} ({n} samples):")
-    print(f"    Token F1:       Base={b['Token_F1']:.2f}%  Adapted={a['Token_F1']:.2f}%  Δ={delta_f1:+.2f}pp")
-    print(f"    Avg Length:     Base={b['Avg_Response_Length_Words']:.1f}  Adapted={a['Avg_Response_Length_Words']:.1f} words")
-    print(f"    Completeness:   Base={b['Sentence_Completeness_Pct']:.1f}%  Adapted={a['Sentence_Completeness_Pct']:.1f}%")
+    agg_base_f1      += b["Token_F1"]               * n
+    agg_adapted_f1   += a["Token_F1"]               * n
+    agg_base_faith   += b["Context_Faithfulness_Pct"] * n
+    agg_adapted_faith += a["Context_Faithfulness_Pct"] * n
 
+    print(f"\n  {ds_name} ({n} samples):")
+    for key, label, unit in METRIC_KEYS:
+        delta = a[key] - b[key]
+        sign  = "+" if delta >= 0 else ""
+        print(f"    {label:26s}  Base={b[key]:.2f}{unit}  "
+              f"Adapted={a[key]:.2f}{unit}  Δ={sign}{delta:.2f}{unit}")
+
+    deltas = {key: round(a[key] - b[key], 2) for key, *_ in METRIC_KEYS}
     comparison["per_dataset"][ds_name] = {
-        "base": b,
-        "adapted": a,
-        "deltas": {
-            "Token_F1": round(delta_f1, 2),
-            "Avg_Response_Length_Words": round(
-                a["Avg_Response_Length_Words"] - b["Avg_Response_Length_Words"], 1
-            ),
-            "Sentence_Completeness_Pct": round(
-                a["Sentence_Completeness_Pct"] - b["Sentence_Completeness_Pct"], 1
-            ),
-        },
+        "base": b, "adapted": a, "deltas": deltas,
+        "sample_pairs": [
+            {
+                "instruction":       br["instruction"],
+                "ground_truth":      br["ground_truth"],
+                "base_prediction":   br["prediction"],
+                "adapted_prediction": ar["prediction"],
+                "base_f1":           br["f1"],
+                "adapted_f1":        ar["f1"],
+                "base_faithfulness": br["faithfulness"],
+                "adapted_faithfulness": ar["faithfulness"],
+            }
+            for br, ar in zip(base_results[ds_name][:5], adapted_results[ds_name][:5])
+        ],
     }
 
-    # Save first 5 sample pairs per dataset for qualitative review
-    sample_pairs = []
-    for b_res, a_res in zip(base_results[ds_name][:5], adapted_results[ds_name][:5]):
-        sample_pairs.append({
-            "instruction": b_res["instruction"],
-            "ground_truth": b_res["ground_truth"],
-            "base_prediction": b_res["prediction"],
-            "adapted_prediction": a_res["prediction"],
-            "base_f1": b_res["f1"],
-            "adapted_f1": a_res["f1"],
-        })
-    comparison["per_dataset"][ds_name]["sample_pairs"] = sample_pairs
-
-
-# Weighted aggregate
 if agg_n > 0:
-    agg_base = agg_base_f1 / agg_n
-    agg_adapted = agg_adapted_f1 / agg_n
+    agg_b_f1    = agg_base_f1    / agg_n
+    agg_a_f1    = agg_adapted_f1 / agg_n
+    agg_b_faith = agg_base_faith / agg_n
+    agg_a_faith = agg_adapted_faith / agg_n
+
     comparison["aggregate"] = {
-        "Base_F1": round(agg_base, 2),
-        "Adapted_F1": round(agg_adapted, 2),
-        "Delta_F1": round(agg_adapted - agg_base, 2),
-        "Total_Samples": agg_n,
+        "Total_Samples":          agg_n,
+        "Base_Token_F1":          round(agg_b_f1,    2),
+        "Adapted_Token_F1":       round(agg_a_f1,    2),
+        "Delta_Token_F1":         round(agg_a_f1  - agg_b_f1,    2),
+        "Base_Faithfulness":      round(agg_b_faith, 2),
+        "Adapted_Faithfulness":   round(agg_a_faith, 2),
+        "Delta_Faithfulness":     round(agg_a_faith - agg_b_faith, 2),
     }
 
     print(f"\n{'=' * 70}")
-    print(f"WEIGHTED AGGREGATE ({agg_n} samples)")
-    print(f"  Token F1: Base={agg_base:.2f}% → Adapted={agg_adapted:.2f}%  Δ={agg_adapted - agg_base:+.2f}pp")
+    print(f"AGREGADO PONDERADO ({agg_n} muestras — mismas preguntas para ambos modelos)")
+    print(f"  Token F1:            Base={agg_b_f1:.2f}%  → Adapted={agg_a_f1:.2f}%"
+          f"   Δ={agg_a_f1 - agg_b_f1:+.2f}pp")
+    print(f"  Context Faithfulness: Base={agg_b_faith:.2f}%  → Adapted={agg_a_faith:.2f}%"
+          f"   Δ={agg_a_faith - agg_b_faith:+.2f}pp")
     print(f"{'=' * 70}")
 
 
-# --- Training summary ---
+# =============================================================================
+# SECCIÓN 13: GUARDADO DE ARTEFACTOS
+# =============================================================================
+# training_stats.json        — resumen completo + log_history + muestras
+# evaluation_comparison.json — deltas por dataset + pares base/adaptado
+# =============================================================================
 
 training_summary = {
-    "model_name": model_name,
-    "total_steps": trainer.state.global_step,
-    "final_loss": trainer.state.log_history[-1].get("loss") if trainer.state.log_history else None,
-    "dataset_size": len(tokenized_dataset),
-    "effective_batch_size": training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps,
-    "datasets_used": [name for name, _, _ in train_loaders],
-    "eval_loss": None,
-    "perplexity": None,
-    "comparison": comparison,
-    "log_history": trainer.state.log_history,
+    "model_name":       model_name,
+    "version":          "v7.2",
+    "total_steps":      trainer.state.global_step,
+    "dataset_size":     len(tokenized_train),
+    "effective_batch":  training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps,
+    "datasets":         [name for name, _, _ in train_loaders],
+    "eval_loss":        None,
+    "perplexity":       None,
+    "comparison":       comparison,
+    "log_history":      trainer.state.log_history,
 }
 
-# Final eval loss + perplexity from the Trainer's validation set
-print("\n--> Computing final eval loss on validation set...")
-eval_results = trainer.evaluate()
-if "eval_loss" in eval_results:
-    training_summary["eval_loss"] = eval_results["eval_loss"]
-    training_summary["perplexity"] = math.exp(eval_results["eval_loss"])
-    print(f"    Eval Loss: {eval_results['eval_loss']:.4f}")
-    print(f"    Perplexity: {training_summary['perplexity']:.2f}")
+print("\n--> Calculando eval loss final...")
+try:
+    ev = trainer.evaluate()
+    if "eval_loss" in ev:
+        training_summary["eval_loss"]    = ev["eval_loss"]
+        training_summary["perplexity"]   = math.exp(ev["eval_loss"])
+        print(f"    Eval Loss: {ev['eval_loss']:.4f}  "
+              f"Perplexity: {training_summary['perplexity']:.2f}")
+except Exception as e:
+    print(f"    Warning: final eval failed: {e}")
 
 
-# --- Qualitative generation samples ---
-
-print("\n--> Generating qualitative test samples...")
-print("-" * 70)
-
+print("\n--> Generando muestras cualitativas de produccion...")
 test_prompts = [
     {
-        "instruction": "What is the main function of the mitochondria in a cell?",
+        "instruction": "Why is the scaling factor (1/√dk) applied in Scaled Dot-Product Attention?",
         "context": (
-            "The mitochondria are membrane-bound organelles found in the cytoplasm "
-            "of eukaryotic cells. They are often referred to as the powerhouse of "
-            "the cell because they generate most of the cell's supply of adenosine "
-            "triphosphate (ATP), which is used as a source of chemical energy. "
-            "Mitochondria also play a role in cell signaling, cellular "
-            "differentiation, cell death, and the control of the cell cycle and "
-            "cell growth."
+            "The two most commonly used attention functions are additive attention and "
+            "dot-product (multiplicative) attention. Dot-product attention is identical "
+            "to our algorithm, except for the scaling factor of 1/√dk. While the two are "
+            "similar in theoretical complexity, dot-product attention is much faster and "
+            "more space-efficient in practice, since it can be implemented using highly "
+            "optimized matrix multiplication code. For large values of dk, the dot products "
+            "grow large in magnitude, pushing the softmax function into regions where it has "
+            "extremely small gradients. To counteract this effect, we scale the dot products "
+            "by 1/√dk."
         ),
-        "description": "[EN] Science fact QA: biology context"
+        "description": "[EN] Technical RAG — analytical answer expected",
     },
     {
-        "instruction": "¿Cuál fue el resultado principal del Tratado de Utrecht?",
+        "instruction": "¿Cuáles fueron las consecuencias territoriales del Tratado de Utrecht para España?",
         "context": (
-            "El Tratado de Utrecht, firmado en 1713, puso fin a la Guerra de "
-            "Sucesión Española. España cedió Gibraltar y Menorca a Gran Bretaña, "
-            "y los Países Bajos españoles y territorios italianos pasaron a "
-            "Austria. Felipe V fue reconocido como rey de España, pero renunció "
-            "a sus derechos al trono francés."
+            "El Tratado de Utrecht, firmado en 1713, puso fin a la Guerra de Sucesión Española. "
+            "España cedió Gibraltar y Menorca a Gran Bretaña, y los Países Bajos españoles "
+            "y territorios italianos pasaron a Austria. Felipe V fue reconocido como rey de "
+            "España, pero renunció a sus derechos al trono francés. El tratado también otorgó "
+            "a Gran Bretaña el asiento, un contrato monopolístico para abastecer de esclavos "
+            "africanos a las colonias españolas en América."
         ),
-        "description": "[ES] QA histórica: Tratado de Utrecht"
+        "description": "[ES] QA histórica — respuesta elaborada esperada",
     },
     {
-        "instruction": "Quines són les principals característiques de l'Albufera de València?",
+        "instruction": "Quines eren les característiques principals del sistema de reg de l'Albufera?",
         "context": (
-            "L'Albufera de València és un parc natural situat a uns 10 km al sud "
-            "de la ciutat. Es tracta d'una llacuna d'aigua dolça separada del mar "
-            "per una estreta franja d'arena coneguda com la Devesa. És un dels "
-            "ecosistemes més importants de la península Ibèrica, amb més de 300 "
-            "espècies d'aus. A més, els arrossars que l'envolten són fonamentals "
-            "per al cultiu de l'arròs utilitzat en la paella valenciana."
+            "L'Albufera de València és un parc natural situat a uns 10 km al sud de la ciutat. "
+            "El sistema de reg de la marjal es basa en una xarxa de canals i sèquies que distribueixen "
+            "l'aigua provinent del riu Xúquer cap als arrossars. Les comportes de la Devesa regulen "
+            "el nivell de l'aigua de la llacuna, essencial per al cultiu de l'arròs. Durant "
+            "l'estiu, els arrossars s'inunden de manera controlada per afavorir la germinació, "
+            "i a la tardor s'asseca el terreny per permetre la collita. Aquesta gestió hídrica "
+            "és fonamental per mantenir tanto la producció agrícola com l'ecosistema natural."
         ),
-        "description": "[CA/VAL] QA geogràfica: l'Albufera de València"
-    },
-    {
-        "instruction": "Explain how photosynthesis works and why it is important for life on Earth.",
-        "context": (
-            "Photosynthesis is a biological process used by plants, algae, and "
-            "certain bacteria to convert light energy into chemical energy stored "
-            "in glucose. The process occurs primarily in the chloroplasts of plant "
-            "cells and involves two main stages: the light-dependent reactions, "
-            "which take place in the thylakoid membranes and produce ATP and NADPH, "
-            "and the Calvin cycle, which occurs in the stroma and uses these energy "
-            "carriers to fix carbon dioxide into organic molecules. Photosynthesis "
-            "is responsible for producing the oxygen in Earth's atmosphere and forms "
-            "the base of virtually all food chains. Without photosynthesis, most "
-            "life forms on Earth could not exist, as it provides both the oxygen "
-            "needed for aerobic respiration and the organic compounds that serve "
-            "as food for heterotrophs."
-        ),
-        "description": "[EN] Analytical QA: detailed explanation expected"
+        "description": "[CA] QA tècnica — resposta elaborada en català esperada",
     },
 ]
 
-generated_samples = []
-for i, test in enumerate(test_prompts, 1):
-    print(f"\n[Sample {i}] {test['description']}")
-    print(f"  Q: {test['instruction'][:80]}{'...' if len(test['instruction']) > 80 else ''}")
-
+gen_samples = []
+for i, t in enumerate(test_prompts, 1):
+    print(f"\n[Sample {i}] {t['description']}")
+    print(f"  Q: {t['instruction'][:90]}...")
     try:
-        resp = generate_response(model, tokenizer, test["instruction"], test["context"])
-        print(f"  A: {resp[:300]}{'...' if len(resp) > 300 else ''}")
-        generated_samples.append({
-            "instruction": test["instruction"],
-            "context": test["context"],
-            "response": resp,
-        })
+        r = generate_response(model, tokenizer, t["instruction"], t["context"])
+        print(f"  A: {r[:300]}{'...' if len(r) > 300 else ''}")
+        gen_samples.append({"instruction": t["instruction"],
+                            "context": t["context"], "response": r})
     except Exception as e:
         print(f"  Error: {e}")
 
-training_summary["generated_samples"] = generated_samples
+training_summary["generated_samples"] = gen_samples
 
-
-# --- Save all artifacts ---
-
-log_history_path = os.path.join(output_dir, "training_stats.json")
-comparison_path = os.path.join(output_dir, "evaluation_comparison.json")
-
-try:
-    with open(log_history_path, "w", encoding="utf-8") as f:
-        json.dump(training_summary, f, indent=4, ensure_ascii=False)
-    print(f"\n--> Training stats saved to: {log_history_path}")
-except Exception as e:
-    print(f"Error saving stats: {e}")
-
-try:
-    with open(comparison_path, "w", encoding="utf-8") as f:
-        json.dump(comparison, f, indent=4, ensure_ascii=False)
-    print(f"--> Evaluation comparison saved to: {comparison_path}")
-except Exception as e:
-    print(f"Error saving comparison: {e}")
+for path, obj in [
+    (os.path.join(output_dir, "training_stats.json"),       training_summary),
+    (os.path.join(output_dir, "evaluation_comparison.json"), comparison),
+]:
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(obj, f, indent=4, ensure_ascii=False)
+        print(f"--> Saved: {path}")
+    except Exception as e:
+        print(f"    Warning: could not save {path}: {e}")
 
 print("\n" + "=" * 70)
-print("--> PROCESS COMPLETE")
-print(f"    - Adapted model:          {output_dir}")
-print(f"    - Training stats:         {log_history_path}")
-print(f"    - Evaluation comparison:  {comparison_path}")
-print(f"    - Base eval backup:       {base_eval_path}")
+print("--> PROCESO COMPLETADO")
+print(f"    Adapted model:         {output_dir}")
+print(f"    Training stats:        {os.path.join(output_dir, 'training_stats.json')}")
+print(f"    Evaluation comparison: {os.path.join(output_dir, 'evaluation_comparison.json')}")
+print(f"    Base eval backup:      {base_eval_path}")
 print("=" * 70)

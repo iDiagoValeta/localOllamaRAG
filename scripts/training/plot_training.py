@@ -35,10 +35,11 @@ except ImportError:
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 DEFAULT_PATHS = [
+    os.path.join(PROJECT_ROOT, "training-output", "qwen-3", "training_stats.json"),
     os.path.join(PROJECT_ROOT, "training-output", "training_stats.json"),
-    os.path.join(PROJECT_ROOT, "models", "training-output", "training_stats.json"),
     os.path.join(PROJECT_ROOT, "training_stats.json"),
 ]
+IMAGES_DIR = os.path.join(PROJECT_ROOT, "training-output", "images")
 
 
 def find_stats_file(path_arg):
@@ -81,6 +82,7 @@ def main():
     - 2 subgráficas: loss y learning rate.
     - 3 subgráficas: añade grad_norm cuando existen datos válidos.
     """
+    os.makedirs(IMAGES_DIR, exist_ok=True)
     stats_path = find_stats_file(sys.argv[1] if len(sys.argv) > 1 else None)
     if not os.path.exists(stats_path):
         print(f"Error: No existe {stats_path}")
@@ -120,24 +122,38 @@ def main():
     if n_plots == 2:
         axes = [axes[0], axes[1]]
 
-    axes[0].plot(train_steps, train_loss, "b-", alpha=0.7, label="Train Loss")
+    model_name = data.get("model_name", "Model")
+    version = data.get("version", "")
+    fig.suptitle(f"Curvas de entrenamiento — {model_name} {version}",
+                 fontsize=13, fontweight="bold", y=1.01)
+
+    axes[0].plot(train_steps, train_loss, color="#2563eb", alpha=0.75,
+                 linewidth=1.2, label="Train Loss")
     if eval_steps and eval_loss:
-        axes[0].plot(eval_steps, eval_loss, "r-o", markersize=5, label="Eval Loss")
+        axes[0].plot(eval_steps, eval_loss, color="#dc2626", marker="o",
+                     markersize=6, linewidth=1.8, label="Eval Loss")
+        # Final eval loss annotation
+        axes[0].annotate(f"{eval_loss[-1]:.4f}",
+                         xy=(eval_steps[-1], eval_loss[-1]),
+                         xytext=(8, 4), textcoords="offset points",
+                         fontsize=8, color="#dc2626")
     axes[0].set_ylabel("Loss")
-    axes[0].set_title("Loss durante el entrenamiento")
+    axes[0].set_title("Pérdida de entrenamiento y validación")
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
 
     if lr:
-        axes[1].plot(train_steps, lr, "g-", alpha=0.7)
+        axes[1].plot(train_steps, lr, color="#16a34a", alpha=0.85, linewidth=1.2)
     axes[1].set_ylabel("Learning Rate")
-    axes[1].set_title("Learning Rate")
+    axes[1].set_title("Evolución del Learning Rate")
+    axes[1].ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     axes[1].grid(True, alpha=0.3)
 
     if n_plots == 3 and grad_norm:
         valid_gn = [(s, g) for s, g in zip(train_steps, grad_norm) if g is not None]
         if valid_gn:
-            axes[2].plot([x[0] for x in valid_gn], [x[1] for x in valid_gn], "m-", alpha=0.7)
+            axes[2].plot([x[0] for x in valid_gn], [x[1] for x in valid_gn],
+                         color="#9333ea", alpha=0.7, linewidth=1.0)
     if n_plots == 3:
         axes[2].set_xlabel("Step")
         axes[2].set_ylabel("Grad Norm")
@@ -147,16 +163,16 @@ def main():
         axes[1].set_xlabel("Step")
 
     plt.tight_layout()
-    out_dir = os.path.dirname(stats_path)
-    out_path = os.path.join(out_dir, "training_curves.png")
-    plt.savefig(out_path, dpi=150)
-    print(f"Gráficos guardados en: {out_path}")
+    out_path = os.path.join(IMAGES_DIR, "training_curves.png")
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Curvas de entrenamiento guardadas en: {out_path}")
 
-    final_loss = data.get("final_loss")
+    final_loss = data.get("eval_loss") or data.get("final_loss")
     loss_str = f"{final_loss:.4f}" if final_loss is not None else "N/A"
-    print(f"\nResumen: {data.get('total_steps', 'N/A')} steps, Loss final: {loss_str}")
+    print(f"\nResumen: {data.get('total_steps', 'N/A')} steps, Eval Loss final: {loss_str}")
     if "perplexity" in data and data["perplexity"]:
-        print(f"Perplexity: {data['perplexity']:.2f}")
+        print(f"Perplexity: {data['perplexity']:.4f}")
 
 
 # =============================================================================

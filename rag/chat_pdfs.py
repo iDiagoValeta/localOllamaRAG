@@ -73,6 +73,7 @@ import json
 import logging
 import os
 import re
+import requests
 import sys
 import warnings
 from collections import Counter
@@ -137,7 +138,7 @@ if hasattr(sys.stderr, "reconfigure"):
 
 # --- 3.2 Modelos Ollama ---
 
-MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", os.getenv("OLLAMA_CHAT_MODEL", "Qwen-2.5-FineTuned:latest"))
+MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", os.getenv("OLLAMA_CHAT_MODEL", "Qwen3-FineTuned:latest"))
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:4b")
 MODELO_AUXILIAR = MODELO_CHAT
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
@@ -160,7 +161,7 @@ USAR_BUSQUEDA_EXHAUSTIVA = True
 USAR_RERANKER = RERANKER_AVAILABLE
 EXPANDIR_CONTEXTO = True
 USAR_OPTIMIZACION_CONTEXTO = True
-USAR_RECOMP_SYNTHESIS = True
+USAR_RECOMP_SYNTHESIS = False
 LOGGING_METRICAS = True
 GUARDAR_DEBUG_RAG = True
 
@@ -238,7 +239,7 @@ os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 # =============================================================================
 
 
-SYSTEM_PROMPT_RAG = f"""You are a professional document analysis assistant. Your role is to answer questions accurately based on the provided document context.
+SYSTEM_PROMPT_RAG = """You are a professional document analysis assistant. Your role is to answer questions accurately based on the provided document context.
 
 Guidelines:
 - Base your answers strictly on the information within the <context> tags.
@@ -246,7 +247,7 @@ Guidelines:
 - Formulate clear, well-structured responses in complete sentences.
 - For factual questions, be direct and precise.
 - For analytical or complex questions, provide detailed explanations referencing specific information from the context.
-- Always respond in the same language as the question.
+- Always respond in the same language as the context (English, Spanish/Castellano, or Catalan/Català).
 - Synthesize information naturally rather than copying text verbatim."""
 
 SYSTEM_PROMPT_CHAT = f"""
@@ -1477,65 +1478,65 @@ def guardar_debug_rag(
 
 # --- 10.4 Generación de respuesta ---
 
-def generar_respuesta(
-    pregunta: str, 
-    fragmentos: List[Dict[str, Any]]
-) -> str:
-    """Streaming con MODELO_RAG. Formato: pregunta + <context>...</context>. Guarda debug."""
+OLLAMA_BASE_URL = "http://localhost:11434"
+
+def _ollama_generate_stream(model: str, system: str, prompt: str, options: dict):
+    payload = {
+        "model": model,
+        "system": system,
+        "prompt": prompt,
+        "stream": True,
+        "think": False,
+        "options": options,
+    }
+    with requests.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload, stream=True) as resp:
+        for line in resp.iter_lines():
+            if line:
+                yield json.loads(line)
+
+
+def generar_respuesta(pregunta: str, fragmentos: List[Dict[str, Any]]) -> str:
     if USAR_RECOMP_SYNTHESIS:
-        ui.debug("sintetizando contexto con RECOMP...")
         contexto_str = sintetizar_contexto_recomp(fragmentos, query_usuario=pregunta)
     else:
         contexto_str = construir_contexto_para_modelo(fragmentos)
 
     mensaje_usuario = f"{pregunta}\n\n<context>{contexto_str}</context>"
 
-    stream = ollama.chat(
-        model=MODELO_RAG,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT_RAG},
-            {"role": "user", "content": mensaje_usuario}
-        ],
-        stream=True,
-        options={"temperature": 0.15, "top_p": 0.85, "repeat_penalty": 1.15, "num_ctx": 8192}
-    )
-
     respuesta_completa = ""
     print()
-    for chunk in stream:
-        content = chunk.get("message", {}).get("content", "") or chunk.get("content", "")
+    for chunk in _ollama_generate_stream(
+        model=MODELO_RAG,
+        system=SYSTEM_PROMPT_RAG,
+        prompt=mensaje_usuario,
+        options={"temperature": 0.15, "top_p": 0.85, "repeat_penalty": 1.15, "num_ctx": 8192}
+    ):
+        content = chunk.get("response", "")
         if content:
             ui.stream_token(content)
             respuesta_completa += content
     print()
-    
+
     guardar_debug_rag(pregunta, SYSTEM_PROMPT_RAG, mensaje_usuario, respuesta_completa, fragmentos)
-    
     return respuesta_completa
 
 
-def generar_respuesta_silenciosa(
-    pregunta: str,
-    fragmentos: List[Dict[str, Any]]
-) -> str:
-    """Sin streaming ni salida. Para RAGAS y tests automatizados."""
+def generar_respuesta_silenciosa(pregunta: str, fragmentos: List[Dict[str, Any]]) -> str:
     if USAR_RECOMP_SYNTHESIS:
         contexto_str = sintetizar_contexto_recomp(fragmentos, query_usuario=pregunta)
     else:
         contexto_str = construir_contexto_para_modelo(fragmentos)
+
     mensaje_usuario = f"{pregunta}\n\n<context>{contexto_str}</context>"
-    stream = ollama.chat(
-        model=MODELO_RAG,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT_RAG},
-            {"role": "user", "content": mensaje_usuario}
-        ],
-        stream=True,
-        options={"temperature": 0.15, "top_p": 0.85, "repeat_penalty": 1.15, "num_ctx": 8192}
-    )
+
     respuesta_completa = ""
-    for chunk in stream:
-        content = chunk.get("message", {}).get("content", "") or chunk.get("content", "")
+    for chunk in _ollama_generate_stream(
+        model=MODELO_RAG,
+        system=SYSTEM_PROMPT_RAG,
+        prompt=mensaje_usuario,
+        options={"temperature": 0.15, "top_p": 0.85, "repeat_penalty": 1.15, "num_ctx": 8192}
+    ):
+        content = chunk.get("response", "")
         if content:
             respuesta_completa += content
     return respuesta_completa

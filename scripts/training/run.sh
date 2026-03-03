@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =============================================================================
-# SCRIPT DE EJECUCIÓN EN SLURM
+# SCRIPT DE EJECUCIÓN EN SLURM (TFG)
 # =============================================================================
 # Lanzador de entrenamiento para entorno HPC con 1 GPU.
 # Define recursos, activa entorno Python del proyecto y ejecuta `train.py`
@@ -57,3 +57,4 @@ pip uninstall triton -y 2>/dev/null
 cd $SLURM_SUBMIT_DIR
 echo "--> Directorio de trabajo: $(pwd)"
 python -u train.py
+
