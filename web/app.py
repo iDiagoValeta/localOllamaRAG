@@ -361,6 +361,7 @@ def api_rag():
                 mensaje_usuario,
                 full,
                 fragmentos_finales,
+                metricas=metricas,
             )
             yield f"data: {json.dumps({'done': True, 'sources': sources})}\n\n"
 
@@ -377,6 +378,7 @@ def api_rag():
         mensaje_usuario,
         respuesta,
         fragmentos_finales,
+        metricas=metricas,
     )
     return jsonify({
         "ok": True,

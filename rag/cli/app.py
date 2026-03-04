@@ -262,7 +262,7 @@ class MonkeyGrabCLI:
         ui.pipeline_stop()
 
         ui.response_header("rag", self.rag.MODELO_RAG)
-        self.rag.generar_respuesta(pregunta, fragmentos_finales)
+        self.rag.generar_respuesta(pregunta, fragmentos_finales, metricas=metricas)
 
         ui.sources_panel(fragmentos_finales)
         ui.response_footer()

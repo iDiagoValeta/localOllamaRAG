@@ -1121,6 +1121,11 @@ def realizar_busqueda_hibrida(
     mejor_score = fragmentos_ranked[0]['score_final'] if fragmentos_ranked else 0
     metricas_totales['resultados_finales'] = len(fragmentos_ranked)
 
+    metricas_totales['sub_queries'] = llm_queries
+    metricas_totales['queries_semanticas'] = queries
+    metricas_totales['keywords'] = list(keywords_expandidas)
+    metricas_totales['terminos_criticos'] = terminos_criticos
+
     if LOGGING_METRICAS:
         sem_unicos = metricas_totales['fase_semantica'].get('fragmentos_unicos', 0)
         kw_total = metricas_keywords.get('resultados_totales', 0)
@@ -1371,7 +1376,7 @@ def guardar_debug_rag(
     motivo_interrupcion: Optional[str] = None,
     metricas: Optional[Dict[str, Any]] = None
 ) -> None:
-    """Volcado de interacción RAG en debug_rag/ (timestamp + slug). Soporta motivo_interrupcion."""
+    """Volcado de interacción RAG en debug_rag/ (timestamp + slug). Incluye sub-queries, keywords, métricas."""
     fragmentos = fragmentos or []
     
     if not GUARDAR_DEBUG_RAG:
@@ -1391,6 +1396,33 @@ def guardar_debug_rag(
             f.write(f"  DEBUG RAG - {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write("=" * 80 + "\n\n")
 
+            if metricas and (metricas.get('sub_queries') or metricas.get('queries_semanticas') or metricas.get('keywords') or metricas.get('terminos_criticos') or metricas.get('fase_semantica') or metricas.get('fase_keywords') or metricas.get('fase_exhaustiva') or metricas.get('fase_reranking')):
+                f.write("─" * 80 + "\n")
+                f.write("  PIPELINE DE RECUPERACIÓN (sub-queries, keywords, términos, métricas)\n")
+                f.write("─" * 80 + "\n")
+                sub_q = metricas.get('sub_queries', [])
+                if sub_q:
+                    f.write("\nSub-queries (Query Decomposition):\n")
+                    for i, sq in enumerate(sub_q, 1):
+                        f.write(f"  {i}. {sq}\n")
+                queries_sem = metricas.get('queries_semanticas', [])
+                if queries_sem:
+                    f.write("\nQueries usadas en búsqueda semántica:\n")
+                    for i, q in enumerate(queries_sem, 1):
+                        f.write(f"  {i}. {q}\n")
+                keywords = metricas.get('keywords', [])
+                if keywords:
+                    f.write(f"\nKeywords extraídas ({len(keywords)}):\n  {', '.join(keywords[:30])}\n")
+                    if len(keywords) > 30:
+                        f.write(f"  ... y {len(keywords) - 30} más\n")
+                terminos = metricas.get('terminos_criticos', [])
+                if terminos:
+                    f.write(f"\nTérminos críticos (búsqueda exhaustiva):\n  {', '.join(terminos)}\n")
+                fase_kw = metricas.get('fase_keywords', {})
+                if fase_kw:
+                    f.write(f"\nMétricas keywords: {fase_kw.get('keywords_encontradas', 0)}/{fase_kw.get('keywords_totales', 0)} encontradas, {fase_kw.get('resultados_totales', 0)} resultados\n")
+                f.write(f"\nMétricas completas:\n{json.dumps(metricas, indent=2, ensure_ascii=False, default=str)}\n\n")
+
             if motivo_interrupcion:
                 f.write("─" * 80 + "\n")
                 f.write("  ⚠ INTERRUPCIÓN TEMPRANA\n")
@@ -1404,8 +1436,14 @@ def guardar_debug_rag(
             f.write("  CONFIGURACIÓN DEL PIPELINE\n")
             f.write("─" * 80 + "\n")
             f.write(f"Modelo RAG: {_inferir_descripcion_modelo(MODELO_RAG)}\n")
-            f.write(f"Contextual Retrieval (Indexación): {'SÍ (' + _inferir_descripcion_modelo(MODELO_CONTEXTUAL) + ')' if USAR_CONTEXTUAL_RETRIEVAL else 'NO'}\n")
-            f.write(f"RECOMP Synthesis (Generación): {'SÍ (' + _inferir_descripcion_modelo(MODELO_RECOMP) + ')' if USAR_RECOMP_SYNTHESIS else 'NO'}\n\n")
+            f.write(f"Contextual Retrieval (Indexación): {'SÍ' if USAR_CONTEXTUAL_RETRIEVAL else 'NO'}\n")
+            f.write(f"Query Decomposition: {'SÍ' if USAR_LLM_QUERY_DECOMPOSITION else 'NO'}\n")
+            f.write(f"Búsqueda Híbrida (keywords): {'SÍ' if USAR_BUSQUEDA_HIBRIDA else 'NO'}\n")
+            f.write(f"Búsqueda Exhaustiva: {'SÍ' if USAR_BUSQUEDA_EXHAUSTIVA else 'NO'}\n")
+            f.write(f"Reranker: {'SÍ' if USAR_RERANKER else 'NO'}\n")
+            f.write(f"Expandir Contexto: {'SÍ' if EXPANDIR_CONTEXTO else 'NO'}\n")
+            f.write(f"Optimizar Contexto: {'SÍ' if USAR_OPTIMIZACION_CONTEXTO else 'NO'}\n")
+            f.write(f"RECOMP Synthesis: {'SÍ' if USAR_RECOMP_SYNTHESIS else 'NO'}\n\n")
             
             f.write("─" * 80 + "\n")
             f.write("  PREGUNTA ORIGINAL\n")
@@ -1449,6 +1487,12 @@ def guardar_debug_rag(
                 pag = meta.get('page', 0)
                 f.write(f"Fuente: {meta.get('source', '?')}, pág. {pag + 1 if isinstance(pag, int) else pag}\n")
                 f.write(f"Score final: {score}  |  Score reranker: {score_rr}\n")
+                matches = frag.get('matches', [])
+                if matches:
+                    f.write(f"Keywords que coincidieron: {', '.join(matches)}\n")
+                query_matches = frag.get('query_matches', [])
+                if query_matches:
+                    f.write(f"Coincidió con query(s): {query_matches}\n")
                 f.write(f"Sección: {meta.get('section_header', '(sin header)')}\n")
                 doc_text = frag.get('doc', '')
                 if '\\n\\n' in doc_text:
@@ -1483,7 +1527,7 @@ def _ollama_generate_stream(model: str, system: str, prompt: str, options: dict)
                 yield json.loads(line)
 
 
-def generar_respuesta(pregunta: str, fragmentos: List[Dict[str, Any]]) -> str:
+def generar_respuesta(pregunta: str, fragmentos: List[Dict[str, Any]], metricas: Optional[Dict[str, Any]] = None) -> str:
     if USAR_RECOMP_SYNTHESIS:
         contexto_str = sintetizar_contexto_recomp(fragmentos, query_usuario=pregunta)
     else:
@@ -1505,11 +1549,11 @@ def generar_respuesta(pregunta: str, fragmentos: List[Dict[str, Any]]) -> str:
             respuesta_completa += content
     print()
 
-    guardar_debug_rag(pregunta, SYSTEM_PROMPT_RAG, mensaje_usuario, respuesta_completa, fragmentos)
+    guardar_debug_rag(pregunta, SYSTEM_PROMPT_RAG, mensaje_usuario, respuesta_completa, fragmentos, metricas=metricas)
     return respuesta_completa
 
 
-def generar_respuesta_silenciosa(pregunta: str, fragmentos: List[Dict[str, Any]]) -> str:
+def generar_respuesta_silenciosa(pregunta: str, fragmentos: List[Dict[str, Any]], metricas: Optional[Dict[str, Any]] = None) -> str:
     if USAR_RECOMP_SYNTHESIS:
         contexto_str = sintetizar_contexto_recomp(fragmentos, query_usuario=pregunta)
     else:
