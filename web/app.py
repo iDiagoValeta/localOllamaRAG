@@ -1,0 +1,602 @@
+"""
+MonkeyGrab — Interfaz web local
+================================
+
+Servidor Flask para el pipeline RAG completo. Ofrece la misma funcionalidad
+que la CLI: modo CHAT (conversación libre) y modo RAG (consulta documental).
+
+Sirve la interfaz React (build en web/zip/dist/) y la API en /api/*.
+
+Uso (desde la raíz del proyecto):
+    python web/app.py
+    # o: python -m web.app
+
+Abre http://127.0.0.1:5000 en el navegador.
+"""
+
+import gc
+import os
+import sys
+import shutil
+import json
+import time
+from collections import Counter
+from typing import Generator
+from werkzeug.utils import secure_filename
+
+import chromadb
+from flask import Flask, request, jsonify, Response, stream_with_context, send_from_directory
+from flask_cors import CORS
+
+# Asegurar que el proyecto esté en sys.path
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
+import rag.chat_pdfs as rag_engine
+
+# Directorio del build React (web/zip/dist/)
+_web_dir = os.path.dirname(os.path.abspath(__file__))
+_react_dist = os.path.join(_web_dir, "zip", "dist")
+
+app = Flask(
+    __name__,
+    static_folder=os.path.join(_react_dist, "assets") if os.path.isdir(os.path.join(_react_dist, "assets")) else None,
+)
+app.config["JSON_AS_ASCII"] = False
+app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
+
+# CORS para desarrollo (Vite en :3000 → Flask en :5000)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# Estado global (sesión simple para uso local)
+_state = {
+    "mode": "chat",
+    "historial_chat": [],
+    "collection": None,
+}
+
+
+def _get_collection():
+    """Obtiene o crea la colección ChromaDB."""
+    if _state["collection"] is None:
+        client = chromadb.PersistentClient(path=rag_engine.PATH_DB)
+        _state["collection"] = client.get_or_create_collection(
+            name=rag_engine.COLLECTION_NAME
+        )
+    return _state["collection"]
+
+
+def _ensure_indexed():
+    """Indexa documentos si la colección está vacía."""
+    coll = _get_collection()
+    if coll.count() == 0:
+        total = rag_engine.indexar_documentos(rag_engine.CARPETA_DOCS, coll)
+        return total
+    return coll.count()
+
+
+def _reset_db():
+    """Libera la colección ChromaDB y la elimina vía API (sin tocar el sistema de archivos).
+    Evita WinError 32 en Windows al re-indexar, usando delete_collection en lugar de rmtree.
+    """
+    _state["collection"] = None
+    gc.collect()
+    last_error = None
+    for attempt in range(5):
+        time.sleep(0.5 * (attempt + 1))  # 0.5s, 1s, 1.5s, 2s, 2.5s
+        try:
+            client = chromadb.PersistentClient(path=rag_engine.PATH_DB)
+            client.delete_collection(name=rag_engine.COLLECTION_NAME)
+            return
+        except ValueError:
+            return  # Colección no existía, listo
+        except Exception as e:
+            last_error = e
+            if attempt >= 4:
+                raise last_error
+
+
+def _chat_stream(pregunta: str) -> Generator[str, None, None]:
+    """Genera tokens del modo chat en streaming."""
+    import ollama
+
+    messages = [{"role": "system", "content": rag_engine.SYSTEM_PROMPT_CHAT}]
+    mensajes_recientes = _state["historial_chat"][-(rag_engine.MAX_HISTORIAL_MENSAJES):]
+    messages.extend(mensajes_recientes)
+    messages.append({"role": "user", "content": pregunta})
+
+    stream = ollama.chat(
+        model=rag_engine.MODELO_AUXILIAR,
+        messages=messages,
+        stream=True,
+        options={"temperature": 0.7, "top_p": 0.9, "num_ctx": 8192},
+    )
+
+    for chunk in stream:
+        content = chunk.get("message", {}).get("content", "") or chunk.get("content", "")
+        if content:
+            yield content
+
+
+def _rag_stream(mensaje_usuario: str) -> Generator[str, None, None]:
+    """Genera tokens del modo RAG en streaming."""
+    import ollama
+
+    stream = ollama.chat(
+        model=rag_engine.MODELO_RAG,
+        messages=[
+            {"role": "system", "content": rag_engine.SYSTEM_PROMPT_RAG},
+            {"role": "user", "content": mensaje_usuario},
+        ],
+        stream=True,
+        options={
+            "temperature": 0.15,
+            "top_p": 0.85,
+            "repeat_penalty": 1.15,
+            "num_ctx": 8192,
+        },
+    )
+
+    for chunk in stream:
+        content = chunk.get("message", {}).get("content", "") or chunk.get("content", "")
+        if content:
+            yield content
+
+
+def _format_sources(fragments: list) -> list:
+    """Formatea fuentes para la respuesta JSON."""
+    sources_map = {}
+    for frag in fragments:
+        meta = frag.get("metadata", {})
+        doc = meta.get("source", "?")
+        page = meta.get("page", 0)
+        page_num = page + 1 if isinstance(page, int) else page
+        if doc not in sources_map:
+            sources_map[doc] = set()
+        sources_map[doc].add(page_num)
+
+    return [
+        {"document": doc, "pages": sorted(pages)}
+        for doc, pages in sorted(sources_map.items())
+    ]
+
+
+# =============================================================================
+# RUTAS
+# =============================================================================
+
+
+@app.route("/")
+def index():
+    """Página principal — sirve el build React."""
+    react_index = os.path.join(_react_dist, "index.html")
+    if os.path.isfile(react_index):
+        return send_from_directory(_react_dist, "index.html")
+    return (
+        "<h1>MonkeyGrab</h1><p>Build React no encontrado. Ejecuta: <code>cd web/zip && npm install && npm run build</code></p>",
+        503,
+        {"Content-Type": "text/html; charset=utf-8"},
+    )
+
+
+@app.route("/assets/<path:filename>")
+def serve_assets(filename):
+    """Sirve archivos estáticos del build React (JS/CSS bundles)."""
+    assets_dir = os.path.join(_react_dist, "assets")
+    return send_from_directory(assets_dir, filename)
+
+
+@app.route("/logo.png")
+def serve_logo():
+    """Sirve el logo MonkeyGrab."""
+    return send_from_directory(_react_dist, "logo.png")
+
+
+@app.route("/api/init", methods=["GET"])
+def api_init():
+    """Inicializa el sistema y devuelve estado."""
+    try:
+        _ensure_indexed()
+        coll = _get_collection()
+        docs = rag_engine.obtener_documentos_indexados(coll)
+
+        # Cargar historial
+        _state["historial_chat"] = rag_engine.cargar_historial()
+
+        return jsonify({
+            "ok": True,
+            "mode": _state["mode"],
+            "total_fragments": coll.count(),
+            "documents": docs,
+            "history_count": len(_state["historial_chat"]),
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/chat", methods=["POST"])
+def api_chat():
+    """Procesa mensaje en modo chat. Soporta streaming SSE."""
+    data = request.get_json() or {}
+    pregunta = (data.get("message") or "").strip()
+    stream = data.get("stream", True)
+
+    if not pregunta:
+        return jsonify({"ok": False, "error": "Mensaje vacío"}), 400
+
+    if stream:
+        def generate():
+            full = ""
+            for token in _chat_stream(pregunta):
+                full += token
+                yield f"data: {json.dumps({'token': token})}\n\n"
+            _state["historial_chat"].append({"role": "user", "content": pregunta})
+            _state["historial_chat"].append({"role": "assistant", "content": full})
+            rag_engine.guardar_historial(_state["historial_chat"])
+            yield f"data: {json.dumps({'done': True})}\n\n"
+
+        return Response(
+            stream_with_context(generate()),
+            mimetype="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    return jsonify({"ok": False, "error": "Usar stream=true"}), 400
+
+
+@app.route("/api/rag", methods=["POST"])
+def api_rag():
+    """Procesa consulta RAG. Soporta streaming SSE."""
+    data = request.get_json() or {}
+    pregunta = (data.get("message") or "").strip()
+    stream = data.get("stream", True)
+
+    if len(pregunta) < rag_engine.MIN_LONGITUD_PREGUNTA_RAG:
+        return jsonify({
+            "ok": False,
+            "error": "question_too_short",
+            "message": "Pregunta demasiado corta. Formula una pregunta concreta.",
+        }), 400
+
+    coll = _get_collection()
+    fragmentos_ranked, mejor_score, metricas = rag_engine.realizar_busqueda_hibrida(
+        pregunta, coll
+    )
+
+    if not fragmentos_ranked:
+        return jsonify({
+            "ok": False,
+            "error": "no_results",
+            "message": "No se encontró información relevante en los documentos.",
+        }), 200
+
+    if mejor_score < rag_engine.UMBRAL_RELEVANCIA:
+        return jsonify({
+            "ok": False,
+            "error": "out_of_scope",
+            "message": "Pregunta fuera del ámbito de los documentos indexados.",
+        }), 200
+
+    if rag_engine.USAR_RERANKER:
+        fragmentos_filtrados = [
+            f
+            for f in fragmentos_ranked
+            if f.get("score_reranker", f.get("score_final", 0))
+            >= rag_engine.UMBRAL_SCORE_RERANKER
+        ]
+        if not fragmentos_filtrados:
+            return jsonify({
+                "ok": False,
+                "error": "no_results",
+                "message": "No se encontró información relevante.",
+            }), 200
+        fragmentos_ranked = fragmentos_filtrados
+
+    fragmentos_finales = fragmentos_ranked[: rag_engine.TOP_K_FINAL]
+    ids_usados = {f["id"] for f in fragmentos_finales}
+
+    if (
+        rag_engine.EXPANDIR_CONTEXTO
+        and fragmentos_finales
+        and "chunk" in fragmentos_finales[0]["metadata"]
+    ):
+        for frag in fragmentos_finales[: rag_engine.N_TOP_PARA_EXPANSION]:
+            ids_vecinos = rag_engine.expandir_con_chunks_adyacentes(
+                frag["id"], frag["metadata"], n_vecinos=1
+            )
+            if ids_vecinos:
+                try:
+                    vecinos = coll.get(
+                        ids=ids_vecinos, include=["documents", "metadatas"]
+                    )
+                    for v_doc, v_meta in zip(
+                        vecinos["documents"], vecinos["metadatas"]
+                    ):
+                        v_id = f"{v_meta['source']}_pag{v_meta['page']}_chunk{v_meta.get('chunk', 0)}"
+                        if v_id not in ids_usados:
+                            fragmentos_finales.append({
+                                "doc": v_doc,
+                                "metadata": v_meta,
+                                "distancia": float("inf"),
+                                "score_final": 0.0,
+                                "id": v_id,
+                            })
+                            ids_usados.add(v_id)
+                except Exception:
+                    pass
+
+    contexto_total = sum(len(f["doc"]) for f in fragmentos_finales)
+    if contexto_total > rag_engine.MAX_CONTEXTO_CHARS:
+        fragmentos_truncados = []
+        chars_acum = 0
+        for f in fragmentos_finales:
+            if chars_acum + len(f["doc"]) > rag_engine.MAX_CONTEXTO_CHARS:
+                break
+            fragmentos_truncados.append(f)
+            chars_acum += len(f["doc"])
+        fragmentos_finales = fragmentos_truncados
+
+    sources = _format_sources(fragmentos_finales)
+
+    # Construir contexto y mensaje de usuario (compartido por streaming y no-streaming)
+    if rag_engine.USAR_RECOMP_SYNTHESIS:
+        contexto_str = rag_engine.sintetizar_contexto_recomp(
+            fragmentos_finales, query_usuario=pregunta
+        )
+    else:
+        contexto_str = rag_engine.construir_contexto_para_modelo(fragmentos_finales)
+
+    mensaje_usuario = f"{pregunta}\n\n<context>{contexto_str}</context>"
+
+    if stream:
+        def generate():
+            full = ""
+            for token in _rag_stream(mensaje_usuario):
+                full += token
+                yield f"data: {json.dumps({'token': token})}\n\n"
+            rag_engine.guardar_debug_rag(
+                pregunta,
+                rag_engine.SYSTEM_PROMPT_RAG,
+                mensaje_usuario,
+                full,
+                fragmentos_finales,
+            )
+            yield f"data: {json.dumps({'done': True, 'sources': sources})}\n\n"
+
+        return Response(
+            stream_with_context(generate()),
+            mimetype="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    respuesta = rag_engine.generar_respuesta_silenciosa(pregunta, fragmentos_finales)
+    rag_engine.guardar_debug_rag(
+        pregunta,
+        rag_engine.SYSTEM_PROMPT_RAG,
+        mensaje_usuario,
+        respuesta,
+        fragmentos_finales,
+    )
+    return jsonify({
+        "ok": True,
+        "response": respuesta,
+        "sources": sources,
+    })
+
+
+@app.route("/api/mode", methods=["POST"])
+def api_mode():
+    """Cambia el modo (chat/rag)."""
+    data = request.get_json() or {}
+    mode = (data.get("mode") or "chat").lower()
+    if mode not in ("chat", "rag"):
+        return jsonify({"ok": False, "error": "Modo inválido"}), 400
+    _state["mode"] = mode
+    return jsonify({"ok": True, "mode": mode})
+
+
+@app.route("/api/clear", methods=["POST"])
+def api_clear():
+    """Limpia el historial de chat."""
+    rag_engine.limpiar_historial(_state["historial_chat"])
+    _state["historial_chat"] = []
+    return jsonify({"ok": True})
+
+
+@app.route("/api/stats", methods=["GET"])
+def api_stats():
+    """Estadísticas de la base de datos."""
+    coll = _get_collection()
+    docs = rag_engine.obtener_documentos_indexados(coll)
+    return jsonify({
+        "ok": True,
+        "total_fragments": coll.count(),
+        "documents": docs,
+    })
+
+
+@app.route("/api/docs", methods=["GET"])
+def api_docs():
+    """Lista de documentos indexados."""
+    coll = _get_collection()
+    docs = rag_engine.obtener_documentos_indexados(coll)
+    return jsonify({"ok": True, "documents": docs})
+
+
+@app.route("/api/docs/<path:filename>", methods=["DELETE"])
+def api_delete_doc(filename):
+    """Elimina un documento: borra sus chunks de ChromaDB y el archivo PDF del disco."""
+    if not filename or not filename.lower().endswith(".pdf"):
+        return jsonify({"ok": False, "error": "Nombre de archivo inválido"}), 400
+    filename = secure_filename(os.path.basename(filename))
+    filepath = os.path.join(rag_engine.CARPETA_DOCS, filename)
+    try:
+        coll = _get_collection()
+        coll.delete(where={"source": filename})
+        if os.path.isfile(filepath):
+            os.remove(filepath)
+        docs = rag_engine.obtener_documentos_indexados(coll)
+        return jsonify({"ok": True, "documents": docs, "total_fragments": coll.count()})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/topics", methods=["GET"])
+def api_topics():
+    """Resumen de contenidos/temas."""
+    coll = _get_collection()
+    docs = rag_engine.obtener_documentos_indexados(coll)
+    docs_data = []
+
+    for doc_name in docs:
+        doc_info = {"name": doc_name}
+        try:
+            all_data = coll.get(
+                where={"source": doc_name},
+                include=["documents", "metadatas"],
+                limit=100,
+            )
+            if all_data["documents"]:
+                pages = {meta["page"] for meta in all_data["metadatas"]}
+                doc_info["pages"] = len(pages)
+                doc_info["fragments"] = len(all_data["documents"])
+                texto = " ".join(all_data["documents"][:20])
+                palabras = texto.split()
+                significativas = [
+                    p.strip('.,;:()[]{}"\'-\'').lower()
+                    for p in palabras
+                    if len(p) > 5
+                    and p.strip('.,;:()[]{}"\'-\'').lower()
+                    not in rag_engine.STOPWORDS
+                ]
+                frecuencias = Counter(significativas)
+                top = [w for w, _ in frecuencias.most_common(10)]
+                doc_info["terms"] = ", ".join(top) if top else None
+        except Exception:
+            pass
+        docs_data.append(doc_info)
+
+    return jsonify({"ok": True, "topics": docs_data})
+
+
+@app.route("/api/reindex", methods=["POST"])
+def api_reindex():
+    """Re-indexa todo con los ajustes actuales del pipeline. Acepta PDFs opcionales para añadir antes."""
+    try:
+        files = request.files.getlist("file") or []
+        for f in files:
+            if f and f.filename and f.filename.lower().endswith(".pdf"):
+                filename = secure_filename(f.filename)
+                dest = os.path.join(rag_engine.CARPETA_DOCS, filename)
+                os.makedirs(rag_engine.CARPETA_DOCS, exist_ok=True)
+                f.save(dest)
+
+        _reset_db()
+        total = _ensure_indexed()
+        coll = _get_collection()
+        docs = rag_engine.obtener_documentos_indexados(coll)
+        return jsonify({"ok": True, "total_fragments": total, "documents": docs})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# --- Pipeline settings mapping (nombre frontend → variable global del engine) ---
+_SETTINGS_MAP = {
+    "contextualRetrieval": "USAR_CONTEXTUAL_RETRIEVAL",
+    "queryDecomposition": "USAR_LLM_QUERY_DECOMPOSITION",
+    "hybridSearch": "USAR_BUSQUEDA_HIBRIDA",
+    "exhaustiveSearch": "USAR_BUSQUEDA_EXHAUSTIVA",
+    "reranker": "USAR_RERANKER",
+    "expandContext": "EXPANDIR_CONTEXTO",
+    "optimizeContext": "USAR_OPTIMIZACION_CONTEXTO",
+    "recompSynthesis": "USAR_RECOMP_SYNTHESIS",
+}
+
+
+@app.route("/api/settings", methods=["GET"])
+def api_settings_get():
+    """Devuelve el estado actual de los flags del pipeline."""
+    current = {}
+    for fe_key, engine_var in _SETTINGS_MAP.items():
+        current[fe_key] = getattr(rag_engine, engine_var, False)
+    return jsonify({"ok": True, "settings": current})
+
+
+@app.route("/api/settings", methods=["POST"])
+def api_settings_post():
+    """Actualiza los flags del pipeline RAG en caliente."""
+    data = request.get_json() or {}
+    updated = {}
+    for fe_key, engine_var in _SETTINGS_MAP.items():
+        if fe_key in data:
+            val = bool(data[fe_key])
+            # El reranker solo se activa si la dependencia está disponible
+            if engine_var == "USAR_RERANKER" and val and not rag_engine.RERANKER_AVAILABLE:
+                updated[fe_key] = False
+                continue
+            setattr(rag_engine, engine_var, val)
+            updated[fe_key] = val
+    return jsonify({"ok": True, "settings": updated})
+
+
+@app.route("/api/upload", methods=["POST"])
+def api_upload():
+    """Sube PDF(s) y los indexa. add_only=1: añade sin reindexar (usa ajustes actuales)."""
+    add_only = request.args.get("add_only", "").lower() in ("1", "true", "yes")
+    files = request.files.getlist("file") or (request.files.get("file") and [request.files["file"]] or [])
+    if not files:
+        return jsonify({"ok": False, "error": "No se envió ningún archivo"}), 400
+
+    saved = []
+    for f in files:
+        if not f or not f.filename or not f.filename.lower().endswith(".pdf"):
+            continue
+        filename = secure_filename(f.filename)
+        dest = os.path.join(rag_engine.CARPETA_DOCS, filename)
+        os.makedirs(rag_engine.CARPETA_DOCS, exist_ok=True)
+        f.save(dest)
+        saved.append(filename)
+
+    if not saved:
+        return jsonify({"ok": False, "error": "Ningún PDF válido"}), 400
+
+    try:
+        coll = _get_collection()
+        if add_only:
+            rag_engine.indexar_documentos(
+                rag_engine.CARPETA_DOCS, coll, solo_archivos=saved
+            )
+            total = coll.count()
+        else:
+            _reset_db()
+            total = _ensure_indexed()
+        docs = rag_engine.obtener_documentos_indexados(coll)
+        return jsonify({
+            "ok": True,
+            "filename": saved[0] if len(saved) == 1 else None,
+            "files": saved,
+            "total_fragments": total,
+            "documents": docs,
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def main():
+    port = int(os.getenv("MONKEYGRAB_PORT", "5000"))
+    host = os.getenv("MONKEYGRAB_HOST", "127.0.0.1")
+    has_react = os.path.isfile(os.path.join(_react_dist, "index.html"))
+    print(f"\n  MonkeyGrab Web — http://{host}:{port}")
+    if has_react:
+        print(f"  Frontend React: {_react_dist}")
+    else:
+        print(f"  ⚠  Build React no encontrado en {_react_dist}")
+        print(f"     Ejecuta: cd web/zip && npm install && npm run build")
+        print(f"     (Usando template legacy como fallback)")
+    print()
+    app.run(host=host, port=port, debug=False, threaded=True)
+
+
+if __name__ == "__main__":
+    main()

@@ -66,8 +66,9 @@ venv/
 rag/mi_vector_db/
 rag/pdfs/
 
-# Interfaz web local (aún no subir)
-web/
+# Interfaz web — excluir solo lo generado/instalable
+web/zip/node_modules/
+web/zip/dist/
 
 # IDE
 .idea/

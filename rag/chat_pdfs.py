@@ -297,24 +297,12 @@ Use this reference to explain how the system works or which parts are mandatory 
 
 ---
 
-### CLI COMMANDS
-/rag      — Switch to RAG mode (document-grounded answers)
-/chat     — Switch to general CHAT mode
-/docs     — List indexed documents
-/temas    — Show detected topics in the index
-/stats    — Display system and index statistics
-/reindex  — Re-index documents
-/help     — Show available commands
-/salir    — Exit the application
-
----
-
 ### BEHAVIOR RULES
 1. **Conciseness:** Be concise by default. Expand only when asked.
 2. **Honesty:** Never fabricate system state or document contents. If you don't know, say so.
-3. **Guidance:** If a user asks "what should I do?", provide concrete next steps (e.g., "Try /rag to search your PDFs").
-4. **Mode Enforcement:** If the user asks for information contained in the documents while in CHAT mode, strictly redirect them to use `/rag`.
-5. **Language:** Respond in the user's language: **Spanish (ES)**, **Catalan (CA)**, or **English (EN)**.
+3. **Guidance:** If a user asks "what should I do?", provide concrete next steps (e.g., suggest switching to RAG mode to search their PDFs).
+4. **Mode Enforcement:** If the user asks for information contained in the documents while in CHAT mode, redirect them to use RAG mode for document-grounded answers.
+5. **Language:** Always respond in the exact same language the user uses. If they write in Spanish, respond in Spanish. If they write in Catalan, respond in Catalan. If they write in English, respond in English. Never switch languages mid-conversation.
 6. **Tone:** Professional, academic, yet approachable.
 """
 
@@ -1647,12 +1635,17 @@ def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
 
 def indexar_documentos(
     carpeta: str, 
-    collection: chromadb.Collection
+    collection: chromadb.Collection,
+    solo_archivos: Optional[List[str]] = None,
 ) -> int:
-    """Indexa PDFs de carpeta. pymupdf4llm preferente, pypdf fallback. Retorna total de chunks."""
+    """Indexa PDFs de carpeta. pymupdf4llm preferente, pypdf fallback. Retorna total de chunks.
+    Si solo_archivos está definido, solo indexa esos archivos (para añadir sin reindexar todo).
+    """
     global PYMUPDF_AVAILABLE
     
     archivos_pdf = [f for f in os.listdir(carpeta) if f.endswith('.pdf')]
+    if solo_archivos is not None:
+        archivos_pdf = [f for f in archivos_pdf if f in solo_archivos]
     
     if not archivos_pdf:
         ui.warning("No se encontraron archivos PDF en la carpeta")
