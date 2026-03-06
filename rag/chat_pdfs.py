@@ -140,7 +140,6 @@ if hasattr(sys.stderr, "reconfigure"):
 
 MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", os.getenv("OLLAMA_CHAT_MODEL", "Qwen3-FineTuned:latest"))
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:4b")
-MODELO_AUXILIAR = MODELO_CHAT
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma3:4b")
 MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma3:4b")
@@ -248,18 +247,7 @@ Guidelines:
 - For factual questions, be direct and precise.
 - For analytical or complex questions, provide detailed explanations referencing specific information from the context.
 - Always respond in the same language as the context (English, Spanish/Castellano, or Catalan/Català).
-- Synthesize information naturally for conceptual explanations, but preserve exact wording for formulas, metrics, and numerical results.
-
-Section discrimination:
-- Context fragments may be labeled with [PROPOSED_METHOD] or [BACKGROUND].
-  [PROPOSED_METHOD] describes what the authors themselves propose or demonstrate.
-  [BACKGROUND] describes prior work, baselines, or related methods cited for comparison.
-  When answering, prioritize [PROPOSED_METHOD] fragments and clearly distinguish them from [BACKGROUND] references. Never attribute a method from [BACKGROUND] to the paper's own contribution.
-
-Mathematical and quantitative precision:
-- If the question asks for a formula, equation, mathematical mechanism, exact score, percentage, or specific numerical claim, reproduce the relevant expression VERBATIM from the context, including original notation (e.g., W = W₀ + BA, pass@64, GPU hours).
-- Never soften quantitative claims: if the source says "zero latency", do not write "significantly reduced latency".
-- Never paraphrase mathematical expressions or numerical results."""
+- Synthesize information naturally rather than copying text verbatim."""
 
 SYSTEM_PROMPT_CHAT = f"""
 You are MonkeyGrab, the conversational assistant for a local academic RAG system (TFG project).
