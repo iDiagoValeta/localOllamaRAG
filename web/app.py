@@ -15,11 +15,14 @@ Abre http://127.0.0.1:5000 en el navegador.
 """
 
 import gc
+import io
 import os
 import sys
 import shutil
 import json
 import time
+import threading
+import contextlib
 from collections import Counter
 from typing import Generator
 from werkzeug.utils import secure_filename
@@ -33,7 +36,7 @@ _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-import rag.chat_pdfs as rag_engine
+import rag.debug_rag.chat_pdfs as rag_engine
 
 # Directorio del build React (web/zip/dist/)
 _web_dir = os.path.dirname(os.path.abspath(__file__))
@@ -54,7 +57,12 @@ _state = {
     "mode": "chat",
     "historial_chat": [],
     "collection": None,
+    "indexing": False,
+    "indexing_error": None,
+    "indexing_failed": False,       # True si el último intento falló permanentemente
+    "indexing_progress": None,      # {"file": str, "file_index": int, "total_files": int}
 }
+_indexing_lock = threading.Lock()
 
 
 def _get_collection():
@@ -67,13 +75,44 @@ def _get_collection():
     return _state["collection"]
 
 
+def _run_indexing_bg():
+    """Ejecuta indexación en background en modo silencioso (sin display Rich)."""
+    try:
+        coll = _get_collection()
+
+        def _on_progress(info):
+            _state["indexing_progress"] = info
+
+        rag_engine.indexar_documentos(
+            rag_engine.CARPETA_DOCS,
+            coll,
+            silent=True,
+            progress_callback=_on_progress,
+        )
+        _state["indexing_error"] = None
+        _state["indexing_failed"] = False
+    except Exception as e:
+        _state["indexing_error"] = str(e)
+        _state["indexing_failed"] = True
+    finally:
+        _state["indexing"] = False
+        _state["indexing_progress"] = None
+
+
 def _ensure_indexed():
-    """Indexa documentos si la colección está vacía."""
+    """Inicia indexación en background si la colección está vacía. No bloquea.
+    No reinicia si el intento anterior falló (usa api_reindex para forzar).
+    """
+    if _state["indexing_failed"]:
+        return
     coll = _get_collection()
-    if coll.count() == 0:
-        total = rag_engine.indexar_documentos(rag_engine.CARPETA_DOCS, coll)
-        return total
-    return coll.count()
+    if coll.count() == 0 and not _state["indexing"]:
+        with _indexing_lock:
+            if coll.count() == 0 and not _state["indexing"] and not _state["indexing_failed"]:
+                _state["indexing"] = True
+                _state["indexing_error"] = None
+                _state["indexing_progress"] = None
+                threading.Thread(target=_run_indexing_bg, daemon=True).start()
 
 
 def _reset_db():
@@ -197,8 +236,30 @@ def serve_logo():
 def api_init():
     """Inicializa el sistema y devuelve estado."""
     try:
+        # Si falló permanentemente, reportar error sin reiniciar el bucle
+        if _state["indexing_failed"]:
+            return jsonify({"ok": False, "error": _state["indexing_error"] or "La indexación falló"}), 500
+
         _ensure_indexed()
+
+        if _state["indexing"]:
+            resp = {
+                "ok": False,
+                "indexing": True,
+                "error": "Indexando documentos, por favor espera...",
+            }
+            if _state["indexing_progress"]:
+                resp["progress"] = _state["indexing_progress"]
+            return jsonify(resp), 202
+
         coll = _get_collection()
+        if coll.count() == 0:
+            return jsonify({
+                "ok": False,
+                "indexing": True,
+                "error": "Iniciando indexación de documentos...",
+            }), 202
+
         docs = rag_engine.obtener_documentos_indexados(coll)
 
         # Cargar historial
@@ -351,18 +412,21 @@ def api_rag():
 
     if stream:
         def generate():
-            full = ""
+            raw = ""
             for token in _rag_stream(mensaje_usuario):
-                full += token
-                yield f"data: {json.dumps({'token': token})}\n\n"
+                raw += token
             rag_engine.guardar_debug_rag(
                 pregunta,
                 rag_engine.SYSTEM_PROMPT_RAG,
                 mensaje_usuario,
-                full,
+                raw,
                 fragmentos_finales,
                 metricas=metricas,
             )
+            words = raw.split(" ")
+            for i, word in enumerate(words):
+                token = word if i == 0 else " " + word
+                yield f"data: {json.dumps({'token': token})}\n\n"
             yield f"data: {json.dumps({'done': True, 'sources': sources})}\n\n"
 
         return Response(
@@ -495,10 +559,11 @@ def api_reindex():
                 f.save(dest)
 
         _reset_db()
-        total = _ensure_indexed()
-        coll = _get_collection()
-        docs = rag_engine.obtener_documentos_indexados(coll)
-        return jsonify({"ok": True, "total_fragments": total, "documents": docs})
+        # Resetear estado de fallo para permitir nueva indexación
+        _state["indexing_failed"] = False
+        _state["indexing_error"] = None
+        _ensure_indexed()
+        return jsonify({"ok": True, "total_fragments": 0, "indexing": True, "documents": []})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 

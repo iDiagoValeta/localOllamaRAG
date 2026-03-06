@@ -199,6 +199,8 @@ export default function App() {
   const [documents, setDocuments] = useState<string[]>([]);
   const [totalFragments, setTotalFragments] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isIndexing, setIsIndexing] = useState(false);
+  const [indexingProgress, setIndexingProgress] = useState<{file: string; file_index: number; total_files: number} | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isReindexing, setIsReindexing] = useState(false);
@@ -238,6 +240,8 @@ export default function App() {
 
   // ---- Initialize on mount ----
   useEffect(() => {
+    let cancelled = false;
+
     async function init() {
       try {
         const [initData, settingsData] = await Promise.all([
@@ -245,7 +249,11 @@ export default function App() {
           api.getSettings(),
         ]);
 
+        if (cancelled) return;
+
         if (initData.ok) {
+          setIsIndexing(false);
+          setIndexingProgress(null);
           setMode(initData.mode || 'rag');
           setDocuments(initData.documents || []);
           setTotalFragments(initData.total_fragments || 0);
@@ -257,6 +265,11 @@ export default function App() {
             content: '¡Hola! Soy **MonkeyGrab**, tu asistente para el sistema RAG académico.\n\nUsa el modo **CHAT** para conversación general o **RAG** para consultar tus documentos PDF indexados.',
             mode: 'chat',
           }]);
+        } else if (initData.indexing) {
+          setIsIndexing(true);
+          if (initData.progress) setIndexingProgress(initData.progress);
+          // Poll every 5s until indexing finishes
+          setTimeout(() => { if (!cancelled) init(); }, 5000);
         } else {
           setInitError(initData.error || 'Error al inicializar');
         }
@@ -265,10 +278,11 @@ export default function App() {
           setSettings(prev => ({ ...prev, ...settingsData.settings }));
         }
       } catch (err) {
-        setInitError('No se pudo conectar con el servidor. ¿Está Flask ejecutándose?');
+        if (!cancelled) setInitError('No se pudo conectar con el servidor. ¿Está Flask ejecutándose?');
       }
     }
     init();
+    return () => { cancelled = true; };
   }, []);
 
   // ---- Mode switching ----
@@ -531,6 +545,39 @@ export default function App() {
           >
             Reintentar
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Indexing screen ----
+  if (isIndexing) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#050505] text-zinc-300 p-4">
+        <div className="glass-panel rounded-3xl p-10 max-w-md text-center space-y-4">
+          <Loader2 className="w-12 h-12 text-orange-400 animate-spin mx-auto" />
+          <h2 className="text-xl font-semibold text-white">Indexando documentos</h2>
+          {indexingProgress ? (
+            <div className="space-y-1">
+              <p className="text-zinc-300 text-sm font-medium">
+                Procesando: <span className="text-orange-400">{indexingProgress.file}</span>
+              </p>
+              <p className="text-zinc-500 text-xs">
+                {indexingProgress.file_index} / {indexingProgress.total_files} archivo{indexingProgress.total_files !== 1 ? 's' : ''}
+              </p>
+              <div className="w-full bg-zinc-800 rounded-full h-1.5 mt-2">
+                <div
+                  className="bg-orange-400 h-1.5 rounded-full transition-all duration-500"
+                  style={{ width: `${(indexingProgress.file_index / indexingProgress.total_files) * 100}%` }}
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="text-zinc-400 text-sm">
+              Los documentos PDF se están procesando e indexando.
+            </p>
+          )}
+          <p className="text-zinc-600 text-xs">Esto puede tardar varios minutos si está activada la recuperación contextual.<br/>La página se actualizará automáticamente al terminar.</p>
         </div>
       </div>
     );

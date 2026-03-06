@@ -248,7 +248,18 @@ Guidelines:
 - For factual questions, be direct and precise.
 - For analytical or complex questions, provide detailed explanations referencing specific information from the context.
 - Always respond in the same language as the context (English, Spanish/Castellano, or Catalan/Català).
-- Synthesize information naturally rather than copying text verbatim."""
+- Synthesize information naturally for conceptual explanations, but preserve exact wording for formulas, metrics, and numerical results.
+
+Section discrimination:
+- Context fragments may be labeled with [PROPOSED_METHOD] or [BACKGROUND].
+  [PROPOSED_METHOD] describes what the authors themselves propose or demonstrate.
+  [BACKGROUND] describes prior work, baselines, or related methods cited for comparison.
+  When answering, prioritize [PROPOSED_METHOD] fragments and clearly distinguish them from [BACKGROUND] references. Never attribute a method from [BACKGROUND] to the paper's own contribution.
+
+Mathematical and quantitative precision:
+- If the question asks for a formula, equation, mathematical mechanism, exact score, percentage, or specific numerical claim, reproduce the relevant expression VERBATIM from the context, including original notation (e.g., W = W₀ + BA, pass@64, GPU hours).
+- Never soften quantitative claims: if the source says "zero latency", do not write "significantly reduced latency".
+- Never paraphrase mathematical expressions or numerical results."""
 
 SYSTEM_PROMPT_CHAT = f"""
 You are MonkeyGrab, the conversational assistant for a local academic RAG system (TFG project).
@@ -367,8 +378,16 @@ def dividir_en_chunks(
     """Divide texto en chunks por secciones Markdown, con overlap. Retorna [{"text", "header"}]. """
     if not texto or not texto.strip():
         return []
-    
-    header_pattern = re.compile(r'^(#{1,4}\s+.+)$', re.MULTILINE)
+
+    texto = re.sub(r'~~`?[^~]*`?~~', '', texto)
+    texto = re.sub(r'(?<!\*)\*{1,2}(?!\*)', '', texto)
+    texto = re.sub(r'`([^`\n]{1,3})`', r'\1', texto)
+    texto = re.sub(r'\n{3,}', '\n\n', texto)
+
+    header_pattern = re.compile(
+        r'^(?:#{1,4}\s+.+|\*\*(?:[A-Z0-9].+?)\*\*\s*)$',
+        re.MULTILINE
+    )
     
     secciones = []
     last_end = 0
@@ -379,7 +398,8 @@ def dividir_en_chunks(
         if contenido_previo:
             secciones.append({"header": current_header, "content": contenido_previo})
         
-        current_header = match.group(1).strip()
+        raw_header = match.group(0).strip()
+        current_header = re.sub(r'^\*\*(.+?)\*\*$', r'\1', raw_header).strip()
         last_end = match.end()
 
     contenido_final = texto[last_end:].strip()
@@ -569,6 +589,16 @@ STOPWORDS = {
 
 TERMINOS_EXPANSION = {}
 
+GENERIC_TERMS_BLACKLIST = {
+    "paper", "according", "specific", "specifically", "terms", "allows",
+    "allow", "achieve", "system", "model", "approach", "method", "results",
+    "three", "two", "one", "first", "second", "following", "based",
+    "using", "used", "show", "shows", "provide", "provides", "propose",
+    "proposed", "models", "methods", "approaches", "direct",
+    "training", "learning", "optimize", "scores", "phases", "primary",
+    "compare", "evaluate", "section", "table", "figure", "described",
+}
+
 
 def extraer_keywords(texto: str) -> List[str]:
     """Extrae siglas, bigramas, términos entre paréntesis y tokens técnicos. Filtra stopwords."""
@@ -630,12 +660,32 @@ def extraer_keywords(texto: str) -> List[str]:
 
     keywords_filtradas = {k for k in keywords_expandidas if _es_keyword_valida(k)}
 
-    resultado = sorted(keywords_filtradas, 
-                      key=lambda x: (
-                          0 if (x.isupper() or any(c.isupper() for c in x[1:]) or '-' in x) else 1,
-                          len(x)
-                      ))
-    
+    seen_lower = set()
+    deduped = []
+    for kw in sorted(keywords_filtradas,
+                     key=lambda x: (
+                         0 if (x.isupper() or any(c.isupper() for c in x[1:]) or '-' in x) else 1,
+                         len(x)
+                     )):
+        kw_lower = kw.lower()
+        if kw_lower not in seen_lower:
+            seen_lower.add(kw_lower)
+            deduped.append(kw)
+
+    ngrams = [kw for kw in deduped if len(kw.split()) >= 2]
+    ngram_words = set()
+    for ng in ngrams:
+        for word in ng.lower().split():
+            ngram_words.add(word)
+
+    resultado = []
+    for kw in deduped:
+        if len(kw.split()) == 1 and kw.lower() in ngram_words:
+            continue
+        if len(kw.split()) == 1 and kw.lower() in GENERIC_TERMS_BLACKLIST:
+            continue
+        resultado.append(kw)
+
     return resultado
 
 
@@ -860,7 +910,13 @@ def rerank_resultados(
         import time
         inicio = time.time()
 
-        textos_documentos = [doc['doc'] for doc in documentos_recuperados]
+        textos_documentos = []
+        for doc in documentos_recuperados:
+            texto = doc['doc']
+            if '\\n\\n' in texto:
+                partes = texto.split('\\n\\n', 1)
+                texto = partes[-1]
+            textos_documentos.append(texto)
 
         import io, contextlib
         with contextlib.redirect_stderr(io.StringIO()):
@@ -916,7 +972,7 @@ def generar_queries_con_llm(pregunta: str) -> List[str]:
             prompt=prompt,
             options={
                 "temperature": 0.5,
-                "num_predict": 200,
+                "num_predict": 400,
                 "stop": ["\n\n\n"],
             }
         )
@@ -924,7 +980,7 @@ def generar_queries_con_llm(pregunta: str) -> List[str]:
         queries = [
             q.strip().lstrip("0123456789.-) ")
             for q in response["response"].strip().split("\n")
-            if q.strip() and len(q.strip()) > 10
+            if q.strip() and len(q.strip()) > 20
         ]
 
         return queries[:3]
@@ -932,6 +988,58 @@ def generar_queries_con_llm(pregunta: str) -> List[str]:
     except Exception as e:
         logging.warning(f"Error generando queries con LLM ({MODELO_CHAT}): {e}")
         return []
+
+
+def _validar_coherencia_query(query: str) -> bool:
+    """Detecta si una query es un bag-of-words incoherente."""
+    words = query.lower().split()
+    if len(words) < 2:
+        return True
+
+    unique_ratio = len(set(words)) / len(words)
+    if unique_ratio < 0.7:
+        return False
+
+    word_freq = Counter(words)
+    if word_freq.most_common(1)[0][1] >= 3:
+        return False
+
+    connectors = {
+    # English
+    "the", "a", "an", "is", "are", "how", "what", "why",
+    "when", "where", "which", "does", "do", "to", "in", "of",
+    "that", "for", "and", "with", "by", "on", "as",
+    # Español
+    "cómo", "qué", "cuál", "cuáles", "cuándo", "dónde", "por", 
+    "para", "que", "son", "está", "entre", "con", "los", "las",
+    # Valencià
+    "com", "quins", "quines", "quan", "quin", "quina", "per", "que",
+    }
+
+    has_connectors = any(w in connectors for w in words)
+    if len(words) > 8 and not has_connectors:
+        return False
+
+    return True
+
+
+def _filtrar_terminos_criticos(terminos: List[str]) -> List[str]:
+    """Mantiene solo términos de dominio específico con alta discriminación para fase exhaustiva."""
+    filtered = []
+    for term in terminos:
+        words = term.lower().split()
+
+        if len(words) == 1 and term.lower() in GENERIC_TERMS_BLACKLIST:
+            continue
+
+        if len(words) >= 2:
+            filtered.append(term)
+            continue
+
+        if term[0].isupper() or term.isupper():
+            filtered.append(term)
+
+    return filtered
 
 
 # =============================================================================
@@ -968,15 +1076,25 @@ def realizar_busqueda_hibrida(
 
     queries = [pregunta]
 
-    palabras_clave_pregunta = [p for p in pregunta.split() if len(p) > 4]
-    query_corta = ' '.join(palabras_clave_pregunta[:10]).strip()
+    _KEEP_SHORT = {"to", "of", "in", "on", "by", "for", "as", "is", "are", "was",
+                    "and", "or", "the", "its", "how", "not", "no", "what", "does"}
+    palabras_clave_pregunta = [
+        p for p in pregunta.split()
+        if len(p) > 4 or p.lower().strip('"?,()') in _KEEP_SHORT
+    ]
+    query_corta = ' '.join(palabras_clave_pregunta[:20]).strip()
     if query_corta and query_corta != pregunta:
         queries.append(query_corta)
 
     keywords_expandidas = extraer_keywords(pregunta)
-    if keywords_expandidas:
-        query_kw = ' '.join(keywords_expandidas[:10]).strip()
-        if query_kw and query_kw not in queries:
+
+    if llm_queries:
+        fallback_q = llm_queries[0]
+        if _validar_coherencia_query(fallback_q) and fallback_q not in queries:
+            queries.append(fallback_q)
+    elif keywords_expandidas:
+        query_kw = ' '.join(keywords_expandidas[:6]).strip()
+        if query_kw and _validar_coherencia_query(query_kw) and query_kw not in queries:
             queries.append(query_kw)
 
     for lq in llm_queries:
@@ -1064,7 +1182,9 @@ def realizar_busqueda_hibrida(
     for frag in fragmentos_data.values():
         frag['score_final'] = (frag['score_semantic'] * 0.55 + frag['score_keyword'] * 0.45)
 
-    terminos_criticos = [k for k in keywords_expandidas[:12] if len(k) > 3]
+    terminos_criticos = _filtrar_terminos_criticos(
+        [k for k in keywords_expandidas[:12] if len(k) > 3]
+    )
     
     metricas_exhaustiva = {}
     if USAR_BUSQUEDA_EXHAUSTIVA and terminos_criticos:
@@ -1262,8 +1382,25 @@ def optimizar_texto_contexto(texto: str) -> str:
 
 # --- 10.2 Construcción de contexto ---
 
+def _clasificar_seccion(header: str) -> str:
+    """Clasifica un header de sección como PROPOSED_METHOD o BACKGROUND."""
+    if not header:
+        return "PROPOSED_METHOD"
+    h = header.lower().strip().lstrip('#').strip()
+    background_patterns = [
+        "related work", "related works", "prior work", "previous work",
+        "background", "state of the art", "literature review",
+        "trabajo relacionado", "trabajos relacionados", "estado del arte",
+        "treball relacionat", "treballs relacionats", "estat de l'art",
+    ]
+    for pat in background_patterns:
+        if pat in h:
+            return "BACKGROUND"
+    return "PROPOSED_METHOD"
+
+
 def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
-    """Texto puro sin metadatos (alineado con RAG_Multilingual). Separa con '...'. Opcional: optimizar_texto_contexto."""
+    """Texto con labels [PROPOSED_METHOD]/[BACKGROUND] por sección. Separa con '...'. Opcional: optimizar_texto_contexto."""
     fragmentos_ordenados = sorted(
         fragmentos,
         key=lambda f: (f['metadata']['source'], f['metadata']['page'], f['metadata'].get('chunk', 0))
@@ -1273,15 +1410,13 @@ def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
     chars_original = sum(len(t) for t in textos_originales)
     
     contextos_texto = []
-    if USAR_OPTIMIZACION_CONTEXTO:
-        contextos_texto = [
-            optimizar_texto_contexto(frag['doc'])
-            for frag in fragmentos_ordenados
-        ]
-    else:
-        contextos_texto = [frag['doc'] for frag in fragmentos_ordenados]
-    
-    contextos_texto = [t for t in contextos_texto if t]
+    for frag in fragmentos_ordenados:
+        texto = optimizar_texto_contexto(frag['doc']) if USAR_OPTIMIZACION_CONTEXTO else frag['doc']
+        if not texto:
+            continue
+        section_header = frag.get('metadata', {}).get('section_header', '')
+        section_type = _clasificar_seccion(section_header)
+        contextos_texto.append(f"[{section_type}]\n{texto}")
     
     resultado = "\n\n...\n\n".join(contextos_texto)
     
@@ -1475,7 +1610,7 @@ def guardar_debug_rag(
             f.write("  RESPUESTA DEL MODELO\n")
             f.write("─" * 80 + "\n")
             f.write(f"{respuesta or '(no generada)'}\n\n")
-            
+
             f.write("─" * 80 + "\n")
             f.write(f"  FRAGMENTOS RECUPERADOS ({len(fragmentos)})\n")
             f.write("─" * 80 + "\n")
@@ -1536,7 +1671,6 @@ def generar_respuesta(pregunta: str, fragmentos: List[Dict[str, Any]], metricas:
     mensaje_usuario = f"{pregunta}\n\n<context>{contexto_str}</context>"
 
     respuesta_completa = ""
-    print()
     for chunk in _ollama_generate_stream(
         model=MODELO_RAG,
         system=SYSTEM_PROMPT_RAG,
@@ -1545,8 +1679,10 @@ def generar_respuesta(pregunta: str, fragmentos: List[Dict[str, Any]], metricas:
     ):
         content = chunk.get("response", "")
         if content:
-            ui.stream_token(content)
             respuesta_completa += content
+
+    print()
+    ui.stream_token(respuesta_completa)
     print()
 
     guardar_debug_rag(pregunta, SYSTEM_PROMPT_RAG, mensaje_usuario, respuesta_completa, fragmentos, metricas=metricas)
@@ -1681,9 +1817,13 @@ def indexar_documentos(
     carpeta: str, 
     collection: chromadb.Collection,
     solo_archivos: Optional[List[str]] = None,
+    silent: bool = False,
+    progress_callback=None,
 ) -> int:
     """Indexa PDFs de carpeta. pymupdf4llm preferente, pypdf fallback. Retorna total de chunks.
     Si solo_archivos está definido, solo indexa esos archivos (para añadir sin reindexar todo).
+    silent=True suprime toda salida por pantalla (uso en background/web).
+    progress_callback(info) se llama al iniciar cada archivo con {"file", "file_index", "total_files"}.
     """
     global PYMUPDF_AVAILABLE
     
@@ -1692,10 +1832,12 @@ def indexar_documentos(
         archivos_pdf = [f for f in archivos_pdf if f in solo_archivos]
     
     if not archivos_pdf:
-        ui.warning("No se encontraron archivos PDF en la carpeta")
+        if not silent:
+            ui.warning("No se encontraron archivos PDF en la carpeta")
         return 0
 
-    ui.pipeline_start("Indexando documentos...")
+    if not silent:
+        ui.pipeline_start("Indexando documentos...")
     
     total_chunks = 0
     
@@ -1734,8 +1876,14 @@ def indexar_documentos(
                 logging.error(f"Error embeddeando {id_doc}: {e}")
             return False
     
-    for archivo in archivos_pdf:
-        ui.pipeline_update(f"Procesando: {archivo}")
+    for idx, archivo in enumerate(archivos_pdf):
+        if progress_callback:
+            try:
+                progress_callback({"file": archivo, "file_index": idx + 1, "total_files": len(archivos_pdf)})
+            except Exception:
+                pass
+        if not silent:
+            ui.pipeline_update(f"Procesando: {archivo}")
         usar_pypdf_fallback = False
 
         try:
@@ -1825,9 +1973,11 @@ def indexar_documentos(
 
         except Exception as e:
             logging.error(f"Error procesando {archivo}: {e}")
-            ui.error(f"error en {archivo}: {e}")
+            if not silent:
+                ui.error(f"error en {archivo}: {e}")
     
-    ui.pipeline_stop()
+    if not silent:
+        ui.pipeline_stop()
     return total_chunks
 
 
