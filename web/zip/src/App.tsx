@@ -4,7 +4,7 @@ import {
   Database,
   Search, Layers, FileUp, Menu, X,
   RefreshCw, Loader2, AlertCircle, CheckCircle2, Trash2,
-  ChevronDown, ChevronRight
+  ChevronDown, ChevronRight, Copy, Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -230,6 +230,7 @@ export default function App() {
   const reindexFileInputRef = useRef<HTMLInputElement>(null);
   const [retryTrigger, setRetryTrigger] = useState(0);
   const [indexingError, setIndexingError] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // ---- Scroll to bottom ----
   const scrollToBottom = useCallback(() => {
@@ -259,12 +260,7 @@ export default function App() {
           setTotalFragments(initData.total_fragments || 0);
           setIsInitialized(true);
 
-          setMessages([{
-            id: 'welcome',
-            role: 'assistant',
-            content: '¡Hola! Soy **MonkeyGrab**, tu asistente para el sistema RAG académico.\n\nUsa el modo **CHAT** para conversación general o **RAG** para consultar tus documentos PDF indexados.',
-            mode: 'chat',
-          }]);
+          setMessages([]);
         } else {
           // ok: false = indexando o error previo → siempre pantalla de indexación (nunca "Error de conexión")
           setInitError(null);
@@ -513,6 +509,18 @@ export default function App() {
       setIsLoading(false);
     }
   }, [input, mode, isLoading]);
+
+  // ---- Copy message ----
+  const handleCopyMessage = useCallback(async (msg: Message) => {
+    if (!msg.content) return;
+    try {
+      await navigator.clipboard.writeText(msg.content);
+      setCopiedId(msg.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      /* fallback no soportado */
+    }
+  }, []);
 
   // ---- Clear history ----
   const handleClear = useCallback(async () => {
@@ -955,8 +963,8 @@ export default function App() {
                 ) : (
                   <>
                     <div className={`flex flex-col gap-2 max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                      {/* Meta label */}
-                      <div className="flex items-center gap-2 px-2">
+                      {/* Meta label + copy */}
+                      <div className="flex items-center gap-2 px-2 group/meta">
                         <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
                           {msg.role === 'user' ? 'Tú' : 'MonkeyGrab'}
                         </span>
@@ -965,6 +973,17 @@ export default function App() {
                             {msg.mode}
                           </span>
                         )}
+                        <button
+                          onClick={() => handleCopyMessage(msg)}
+                          className="p-1.5 rounded-full text-zinc-500 hover:text-orange-400 hover:bg-orange-500/10 border border-transparent hover:border-orange-500/20 transition-all opacity-60 group-hover/meta:opacity-100"
+                          title="Copiar mensaje"
+                        >
+                          {copiedId === msg.id ? (
+                            <Check className="w-3.5 h-3.5 text-green-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
                       </div>
 
                       {/* Message bubble */}

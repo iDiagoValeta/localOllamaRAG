@@ -138,7 +138,7 @@ if hasattr(sys.stderr, "reconfigure"):
 
 # --- 3.2 Modelos Ollama ---
 
-MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", os.getenv("OLLAMA_CHAT_MODEL", "Qwen3-FineTuned:latest"))
+MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "Qwen3-FineTuned:latest")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:4b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma3:4b")
@@ -275,11 +275,12 @@ Use this reference to explain how the system works or which parts are mandatory 
     * **Contextual Retrieval:** Uses an LLM to generate a summary/context for each chunk before indexing to improve retrieval accuracy.
 
 #### 2. RETRIEVAL PHASE
+Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; optional components extend it.
 * **CORE (Mandatory):**
-    * **Semantic Search:** Vector distance lookup (`realizar_busqueda_hibrida`).
-* **OPTIONAL:**
+    * **Semantic Search:** Vector distance lookup; always performed.
+* **OPTIONAL (execution order):**
+    * **Query Decomposition** (`USAR_LLM_QUERY_DECOMPOSITION`): Uses an auxiliary LLM to generate sub-queries before semantic search; activates for long questions (>60 chars).
     * **Hybrid Search** (`USAR_BUSQUEDA_HIBRIDA`): Adds keyword/lexical search.
-    * **Query Decomposition** (`USAR_LLM_QUERY_DECOMPOSITION`): Uses an auxiliary LLM to generate sub-queries for broader coverage.
     * **Exhaustive Search** (`USAR_BUSQUEDA_EXHAUSTIVA`): Deep scan for critical terms (computationally expensive).
 
 #### 3. RANKING & REFINEMENT
@@ -292,7 +293,7 @@ Use this reference to explain how the system works or which parts are mandatory 
 * **OPTIONAL:**
     * **Context Optimization** (`USAR_OPTIMIZACION_CONTEXTO`): Cleans PDF artifacts (headers, footers, noise) before sending to the LLM.
     * **Neighbor Expansion** (`EXPANDIR_CONTEXTO`): Retrieves adjacent chunks to provide continuous context.
-    * **RECOMP Synthesis** (`USAR_RECOMP_SYNTHESIS`): Uses an LLM to summarize/synthesize the context instead of feeding raw chunks (Default: False).
+    * **RECOMP Synthesis** (`USAR_RECOMP_SYNTHESIS`): Uses `MODELO_RECOMP` (separate from `MODELO_RAG`) to summarize/synthesize the context instead of feeding raw chunks (Default: False).
 
 ---
 
@@ -1635,13 +1636,13 @@ def guardar_debug_rag(
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 
+
 def _ollama_generate_stream(model: str, system: str, prompt: str, options: dict):
     payload = {
         "model": model,
         "system": system,
         "prompt": prompt,
         "stream": True,
-        "think": False,
         "options": options,
     }
     with requests.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload, stream=True) as resp:
@@ -1663,7 +1664,7 @@ def generar_respuesta(pregunta: str, fragmentos: List[Dict[str, Any]], metricas:
         model=MODELO_RAG,
         system=SYSTEM_PROMPT_RAG,
         prompt=mensaje_usuario,
-        options={"temperature": 0.15, "top_p": 0.85, "repeat_penalty": 1.15, "num_ctx": 8192}
+        options={"temperature": 0.15, "top_p": 0.9, "repeat_penalty": 1.15, "num_ctx": 8192},
     ):
         content = chunk.get("response", "")
         if content:
@@ -1690,7 +1691,7 @@ def generar_respuesta_silenciosa(pregunta: str, fragmentos: List[Dict[str, Any]]
         model=MODELO_RAG,
         system=SYSTEM_PROMPT_RAG,
         prompt=mensaje_usuario,
-        options={"temperature": 0.15, "top_p": 0.85, "repeat_penalty": 1.15, "num_ctx": 8192}
+        options={"temperature": 0.15, "top_p": 0.9, "repeat_penalty": 1.15, "num_ctx": 8192},
     ):
         content = chunk.get("response", "")
         if content:

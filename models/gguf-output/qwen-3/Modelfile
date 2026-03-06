@@ -1,4 +1,4 @@
-FROM C:\Users\nadiv\.ollama\models\blobs\sha256-98e5996c676ddd22549a314e4147e58b8ba0f6f42094a05dbdef2e0e314afa93
+FROM ./Qwen3-14B-Q4_K_M.gguf
 
 TEMPLATE """{{- if .System }}<|im_start|>system
 {{ .System }}<|im_end|>
