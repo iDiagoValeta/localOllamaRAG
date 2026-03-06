@@ -164,7 +164,7 @@ def _chat_stream(pregunta: str) -> Generator[str, None, None]:
     messages.append({"role": "user", "content": pregunta})
 
     stream = ollama.chat(
-        model=rag_engine.MODELO_AUXILIAR,
+        model=rag_engine.MODELO_CHAT,
         messages=messages,
         stream=True,
         options={"temperature": 0.7, "top_p": 0.9, "num_ctx": 8192},

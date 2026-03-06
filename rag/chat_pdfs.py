@@ -1371,44 +1371,58 @@ def optimizar_texto_contexto(texto: str) -> str:
 
 # --- 10.2 Construcción de contexto ---
 
-def _clasificar_seccion(header: str) -> str:
-    """Clasifica un header de sección como PROPOSED_METHOD o BACKGROUND."""
-    if not header:
-        return "PROPOSED_METHOD"
-    h = header.lower().strip().lstrip('#').strip()
-    background_patterns = [
-        "related work", "related works", "prior work", "previous work",
-        "background", "state of the art", "literature review",
-        "trabajo relacionado", "trabajos relacionados", "estado del arte",
-        "treball relacionat", "treballs relacionats", "estat de l'art",
-    ]
-    for pat in background_patterns:
-        if pat in h:
-            return "BACKGROUND"
-    return "PROPOSED_METHOD"
+
+def _marcar_fragmento_incompleto(texto: str) -> str:
+    """Añade [incomplete fragment] si el texto no termina en puntuación de cierre."""
+    stripped = texto.rstrip()
+    if not stripped:
+        return texto
+    if stripped[-1] not in '.?!:':
+        return texto + '\n[incomplete fragment]'
+    return texto
 
 
 def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
-    """Texto con labels [PROPOSED_METHOD]/[BACKGROUND] por sección. Separa con '...'. Opcional: optimizar_texto_contexto."""
+    """
+    Construye el contexto para el modelo RAG a partir de fragmentos recuperados.
+
+    Formato de salida por fragmento:
+        --- [Fragment N] ---
+        [Fragment Context]            ← solo si hay resumen de Contextual Retrieval
+        ...
+        [Source Text]
+        ...
+        [incomplete fragment]         ← solo si el chunk está truncado
+
+    Separador entre fragmentos: doble salto de línea.
+    Optimización de texto PDF opcional (flag USAR_OPTIMIZACION_CONTEXTO).
+    """
     fragmentos_ordenados = sorted(
         fragmentos,
         key=lambda f: (f['metadata']['source'], f['metadata']['page'], f['metadata'].get('chunk', 0))
     )
-    
+
     textos_originales = [frag['doc'] for frag in fragmentos_ordenados]
     chars_original = sum(len(t) for t in textos_originales)
-    
-    contextos_texto = []
-    for frag in fragmentos_ordenados:
+
+    fragmentos_formateados = []
+    for i, frag in enumerate(fragmentos_ordenados, 1):
         texto = optimizar_texto_contexto(frag['doc']) if USAR_OPTIMIZACION_CONTEXTO else frag['doc']
         if not texto:
             continue
-        section_header = frag.get('metadata', {}).get('section_header', '')
-        section_type = _clasificar_seccion(section_header)
-        contextos_texto.append(f"[{section_type}]\n{texto}")
-    
-    resultado = "\n\n...\n\n".join(contextos_texto)
-    
+
+        # Separar resumen de Contextual Retrieval del texto fuente
+        if '\\n\\n' in texto:
+            ctx_summary, raw_content = texto.split('\\n\\n', 1)
+            raw_content = _marcar_fragmento_incompleto(raw_content.strip())
+            texto = f"[Fragment Context]\n{ctx_summary.strip()}\n\n[Source Text]\n{raw_content}"
+        else:
+            texto = _marcar_fragmento_incompleto(texto.strip())
+
+        fragmentos_formateados.append(f"--- [Fragment {i}] ---\n{texto}")
+
+    resultado = "\n\n".join(fragmentos_formateados)
+
     chars_optimizado = len(resultado)
     if chars_original > 0 and LOGGING_METRICAS:
         ahorro = chars_original - chars_optimizado
@@ -1417,7 +1431,7 @@ def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
             f"Contexto optimizado: {chars_original} → {chars_optimizado} chars "
             f"({ahorro} ahorrados, {pct:.1f}%)"
         )
-    
+
     return resultado
 
 
