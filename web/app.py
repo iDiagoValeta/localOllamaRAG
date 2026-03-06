@@ -36,7 +36,7 @@ _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-import rag.debug_rag.chat_pdfs as rag_engine
+import rag.chat_pdfs as rag_engine
 
 # Directorio del build React (web/zip/dist/)
 _web_dir = os.path.dirname(os.path.abspath(__file__))
@@ -60,14 +60,28 @@ _state = {
     "indexing": False,
     "indexing_error": None,
     "indexing_failed": False,       # True si el último intento falló permanentemente
+    "indexing_done_empty": False,   # True si indexación completó con 0 chunks (sin PDFs)
     "indexing_progress": None,      # {"file": str, "file_index": int, "total_files": int}
 }
 _indexing_lock = threading.Lock()
 
 
+def _invalidate_collection_if_deleted():
+    """Si la carpeta de la DB fue borrada, limpia el estado para arrancar de cero."""
+    path_db = rag_engine.PATH_DB
+    if not os.path.exists(os.path.dirname(path_db)):
+        _state["collection"] = None
+        _state["indexing_failed"] = False
+        _state["indexing_error"] = None
+        _state["indexing_done_empty"] = False
+        gc.collect()
+
+
 def _get_collection():
-    """Obtiene o crea la colección ChromaDB."""
+    """Obtiene o crea la colección ChromaDB. Invalida si la carpeta fue borrada."""
+    _invalidate_collection_if_deleted()
     if _state["collection"] is None:
+        os.makedirs(os.path.dirname(rag_engine.PATH_DB), exist_ok=True)
         client = chromadb.PersistentClient(path=rag_engine.PATH_DB)
         _state["collection"] = client.get_or_create_collection(
             name=rag_engine.COLLECTION_NAME
@@ -83,7 +97,7 @@ def _run_indexing_bg():
         def _on_progress(info):
             _state["indexing_progress"] = info
 
-        rag_engine.indexar_documentos(
+        total_chunks = rag_engine.indexar_documentos(
             rag_engine.CARPETA_DOCS,
             coll,
             silent=True,
@@ -91,6 +105,8 @@ def _run_indexing_bg():
         )
         _state["indexing_error"] = None
         _state["indexing_failed"] = False
+        if total_chunks == 0:
+            _state["indexing_done_empty"] = True  # No reiniciar indexación infinita
     except Exception as e:
         _state["indexing_error"] = str(e)
         _state["indexing_failed"] = True
@@ -102,13 +118,14 @@ def _run_indexing_bg():
 def _ensure_indexed():
     """Inicia indexación en background si la colección está vacía. No bloquea.
     No reinicia si el intento anterior falló (usa api_reindex para forzar).
+    No reinicia si ya se intentó y no hay PDFs (indexing_done_empty).
     """
-    if _state["indexing_failed"]:
+    if _state["indexing_failed"] or _state["indexing_done_empty"]:
         return
     coll = _get_collection()
     if coll.count() == 0 and not _state["indexing"]:
         with _indexing_lock:
-            if coll.count() == 0 and not _state["indexing"] and not _state["indexing_failed"]:
+            if coll.count() == 0 and not _state["indexing"] and not _state["indexing_failed"] and not _state["indexing_done_empty"]:
                 _state["indexing"] = True
                 _state["indexing_error"] = None
                 _state["indexing_progress"] = None
@@ -120,6 +137,7 @@ def _reset_db():
     Evita WinError 32 en Windows al re-indexar, usando delete_collection en lugar de rmtree.
     """
     _state["collection"] = None
+    _state["indexing_done_empty"] = False
     gc.collect()
     last_error = None
     for attempt in range(5):
@@ -227,53 +245,84 @@ def serve_assets(filename):
 
 
 @app.route("/logo.png")
+@app.route("/logo.jpg")
 def serve_logo():
     """Sirve el logo MonkeyGrab."""
-    return send_from_directory(_react_dist, "logo.png")
+    for name in ("logo.jpg", "logo.png"):
+        path = os.path.join(_react_dist, name)
+        if os.path.isfile(path):
+            return send_from_directory(_react_dist, name)
+    return "", 404
+
+
+def _api_init_logic():
+    """Lógica de api_init. Retorna (dict, status_code)."""
+    _invalidate_collection_if_deleted()
+
+    # Si falló permanentemente, reportar error sin reiniciar el bucle
+    if _state["indexing_failed"]:
+        return {"ok": False, "error": _state["indexing_error"] or "La indexación falló"}, 500
+
+    _ensure_indexed()
+
+    if _state["indexing"]:
+        resp = {
+            "ok": False,
+            "indexing": True,
+            "error": "Indexando documentos, por favor espera...",
+        }
+        if _state["indexing_progress"]:
+            resp["progress"] = _state["indexing_progress"]
+        return resp, 202
+
+    coll = _get_collection()
+    if coll.count() == 0:
+        if _state["indexing_done_empty"]:
+            docs = []
+            _state["historial_chat"] = rag_engine.cargar_historial()
+            return {
+                "ok": True,
+                "mode": _state["mode"],
+                "total_fragments": 0,
+                "documents": docs,
+                "history_count": len(_state["historial_chat"]),
+            }, 200
+        return {
+            "ok": False,
+            "indexing": True,
+            "error": "Iniciando indexación de documentos...",
+        }, 202
+
+    docs = rag_engine.obtener_documentos_indexados(coll)
+    _state["historial_chat"] = rag_engine.cargar_historial()
+
+    return {
+        "ok": True,
+        "mode": _state["mode"],
+        "total_fragments": coll.count(),
+        "documents": docs,
+        "history_count": len(_state["historial_chat"]),
+    }, 200
 
 
 @app.route("/api/init", methods=["GET"])
 def api_init():
     """Inicializa el sistema y devuelve estado."""
     try:
-        # Si falló permanentemente, reportar error sin reiniciar el bucle
-        if _state["indexing_failed"]:
-            return jsonify({"ok": False, "error": _state["indexing_error"] or "La indexación falló"}), 500
-
-        _ensure_indexed()
-
-        if _state["indexing"]:
-            resp = {
-                "ok": False,
-                "indexing": True,
-                "error": "Indexando documentos, por favor espera...",
-            }
-            if _state["indexing_progress"]:
-                resp["progress"] = _state["indexing_progress"]
-            return jsonify(resp), 202
-
-        coll = _get_collection()
-        if coll.count() == 0:
-            return jsonify({
-                "ok": False,
-                "indexing": True,
-                "error": "Iniciando indexación de documentos...",
-            }), 202
-
-        docs = rag_engine.obtener_documentos_indexados(coll)
-
-        # Cargar historial
-        _state["historial_chat"] = rag_engine.cargar_historial()
-
-        return jsonify({
-            "ok": True,
-            "mode": _state["mode"],
-            "total_fragments": coll.count(),
-            "documents": docs,
-            "history_count": len(_state["historial_chat"]),
-        })
+        resp, status = _api_init_logic()
+        return jsonify(resp), status
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        # DB corrupta o borrada: invalidar y reintentar una vez
+        _state["collection"] = None
+        _state["indexing_failed"] = False
+        _state["indexing_error"] = None
+        _state["indexing_done_empty"] = False
+        gc.collect()
+        try:
+            resp, status = _api_init_logic()
+            return jsonify(resp), status
+        except Exception as e2:
+            return jsonify({"ok": False, "error": str(e2)}), 500
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -559,9 +608,10 @@ def api_reindex():
                 f.save(dest)
 
         _reset_db()
-        # Resetear estado de fallo para permitir nueva indexación
+        # Resetear estado de fallo y empty para permitir nueva indexación
         _state["indexing_failed"] = False
         _state["indexing_error"] = None
+        _state["indexing_done_empty"] = False
         _ensure_indexed()
         return jsonify({"ok": True, "total_fragments": 0, "indexing": True, "documents": []})
     except Exception as e:
@@ -637,7 +687,12 @@ def api_upload():
             total = coll.count()
         else:
             _reset_db()
-            total = _ensure_indexed()
+            _state["indexing_failed"] = False
+            _state["indexing_error"] = None
+            _state["indexing_done_empty"] = False
+            _ensure_indexed()
+            coll = _get_collection()
+            total = coll.count()
         docs = rag_engine.obtener_documentos_indexados(coll)
         return jsonify({
             "ok": True,

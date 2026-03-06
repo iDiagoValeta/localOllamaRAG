@@ -1826,7 +1826,8 @@ def indexar_documentos(
     progress_callback(info) se llama al iniciar cada archivo con {"file", "file_index", "total_files"}.
     """
     global PYMUPDF_AVAILABLE
-    
+
+    os.makedirs(carpeta, exist_ok=True)
     archivos_pdf = [f for f in os.listdir(carpeta) if f.endswith('.pdf')]
     if solo_archivos is not None:
         archivos_pdf = [f for f in archivos_pdf if f in solo_archivos]

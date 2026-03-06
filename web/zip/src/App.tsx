@@ -228,6 +228,8 @@ export default function App() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const reindexFileInputRef = useRef<HTMLInputElement>(null);
+  const [retryTrigger, setRetryTrigger] = useState(0);
+  const [indexingError, setIndexingError] = useState<string | null>(null);
 
   // ---- Scroll to bottom ----
   const scrollToBottom = useCallback(() => {
@@ -244,14 +246,12 @@ export default function App() {
 
     async function init() {
       try {
-        const [initData, settingsData] = await Promise.all([
-          api.init(),
-          api.getSettings(),
-        ]);
-
+        const initData = await api.init();
         if (cancelled) return;
 
         if (initData.ok) {
+          setInitError(null);
+          setIndexingError(null);
           setIsIndexing(false);
           setIndexingProgress(null);
           setMode(initData.mode || 'rag');
@@ -265,17 +265,20 @@ export default function App() {
             content: '¡Hola! Soy **MonkeyGrab**, tu asistente para el sistema RAG académico.\n\nUsa el modo **CHAT** para conversación general o **RAG** para consultar tus documentos PDF indexados.',
             mode: 'chat',
           }]);
-        } else if (initData.indexing) {
-          setIsIndexing(true);
-          if (initData.progress) setIndexingProgress(initData.progress);
-          // Poll every 5s until indexing finishes
-          setTimeout(() => { if (!cancelled) init(); }, 5000);
         } else {
-          setInitError(initData.error || 'Error al inicializar');
+          // ok: false = indexando o error previo → siempre pantalla de indexación (nunca "Error de conexión")
+          setInitError(null);
+          setIsIndexing(true);
+          setIndexingError(initData.error || null);
+          if (initData.progress) setIndexingProgress(initData.progress);
+          setTimeout(() => { if (!cancelled) init(); }, 5000);
         }
 
-        if (settingsData.ok) {
-          setSettings(prev => ({ ...prev, ...settingsData.settings }));
+        try {
+          const settingsData = await api.getSettings();
+          if (settingsData.ok) setSettings(prev => ({ ...prev, ...settingsData.settings }));
+        } catch {
+          /* ignorar fallo de settings */
         }
       } catch (err) {
         if (!cancelled) setInitError('No se pudo conectar con el servidor. ¿Está Flask ejecutándose?');
@@ -283,7 +286,7 @@ export default function App() {
     }
     init();
     return () => { cancelled = true; };
-  }, []);
+  }, [retryTrigger]);
 
   // ---- Mode switching ----
   const handleModeChange = useCallback(async (newMode: Mode) => {
@@ -532,6 +535,73 @@ export default function App() {
   }, [input]);
 
   // ---- Connection error screen ----
+  const handleRetry = useCallback(async () => {
+    setInitError(null);
+    setIsIndexing(true);
+    try {
+      const result = await api.reindex();
+      if (result.ok) {
+        setRetryTrigger(t => t + 1);
+      } else {
+        setInitError(result.error || 'Error al reintentar');
+        setIsIndexing(false);
+      }
+    } catch {
+      setInitError('No se pudo conectar con el servidor. ¿Está Flask ejecutándose?');
+      setIsIndexing(false);
+    }
+  }, []);
+
+  // ---- Indexing screen (cuando ok: false desde API, nunca "Error de conexión") ----
+  if (isIndexing) {
+    const showRetry = indexingError && /falló|fallido|failed|refused|no se pudo/i.test(indexingError);
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#050505] text-zinc-300 p-4">
+        <div className="glass-panel rounded-3xl p-10 max-w-md text-center space-y-4">
+          <Loader2 className="w-12 h-12 text-orange-500 animate-spin mx-auto" />
+          <h2 className="text-xl font-semibold text-white">
+            Se están indexando los documentos
+          </h2>
+          <p className="text-zinc-400 text-sm">
+            Puede tardar unos minutos dependiendo de tu hardware.
+          </p>
+          {indexingError && showRetry && (
+            <p className="text-amber-400 text-sm">{indexingError}</p>
+          )}
+          {indexingProgress ? (
+            <div className="space-y-1">
+              <p className="text-zinc-300 text-sm font-medium">
+                Procesando: <span className="text-orange-500">{indexingProgress.file}</span>
+              </p>
+              <p className="text-zinc-500 text-xs">
+                {indexingProgress.file_index} / {indexingProgress.total_files} archivo{indexingProgress.total_files !== 1 ? 's' : ''}
+              </p>
+              <div className="w-full bg-zinc-800 rounded-full h-1.5 mt-2">
+                <div
+                  className="bg-orange-500 h-1.5 rounded-full transition-all duration-500"
+                  style={{ width: `${(indexingProgress.file_index / indexingProgress.total_files) * 100}%` }}
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="text-zinc-500 text-xs">
+              La página se actualizará automáticamente al terminar.
+            </p>
+          )}
+          {showRetry && (
+            <button
+              className="px-6 py-2 bg-orange-500 text-black rounded-full font-semibold hover:bg-orange-400 transition-colors"
+              onClick={handleRetry}
+            >
+              Reintentar
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Connection error screen ----
   if (initError) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#050505] text-zinc-300 p-4">
@@ -541,43 +611,10 @@ export default function App() {
           <p className="text-zinc-400 text-sm">{initError}</p>
           <button
             className="px-6 py-2 bg-orange-500 text-black rounded-full font-semibold hover:bg-orange-400 transition-colors"
-            onClick={() => window.location.reload()}
+            onClick={handleRetry}
           >
             Reintentar
           </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ---- Indexing screen ----
-  if (isIndexing) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#050505] text-zinc-300 p-4">
-        <div className="glass-panel rounded-3xl p-10 max-w-md text-center space-y-4">
-          <Loader2 className="w-12 h-12 text-orange-400 animate-spin mx-auto" />
-          <h2 className="text-xl font-semibold text-white">Indexando documentos</h2>
-          {indexingProgress ? (
-            <div className="space-y-1">
-              <p className="text-zinc-300 text-sm font-medium">
-                Procesando: <span className="text-orange-400">{indexingProgress.file}</span>
-              </p>
-              <p className="text-zinc-500 text-xs">
-                {indexingProgress.file_index} / {indexingProgress.total_files} archivo{indexingProgress.total_files !== 1 ? 's' : ''}
-              </p>
-              <div className="w-full bg-zinc-800 rounded-full h-1.5 mt-2">
-                <div
-                  className="bg-orange-400 h-1.5 rounded-full transition-all duration-500"
-                  style={{ width: `${(indexingProgress.file_index / indexingProgress.total_files) * 100}%` }}
-                />
-              </div>
-            </div>
-          ) : (
-            <p className="text-zinc-400 text-sm">
-              Los documentos PDF se están procesando e indexando.
-            </p>
-          )}
-          <p className="text-zinc-600 text-xs">Esto puede tardar varios minutos si está activada la recuperación contextual.<br/>La página se actualizará automáticamente al terminar.</p>
         </div>
       </div>
     );
@@ -636,7 +673,7 @@ export default function App() {
         {/* Sidebar Header */}
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="MonkeyGrab" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+            <img src="/logo.jpg" alt="MonkeyGrab" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
             <h1 className="font-semibold text-orange-400 text-lg tracking-tight">MonkeyGrab</h1>
           </div>
           <button className="md:hidden text-zinc-500 hover:text-white transition-colors bg-white/5 p-2 rounded-full" onClick={() => setIsSidebarOpen(false)}>
