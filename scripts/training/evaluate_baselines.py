@@ -92,7 +92,7 @@ os.makedirs(output_dir, exist_ok=True)
 
 # ── Modelos a evaluar (secuencialmente, uno a la vez para evitar OOM) ────────
 # Qwen3 y Qwen3.5 son razonadores: se desactiva thinking para RAG.
-# Qwen2.5-Instruct y Llama-3.2-Instruct usan chat template estándar.
+# Qwen2.5-Instruct y Llama-3.1-Instruct usan chat template estándar.
 MODELS = [
     "Qwen/Qwen3-14B",
     "Qwen/Qwen3.5-9B",
@@ -105,7 +105,6 @@ EVAL_SAMPLES_DEV  = 150   # por dataset, split de validación
 EVAL_SAMPLES_TEST = 200   # por dataset, split de test (congelado)
 
 # ── Tokens ───────────────────────────────────────────────────────────────────
-MAX_NEW_TOKENS      = 2048
 EVAL_MAX_NEW_TOKENS = 2048
 MAX_CONTEXT_TOKENS  = 2048
 
@@ -195,7 +194,7 @@ def compute_context_faithfulness(prediction: str, context: str) -> float:
 
 def generate_response(
     model, tokenizer, instruction: str, context: str,
-    max_new_tokens: int = MAX_NEW_TOKENS,
+    max_new_tokens: int = EVAL_MAX_NEW_TOKENS,
     model_name: str = "",
 ) -> str:
     """
@@ -205,7 +204,7 @@ def generate_response(
         EOS token: <|im_end|>.
       - Qwen2.5-14B-Instruct: standard apply_chat_template.
         EOS token: <|im_end|>.
-      - Llama-3.2-11B-Instruct: standard apply_chat_template.
+      - Llama-3.1-8B-Instruct: standard apply_chat_template.
         EOS token: tokenizer.eos_token_id nativo.
 
     Cuando with_context es False (llamado desde evaluate_on_datasets con
@@ -333,6 +332,8 @@ def evaluate_on_datasets(
             "Avg_Response_Length_Words":   round( total_words / n,         1) if n else 0.0,
             "Sentence_Completeness_Pct":   round((n_complete  / n) * 100, 1) if n else 0.0,
         }
+        if not with_context:
+            metrics["Context_Faithfulness_Note"] = "Computed vs unseen context (baseline overlap)"
         all_metrics[ds_name] = metrics
         all_results[ds_name] = results
 
@@ -529,7 +530,7 @@ for model_idx, model_name in enumerate(MODELS, 1):
     print(f"\n--> Cargando {model_name}...")
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
         device_map="auto",
         trust_remote_code=True,
         attn_implementation="sdpa",
