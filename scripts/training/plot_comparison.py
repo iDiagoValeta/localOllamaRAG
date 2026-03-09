@@ -3,17 +3,18 @@ Visualización de comparativa base vs. modelo fine-tuneado
 ==========================================================
 
 Genera gráficas de evaluación a partir de `evaluation_comparison.json` y
-`training_stats.json`, situados en `training-output/qwen-3/`.
+`training_stats.json`, situados en `training-output/<model>/`.
 
-Salida en `training-output/images/`:
+Salida en `training-output/<model>/plots/eval/`:
   - eval_metrics_by_dataset.png  — 4 métricas × 3 datasets (barras agrupadas)
   - eval_aggregate.png           — resumen agregado con deltas anotados
   - eval_sample_pairs.png        — scatter F1 base vs. adaptado por dataset
 
 Uso:
-    python scripts/training/plot_comparison.py
+    python scripts/training/plot_comparison.py [--model qwen-3|llama-3]
 """
 
+import argparse
 import json
 import os
 import sys
@@ -35,11 +36,15 @@ except ImportError:
 
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT  = os.path.dirname(os.path.dirname(SCRIPT_DIR))
-DATA_DIR      = os.path.join(PROJECT_ROOT, "training-output", "qwen-3")
-IMAGES_DIR    = os.path.join(PROJECT_ROOT, "training-output", "images")
+VALID_MODELS  = ["qwen-3", "llama-3"]
+MODEL_DISPLAY = {"qwen-3": "Qwen3-FineTuned", "llama-3": "Llama3-FineTuned"}
 
+# These globals are set by main() after resolving --model
+DATA_DIR        = os.path.join(PROJECT_ROOT, "training-output", "qwen-3")
+IMAGES_DIR      = os.path.join(DATA_DIR, "plots", "eval")
 COMPARISON_FILE = os.path.join(DATA_DIR, "evaluation_comparison.json")
 STATS_FILE      = os.path.join(DATA_DIR, "training_stats.json")
+ADAPTED_LABEL   = MODEL_DISPLAY["qwen-3"]
 
 
 # =============================================================================
@@ -122,7 +127,7 @@ def plot_metrics_by_dataset(data: dict) -> None:
     ]
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle("Comparativa base vs. Qwen3-FineTuned por dataset",
+    fig.suptitle(f"Comparativa base vs. {ADAPTED_LABEL} por dataset",
                  fontsize=14, fontweight="bold", y=1.01)
     axes_flat = axes.flatten()
 
@@ -191,7 +196,7 @@ def plot_aggregate(data: dict, stats: dict) -> None:
 
     fig = plt.figure(figsize=(14, 6))
     fig.patch.set_facecolor(BG_COLOR)
-    fig.suptitle("Resumen agregado — Modelo base vs. Qwen3-FineTuned (600 muestras)",
+    fig.suptitle(f"Resumen agregado — Modelo base vs. {ADAPTED_LABEL} (600 muestras)",
                  fontsize=13, fontweight="bold")
 
     # --- Subplot izquierdo: barras Token F1 y Faithfulness ---
@@ -367,6 +372,21 @@ def plot_sample_scatter(data: dict) -> None:
 # =============================================================================
 
 def main() -> None:
+    global DATA_DIR, IMAGES_DIR, COMPARISON_FILE, STATS_FILE, ADAPTED_LABEL
+
+    parser = argparse.ArgumentParser(description="Comparativa base vs. modelo fine-tuned.")
+    parser.add_argument(
+        "--model", choices=VALID_MODELS, default="qwen-3",
+        help="Modelo a visualizar (default: qwen-3).",
+    )
+    args = parser.parse_args()
+
+    DATA_DIR        = os.path.join(PROJECT_ROOT, "training-output", args.model)
+    IMAGES_DIR      = os.path.join(DATA_DIR, "plots", "eval")
+    COMPARISON_FILE = os.path.join(DATA_DIR, "evaluation_comparison.json")
+    STATS_FILE      = os.path.join(DATA_DIR, "training_stats.json")
+    ADAPTED_LABEL   = MODEL_DISPLAY[args.model]
+
     os.makedirs(IMAGES_DIR, exist_ok=True)
 
     comparison = load_json(COMPARISON_FILE)

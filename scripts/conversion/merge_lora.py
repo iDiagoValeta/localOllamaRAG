@@ -10,6 +10,7 @@ Resultado:
 - Tokenizador guardado junto al modelo para mantener compatibilidad.
 """
 
+import argparse
 import os
 import torch
 from peft import PeftModel, PeftConfig
@@ -22,14 +23,23 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # antes de iniciar el proceso de fusión.
 # =============================================================================
 
+VALID_MODELS = ["qwen-3", "llama-3"]
+
+parser = argparse.ArgumentParser(description="Fusiona adaptador LoRA con modelo base.")
+parser.add_argument(
+    "--model", choices=VALID_MODELS, default="qwen-3",
+    help="Modelo a fusionar (default: qwen-3).",
+)
+args = parser.parse_args()
+
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-LORA_PATH = os.path.join(PROJECT_ROOT, "training-output", "qwen-3")
-MERGED_PATH = os.path.join(PROJECT_ROOT, "models", "merged-model", "qwen-3")
+LORA_PATH   = os.path.join(PROJECT_ROOT, "training-output", args.model)
+MERGED_PATH = os.path.join(PROJECT_ROOT, "models", "merged-model", args.model)
 
 if not os.path.exists(os.path.join(LORA_PATH, "adapter_config.json")):
     raise FileNotFoundError(
         f"No se encontró el adaptador LoRA en {LORA_PATH}. "
-        "Ejecuta primero el entrenamiento (scripts/training/train.py)."
+        "Ejecuta primero el entrenamiento (scripts/training/train-{args.model}.py)."
     )
 
 os.makedirs(MERGED_PATH, exist_ok=True)

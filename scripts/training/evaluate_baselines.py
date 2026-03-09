@@ -1,17 +1,19 @@
 """
-evaluate_baselines.py — Evaluación de modelos base para RAG (TFG) — v1.1
+evaluate_baselines.py — Evaluación de modelos base para RAG (TFG) — v1.2
 =========================================================================
 
-Benchmark comparativo de 4 modelos base (sin fine-tuning) sobre 3 datasets
+Benchmark comparativo de 6 modelos base (sin fine-tuning) sobre 3 datasets
 RAG, evaluados en dos modos (con contexto / sin contexto) y dos splits
 (dev / test).  Cada modelo se carga y descarga secuencialmente para evitar
 OOM en GPU.
 
 Modelos evaluados:
-  1. Qwen/Qwen3-14B              — razonador, thinking desactivado
-  2. Qwen/Qwen3.5-9B             — razonador, thinking desactivado
-  3. Qwen/Qwen2.5-14B-Instruct   — instruction-tuned estándar
-  4. meta-llama/Llama-3.1-8B-Instruct — instruction-tuned estándar
+  1. meta-llama/Llama-3.1-8B-Instruct — instruction-tuned estándar
+  2. Qwen/Qwen3-14B              — razonador, thinking desactivado
+  3. Qwen/Qwen3.5-9B             — razonador, thinking desactivado
+  4. Qwen/Qwen2.5-14B-Instruct   — instruction-tuned estándar
+  5. google/gemma-3-12b-it       — instruction-tuned estándar
+  6. microsoft/phi-4             — instruction-tuned estándar
 
 Datasets:
   - neural-bridge/rag-dataset-12000       (EN, QA profesional)
@@ -46,6 +48,8 @@ Uso:
 #           2.3 compute_context_faithfulness()  métrica primaria del TFG
 #           2.4 generate_response()       inferencia con chat template
 #                                         (Qwen3/3.5: enable_thinking=False;
+#                                          Gemma-3: EOS=<end_of_turn>;
+#                                          Phi-4: EOS=<|im_end|>;
 #                                          Qwen2.5/Llama: template estándar)
 #           2.5 evaluate_on_datasets()    bucle sobre eval_datasets
 #
@@ -82,6 +86,13 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # máximos y system prompts (con/sin contexto).
 # =============================================================================
 
+# =============================================================================
+# Verificación de Token de Hugging Face
+# =============================================================================
+import os
+if not os.environ.get("HF_TOKEN") and not os.path.exists(os.path.expanduser("~/.cache/huggingface/token")):
+    print("WARNING: HF_TOKEN no está configurado en el entorno.")
+
 os.environ["TORCH_COMPILE_DISABLE"] = "1"
 os.environ["TORCH_DYNAMO_DISABLE"] = "1"
 os.environ["TRITON_DISABLE"] = "1"
@@ -92,12 +103,15 @@ os.makedirs(output_dir, exist_ok=True)
 
 # ── Modelos a evaluar (secuencialmente, uno a la vez para evitar OOM) ────────
 # Qwen3 y Qwen3.5 son razonadores: se desactiva thinking para RAG.
-# Qwen2.5-Instruct y Llama-3.1-Instruct usan chat template estándar.
+# Qwen2.5-Instruct, Llama-3.1-Instruct, Gemma-3-12b-it y Phi-4 usan
+# chat template estándar (ninguno tiene modo reasoning activo).
 MODELS = [
+    "meta-llama/Llama-3.1-8B-Instruct",
     "Qwen/Qwen3-14B",
     "Qwen/Qwen3.5-9B",
     "Qwen/Qwen2.5-14B-Instruct",
-    "meta-llama/Llama-3.1-8B-Instruct",
+    "google/gemma-3-12b-it",
+    "microsoft/phi-4"
 ]
 
 # ── Caps por split ───────────────────────────────────────────────────────────
@@ -204,6 +218,10 @@ def generate_response(
         EOS token: <|im_end|>.
       - Qwen2.5-14B-Instruct: standard apply_chat_template.
         EOS token: <|im_end|>.
+      - Phi-4: standard apply_chat_template.
+        EOS token: <|im_end|> (same convention as Qwen).
+      - Gemma-3-12b-it: standard apply_chat_template.
+        EOS token: <end_of_turn> (+ native eos as fallback).
       - Llama-3.1-8B-Instruct: standard apply_chat_template.
         EOS token: tokenizer.eos_token_id nativo.
 
@@ -239,9 +257,15 @@ def generate_response(
     )
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
-    # Determine EOS token — Qwen uses <|im_end|>, Llama uses tokenizer.eos_token_id
-    if is_qwen3 or "Qwen" in model_name:
+    # Determine EOS token(s):
+    #   Qwen + Phi-4  → <|im_end|>  (ChatML convention)
+    #   Gemma-3       → [<eos>, <end_of_turn>]  (both needed for clean stop)
+    #   Llama + rest  → tokenizer.eos_token_id native
+    if "Qwen" in model_name or "phi-4" in model_name.lower():
         eos_id = tokenizer.encode("<|im_end|>", add_special_tokens=False)[0]
+    elif "gemma" in model_name.lower():
+        eot_ids = tokenizer.encode("<end_of_turn>", add_special_tokens=False)
+        eos_id = ([tokenizer.eos_token_id] + eot_ids) if eot_ids else tokenizer.eos_token_id
     else:
         eos_id = tokenizer.eos_token_id
 
@@ -512,19 +536,36 @@ print(f"--> Total test samples: {total_test}")
 
 
 # =============================================================================
-# SECCIÓN 4: BUCLE PRINCIPAL — 4 Modelos × 2 Modos × 2 Splits
+# SECCIÓN 4: BUCLE PRINCIPAL — 6 Modelos × 2 Modos × 2 Splits
 # =============================================================================
-# Orden: Qwen3-14B → Qwen3.5-9B → Qwen2.5-14B-Instruct → Llama-3.1-8B-Instruct
+# Orden: Llama-3.1-8B → Qwen3-14B → Qwen3.5-9B → Qwen2.5-14B →
+#        Gemma-3-12b-it → Phi-4
 # Cada modelo se carga, evalúa en 4 combinaciones (modo × split), y se
 # descarga con gc.collect() + torch.cuda.empty_cache() antes del siguiente.
 # =============================================================================
 
 all_results = {}
+CHECKPOINT_PATH = os.path.join(output_dir, "baseline_checkpoint.json")
+
+if os.path.exists(CHECKPOINT_PATH):
+    print(f"\n--> Cargando checkpoint existente: {CHECKPOINT_PATH}")
+    try:
+        with open(CHECKPOINT_PATH, "r", encoding="utf-8") as f:
+            all_results = json.load(f)
+    except Exception as e:
+        print(f"Error cargando checkpoint: {e}")
+        all_results = {}
+else:
+    all_results = {}
 
 for model_idx, model_name in enumerate(MODELS, 1):
     print("\n" + "=" * 70)
     print(f"[{model_idx}/{len(MODELS)}] Evaluando modelo: {model_name}")
     print("=" * 70)
+
+    if model_name in all_results:
+        print(f"--> Modelo {model_name} ya evaluado (saltando).")
+        continue
 
     # ── Cargar modelo ────────────────────────────────────────────────────────
     print(f"\n--> Cargando {model_name}...")
@@ -600,6 +641,14 @@ for model_idx, model_name in enumerate(MODELS, 1):
         model_results[mode_key] = mode_results
 
     all_results[model_name] = model_results
+
+    # ── Guardar Checkpoint ───────────────────────────────────────────────────
+    try:
+        with open(CHECKPOINT_PATH, "w", encoding="utf-8") as f:
+            json.dump(all_results, f, indent=4, ensure_ascii=False)
+        print(f"--> Checkpoint guardado: {CHECKPOINT_PATH}")
+    except Exception as e:
+        print(f"--> Warning: no se pudo guardar el checkpoint: {e}")
 
     # ── Descargar modelo y liberar memoria ───────────────────────────────────
     print(f"\n--> Descargando modelo {model_name} y liberando memoria GPU...")

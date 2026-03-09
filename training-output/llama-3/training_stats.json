@@ -1,0 +1,792 @@
+{
+    "model_name": "meta-llama/Llama-3.1-8B-Instruct",
+    "version": "v1.0-llama",
+    "total_steps": 1500,
+    "dataset_size": 20525,
+    "effective_batch": 16,
+    "datasets": [
+        "Neural-Bridge RAG",
+        "Dolly QA",
+        "Aina RAG"
+    ],
+    "eval_loss": 0.5515475273132324,
+    "perplexity": 1.7359373507568072,
+    "comparison": {
+        "per_dataset": {
+            "Neural-Bridge RAG": {
+                "base": {
+                    "n_samples": 200,
+                    "Token_F1": 64.33,
+                    "Context_Faithfulness_Pct": 80.12,
+                    "Avg_Response_Length_Words": 65.2,
+                    "Sentence_Completeness_Pct": 91.5
+                },
+                "adapted": {
+                    "n_samples": 200,
+                    "Token_F1": 79.76,
+                    "Context_Faithfulness_Pct": 89.55,
+                    "Avg_Response_Length_Words": 37.0,
+                    "Sentence_Completeness_Pct": 98.5
+                },
+                "deltas": {
+                    "Token_F1": 15.43,
+                    "Context_Faithfulness_Pct": 9.43,
+                    "Avg_Response_Length_Words": -28.2,
+                    "Sentence_Completeness_Pct": 7.0
+                },
+                "sample_pairs": [
+                    {
+                        "instruction": "What are some common modifications made to the interior of a car?",
+                        "ground_truth": "Common modifications made to the interior of a car include LED interior lighting, replacing standard gear lever knob and cups with sports versions, replacing the steering wheel with a smaller and handier one, and installing sport pedals. Other modifications can include changing belts, door handles, and chrome inserts.",
+                        "base_prediction": "Based on the provided document, some common modifications made to the interior of a car include:\n\n1. Replacing the standard gear lever knob and cups with sports versions.\n2. Swapping the standard steering wheel for a smaller and more handy one.\n3. Installing sport pedals in various variants.\n4. Upgrading the interior lighting with LED lights.\n5. Replacing door handles, chrome inserts, and other parts with custom or upgraded versions.\n6. Adding or replacing belts.\n7. Installing a new radio or antenna, such as the \"Aktiv\" antenna mentioned in the document, which is a radio/cellphone flagpole antenna made of ABS, PVC, fiberglass, and metal.\n\nThese modifications can be made to personalize the car's interior and improve its overall appearance and functionality.",
+                        "adapted_prediction": "Common modifications made to the interior of a car include replacing the standard gear lever knob and cups with sports versions, replacing the steering wheel with a small and handy one, and installing sport pedals. Other modifications include changing the interior lighting, door handles, and chrome inserts.",
+                        "base_f1": 0.5359,
+                        "adapted_f1": 0.9176,
+                        "base_faithfulness": 0.6429,
+                        "adapted_faithfulness": 0.7879
+                    },
+                    {
+                        "instruction": "Who returns with the glory of victory?",
+                        "ground_truth": "Pan returns with the glory of victory.",
+                        "base_prediction": "Pan returns with the glory of victory.",
+                        "adapted_prediction": "Pan returns with the glory of victory.",
+                        "base_f1": 1.0,
+                        "adapted_f1": 1.0,
+                        "base_faithfulness": 1.0,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "What is the significance of medical insurance in any medical setting?",
+                        "ground_truth": "Medical insurance is crucial in any kind of medical setting, because without health insurance it is nearly not possible to pay off any debts owed as a consequence of an ER visit or an easy surgery.",
+                        "base_prediction": "Medical insurance is crucial in any medical setting because without it, it is nearly impossible to pay off any debts owed as a consequence of an ER visit or a simple surgery.",
+                        "adapted_prediction": "Medical insurance is crucial in any kind of medical setting, because without health insurance it is nearly impossible to pay off any debts owed as a consequence of an ER visit or an easy surgery.",
+                        "base_f1": 0.8387,
+                        "adapted_f1": 0.9538,
+                        "base_faithfulness": 0.92,
+                        "adapted_faithfulness": 0.963
+                    },
+                    {
+                        "instruction": "Where has Mao Sone taught music before?",
+                        "ground_truth": "Mao Sone has taught music at Fedu Jazz in the Dominican Republic, Danilo Perez Foundation in Panama, and at the Newport Jazz Camp 2016, organized by Berklee College Of Music, and the Newport Jazz Festival.",
+                        "base_prediction": "Mao Sone has taught music before at the following places:\n\n1. Fedu Jazz in the Dominican Republic, where he taught preschool to early grades students.\n2. Danilo Perez Foundation in Panama, as a part of the Berklee Global Jazz Institute Ambassador, where he also taught preschool to early grades students.\n3. Newport Jazz Camp 2016, organized by Berklee College Of Music, where he taught an ensemble class and a brass instrument class.",
+                        "adapted_prediction": "Mao Sone has taught music at Fedu Jazz in the Dominican Republic, Danilo Perez Foundation in Panama, and the Newport Jazz Camp 2016, organized by Berklee College Of Music, and the Newport Jazz Festival.",
+                        "base_f1": 0.5714,
+                        "adapted_f1": 0.9841,
+                        "base_faithfulness": 0.9149,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "What is an externality in the context of energy production and its impact on the environment?",
+                        "ground_truth": "In economics, an externality is conduct that re-allocates part of the cost of doing business upon other parties without their consent, such as pollution of public air and waters. In terms of energy production, the massive emissions of carbon dioxide (CO{-2}) from fossil-fuel energy production is an externality. This carbon-dioxide pollution emitted by coal and oil-fired power plants damages air quality and threatens our climate. This cost is not reflected in the market price of electricity, resulting in consumers not paying the full cost of power and energy markets becoming distorted.",
+                        "base_prediction": "In the context of energy production, an externality refers to conduct that re-allocates part of the cost of doing business upon other parties without their consent, such as pollution of public air and waters. This means that when environmental impacts are not reflected in the market price of electricity, consumers are not paying the full cost of that power, and energy markets become distorted, resulting in inefficient use of resources.",
+                        "adapted_prediction": "In economics, conduct that re-allocates part of the cost of doing business upon other parties without their consent (such as pollution of public air and waters) is called an externality. To the extent that environmental impacts are not reflected in the market price of electricity, consumers are not paying the full cost of that power, and energy markets become distorted, resulting in inefficient use of resources.",
+                        "base_f1": 0.6667,
+                        "adapted_f1": 0.6575,
+                        "base_faithfulness": 0.94,
+                        "adapted_faithfulness": 1.0
+                    }
+                ]
+            },
+            "Dolly QA": {
+                "base": {
+                    "n_samples": 200,
+                    "Token_F1": 46.93,
+                    "Context_Faithfulness_Pct": 77.78,
+                    "Avg_Response_Length_Words": 50.4,
+                    "Sentence_Completeness_Pct": 87.0
+                },
+                "adapted": {
+                    "n_samples": 200,
+                    "Token_F1": 51.64,
+                    "Context_Faithfulness_Pct": 92.45,
+                    "Avg_Response_Length_Words": 74.8,
+                    "Sentence_Completeness_Pct": 91.5
+                },
+                "deltas": {
+                    "Token_F1": 4.71,
+                    "Context_Faithfulness_Pct": 14.67,
+                    "Avg_Response_Length_Words": 24.4,
+                    "Sentence_Completeness_Pct": 4.5
+                },
+                "sample_pairs": [
+                    {
+                        "instruction": "Who is Solveig Margrete Fiske",
+                        "ground_truth": "Solveig Margrete Fiske (born 26 October 1952) is a theologian and bishop emerita in the Church of Norway, serving as the bishop of Hamar between 2006 and 2022, when she retired.",
+                        "base_prediction": "Solveig Margrete Fiske is a theologian and a former bishop in the Church of Norway.",
+                        "adapted_prediction": "Solveig Margrete Fiske (born 26 October 1952) is a theologian and bishop emerita in the Church of Norway, serving as the bishop of Hamar between 2006 and 2022, when she retired.\n\nOriginally from Frei in Møre og Romsdal, she graduated from the Free Faculty of Theology (now the MF Norwegian School of Theology) in 1980, and completed her practical examinations there in 1981. She briefly worked as a consultant for the Church Council in 1981, followed by an assignment to the parish in Elverum as a chaplain between 1982 and 1994. In 1994, she became the parish priest in Løten, a position she held for 12 years.",
+                        "base_f1": 0.55,
+                        "adapted_f1": 0.4553,
+                        "base_faithfulness": 0.9167,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "From the passage provided, extract the launch date and current distance from Earth in miles of Voyager 1.",
+                        "ground_truth": "The Voyager 1 space probe was launched by NASA on September 5, 1977. As of March 27, 2023 Voyager 1 is 14.799 billion mi from Earth.",
+                        "base_prediction": "The launch date of Voyager 1 is September 5, 1977. \n\nAs of March 27, 2023, the current distance of Voyager 1 from Earth is 14.799 billion miles.",
+                        "adapted_prediction": "Voyager 1 was launched on September 5, 1977.  As of March 27, 2023, Voyager 1 is 14.799 billion miles from Earth.",
+                        "base_f1": 0.68,
+                        "adapted_f1": 0.8696,
+                        "base_faithfulness": 0.8,
+                        "adapted_faithfulness": 0.8947
+                    },
+                    {
+                        "instruction": "What is F1 or Formula 1 racing?",
+                        "ground_truth": "Formula 1 is the best and most technical open-wheel single-seater racing car form. It is very technical because the cars are built with the latest and bleeding technology in aerodynamics and every other field in science to make the car as fast as possible. The races happen every year across all the continents on dedicated circuits or public roads converted to a race track for the race weekend.",
+                        "base_prediction": "Formula One, commonly referred to as F1, is the highest level of international open-wheel single-seater auto racing sanctioned by the Fédération Internationale de l'Automobile (FIA).",
+                        "adapted_prediction": "Formula One (more commonly known as Formula 1 or F1) is the highest class of international racing for open-wheel single-seater formula racing cars sanctioned by the Fédération Internationale de l'Automobile (FIA). The FIA Formula One World Championship has been one of the premier forms of racing around the world since its inaugural season in 1950. The word formula in the name refers to the set of rules to which all participants' cars must conform. A Formula One season consists of a series of races, known as Grands Prix. Grands Prix take place in multiple countries and continents around the world on either purpose-built circuits or closed public roads.",
+                        "base_f1": 0.1687,
+                        "adapted_f1": 0.293,
+                        "base_faithfulness": 0.8696,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "Does extended screen time cause speech delay in children?",
+                        "ground_truth": "There is no definite proof that extended screen time cause speech delay in children because there are contradicting study results.",
+                        "base_prediction": "According to the provided context, there is a possible link between extended screen time and speech delay in children. The text states that when children are \"addicted to screens,\" they may not be stimulated to engage in conversations, which can cause speech delays. However, it's essential to note that the relationship between screen time and speech delay is not definitively established, as a study in Saudi Arabia found no correlation between smart device use and speech delay.",
+                        "adapted_prediction": "There is no conclusive evidence that extended screen time causes speech delay in children. While some studies suggest a potential link between screen addiction and speech delay, others have found no correlation. For instance, a study in Saudi Arabia found no relationship between smart device use and speech delay, despite 64.8% of parents believing that smart devices are a problem. A review study from Indonesia also notes the existence of conflicting results on this issue. It is important to note that speech delay can be caused by a variety of factors, including bilingualism, autism spectrum conditions, childhood apraxia, auditory processing disorder, prematurity, cognitive impairment, and hearing loss.",
+                        "base_f1": 0.3043,
+                        "adapted_f1": 0.2314,
+                        "base_faithfulness": 0.5385,
+                        "adapted_faithfulness": 0.5875
+                    },
+                    {
+                        "instruction": "What is Linux?",
+                        "ground_truth": "After AT&T had dropped out of the Multics project, the Unix operating system was conceived and implemented by Ken Thompson and Dennis Ritchie (both of AT&T Bell Laboratories) in 1969 and first released in 1970. Later they rewrote it in a new programming language, C, to make it portable. The availability and portability of Unix caused it to be widely adopted, copied and modified by academic institutions and businesses.\n\nIn 1977, the Berkeley Software Distribution (BSD) was developed by the Computer Systems Research Group (CSRG) from UC Berkeley, based on the 6th edition of Unix from AT&T. Since BSD contained Unix code that AT&T owned, AT&T filed a lawsuit (USL v. BSDi) in the early 1990s against the University of California. This strongly limited the development and adoption of BSD.\n\nOnyx Systems began selling early microcomputer-based Unix workstations in 1980. Later, Sun Microsystems, founded as a spin-off of a student project at Stanford University, also began selling Unix-based desktop workstations in 1982. While Sun workstations didn't utilize commodity PC hardware like Linux was later developed for, it represented the first successful commercial attempt at distributing a primarily single-user microcomputer that ran a Unix operating system.\n\nIn 1983, Richard Stallman started the GNU project with the goal of creating a free UNIX-like operating system. As part of this work, he wrote the GNU General Public License (GPL). By the early 1990s, there was almost enough available software to create a full operating system. However, the GNU kernel, called Hurd, failed to attract enough development effort, leaving GNU incomplete.[citation needed]\n\nIn 1985, Intel released the 80386, the first x86 microprocessor with a 32-bit instruction set and a memory management unit with paging.\n\nIn 1986, Maurice J. Bach, of AT&T Bell Labs, published The Design of the UNIX Operating System. This definitive description principally covered the System V Release 2 kernel, with some new features from Release 3 and BSD.\n\nIn 1987, MINIX, a Unix-like system intended for academic use, was released by Andrew S. Tanenbaum to exemplify the principles conveyed in his textbook, Operating Systems: Design and Implementation. While source code for the system was available, modification and redistribution were restricted. In addition, MINIX's 16-bit design was not well adapted to the 32-bit features of the increasingly cheap and popular Intel 386 architecture for personal computers. In the early nineties a commercial UNIX operating system for Intel 386 PCs was too expensive for private users.\n\nThese factors and the lack of a widely adopted, free kernel provided the impetus for Torvalds' starting his project. He has stated that if either the GNU Hurd or 386BSD kernels had been available at the time, he likely would not have written his own.",
+                        "base_prediction": "Linux is a family of open-source Unix-like operating systems based on the Linux kernel.",
+                        "adapted_prediction": "Linux is a family of open-source Unix-like operating systems based on the Linux kernel, an operating system kernel first released on September 17, 1991, by Linus Torvalds. Linux is typically packaged as a Linux distribution, which includes the kernel and supporting system software and libraries, many of which are provided by the GNU Project. Many Linux distributions use the word \"Linux\" in their name, but the Free Software Foundation uses the name \"GNU/Linux\" to emphasize the importance of GNU software, causing some controversy.",
+                        "base_f1": 0.0383,
+                        "adapted_f1": 0.1461,
+                        "base_faithfulness": 1.0,
+                        "adapted_faithfulness": 1.0
+                    }
+                ]
+            },
+            "Aina RAG": {
+                "base": {
+                    "n_samples": 200,
+                    "Token_F1": 27.62,
+                    "Context_Faithfulness_Pct": 79.1,
+                    "Avg_Response_Length_Words": 21.9,
+                    "Sentence_Completeness_Pct": 98.0
+                },
+                "adapted": {
+                    "n_samples": 200,
+                    "Token_F1": 56.14,
+                    "Context_Faithfulness_Pct": 73.08,
+                    "Avg_Response_Length_Words": 78.4,
+                    "Sentence_Completeness_Pct": 100.0
+                },
+                "deltas": {
+                    "Token_F1": 28.52,
+                    "Context_Faithfulness_Pct": -6.02,
+                    "Avg_Response_Length_Words": 56.5,
+                    "Sentence_Completeness_Pct": 2.0
+                },
+                "sample_pairs": [
+                    {
+                        "instruction": "Unicode contains how many thousands of characters in its repertoire?",
+                        "ground_truth": "The Unicode standard, used for consistent encoding and representation of text in most of the world's writing systems, contains a repertoire of over 120,000 characters. This includes characters from 129 modern and historic scripts, as well as multiple symbol sets.",
+                        "base_prediction": "The Unicode repertoire contains more than 120,000 characters.",
+                        "adapted_prediction": "The Unicode standard, which is a computing industry standard for the consistent encoding, representation, and handling of text expressed in most of the world's writing systems, contains a repertoire of more than 120,000 characters. This repertoire includes 129 modern and historic scripts, as well as multiple symbol sets. The standard is maintained by the Unicode Consortium and is updated periodically, with the most recent version being Unicode 8.0 as of June 2015.",
+                        "base_f1": 0.2273,
+                        "adapted_f1": 0.6535,
+                        "base_faithfulness": 1.0,
+                        "adapted_faithfulness": 0.8571
+                    },
+                    {
+                        "instruction": "¿Cuál iba a ser el tercer \"single\" de The Joshua Tree inicialmente?",
+                        "ground_truth": "Inicialmente, la canción «Red Hill Mining Town» estaba planeada para ser el tercer sencillo del álbum The Joshua Tree de U2, pero fue finalmente lanzada «Where the Streets Have No Name» en agosto de 1987. Aunque no tuvo el mismo éxito que los dos primeros sencillos del álbum, «Red Hill Mining Town» logró ingresar en las listas de venta en varios países. En los Estados Unidos, alcanzó el puesto 13 en el Billboard Hot 100 y el número 11 en la lista Album Rock Tracks. En el Reino Unido, llegó al número 4 de la UK Singles Chart y encabezó la lista Irish Singles Chart. El sencillo se publicó en formatos 7\", 12\", casete y CD, con tres lados B: «Race Against Time», «Silver and Gold» y «Sweetest Thing», excepto en la versión de 7\", en la que solo figuran los últimos dos temas. La versión de 12\" presenta «Race Against Time» en el lado A del disco, y en formato casete, el sencillo posee las cuatro pistas en ambos lados de la cinta.",
+                        "base_prediction": "La canción \"Red Hill Mining Town\" iba a ser el tercer \"single\" de The Joshua Tree inicialmente.",
+                        "adapted_prediction": "La canción \"Red Hill Mining Town\" iba a ser el tercer sencillo de The Joshua Tree, pero finalmente se lanzó \"Where the Streets Have No Name\" en agosto de 1987. Aunque \"Red Hill Mining Town\" no fue lanzada como sencillo, la canción sí logró ingresar en las listas de ventas en los Estados Unidos, donde alcanzó el puesto 13 en el Billboard Hot 100 y el número 11 en la lista Album Rock Tracks. En el Reino Unido, alcanzó el número 4 en la UK Singles Chart.",
+                        "base_f1": 0.1358,
+                        "adapted_f1": 0.5792,
+                        "base_faithfulness": 0.6923,
+                        "adapted_faithfulness": 0.8364
+                    },
+                    {
+                        "instruction": "How many inches of precipitation does NYC get in a year?",
+                        "ground_truth": "New York City receives approximately 49.9 inches (1,270 mm) of precipitation each year. This amount is relatively evenly distributed throughout the year. While the city typically experiences snowfall during the winter months, the annual average snowfall between 1981 and 2010 was 25.8 inches (66 cm), although this can vary significantly from year to year. It is worth noting that hurricanes and tropical storms are not common in the New York area, but they can occur and have the potential to cause significant damage. One such example is Hurricane Sandy, which hit the city in October 2012, causing extensive flooding and power outages in many parts of the city and its suburbs. The aftermath of Hurricane Sandy has led to discussions about implementing seawalls and other coastal barriers to protect the city from future storms and their potential destruction.",
+                        "base_prediction": "The city of New York receives 49.9 inches of precipitation annually.",
+                        "adapted_prediction": "New York City receives an average of 49.9 inches of precipitation annually. This precipitation is fairly evenly distributed throughout the year, with an average winter snowfall of 25.8 inches between 1981 and 2010. However, it's important to note that precipitation can vary significantly from year to year, and the city is not immune to the impacts of hurricanes and tropical storms, which can bring destructive storm surges and flooding.",
+                        "base_f1": 0.1304,
+                        "adapted_f1": 0.5,
+                        "base_faithfulness": 1.0,
+                        "adapted_faithfulness": 0.7234
+                    },
+                    {
+                        "instruction": "Qui participa activament en les Falles?",
+                        "ground_truth": "Les Falles de València compten amb la participació activa de diverses entitats, com ara comunitats, ajuntaments i universitats. Aquesta festivitat, declarada Patrimoni Cultural Immaterial de la Humanitat per la UNESCO, destaca per la seva creativitat en les arts i oficis, així com per la transmissió intergeneracional activa de les seves tradicions.\n\nLa participació de les dones en la planificació i realització de les Falles ha anat augmentant, la qual cosa reflecteix l'obertura d'aquest esdeveniment a tots els grups socials, independentment de l'edat, professió, classe social o dimensió cultural.\n\nA més, formar part de la llista de la UNESCO pot contribuir a cridar l'atenció sobre altres festivals del foc nacionals i internacionals i les seves respectives comunitats a la regió mediterrània, fomentant així la reflexió col·lectiva i la comprensió social.\n\nEn definitiva, les Falles de València no només són una important mostra de patrimoni cultural immaterial, sinó que també promouen la participació activa de la comunitat i serveixen com a font d'inspiració per a la relevància del patrimoni cultural immaterial en el món contemporani.",
+                        "base_prediction": "Segons el text, les persones que participen activament en les Falles són:\n\n- Grups socials de qualsevol edat, professió, classe social i dimensió cultural.\n- Les dones, que tenen una participació cada cop més gran en la planificació i la realització de les Falles.\n- Les comunitats locals, que participen activament en la festivitat.\n- Les comissions falleres, que asseguren la viabilitat de la festivitat.\n- Les universitats, que també participen activament en la festivitat.\n- Els ajuntaments, que també participen activament en la festivitat.",
+                        "adapted_prediction": "Les Falles de València són una festa que participa activament en la qual tothom pot participar, independentment de la seva edat, professió, classe social o dimensió cultural. Aquesta inclusivitat es reflecteix en la planificació i realització de la festa, on les dones tenen una representació i participació cada cop més gran. A més, la UNESCO destaca la creativitat en les arts i oficis, la transmissió intergeneracional activa i la participació activa de les comunitats, ajuntaments i universitats en la festa.",
+                        "base_f1": 0.2956,
+                        "adapted_f1": 0.4585,
+                        "base_faithfulness": 0.7436,
+                        "adapted_faithfulness": 0.7143
+                    },
+                    {
+                        "instruction": "¿Qué tipo de cargo era el doméstico de las escolas?",
+                        "ground_truth": "El doméstico de las escolas era un importante cargo militar en el Imperio Bizantino, vigente desde el siglo VIII hasta el siglo XIV. Originalmente, este cargo representaba al comandante de las scholae, los regimientos de élite tagma. Sin embargo, con el tiempo, la importancia del doméstico de las escolas aumentó y hacia la mitad del siglo IX, sus titulares ocuparon la posición de comandantes en jefe del ejército bizantino, al lado del emperador. Aunque en el siglo XII esta función fue eclipsada por la del Megadoméstico, el doméstico de las escolas siguió siendo una dignidad militar de cierto nivel hasta la dinastía Paleóloga (siglos XIII-XV).",
+                        "base_prediction": "El doméstico de las escolas era un cargo militar en el Imperio bizantino.",
+                        "adapted_prediction": "El doméstico de las escolas era un alto cargo militar en el Imperio bizantino, que existió desde el siglo VIII hasta el siglo XIV. Originalmente, este cargo representaba al comandante de las scholae, los regimientos de élite tagma. Sin embargo, a medida que avanzaba el siglo IX, el doméstico de las escolas adquirió una importancia cada vez mayor, hasta el punto de que sus titulares ocuparon la posición de comandantes en jefe del ejército bizantino, junto al emperador. Aunque en el siglo XII esta función fue eclipsada por la del Megadoméstico, el doméstico de las escolas siguió siendo un cargo importante durante la dinastía Paleóloga, que abarcó los siglos XIII al XV, aunque se redujo a una dignidad honorífica de nivel medio.",
+                        "base_f1": 0.1895,
+                        "adapted_f1": 0.7826,
+                        "base_faithfulness": 0.8889,
+                        "adapted_faithfulness": 0.7606
+                    }
+                ]
+            }
+        },
+        "aggregate": {
+            "Total_Samples": 600,
+            "Base_Token_F1": 46.29,
+            "Adapted_Token_F1": 62.51,
+            "Delta_Token_F1": 16.22,
+            "Base_Faithfulness": 79.0,
+            "Adapted_Faithfulness": 85.03,
+            "Delta_Faithfulness": 6.03
+        }
+    },
+    "log_history": [
+        {
+            "loss": 0.6971200108528137,
+            "grad_norm": 0.09730661660432816,
+            "learning_rate": 0.0,
+            "epoch": 0.000779537149817296,
+            "step": 1
+        },
+        {
+            "loss": 0.7600683371225992,
+            "grad_norm": 0.11023149639368057,
+            "learning_rate": 6.217616580310881e-06,
+            "epoch": 0.0194884287454324,
+            "step": 25
+        },
+        {
+            "loss": 0.6351564025878906,
+            "grad_norm": 0.05483175069093704,
+            "learning_rate": 1.2694300518134716e-05,
+            "epoch": 0.0389768574908648,
+            "step": 50
+        },
+        {
+            "loss": 0.5557711029052734,
+            "grad_norm": 0.040829136967659,
+            "learning_rate": 1.917098445595855e-05,
+            "epoch": 0.058465286236297195,
+            "step": 75
+        },
+        {
+            "loss": 0.6004204177856445,
+            "grad_norm": 0.05308593437075615,
+            "learning_rate": 2.5647668393782386e-05,
+            "epoch": 0.0779537149817296,
+            "step": 100
+        },
+        {
+            "loss": 0.5767829132080078,
+            "grad_norm": 0.05359918624162674,
+            "learning_rate": 3.212435233160622e-05,
+            "epoch": 0.09744214372716199,
+            "step": 125
+        },
+        {
+            "loss": 0.546322898864746,
+            "grad_norm": 0.050351765006780624,
+            "learning_rate": 3.860103626943005e-05,
+            "epoch": 0.11693057247259439,
+            "step": 150
+        },
+        {
+            "eval_loss": 0.6124132871627808,
+            "eval_runtime": 104.2403,
+            "eval_samples_per_second": 10.601,
+            "eval_steps_per_second": 10.601,
+            "epoch": 0.11693057247259439,
+            "step": 150
+        },
+        {
+            "loss": 0.5699372863769532,
+            "grad_norm": 0.04492238909006119,
+            "learning_rate": 4.507772020725389e-05,
+            "epoch": 0.1364190012180268,
+            "step": 175
+        },
+        {
+            "loss": 0.5202191925048828,
+            "grad_norm": 0.04486725851893425,
+            "learning_rate": 4.99996677240388e-05,
+            "epoch": 0.1559074299634592,
+            "step": 200
+        },
+        {
+            "loss": 0.5135804748535157,
+            "grad_norm": 0.04178831726312637,
+            "learning_rate": 4.999113058265831e-05,
+            "epoch": 0.1753958587088916,
+            "step": 225
+        },
+        {
+            "loss": 0.5681230545043945,
+            "grad_norm": 0.04146995767951012,
+            "learning_rate": 4.997106059269182e-05,
+            "epoch": 0.19488428745432398,
+            "step": 250
+        },
+        {
+            "loss": 0.5527764892578125,
+            "grad_norm": 0.03632618859410286,
+            "learning_rate": 4.993946701599143e-05,
+            "epoch": 0.2143727161997564,
+            "step": 275
+        },
+        {
+            "loss": 0.487593879699707,
+            "grad_norm": 0.044408589601516724,
+            "learning_rate": 4.9896364432287155e-05,
+            "epoch": 0.23386114494518878,
+            "step": 300
+        },
+        {
+            "eval_loss": 0.577243983745575,
+            "eval_runtime": 104.0523,
+            "eval_samples_per_second": 10.62,
+            "eval_steps_per_second": 10.62,
+            "epoch": 0.23386114494518878,
+            "step": 300
+        },
+        {
+            "loss": 0.5414926147460938,
+            "grad_norm": 0.04547398164868355,
+            "learning_rate": 4.984177273245867e-05,
+            "epoch": 0.25334957369062117,
+            "step": 325
+        },
+        {
+            "loss": 0.4993572616577148,
+            "grad_norm": 0.05312593653798103,
+            "learning_rate": 4.977571710935614e-05,
+            "epoch": 0.2728380024360536,
+            "step": 350
+        },
+        {
+            "loss": 0.48734905242919924,
+            "grad_norm": 0.036984603852033615,
+            "learning_rate": 4.969822804617427e-05,
+            "epoch": 0.292326431181486,
+            "step": 375
+        },
+        {
+            "loss": 0.527374382019043,
+            "grad_norm": 0.04395299777388573,
+            "learning_rate": 4.9609341302384994e-05,
+            "epoch": 0.3118148599269184,
+            "step": 400
+        },
+        {
+            "loss": 0.5179609298706055,
+            "grad_norm": 0.03391534462571144,
+            "learning_rate": 4.950909789723529e-05,
+            "epoch": 0.3313032886723508,
+            "step": 425
+        },
+        {
+            "loss": 0.5335378646850586,
+            "grad_norm": 0.035291723906993866,
+            "learning_rate": 4.939754409081768e-05,
+            "epoch": 0.3507917174177832,
+            "step": 450
+        },
+        {
+            "eval_loss": 0.5762356519699097,
+            "eval_runtime": 104.2008,
+            "eval_samples_per_second": 10.605,
+            "eval_steps_per_second": 10.605,
+            "epoch": 0.3507917174177832,
+            "step": 450
+        },
+        {
+            "loss": 0.5208808898925781,
+            "grad_norm": 0.03339061886072159,
+            "learning_rate": 4.9274731362722286e-05,
+            "epoch": 0.3702801461632156,
+            "step": 475
+        },
+        {
+            "loss": 0.5163131713867187,
+            "grad_norm": 0.03831247240304947,
+            "learning_rate": 4.9140716388280085e-05,
+            "epoch": 0.38976857490864797,
+            "step": 500
+        },
+        {
+            "loss": 0.47267009735107424,
+            "grad_norm": 0.0423029325902462,
+            "learning_rate": 4.8995561012408554e-05,
+            "epoch": 0.4092570036540804,
+            "step": 525
+        },
+        {
+            "loss": 0.4954922866821289,
+            "grad_norm": 0.02788134291768074,
+            "learning_rate": 4.883933222107161e-05,
+            "epoch": 0.4287454323995128,
+            "step": 550
+        },
+        {
+            "loss": 0.4970096588134766,
+            "grad_norm": 0.0316702201962471,
+            "learning_rate": 4.867210211036707e-05,
+            "epoch": 0.4482338611449452,
+            "step": 575
+        },
+        {
+            "loss": 0.5178851699829101,
+            "grad_norm": 0.03708506003022194,
+            "learning_rate": 4.849394785325594e-05,
+            "epoch": 0.46772228989037756,
+            "step": 600
+        },
+        {
+            "eval_loss": 0.570751428604126,
+            "eval_runtime": 103.912,
+            "eval_samples_per_second": 10.634,
+            "eval_steps_per_second": 10.634,
+            "epoch": 0.46772228989037756,
+            "step": 600
+        },
+        {
+            "loss": 0.512422103881836,
+            "grad_norm": 0.03720007464289665,
+            "learning_rate": 4.8304951663948793e-05,
+            "epoch": 0.48721071863581,
+            "step": 625
+        },
+        {
+            "loss": 0.5299452209472656,
+            "grad_norm": 0.04443345591425896,
+            "learning_rate": 4.810520075996576e-05,
+            "epoch": 0.5066991473812423,
+            "step": 650
+        },
+        {
+            "loss": 0.5099394607543946,
+            "grad_norm": 0.03789888322353363,
+            "learning_rate": 4.789478732188758e-05,
+            "epoch": 0.5261875761266748,
+            "step": 675
+        },
+        {
+            "loss": 0.5075323486328125,
+            "grad_norm": 0.03792717307806015,
+            "learning_rate": 4.7673808450816345e-05,
+            "epoch": 0.5456760048721072,
+            "step": 700
+        },
+        {
+            "loss": 0.4898610305786133,
+            "grad_norm": 0.034724701195955276,
+            "learning_rate": 4.744236612356546e-05,
+            "epoch": 0.5651644336175395,
+            "step": 725
+        },
+        {
+            "loss": 0.4586335754394531,
+            "grad_norm": 0.03345350921154022,
+            "learning_rate": 4.720056714559969e-05,
+            "epoch": 0.584652862362972,
+            "step": 750
+        },
+        {
+            "eval_loss": 0.5636692047119141,
+            "eval_runtime": 103.6532,
+            "eval_samples_per_second": 10.661,
+            "eval_steps_per_second": 10.661,
+            "epoch": 0.584652862362972,
+            "step": 750
+        },
+        {
+            "loss": 0.48445762634277345,
+            "grad_norm": 0.03226584568619728,
+            "learning_rate": 4.6948523101746786e-05,
+            "epoch": 0.6041412911084044,
+            "step": 775
+        },
+        {
+            "loss": 0.46227149963378905,
+            "grad_norm": 0.03492896258831024,
+            "learning_rate": 4.6686350304703566e-05,
+            "epoch": 0.6236297198538368,
+            "step": 800
+        },
+        {
+            "loss": 0.5038386154174804,
+            "grad_norm": 0.035682499408721924,
+            "learning_rate": 4.6414169741360216e-05,
+            "epoch": 0.6431181485992692,
+            "step": 825
+        },
+        {
+            "loss": 0.4995721817016602,
+            "grad_norm": 0.03451850265264511,
+            "learning_rate": 4.6132107016967565e-05,
+            "epoch": 0.6626065773447016,
+            "step": 850
+        },
+        {
+            "loss": 0.5354480361938476,
+            "grad_norm": 0.033137816935777664,
+            "learning_rate": 4.5840292297173026e-05,
+            "epoch": 0.682095006090134,
+            "step": 875
+        },
+        {
+            "loss": 0.5006021881103515,
+            "grad_norm": 0.038462549448013306,
+            "learning_rate": 4.5538860247952106e-05,
+            "epoch": 0.7015834348355664,
+            "step": 900
+        },
+        {
+            "eval_loss": 0.5577878952026367,
+            "eval_runtime": 104.2137,
+            "eval_samples_per_second": 10.603,
+            "eval_steps_per_second": 10.603,
+            "epoch": 0.7015834348355664,
+            "step": 900
+        },
+        {
+            "loss": 0.48496208190917967,
+            "grad_norm": 0.036715321242809296,
+            "learning_rate": 4.5227949973463025e-05,
+            "epoch": 0.7210718635809987,
+            "step": 925
+        },
+        {
+            "loss": 0.5034502410888672,
+            "grad_norm": 0.03852606564760208,
+            "learning_rate": 4.490770495185325e-05,
+            "epoch": 0.7405602923264312,
+            "step": 950
+        },
+        {
+            "loss": 0.4895667266845703,
+            "grad_norm": 0.03885359689593315,
+            "learning_rate": 4.457827296904758e-05,
+            "epoch": 0.7600487210718636,
+            "step": 975
+        },
+        {
+            "loss": 0.5557269668579101,
+            "grad_norm": 0.04210906848311424,
+            "learning_rate": 4.42398060505482e-05,
+            "epoch": 0.7795371498172959,
+            "step": 1000
+        },
+        {
+            "loss": 0.5123862457275391,
+            "grad_norm": 0.037655044347047806,
+            "learning_rate": 4.389246039127833e-05,
+            "epoch": 0.7990255785627284,
+            "step": 1025
+        },
+        {
+            "loss": 0.5284094619750976,
+            "grad_norm": 0.03644842281937599,
+            "learning_rate": 4.353639628350173e-05,
+            "epoch": 0.8185140073081608,
+            "step": 1050
+        },
+        {
+            "eval_loss": 0.5557665824890137,
+            "eval_runtime": 103.8933,
+            "eval_samples_per_second": 10.636,
+            "eval_steps_per_second": 10.636,
+            "epoch": 0.8185140073081608,
+            "step": 1050
+        },
+        {
+            "loss": 0.5089950180053711,
+            "grad_norm": 0.04095075652003288,
+            "learning_rate": 4.317177804285145e-05,
+            "epoch": 0.8380024360535931,
+            "step": 1075
+        },
+        {
+            "loss": 0.5473123550415039,
+            "grad_norm": 0.03921728581190109,
+            "learning_rate": 4.279877393250179e-05,
+            "epoch": 0.8574908647990256,
+            "step": 1100
+        },
+        {
+            "loss": 0.48407318115234377,
+            "grad_norm": 0.035654596984386444,
+            "learning_rate": 4.241755608551859e-05,
+            "epoch": 0.876979293544458,
+            "step": 1125
+        },
+        {
+            "loss": 0.5488758087158203,
+            "grad_norm": 0.03454877436161041,
+            "learning_rate": 4.202830042542374e-05,
+            "epoch": 0.8964677222898904,
+            "step": 1150
+        },
+        {
+            "loss": 0.4781006240844727,
+            "grad_norm": 0.030567357316613197,
+            "learning_rate": 4.163118658501032e-05,
+            "epoch": 0.9159561510353228,
+            "step": 1175
+        },
+        {
+            "loss": 0.5084899520874023,
+            "grad_norm": 0.031383220106363297,
+            "learning_rate": 4.1226397823446136e-05,
+            "epoch": 0.9354445797807551,
+            "step": 1200
+        },
+        {
+            "eval_loss": 0.5515475273132324,
+            "eval_runtime": 103.8617,
+            "eval_samples_per_second": 10.639,
+            "eval_steps_per_second": 10.639,
+            "epoch": 0.9354445797807551,
+            "step": 1200
+        },
+        {
+            "loss": 0.4878360748291016,
+            "grad_norm": 0.038234736770391464,
+            "learning_rate": 4.081412094170367e-05,
+            "epoch": 0.9549330085261876,
+            "step": 1225
+        },
+        {
+            "loss": 0.4703201675415039,
+            "grad_norm": 0.040476441383361816,
+            "learning_rate": 4.0394546196355634e-05,
+            "epoch": 0.97442143727162,
+            "step": 1250
+        },
+        {
+            "loss": 0.5285547637939453,
+            "grad_norm": 0.046116359531879425,
+            "learning_rate": 3.9967867211775784e-05,
+            "epoch": 0.9939098660170523,
+            "step": 1275
+        },
+        {
+            "loss": 0.4315835952758789,
+            "grad_norm": 0.03385333716869354,
+            "learning_rate": 3.9534280890785605e-05,
+            "epoch": 1.013252131546894,
+            "step": 1300
+        },
+        {
+            "loss": 0.40920223236083986,
+            "grad_norm": 0.03155552223324776,
+            "learning_rate": 3.9093987323788075e-05,
+            "epoch": 1.0327405602923265,
+            "step": 1325
+        },
+        {
+            "loss": 0.40589813232421873,
+            "grad_norm": 0.043475277721881866,
+            "learning_rate": 3.8647189696430376e-05,
+            "epoch": 1.0522289890377587,
+            "step": 1350
+        },
+        {
+            "eval_loss": 0.5600505471229553,
+            "eval_runtime": 103.4162,
+            "eval_samples_per_second": 10.685,
+            "eval_steps_per_second": 10.685,
+            "epoch": 1.0522289890377587,
+            "step": 1350
+        },
+        {
+            "loss": 0.4095016860961914,
+            "grad_norm": 0.041039250791072845,
+            "learning_rate": 3.8194094195838304e-05,
+            "epoch": 1.0717174177831912,
+            "step": 1375
+        },
+        {
+            "loss": 0.4087295913696289,
+            "grad_norm": 0.03542497754096985,
+            "learning_rate": 3.773490991546548e-05,
+            "epoch": 1.0912058465286236,
+            "step": 1400
+        },
+        {
+            "loss": 0.38386394500732424,
+            "grad_norm": 0.03600231185555458,
+            "learning_rate": 3.726984875860137e-05,
+            "epoch": 1.110694275274056,
+            "step": 1425
+        },
+        {
+            "loss": 0.3770546722412109,
+            "grad_norm": 0.03932006284594536,
+            "learning_rate": 3.679912534058274e-05,
+            "epoch": 1.1301827040194885,
+            "step": 1450
+        },
+        {
+            "loss": 0.4086454772949219,
+            "grad_norm": 0.04313809424638748,
+            "learning_rate": 3.632295688975336e-05,
+            "epoch": 1.149671132764921,
+            "step": 1475
+        },
+        {
+            "loss": 0.41506080627441405,
+            "grad_norm": 0.0423964187502861,
+            "learning_rate": 3.584156314721806e-05,
+            "epoch": 1.1691595615103532,
+            "step": 1500
+        },
+        {
+            "eval_loss": 0.5581676363945007,
+            "eval_runtime": 103.7371,
+            "eval_samples_per_second": 10.652,
+            "eval_steps_per_second": 10.652,
+            "epoch": 1.1691595615103532,
+            "step": 1500
+        },
+        {
+            "train_runtime": 9723.9725,
+            "train_samples_per_second": 6.332,
+            "train_steps_per_second": 0.396,
+            "total_flos": 8.083769988181524e+17,
+            "train_loss": 0.5048780265251795,
+            "epoch": 1.1691595615103532,
+            "step": 1500
+        },
+        {
+            "eval_loss": 0.5515475273132324,
+            "eval_runtime": 104.3373,
+            "eval_samples_per_second": 10.591,
+            "eval_steps_per_second": 10.591,
+            "epoch": 1.1691595615103532,
+            "step": 1500
+        }
+    ],
+    "generated_samples": [
+        {
+            "instruction": "Why is the scaling factor (1/√dk) applied in Scaled Dot-Product Attention?",
+            "context": "The two most commonly used attention functions are additive attention and dot-product (multiplicative) attention. Dot-product attention is identical to our algorithm, except for the scaling factor of 1/√dk. While the two are similar in theoretical complexity, dot-product attention is much faster and more space-efficient in practice, since it can be implemented using highly optimized matrix multiplication code. For large values of dk, the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients. To counteract this effect, we scale the dot products by 1/√dk.",
+            "response": "The scaling factor 1/√dk is applied in Scaled Dot-Product Attention to counteract the effect of large dot products growing in magnitude, which can push the softmax function into regions where it has extremely small gradients. This is particularly relevant for large values of dk, where the dot products can become very large. By scaling the dot products by 1/√dk, the softmax function is able to operate in regions with more manageable gradients, which is important for the stability and efficiency of the attention mechanism."
+        },
+        {
+            "instruction": "¿Cuáles fueron las consecuencias territoriales del Tratado de Utrecht para España?",
+            "context": "El Tratado de Utrecht, firmado en 1713, puso fin a la Guerra de Sucesión Española. España cedió Gibraltar y Menorca a Gran Bretaña, y los Países Bajos españoles y territorios italianos pasaron a Austria. Felipe V fue reconocido como rey de España, pero renunció a sus derechos al trono francés. El tratado también otorgó a Gran Bretaña el asiento, un contrato monopolístico para abastecer de esclavos africanos a las colonias españolas en América.",
+            "response": "El Tratado de Utrecht, firmado en 1713, tuvo como consecuencia territorial la cesión de Gibraltar y Menorca a Gran Bretaña, y la transferencia de los Países Bajos españoles y territorios italianos a Austria. Además, Felipe V renunció a sus derechos al trono francés y Gran Bretaña obtuvo el asiento, un contrato monopolístico para abastecer de esclavos africanos a las colonias españolas en América."
+        },
+        {
+            "instruction": "Quines eren les característiques principals del sistema de reg de l'Albufera?",
+            "context": "L'Albufera de València és un parc natural situat a uns 10 km al sud de la ciutat. El sistema de reg de la marjal es basa en una xarxa de canals i sèquies que distribueixen l'aigua provinent del riu Xúquer cap als arrossars. Les comportes de la Devesa regulen el nivell de l'aigua de la llacuna, essencial per al cultiu de l'arròs. Durant l'estiu, els arrossars s'inunden de manera controlada per afavorir la germinació, i a la tardor s'asseca el terreny per permetre la collita. Aquesta gestió hídrica és fonamental per mantenir tanto la producció agrícola com l'ecosistema natural.",
+            "response": "El sistema de reg de l'Albufera de València es caracteritza per una xarxa de canals i séquies que distribueixen aigua del riu Xúquer cap als arrossars. Aquest sistema és essencial per al cultiu de l'arròs, ja que les comportes de la Devesa regulen el nivell d'aigua de la llacuna. Durant l'estiu, els arrossars es reguen de manera controlada per afavorir la germinació, i a la tardor es dessecen per permetre la collita. Aquesta gestió hídrica és crucial per mantenir tant la producció agrícola com l'ecosistema natural de l'Albufera."
+        }
+    ]
+}

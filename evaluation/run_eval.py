@@ -33,7 +33,7 @@ if _proj_root not in sys.path:
 import pandas as pd
 import chromadb
 
-from rag.debug_rag.chat_pdfs import (
+from rag.chat_pdfs import (
     evaluar_pregunta_rag,
     PATH_DB,
     COLLECTION_NAME,

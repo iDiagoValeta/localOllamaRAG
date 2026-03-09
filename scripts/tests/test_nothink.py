@@ -8,7 +8,6 @@ MODEL_TEST = "Qwen3-NoThink-Test:latest"
 SYSTEM = "You are a helpful assistant."
 QUESTION = "What is 2+2? Answer briefly."
 
-# Qwen3 chat template that respects the 'think' flag from Ollama
 QWEN3_TEMPLATE = (
     "{%- if .System %}<|im_start|>system\n"
     "{{ .System }}<|im_end|>\n"
@@ -60,7 +59,6 @@ def assess(text):
     return "FALLO - RAZONA"
 
 
-# A: raw + think block vacio pre-rellenado
 sep("A) raw:true + <think></think> pre-rellenado")
 prompt_a = (f"<|im_start|>system\n{SYSTEM}<|im_end|>\n"
             f"<|im_start|>user\n{QUESTION}<|im_end|>\n"
@@ -71,7 +69,6 @@ resp_a = stream_generate({"model": MODEL, "prompt": prompt_a, "raw": True,
 print(f"  -> {assess(resp_a)}")
 time.sleep(1)
 
-# B: raw + /no_think en usuario
 sep("B) raw:true + /no_think en usuario")
 prompt_b = (f"<|im_start|>system\n{SYSTEM}<|im_end|>\n"
             f"<|im_start|>user\n/no_think\n{QUESTION}<|im_end|>\n"
@@ -82,7 +79,6 @@ resp_b = stream_generate({"model": MODEL, "prompt": prompt_b, "raw": True,
 print(f"  -> {assess(resp_b)}")
 time.sleep(1)
 
-# C: Modelfile derivado con plantilla Qwen3 nativa
 sep("C) Modelfile derivado con plantilla Qwen3 nativa")
 with tempfile.NamedTemporaryFile(mode="w", suffix=".Modelfile",
                                   delete=False, encoding="utf-8") as f:

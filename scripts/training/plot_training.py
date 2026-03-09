@@ -9,9 +9,10 @@ producido por `train.py`. El objetivo es facilitar el análisis experimental de:
 - Norma del gradiente (si está disponible en el historial).
 
 Uso:
-    python plot_training.py [ruta_al_training_stats.json]
+    python plot_training.py [ruta_al_training_stats.json] [--model qwen-3|llama-3]
 """
 
+import argparse
 import json
 import sys
 import os
@@ -34,35 +35,42 @@ except ImportError:
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
-DEFAULT_PATHS = [
-    os.path.join(PROJECT_ROOT, "training-output", "qwen-3", "training_stats.json"),
-    os.path.join(PROJECT_ROOT, "training-output", "training_stats.json"),
-    os.path.join(PROJECT_ROOT, "training_stats.json"),
-]
-IMAGES_DIR = os.path.join(PROJECT_ROOT, "training-output", "images")
+VALID_MODELS = ["qwen-3", "llama-3"]
 
 
-def find_stats_file(path_arg):
+def parse_args():
+    parser = argparse.ArgumentParser(description="Genera curvas de entrenamiento.")
+    parser.add_argument(
+        "stats_file", nargs="?", default=None,
+        help="Ruta explícita a training_stats.json (opcional).",
+    )
+    parser.add_argument(
+        "--model", choices=VALID_MODELS, default="qwen-3",
+        help="Modelo a visualizar (default: qwen-3).",
+    )
+    return parser.parse_args()
+
+
+def get_paths(model: str, stats_arg: str | None):
+    model_dir = os.path.join(PROJECT_ROOT, "training-output", model)
+    default_stats = os.path.join(model_dir, "training_stats.json")
+    stats_path = stats_arg if stats_arg else default_stats
+    images_dir = os.path.join(model_dir, "plots", "train")
+    return stats_path, images_dir
+
+
+def find_stats_file(stats_path: str) -> str:
     """
-    Resuelve la ruta del archivo de estadísticas de entrenamiento.
-
-    Prioridad de búsqueda:
-    1) Ruta pasada como argumento.
-    2) Rutas por defecto del proyecto.
+    Valida que el archivo de estadísticas de entrenamiento existe.
 
     Args:
-        path_arg: Ruta opcional recibida por línea de comandos.
+        stats_path: Ruta resuelta por get_paths().
 
     Returns:
-        Ruta existente encontrada o, en su defecto, una ruta candidata para
-        informar al usuario en el mensaje de error.
+        La misma ruta si existe; si no, la devuelve para que main() informe
+        del error con contexto.
     """
-    if path_arg and os.path.exists(path_arg):
-        return path_arg
-    for p in DEFAULT_PATHS:
-        if os.path.exists(p):
-            return p
-    return path_arg or DEFAULT_PATHS[0]
+    return stats_path
 
 
 # =============================================================================
@@ -82,8 +90,10 @@ def main():
     - 2 subgráficas: loss y learning rate.
     - 3 subgráficas: añade grad_norm cuando existen datos válidos.
     """
+    args = parse_args()
+    stats_path, IMAGES_DIR = get_paths(args.model, args.stats_file)
     os.makedirs(IMAGES_DIR, exist_ok=True)
-    stats_path = find_stats_file(sys.argv[1] if len(sys.argv) > 1 else None)
+    stats_path = find_stats_file(stats_path)
     if not os.path.exists(stats_path):
         print(f"Error: No existe {stats_path}")
         print("Ejecuta el entrenamiento primero o indica la ruta al archivo.")
@@ -163,7 +173,7 @@ def main():
         axes[1].set_xlabel("Step")
 
     plt.tight_layout()
-    out_path = os.path.join(IMAGES_DIR, "training_curves.png")
+    out_path = os.path.join(IMAGES_DIR, "training_curves.png")  # noqa: F821 — set in main()
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"Curvas de entrenamiento guardadas en: {out_path}")

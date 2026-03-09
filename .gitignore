@@ -8,44 +8,28 @@
 # llama.cpp (clonar como submódulo o por separado)
 llama.cpp/
 
-# Binarios descargados (quantize_to_q4km.ps1)
+# Binarios descargados
 llama-bin/
 
 # Modelo fusionado (generado por merge_lora.py, muy pesado)
+# Solo se conserva el .gitkeep raíz para mostrar que el directorio existe.
 models/merged-model/*
 !models/merged-model/.gitkeep
 
-# Artefactos de entrenamiento — Llama 3.1
-training-output/llama-3.1/*
-!training-output/llama-3.1/.gitkeep
-!training-output/llama-3.1/training_stats.json
-!training-output/llama-3.1/generated_samples.json
-
-# Artefactos de entrenamiento — Qwen 2.5
-training-output/qwen-2.5/*
-!training-output/qwen-2.5/.gitkeep
-!training-output/qwen-2.5/training_stats.json
-!training-output/qwen-2.5/generated_samples.json
+# Artefactos de entrenamiento — Llama 3
+training-output/llama-3/*
+!training-output/llama-3/training_stats.json
 
 # Artefactos de entrenamiento — Qwen 3
 training-output/qwen-3/*
-!training-output/qwen-3/.gitkeep
 !training-output/qwen-3/training_stats.json
-!training-output/qwen-3/generated_samples.json
 
-# GGUF output — Llama 3.1 (solo Modelfile)
-models/gguf-output/llama-3.1/*
-!models/gguf-output/llama-3.1/.gitkeep
-!models/gguf-output/llama-3.1/Modelfile
-
-# GGUF output — Qwen 2.5 (solo Modelfile)
-models/gguf-output/qwen-2.5/*
-!models/gguf-output/qwen-2.5/.gitkeep
-!models/gguf-output/qwen-2.5/Modelfile
+# GGUF output — Llama 3 (solo Modelfile)
+models/gguf-output/llama-3/*
+!models/gguf-output/llama-3/Modelfile
 
 # GGUF output — Qwen 3 (solo Modelfile)
 models/gguf-output/qwen-3/*
-!models/gguf-output/qwen-3/.gitkeep
 !models/gguf-output/qwen-3/Modelfile
 
 # Logs
@@ -89,10 +73,5 @@ rag/debug_rag/
 
 # Resultados de la evaluación con RAGAS
 ragas_scores.csv
-
-models/gguf-output/qwen3-4b
-models/gguf-output/qwen3-14b
-
-scripts/evaluation/
 
 .pytest_cache/
