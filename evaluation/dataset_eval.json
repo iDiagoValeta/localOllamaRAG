@@ -1,22 +1,22 @@
 [
   {
-    "question": "How does the Ragas framework define and measure 'Faithfulness' in a Retrieval Augmented Generation (RAG) system?",
-    "ground_truth": "In the Ragas framework, 'Faithfulness' ensures that the generated answer is grounded in the retrieved context to avoid hallucinations. It is measured by using an LLM to extract a set of individual statements from the generated answer, and then verifying if each statement can be inferred from the given context. The final score is the ratio of supported statements to the total number of extracted statements."
+    "question": "According to the retrieved documents about the Ragas framework, what does 'Faithfulness' refer to and why is it important in a RAG system?",
+    "ground_truth": "Faithfulness refers to the idea that the generated answer should be grounded in the given context. This is important to ensure factual consistency with the grounded sources and to avoid hallucinations, which is especially crucial in domains where information constantly evolves, such as law."
   },
   {
-    "question": "What is the core mechanism of Low-Rank Adaptation (LoRA) for fine-tuning large language models, and how does it reduce the number of trainable parameters?",
-    "ground_truth": "LoRA freezes the pre-trained model weights and injects trainable rank decomposition matrices into each layer of the Transformer architecture. By optimizing only these injected low-rank matrices instead of updating the full dense layers, LoRA significantly reduces the number of trainable parameters for downstream tasks."
+    "question": "What is the core mechanism of Low-Rank Adaptation (LoRA) for adapting large language models, and what effect does it have on the parameters?",
+    "ground_truth": "The core mechanism of LoRA involves freezing the pre-trained model weights and introducing or injecting trainable rank decomposition matrices into each layer of the Transformer architecture. This significantly reduces the number of trainable parameters for downstream tasks compared to full fine-tuning."
   },
   {
     "question": "What is the primary advantage of integrating both a 'thinking mode' and a 'non-thinking mode' into the unified framework of the Qwen3 models?",
-    "ground_truth": "The integration allows users to dynamically switch between complex, multi-step reasoning (thinking mode) and rapid, context-driven responses (non-thinking mode) within a single model. This eliminates the need to alternate between separate dedicated reasoning models and chat-optimized models, adapting the computational effort to the specific task efficiently."
+    "ground_truth": "The primary advantage is that it eliminates the need to switch between different models—such as dedicated reasoning models and chat-optimized models. It enables dynamic mode switching, allowing the model to adapt the computational effort and efficiently manage the reasoning applied based on user queries."
   },
   {
-    "question": "Why is measuring 'Context Relevance' important when evaluating a RAG architecture according to the Ragas framework?",
-    "ground_truth": "Context Relevance evaluates whether the retrieved context contains exclusively the focused information needed to answer a question, penalizing the inclusion of redundant data. This is important because feeding long, irrelevant context passages to LLMs is computationally expensive, and LLMs often become less effective at extracting information when context passages are too long."
+    "question": "Why is measuring 'Context Relevance' important when evaluating a RAG architecture?",
+    "ground_truth": "Context Relevance is important because it ensures the retrieved context is focused and contains as little irrelevant information as possible. Feeding long, irrelevant context passages to LLMs is computationally expensive, and LLMs are often less effective at exploiting the context when it is too long."
   },
   {
-    "question": "Why does Low-Rank Adaptation (LoRA) avoid introducing additional inference latency when deployed in production, unlike adapter layers?",
-    "ground_truth": "LoRA avoids additional inference latency because its linear design allows the newly trained low-rank matrices to be explicitly computed and merged with the frozen pre-trained weights during deployment. This creates a single updated weight matrix that performs inference exactly like a standard fully fine-tuned model."
+    "question": "According to the LoRA documentation, why do traditional adapter layers negatively impact online inference performance in production?",
+    "ground_truth": "Traditional adapter layers negatively impact online inference performance because they have sequential processing requirements. This introduces additional inference latency, which becomes particularly problematic in production settings, especially in scenarios involving small batch sizes or model sharding."
   }
 ]

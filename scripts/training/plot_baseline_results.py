@@ -44,19 +44,23 @@ with open(EVAL_JSON, "r", encoding="utf-8") as f:
 
 # ── Configuración visual ──────────────────────────────────────────────────────
 MODEL_LABELS = {
+    "meta-llama/Llama-3.1-8B-Instruct": "Llama-3.1-8B",
     "Qwen/Qwen3-14B":                "Qwen3-14B",
     "Qwen/Qwen3.5-9B":               "Qwen3.5-9B",
     "Qwen/Qwen2.5-14B-Instruct":     "Qwen2.5-14B",
-    "meta-llama/Llama-3.1-8B-Instruct": "Llama-3.1-8B",
+    "google/gemma-3-12b-it":         "Gemma-3-12B",
+    "microsoft/phi-4":               "Phi-4",
 }
 MODELS = list(MODEL_LABELS.keys())
 SHORT_LABELS = [MODEL_LABELS[m] for m in MODELS]
 
 PALETTE = {
+    "meta-llama/Llama-3.1-8B-Instruct": "#C44E52",
     "Qwen/Qwen3-14B":                "#4C72B0",
     "Qwen/Qwen3.5-9B":               "#DD8452",
     "Qwen/Qwen2.5-14B-Instruct":     "#55A868",
-    "meta-llama/Llama-3.1-8B-Instruct": "#C44E52",
+    "google/gemma-3-12b-it":         "#8172B2",
+    "microsoft/phi-4":               "#937860",
 }
 COLORS = [PALETTE[m] for m in MODELS]
 
@@ -214,7 +218,7 @@ def fig_grounding_delta():
 
     # Anotaciones de referencia
     ax.axhline(40, color="green", lw=0.8, linestyle=":", alpha=0.6)
-    ax.text(len(MODELS) - 0.1, 41, "40 pp", fontsize=8, color="green", ha="right")
+    ax.text(len(MODELS) - 1.1, 41, "40 pp", fontsize=8, color="green", ha="right")
 
     fig.tight_layout()
     save(fig, "03_context_grounding_delta.png")
@@ -442,7 +446,14 @@ def fig_heatmap():
     col_max = np.nanmax(mat, axis=0)
     mat_norm = (mat - col_min) / np.where(col_max - col_min < 1e-9, 1, col_max - col_min)
 
-    fig, ax = plt.subplots(figsize=(11, 7))
+    # Invertir Length (menos palabras = mejor → verde para valores bajos)
+    n_m = len(metrics_short)
+    length_idx = list(metrics_short.keys()).index("Avg_Response_Length_Words")
+    for s_idx in range(len(splits)):
+        col = s_idx * n_m + length_idx
+        mat_norm[:, col] = 1.0 - mat_norm[:, col]
+
+    fig, ax = plt.subplots(figsize=(11, 10))
     fig.suptitle("Heatmap de Métricas — Todos los Modelos, Modos y Splits", fontsize=12, fontweight="bold")
 
     im = ax.imshow(mat_norm, cmap="RdYlGn", aspect="auto", vmin=0, vmax=1)
@@ -452,8 +463,8 @@ def fig_heatmap():
     ax.set_yticks(np.arange(len(row_labels)))
     ax.set_yticklabels(row_labels)
 
-    # Separador entre con/sin contexto (cada 2 filas)
-    for y in [1.5, 3.5, 5.5]:
+    # Separador entre con/sin contexto (cada 2 filas, un separador por modelo)
+    for y in [1.5, 3.5, 5.5, 7.5, 9.5]:
         ax.axhline(y, color="white", lw=2)
 
     # Valores en las celdas
