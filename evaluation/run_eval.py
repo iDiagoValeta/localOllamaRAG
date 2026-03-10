@@ -1,12 +1,12 @@
 """
 Evaluación con RAGAS del pipeline RAG.
 
-Métricas evaluadas:
-    - answer_correctness: Calidad global de la respuesta (similitud semántica + overlap factual vs ground truth).
-    - faithfulness: ¿La respuesta se basa en los contextos recuperados?
-    - answer_relevancy: ¿La respuesta es relevante a la pregunta?
-    - context_precision: ¿Los contextos relevantes están bien rankeados?
-    - context_recall: ¿Se recuperaron todos los contextos necesarios?
+Métricas empleadas (según documentación RAGAS):
+    - Context Recall: Mide la capacidad del retriever para extraer toda la información relevante.
+    - Factual Correctness (answer_correctness): Precisión factual vs ground truth (TP/FP/FN).
+    - Context Precision: Evalúa el ranking de fragmentos recuperados.
+    - Faithfulness: Consistencia factual de la respuesta con el contexto recuperado.
+    - Response Relevancy (answer_relevancy): Grado en que la respuesta aborda la pregunta.
 """
 
 import os
@@ -85,82 +85,55 @@ def normalizar_columnas(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def configurar_llm_evaluacion():
-    """
-    Configura el LLM y embeddings para que RAGAS evalúe las métricas.
-    - LLM: Gemini (vía google-genai + llm_factory) o OpenAI como fallback.
-    - Embeddings: HuggingFace local (all-MiniLM-L6-v2) para evitar problemas
-      con la API de Google Embeddings.
-
-    Returns:
-        (evaluator_llm, evaluator_embeddings)
-    """
-    eval_llm = None
-    eval_embeddings = None
-
-    try:
-        from langchain_community.embeddings import HuggingFaceEmbeddings
-        from ragas.embeddings import LangchainEmbeddingsWrapper
-
-        hf_embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-        eval_embeddings = LangchainEmbeddingsWrapper(hf_embeddings)
-        print("Embeddings de evaluación: HuggingFace (all-MiniLM-L6-v2, local)")
-    except ImportError as err:
-        print(f"No se pudo cargar embeddings locales: {err}")
-        print("   Instala con: pip install sentence-transformers langchain-community")
-
     gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    if gemini_key:
-        try:
-            from google import genai
-            from ragas.llms import llm_factory
-
-            client = genai.Client(api_key=gemini_key)
-            eval_llm = llm_factory(
-                "gemini-2.0-flash",
-                provider="google",
-                client=client,
-            )
-            print("LLM de evaluación: Gemini 2.0 Flash (GEMINI_API_KEY)")
-        except ImportError as err:
-            print(f"GEMINI_API_KEY detectado pero google-genai no instalado: {err}")
-            print("   Instala con: pip install google-genai")
-    elif os.getenv("OPENAI_API_KEY"):
-        try:
-            from ragas.llms import llm_factory
-
-            eval_llm = llm_factory("gpt-4o-mini")
-            print("LLM de evaluación: OpenAI gpt-4o-mini (OPENAI_API_KEY)")
-        except ImportError as err:
-            print(f"OPENAI_API_KEY detectado pero openai no instalado: {err}")
-    else:
-        print("No se encontró GEMINI_API_KEY ni OPENAI_API_KEY.")
-        print("RAGAS necesita un LLM externo para calcular métricas.")
-        print("Configura una variable de entorno con tu API key.")
+    if not gemini_key:
+        print("No se encontró GEMINI_API_KEY ni GOOGLE_API_KEY.")
         raise SystemExit(1)
+    try:
+        from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
-    if eval_llm is None:
-        print("No se pudo configurar el LLM de evaluación.")
+        eval_llm = ChatGoogleGenerativeAI(
+            model="gemini-2.0-flash",
+            google_api_key=gemini_key,
+            temperature=0,
+        )
+        eval_embeddings = GoogleGenerativeAIEmbeddings(
+            model="models/gemini-embedding-001",
+            google_api_key=gemini_key,
+        )
+        print("LLM de evaluación: Gemini 2.0 Flash (langchain-google-genai)")
+        print("Embeddings de evaluación: Google gemini-embedding-001 (langchain-google-genai)")
+        return eval_llm, eval_embeddings
+    except ImportError as err:
+        print(f"Error: {err}")
+        print("  Instala con: pip install langchain-google-genai")
         raise SystemExit(1)
-
-    return eval_llm, eval_embeddings
 
 # ---------------------------------------------------------------------------
 # Formateo de resultados
 # ---------------------------------------------------------------------------
 
 METRIC_NAMES = [
-    "answer_correctness",
-    "faithfulness",
-    "answer_relevancy",
-    "context_precision",
-    "context_recall",
+    "answer_correctness",  # Factual Correctness
+    "faithfulness",        # Faithfulness
+    "answer_relevancy",    # Response Relevancy
+    "context_precision",   # Context Precision
+    "context_recall",      # Context Recall
 ]
 
+METRIC_DISPLAY_NAMES = {
+    "answer_correctness": "Factual Correctness",
+    "faithfulness":       "Faithfulness",
+    "answer_relevancy":   "Response Relevancy",
+    "context_precision":  "Context Precision",
+    "context_recall":     "Context Recall",
+}
+
 METRIC_DESCRIPTIONS = {
-    "answer_correctness": "Calidad global (semántica + factual vs ground truth)",
-    "faithfulness":       "Fidelidad al contexto recuperado",
-    "answer_relevancy":   "Relevancia de la respuesta a la pregunta",
-    "context_precision":  "Precisión del ranking de contextos",
+    "answer_correctness": "Precisión factual vs ground truth (TP/FP/FN, F1)",
+    "faithfulness":       "Consistencia factual de la respuesta con el contexto",
+    "answer_relevancy":   "Grado en que la respuesta aborda la pregunta",
+    "context_precision":  "Precisión del ranking de fragmentos recuperados",
     "context_recall":     "Cobertura de contextos necesarios",
 }
 
@@ -174,7 +147,7 @@ def imprimir_resultados(df_scores: pd.DataFrame, questions: list[str]):
         return
 
     print("\n" + "═" * 70)
-    print("  📊 RESULTADOS RAGAS — MEDIAS GLOBALES")
+    print("  RESULTADOS RAGAS — MEDIAS GLOBALES")
     print("═" * 70)
 
     medias = df_scores[metric_cols].mean(numeric_only=True).sort_values(ascending=False)
@@ -213,6 +186,97 @@ def imprimir_resultados(df_scores: pd.DataFrame, questions: list[str]):
 
     print("\n" + "=" * 70)
 
+
+def _extraer_justificaciones_traces(traces: list, metric_cols: list) -> list[dict]:
+    """
+    Extrae justificaciones de los traces de RAGAS cuando están disponibles.
+    Los traces contienen los outputs de los prompts LLM (TP/FP/FN, statements, etc.).
+    """
+    justificaciones = []
+    for i, trace in enumerate(traces):
+        justif = {}
+        if not hasattr(trace, "__getitem__"):
+            justificaciones.append(justif)
+            continue
+        for metric_name in metric_cols:
+            if metric_name not in trace:
+                continue
+            metric_data = trace[metric_name]
+            if isinstance(metric_data, dict):
+                prompts = []
+                for prompt_name, prompt_io in metric_data.items():
+                    if isinstance(prompt_io, dict) and "output" in prompt_io:
+                        out = prompt_io["output"]
+                        if isinstance(out, dict):
+                            prompts.append({"prompt": prompt_name, "output": out})
+                        elif out is not None:
+                            prompts.append({"prompt": prompt_name, "output": str(out)[:500]})
+                if prompts:
+                    justif[metric_name] = prompts
+            elif metric_data is not None:
+                justif[metric_name] = str(metric_data)[:500]
+        justificaciones.append(justif)
+    return justificaciones
+
+
+def guardar_debug(
+    result,
+    questions: list,
+    answers: list,
+    ground_truths: list,
+    contexts_list: list,
+    eval_dir: str,
+) -> str:
+    """
+    Guarda un archivo JSON de debug con respuestas del modelo y justificaciones de puntuaciones.
+    """
+    df = result.to_pandas()
+    metric_cols = [c for c in METRIC_NAMES if c in df.columns]
+
+    traces = getattr(result, "traces", []) or []
+    justificaciones = _extraer_justificaciones_traces(traces, metric_cols) if traces else [{}] * len(questions)
+
+    debug_entries = []
+    for i in range(len(questions)):
+        ctx_preview = []
+        for j, ctx in enumerate(contexts_list[i] if i < len(contexts_list) else []):
+            ctx_preview.append(ctx[:300] + "..." if len(ctx) > 300 else ctx)
+
+        entry = {
+            "indice": i + 1,
+            "pregunta": questions[i],
+            "respuesta_modelo": answers[i] if i < len(answers) else "",
+            "ground_truth": ground_truths[i] if i < len(ground_truths) else "",
+            "contextos_recuperados_preview": ctx_preview[:3],
+            "contextos_count": len(contexts_list[i]) if i < len(contexts_list) else 0,
+            "puntuaciones": {},
+            "justificaciones": justificaciones[i] if i < len(justificaciones) else {},
+        }
+        for m in metric_cols:
+            val = df.iloc[i][m] if i < len(df) else None
+            entry["puntuaciones"][METRIC_DISPLAY_NAMES.get(m, m)] = (
+                float(val) if val is not None and not pd.isna(val) else None
+            )
+        debug_entries.append(entry)
+
+    debug_data = {
+        "metricas_empleadas": {
+            METRIC_DISPLAY_NAMES.get(m, m): METRIC_DESCRIPTIONS.get(m, "")
+            for m in metric_cols
+        },
+        "resultados": debug_entries,
+        "medias_globales": {
+            METRIC_DISPLAY_NAMES.get(m, m): float(df[m].mean())
+            for m in metric_cols
+        },
+    }
+
+    debug_path = os.path.join(eval_dir, "ragas_debug.json")
+    with open(debug_path, "w", encoding="utf-8") as f:
+        json.dump(debug_data, f, ensure_ascii=False, indent=2)
+    return debug_path
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -236,20 +300,25 @@ def main():
         action="store_true",
         help="Mostrar progreso por pregunta",
     )
+    parser.add_argument(
+        "--no-debug",
+        action="store_true",
+        help="No guardar archivo ragas_debug.json",
+    )
     args = parser.parse_args()
 
     # ------------------------------------------------------------------
-    # 1. Importar métricas RAGAS v0.2+
+    # 1. Importar métricas RAGAS
     # ------------------------------------------------------------------
 
     try:
         from ragas import evaluate
         from ragas.metrics import (
-            AnswerCorrectness,
             faithfulness,
             answer_relevancy,
             context_precision,
             context_recall,
+            answer_correctness,
         )
         from ragas.dataset_schema import SingleTurnSample, EvaluationDataset
         from ragas.run_config import RunConfig
@@ -303,12 +372,18 @@ def main():
     contexts_list = []
     t_start = time.time()
 
-    for i, q in enumerate(questions):
-        if args.verbose:
-            print(f"   [{i+1}/{len(questions)}] {q[:60]}...")
-        answer, contexts = evaluar_pregunta_rag(q, collection)
-        answers.append(answer)
-        contexts_list.append(contexts)
+    try:
+        for i, q in enumerate(questions):
+            if args.verbose:
+                print(f"   [{i+1}/{len(questions)}] {q[:60]}...")
+            answer, contexts = evaluar_pregunta_rag(q, collection)
+            answers.append(answer)
+            contexts_list.append(contexts)
+    except ConnectionError as e:
+        print(f"\nError: No se pudo conectar a Ollama: {e}")
+        print("   Asegúrate de que Ollama está en ejecución antes de lanzar la evaluación.")
+        print("   Inicia Ollama con: ollama serve")
+        raise SystemExit(1)
 
     t_rag = time.time() - t_start
     print(f"   Pipeline completado en {t_rag:.1f}s ({t_rag/len(questions):.1f}s/pregunta)")
@@ -331,25 +406,12 @@ def main():
     eval_dataset = EvaluationDataset(samples=samples)
 
     # ------------------------------------------------------------------
-    # 7. Configurar métricas (usando objetos pre-instanciados y parcheando LLM)
+    # 7. Configurar métricas
     # ------------------------------------------------------------------
 
-    faithfulness.llm = eval_llm
-    answer_relevancy.llm = eval_llm
-    answer_relevancy.embeddings = eval_embeddings
-    context_precision.llm = eval_llm
-    context_recall.llm = eval_llm
-
-    metrics = [
-        faithfulness,
-        answer_relevancy,
-        context_precision,
-        context_recall,
-    ]
-
+    metrics = [faithfulness, answer_relevancy, context_precision, context_recall]
     if tiene_ground_truth:
-        ac = AnswerCorrectness(llm=eval_llm, embeddings=eval_embeddings)
-        metrics.insert(0, ac)
+        metrics.insert(0, answer_correctness)
 
     # ------------------------------------------------------------------
     # 8. Ejecutar evaluación RAGAS
@@ -363,6 +425,8 @@ def main():
     result = evaluate(
         dataset=eval_dataset,
         metrics=metrics,
+        llm=eval_llm,
+        embeddings=eval_embeddings,
         run_config=eval_run_config,
     )
 
@@ -388,6 +452,22 @@ def main():
         )
     df_scores.to_csv(out_path, index=False, encoding="utf-8")
     print(f"\nResultados guardados en: {out_path}")
+
+    # ------------------------------------------------------------------
+    # 11. Guardar debug (respuesta del modelo + justificaciones)
+    # ------------------------------------------------------------------
+
+    if not args.no_debug:
+        eval_dir = os.path.dirname(__file__)
+        debug_path = guardar_debug(
+            result=result,
+            questions=questions,
+            answers=answers,
+            ground_truths=ground_truths,
+            contexts_list=contexts_list,
+            eval_dir=eval_dir,
+        )
+        print(f"Debug guardado en: {debug_path}")
 
 
 if __name__ == "__main__":

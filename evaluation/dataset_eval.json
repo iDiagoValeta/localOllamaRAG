@@ -1,22 +1,22 @@
 [
   {
-    "question": "What is the primary motivation for scaling the dot products by 1/√dk in the Scaled Dot-Product Attention mechanism?",
-    "ground_truth": "The dot-product attention is scaled by $1/sqrt{d_k}$ to prevent large magnitudes from pushing the softmax function into regions with extremely small gradients as the dimension $d_k$ increases, thereby mitigating the vanishing gradient problem and ensuring effective model training."
+    "question": "How does the Ragas framework define and measure 'Faithfulness' in a Retrieval Augmented Generation (RAG) system?",
+    "ground_truth": "In the Ragas framework, 'Faithfulness' ensures that the generated answer is grounded in the retrieved context to avoid hallucinations. It is measured by using an LLM to extract a set of individual statements from the generated answer, and then verifying if each statement can be inferred from the given context. The final score is the ratio of supported statements to the total number of extracted statements."
   },
   {
-    "question": "How many parallel attention layers (heads) does the Transformer employ, and what are the dimensions for the keys and values in each head?",
-    "ground_truth": "The Transformer architecture utilizes 8 parallel attention heads with key and value dimensions ($d_k$, $d_v$) of 64, calculated by dividing the model dimension ($d_{model} = 512$) by the number of heads ($h = 8$), ensuring that the total computational cost remains comparable to that of a single-head attention mechanism with full dimensionality."
+    "question": "What is the core mechanism of Low-Rank Adaptation (LoRA) for fine-tuning large language models, and how does it reduce the number of trainable parameters?",
+    "ground_truth": "LoRA freezes the pre-trained model weights and injects trainable rank decomposition matrices into each layer of the Transformer architecture. By optimizing only these injected low-rank matrices instead of updating the full dense layers, LoRA significantly reduces the number of trainable parameters for downstream tasks."
   },
   {
-    "question": "What specific functions are used for the positional encodings in the Transformer, and why were they chosen over learned embeddings?",
-    "ground_truth": "The Transformer architecture utilizes fixed sinusoidal positional encodings—specifically sine and cosine functions of varying frequencies—to enable the model to learn relative positions and extrapolate to sequence lengths longer than those encountered during training, while maintaining performance parity with learned embeddings."
+    "question": "What is the primary advantage of integrating both a 'thinking mode' and a 'non-thinking mode' into the unified framework of the Qwen3 models?",
+    "ground_truth": "The integration allows users to dynamically switch between complex, multi-step reasoning (thinking mode) and rapid, context-driven responses (non-thinking mode) within a single model. This eliminates the need to alternate between separate dedicated reasoning models and chat-optimized models, adapting the computational effort to the specific task efficiently."
   },
   {
-    "question": "How does the architecture of the decoder stack differ from that of the encoder stack?",
-    "ground_truth": "While both consist of $N=6$ identical layers, the decoder is distinguished from the encoder by an additional encoder-decoder attention sub-layer and a masked self-attention mechanism that ensures the auto-regressive property by preventing positions from attending to subsequent outputs."
+    "question": "Why is measuring 'Context Relevance' important when evaluating a RAG architecture according to the Ragas framework?",
+    "ground_truth": "Context Relevance evaluates whether the retrieved context contains exclusively the focused information needed to answer a question, penalizing the inclusion of redundant data. This is important because feeding long, irrelevant context passages to LLMs is computationally expensive, and LLMs often become less effective at extracting information when context passages are too long."
   },
   {
-    "question": "What is the computational complexity per layer for a Self-Attention layer compared to a Recurrent layer?",
-    "ground_truth": "Self-attention layers have a computational complexity per layer of $O(n^2 cdot d)$ and $O(1)$ sequential operations, making them more efficient than recurrent layers ($O(n cdot d^2)$ with $O(n)$ sequential operations) when the sequence length $n$ is smaller than the representation dimensionality $d$ and significantly improving parallelization."
+    "question": "Why does Low-Rank Adaptation (LoRA) avoid introducing additional inference latency when deployed in production, unlike adapter layers?",
+    "ground_truth": "LoRA avoids additional inference latency because its linear design allows the newly trained low-rank matrices to be explicitly computed and merged with the frozen pre-trained weights during deployment. This creates a single updated weight matrix that performs inference exactly like a standard fully fine-tuned model."
   }
 ]
