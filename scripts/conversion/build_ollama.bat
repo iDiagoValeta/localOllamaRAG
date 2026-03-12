@@ -9,7 +9,7 @@ REM   3) Cuantización a Q4_K_M.
 REM   4) Registro del modelo en Ollama.
 REM
 REM Uso:
-REM   build_ollama.bat [qwen-3|llama-3]
+REM   build_ollama.bat [qwen-3|llama-3|gemma-3]
 REM   (por defecto: qwen-3)
 REM
 REM Requisitos:
@@ -41,8 +41,11 @@ if "%MODEL%"=="qwen-3" (
 ) else if "%MODEL%"=="llama-3" (
     set GGUF_PREFIX=Llama3-8B
     set OLLAMA_NAME=Llama3-FineTuned
+) else if "%MODEL%"=="gemma-3" (
+    set GGUF_PREFIX=Gemma3-12B
+    set OLLAMA_NAME=Gemma3-FineTuned
 ) else (
-    echo ERROR: Modelo no reconocido "%MODEL%". Usa qwen-3 o llama-3.
+    echo ERROR: Modelo no reconocido "%MODEL%". Usa qwen-3, llama-3 o gemma-3.
     pause
     exit /b 1
 )

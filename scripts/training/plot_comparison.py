@@ -36,8 +36,8 @@ except ImportError:
 
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT  = os.path.dirname(os.path.dirname(SCRIPT_DIR))
-VALID_MODELS  = ["qwen-3", "llama-3"]
-MODEL_DISPLAY = {"qwen-3": "Qwen3-FineTuned", "llama-3": "Llama3-FineTuned"}
+VALID_MODELS  = ["qwen-3", "llama-3", "gemma-3"]
+MODEL_DISPLAY = {"qwen-3": "Qwen3-FineTuned", "llama-3": "Llama3-FineTuned", "gemma-3": "Gemma3-FineTuned"}
 
 # These globals are set by main() after resolving --model
 DATA_DIR        = os.path.join(PROJECT_ROOT, "training-output", "qwen-3")

@@ -75,3 +75,5 @@ rag/debug_rag/
 ragas_scores.csv
 
 .pytest_cache/
+
+.claude/

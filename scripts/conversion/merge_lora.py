@@ -23,7 +23,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 # antes de iniciar el proceso de fusión.
 # =============================================================================
 
-VALID_MODELS = ["qwen-3", "llama-3"]
+VALID_MODELS = ["qwen-3", "llama-3", "gemma-3"]
 
 parser = argparse.ArgumentParser(description="Fusiona adaptador LoRA con modelo base.")
 parser.add_argument(

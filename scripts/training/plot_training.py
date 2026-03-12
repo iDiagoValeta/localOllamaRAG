@@ -35,7 +35,7 @@ except ImportError:
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
-VALID_MODELS = ["qwen-3", "llama-3"]
+VALID_MODELS = ["qwen-3", "llama-3", "gemma-3"]
 
 
 def parse_args():
