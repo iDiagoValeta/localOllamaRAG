@@ -24,6 +24,10 @@ training-output/llama-3/*
 training-output/qwen-3/*
 !training-output/qwen-3/training_stats.json
 
+# Artefactos de entrenamiento — Gemma 3
+training-output/gemma-3/*
+!training-output/gemma-3/training_stats.json
+
 # GGUF output — Llama 3 (solo Modelfile)
 models/gguf-output/llama-3/*
 !models/gguf-output/llama-3/Modelfile
@@ -31,6 +35,10 @@ models/gguf-output/llama-3/*
 # GGUF output — Qwen 3 (solo Modelfile)
 models/gguf-output/qwen-3/*
 !models/gguf-output/qwen-3/Modelfile
+
+# GGUF output — Gemma 3 (solo Modelfile)
+models/gguf-output/gemma-3/*
+!models/gguf-output/gemma-3/Modelfile
 
 # Logs
 *.log

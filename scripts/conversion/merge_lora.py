@@ -16,6 +16,9 @@ import torch
 from peft import PeftModel, PeftConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+# Lee el token de HuggingFace desde las variables de entorno (acepta ambos nombres)
+HF_TOKEN = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN") or None
+
 # =============================================================================
 # SECCIÓN 1: RUTAS Y VALIDACIÓN DE ARTEFACTOS
 # =============================================================================
@@ -74,8 +77,9 @@ base_model = AutoModelForCausalLM.from_pretrained(
     torch_dtype=torch.float16,
     device_map="cpu",
     trust_remote_code=True,
+    token=HF_TOKEN,
 )
-tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+tokenizer = AutoTokenizer.from_pretrained(base_model_name, token=HF_TOKEN)
 print("  Modelo base cargado.")
 
 # =============================================================================
@@ -88,7 +92,7 @@ print("  Modelo base cargado.")
 print("\n" + "=" * 60)
 print("[3/4] Fusionando adaptador LoRA con modelo base...")
 print("=" * 60)
-model = PeftModel.from_pretrained(base_model, LORA_PATH)
+model = PeftModel.from_pretrained(base_model, LORA_PATH, token=HF_TOKEN)
 merged_model = model.merge_and_unload()
 print("  Fusión completada.")
 
