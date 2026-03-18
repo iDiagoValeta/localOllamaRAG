@@ -1,72 +1,76 @@
 """
-evaluate_baselines.py — Evaluación de modelos base para RAG (TFG) — v1.2
-=========================================================================
+Baseline model evaluation benchmark for RAG.
 
-Benchmark comparativo de 6 modelos base (sin fine-tuning) sobre 3 datasets
-RAG, evaluados en dos modos (con contexto / sin contexto) y dos splits
-(dev / test).  Cada modelo se carga y descarga secuencialmente para evitar
-OOM en GPU.
+Comparative benchmark of 6 base models (without fine-tuning) across 3 RAG
+datasets, evaluated in two modes (with context / without context) and two
+splits (dev / test). Each model is loaded and unloaded sequentially to
+avoid GPU OOM errors.
 
-Modelos evaluados:
-  1. meta-llama/Llama-3.1-8B-Instruct — instruction-tuned estándar
-  2. Qwen/Qwen3-14B              — razonador, thinking desactivado
-  3. Qwen/Qwen3.5-9B             — razonador, thinking desactivado
-  4. Qwen/Qwen2.5-14B-Instruct   — instruction-tuned estándar
-  5. google/gemma-3-12b-it       — instruction-tuned estándar
-  6. microsoft/phi-4             — instruction-tuned estándar
+Models evaluated:
+  1. meta-llama/Llama-3.1-8B-Instruct  -- standard instruction-tuned
+  2. Qwen/Qwen3-14B                    -- reasoner, thinking disabled
+  3. Qwen/Qwen3.5-9B                   -- reasoner, thinking disabled
+  4. Qwen/Qwen2.5-14B-Instruct         -- standard instruction-tuned
+  5. google/gemma-3-12b-it              -- standard instruction-tuned
+  6. microsoft/phi-4                    -- standard instruction-tuned
 
 Datasets:
-  - neural-bridge/rag-dataset-12000       (EN, QA profesional)
-  - databricks/databricks-dolly-15k       (EN, categorías RAG)
-  - projecte-aina/RAG_Multilingual        (EN/ES/CA, multilingüe)
+  - neural-bridge/rag-dataset-12000       (EN, professional QA)
+  - databricks/databricks-dolly-15k       (EN, RAG categories)
+  - projecte-aina/RAG_Multilingual        (EN/ES/CA, multilingual)
 
-Métricas (por dataset + agregado ponderado):
+Metrics (per dataset + weighted aggregate):
   - Token F1 (SQuAD-standard)
   - Context Faithfulness (%)
   - Avg Response Length (words)
   - Sentence Completeness (%)
 
-Salida:
+Output:
   baseline-evaluation-output/baseline_evaluation.json
   baseline-evaluation-output/baseline_evaluation_samples.json
 
-Uso:
+Usage:
     python evaluate_baselines.py
+Dependencies:
+    - torch
+    - transformers (AutoModelForCausalLM, AutoTokenizer)
+    - datasets (load_dataset)
+    - tqdm
 """
 
-# =============================================================================
-# MAPA DEL MÓDULO — Índice de secciones
-# =============================================================================
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
 #
-#  CONFIGURACIÓN
-#  `-- 1. Entorno y constantes       CUDA env, modelos, caps, system prompts
+#  CONFIGURATION
+#  `-- 1. Environment and constants    CUDA env, models, caps, system prompts
 #
-#  EVALUACIÓN Y MÉTRICAS
-#  `-- 2. Métricas e inferencia
-#           2.1 normalize_text()          normalización EN/ES/CA
+#  EVALUATION AND METRICS
+#  `-- 2. Metrics and inference
+#           2.1 normalize_text()          EN/ES/CA normalization
 #           2.2 compute_f1()              Token F1 (SQuAD-standard)
-#           2.3 compute_context_faithfulness()  métrica primaria del TFG
-#           2.4 generate_response()       inferencia con chat template
+#           2.3 compute_context_faithfulness()  primary thesis metric
+#           2.4 generate_response()       inference with chat template
 #                                         (Qwen3/3.5: enable_thinking=False;
 #                                          Gemma-3: EOS=<end_of_turn>;
 #                                          Phi-4: EOS=<|im_end|>;
-#                                          Qwen2.5/Llama: template estándar)
-#           2.5 evaluate_on_datasets()    bucle sobre eval_datasets
+#                                          Qwen2.5/Llama: standard template)
+#           2.5 evaluate_on_datasets()    loop over eval_datasets
 #
-#  DATOS
-#  `-- 3. Carga de datasets (UNA sola vez, antes de cargar modelos)
-#           3.1 Normalizadores: _normalize_nb, _normalize_dolly, _normalize_aina
-#           3.2 Filtros: _filter_valid, _filter_long_response, _filter_dolly_rag
+#  DATA
+#  `-- 3. Dataset loading (ONCE, before loading models)
+#           3.1 Normalizers: _normalize_nb, _normalize_dolly, _normalize_aina
+#           3.2 Filters: _filter_valid, _filter_long_response, _filter_dolly_rag
 #           3.3 Neural-Bridge RAG      dev (train tail) + test (natural split)
 #           3.4 Dolly QA               dev/test (manual 80/10/10)
 #           3.5 Aina RAG Multilingual  dev (validation) + test (natural split)
-#           3.6 Diccionarios congelados: eval_datasets_dev, eval_datasets_test
+#           3.6 Frozen dictionaries: eval_datasets_dev, eval_datasets_test
 #
 #  PIPELINE
-#  |-- 4. Bucle principal   4 modelos × 2 modos × 2 splits (secuencial)
-#  `-- 5. Tabla resumen + guardado de baseline_evaluation.json
+#  |-- 4. Main loop   6 models x 2 modes x 2 splits (sequential)
+#  `-- 5. Summary table + save baseline_evaluation.json
 #
-# =============================================================================
+# ─────────────────────────────────────────────
 
 import gc
 import os
@@ -79,19 +83,18 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
-# =============================================================================
-# SECCIÓN 1: ENTORNO Y CONSTANTES
-# =============================================================================
-# Variables de entorno CUDA, lista de modelos, caps de evaluación, tokens
-# máximos y system prompts (con/sin contexto).
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 1: ENVIRONMENT AND CONSTANTS
+# ─────────────────────────────────────────────
+# CUDA environment variables, model list, evaluation caps, max tokens,
+# and system prompts (with/without context).
 
-# =============================================================================
-# Verificación de Token de Hugging Face
-# =============================================================================
+# ─────────────────────────────────────────────
+# Hugging Face Token Verification
+# ─────────────────────────────────────────────
 import os
 if not os.environ.get("HF_TOKEN") and not os.path.exists(os.path.expanduser("~/.cache/huggingface/token")):
-    print("WARNING: HF_TOKEN no está configurado en el entorno.")
+    print("WARNING: HF_TOKEN is not set in the environment.")
 
 os.environ["TORCH_COMPILE_DISABLE"] = "1"
 os.environ["TORCH_DYNAMO_DISABLE"] = "1"
@@ -101,10 +104,10 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 output_dir = os.path.join(os.getcwd(), "baseline-evaluation-output")
 os.makedirs(output_dir, exist_ok=True)
 
-# ── Modelos a evaluar (secuencialmente, uno a la vez para evitar OOM) ────────
-# Qwen3 y Qwen3.5 son razonadores: se desactiva thinking para RAG.
-# Qwen2.5-Instruct, Llama-3.1-Instruct, Gemma-3-12b-it y Phi-4 usan
-# chat template estándar (ninguno tiene modo reasoning activo).
+# -- Models to evaluate (sequentially, one at a time to avoid OOM) ----------
+# Qwen3 and Qwen3.5 are reasoners: thinking is disabled for RAG.
+# Qwen2.5-Instruct, Llama-3.1-Instruct, Gemma-3-12b-it and Phi-4 use
+# standard chat template (none have active reasoning mode).
 MODELS = [
     "meta-llama/Llama-3.1-8B-Instruct",
     "Qwen/Qwen3-14B",
@@ -114,15 +117,15 @@ MODELS = [
     "microsoft/phi-4"
 ]
 
-# ── Caps por split ───────────────────────────────────────────────────────────
-EVAL_SAMPLES_DEV  = 150   # por dataset, split de validación
-EVAL_SAMPLES_TEST = 200   # por dataset, split de test (congelado)
+# -- Caps per split ---------------------------------------------------------
+EVAL_SAMPLES_DEV  = 150   # per dataset, validation split
+EVAL_SAMPLES_TEST = 200   # per dataset, test split (frozen)
 
-# ── Tokens ───────────────────────────────────────────────────────────────────
+# -- Tokens -----------------------------------------------------------------
 EVAL_MAX_NEW_TOKENS = 2048
 MAX_CONTEXT_TOKENS  = 2048
 
-# ── System prompt (idéntico al de train.py v7.2) ────────────────────────────
+# -- System prompt (identical to train.py v7.2) -----------------------------
 SYSTEM_PROMPT = (
     "You are a professional document analysis assistant. Your role is to answer "
     "questions accurately based on the provided document context.\n\n"
@@ -138,7 +141,7 @@ SYSTEM_PROMPT = (
     "- Synthesize information naturally rather than copying text verbatim."
 )
 
-# System prompt para modo sin contexto (sin referencia a <context> tags)
+# System prompt for no-context mode (no reference to <context> tags)
 SYSTEM_PROMPT_NO_CONTEXT = (
     "You are a professional knowledge assistant. Your role is to answer "
     "questions accurately using your general knowledge.\n\n"
@@ -152,21 +155,20 @@ SYSTEM_PROMPT_NO_CONTEXT = (
 DOLLY_RAG_CATEGORIES = {"closed_qa", "information_extraction", "summarization"}
 
 
-# =============================================================================
-# SECCIÓN 2: MÉTRICAS E INFERENCIA
-# =============================================================================
-# Cuatro métricas RAG sin dependencias externas.
+# ─────────────────────────────────────────────
+# SECTION 2: METRICS AND INFERENCE
+# ─────────────────────────────────────────────
+# Four RAG metrics with no external dependencies.
 #
-# Primaria (evidencia principal del TFG):
-#   Context Faithfulness — % de tipos de token de la respuesta que aparecen
-#     en el contexto. Diferencia entre with_context y without_context
-#     demuestra cuánto se apoya el modelo en el documento proporcionado.
+# Primary (main thesis evidence):
+#   Context Faithfulness -- % of response token types that also appear
+#     in the context. The difference between with_context and without_context
+#     demonstrates how much the model relies on the provided document.
 #
-# Secundarias:
-#   Token F1              — overlap con gold answer, estándar SQuAD.
-#   Avg Response Length   — detecta cambios de verbosidad entre modelos.
-#   Sentence Completeness — detecta respuestas fragmentadas.
-# =============================================================================
+# Secondary:
+#   Token F1              -- overlap with gold answer, SQuAD standard.
+#   Avg Response Length   -- detects verbosity changes across models.
+#   Sentence Completeness -- detects fragmented responses.
 
 def normalize_text(text: str) -> str:
     """Lowercase, strip articles (EN/ES/CA) and punctuation."""
@@ -195,9 +197,15 @@ def compute_f1(prediction: str, ground_truth: str) -> float:
 
 
 def compute_context_faithfulness(prediction: str, context: str) -> float:
-    """
-    Context Faithfulness: fraction of unique prediction word-types that
-    also appear in the context.
+    """Compute Context Faithfulness: fraction of unique prediction word-types
+    that also appear in the context.
+
+    Args:
+        prediction: The model's generated response text.
+        context: The reference context document.
+
+    Returns:
+        A float between 0.0 and 1.0 representing the faithfulness ratio.
     """
     pred_types = set(normalize_text(prediction).split())
     ctx_types  = set(normalize_text(context).split())
@@ -211,10 +219,11 @@ def generate_response(
     max_new_tokens: int = EVAL_MAX_NEW_TOKENS,
     model_name: str = "",
 ) -> str:
-    """
-    Inference with chat template. Handles model-specific differences:
+    """Run inference with the appropriate chat template for each model family.
+
+    Handles model-specific differences:
       - Qwen3-14B / Qwen3.5-9B: uses enable_thinking=False to disable
-        reasoning mode (razonadores inapropiados para RAG directo).
+        reasoning mode (reasoners unsuitable for direct RAG).
         EOS token: <|im_end|>.
       - Qwen2.5-14B-Instruct: standard apply_chat_template.
         EOS token: <|im_end|>.
@@ -223,11 +232,22 @@ def generate_response(
       - Gemma-3-12b-it: standard apply_chat_template.
         EOS token: <end_of_turn> (+ native eos as fallback).
       - Llama-3.1-8B-Instruct: standard apply_chat_template.
-        EOS token: tokenizer.eos_token_id nativo.
+        EOS token: native tokenizer.eos_token_id.
 
-    Cuando with_context es False (llamado desde evaluate_on_datasets con
-    context=""), se usa SYSTEM_PROMPT_NO_CONTEXT que no menciona <context>
-    tags para no confundir al modelo.
+    When with_context is False (called from evaluate_on_datasets with
+    context=""), SYSTEM_PROMPT_NO_CONTEXT is used, which omits <context>
+    tag references to avoid confusing the model.
+
+    Args:
+        model: The loaded causal language model.
+        tokenizer: The corresponding tokenizer.
+        instruction: The user question or instruction.
+        context: The document context (empty string for no-context mode).
+        max_new_tokens: Maximum number of tokens to generate.
+        model_name: Full model name used for family detection.
+
+    Returns:
+        The generated response text, stripped of whitespace.
     """
     is_qwen3 = "Qwen3" in model_name  # covers Qwen3-14B and Qwen3.5-9B
 
@@ -258,9 +278,9 @@ def generate_response(
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
     # Determine EOS token(s):
-    #   Qwen + Phi-4  → <|im_end|>  (ChatML convention)
-    #   Gemma-3       → [<eos>, <end_of_turn>]  (both needed for clean stop)
-    #   Llama + rest  → tokenizer.eos_token_id native
+    #   Qwen + Phi-4  -> <|im_end|>  (ChatML convention)
+    #   Gemma-3       -> [<eos>, <end_of_turn>]  (both needed for clean stop)
+    #   Llama + rest  -> tokenizer.eos_token_id native
     if "Qwen" in model_name or "phi-4" in model_name.lower():
         eos_id = tokenizer.encode("<|im_end|>", add_special_tokens=False)[0]
     elif "gemma" in model_name.lower():
@@ -289,16 +309,21 @@ def evaluate_on_datasets(
     with_context: bool = True,
     model_name: str = "",
 ) -> tuple:
-    """
-    Evaluate a model on the provided eval_datasets dict.
+    """Evaluate a model on the provided eval_datasets dict.
 
     Args:
+        model: The loaded causal language model.
+        tokenizer: The corresponding tokenizer.
+        eval_datasets: Dict mapping dataset names to HuggingFace datasets.
+        label: Display label for progress bars.
         with_context: If True, passes context to the model. If False,
                       passes context="" (knowledge-only mode).
+        model_name: Full model name for family-specific handling.
 
     Returns:
-        all_metrics  dict[ds_name → metric dict]
-        all_results  dict[ds_name → list of per-sample dicts]
+        A tuple of (all_metrics, all_results) where all_metrics is
+        dict[ds_name -> metric dict] and all_results is
+        dict[ds_name -> list of per-sample dicts].
     """
     all_metrics = {}
     all_results = {}
@@ -361,7 +386,7 @@ def evaluate_on_datasets(
         all_metrics[ds_name] = metrics
         all_results[ds_name] = results
 
-        faith_note = "" if with_context else "  [N/A — no context]"
+        faith_note = "" if with_context else "  [N/A -- no context]"
         print(f"\n  {ds_name} ({n} samples):")
         print(f"    Token F1:               {metrics['Token_F1']:.2f}%")
         print(f"    Context Faithfulness:   {metrics['Context_Faithfulness_Pct']:.2f}%{faith_note}")
@@ -371,21 +396,20 @@ def evaluate_on_datasets(
     return all_metrics, all_results
 
 
-# =============================================================================
-# SECCIÓN 3: CARGA DE DATASETS (una sola vez, antes de cargar modelos)
-# =============================================================================
-# Los splits se cargan y congelan aquí. Se reutilizan para TODOS los modelos.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 3: DATASET LOADING (once, before loading models)
+# ─────────────────────────────────────────────
+# Splits are loaded and frozen here. They are reused for ALL models.
 
 print("\n" + "=" * 70)
-print("SECCIÓN 3: Cargando y congelando datasets")
+print("SECTION 3: Loading and freezing datasets")
 print("=" * 70)
 
 
-# ── Normalizadores ───────────────────────────────────────────────────────────
+# -- Normalizers ------------------------------------------------------------
 
 def _normalize_nb(example):
-    """Neural-Bridge: question→instruction, context, answer→response."""
+    """Neural-Bridge: question->instruction, context, answer->response."""
     return {
         "instruction": (example.get("question") or "").strip(),
         "context":     (example.get("context")  or "").strip(),
@@ -412,7 +436,7 @@ def _normalize_aina(example):
     }
 
 
-# ── Filtros ──────────────────────────────────────────────────────────────────
+# -- Filters ----------------------------------------------------------------
 
 def _filter_valid(ex):
     return (
@@ -435,7 +459,7 @@ def _filter_dolly_rag(ex):
     )
 
 
-# ── Neural-Bridge RAG ────────────────────────────────────────────────────────
+# -- Neural-Bridge RAG -----------------------------------------------------
 
 print("\n  Neural-Bridge RAG...")
 
@@ -463,7 +487,7 @@ nb_test = (
 print(f"    dev={len(nb_dev)}, test={len(nb_test)}")
 
 
-# ── Dolly QA ─────────────────────────────────────────────────────────────────
+# -- Dolly QA ---------------------------------------------------------------
 
 print("  Dolly QA (RAG-relevant categories only, manual 80/10/10)...")
 _dolly_all = (
@@ -484,7 +508,7 @@ print(f"    RAG rows total: {nd}")
 print(f"    dev={len(dolly_dev)}, test={len(dolly_test)}")
 
 
-# ── Aina RAG Multilingual ────────────────────────────────────────────────────
+# -- Aina RAG Multilingual -------------------------------------------------
 
 print("  Aina RAG Multilingual...")
 
@@ -509,7 +533,7 @@ aina_test = _load_aina("test")
 print(f"    dev={len(aina_dev)}, test={len(aina_test)}")
 
 
-# ── Construir diccionarios de evaluación congelados ──────────────────────────
+# -- Build frozen evaluation dictionaries ----------------------------------
 
 def _build_eval_dict(nb_ds, dolly_ds, aina_ds, cap: int, split_label: str) -> dict:
     """Build a frozen eval dict capping each dataset to `cap` samples."""
@@ -535,40 +559,39 @@ print(f"\n--> Total dev samples:  {total_dev}")
 print(f"--> Total test samples: {total_test}")
 
 
-# =============================================================================
-# SECCIÓN 4: BUCLE PRINCIPAL — 6 Modelos × 2 Modos × 2 Splits
-# =============================================================================
-# Orden: Llama-3.1-8B → Qwen3-14B → Qwen3.5-9B → Qwen2.5-14B →
-#        Gemma-3-12b-it → Phi-4
-# Cada modelo se carga, evalúa en 4 combinaciones (modo × split), y se
-# descarga con gc.collect() + torch.cuda.empty_cache() antes del siguiente.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 4: MAIN LOOP -- 6 Models x 2 Modes x 2 Splits
+# ─────────────────────────────────────────────
+# Order: Llama-3.1-8B -> Qwen3-14B -> Qwen3.5-9B -> Qwen2.5-14B ->
+#        Gemma-3-12b-it -> Phi-4
+# Each model is loaded, evaluated across 4 combinations (mode x split),
+# and unloaded with gc.collect() + torch.cuda.empty_cache() before the next.
 
 all_results = {}
 CHECKPOINT_PATH = os.path.join(output_dir, "baseline_checkpoint.json")
 
 if os.path.exists(CHECKPOINT_PATH):
-    print(f"\n--> Cargando checkpoint existente: {CHECKPOINT_PATH}")
+    print(f"\n--> Loading existing checkpoint: {CHECKPOINT_PATH}")
     try:
         with open(CHECKPOINT_PATH, "r", encoding="utf-8") as f:
             all_results = json.load(f)
     except Exception as e:
-        print(f"Error cargando checkpoint: {e}")
+        print(f"Error loading checkpoint: {e}")
         all_results = {}
 else:
     all_results = {}
 
 for model_idx, model_name in enumerate(MODELS, 1):
     print("\n" + "=" * 70)
-    print(f"[{model_idx}/{len(MODELS)}] Evaluando modelo: {model_name}")
+    print(f"[{model_idx}/{len(MODELS)}] Evaluating model: {model_name}")
     print("=" * 70)
 
     if model_name in all_results:
-        print(f"--> Modelo {model_name} ya evaluado (saltando).")
+        print(f"--> Model {model_name} already evaluated (skipping).")
         continue
 
-    # ── Cargar modelo ────────────────────────────────────────────────────────
-    print(f"\n--> Cargando {model_name}...")
+    # -- Load model ---------------------------------------------------------
+    print(f"\n--> Loading {model_name}...")
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         dtype=torch.bfloat16,
@@ -581,24 +604,24 @@ for model_idx, model_name in enumerate(MODELS, 1):
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.pad_token_id = tokenizer.eos_token_id
     tokenizer.padding_side = "right"
-    print(f"--> Modelo cargado: {model_name}")
+    print(f"--> Model loaded: {model_name}")
 
     model_results = {"with_context": {}, "without_context": {}}
 
-    # ── Evaluar en ambos modos ───────────────────────────────────────────────
+    # -- Evaluate in both modes ---------------------------------------------
     for with_context in [True, False]:
         mode_key = "with_context" if with_context else "without_context"
-        mode_label = "CON CONTEXTO" if with_context else "SIN CONTEXTO"
+        mode_label = "WITH CONTEXT" if with_context else "WITHOUT CONTEXT"
 
         print(f"\n{'─' * 60}")
-        print(f"  Modo: {mode_label}")
+        print(f"  Mode: {mode_label}")
         print(f"{'─' * 60}")
 
         mode_results = {}
 
-        # ── Evaluar en ambos splits ──────────────────────────────────────────
+        # -- Evaluate in both splits ----------------------------------------
         for split_name, eval_ds in [("dev", eval_datasets_dev), ("test", eval_datasets_test)]:
-            print(f"\n  ── Split: {split_name.upper()} ──")
+            print(f"\n  -- Split: {split_name.upper()} --")
 
             metrics, results = evaluate_on_datasets(
                 model, tokenizer, eval_ds,
@@ -634,7 +657,7 @@ for model_idx, model_name in enumerate(MODELS, 1):
 
             print(f"\n  Aggregate ({split_name}, {mode_label}):")
             print(f"    Token F1:             {aggregate['Token_F1']:.2f}%")
-            faith_note = "  [N/A — no context]" if not with_context else ""
+            faith_note = "  [N/A -- no context]" if not with_context else ""
             print(f"    Context Faithfulness: {aggregate['Context_Faithfulness_Pct']:.2f}%{faith_note}")
             print(f"    Avg Response Length:  {aggregate['Avg_Response_Length_Words']:.1f} words")
 
@@ -642,16 +665,16 @@ for model_idx, model_name in enumerate(MODELS, 1):
 
     all_results[model_name] = model_results
 
-    # ── Guardar Checkpoint ───────────────────────────────────────────────────
+    # -- Save checkpoint ----------------------------------------------------
     try:
         with open(CHECKPOINT_PATH, "w", encoding="utf-8") as f:
             json.dump(all_results, f, indent=4, ensure_ascii=False)
-        print(f"--> Checkpoint guardado: {CHECKPOINT_PATH}")
+        print(f"--> Checkpoint saved: {CHECKPOINT_PATH}")
     except Exception as e:
-        print(f"--> Warning: no se pudo guardar el checkpoint: {e}")
+        print(f"--> Warning: could not save checkpoint: {e}")
 
-    # ── Descargar modelo y liberar memoria ───────────────────────────────────
-    print(f"\n--> Descargando modelo {model_name} y liberando memoria GPU...")
+    # -- Unload model and free memory ---------------------------------------
+    print(f"\n--> Unloading model {model_name} and freeing GPU memory...")
     del model
     del tokenizer
     gc.collect()
@@ -659,25 +682,24 @@ for model_idx, model_name in enumerate(MODELS, 1):
     print("--> GPU cache cleared.\n")
 
 
-# =============================================================================
-# SECCIÓN 5: TABLA RESUMEN Y GUARDADO
-# =============================================================================
-# Imprime tabla con agregados ponderados por modelo/split/modo.
-# Guarda baseline_evaluation.json (completo) y _samples.json (solo agregados).
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 5: SUMMARY TABLE AND SAVE
+# ─────────────────────────────────────────────
+# Print table with weighted aggregates per model/split/mode.
+# Save baseline_evaluation.json (full) and _samples.json (aggregates only).
 
 print("\n" + "=" * 70)
-print("TABLA RESUMEN DE EVALUACIÓN DE BASELINES")
+print("BASELINE EVALUATION SUMMARY TABLE")
 print("=" * 70)
 
 # Table header
-header = f"{'Modelo':<35s} | {'Split':<5s} | {'Modo':<12s} | {'Token_F1':>9s} | {'Ctx_Faith':>10s} | {'Avg_Len':>8s}"
+header = f"{'Model':<35s} | {'Split':<5s} | {'Mode':<12s} | {'Token_F1':>9s} | {'Ctx_Faith':>10s} | {'Avg_Len':>8s}"
 print(header)
 print("─" * len(header))
 
 for model_name in MODELS:
     short_name = model_name.split("/")[-1]
-    for mode_key, mode_label in [("with_context", "con contexto"), ("without_context", "sin contexto")]:
+    for mode_key, mode_label in [("with_context", "with context"), ("without_context", "no context")]:
         for split_name in ["dev", "test"]:
             agg = all_results[model_name][mode_key][split_name].get("aggregate", {})
             f1      = agg.get("Token_F1", 0.0)
@@ -690,17 +712,17 @@ for model_name in MODELS:
 
 print("─" * len(header))
 
-# ── Guardar JSON ─────────────────────────────────────────────────────────────
+# -- Save JSON --------------------------------------------------------------
 
 output_path = os.path.join(output_dir, "baseline_evaluation.json")
 try:
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(all_results, f, indent=4, ensure_ascii=False)
-    print(f"\n--> Resultados guardados: {output_path}")
+    print(f"\n--> Results saved: {output_path}")
 except Exception as e:
-    print(f"\n    Warning: no se pudo guardar el fichero: {e}")
+    print(f"\n    Warning: could not save file: {e}")
 
-# También guardar muestras compactas para inspección manual
+# Also save compact samples for manual inspection
 samples_path = os.path.join(output_dir, "baseline_evaluation_samples.json")
 try:
     compact = {}
@@ -714,12 +736,12 @@ try:
                 }
     with open(samples_path, "w", encoding="utf-8") as f:
         json.dump(compact, f, indent=4, ensure_ascii=False)
-    print(f"--> Resumen compacto guardado: {samples_path}")
+    print(f"--> Compact summary saved: {samples_path}")
 except Exception as e:
-    print(f"    Warning: no se pudo guardar el resumen compacto: {e}")
+    print(f"    Warning: could not save compact summary: {e}")
 
 print("\n" + "=" * 70)
-print("--> EVALUACIÓN DE BASELINES COMPLETADA")
-print(f"    Resultados completos: {output_path}")
-print(f"    Resumen compacto:     {samples_path}")
+print("--> BASELINE EVALUATION COMPLETED")
+print(f"    Full results:     {output_path}")
+print(f"    Compact summary:  {samples_path}")
 print("=" * 70)

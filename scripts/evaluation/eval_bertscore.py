@@ -1,47 +1,57 @@
 """
-eval_bertscore.py — Evaluación con BERTScore de modelos RAG (TFG)
+BERTScore evaluation for RAG models.
 ==================================================================
 
-Evalúa los 3 modelos (o uno concreto) — tanto la versión base como la
-versión fine-tuneada — empleando BERTScore como métrica principal de
-similitud semántica frente al ground truth.
+Evaluates all 3 models (or a specific one) -- both the base version and the
+fine-tuned version -- using BERTScore as the primary semantic similarity
+metric against the ground truth.
 
-BERTScore mide la similitud contextual entre predicción y referencia
-utilizando embeddings BERT, capturando paráfrasis y equivalencias
-semánticas que el Token F1 estándar (overlap léxico) no detecta.
+BERTScore measures contextual similarity between prediction and reference
+using BERT embeddings, capturing paraphrases and semantic equivalences
+that standard Token F1 (lexical overlap) cannot detect.
 
-Métricas reportadas por muestra y agregadas:
-  - BERTScore Precision (P)  — precisión semántica del texto generado.
-  - BERTScore Recall    (R)  — cobertura semántica de la referencia.
-  - BERTScore F1        (F1) — media armónica de P y R.
+Metrics reported per sample and aggregated:
+  - BERTScore Precision (P)  -- semantic precision of the generated text.
+  - BERTScore Recall    (R)  -- semantic coverage of the reference.
+  - BERTScore F1        (F1) -- harmonic mean of P and R.
 
-Datasets evaluados (mismos test sets congelados que los scripts de training):
-  - Neural-Bridge RAG   (200 muestras)
-  - Dolly QA            (200 muestras)
-  - Aina RAG            (200 muestras)
+Evaluated datasets (same frozen test sets as the training scripts):
+  - Neural-Bridge RAG   (200 samples)
+  - Dolly QA            (200 samples)
+  - Aina RAG            (200 samples)
 
 Pipeline:
-  [1] Cargar datasets (mismos splits y filtros que train-*.py).
-  [2] Para cada modelo seleccionado:
-      a) Cargar modelo base → generar predicciones → BERTScore.
-      b) Cargar modelo base + adaptador LoRA → generar predicciones → BERTScore.
-  [3] Guardar resultados en JSON y CSV resumen.
-  [4] Generar gráficas comparativas.
+  [1] Load datasets (same splits and filters as train-*.py).
+  [2] For each selected model:
+      a) Load base model -> generate predictions -> BERTScore.
+      b) Load base model + LoRA adapter -> generate predictions -> BERTScore.
+  [3] Save results in JSON and summary CSV.
+  [4] Generate comparative plots.
 
-Uso:
-    python eval_bertscore.py                       # Evalúa los 3 modelos
-    python eval_bertscore.py --model gemma-3       # Solo gemma-3
-    python eval_bertscore.py --model llama-3       # Solo llama-3
+Usage:
+    python eval_bertscore.py                       # Evaluate all 3 models
+    python eval_bertscore.py --model gemma-3       # Only gemma-3
+    python eval_bertscore.py --model llama-3       # Only llama-3
 
-Salida (en training-output/<model>/):
-    bertscore_results.json    — resultados detallados por muestra
+Output (all under bertscore/):
+    bertscore_results_{model}.json     -- detailed results per model
+    bertscore_summary.csv              -- global summary
     plots/eval/bertscore_comparison.png
+    bertscore_per_sample_{model}_{dataset}_{variant}.csv  -- P/R/F1 per sample (n=200)
+    metrics_per_sample_{model}_{dataset}_{variant}.csv    -- Token F1 + Faithfulness per sample
+
+    Use compute_std.py to compute mean +/- std over per-sample CSVs.
+
+Dependencies:
+    torch, transformers, peft, datasets, bert_score, tqdm, matplotlib
 """
 
-# =============================================================================
-# CRÍTICO: deshabilitar triton/torch.compile ANTES de cualquier import de torch
-# o transformers para evitar el crash de torchao en el clúster (Python.h)
-# =============================================================================
+# ─────────────────────────────────────────────
+# CONFIGURATION
+# ─────────────────────────────────────────────
+# CRITICAL: disable triton/torch.compile BEFORE any torch or transformers
+# import to avoid the torchao crash on the cluster (Python.h).
+
 import os
 os.environ["TORCH_COMPILE_DISABLE"] = "1"
 os.environ["TORCH_DYNAMO_DISABLE"]  = "1"
@@ -62,11 +72,12 @@ import bert_score.utils as _bsu
 # ---------------------------------------------------------------------------
 # MONKEY-PATCH: bert_score.utils.sent_encode
 # ---------------------------------------------------------------------------
-# La versión interna de sent_encode llama a tokenizer.encode() usando
-# tokenizer.model_max_length como max_length. Para DeBERTa ese valor puede
-# ser sys.maxsize (≈2^63), lo que hace que el backend Rust de `tokenizers`
-# lance OverflowError al intentar almacenarlo en un int de 32 bits.
-# El parche fuerza max_length=512 (límite físico de DeBERTa) y truncation=True.
+# The internal version of sent_encode calls tokenizer.encode() using
+# tokenizer.model_max_length as max_length.  For DeBERTa that value can
+# be sys.maxsize (~2^63), which causes the Rust backend of ``tokenizers``
+# to raise an OverflowError when trying to store it as a 32-bit int.
+# This patch forces max_length=512 (the physical limit of DeBERTa)
+# and truncation=True.
 # ---------------------------------------------------------------------------
 def _safe_sent_encode(tokenizer, a):
     return tokenizer.encode(
@@ -82,10 +93,6 @@ from datasets import load_dataset
 from peft import PeftModel, PeftConfig
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
-
-# =============================================================================
-# SECCIÓN 1: CONFIGURACIÓN
-# =============================================================================
 
 EVAL_SAMPLES_PER_DATASET = 200
 MAX_NEW_TOKENS           = 2048
@@ -127,28 +134,28 @@ MODEL_CONFIGS = {
 VALID_MODELS = list(MODEL_CONFIGS.keys())
 
 
-# =============================================================================
-# SECCIÓN 2: CLI
-# =============================================================================
+# ─────────────────────────────────────────────
+# CLI
+# ─────────────────────────────────────────────
 
 parser = argparse.ArgumentParser(
-    description="Evaluación BERTScore de modelos RAG (base vs. fine-tuned).",
+    description="BERTScore evaluation of RAG models (base vs. fine-tuned).",
 )
 parser.add_argument(
     "--model", choices=VALID_MODELS, default=None,
-    help="Modelo a evaluar. Si se omite, evalúa los 3.",
+    help="Model to evaluate. If omitted, evaluates all 3.",
 )
 parser.add_argument(
     "--output-dir", default=None,
-    help="Directorio raíz de salida de entrenamiento (por defecto: cwd).",
+    help="Root output directory for training output (default: cwd).",
 )
 parser.add_argument(
     "--bertscore-model", default=BERTSCORE_MODEL,
-    help=f"Modelo BERT para BERTScore (default: {BERTSCORE_MODEL}).",
+    help=f"BERT model for BERTScore (default: {BERTSCORE_MODEL}).",
 )
 parser.add_argument(
     "--batch-size", type=int, default=32,
-    help="Batch size para BERTScore (default: 32).",
+    help="Batch size for BERTScore (default: 32).",
 )
 args = parser.parse_args()
 
@@ -157,14 +164,14 @@ BERTSCORE_MODEL = args.bertscore_model
 models_to_eval = [args.model] if args.model else VALID_MODELS
 
 
-# =============================================================================
-# SECCIÓN 3: CARGA DE DATASETS (MISMOS SPLITS QUE TRAINING)
-# =============================================================================
-# Reutiliza la misma lógica de filtrado y normalización que train-*.py
-# para garantizar que el test set congelado sea idéntico.
-# =============================================================================
+# ─────────────────────────────────────────────
+# DATASET LOADING
+# ─────────────────────────────────────────────
+# Reuses the same filtering and normalization logic as train-*.py to
+# ensure that the frozen test set is identical.
 
 def _normalize_nb(example):
+    """Normalize Neural-Bridge RAG fields to the common schema."""
     return {
         "instruction": (example.get("question") or "").strip(),
         "context":     (example.get("context")  or "").strip(),
@@ -173,6 +180,7 @@ def _normalize_nb(example):
 
 
 def _normalize_dolly(example):
+    """Normalize Dolly QA fields to the common schema."""
     return {
         "instruction": (example.get("instruction") or "").strip(),
         "context":     (example.get("context")     or "").strip(),
@@ -182,6 +190,7 @@ def _normalize_dolly(example):
 
 
 def _normalize_aina(example):
+    """Normalize Aina RAG Multilingual fields to the common schema."""
     return {
         "instruction": (example.get("instruction") or "").strip(),
         "context":     (example.get("context")     or "").strip(),
@@ -190,6 +199,7 @@ def _normalize_aina(example):
 
 
 def _filter_valid(ex):
+    """Return True if all required fields are non-empty."""
     return (
         bool(ex["instruction"].strip())
         and bool(ex["context"].strip())
@@ -198,10 +208,12 @@ def _filter_valid(ex):
 
 
 def _filter_long_response(ex, min_words=15):
+    """Return True if the response has at least ``min_words`` words."""
     return len(ex["response"].split()) >= min_words
 
 
 def _filter_dolly_rag(ex):
+    """Return True if the example belongs to a RAG-relevant Dolly category."""
     return (
         ex["category"] in DOLLY_RAG_CATEGORIES
         and bool(ex["context"].strip())
@@ -209,8 +221,13 @@ def _filter_dolly_rag(ex):
 
 
 def load_eval_datasets() -> dict:
-    """Carga los 3 test sets congelados (idénticos a los de train-*.py)."""
-    print("\n--> Cargando datasets de evaluación...")
+    """Load the 3 frozen test sets (identical to those used in train-*.py).
+
+    Returns:
+        Dictionary mapping dataset names to HuggingFace Dataset objects,
+        each capped at ``EVAL_SAMPLES_PER_DATASET`` samples.
+    """
+    print("\n--> Loading evaluation datasets...")
 
     # Neural-Bridge RAG (test split)
     print("  Neural-Bridge RAG...")
@@ -221,7 +238,7 @@ def load_eval_datasets() -> dict:
         .shuffle(seed=42)
     )
 
-    # Dolly QA (manual split: último 10%)
+    # Dolly QA (manual split: last 10%)
     print("  Dolly QA...")
     _dolly_all = (
         load_dataset("databricks/databricks-dolly-15k", split="train")
@@ -258,19 +275,28 @@ def load_eval_datasets() -> dict:
     ]:
         n = min(EVAL_SAMPLES_PER_DATASET, len(test_ds))
         eval_datasets[name] = test_ds.select(range(n))
-        print(f"    {name}: {n} muestras (FROZEN)")
+        print(f"    {name}: {n} samples (FROZEN)")
 
     return eval_datasets
 
 
-# =============================================================================
-# SECCIÓN 4: GENERACIÓN DE RESPUESTAS (por modelo)
-# =============================================================================
-# Cada modelo usa su propio chat template y tokens de parada.
-# =============================================================================
+# ─────────────────────────────────────────────
+# RESPONSE GENERATION
+# ─────────────────────────────────────────────
+# Each model uses its own chat template and stop tokens.
 
 def _build_prompt(tokenizer, instruction, context, model_key):
-    """Construye el prompt usando el chat template nativo del modelo."""
+    """Build the prompt using the model's native chat template.
+
+    Args:
+        tokenizer: The HuggingFace tokenizer for the model.
+        instruction: The user instruction / question.
+        context: The document context to base the answer on.
+        model_key: Model identifier (``"qwen-3"``, ``"llama-3"``, or ``"gemma-3"``).
+
+    Returns:
+        Formatted prompt string ready for tokenization.
+    """
     ctx = (context or "").strip()
     if ctx:
         ctx_ids = tokenizer(ctx, add_special_tokens=False)["input_ids"]
@@ -307,7 +333,15 @@ def _build_prompt(tokenizer, instruction, context, model_key):
 
 
 def _get_eos_ids(tokenizer, model_key):
-    """Devuelve los EOS token IDs específicos de cada modelo."""
+    """Return the EOS token IDs specific to each model.
+
+    Args:
+        tokenizer: The HuggingFace tokenizer for the model.
+        model_key: Model identifier.
+
+    Returns:
+        List of EOS token IDs used as stopping criteria.
+    """
     if model_key == "qwen-3":
         return [tokenizer.encode("<|im_end|>", add_special_tokens=False)[0]]
     elif model_key == "llama-3":
@@ -319,7 +353,18 @@ def _get_eos_ids(tokenizer, model_key):
 
 
 def generate_response(model, tokenizer, instruction, context, model_key):
-    """Genera una respuesta usando el formato nativo del modelo."""
+    """Generate a response using the model's native format.
+
+    Args:
+        model: The loaded causal language model.
+        tokenizer: The corresponding tokenizer.
+        instruction: The user question.
+        context: The document context.
+        model_key: Model identifier.
+
+    Returns:
+        Generated response string, stripped of special tokens.
+    """
     prompt = _build_prompt(tokenizer, instruction, context, model_key)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
     eos_ids = _get_eos_ids(tokenizer, model_key)
@@ -339,7 +384,19 @@ def generate_response(model, tokenizer, instruction, context, model_key):
 
 
 def generate_all_predictions(model, tokenizer, eval_datasets, model_key, label):
-    """Genera predicciones para todos los datasets. Retorna dict[ds → list[str]]."""
+    """Generate predictions for all datasets.
+
+    Args:
+        model: The loaded causal language model.
+        tokenizer: The corresponding tokenizer.
+        eval_datasets: Dictionary of dataset name to HuggingFace Dataset.
+        model_key: Model identifier.
+        label: Display label for progress bars (e.g. ``"BASE"``).
+
+    Returns:
+        Tuple of (predictions, ground_truths) where each is a
+        dict mapping dataset names to lists of strings.
+    """
     predictions = {}
     ground_truths = {}
     model.eval()
@@ -361,26 +418,29 @@ def generate_all_predictions(model, tokenizer, eval_datasets, model_key, label):
     return predictions, ground_truths
 
 
-# =============================================================================
-# SECCIÓN 5: CÁLCULO DE BERTSCORE
-# =============================================================================
+# ─────────────────────────────────────────────
+# BERTSCORE COMPUTATION
+# ─────────────────────────────────────────────
 
 def compute_bertscore(predictions, ground_truths, batch_size=32):
-    """
-    Calcula BERTScore (P, R, F1) para cada dataset.
+    """Compute BERTScore (P, R, F1) for each dataset.
 
-    Retorna:
-        dict[ds_name → {
-            "P": [float], "R": [float], "F1": [float],
-            "avg_P": float, "avg_R": float, "avg_F1": float
-        }]
+    Args:
+        predictions: Dict mapping dataset names to lists of predicted strings.
+        ground_truths: Dict mapping dataset names to lists of reference strings.
+        batch_size: Batch size for BERTScore computation.
+
+    Returns:
+        Dict mapping dataset names to score dictionaries containing
+        per-sample lists (``P``, ``R``, ``F1``) and averages
+        (``avg_P``, ``avg_R``, ``avg_F1``) as percentages.
     """
     results = {}
     for ds_name in predictions:
         preds = predictions[ds_name]
         refs  = ground_truths[ds_name]
 
-        print(f"  Calculando BERTScore para {ds_name} ({len(preds)} muestras)...")
+        print(f"  Computing BERTScore for {ds_name} ({len(preds)} samples)...")
         P, R, F1 = bert_score_fn(
             preds, refs,
             model_type=BERTSCORE_MODEL,
@@ -408,13 +468,20 @@ def compute_bertscore(predictions, ground_truths, batch_size=32):
     return results
 
 
-# =============================================================================
-# SECCIÓN 6: MÉTRICAS AUXILIARES (Token F1, Faithfulness)
-# =============================================================================
-# Se incluyen para comparación directa con los resultados de train-*.py.
-# =============================================================================
+# ─────────────────────────────────────────────
+# AUXILIARY METRICS
+# ─────────────────────────────────────────────
+# Included for direct comparison with the results from train-*.py.
 
 def normalize_text(text):
+    """Normalize text by lowercasing, removing articles and punctuation.
+
+    Args:
+        text: Raw text string.
+
+    Returns:
+        Cleaned, whitespace-normalized string.
+    """
     text = str(text).lower()
     text = re.sub(
         r'\b(a|an|the|el|la|los|las|un|una|unos|unas|les|els|uns|unes)\b',
@@ -425,6 +492,15 @@ def normalize_text(text):
 
 
 def compute_f1(prediction, ground_truth):
+    """Compute token-level F1 between prediction and ground truth.
+
+    Args:
+        prediction: Predicted text string.
+        ground_truth: Reference text string.
+
+    Returns:
+        Token F1 score as a float in [0, 1].
+    """
     pred_tok  = normalize_text(prediction).split()
     truth_tok = normalize_text(ground_truth).split()
     if not pred_tok or not truth_tok:
@@ -439,6 +515,15 @@ def compute_f1(prediction, ground_truth):
 
 
 def compute_context_faithfulness(prediction, context):
+    """Compute faithfulness as the fraction of prediction tokens found in context.
+
+    Args:
+        prediction: Predicted text string.
+        context: Source context string.
+
+    Returns:
+        Faithfulness score as a float in [0, 1].
+    """
     pred_types = set(normalize_text(prediction).split())
     ctx_types  = set(normalize_text(context).split())
     if not pred_types:
@@ -446,19 +531,24 @@ def compute_context_faithfulness(prediction, context):
     return len(pred_types & ctx_types) / len(pred_types)
 
 
-# =============================================================================
-# SECCIÓN 7: GRÁFICAS
-# =============================================================================
+# ─────────────────────────────────────────────
+# PLOTS
+# ─────────────────────────────────────────────
 
 def plot_bertscore_comparison(all_results, output_path):
-    """Genera gráfica comparativa de BERTScore F1 (base vs adapted) por modelo y dataset."""
+    """Generate a comparative BERTScore F1 chart (base vs. adapted) per model and dataset.
+
+    Args:
+        all_results: Dict mapping model keys to their evaluation result dicts.
+        output_path: File path for the saved PNG.
+    """
     try:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         import numpy as np
     except ImportError:
-        print("  matplotlib no disponible — se omiten las gráficas.")
+        print("  matplotlib not available -- skipping plots.")
         return
 
     models_in = list(all_results.keys())
@@ -508,11 +598,16 @@ def plot_bertscore_comparison(all_results, output_path):
     fig.tight_layout()
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print(f"  Gráfica guardada: {output_path}")
+    print(f"  Plot saved: {output_path}")
 
 
 def plot_bertscore_aggregate(all_results, output_path):
-    """Gráfica agregada de BERTScore P/R/F1 por modelo."""
+    """Generate an aggregated BERTScore P/R/F1 chart per model.
+
+    Args:
+        all_results: Dict mapping model keys to their evaluation result dicts.
+        output_path: File path for the saved PNG.
+    """
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -561,25 +656,36 @@ def plot_bertscore_aggregate(all_results, output_path):
         ax.legend(fontsize=8)
         ax.grid(axis="y", alpha=0.3, zorder=0)
 
-    fig.suptitle("BERTScore agregado — Base vs. Fine-tuned por modelo",
+    fig.suptitle("Aggregated BERTScore — Base vs. Fine-tuned per model",
                  fontsize=13, fontweight="bold", y=1.02)
     fig.tight_layout()
     fig.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
-    print(f"  Gráfica guardada: {output_path}")
+    print(f"  Plot saved: {output_path}")
 
 
-# =============================================================================
-# SECCIÓN 8: PIPELINE PRINCIPAL
-# =============================================================================
+# ─────────────────────────────────────────────
+# MAIN PIPELINE
+# ─────────────────────────────────────────────
 
 def get_adapter_path(model_key):
+    """Resolve the LoRA adapter path.
+
+    Compatible with the cluster directory structure
+    (``training-output-<model>``) and the local structure
+    (``training-output/<model>/``).
+
+    Args:
+        model_key: Model identifier.
+
+    Returns:
+        Path to the directory containing ``adapter_config.json``.
+
+    Raises:
+        FileNotFoundError: If the adapter cannot be found in any
+            expected location.
     """
-    Resuelve la ruta del adaptador LoRA.
-    Compatible con la estructura del clúster (training-output-<modelo>)
-    y con la estructura local (training-output/<modelo>/).
-    """
-    # Estructura del clúster: training-output-gemma, training-output-llama, etc.
+    # Cluster structure: training-output-gemma, training-output-llama, etc.
     cluster_names = {
         "qwen-3":  "training-output-qwen",
         "llama-3": "training-output-llama",
@@ -589,46 +695,54 @@ def get_adapter_path(model_key):
     if os.path.exists(os.path.join(cluster_path, "adapter_config.json")):
         return cluster_path
 
-    # Estructura local: training-output/<modelo>/
+    # Local structure: training-output/<model>/
     local_path = os.path.join(OUTPUT_ROOT, "training-output", model_key)
     if os.path.exists(os.path.join(local_path, "adapter_config.json")):
         return local_path
 
     raise FileNotFoundError(
-        f"No se encontró el adaptador LoRA para {model_key}.\n"
-        f"  Buscado en: {cluster_path}\n"
-        f"           y: {local_path}"
+        f"LoRA adapter not found for {model_key}.\n"
+        f"  Searched in: {cluster_path}\n"
+        f"           and: {local_path}"
     )
 
 
 def get_results_dir(model_key):
-    """Resuelve el directorio de salida para resultados."""
-    # Misma lógica de detección que get_adapter_path
-    cluster_names = {
-        "qwen-3":  "training-output-qwen",
-        "llama-3": "training-output-llama",
-        "gemma-3": "training-output-gemma",
-    }
-    cluster_path = os.path.join(OUTPUT_ROOT, cluster_names[model_key])
-    if os.path.isdir(cluster_path):
-        return cluster_path
-    return os.path.join(OUTPUT_ROOT, "training-output", model_key)
+    """Resolve the output directory for results. Everything is saved under bertscore/.
+
+    Args:
+        model_key: Model identifier.
+
+    Returns:
+        Path to the results directory.
+    """
+    return os.path.join(OUTPUT_ROOT, "bertscore")
 
 
 def evaluate_model(model_key, eval_datasets, batch_size=32):
-    """Evalúa un modelo completo (base + adapted) con BERTScore."""
+    """Evaluate a complete model (base + adapted) with BERTScore.
+
+    Args:
+        model_key: Model identifier.
+        eval_datasets: Dictionary of dataset name to HuggingFace Dataset.
+        batch_size: Batch size for BERTScore computation.
+
+    Returns:
+        Result dictionary containing BERTScore and auxiliary metrics
+        for both base and adapted variants.
+    """
     cfg = MODEL_CONFIGS[model_key]
     hf_name = cfg["hf_name"]
     adapter_path = get_adapter_path(model_key)
     results_dir  = get_results_dir(model_key)
 
     print("\n" + "=" * 70)
-    print(f"  MODELO: {cfg['display']}  ({hf_name})")
-    print(f"  Adaptador: {adapter_path}")
+    print(f"  MODEL: {cfg['display']}  ({hf_name})")
+    print(f"  Adapter: {adapter_path}")
     print("=" * 70)
 
-    # --- Cargar modelo base ---
-    print(f"\n--> Cargando modelo base: {hf_name}")
+    # --- Load base model ---
+    print(f"\n--> Loading base model: {hf_name}")
     model = AutoModelForCausalLM.from_pretrained(
         hf_name,
         torch_dtype=torch.bfloat16,
@@ -641,16 +755,17 @@ def evaluate_model(model_key, eval_datasets, batch_size=32):
         tokenizer.pad_token_id = tokenizer.eos_token_id
     tokenizer.padding_side = "right"
 
-    # --- Predicciones BASE ---
-    print("\n--> [BASE] Generando predicciones...")
+    # --- BASE predictions ---
+    print("\n--> [BASE] Generating predictions...")
     base_preds, ground_truths = generate_all_predictions(
         model, tokenizer, eval_datasets, model_key, label="BASE"
     )
-    print("\n--> [BASE] Calculando BERTScore...")
+    print("\n--> [BASE] Computing BERTScore...")
     base_bertscore = compute_bertscore(base_preds, ground_truths, batch_size)
 
-    # Métricas auxiliares (Token F1, Faithfulness) para comparación
+    # Auxiliary metrics (Token F1, Faithfulness) for comparison
     base_aux = {}
+    base_aux_per_sample = {}
     for ds_name, ds in eval_datasets.items():
         f1s, faiths = [], []
         for pred, ex in zip(base_preds[ds_name], ds):
@@ -660,23 +775,25 @@ def evaluate_model(model_key, eval_datasets, batch_size=32):
             "Token_F1": round(sum(f1s) / len(f1s) * 100, 2),
             "Faithfulness": round(sum(faiths) / len(faiths) * 100, 2),
         }
+        base_aux_per_sample[ds_name] = {"token_f1": f1s, "faithfulness": faiths}
 
-    # --- Cargar adaptador LoRA ---
-    print(f"\n--> Aplicando adaptador LoRA desde: {adapter_path}")
+    # --- Load LoRA adapter ---
+    print(f"\n--> Applying LoRA adapter from: {adapter_path}")
     model = PeftModel.from_pretrained(model, adapter_path)
     model = model.merge_and_unload()
-    print("--> Adaptador fusionado.")
+    print("--> Adapter merged.")
 
-    # --- Predicciones ADAPTED ---
-    print("\n--> [ADAPTED] Generando predicciones...")
+    # --- ADAPTED predictions ---
+    print("\n--> [ADAPTED] Generating predictions...")
     adapted_preds, _ = generate_all_predictions(
         model, tokenizer, eval_datasets, model_key, label="ADAPTED"
     )
-    print("\n--> [ADAPTED] Calculando BERTScore...")
+    print("\n--> [ADAPTED] Computing BERTScore...")
     adapted_bertscore = compute_bertscore(adapted_preds, ground_truths, batch_size)
 
-    # Métricas auxiliares adaptadas
+    # Adapted auxiliary metrics
     adapted_aux = {}
+    adapted_aux_per_sample = {}
     for ds_name, ds in eval_datasets.items():
         f1s, faiths = [], []
         for pred, ex in zip(adapted_preds[ds_name], ds):
@@ -686,13 +803,14 @@ def evaluate_model(model_key, eval_datasets, batch_size=32):
             "Token_F1": round(sum(f1s) / len(f1s) * 100, 2),
             "Faithfulness": round(sum(faiths) / len(faiths) * 100, 2),
         }
+        adapted_aux_per_sample[ds_name] = {"token_f1": f1s, "faithfulness": faiths}
 
-    # --- Liberar GPU ---
+    # --- Free GPU memory ---
     del model
     gc.collect()
     torch.cuda.empty_cache()
 
-    # --- Montar resultado ---
+    # --- Assemble result ---
     datasets_list = list(eval_datasets.keys())
     result = {
         "model":       model_key,
@@ -733,7 +851,7 @@ def evaluate_model(model_key, eval_datasets, batch_size=32):
             },
             "sample_scores": [],
         }
-        # Guardar primeras 10 muestras con detalle para inspección
+        # Save first 10 samples with detail for inspection
         for i in range(min(10, len(eval_datasets[ds_name]))):
             ex = eval_datasets[ds_name][i]
             result["per_dataset"][ds_name]["sample_scores"].append({
@@ -747,32 +865,69 @@ def evaluate_model(model_key, eval_datasets, batch_size=32):
                 "adapt_token_f1":     compute_f1(adapted_preds[ds_name][i], ex["response"]),
             })
 
-    # --- Guardar JSON ---
+    # --- Save per-sample CSVs ---
+    bertscore_per_sample_dir = os.path.join(OUTPUT_ROOT, "bertscore")
+    os.makedirs(bertscore_per_sample_dir, exist_ok=True)
+    for ds_name in list(eval_datasets.keys()):
+        ds_slug = re.sub(r'[^a-z0-9]+', '_', ds_name.lower()).strip('_')
+        for variant, bs_data, aux_data in [
+            ("base",    base_bertscore,    base_aux_per_sample),
+            ("adapted", adapted_bertscore, adapted_aux_per_sample),
+        ]:
+            # BERTScore per sample
+            bs_csv = os.path.join(
+                bertscore_per_sample_dir,
+                f"bertscore_per_sample_{model_key}_{ds_slug}_{variant}.csv",
+            )
+            with open(bs_csv, "w", encoding="utf-8") as f:
+                f.write("sample_idx,bs_precision,bs_recall,bs_f1\n")
+                p_list = bs_data[ds_name]["P"]
+                r_list = bs_data[ds_name]["R"]
+                f1_list = bs_data[ds_name]["F1"]
+                for i, (p, r, f1) in enumerate(zip(p_list, r_list, f1_list)):
+                    f.write(f"{i},{p:.4f},{r:.4f},{f1:.4f}\n")
+
+            # Token F1 + Faithfulness per sample
+            aux_csv = os.path.join(
+                bertscore_per_sample_dir,
+                f"metrics_per_sample_{model_key}_{ds_slug}_{variant}.csv",
+            )
+            with open(aux_csv, "w", encoding="utf-8") as f:
+                f.write("sample_idx,token_f1,faithfulness\n")
+                tf1s  = aux_data[ds_name]["token_f1"]
+                faiths = aux_data[ds_name]["faithfulness"]
+                for i, (tf1, faith) in enumerate(zip(tf1s, faiths)):
+                    f.write(f"{i},{tf1:.4f},{faith:.4f}\n")
+
+    print(f"\n--> Per-sample CSVs saved to: {bertscore_per_sample_dir}")
+
+    # --- Save JSON ---
     os.makedirs(results_dir, exist_ok=True)
-    json_path = os.path.join(results_dir, "bertscore_results.json")
+    json_path = os.path.join(results_dir, f"bertscore_results_{model_key}.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=4, ensure_ascii=False)
-    print(f"\n--> Resultados guardados: {json_path}")
+    print(f"\n--> Results saved: {json_path}")
 
-    # --- Resumen ---
+    # --- Summary ---
     print(f"\n{'='*70}")
-    print(f"  RESUMEN BERTScore — {cfg['display']}")
+    print(f"  BERTSCORE SUMMARY — {cfg['display']}")
     print(f"{'='*70}")
     for ds_name in datasets_list:
         d = result["per_dataset"][ds_name]
-        print(f"\n  {ds_name} ({d['n_samples']} muestras):")
-        print(f"    Base     → BERTScore F1: {d['base']['BERTScore_F1']:.2f}%  |  Token F1: {d['base']['Token_F1']:.2f}%")
-        print(f"    Adapted  → BERTScore F1: {d['adapted']['BERTScore_F1']:.2f}%  |  Token F1: {d['adapted']['Token_F1']:.2f}%")
-        print(f"    Δ          BERTScore F1: {d['deltas']['BERTScore_F1']:+.2f}   |  Token F1: {d['deltas']['Token_F1']:+.2f}")
+        print(f"\n  {ds_name} ({d['n_samples']} samples):")
+        print(f"    Base     -> BERTScore F1: {d['base']['BERTScore_F1']:.2f}%  |  Token F1: {d['base']['Token_F1']:.2f}%")
+        print(f"    Adapted  -> BERTScore F1: {d['adapted']['BERTScore_F1']:.2f}%  |  Token F1: {d['adapted']['Token_F1']:.2f}%")
+        print(f"    Delta      BERTScore F1: {d['deltas']['BERTScore_F1']:+.2f}   |  Token F1: {d['deltas']['Token_F1']:+.2f}")
 
     return result
 
 
-# =============================================================================
-# SECCIÓN 9: MAIN
-# =============================================================================
+# ─────────────────────────────────────────────
+# MAIN
+# ─────────────────────────────────────────────
 
 def main():
+    """Run the full BERTScore evaluation pipeline for all selected models."""
     eval_datasets = load_eval_datasets()
 
     all_results = {}
@@ -780,9 +935,9 @@ def main():
         result = evaluate_model(model_key, eval_datasets, batch_size=args.batch_size)
         all_results[model_key] = result
 
-    # --- Gráficas (solo si hay al menos 1 modelo evaluado) ---
+    # --- Plots (only if at least 1 model was evaluated) ---
     if all_results:
-        # Gráfica por modelo y dataset
+        # Per-model and per-dataset plot
         first_key = list(all_results.keys())[0]
         results_dir = get_results_dir(first_key)
         plots_dir = os.path.join(results_dir, "plots", "eval")
@@ -793,7 +948,7 @@ def main():
         if len(all_results) > 1:
             plot_bertscore_aggregate(all_results, os.path.join(plots_dir, "bertscore_aggregate.png"))
 
-    # --- CSV resumen global ---
+    # --- Global summary CSV ---
     csv_lines = ["model,dataset,variant,BERTScore_P,BERTScore_R,BERTScore_F1,Token_F1,Faithfulness"]
     for model_key, result in all_results.items():
         for ds_name in result["per_dataset"]:
@@ -806,13 +961,14 @@ def main():
                     f"{v['Token_F1']},{v['Faithfulness']}"
                 )
 
-    csv_path = os.path.join(OUTPUT_ROOT, "bertscore_summary.csv")
+    csv_path = os.path.join(OUTPUT_ROOT, "bertscore", "bertscore_summary.csv")
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
     with open(csv_path, "w", encoding="utf-8") as f:
         f.write("\n".join(csv_lines) + "\n")
-    print(f"\n--> CSV resumen global: {csv_path}")
+    print(f"\n--> Global summary CSV: {csv_path}")
 
     print("\n" + "=" * 70)
-    print("  EVALUACIÓN BERTSCORE COMPLETADA")
+    print("  BERTSCORE EVALUATION COMPLETED")
     print("=" * 70)
 
 

@@ -1,22 +1,94 @@
 [
   {
-    "question": "According to the retrieved documents about the Ragas framework, what does 'Faithfulness' refer to and why is it important in a RAG system?",
-    "ground_truth": "Faithfulness refers to the idea that the generated answer should be grounded in the given context. This is important to ensure factual consistency with the grounded sources and to avoid hallucinations, which is especially crucial in domains where information constantly evolves, such as law."
+    "question": "According to the ragas.pdf document, what are the two main modules that compose a RAG system and what does each module do?",
+    "ground_truth": "RAG systems are composed of a retrieval module and an LLM-based generation module. The retrieval module identifies relevant and focused context passages from a reference textual database, while the LLM-based generation module exploits these passages in a faithful way to provide knowledge to the user, reducing the risk of hallucinations."
   },
   {
-    "question": "What is the core mechanism of Low-Rank Adaptation (LoRA) for adapting large language models, and what effect does it have on the parameters?",
-    "ground_truth": "The core mechanism of LoRA involves freezing the pre-trained model weights and introducing or injecting trainable rank decomposition matrices into each layer of the Transformer architecture. This significantly reduces the number of trainable parameters for downstream tasks compared to full fine-tuning."
+    "question": "Based on the ragas.pdf paper, how many Wikipedia pages were selected to construct the WikiEval dataset, and what time period do they cover?",
+    "ground_truth": "To construct the WikiEval dataset, the authors selected 50 Wikipedia pages covering events that have happened since the start of 2022."
   },
   {
-    "question": "What is the primary advantage of integrating both a 'thinking mode' and a 'non-thinking mode' into the unified framework of the Qwen3 models?",
-    "ground_truth": "The primary advantage is that it eliminates the need to switch between different models—such as dedicated reasoning models and chat-optimized models. It enables dynamic mode switching, allowing the model to adapt the computational effort and efficiently manage the reasoning applied based on user queries."
+    "question": "According to the Ragas paper, what are the two specific cases that the Answer Relevance metric penalizes?",
+    "ground_truth": "The Ragas framework focuses on settings where reference answers may not be available. The assessment of answer relevance penalises cases where the generated answer is incomplete or where it contains redundant information."
   },
   {
-    "question": "Why is measuring 'Context Relevance' important when evaluating a RAG architecture?",
-    "ground_truth": "Context Relevance is important because it ensures the retrieved context is focused and contains as little irrelevant information as possible. Feeding long, irrelevant context passages to LLMs is computationally expensive, and LLMs are often less effective at exploiting the context when it is too long."
+    "question": "According to the ragas.pdf document, what are two fundamental limitations of using LLMs as knowledge bases, and what is the standard solution to these issues?",
+    "ground_truth": "The document states that LLMs are not able to answer questions about events that have happened after they were trained, and they struggle to memorise knowledge that is only rarely mentioned in the training corpus. The standard solution to these issues is to rely on Retrieval Augmented Generation (RAG). Answering a question then essentially involves retrieving relevant passages from a corpus and feeding these passages, along with the original question, to the LM."
   },
   {
-    "question": "According to the LoRA documentation, why do traditional adapter layers negatively impact online inference performance in production?",
-    "ground_truth": "Traditional adapter layers negatively impact online inference performance because they have sequential processing requirements. This introduces additional inference latency, which becomes particularly problematic in production settings, especially in scenarios involving small batch sizes or model sharding."
+    "question": "Based on the ragas.pdf paper, what does the Faithfulness metric evaluate, and why is Context Relevance important?",
+    "ground_truth": "Faithfulness evaluates whether the claims made in the answer can be inferred from the given context, ensuring the answer is grounded, avoiding hallucinations, and ensuring that the retrieved context can act as a justification for the generated answer. Context Relevance ensures the retrieved context is focused and contains as little irrelevant information as possible, which is important given the cost associated with feeding long context passages to LLMs, as they are often less effective in exploiting that context, especially for information that is provided in the middle of the context passage."
+  },
+  {
+    "question": "According to the Ragas framework, what is the two-step process used to estimate faithfulness by prompting an LLM?",
+    "ground_truth": "To estimate faithfulness, the first step uses an LLM to decompose longer sentences in the generated answer into shorter and more focused assertions. The second step uses a verification function via prompting where the LLM determines if each extracted statement can be inferred from the given context."
+  },
+  {
+    "question": "According to the LoRA.pdf paper, how does Low-Rank Adaptation (LoRA) reduce the number of trainable parameters?",
+    "ground_truth": "LoRA freezes the pre-trained model weights and injects trainable rank decomposition matrices into each layer of the Transformer architecture, greatly reducing the number of trainable parameters for downstream tasks while maintaining or improving model performance."
+  },
+  {
+    "question": "According to the LoRA document, by how many times can LoRA reduce the number of trainable parameters compared to a fully fine-tuned GPT-3 175B?",
+    "ground_truth": "Compared to GPT-3 175B fine-tuned with Adam, LoRA can reduce the number of trainable parameters by 10,000 times."
+  },
+  {
+    "question": "Why do adapter layers introduce inference latency according to the LoRA paper?",
+    "ground_truth": "Adapter layers introduce inference latency because large neural networks rely on hardware parallelism to keep latency low, and adapter layers have to be processed sequentially. This is especially significant in online inference settings where the batch size is typically as small as one, and the extra compute in adapter layers cannot be bypassed directly. The additional depth also requires more synchronous GPU operations such as AllReduce and Broadcast, unless the adapter parameters are stored redundantly many times."
+  },
+  {
+    "question": "According to the LoRA.pdf paper, how are the matrices A and B initialized at the beginning of training, and what is the resulting value of the update matrix?",
+    "ground_truth": "The authors use a random Gaussian initialization for matrix A and zero for matrix B. As a result, the update matrix is zero at the beginning of training."
+  },
+  {
+    "question": "Based on the LoRA document, which types of attention weights yield the best downstream performance when adapted, and what module is frozen for simplicity?",
+    "ground_truth": "Adapting both the query and value projection matrices (Wq and Wv) yields the best downstream performance overall, and even a rank of four captures enough information. The MLP modules are frozen so they are not trained in downstream tasks, prioritizing simplicity and parameter-efficiency."
+  },
+  {
+    "question": "According to the LoRA paper, how does LoRA impact VRAM consumption during training on GPT-3 175B, and what causes this reduction?",
+    "ground_truth": "On GPT-3 175B, LoRA reduces the VRAM consumption during training from 1.2TB to 350GB. This reduction occurs because the system does not need to store the optimizer states for the frozen parameters. By freezing the MLP modules and adapting only Wq and Wv with low rank, the checkpoint size is further reduced from 350GB to 35MB."
+  },
+  {
+    "question": "According to the qwen3.pdf technical report, what are the two distinct operating modes integrated into its unified framework, and what does this integration eliminate?",
+    "ground_truth": "Qwen3 integrates a thinking mode for complex, multi-step reasoning and a non-thinking mode for rapid, context-driven responses into a unified framework. This eliminates the need to switch between different models, such as chat-optimized models and dedicated reasoning models, and enables dynamic mode switching based on user queries."
+  },
+  {
+    "question": "According to the qwen3.pdf document, how many parameters are activated per token in the Qwen3-235B-A22B model, and what is its total parameter count?",
+    "ground_truth": "The flagship model, Qwen3-235B-A22B, is an MoE model with 22 billion activated parameters per token out of a total of 235 billion parameters. This design ensures both high performance and efficient inference."
+  },
+  {
+    "question": "Based on the qwen3.pdf paper, how many tokens were used in the pre-training dataset and what was the purpose of this dataset?",
+    "ground_truth": "The pre-training process for Qwen3 utilizes a large-scale dataset consisting of approximately 36 trillion tokens, curated to ensure linguistic and domain diversity, enabling the model to understand and generate text in a wide range of languages and dialects."
+  },
+  {
+    "question": "According to the qwen3.pdf technical report, what is the purpose of the Strong-to-Weak Distillation pipeline, and what are its two primary phases?",
+    "ground_truth": "The Strong-to-Weak Distillation pipeline is designed to optimize lightweight models by reducing the computational costs and development efforts required for building smaller-scale models. Its two primary phases are Off-policy Distillation and On-policy Distillation. In the Off-policy phase, outputs from teacher models in both /think and /no think modes are combined for response distillation, helping student models develop basic reasoning skills and mode-switching capabilities. In the On-policy phase, the student model generates its own sequences and is fine-tuned by aligning its logits with those of a teacher model to minimize KL divergence."
+  },
+  {
+    "question": "Based on the qwen3.pdf document, what techniques are used during the Long Context Stage to extend the context length, and what is the maximum sequence length capacity?",
+    "ground_truth": "During the Long Context Stage, the authors collect high-quality long context corpora to extend the context length, increase the base frequency of RoPE using the ABF technique, and introduce YARN and Dual Chunk Attention (DCA) to extend the capacity. This allows all models to be pre-trained on hundreds of billions of tokens with a maximum sequence length of 32,768 tokens."
+  },
+  {
+    "question": "According to qwen3.pdf, what tools are used to efficiently expand the training data, and what is the total number of languages and dialects covered?",
+    "ground_truth": "To efficiently expand the training data, the authors use Qwen2.5-VL to extract text from PDF documents, and domain-specific models like Qwen2.5-Math and Qwen2.5-Coder to generate synthetic data. The pre-training follows a three-stage strategy: General Stage, Reasoning Stage for STEM and coding, and Long Context Stage. The total pre-training dataset covers 119 languages and dialects."
+  },
+  {
+    "question": "According to att.pdf, what two neural network mechanisms does the Transformer architecture dispense with entirely, and what does it rely on instead?",
+    "ground_truth": "The Transformer architecture dispenses with recurrence and convolutions entirely, relying solely on attention mechanisms to draw global dependencies between input and output. This allows for significantly more parallelization compared to recurrent or convolutional architectures."
+  },
+  {
+    "question": "According to the att.pdf paper, how many identical layers compose the encoder stack, and what two sub-layers does each layer contain?",
+    "ground_truth": "The encoder is composed of a stack of N = 6 identical layers. Each layer has two sub-layers: a multi-head self-attention mechanism and a simple, position-wise fully connected feed-forward network, with residual connections and layer normalization applied around each sub-layer."
+  },
+  {
+    "question": "How many parallel attention heads are employed in the multi-head attention mechanism according to att.pdf, and what is the dimension used per head?",
+    "ground_truth": "The authors employ h = 8 parallel attention layers, or heads. For each head, dk = dv = dmodel/h = 64. Due to the reduced dimension of each head, the total computational cost is similar to that of single-head attention with full dimensionality."
+  },
+  {
+    "question": "According to att.pdf, what are the two most commonly used attention functions, and why is dot-product attention preferred in practice?",
+    "ground_truth": "The two most commonly used attention functions are additive attention and dot-product (multiplicative) attention. While they are similar in theoretical complexity, dot-product attention is much faster and more space-efficient in practice because it can be implemented using highly optimized matrix multiplication code. For large values of dk, the dot products grow large in magnitude, pushing the softmax function into regions with extremely small gradients; to counteract this effect, the dot products are scaled by 1/sqrt(dk)."
+  },
+  {
+    "question": "According to the att.pdf paper, why are positional encodings added to the input embeddings, and what specific functions are used for them?",
+    "ground_truth": "Since the model contains no recurrence and no convolution, positional encodings are added to inject information about the relative or absolute position of the tokens in the sequence. The positional encodings have the same dimension dmodel as the embeddings, so that the two can be summed. There are many choices of positional encodings, learned and fixed. The authors use sine and cosine functions of different frequencies to form these encodings."
   }
 ]

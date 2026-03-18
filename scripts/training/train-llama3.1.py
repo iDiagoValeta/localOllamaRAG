@@ -1,72 +1,74 @@
 """
-train_llama.py — Fine-tuning LoRA de Llama-3.1-8B-Instruct para RAG (TFG) — v1.0
-==================================================================================
+LoRA fine-tuning of Llama-3.1-8B-Instruct for RAG (v1.0).
 
-Pipeline de entrenamiento y evaluación comparativa en 5 etapas:
-  1. Cargar modelo base meta-llama/Llama-3.1-8B-Instruct.
-  2. Evaluar el modelo base sobre un test set congelado (baseline).
-  3. Aplicar adaptador LoRA y fine-tunear sobre 3 datasets RAG nativos.
-  4. Evaluar el modelo adaptado sobre el MISMO test set.
-  5. Generar resumen comparativo con métricas específicas de RAG.
+Five-stage training and comparative evaluation pipeline:
+  1. Load base model meta-llama/Llama-3.1-8B-Instruct.
+  2. Evaluate the base model on a frozen test set (baseline).
+  3. Apply LoRA adapter and fine-tune on 3 native RAG datasets.
+  4. Evaluate the adapted model on the SAME test set.
+  5. Generate a comparative summary with RAG-specific metrics.
 
-Objetivo: asistente de Q&A documental con adherencia estricta al contexto
-recuperado. Responde en el idioma del contexto (EN, ES o CA).
+Goal: document Q&A assistant with strict adherence to the retrieved context.
+Responds in the language of the context (EN, ES, or CA).
 
-Diferencias respecto a train.py (Qwen3-14B):
-  - Modelo:         meta-llama/Llama-3.1-8B-Instruct (gated — requiere HF_TOKEN).
-  - Chat template:  apply_chat_template estándar sin enable_thinking.
-                    EOS de generación: <|eot_id|> (128009) + eos_token_id.
-                    Terminador de respuesta en tokenización: <|eot_id|>.
+Differences from train.py (Qwen3-14B):
+  - Model:         meta-llama/Llama-3.1-8B-Instruct (gated -- requires HF_TOKEN).
+  - Chat template:  apply_chat_template standard without enable_thinking.
+                    Generation EOS: <|eot_id|> (128009) + eos_token_id.
+                    Response terminator in tokenization: <|eot_id|>.
   - LoRA:           r=32, alpha=64 (Qwen3: r=64, alpha=128).
-  - Output dir:     training-output2 (con sufijo "2").
+  - Output dir:     training-output2 (with suffix "2").
   - Checkpoints:    save_total_limit=2 (vs 3).
-  - Early stopping: patience=2 evaluaciones (vs 5).
+  - Early stopping: patience=2 evaluations (vs 5).
 
-Uso:
+Usage:
     python train_llama.py
+
+Dependencies:
+    - torch, transformers, peft, datasets, tqdm
 """
 
-# =============================================================================
-# MAPA DEL MÓDULO — Índice de secciones
-# =============================================================================
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
 #
-#  CONFIGURACIÓN
-#  |-- 1. Entorno y constantes   variables de entorno CUDA, limites de tokens
-#  |        1.1 Tamaños de dataset   caps de train/val por fuente
-#  |        1.2 System prompt        alineado con SYSTEM_PROMPT_RAG de chat_pdfs
-#  `-- 2. Carga del modelo base  AutoModelForCausalLM + tokenizador Llama-3.1-8B
+#  CONFIGURATION
+#  |-- 1. Environment and constants   CUDA env vars, token limits
+#  |        1.1 Dataset sizes            train/val caps per source
+#  |        1.2 System prompt            aligned with SYSTEM_PROMPT_RAG from chat_pdfs
+#  `-- 2. Base model loading          AutoModelForCausalLM + Llama-3.1-8B tokenizer
 #
-#  EVALUACIÓN Y MÉTRICAS
-#  `-- 3. Métricas e inferencia
-#           3.1 Normalización de texto   (EN/ES/CA, sin artículos ni puntuación)
-#           3.2 Token F1                 overlap con gold answer (SQuAD-estándar)
-#           3.3 Context Faithfulness     métrica primaria del TFG
-#           3.4 Generación              apply_chat_template estándar (sin enable_thinking)
-#           3.5 Bucle de evaluación     loop sobre eval_datasets congelado
+#  EVALUATION AND METRICS
+#  `-- 3. Metrics and inference
+#           3.1 Text normalization       (EN/ES/CA, strip articles and punctuation)
+#           3.2 Token F1                 overlap with gold answer (SQuAD-standard)
+#           3.3 Context Faithfulness     primary metric for the thesis
+#           3.4 Generation              apply_chat_template standard (no enable_thinking)
+#           3.5 Evaluation loop         loop over frozen eval_datasets
 #
-#  DATOS
-#  `-- 4. Carga de datasets
-#           4.1 Normalizadores          mapeo de esquemas -> instruction/context/response
-#           4.2 Filtros compartidos     valid, long_response, dolly_rag
-#           4.3 Neural-Bridge RAG       9 600 train / 2 400 test
-#           4.4 Dolly QA                15 000 -> filtrado RAG -> split 80/10/10
-#           4.5 Aina RAG Multilingual   42 300 train / 8 460 val / 5 640 test
-#           4.6 Conjunto de train       interleaving round-robin proporcional
-#           4.7 Conjunto de validación  Trainer (loss monitoring / early stopping)
-#           4.8 Test set congelado      FROZEN — mismo para BASE y ADAPTADO
+#  DATA
+#  `-- 4. Dataset loading
+#           4.1 Normalizers              schema mapping -> instruction/context/response
+#           4.2 Shared filters           valid, long_response, dolly_rag
+#           4.3 Neural-Bridge RAG        9 600 train / 2 400 test
+#           4.4 Dolly QA                 15 000 -> RAG filtered -> split 80/10/10
+#           4.5 Aina RAG Multilingual    42 300 train / 8 460 val / 5 640 test
+#           4.6 Training set             proportional round-robin interleaving
+#           4.7 Validation set           Trainer (loss monitoring / early stopping)
+#           4.8 Frozen test set          FROZEN -- same for BASE and ADAPTED
 #
 #  PIPELINE
-#  |-- 5. Evaluación modelo base    baseline pre-entrenamiento
-#  |-- 6. Adaptador LoRA            r=32, alpha=64, 7 módulos target
-#  |-- 7. Tokenización              Llama chat template + máscara de pérdida en prompt
-#  |-- 8. Configuración Trainer     hiperparámetros, early stopping, checkpoints
-#  |-- 9. Bucle de entrenamiento    Trainer.train()
-#  |--10. Exportación del modelo    save_pretrained (mejor checkpoint)
-#  |--11. Evaluación adaptado       mismo test set congelado que sección 5
-#  |--12. Resumen comparativo       deltas por dataset + agregado ponderado
-#  `--13. Guardado de artefactos    training_stats.json, evaluation_comparison.json
+#  |-- 5. Base model evaluation     pre-training baseline
+#  |-- 6. LoRA adapter              r=32, alpha=64, 7 target modules
+#  |-- 7. Tokenization              Llama chat template + prompt loss masking
+#  |-- 8. Training configuration    hyperparameters, early stopping, checkpoints
+#  |-- 9. Training loop             Trainer.train()
+#  |--10. Model export              save_pretrained (best checkpoint)
+#  |--11. Adapted model evaluation  same frozen test set as Section 5
+#  |--12. Comparative summary       deltas per dataset + weighted aggregate
+#  `--13. Artifact export           training_stats.json, evaluation_comparison.json
 #
-# =============================================================================
+# ─────────────────────────────────────────────
 
 import gc
 import os
@@ -88,26 +90,26 @@ from transformers import (
 )
 
 
-# =============================================================================
-# SECCIÓN 1: ENTORNO Y CONSTANTES
-# =============================================================================
-# Variables de entorno CUDA, rutas de salida, caps de dataset y system prompt.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 1: ENVIRONMENT AND CONSTANTS
+# ─────────────────────────────────────────────
+# CUDA environment variables, output paths, dataset caps, and system prompt.
+# ─────────────────────────────────────────────
 
-# Llama-3.1-8B-Instruct es un modelo gated en HuggingFace; requiere autenticación.
+# Llama-3.1-8B-Instruct is a gated model on HuggingFace; requires authentication.
 if not os.environ.get("HF_TOKEN") and not os.path.exists(
     os.path.expanduser("~/.cache/huggingface/token")
 ):
-    print("WARNING: HF_TOKEN no está configurado en el entorno.")
-    print("meta-llama/Llama-3.1-8B-Instruct es un Gated Repo.")
-    print("Ejecuta 'huggingface-cli login' o exporta HF_TOKEN antes de continuar.\n")
+    print("WARNING: HF_TOKEN is not configured in the environment.")
+    print("meta-llama/Llama-3.1-8B-Instruct is a Gated Repo.")
+    print("Run 'huggingface-cli login' or export HF_TOKEN before continuing.\n")
 
 os.environ["TORCH_COMPILE_DISABLE"] = "1"
 os.environ["TORCH_DYNAMO_DISABLE"] = "1"
 os.environ["TRITON_DISABLE"] = "1"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-# Carpeta de salida con sufijo "2" para no sobreescribir el run de Qwen3.
+# Output folder with suffix "2" to avoid overwriting the Qwen3 run.
 output_dir = os.path.join(os.getcwd(), "training-output2")
 os.makedirs(output_dir, exist_ok=True)
 
@@ -145,14 +147,14 @@ SYSTEM_PROMPT = (
 )
 
 
-# =============================================================================
-# SECCIÓN 2: CARGA DEL MODELO BASE
-# =============================================================================
-# AutoModelForCausalLM en bfloat16 con device_map="auto" + SDPA attention.
-# Llama-3.1-8B no requiere trust_remote_code, incluido por consistencia.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 2: BASE MODEL LOADING
+# ─────────────────────────────────────────────
+# AutoModelForCausalLM in bfloat16 with device_map="auto" + SDPA attention.
+# Llama-3.1-8B does not require trust_remote_code, included for consistency.
+# ─────────────────────────────────────────────
 
-print(f"\n--> [2] Cargando modelo base: {model_name}")
+print(f"\n--> [2] Loading base model: {model_name}")
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
     torch_dtype=torch.bfloat16,
@@ -167,32 +169,39 @@ tokenizer.padding_side = "right"
 print("--> Base model loaded.")
 
 
-# =============================================================================
-# SECCIÓN 3: MÉTRICAS E INFERENCIA
-# =============================================================================
-# Cuatro métricas RAG sin dependencias externas.
+# ─────────────────────────────────────────────
+# SECTION 3: METRICS AND INFERENCE
+# ─────────────────────────────────────────────
+# Four RAG metrics with no external dependencies.
 #
-# Primaria (evidencia principal del TFG):
-#   Context Faithfulness — % de tipos de token de la respuesta que aparecen
-#     en el contexto. Incremento post-fine-tuning demuestra que el modelo
-#     sintetiza desde el documento en lugar de usar conocimiento previo.
+# Primary (main evidence for the thesis):
+#   Context Faithfulness -- % of response word-types that also appear
+#     in the context. Post-fine-tuning increase demonstrates the model
+#     synthesizes from the document rather than using prior knowledge.
 #
-# Secundarias:
-#   Token F1              — overlap con gold answer, estándar SQuAD.
-#   Avg Response Length   — detecta cambios de verbosidad.
-#   Sentence Completeness — detecta respuestas fragmentadas (span-copying).
+# Secondary:
+#   Token F1              -- overlap with gold answer, SQuAD-standard.
+#   Avg Response Length   -- detects verbosity changes.
+#   Sentence Completeness -- detects fragmented responses (span-copying).
 #
-# Nota Llama: a diferencia de Qwen3/3.5, Llama-3.1 usa el chat template
-# estándar sin enable_thinking. El token de fin de turno es <|eot_id|>
-# (id 128009); el EOS nativo (<|end_of_text|>, id 128001) también se usa
-# como señal de parada en generate().
-# =============================================================================
+# Llama note: unlike Qwen3/3.5, Llama-3.1 uses the standard chat template
+# without enable_thinking. The end-of-turn token is <|eot_id|> (id 128009);
+# the native EOS (<|end_of_text|>, id 128001) is also used as a stop signal
+# in generate().
+# ─────────────────────────────────────────────
 
 DOLLY_RAG_CATEGORIES = {"closed_qa", "information_extraction", "summarization"}
 
 
 def normalize_text(text: str) -> str:
-    """Lowercase, strip articles (EN/ES/CA) and punctuation."""
+    """Lowercase, strip articles (EN/ES/CA) and punctuation.
+
+    Args:
+        text: Raw text string to normalize.
+
+    Returns:
+        Cleaned, lowercased text with articles and punctuation removed.
+    """
     text = str(text).lower()
     text = re.sub(
         r'\b(a|an|the|el|la|los|las|un|una|unos|unas|les|els|uns|unes)\b',
@@ -203,7 +212,15 @@ def normalize_text(text: str) -> str:
 
 
 def compute_f1(prediction: str, ground_truth: str) -> float:
-    """Token-level F1 (SQuAD-standard)."""
+    """Compute token-level F1 score (SQuAD-standard).
+
+    Args:
+        prediction: Model-generated answer.
+        ground_truth: Reference answer.
+
+    Returns:
+        F1 score between 0.0 and 1.0.
+    """
     pred_tok  = normalize_text(prediction).split()
     truth_tok = normalize_text(ground_truth).split()
     if not pred_tok or not truth_tok:
@@ -218,18 +235,24 @@ def compute_f1(prediction: str, ground_truth: str) -> float:
 
 
 def compute_context_faithfulness(prediction: str, context: str) -> float:
-    """
-    Context Faithfulness: fraction of unique prediction word-types that
-    also appear in the context.
+    """Compute Context Faithfulness: fraction of unique prediction word-types
+    that also appear in the context.
 
     Interpretation:
-        > 0.70  Strongly grounded — almost all content comes from context.
+        > 0.70  Strongly grounded -- almost all content comes from context.
         0.50-0.70  Adequately grounded.
         < 0.50  Possible hallucination or excessive prior-knowledge use.
 
-    Expected behaviour:
+    Expected behavior:
         BASE model:    lower score (uses world knowledge freely).
         ADAPTED model: higher score (learned to stay in context).
+
+    Args:
+        prediction: Model-generated answer.
+        context: Source context provided to the model.
+
+    Returns:
+        Faithfulness ratio between 0.0 and 1.0.
     """
     pred_types = set(normalize_text(prediction).split())
     ctx_types  = set(normalize_text(context).split())
@@ -242,14 +265,24 @@ def generate_response(
     model, tokenizer, instruction: str, context: str,
     max_new_tokens: int = MAX_NEW_TOKENS,
 ) -> str:
-    """
-    Inference using the same prompt format as training.
+    """Run inference using the same prompt format as training.
+
     Context is truncated to MAX_CONTEXT_TOKENS (mirrors format_and_tokenize).
 
-    Llama-3.1 specifics:.
-      - EOS tokens: <|eot_id|> (128009, fin de turno) y eos_token_id
-        (<|end_of_text|>, 128001). Se pasan ambos a generate() para cobertura
-        completa.
+    Llama-3.1 specifics:
+      - EOS tokens: <|eot_id|> (128009, end of turn) and eos_token_id
+        (<|end_of_text|>, 128001). Both are passed to generate() for
+        full coverage.
+
+    Args:
+        model: The causal LM (base or adapted).
+        tokenizer: Corresponding tokenizer.
+        instruction: User question.
+        context: Document context for grounding.
+        max_new_tokens: Maximum tokens to generate.
+
+    Returns:
+        Generated response string.
     """
     ctx = (context or "").strip()
     if ctx:
@@ -270,7 +303,7 @@ def generate_response(
     )
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
-    # Llama 3.1: parar en <|eot_id|> (fin de turno) O en eos_token_id
+    # Llama 3.1: stop at <|eot_id|> (end of turn) OR at eos_token_id
     eot_id = tokenizer.encode("<|eot_id|>", add_special_tokens=False)[0]
     eos_ids = list({tokenizer.eos_token_id, eot_id})
 
@@ -289,16 +322,28 @@ def generate_response(
 
 
 def evaluate_on_datasets(model, tokenizer, eval_datasets: dict, label: str = "MODEL") -> tuple:
-    """
-    Evaluate a model on the provided eval_datasets dict.
+    """Evaluate a model on the provided eval_datasets dict.
 
     IMPORTANT: eval_datasets must be the same frozen object for BASE and
     ADAPTED evaluations so that both models answer identical questions on
-    identical contexts. This is enforced by the caller — see Section 5 and 11.
+    identical contexts. This is enforced by the caller -- see Section 5 and 11.
+
+    Args:
+        model: The causal LM to evaluate.
+        tokenizer: Corresponding tokenizer.
+        eval_datasets: Dict mapping dataset name to HF Dataset.
+        label: Display label for progress bars (e.g. "BASE", "ADAPTED").
 
     Returns:
-        all_metrics  dict[ds_name → metric dict]
-        all_results  dict[ds_name → list of per-sample dicts]
+        Tuple of (all_metrics, all_results) where:
+            all_metrics: dict[ds_name -> metric dict]
+            all_results: dict[ds_name -> list of per-sample dicts]
+
+    Metrics per dataset:
+        Token_F1                    answer relevance vs gold (%)
+        Context_Faithfulness_Pct    grounding in provided context (%)
+        Avg_Response_Length_Words   mean word count
+        Sentence_Completeness_Pct  % responses ending with . ! ?
     """
     all_metrics = {}
     all_results = {}
@@ -363,25 +408,32 @@ def evaluate_on_datasets(model, tokenizer, eval_datasets: dict, label: str = "MO
     return all_metrics, all_results
 
 
-# =============================================================================
-# SECCIÓN 4: CARGA DE DATASETS
-# =============================================================================
-# Uso de splits:
-#   train -> SFT (interleaving round-robin proporcional)
-#   val   -> eval_dataset del Trainer (loss monitoring / early stopping)
-#   test  -> set congelado, cargado UNA vez, compartido por BASE y ADAPTADO
+# ─────────────────────────────────────────────
+# SECTION 4: DATASET LOADING
+# ─────────────────────────────────────────────
+# Split usage:
+#   train -> SFT (proportional round-robin interleaving)
+#   val   -> Trainer eval_dataset (loss monitoring / early stopping)
+#   test  -> frozen set, loaded ONCE, shared by BASE and ADAPTED
 #
-# Esquemas normalizados a: instruction | context | response
+# Schemas normalized to: instruction | context | response
 #   Neural-Bridge: context | question | answer
 #   Dolly:         instruction | context | response | category
 #   Aina:          instruction | context | response
-# =============================================================================
+# ─────────────────────────────────────────────
 
-print("\n--> [4] Cargando datasets...")
+print("\n--> [4] Loading datasets...")
 
 
 def _normalize_nb(example):
-    """Neural-Bridge: question→instruction, context, answer→response."""
+    """Normalize Neural-Bridge schema: question->instruction, answer->response.
+
+    Args:
+        example: Raw dataset row with question/context/answer fields.
+
+    Returns:
+        Dict with instruction/context/response keys.
+    """
     return {
         "instruction": (example.get("question") or "").strip(),
         "context":     (example.get("context")  or "").strip(),
@@ -390,10 +442,16 @@ def _normalize_nb(example):
 
 
 def _normalize_dolly(example):
-    """
-    Dolly: instruction, context, response.
+    """Normalize Dolly schema: instruction, context, response.
+
     Only RAG-relevant categories with non-empty context are kept.
-    Filtering happens AFTER normalisation via _filter_dolly_rag.
+    Filtering happens AFTER normalization via _filter_dolly_rag.
+
+    Args:
+        example: Raw dataset row with instruction/context/response/category fields.
+
+    Returns:
+        Dict with instruction/context/response/category keys.
     """
     return {
         "instruction": (example.get("instruction") or "").strip(),
@@ -404,10 +462,17 @@ def _normalize_dolly(example):
 
 
 def _normalize_aina(example):
-    """
-    Aina RAG Multilingual actual columns (verified from HuggingFace):
+    """Normalize Aina RAG Multilingual schema.
+
+    Actual columns (verified from HuggingFace):
       id | instruction | context | response | category | lang | extractive
     Maps directly to instruction/context/response (same schema as Dolly).
+
+    Args:
+        example: Raw dataset row.
+
+    Returns:
+        Dict with instruction/context/response keys.
     """
     return {
         "instruction": (example.get("instruction") or "").strip(),
@@ -425,12 +490,27 @@ def _filter_valid(ex):
 
 
 def _filter_long_response(ex, min_words: int = 15):
-    """Keep only responses with at least min_words words."""
+    """Keep only responses with at least min_words words.
+
+    Args:
+        ex: Dataset example with a 'response' field.
+        min_words: Minimum word count threshold.
+
+    Returns:
+        True if the response meets the minimum length.
+    """
     return len(ex["response"].split()) >= min_words
 
 
 def _filter_dolly_rag(ex):
-    """Keep only Dolly rows that are RAG-relevant (non-empty context + correct category)."""
+    """Keep only Dolly rows that are RAG-relevant (non-empty context + correct category).
+
+    Args:
+        ex: Dataset example with 'category' and 'context' fields.
+
+    Returns:
+        True if the row belongs to a RAG-relevant category with context.
+    """
     return (
         ex["category"] in DOLLY_RAG_CATEGORIES
         and bool(ex["context"].strip())
@@ -544,15 +624,15 @@ train_loaders = [
 ]
 
 
-# =============================================================================
-# SECCIÓN 5: EVALUACIÓN DEL MODELO BASE (baseline pre-entrenamiento)
-# =============================================================================
-# eval_datasets NO se modifica aquí. Se reutiliza tal cual en la sección 11.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 5: BASE MODEL EVALUATION
+# ─────────────────────────────────────────────
+# eval_datasets is NOT modified here. It is reused as-is in Section 11.
+# ─────────────────────────────────────────────
 
 print("\n" + "=" * 70)
-print("--> [5] Evaluando modelo BASE (baseline pre-entrenamiento)")
-print("    (Mismo test set congelado que se usará en la sección 11)")
+print("--> [5] Evaluating BASE model (pre-training baseline)")
+print("    (Same frozen test set that will be used in Section 11)")
 print("=" * 70)
 
 base_metrics, base_results = evaluate_on_datasets(
@@ -576,16 +656,16 @@ torch.cuda.empty_cache()
 print("--> GPU cache cleared after base evaluation.")
 
 
-# =============================================================================
-# SECCIÓN 6: ADAPTADOR LoRA
-# =============================================================================
-# r=32, alpha=64 (mitad que en Qwen3: r=64, alpha=128).
-# Dropout=0.05. Target: q/k/v/o_proj + gate/up/down_proj.
-# Llama-3.1-8B usa las mismas nomenclaturas de módulos que Qwen3, por lo que
-# el target_modules es idéntico al del script original.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 6: LoRA ADAPTER
+# ─────────────────────────────────────────────
+# r=32, alpha=64 (half of Qwen3: r=64, alpha=128). dropout=0.05.
+# Target: q/k/v/o_proj + gate/up/down_proj.
+# Llama-3.1-8B uses the same module naming conventions as Qwen3, so
+# target_modules is identical to the original script.
+# ─────────────────────────────────────────────
 
-print("\n--> [6] Aplicando adaptador LoRA...")
+print("\n--> [6] Applying LoRA adapter...")
 model.gradient_checkpointing_enable()
 
 peft_config = LoraConfig(
@@ -602,24 +682,32 @@ print("--> LoRA adapter applied.")
 model.print_trainable_parameters()
 
 
-# =============================================================================
-# SECCIÓN 7: TOKENIZACIÓN Y FORMATO DE PROMPT
-# =============================================================================
-# Formato Llama 3 via apply_chat_template estándar (sin enable_thinking).
-# Mensaje usuario: f"{instruction}\n\n<context>{ctx}</context>"
-#   - idéntico al formato de training del script original.
-# Terminador de respuesta: <|eot_id|> (token de fin de turno de Llama 3).
-#   Llama 3.1 usa <|eot_id|> (id 128009) para cerrar cada turno, equivalente
-#   a <|im_end|> en ChatML de Qwen.
-# Pérdida enmascarada en tokens del prompt (-100): solo aprende la respuesta.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 7: TOKENIZATION AND FORMATTING
+# ─────────────────────────────────────────────
+# Llama 3 format via standard apply_chat_template (no enable_thinking).
+# User message: f"{instruction}\n\n<context>{ctx}</context>"
+#   - identical to the training format in the original script.
+# Response terminator: <|eot_id|> (Llama 3 end-of-turn token).
+#   Llama 3.1 uses <|eot_id|> (id 128009) to close each turn, equivalent
+#   to <|im_end|> in Qwen's ChatML.
+# Loss masked on prompt tokens (-100): only the response is learned.
+# ─────────────────────────────────────────────
 
 def format_and_tokenize(examples):
+    """Tokenize examples into Llama chat format with prompt loss masking.
+
+    Args:
+        examples: Batch dict with instruction/context/response lists.
+
+    Returns:
+        Dict with input_ids, labels, and attention_mask lists.
+    """
     all_input_ids    = []
     all_labels       = []
     all_attention    = []
 
-    # <|eot_id|> — token de fin de turno en Llama 3.1 (equivale a <|im_end|> en Qwen)
+    # <|eot_id|> -- end-of-turn token in Llama 3.1 (equivalent to <|im_end|> in Qwen)
     eot_id = tokenizer.encode("<|eot_id|>", add_special_tokens=False)
 
     for instruction, context, response in zip(
@@ -649,8 +737,8 @@ def format_and_tokenize(examples):
         )
 
         prompt_ids   = tokenizer(prompt_text,             add_special_tokens=False)["input_ids"]
-        # Adjuntamos <|eot_id|> explícitamente para cerrar el turno del asistente,
-        # igual que Qwen usa <|im_end|> al final de la respuesta generada.
+        # Append <|eot_id|> explicitly to close the assistant turn,
+        # just as Qwen uses <|im_end|> at the end of the generated response.
         response_ids = tokenizer(f"{response}<|eot_id|>", add_special_tokens=False)["input_ids"]
         full_ids     = prompt_ids + response_ids
 
@@ -678,7 +766,7 @@ def format_and_tokenize(examples):
     }
 
 
-print("\n--> [7] Tokenizando datasets...")
+print("\n--> [7] Tokenizing datasets...")
 tokenized_train = dataset.map(
     format_and_tokenize, batched=True, batch_size=1000,
     remove_columns=dataset.column_names, desc="Tokenising train",
@@ -692,14 +780,14 @@ tokenized_eval = eval_dataset_raw.map(
 print(f"--> Train: {len(tokenized_train)} | Val: {len(tokenized_eval)} tokenised samples")
 
 
-# =============================================================================
-# SECCIÓN 8: CONFIGURACIÓN DEL ENTRENAMIENTO
-# =============================================================================
-# LR 5e-5 cosine. Batch efectivo 16.
-# save_total_limit=2 (vs 3 en Qwen3).
-# EarlyStoppingCallback(patience=2): lógico al reducir save_total_limit.
-# load_best_model_at_end=True: exporta el checkpoint con menor eval_loss.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 8: TRAINING CONFIGURATION
+# ─────────────────────────────────────────────
+# LR 5e-5 cosine. Effective batch 16.
+# save_total_limit=2 (vs 3 in Qwen3).
+# EarlyStoppingCallback(patience=2): logical given reduced save_total_limit.
+# load_best_model_at_end=True: exports the checkpoint with lowest eval_loss.
+# ─────────────────────────────────────────────
 
 data_collator = DataCollatorForSeq2Seq(
     tokenizer=tokenizer, padding=True, pad_to_multiple_of=8,
@@ -724,7 +812,7 @@ training_args = TrainingArguments(
     logging_first_step=True,
     save_strategy="steps",
     save_steps=300,
-    save_total_limit=2,        # reducido de 3 a 2
+    save_total_limit=2,
     eval_strategy="steps",
     eval_steps=150,
     load_best_model_at_end=True,
@@ -736,7 +824,7 @@ training_args = TrainingArguments(
     remove_unused_columns=False,
 )
 
-print("\n--> [8] Inicializando Trainer...")
+print("\n--> [8] Initializing Trainer...")
 trainer = Trainer(
     model=model,
     args=training_args,
@@ -744,43 +832,43 @@ trainer = Trainer(
     eval_dataset=tokenized_eval,
     data_collator=data_collator,
     processing_class=tokenizer,
-    callbacks=[EarlyStoppingCallback(early_stopping_patience=2)],  # reducido de 5 a 2
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=2)],
 )
 
 
-# =============================================================================
-# SECCIÓN 9: BUCLE DE ENTRENAMIENTO
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 9: TRAINING LOOP
+# ─────────────────────────────────────────────
 
-print("\n--> [9] Iniciando entrenamiento...")
+print("\n--> [9] Starting training...")
 print(f"    Epochs:            {training_args.num_train_epochs}")
-print(f"    Batch efectivo:    {training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps}")
+print(f"    Effective batch:   {training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps}")
 print(f"    LR:                {training_args.learning_rate}  (cosine, patience=2)")
-print(f"    Mejor checkpoint:  load_best_model_at_end=True")
+print(f"    Best checkpoint:   load_best_model_at_end=True")
 trainer.train()
 
 
-# =============================================================================
-# SECCIÓN 10: EXPORTACIÓN DEL MODELO
-# =============================================================================
-# Se guarda el checkpoint de menor eval_loss (no el último paso).
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 10: MODEL EXPORT
+# ─────────────────────────────────────────────
+# Saves the checkpoint with lowest eval_loss (not the last step).
+# ─────────────────────────────────────────────
 
-print(f"\n--> [10] Guardando modelo adaptado en {output_dir}")
+print(f"\n--> [10] Saving adapted model to {output_dir}")
 model.save_pretrained(output_dir)
 tokenizer.save_pretrained(output_dir)
 print("--> Adapter + tokenizer saved.")
 
 
-# =============================================================================
-# SECCIÓN 11: EVALUACIÓN DEL MODELO ADAPTADO
-# =============================================================================
-# Mismo dict congelado que la sección 5 -> comparación objetiva BASE vs ADAPTADO.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 11: ADAPTED MODEL EVALUATION
+# ─────────────────────────────────────────────
+# Same frozen dict as Section 5 -> objective BASE vs ADAPTED comparison.
+# ─────────────────────────────────────────────
 
 print("\n" + "=" * 70)
-print("--> [11] Evaluando modelo ADAPTADO")
-print("    (Mismo test set congelado que la sección 5)")
+print("--> [11] Evaluating ADAPTED model")
+print("    (Same frozen test set as Section 5)")
 print("=" * 70)
 
 model.gradient_checkpointing_disable()
@@ -790,14 +878,14 @@ adapted_metrics, adapted_results = evaluate_on_datasets(
 )
 
 
-# =============================================================================
-# SECCIÓN 12: RESUMEN COMPARATIVO BASE vs ADAPTADO
-# =============================================================================
-# Deltas por dataset + agregado ponderado por número de muestras.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 12: COMPARATIVE SUMMARY
+# ─────────────────────────────────────────────
+# Deltas per dataset + weighted aggregate by sample count.
+# ─────────────────────────────────────────────
 
 print("\n" + "=" * 70)
-print("RESUMEN COMPARATIVO: BASE vs ADAPTADO")
+print("COMPARATIVE SUMMARY: BASE vs ADAPTED")
 print("=" * 70)
 
 METRIC_KEYS = [
@@ -864,20 +952,20 @@ if agg_n > 0:
     }
 
     print(f"\n{'=' * 70}")
-    print(f"AGREGADO PONDERADO ({agg_n} muestras — mismas preguntas para ambos modelos)")
-    print(f"  Token F1:             Base={agg_b_f1:.2f}%  → Adapted={agg_a_f1:.2f}%"
+    print(f"WEIGHTED AGGREGATE ({agg_n} samples -- same questions for both models)")
+    print(f"  Token F1:            Base={agg_b_f1:.2f}%  -> Adapted={agg_a_f1:.2f}%"
           f"   Δ={agg_a_f1 - agg_b_f1:+.2f}pp")
-    print(f"  Context Faithfulness: Base={agg_b_faith:.2f}%  → Adapted={agg_a_faith:.2f}%"
+    print(f"  Context Faithfulness: Base={agg_b_faith:.2f}%  -> Adapted={agg_a_faith:.2f}%"
           f"   Δ={agg_a_faith - agg_b_faith:+.2f}pp")
     print(f"{'=' * 70}")
 
 
-# =============================================================================
-# SECCIÓN 13: GUARDADO DE ARTEFACTOS
-# =============================================================================
-# training_stats.json        — resumen completo + log_history + muestras
-# evaluation_comparison.json — deltas por dataset + pares base/adaptado
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 13: ARTIFACT EXPORT
+# ─────────────────────────────────────────────
+# training_stats.json        -- full summary + log_history + samples
+# evaluation_comparison.json -- deltas per dataset + base/adapted pairs
+# ─────────────────────────────────────────────
 
 training_summary = {
     "model_name":       model_name,
@@ -892,7 +980,7 @@ training_summary = {
     "log_history":      trainer.state.log_history,
 }
 
-print("\n--> Calculando eval loss final...")
+print("\n--> Computing final eval loss...")
 try:
     ev = trainer.evaluate()
     if "eval_loss" in ev:
@@ -904,7 +992,7 @@ except Exception as e:
     print(f"    Warning: final eval failed: {e}")
 
 
-print("\n--> Generando muestras cualitativas de producción...")
+print("\n--> Generating qualitative production samples...")
 test_prompts = [
     {
         "instruction": "Why is the scaling factor (1/√dk) applied in Scaled Dot-Product Attention?",
@@ -919,7 +1007,7 @@ test_prompts = [
             "extremely small gradients. To counteract this effect, we scale the dot products "
             "by 1/√dk."
         ),
-        "description": "[EN] Technical RAG — analytical answer expected",
+        "description": "[EN] Technical RAG -- analytical answer expected",
     },
     {
         "instruction": "¿Cuáles fueron las consecuencias territoriales del Tratado de Utrecht para España?",
@@ -931,7 +1019,7 @@ test_prompts = [
             "a Gran Bretaña el asiento, un contrato monopolístico para abastecer de esclavos "
             "africanos a las colonias españolas en América."
         ),
-        "description": "[ES] QA histórica — respuesta elaborada esperada",
+        "description": "[ES] Historical QA -- detailed answer expected",
     },
     {
         "instruction": "Quines eren les característiques principals del sistema de reg de l'Albufera?",
@@ -944,7 +1032,7 @@ test_prompts = [
             "i a la tardor s'asseca el terreny per permetre la collita. Aquesta gestió hídrica "
             "és fonamental per mantenir tanto la producció agrícola com l'ecosistema natural."
         ),
-        "description": "[CA] QA tècnica — resposta elaborada en català esperada",
+        "description": "[CA] Technical QA -- detailed answer in Catalan expected",
     },
 ]
 
@@ -974,7 +1062,7 @@ for path, obj in [
         print(f"    Warning: could not save {path}: {e}")
 
 print("\n" + "=" * 70)
-print("--> PROCESO COMPLETADO")
+print("--> PROCESS COMPLETED")
 print(f"    Adapted model:         {output_dir}")
 print(f"    Training stats:        {os.path.join(output_dir, 'training_stats.json')}")
 print(f"    Evaluation comparison: {os.path.join(output_dir, 'evaluation_comparison.json')}")

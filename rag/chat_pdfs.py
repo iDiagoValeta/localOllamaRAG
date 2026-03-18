@@ -1,72 +1,67 @@
 """
-MonkeyGrab — Sistema RAG para consulta de PDFs
-==============================================
+MonkeyGrab -- RAG engine for PDF document queries.
 
-Aplicación interactiva con dos modos:
+Interactive application with two operating modes: CHAT (free conversation with
+a base model, persistent history, and project identity) and RAG (document
+queries over indexed PDFs with hybrid retrieval and source-backed answers).
 
-    CHAT  Conversación libre con modelo base, historial persistente e identidad del proyecto.
-    RAG   Consulta documental sobre PDFs indexados, recuperación híbrida y respuestas con fuentes.
+Pipeline stages (each togglable via flags):
+    1. Indexing        chunking + embeddings + contextual retrieval (opt.)
+    2. Retrieval       semantic + query decomposition (opt.) + keywords
+    3. Deep scan       exhaustive search by critical terms
+    4. Ranking         RRF fusion + Cross-Encoder reranking (opt.)
+    5. Context         neighbor expansion + optimization
+    6. Generation      RECOMP synthesis (opt.) + streaming
+    7. Observability   metrics and debug dumps
 
-Pipeline RAG (etapas activables por flags):
-    1. Indexación      chunking + embeddings + contextual retrieval (opc.)
-    2. Recuperación    semántica + descomposición (opc.) + keywords
-    3. Profundización  búsqueda exhaustiva por términos críticos
-    4. Ranking         fusión RRF + reranking Cross-Encoder (opc.)
-    5. Contexto        expansión de adyacentes + optimización
-    6. Generación      síntesis RECOMP (opc.) + streaming
-    7. Observabilidad  métricas y dumps de debug
-
-Uso:
+Usage:
     python chat_pdfs.py
 """
 
-# =============================================================================
-# MAPA DEL MÓDULO — Índice de secciones
-# =============================================================================
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
 #
-#  CONFIGURACIÓN (arranque)
-#  ├── 1. Importaciones     stdlib → terceros (ollama, chromadb, pypdf) → locales
-#  ├── 2. Dependencias opc. pymupdf4llm (PDF), CrossEncoder (reranking)
-#  └── 3. Configuración global
-#       ├── 3.1 Runtime terminal (UTF-8)
-#       ├── 3.2 Modelos Ollama (RAG, CHAT, embedding, contextual, RECOMP)
-#       ├── 3.3 Flags del pipeline (toggle por etapa)
-#       ├── 3.4 Rutas y persistencia (DB, historial, debug)
-#       ├── 3.5 Parámetros recuperación/generación
-#       └── 3.6 Logging y entorno
+#  CONFIGURATION (startup)
+#  +-- 1. Imports            stdlib -> third-party (ollama, chromadb, pypdf) -> local
+#  +-- 2. Optional deps      pymupdf4llm (PDF), CrossEncoder (reranking)
+#  +-- 3. Global config
+#  |      +-- 3.1 Terminal runtime (UTF-8)
+#  |      +-- 3.2 Ollama models (RAG, CHAT, embedding, contextual, RECOMP)
+#  |      +-- 3.3 Pipeline flags (per-stage toggle)
+#  |      +-- 3.4 Paths and persistence (DB, history, debug)
+#  |      +-- 3.5 Retrieval / generation parameters
+#  |      +-- 3.6 Logging and environment
+#  |
+#  BUSINESS LOGIC
+#  +-- 4. System prompts      RAG (empty), CHAT (identity + language)
+#  +-- 5. History persistence  local JSON for CHAT mode
+#  +-- 6. Preprocessing and chunking  text -> Markdown chunks with overlap
+#  +-- 7. Keywords and lexical search  acronyms, bigrams, where_document
+#  +-- 8. Semantic reranking   CrossEncoder singleton, CUDA/CPU
+#  +-- 9. Hybrid retrieval pipeline  semantic + keywords + exhaustive -> RRF -> rerank
+#  +--10. Context and generation
+#  |      +-- 10.1 PDF text optimization (artifacts, footers, paragraphs)
+#  |      +-- 10.2 Context construction (raw or RECOMP synthesis)
+#  |      +-- 10.3 Debug         interaction dump in debug_rag/
+#  |      +-- 10.4 Generation    Ollama streaming, <context> format
+#  |      +-- 10.5 Evaluation    silent pipeline for RAGAS
+#  +--11. Indexing and collection management
+#  |      +-- 11.1 Contextual retrieval  chunk enrichment with LLM
+#  |      +-- 11.2 Indexing              PDFs -> pymupdf4llm/pypdf -> ChromaDB
+#  |      +-- 11.3 Collection mgmt      list indexed documents
+#  |
+#  ENTRY
+#  +--12. Entry point   main() -> MonkeyGrabCLI.run()
 #
-#  LÓGICA DE NEGOCIO
-#  ├── 4. Prompts del sistema    RAG (vacío), CHAT (identidad + idioma)
-#  ├── 5. Persistencia historial  JSON local modo CHAT
-#  ├── 6. Preprocesado y chunking texto → chunks Markdown con overlap
-#  ├── 7. Keywords y búsqueda léxica  siglas, bigramas, where_document
-#  ├── 8. Reranking semántico    CrossEncoder singleton, CUDA/CPU
-#  ├── 9. Pipeline recuperación  semántica + keywords + exhaustiva → RRF → rerank
-#  ├──10. Contexto y generación
-#  │      ├── 10.1 Optimización texto PDF (artefactos, footers, párrafos)
-#  │      ├── 10.2 Construcción contexto (raw o síntesis RECOMP)
-#  │      ├── 10.3 Debug         volcado interacción en debug_rag/
-#  │      ├── 10.4 Generación    streaming Ollama, formato <context>
-#  │      └── 10.5 Evaluación    pipeline silencioso para RAGAS
-#  └──11. Indexación y colección
-#       ├── 11.1 Contextual retrieval  enriquecimiento chunk con LLM
-#       ├── 11.2 Indexación           PDFs → pymupdf4llm/pypdf → ChromaDB
-#       └── 11.3 Gestión colección    listar documentos indexados
-#
-#  ENTRADA
-#  └──12. Punto de entrada   main() → MonkeyGrabCLI.run()
-#
-# =============================================================================
+# ─────────────────────────────────────────────
 
 
-# =============================================================================
-# SECCIÓN 1: IMPORTACIONES
-# =============================================================================
-# Organizadas por responsabilidad: stdlib → terceros → locales.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 1: IMPORTS
+# ─────────────────────────────────────────────
 
-
-# --- 1.1 Librería estándar ---
+# --- 1.1 Standard library ---
 
 import io
 import json
@@ -80,28 +75,26 @@ from collections import Counter
 from contextlib import redirect_stderr, redirect_stdout
 from typing import Any, Dict, List, Optional, Tuple
 
-# --- 1.2 Terceros (Ollama, ChromaDB, pypdf) ---
+# --- 1.2 Third-party (Ollama, ChromaDB, pypdf) ---
 
 import chromadb
 import ollama
 from pypdf import PdfReader
 
-# --- 1.3 Bootstrap: path del proyecto ---
+# --- 1.3 Bootstrap: project path ---
 
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-# --- 1.4 Locales ---
+# --- 1.4 Local ---
 
 from rag.cli.display import ui
 
 
-# =============================================================================
-# SECCIÓN 2: DEPENDENCIAS OPCIONALES
-# =============================================================================
-# pymupdf4llm (extracción PDF) y CrossEncoder (reranking).
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 2: OPTIONAL DEPENDENCIES
+# ─────────────────────────────────────────────
 
 
 try:
@@ -118,12 +111,12 @@ except ImportError:
     RERANKER_AVAILABLE = False
 
 
-# =============================================================================
-# SECCIÓN 3: CONFIGURACIÓN GLOBAL
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 3: GLOBAL CONFIGURATION
+# ─────────────────────────────────────────────
 
 
-# --- 3.1 Runtime terminal (encoding UTF-8) ---
+# --- 3.1 Terminal runtime (UTF-8 encoding) ---
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -136,7 +129,7 @@ if hasattr(sys.stderr, "reconfigure"):
     except Exception:
         pass
 
-# --- 3.2 Modelos Ollama ---
+# --- 3.2 Ollama models ---
 
 MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "Qwen3-FineTuned:latest")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:4b")
@@ -146,12 +139,20 @@ MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma3:4b")
 
 
 def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
+    """Extract the base model name by stripping the tag suffix.
+
+    Args:
+        nombre_modelo: Full model identifier (e.g. ``"gemma3:4b"``).
+
+    Returns:
+        Model name without the colon-separated tag.
+    """
     return nombre_modelo.split(":")[0]
 
 
 MODELO_DESC = os.getenv("MODELO_DESC", _inferir_descripcion_modelo(MODELO_RAG))
 
-# --- 3.3 Flags del pipeline (toggle por etapa) ---
+# --- 3.3 Pipeline flags (per-stage toggle) ---
 
 USAR_CONTEXTUAL_RETRIEVAL = True
 USAR_LLM_QUERY_DECOMPOSITION = True
@@ -164,7 +165,7 @@ USAR_RECOMP_SYNTHESIS = False
 LOGGING_METRICAS = True
 GUARDAR_DEBUG_RAG = True
 
-# --- 3.4 Rutas y persistencia ---
+# --- 3.4 Paths and persistence ---
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "pdfs"))
@@ -180,17 +181,17 @@ MAX_HISTORIAL_MENSAJES = 40
 
 CARPETA_DEBUG_RAG = os.path.join(BASE_DIR, "debug_rag")
 
-# --- 3.5 Parámetros de recuperación y generación ---
+# --- 3.5 Retrieval and generation parameters ---
 
 _embed_name_lower = MODELO_EMBEDDING.lower().split(":")[0]
 if "nomic" in _embed_name_lower:
     EMBED_PREFIX_QUERY = "search_query: "
     EMBED_PREFIX_DOC = "search_document: "
-    _EMBED_PREFIX_DESC = "prefijos nomic (query/doc)"
+    _EMBED_PREFIX_DESC = "nomic prefixes (query/doc)"
 else:
     EMBED_PREFIX_QUERY = ""
     EMBED_PREFIX_DOC = ""
-    _EMBED_PREFIX_DESC = "sin prefijos (nativo)"
+    _EMBED_PREFIX_DESC = "no prefixes (native)"
 
 MAX_CHARS_EMBED = 4000
 CHUNK_SIZE = 1500
@@ -211,7 +212,7 @@ UMBRAL_SCORE_RERANKER = 0.40
 MIN_LONGITUD_PREGUNTA_RAG = 10
 MAX_CONTEXTO_CHARS = 8192
 
-# --- 3.6 Logging y entorno ---
+# --- 3.6 Logging and environment ---
 
 LOG_LEVEL = logging.ERROR
 
@@ -231,11 +232,9 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
 
-# =============================================================================
-# SECCIÓN 4: PROMPTS DEL SISTEMA
-# =============================================================================
-# Define la identidad y comportamiento del modelo en cada modo.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 4: SYSTEM PROMPTS
+# ─────────────────────────────────────────────
 
 
 SYSTEM_PROMPT_RAG = """You are a professional document analysis assistant. Your role is to answer questions accurately based on the provided document context.
@@ -307,15 +306,17 @@ Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; o
 """
 
 
-# =============================================================================
-# SECCIÓN 5: PERSISTENCIA DEL HISTORIAL
-# =============================================================================
-# JSON local para modo CHAT. RAG no persiste (consultas independientes).
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 5: HISTORY PERSISTENCE
+# ─────────────────────────────────────────────
 
 
 def cargar_historial() -> List[Dict[str, str]]:
-    """Carga historial CHAT desde disco. Retorna [] si no existe o falla."""
+    """Load CHAT history from disk.
+
+    Returns:
+        List of message dicts. Empty list if the file is missing or corrupt.
+    """
     try:
         if os.path.exists(HISTORIAL_PATH):
             with open(HISTORIAL_PATH, 'r', encoding='utf-8') as f:
@@ -325,46 +326,73 @@ def cargar_historial() -> List[Dict[str, str]]:
                 if isinstance(data, list):
                     return data
     except Exception as e:
-        logging.warning(f"Error cargando historial: {e}")
-    
+        logging.warning(f"Error loading history: {e}")
+
     return []
 
 
 def guardar_historial(historial: List[Dict[str, str]]) -> None:
-    """Guarda historial CHAT a disco (últimos MAX_HISTORIAL_MENSAJES)."""
+    """Persist CHAT history to disk (last MAX_HISTORIAL_MENSAJES entries).
+
+    Args:
+        historial: Full list of message dicts to save.
+    """
     try:
         historial_recortado = historial[-MAX_HISTORIAL_MENSAJES:]
         with open(HISTORIAL_PATH, 'w', encoding='utf-8') as f:
             json.dump(historial_recortado, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        logging.warning(f"Error guardando historial: {e}")
+        logging.warning(f"Error saving history: {e}")
 
 
 def limpiar_historial(historial: List[Dict[str, str]]) -> None:
-    """Vacía el historial in-place y persiste."""
+    """Clear history in-place and persist the empty state.
+
+    Args:
+        historial: The history list to clear.
+    """
     historial.clear()
     guardar_historial(historial)
 
 
-# =============================================================================
-# SECCIÓN 6: PREPROCESADO Y CHUNKING
-# =============================================================================
-# Texto → chunks semánticos con headers Markdown, overlap y expansión adyacente.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 6: PREPROCESSING AND CHUNKING
+# ─────────────────────────────────────────────
 
 
 def extraer_header_markdown(texto: str) -> str:
-    """Extrae el último header Markdown (#...#) del texto. Vacío si no hay."""
+    """Extract the last Markdown header (``# ...``) from the text.
+
+    Args:
+        texto: Raw text that may contain Markdown headers.
+
+    Returns:
+        The last header string found, or empty string if none.
+    """
     headers = re.findall(r'^(#{1,4}\s+.+)$', texto, re.MULTILINE)
     return headers[-1].strip() if headers else ""
 
 
 def dividir_en_chunks(
-    texto: str, 
-    chunk_size: int = CHUNK_SIZE, 
+    texto: str,
+    chunk_size: int = CHUNK_SIZE,
     overlap: int = CHUNK_OVERLAP
 ) -> List[Dict[str, str]]:
-    """Divide texto en chunks por secciones Markdown, con overlap. Retorna [{"text", "header"}]. """
+    """Split text into chunks by Markdown sections with overlap.
+
+    Uses a recursive separator strategy to break content at natural
+    boundaries (paragraphs, sentences, commas, spaces). Each chunk
+    preserves its nearest Markdown header for context.
+
+    Args:
+        texto: Source text to split.
+        chunk_size: Maximum character length per chunk.
+        overlap: Number of trailing characters from the previous chunk
+            to prepend to the next one.
+
+    Returns:
+        List of dicts with ``"text"`` and ``"header"`` keys.
+    """
     if not texto or not texto.strip():
         return []
 
@@ -377,16 +405,16 @@ def dividir_en_chunks(
         r'^(?:#{1,4}\s+.+|\*\*(?:[A-Z0-9].+?)\*\*\s*)$',
         re.MULTILINE
     )
-    
+
     secciones = []
     last_end = 0
     current_header = ""
-    
+
     for match in header_pattern.finditer(texto):
         contenido_previo = texto[last_end:match.start()].strip()
         if contenido_previo:
             secciones.append({"header": current_header, "content": contenido_previo})
-        
+
         raw_header = match.group(0).strip()
         current_header = re.sub(r'^\*\*(.+?)\*\*$', r'\1', raw_header).strip()
         last_end = match.end()
@@ -399,29 +427,29 @@ def dividir_en_chunks(
         secciones = [{"header": "", "content": texto.strip()}]
 
     separadores = ["\n\n", "\n", ". ", ".\n", "! ", "? ", "; ", ", ", " "]
-    
+
     def _split_recursivo(text: str, max_size: int, depth: int = 0) -> List[str]:
-        """División recursiva usando separadores jerárquicos."""
+        """Recursively split text using hierarchical separators."""
         if len(text) <= max_size:
             return [text] if text.strip() else []
-        
+
         for sep_idx, separador in enumerate(separadores):
             if separador not in text:
                 continue
-            
+
             partes = text.split(separador)
             resultado = []
             chunk_actual = ""
-            
+
             for i, parte in enumerate(partes):
                 parte_con_sep = parte + separador if i < len(partes) - 1 else parte
-                
+
                 if len(chunk_actual) + len(parte_con_sep) <= max_size:
                     chunk_actual += parte_con_sep
                 else:
                     if chunk_actual.strip():
                         resultado.append(chunk_actual.strip())
-                    
+
                     if len(parte_con_sep) > max_size and depth < len(separadores) - 1:
                         resultado.extend(_split_recursivo(parte_con_sep, max_size, depth + 1))
                         chunk_actual = ""
@@ -430,10 +458,10 @@ def dividir_en_chunks(
                             resultado.append(parte_con_sep[:max_size].strip())
                             parte_con_sep = parte_con_sep[max_size:]
                         chunk_actual = parte_con_sep
-            
+
             if chunk_actual.strip():
                 resultado.append(chunk_actual.strip())
-            
+
             if resultado:
                 return resultado
 
@@ -443,7 +471,7 @@ def dividir_en_chunks(
             if fragmento:
                 resultado.append(fragmento)
         return resultado
-    
+
     fragmentos_raw = []
     for seccion in secciones:
         header = seccion["header"]
@@ -451,18 +479,18 @@ def dividir_en_chunks(
 
         header_prefix = f"{header}\n" if header else ""
         espacio_contenido = chunk_size - len(header_prefix)
-        
+
         if espacio_contenido < MIN_CHUNK_LENGTH:
             espacio_contenido = chunk_size
             header_prefix = ""
-        
+
         partes = _split_recursivo(content, espacio_contenido)
-        
+
         for parte in partes:
             texto_chunk = (header_prefix + parte).strip()
             if len(texto_chunk) >= MIN_CHUNK_LENGTH:
                 fragmentos_raw.append({"text": texto_chunk, "header": header})
-    
+
     if not fragmentos_raw:
         if len(texto.strip()) >= MIN_CHUNK_LENGTH:
             return [{"text": texto.strip()[:chunk_size], "header": ""}]
@@ -471,7 +499,7 @@ def dividir_en_chunks(
     chunks_finales = []
     for i, frag in enumerate(fragmentos_raw):
         texto_chunk = frag["text"]
-        
+
         if i > 0 and overlap > 0:
             prev_text = fragmentos_raw[i - 1]["text"]
             overlap_text = prev_text[-overlap:]
@@ -480,32 +508,43 @@ def dividir_en_chunks(
                 overlap_text = overlap_text[space_idx + 1:]
             if overlap_text and overlap_text not in texto_chunk[:overlap + 50]:
                 texto_chunk = overlap_text + " " + texto_chunk
-        
+
         chunks_finales.append({
             "text": texto_chunk.strip(),
             "header": frag["header"]
         })
-    
+
     return chunks_finales
 
 
 def expandir_con_chunks_adyacentes(
-    chunk_id: str, 
-    metadata: Dict[str, Any], 
+    chunk_id: str,
+    metadata: Dict[str, Any],
     n_vecinos: int = 1
 ) -> List[str]:
-    """IDs de chunks vecinos (misma página y cross-page) para contexto expandido."""
+    """Build IDs for neighboring chunks (same-page and cross-page) for context expansion.
+
+    Args:
+        chunk_id: Identifier of the anchor chunk.
+        metadata: Metadata dict with ``source``, ``page``, ``chunk``,
+            and optionally ``total_chunks_in_page``.
+        n_vecinos: How many neighbors to include on each side.
+
+    Returns:
+        List of neighboring chunk IDs.
+    """
     archivo = metadata['source']
     pagina = metadata['page']
     chunk_num = metadata.get('chunk', 0)
     total_in_page = metadata.get('total_chunks_in_page', None)
-    
+
     ids_adyacentes = []
 
     for i in range(1, n_vecinos + 1):
         if chunk_num - i >= 0:
             ids_adyacentes.append(f"{archivo}_pag{pagina}_chunk{chunk_num - i}")
 
+    # Cross-page: last chunks of previous page
     if chunk_num == 0 and pagina > 0:
         for last_c in range(3):
             ids_adyacentes.append(f"{archivo}_pag{pagina - 1}_chunk{last_c}")
@@ -515,20 +554,19 @@ def expandir_con_chunks_adyacentes(
             if chunk_num + i < total_in_page:
                 ids_adyacentes.append(f"{archivo}_pag{pagina}_chunk{chunk_num + i}")
 
+        # Cross-page: first chunks of next page
         if chunk_num >= total_in_page - 1:
             for first_c in range(min(2, n_vecinos + 1)):
                 ids_adyacentes.append(f"{archivo}_pag{pagina + 1}_chunk{first_c}")
     else:
         ids_adyacentes.append(f"{archivo}_pag{pagina + 1}_chunk0")
-    
+
     return ids_adyacentes
 
 
-# =============================================================================
-# SECCIÓN 7: KEYWORDS Y BÚSQUEDA LÉXICA
-# =============================================================================
-# Complementa la semántica con búsqueda por términos (siglas, bigramas, where_document).
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 7: KEYWORD AND LEXICAL SEARCH
+# ─────────────────────────────────────────────
 
 
 STOPWORDS = {
@@ -559,7 +597,7 @@ STOPWORDS = {
     'would', 'could', 'should', 'may', 'might', 'must', 'shall', 'can', 'will', 'this', 'that',
     'it', 'its', 'they', 'them', 'their', 'we', 'our', 'you', 'your', 'he', 'she', 'him', 'her',
     'what', 'which', 'who', 'whom', 'whose',
-    # Valencià
+    # Valencian
     'els', 'les', 'uns', 'unes', 'dels', 'als',
     'per', 'per a', 'amb', 'sense', 'des de', 'fins a', 'fins', 'dins', 'envers',
     'que', 'qui', 'qual', 'quals', 'què', 'aquest', 'aquesta', 'aquests', 'aquestes',
@@ -590,12 +628,22 @@ GENERIC_TERMS_BLACKLIST = {
 
 
 def extraer_keywords(texto: str) -> List[str]:
-    """Extrae siglas, bigramas, términos entre paréntesis y tokens técnicos. Filtra stopwords."""
+    """Extract acronyms, bigrams, parenthesized terms, and technical tokens.
+
+    Filters stopwords, deduplicates case-insensitively, and removes
+    single-word tokens already covered by multi-word n-grams.
+
+    Args:
+        texto: Input text (typically a user query).
+
+    Returns:
+        Deduplicated list of keywords sorted by specificity.
+    """
     keywords = set()
-    
+
     siglas = re.findall(r'\b[A-ZÁÉÍÓÚÑ]{2,}\b', texto)
     keywords.update(s for s in siglas if len(s) >= 2)
-    
+
     parentesis = re.findall(r'\(([^)]+)\)', texto)
     for term in parentesis:
         term_clean = term.strip()
@@ -611,8 +659,8 @@ def extraer_keywords(texto: str) -> List[str]:
     for i in range(len(palabras) - 1):
         p1 = palabras[i].strip('¿?.,;:()[]{}"\'-')
         p2 = palabras[i + 1].strip('¿?.,;:()[]{}"\'-')
-        
-        if (len(p1) > 3 and len(p2) > 3 and 
+
+        if (len(p1) > 3 and len(p2) > 3 and
             p1.lower() not in STOPWORDS and p2.lower() not in STOPWORDS):
             bigrama = f"{p1} {p2}"
             keywords.add(bigrama.lower())
@@ -623,10 +671,10 @@ def extraer_keywords(texto: str) -> List[str]:
             keywords.add(clean.lower())
 
     terminos_tecnicos = [
-        palabra.strip('¿?.,;:()[]{}"\'-') 
-        for palabra in palabras 
+        palabra.strip('¿?.,;:()[]{}"\'-')
+        for palabra in palabras
         if (any(c.isupper() for c in palabra[1:]) or
-           any(c.isdigit() for c in palabra) or 
+           any(c.isdigit() for c in palabra) or
            '-' in palabra) and
         len(palabra.strip('¿?.,;:()[]{}"\'-')) > 1
     ]
@@ -679,23 +727,35 @@ def extraer_keywords(texto: str) -> List[str]:
 
 
 def busqueda_por_keywords(
-    pregunta: str, 
+    pregunta: str,
     collection: chromadb.Collection,
     n_results: int = N_RESULTADOS_KEYWORD
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
-    """Búsqueda por where_document (get, no query). Retorna (resultados, métricas)."""
+    """Search by keyword containment using ChromaDB ``where_document``.
+
+    Iterates over extracted keywords (with case variants and hyphen
+    alternatives) and collects matching chunks via ``collection.get()``.
+
+    Args:
+        pregunta: User query to extract keywords from.
+        collection: ChromaDB collection to search.
+        n_results: Maximum results per keyword variant.
+
+    Returns:
+        Tuple of (matched chunks, metrics dict).
+    """
     keywords = extraer_keywords(pregunta)
-    
+
     metricas = {
         'keywords_totales': len(keywords),
         'keywords_encontradas': 0,
         'resultados_totales': 0,
         'errores': 0
     }
-    
+
     if not keywords:
         return [], metricas
-    
+
     resultados_keyword = []
     keywords_encontradas = set()
     ids_vistos = set()
@@ -709,18 +769,18 @@ def busqueda_por_keywords(
         if '-' in keyword_base:
             variantes.append(keyword_base.replace('-', ' '))
             variantes.append(keyword_base.replace('-', ' ').lower())
-        
+
         for keyword in variantes:
             if len(keyword) < 3:
                 continue
-                
+
             try:
                 results = collection.get(
                     where_document={"$contains": keyword},
                     include=['documents', 'metadatas'],
                     limit=n_results
                 )
-                
+
                 if results['documents']:
                     for doc, meta, doc_id in zip(
                         results['documents'],
@@ -739,38 +799,50 @@ def busqueda_por_keywords(
                             keywords_encontradas.add(keyword_base)
             except Exception as e:
                 metricas['errores'] += 1
-                logging.warning(f"Error buscando keyword '{keyword}': {e}")
-    
+                logging.warning(f"Error searching keyword '{keyword}': {e}")
+
     metricas['keywords_encontradas'] = len(keywords_encontradas)
     metricas['resultados_totales'] = len(resultados_keyword)
-    
+
     if keywords_encontradas:
         ui.debug(f"keywords: {', '.join(list(keywords_encontradas)[:10])}")
     else:
-        ui.debug("sin coincidencias directas por keywords")
-    
+        ui.debug("no direct keyword matches")
+
     if LOGGING_METRICAS:
-        logging.info(f"Búsqueda keywords: {metricas['keywords_encontradas']}/{metricas['keywords_totales']} encontradas, {metricas['resultados_totales']} resultados")
-    
+        logging.info(f"Keyword search: {metricas['keywords_encontradas']}/{metricas['keywords_totales']} found, {metricas['resultados_totales']} results")
+
     return resultados_keyword, metricas
 
 
 def busqueda_exhaustiva_texto(
-    terminos_criticos: List[str], 
+    terminos_criticos: List[str],
     collection: chromadb.Collection,
     max_results: int = 20
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
-    """Escaneo por lotes de todos los docs. Retorna los que contienen los términos, ordenados por matches."""
+    """Batch-scan all documents for critical terms.
+
+    Iterates over the entire collection in batches and returns chunks
+    containing the specified terms, sorted by match count.
+
+    Args:
+        terminos_criticos: Domain-specific terms to search for.
+        collection: ChromaDB collection to scan.
+        max_results: Maximum number of results to return.
+
+    Returns:
+        Tuple of (matched chunks sorted by match count, metrics dict).
+    """
     resultados = []
     total_docs = collection.count()
     batch_size = 100
-    
+
     metricas = {
         'documentos_escaneados': 0,
         'documentos_con_matches': 0,
         'errores': 0
     }
-    
+
     for offset in range(0, total_docs, batch_size):
         try:
             batch = collection.get(
@@ -778,22 +850,22 @@ def busqueda_exhaustiva_texto(
                 offset=offset,
                 include=['documents', 'metadatas']
             )
-            
+
             metricas['documentos_escaneados'] += len(batch['documents'])
-            
+
             for doc, meta, doc_id in zip(
-                batch['documents'], 
-                batch['metadatas'], 
+                batch['documents'],
+                batch['metadatas'],
                 batch['ids']
             ):
                 doc_lower = doc.lower()
                 matches_encontrados = []
-                
+
                 for termino in terminos_criticos:
                     termino_lower = termino.lower()
                     if termino_lower in doc_lower:
                         matches_encontrados.append(termino)
-                
+
                 if matches_encontrados:
                     metricas['documentos_con_matches'] += 1
                     resultados.append({
@@ -805,28 +877,30 @@ def busqueda_exhaustiva_texto(
                     })
         except Exception as e:
             metricas['errores'] += 1
-            logging.warning(f"Error en búsqueda exhaustiva (offset {offset}): {e}")
-    
+            logging.warning(f"Error in exhaustive search (offset {offset}): {e}")
+
     resultados.sort(key=lambda x: x['num_matches'], reverse=True)
-    
+
     if LOGGING_METRICAS:
-        logging.info(f"Búsqueda exhaustiva: {metricas['documentos_con_matches']} docs con matches de {metricas['documentos_escaneados']} escaneados")
-    
+        logging.info(f"Exhaustive search: {metricas['documentos_con_matches']} docs with matches out of {metricas['documentos_escaneados']} scanned")
+
     return resultados[:max_results], metricas
 
 
-# =============================================================================
-# SECCIÓN 8: RERANKING SEMÁNTICO
-# =============================================================================
-# CrossEncoder (singleton, CUDA/CPU). Reordena candidatos por relevancia pregunta-doc.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 8: SEMANTIC RERANKING
+# ─────────────────────────────────────────────
 
 
 _reranker_model = None
 
 
 def _detectar_dispositivo_reranker() -> str:
-    """Devuelve 'cuda' si está disponible, si no 'cpu'."""
+    """Detect the best available device for the reranker.
+
+    Returns:
+        ``"cuda"`` if a CUDA GPU is available, otherwise ``"cpu"``.
+    """
     try:
         import torch
         if torch.cuda.is_available():
@@ -837,23 +911,30 @@ def _detectar_dispositivo_reranker() -> str:
 
 
 def obtener_modelo_reranker():
-    """Singleton del Cross-Encoder. Carga lazy, FP16 en CUDA si hay GPU."""
+    """Return the Cross-Encoder singleton, loading it lazily on first call.
+
+    Uses FP16 on CUDA when a GPU is available. The model variant is
+    controlled by ``RERANKER_MODEL_QUALITY`` (``"quality"`` or fast).
+
+    Returns:
+        The loaded ``CrossEncoder`` instance, or ``None`` on failure.
+    """
     global _reranker_model
-    
+
     if not USAR_RERANKER:
         return None
-    
+
     if _reranker_model is None:
         try:
             if RERANKER_MODEL_QUALITY == "quality":
                 modelo_nombre = "BAAI/bge-reranker-v2-m3"
             else:
                 modelo_nombre = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-            
+
             device = _detectar_dispositivo_reranker()
-            
-            ui.debug(f"Cargando reranker: {modelo_nombre}")
-            ui.debug(f"dispositivo: {device.upper()}" + (" (FP16)" if device == "cuda" else ""))
+
+            ui.debug(f"Loading reranker: {modelo_nombre}")
+            ui.debug(f"device: {device.upper()}" + (" (FP16)" if device == "cuda" else ""))
 
             model_kwargs = {"torch_dtype": "float16"} if device == "cuda" else {}
             import io, contextlib
@@ -864,20 +945,29 @@ def obtener_modelo_reranker():
                     model_kwargs=model_kwargs,
                 )
 
-            ui.debug(f"reranker cargado en {device.upper()}")
+            ui.debug(f"reranker loaded on {device.upper()}")
         except Exception as e:
-            logging.error(f"Error cargando modelo de reranking: {e}")
+            logging.error(f"Error loading reranker model: {e}")
             return None
-    
+
     return _reranker_model
 
 
 def rerank_resultados(
-    pregunta: str, 
-    documentos_recuperados: List[Dict[str, Any]], 
+    pregunta: str,
+    documentos_recuperados: List[Dict[str, Any]],
     top_k: int = TOP_K_AFTER_RERANK
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """Reordena candidatos con Cross-Encoder. Retorna (top_k docs con score_reranker, métricas)."""
+    """Reorder candidates using a Cross-Encoder for finer relevance scoring.
+
+    Args:
+        pregunta: The user query.
+        documentos_recuperados: Candidate chunks from prior retrieval stages.
+        top_k: Number of top results to keep after reranking.
+
+    Returns:
+        Tuple of (top-k documents with ``score_reranker``, metrics dict).
+    """
     metricas = {
         'candidatos_entrada': len(documentos_recuperados),
         'resultados_salida': 0,
@@ -885,16 +975,16 @@ def rerank_resultados(
         'modelo_usado': RERANKER_MODEL_QUALITY,
         'dispositivo': _detectar_dispositivo_reranker()
     }
-    
+
     if not USAR_RERANKER or not documentos_recuperados:
         metricas['resultados_salida'] = len(documentos_recuperados)
         return documentos_recuperados, metricas
-    
+
     reranker = obtener_modelo_reranker()
     if reranker is None:
         metricas['resultados_salida'] = len(documentos_recuperados)
         return documentos_recuperados, metricas
-    
+
     try:
         import time
         inicio = time.time()
@@ -902,6 +992,7 @@ def rerank_resultados(
         textos_documentos = []
         for doc in documentos_recuperados:
             texto = doc['doc']
+            # Strip contextual retrieval prefix if present
             if '\\n\\n' in texto:
                 partes = texto.split('\\n\\n', 1)
                 texto = partes[-1]
@@ -910,8 +1001,8 @@ def rerank_resultados(
         import io, contextlib
         with contextlib.redirect_stderr(io.StringIO()):
             ranks = reranker.rank(
-                pregunta, 
-                textos_documentos, 
+                pregunta,
+                textos_documentos,
                 top_k=min(top_k, len(textos_documentos)),
                 return_documents=False
             )
@@ -920,29 +1011,39 @@ def rerank_resultados(
         for rank_info in ranks:
             idx = rank_info['corpus_id']
             score = rank_info['score']
-            
+
             doc_original = documentos_recuperados[idx].copy()
             doc_original['score_reranker'] = float(score)
             doc_original['score_final'] = float(score)
             documentos_reordenados.append(doc_original)
-        
+
         metricas['tiempo_reranking'] = time.time() - inicio
         metricas['resultados_salida'] = len(documentos_reordenados)
-        
+
         if LOGGING_METRICAS:
             dev = metricas['dispositivo'].upper()
-            logging.info(f"Reranking ({dev}): {metricas['candidatos_entrada']} → {metricas['resultados_salida']} en {metricas['tiempo_reranking']:.2f}s")
-        
+            logging.info(f"Reranking ({dev}): {metricas['candidatos_entrada']} -> {metricas['resultados_salida']} in {metricas['tiempo_reranking']:.2f}s")
+
         return documentos_reordenados, metricas
-        
+
     except Exception as e:
-        logging.error(f"Error en reranking: {e}")
+        logging.error(f"Error in reranking: {e}")
         metricas['resultados_salida'] = len(documentos_recuperados)
         return documentos_recuperados, metricas
 
 
 def generar_queries_con_llm(pregunta: str) -> List[str]:
-    """Genera 3 queries de búsqueda con un modelo auxiliar. Mismo idioma que la pregunta."""
+    """Generate 3 search sub-queries via an auxiliary LLM.
+
+    Each sub-query targets a different semantic aspect of the original
+    question and is written in the same language.
+
+    Args:
+        pregunta: The original user question.
+
+    Returns:
+        Up to 3 generated queries, or empty list on failure.
+    """
     try:
         prompt = (
             "Generate exactly 3 search queries to retrieve relevant content "
@@ -975,12 +1076,22 @@ def generar_queries_con_llm(pregunta: str) -> List[str]:
         return queries[:3]
 
     except Exception as e:
-        logging.warning(f"Error generando queries con LLM ({MODELO_CHAT}): {e}")
+        logging.warning(f"Error generating queries with LLM ({MODELO_CHAT}): {e}")
         return []
 
 
 def _validar_coherencia_query(query: str) -> bool:
-    """Detecta si una query es un bag-of-words incoherente."""
+    """Detect whether a query is an incoherent bag-of-words.
+
+    Checks unique-word ratio, word repetition, and presence of
+    connectors to ensure the query reads as a natural sentence.
+
+    Args:
+        query: The candidate query string.
+
+    Returns:
+        ``True`` if the query appears coherent, ``False`` otherwise.
+    """
     words = query.lower().split()
     if len(words) < 2:
         return True
@@ -998,10 +1109,10 @@ def _validar_coherencia_query(query: str) -> bool:
     "the", "a", "an", "is", "are", "how", "what", "why",
     "when", "where", "which", "does", "do", "to", "in", "of",
     "that", "for", "and", "with", "by", "on", "as",
-    # Español
-    "cómo", "qué", "cuál", "cuáles", "cuándo", "dónde", "por", 
+    # Spanish
+    "cómo", "qué", "cuál", "cuáles", "cuándo", "dónde", "por",
     "para", "que", "son", "está", "entre", "con", "los", "las",
-    # Valencià
+    # Valencian
     "com", "quins", "quines", "quan", "quin", "quina", "per", "que",
     }
 
@@ -1013,7 +1124,17 @@ def _validar_coherencia_query(query: str) -> bool:
 
 
 def _filtrar_terminos_criticos(terminos: List[str]) -> List[str]:
-    """Mantiene solo términos de dominio específico con alta discriminación para fase exhaustiva."""
+    """Keep only high-discrimination domain-specific terms for exhaustive search.
+
+    Filters out generic blacklisted single words and retains multi-word
+    terms, capitalized terms, and acronyms.
+
+    Args:
+        terminos: Candidate critical terms.
+
+    Returns:
+        Filtered list of domain-specific terms.
+    """
     filtered = []
     for term in terminos:
         words = term.lower().split()
@@ -1031,20 +1152,30 @@ def _filtrar_terminos_criticos(terminos: List[str]) -> List[str]:
     return filtered
 
 
-# =============================================================================
-# SECCIÓN 9: PIPELINE DE RECUPERACIÓN HÍBRIDA
-# =============================================================================
-# Semántica multi-query + keywords + exhaustiva → fusión RRF → reranking.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 9: HYBRID RETRIEVAL PIPELINE
+# ─────────────────────────────────────────────
 
 
 def realizar_busqueda_hibrida(
     pregunta: str,
     collection: chromadb.Collection
 ) -> Tuple[List[Dict[str, Any]], float, Dict[str, Any]]:
-    """Orquesta semántica, keywords, exhaustiva, fusión y reranking. Retorna (fragmentos, mejor_score, métricas)."""
-    ui.debug("Iniciando búsqueda híbrida...")
-    
+    """Orchestrate the full hybrid retrieval pipeline.
+
+    Combines multi-query semantic search, keyword search, exhaustive
+    deep scan, RRF fusion, and optional Cross-Encoder reranking into
+    a single ranked result set.
+
+    Args:
+        pregunta: User query.
+        collection: ChromaDB collection to search.
+
+    Returns:
+        Tuple of (ranked fragments, best score, full metrics dict).
+    """
+    ui.debug("Starting hybrid search...")
+
     metricas_totales = {
         'fase_semantica': {},
         'fase_keywords': {},
@@ -1056,12 +1187,12 @@ def realizar_busqueda_hibrida(
 
     llm_queries = []
     if USAR_LLM_QUERY_DECOMPOSITION and len(pregunta) > 60:
-        ui.debug("descomponiendo pregunta...")
+        ui.debug("decomposing query...")
         llm_queries = generar_queries_con_llm(pregunta)
         if llm_queries:
-            ui.debug(f"{len(llm_queries)} sub-queries generadas")
+            ui.debug(f"{len(llm_queries)} sub-queries generated")
 
-    ui.debug("busqueda semántica...")
+    ui.debug("semantic search...")
 
     queries = [pregunta]
 
@@ -1089,28 +1220,28 @@ def realizar_busqueda_hibrida(
     for lq in llm_queries:
         if lq not in queries:
             queries.append(lq)
-    
-    ui.debug(f"{len(queries)} variante(s) de la pregunta")
+
+    ui.debug(f"{len(queries)} query variant(s)")
 
     all_semantic_results = {}
-    
+
     for q_idx, query in enumerate(queries):
         query_con_prefijo = f"{EMBED_PREFIX_QUERY}{query}"
         response_emb = ollama.embeddings(model=MODELO_EMBEDDING, prompt=query_con_prefijo)
-        
+
         results_semantic = collection.query(
             query_embeddings=[response_emb["embedding"]],
             n_results=N_RESULTADOS_SEMANTICOS,
             include=['documents', 'distances', 'metadatas']
         )
-        
+
         for idx, (doc, distancia, metadata) in enumerate(zip(
-            results_semantic['documents'][0], 
-            results_semantic['distances'][0], 
+            results_semantic['documents'][0],
+            results_semantic['distances'][0],
             results_semantic['metadatas'][0]
         ), 1):
             chunk_id = f"{metadata['source']}_pag{metadata['page']}_chunk{metadata.get('chunk', 0)}"
-            
+
             if chunk_id not in all_semantic_results:
                 all_semantic_results[chunk_id] = {
                     'doc': doc,
@@ -1123,35 +1254,36 @@ def realizar_busqueda_hibrida(
                     'query_matches': []
                 }
 
+            # RRF scoring: accumulate reciprocal rank
             all_semantic_results[chunk_id]['score_semantic'] += 1.0 / (idx + 60)
             all_semantic_results[chunk_id]['query_matches'].append(q_idx + 1)
             if distancia < all_semantic_results[chunk_id]['distancia']:
                 all_semantic_results[chunk_id]['distancia'] = distancia
-    
+
     metricas_totales['fase_semantica'] = {
         'queries_generadas': len(queries),
         'fragmentos_unicos': len(all_semantic_results)
     }
-    
-    ui.debug(f"{len(all_semantic_results)} fragmentos únicos")
+
+    ui.debug(f"{len(all_semantic_results)} unique fragments")
 
     results_keyword = []
     metricas_keywords = {}
     if USAR_BUSQUEDA_HIBRIDA:
-        ui.debug("busqueda por keywords...")
+        ui.debug("keyword search...")
         keywords = extraer_keywords(pregunta)
         if keywords:
-            ui.debug(f"detectadas: {', '.join(keywords[:8])}")
+            ui.debug(f"detected: {', '.join(keywords[:8])}")
         results_keyword, metricas_keywords = busqueda_por_keywords(pregunta, collection)
         metricas_totales['fase_keywords'] = metricas_keywords
 
-    ui.debug("fusionando resultados...")
-    
+    ui.debug("fusing results...")
+
     fragmentos_data = all_semantic_results.copy()
-    
+
     for idx, result in enumerate(results_keyword, 1):
         chunk_id = result['id']
-        
+
         if chunk_id in fragmentos_data:
             fragmentos_data[chunk_id]['score_keyword'] += 1.0 / (idx + 60)
             if result['keyword_match'] not in fragmentos_data[chunk_id]['matches']:
@@ -1174,18 +1306,18 @@ def realizar_busqueda_hibrida(
     terminos_criticos = _filtrar_terminos_criticos(
         [k for k in keywords_expandidas[:12] if len(k) > 3]
     )
-    
+
     metricas_exhaustiva = {}
     if USAR_BUSQUEDA_EXHAUSTIVA and terminos_criticos:
-        ui.debug(f"busqueda profunda: {', '.join(terminos_criticos[:6])}")
+        ui.debug(f"deep search: {', '.join(terminos_criticos[:6])}")
         resultados_exhaustivos, metricas_exhaustiva = busqueda_exhaustiva_texto(
             terminos_criticos, collection, max_results=30
         )
         metricas_totales['fase_exhaustiva'] = metricas_exhaustiva
-        
+
         for idx, result in enumerate(resultados_exhaustivos):
             chunk_id = result['id']
-            
+
             if chunk_id in fragmentos_data:
                 fragmentos_data[chunk_id]['score_keyword'] += 0.3 * result['num_matches']
                 fragmentos_data[chunk_id]['matches'].extend(
@@ -1207,16 +1339,16 @@ def realizar_busqueda_hibrida(
             frag['score_final'] = (frag['score_semantic'] * 0.55 + frag['score_keyword'] * 0.45)
 
     fragmentos_ranked = sorted(
-        fragmentos_data.values(), 
-        key=lambda x: x['score_final'], 
+        fragmentos_data.values(),
+        key=lambda x: x['score_final'],
         reverse=True
     )
-    
+
     metricas_totales['candidatos_fusion'] = len(fragmentos_ranked)
 
     if USAR_RERANKER and fragmentos_ranked:
         n_candidatos = min(TOP_K_RERANK_CANDIDATES, len(fragmentos_ranked))
-        ui.debug(f"reranking top {n_candidatos} candidatos...")
+        ui.debug(f"reranking top {n_candidatos} candidates...")
 
         candidatos_rerank = fragmentos_ranked[:TOP_K_RERANK_CANDIDATES]
         fragmentos_ranked, metricas_rerank = rerank_resultados(
@@ -1225,8 +1357,8 @@ def realizar_busqueda_hibrida(
             top_k=TOP_K_AFTER_RERANK
         )
         metricas_totales['fase_reranking'] = metricas_rerank
-        ui.debug(f"top {len(fragmentos_ranked)} tras reranking")
-    
+        ui.debug(f"top {len(fragmentos_ranked)} after reranking")
+
     mejor_score = fragmentos_ranked[0]['score_final'] if fragmentos_ranked else 0
     metricas_totales['resultados_finales'] = len(fragmentos_ranked)
 
@@ -1239,35 +1371,43 @@ def realizar_busqueda_hibrida(
         sem_unicos = metricas_totales['fase_semantica'].get('fragmentos_unicos', 0)
         kw_total = metricas_keywords.get('resultados_totales', 0)
         logging.info(
-            f"Pipeline completo: Semántica({sem_unicos}) + "
-            f"Keywords({kw_total}) → "
-            f"Fusión({metricas_totales['candidatos_fusion']}) → "
+            f"Full pipeline: Semantic({sem_unicos}) + "
+            f"Keywords({kw_total}) -> "
+            f"Fusion({metricas_totales['candidatos_fusion']}) -> "
             f"Reranking({metricas_totales['resultados_finales']})"
         )
-    
+
     return fragmentos_ranked, mejor_score, metricas_totales
 
 
-# =============================================================================
-# SECCIÓN 10: CONTEXTO Y GENERACIÓN
-# =============================================================================
-# Fragmentos → prompt <context>...</context> → streaming Ollama. Formato alineado con train.py.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 10: CONTEXT AND GENERATION
+# ─────────────────────────────────────────────
 
 
-# --- 10.1 Optimización de texto PDF ---
+# --- 10.1 PDF text optimization ---
 
 def _es_continuacion_parrafo(linea_previa: str, linea_actual: str) -> bool:
-    """Heurística: detecta si la línea actual continúa el párrafo (evita roturas por doble espaciado PDF)."""
+    """Heuristic to detect whether the current line continues a paragraph.
+
+    Avoids false paragraph breaks caused by PDF extraction double-spacing.
+
+    Args:
+        linea_previa: The preceding line (right-stripped).
+        linea_actual: The current line (stripped).
+
+    Returns:
+        ``True`` if the current line likely continues the paragraph.
+    """
     if not linea_previa or not linea_actual:
         return False
-    
+
     prev_stripped = linea_previa.rstrip()
     curr_stripped = linea_actual.strip()
-    
+
     if not prev_stripped or not curr_stripped:
         return False
-    
+
     prev_end = prev_stripped[-1]
 
     if prev_end in '.?!':
@@ -1286,29 +1426,36 @@ def _es_continuacion_parrafo(linea_previa: str, linea_actual: str) -> bool:
         return True
     if curr_stripped[0].islower():
         return True
-    
+
     if prev_end not in '.?!:':
         return True
-    
+
     return False
 
 
 def _reunir_parrafos(texto: str) -> str:
-    """Re-une líneas separadas por extracción PDF (look-ahead para continuaciones)."""
+    """Re-join lines split by PDF extraction using look-ahead for continuations.
+
+    Args:
+        texto: Text with potentially broken paragraph lines.
+
+    Returns:
+        Text with properly joined paragraphs.
+    """
     lines = texto.split('\n')
     result = []
     buffer = ""
-    
+
     i = 0
     while i < len(lines):
         stripped = lines[i].strip()
-        
+
         if not stripped:
             if buffer:
                 j = i + 1
                 while j < len(lines) and not lines[j].strip():
                     j += 1
-                
+
                 if j < len(lines) and _es_continuacion_parrafo(buffer, lines[j].strip()):
                     buffer += ' ' + lines[j].strip()
                     i = j + 1
@@ -1323,7 +1470,7 @@ def _reunir_parrafos(texto: str) -> str:
                 result.append("")
                 i += 1
                 continue
-        
+
         if not buffer:
             buffer = stripped
         elif _es_continuacion_parrafo(buffer, stripped):
@@ -1331,49 +1478,65 @@ def _reunir_parrafos(texto: str) -> str:
         else:
             result.append(buffer)
             buffer = stripped
-        
+
         i += 1
-    
+
     if buffer:
         result.append(buffer)
-    
+
     return '\n'.join(result)
 
 
 def optimizar_texto_contexto(texto: str) -> str:
-    """Elimina ruido PDF (artefactos □, footers, doble espaciado). Ahorro típico 30-50% chars."""
+    """Remove PDF noise (box artifacts, footers, double spacing).
+
+    Typical savings are 30-50% of characters.
+
+    Args:
+        texto: Raw text extracted from a PDF chunk.
+
+    Returns:
+        Cleaned text ready for LLM context.
+    """
     texto = re.sub(r'#{1,6}\s*□', '', texto)
     texto = re.sub(r'^□\s*$', '', texto, flags=re.MULTILINE)
 
     texto = re.sub(r'^#{1,6}\s+', '', texto, flags=re.MULTILINE)
-    
+
     texto = re.sub(
         r'^[A-ZÀ-Ú][a-zà-ú]+ [A-ZÀ-Ú][a-zà-ú]+,\s+[A-ZÀ-Ú].*?\d+\s*/\s*\d+\s+\w+.*$',
         '', texto, flags=re.MULTILINE
     )
-    
+
     texto = re.sub(r'\*{0,2}Solución:?\*{0,2}\s*La\s+\d+\s*', '', texto)
-    
+
     texto = re.sub(r'\*\*(.+?)\*\*', r'\1', texto)
-    
+
     texto = re.sub(r'[ \t]{2,}', ' ', texto)
-    
+
     texto = re.sub(r'[ \t]+$', '', texto, flags=re.MULTILINE)
-    
+
     texto = _reunir_parrafos(texto)
-    
+
     texto = re.sub(r'^\s+$', '', texto, flags=re.MULTILINE)
-    
+
     texto = re.sub(r'\n{3,}', '\n\n', texto)
-    
+
     return texto.strip()
 
 
-# --- 10.2 Construcción de contexto ---
+# --- 10.2 Context construction ---
 
 
 def _marcar_fragmento_incompleto(texto: str) -> str:
-    """Añade [incomplete fragment] si el texto no termina en puntuación de cierre."""
+    """Append ``[incomplete fragment]`` if text lacks closing punctuation.
+
+    Args:
+        texto: Fragment text to inspect.
+
+    Returns:
+        Original text, possibly with an appended incompleteness marker.
+    """
     stripped = texto.rstrip()
     if not stripped:
         return texto
@@ -1383,19 +1546,25 @@ def _marcar_fragmento_incompleto(texto: str) -> str:
 
 
 def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
-    """
-    Construye el contexto para el modelo RAG a partir de fragmentos recuperados.
+    """Build the context string for the RAG model from retrieved fragments.
 
-    Formato de salida por fragmento:
+    Output format per fragment::
+
         --- [Fragment N] ---
-        [Fragment Context]            ← solo si hay resumen de Contextual Retrieval
+        [Fragment Context]            <- only if Contextual Retrieval summary exists
         ...
         [Source Text]
         ...
-        [incomplete fragment]         ← solo si el chunk está truncado
+        [incomplete fragment]         <- only if the chunk is truncated
 
-    Separador entre fragmentos: doble salto de línea.
-    Optimización de texto PDF opcional (flag USAR_OPTIMIZACION_CONTEXTO).
+    Fragments are separated by double newlines. PDF text optimization
+    is applied when ``USAR_OPTIMIZACION_CONTEXTO`` is enabled.
+
+    Args:
+        fragmentos: List of retrieved chunk dicts with ``doc`` and ``metadata``.
+
+    Returns:
+        Formatted context string ready for the ``<context>`` tag.
     """
     fragmentos_ordenados = sorted(
         fragmentos,
@@ -1411,7 +1580,7 @@ def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
         if not texto:
             continue
 
-        # Separar resumen de Contextual Retrieval del texto fuente
+        # Separate Contextual Retrieval summary from source text
         if '\\n\\n' in texto:
             ctx_summary, raw_content = texto.split('\\n\\n', 1)
             raw_content = _marcar_fragmento_incompleto(raw_content.strip())
@@ -1428,18 +1597,29 @@ def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
         ahorro = chars_original - chars_optimizado
         pct = (ahorro / chars_original) * 100 if ahorro > 0 else 0
         logging.info(
-            f"Contexto optimizado: {chars_original} → {chars_optimizado} chars "
-            f"({ahorro} ahorrados, {pct:.1f}%)"
+            f"Optimized context: {chars_original} -> {chars_optimizado} chars "
+            f"({ahorro} saved, {pct:.1f}%)"
         )
 
     return resultado
 
 
 def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: str = "") -> str:
-    """Síntesis con MODELO_RECOMP. Si falla o está desactivado, usa construir_contexto_para_modelo."""
+    """Synthesize context using MODELO_RECOMP instead of raw chunks.
+
+    Falls back to ``construir_contexto_para_modelo`` if synthesis is
+    disabled, fails, or produces too little output.
+
+    Args:
+        fragmentos: Retrieved chunk dicts.
+        query_usuario: The user query for focused synthesis.
+
+    Returns:
+        Synthesized context string or raw formatted context on fallback.
+    """
     if not USAR_RECOMP_SYNTHESIS or not fragmentos:
         return construir_contexto_para_modelo(fragmentos)
-        
+
     textos_preparados = []
     for i, f in enumerate(fragmentos):
         content = f['doc'].replace("\n", " ").strip()
@@ -1465,7 +1645,7 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
     focus_instruction = (
         f"Focus specifically on information answering: '{query_usuario}'. "
         "Include only the essential details."
-        if query_usuario else 
+        if query_usuario else
         "Summarize the key technical definitions and comparisons."
     )
 
@@ -1474,7 +1654,7 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
         f"--- INPUT FRAGMENTS ---\n{contexto_raw}\n-----------------------\n\n"
         "Concise synthesis:"
     )
-    
+
     try:
         response = ollama.chat(
             model=MODELO_RECOMP,
@@ -1490,16 +1670,16 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
                 "num_ctx": 8192
             }
         )
-        
+
         sintesis = response['message']['content'].strip()
-        
-        if len(sintesis) < 20: 
+
+        if len(sintesis) < 20:
             return construir_contexto_para_modelo(fragmentos)
-            
+
         return sintesis
 
     except Exception as e:
-        logging.warning(f"Error crítico en síntesis RECOMP ({MODELO_RECOMP}): {e}")
+        logging.warning(f"Critical error in RECOMP synthesis ({MODELO_RECOMP}): {e}")
         return construir_contexto_para_modelo(fragmentos)
 
 
@@ -1514,21 +1694,35 @@ def guardar_debug_rag(
     motivo_interrupcion: Optional[str] = None,
     metricas: Optional[Dict[str, Any]] = None
 ) -> None:
-    """Volcado de interacción RAG en debug_rag/ (timestamp + slug). Incluye sub-queries, keywords, métricas."""
+    """Dump a full RAG interaction to ``debug_rag/`` for inspection.
+
+    The output file (timestamped + slug) includes sub-queries, keywords,
+    pipeline configuration, the full prompt, the model response, and all
+    retrieved fragments with their scores.
+
+    Args:
+        pregunta: Original user question.
+        system_prompt: System prompt sent to the model.
+        mensaje_usuario: Complete user message (with ``<context>``).
+        respuesta: Model response text.
+        fragmentos: Retrieved fragments used for context.
+        motivo_interrupcion: Reason for early interruption, if any.
+        metricas: Full pipeline metrics dict.
+    """
     fragmentos = fragmentos or []
-    
+
     if not GUARDAR_DEBUG_RAG:
         return
-    
+
     try:
         os.makedirs(CARPETA_DEBUG_RAG, exist_ok=True)
-        
+
         import time
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         slug = re.sub(r'[^\w\s]', '', pregunta)[:40].strip().replace(' ', '_')
         nombre_archivo = f"{timestamp}_{slug}.txt"
         ruta = os.path.join(CARPETA_DEBUG_RAG, nombre_archivo)
-        
+
         with open(ruta, 'w', encoding='utf-8') as f:
             f.write("=" * 80 + "\n")
             f.write(f"  DEBUG RAG - {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -1536,7 +1730,7 @@ def guardar_debug_rag(
 
             if metricas and (metricas.get('sub_queries') or metricas.get('queries_semanticas') or metricas.get('keywords') or metricas.get('terminos_criticos') or metricas.get('fase_semantica') or metricas.get('fase_keywords') or metricas.get('fase_exhaustiva') or metricas.get('fase_reranking')):
                 f.write("─" * 80 + "\n")
-                f.write("  PIPELINE DE RECUPERACIÓN (sub-queries, keywords, términos, métricas)\n")
+                f.write("  RETRIEVAL PIPELINE (sub-queries, keywords, terms, metrics)\n")
                 f.write("─" * 80 + "\n")
                 sub_q = metricas.get('sub_queries', [])
                 if sub_q:
@@ -1545,113 +1739,124 @@ def guardar_debug_rag(
                         f.write(f"  {i}. {sq}\n")
                 queries_sem = metricas.get('queries_semanticas', [])
                 if queries_sem:
-                    f.write("\nQueries usadas en búsqueda semántica:\n")
+                    f.write("\nQueries used in semantic search:\n")
                     for i, q in enumerate(queries_sem, 1):
                         f.write(f"  {i}. {q}\n")
                 keywords = metricas.get('keywords', [])
                 if keywords:
-                    f.write(f"\nKeywords extraídas ({len(keywords)}):\n  {', '.join(keywords[:30])}\n")
+                    f.write(f"\nExtracted keywords ({len(keywords)}):\n  {', '.join(keywords[:30])}\n")
                     if len(keywords) > 30:
-                        f.write(f"  ... y {len(keywords) - 30} más\n")
+                        f.write(f"  ... and {len(keywords) - 30} more\n")
                 terminos = metricas.get('terminos_criticos', [])
                 if terminos:
-                    f.write(f"\nTérminos críticos (búsqueda exhaustiva):\n  {', '.join(terminos)}\n")
+                    f.write(f"\nCritical terms (exhaustive search):\n  {', '.join(terminos)}\n")
                 fase_kw = metricas.get('fase_keywords', {})
                 if fase_kw:
-                    f.write(f"\nMétricas keywords: {fase_kw.get('keywords_encontradas', 0)}/{fase_kw.get('keywords_totales', 0)} encontradas, {fase_kw.get('resultados_totales', 0)} resultados\n")
-                f.write(f"\nMétricas completas:\n{json.dumps(metricas, indent=2, ensure_ascii=False, default=str)}\n\n")
+                    f.write(f"\nKeyword metrics: {fase_kw.get('keywords_encontradas', 0)}/{fase_kw.get('keywords_totales', 0)} found, {fase_kw.get('resultados_totales', 0)} results\n")
+                f.write(f"\nFull metrics:\n{json.dumps(metricas, indent=2, ensure_ascii=False, default=str)}\n\n")
 
             if motivo_interrupcion:
                 f.write("─" * 80 + "\n")
-                f.write("  ⚠ INTERRUPCIÓN TEMPRANA\n")
+                f.write("  EARLY INTERRUPTION\n")
                 f.write("─" * 80 + "\n")
                 f.write(f"{motivo_interrupcion}\n\n")
                 if metricas:
-                    f.write("Métricas de búsqueda:\n")
+                    f.write("Search metrics:\n")
                     f.write(json.dumps(metricas, indent=2, ensure_ascii=False) + "\n\n")
 
             f.write("─" * 80 + "\n")
-            f.write("  CONFIGURACIÓN DEL PIPELINE\n")
+            f.write("  PIPELINE CONFIGURATION\n")
             f.write("─" * 80 + "\n")
-            f.write(f"Modelo RAG: {_inferir_descripcion_modelo(MODELO_RAG)}\n")
-            f.write(f"Contextual Retrieval (Indexación): {'SÍ' if USAR_CONTEXTUAL_RETRIEVAL else 'NO'}\n")
-            f.write(f"Query Decomposition: {'SÍ' if USAR_LLM_QUERY_DECOMPOSITION else 'NO'}\n")
-            f.write(f"Búsqueda Híbrida (keywords): {'SÍ' if USAR_BUSQUEDA_HIBRIDA else 'NO'}\n")
-            f.write(f"Búsqueda Exhaustiva: {'SÍ' if USAR_BUSQUEDA_EXHAUSTIVA else 'NO'}\n")
-            f.write(f"Reranker: {'SÍ' if USAR_RERANKER else 'NO'}\n")
-            f.write(f"Expandir Contexto: {'SÍ' if EXPANDIR_CONTEXTO else 'NO'}\n")
-            f.write(f"Optimizar Contexto: {'SÍ' if USAR_OPTIMIZACION_CONTEXTO else 'NO'}\n")
-            f.write(f"RECOMP Synthesis: {'SÍ' if USAR_RECOMP_SYNTHESIS else 'NO'}\n\n")
-            
+            f.write(f"RAG Model: {_inferir_descripcion_modelo(MODELO_RAG)}\n")
+            f.write(f"Contextual Retrieval (Indexing): {'YES' if USAR_CONTEXTUAL_RETRIEVAL else 'NO'}\n")
+            f.write(f"Query Decomposition: {'YES' if USAR_LLM_QUERY_DECOMPOSITION else 'NO'}\n")
+            f.write(f"Hybrid Search (keywords): {'YES' if USAR_BUSQUEDA_HIBRIDA else 'NO'}\n")
+            f.write(f"Exhaustive Search: {'YES' if USAR_BUSQUEDA_EXHAUSTIVA else 'NO'}\n")
+            f.write(f"Reranker: {'YES' if USAR_RERANKER else 'NO'}\n")
+            f.write(f"Expand Context: {'YES' if EXPANDIR_CONTEXTO else 'NO'}\n")
+            f.write(f"Optimize Context: {'YES' if USAR_OPTIMIZACION_CONTEXTO else 'NO'}\n")
+            f.write(f"RECOMP Synthesis: {'YES' if USAR_RECOMP_SYNTHESIS else 'NO'}\n\n")
+
             f.write("─" * 80 + "\n")
-            f.write("  PREGUNTA ORIGINAL\n")
+            f.write("  ORIGINAL QUESTION\n")
             f.write("─" * 80 + "\n")
             f.write(f"{pregunta}\n\n")
-            
+
             f.write("─" * 80 + "\n")
             f.write("  SYSTEM PROMPT\n")
             f.write("─" * 80 + "\n")
-            f.write(f"{system_prompt or '(no enviado)'}\n\n")
-            
+            f.write(f"{system_prompt or '(not sent)'}\n\n")
+
             context_match = re.search(r'<context>(.*?)</context>', mensaje_usuario, re.DOTALL)
-            contexto_enviado = context_match.group(1).strip() if context_match else "(vacío)"
-            
-            f.write("─" * 80 + "\n")
-            if USAR_RECOMP_SYNTHESIS:
-                f.write("  SÍNTESIS RECOMP ENVIADA AL MODELO FINAL (en vez de raw chunks)\n")
-            else:
-                f.write("  CONTEXTO RAW ENVIADO AL MODELO FINAL\n")
-            f.write("─" * 80 + "\n")
-            f.write(f"{contexto_enviado}\n\n")
-            
-            f.write("─" * 80 + "\n")
-            f.write("  MENSAJE DE USUARIO (Prompt real completo)\n")
-            f.write("─" * 80 + "\n")
-            f.write(f"{mensaje_usuario or '(no enviado al modelo)'}\n\n")
-            
-            f.write("─" * 80 + "\n")
-            f.write("  RESPUESTA DEL MODELO\n")
-            f.write("─" * 80 + "\n")
-            f.write(f"{respuesta or '(no generada)'}\n\n")
+            contexto_enviado = context_match.group(1).strip() if context_match else "(empty)"
 
             f.write("─" * 80 + "\n")
-            f.write(f"  FRAGMENTOS RECUPERADOS ({len(fragmentos)})\n")
+            if USAR_RECOMP_SYNTHESIS:
+                f.write("  RECOMP SYNTHESIS SENT TO FINAL MODEL (instead of raw chunks)\n")
+            else:
+                f.write("  RAW CONTEXT SENT TO FINAL MODEL\n")
+            f.write("─" * 80 + "\n")
+            f.write(f"{contexto_enviado}\n\n")
+
+            f.write("─" * 80 + "\n")
+            f.write("  USER MESSAGE (full actual prompt)\n")
+            f.write("─" * 80 + "\n")
+            f.write(f"{mensaje_usuario or '(not sent to model)'}\n\n")
+
+            f.write("─" * 80 + "\n")
+            f.write("  MODEL RESPONSE\n")
+            f.write("─" * 80 + "\n")
+            f.write(f"{respuesta or '(not generated)'}\n\n")
+
+            f.write("─" * 80 + "\n")
+            f.write(f"  RETRIEVED FRAGMENTS ({len(fragmentos)})\n")
             f.write("─" * 80 + "\n")
             for i, frag in enumerate(fragmentos, 1):
                 meta = frag.get('metadata', {})
                 score = frag.get('score_final', 'N/A')
                 score_rr = frag.get('score_reranker', 'N/A')
-                f.write(f"\n--- Fragmento {i} ---\n")
+                f.write(f"\n--- Fragment {i} ---\n")
                 pag = meta.get('page', 0)
-                f.write(f"Fuente: {meta.get('source', '?')}, pág. {pag + 1 if isinstance(pag, int) else pag}\n")
-                f.write(f"Score final: {score}  |  Score reranker: {score_rr}\n")
+                f.write(f"Source: {meta.get('source', '?')}, page {pag + 1 if isinstance(pag, int) else pag}\n")
+                f.write(f"Final score: {score}  |  Reranker score: {score_rr}\n")
                 matches = frag.get('matches', [])
                 if matches:
-                    f.write(f"Keywords que coincidieron: {', '.join(matches)}\n")
+                    f.write(f"Matched keywords: {', '.join(matches)}\n")
                 query_matches = frag.get('query_matches', [])
                 if query_matches:
-                    f.write(f"Coincidió con query(s): {query_matches}\n")
-                f.write(f"Sección: {meta.get('section_header', '(sin header)')}\n")
+                    f.write(f"Matched query(s): {query_matches}\n")
+                f.write(f"Section: {meta.get('section_header', '(no header)')}\n")
                 doc_text = frag.get('doc', '')
                 if '\\n\\n' in doc_text:
                     ctx_part, orig_part = doc_text.split('\\n\\n', 1)
                     f.write(f"[Contextual Retrieval]:\n{ctx_part}\n\n")
-                    f.write(f"[Texto del documento]:\n{orig_part}\n")
+                    f.write(f"[Document text]:\n{orig_part}\n")
                 else:
-                    f.write(f"[Texto del documento]:\n{doc_text}\n")
-        
-        logging.info(f"Debug RAG guardado: {ruta}")
-        
+                    f.write(f"[Document text]:\n{doc_text}\n")
+
+        logging.info(f"Debug RAG saved: {ruta}")
+
     except Exception as e:
-        logging.warning(f"Error guardando debug RAG: {e}")
+        logging.warning(f"Error saving debug RAG: {e}")
 
 
-# --- 10.4 Generación de respuesta ---
+# --- 10.4 Response generation ---
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 
 def _ollama_generate_stream(model: str, system: str, prompt: str, options: dict):
+    """Stream tokens from the Ollama ``/api/generate`` endpoint.
+
+    Args:
+        model: Ollama model name.
+        system: System prompt.
+        prompt: User prompt.
+        options: Generation options (temperature, top_p, etc.).
+
+    Yields:
+        Parsed JSON objects from each streamed line.
+    """
     payload = {
         "model": model,
         "system": system,
@@ -1666,6 +1871,19 @@ def _ollama_generate_stream(model: str, system: str, prompt: str, options: dict)
 
 
 def generar_respuesta(pregunta: str, fragmentos: List[Dict[str, Any]], metricas: Optional[Dict[str, Any]] = None) -> str:
+    """Generate a RAG response with streaming output to the terminal.
+
+    Builds context from fragments, streams the response via Ollama,
+    and saves a debug dump.
+
+    Args:
+        pregunta: User question.
+        fragmentos: Retrieved context fragments.
+        metricas: Pipeline metrics for debug logging.
+
+    Returns:
+        Complete response text.
+    """
     if USAR_RECOMP_SYNTHESIS:
         contexto_str = sintetizar_contexto_recomp(fragmentos, query_usuario=pregunta)
     else:
@@ -1693,6 +1911,18 @@ def generar_respuesta(pregunta: str, fragmentos: List[Dict[str, Any]], metricas:
 
 
 def generar_respuesta_silenciosa(pregunta: str, fragmentos: List[Dict[str, Any]], metricas: Optional[Dict[str, Any]] = None) -> str:
+    """Generate a RAG response silently (no terminal output).
+
+    Same as ``generar_respuesta`` but without printing or debug dump.
+
+    Args:
+        pregunta: User question.
+        fragmentos: Retrieved context fragments.
+        metricas: Pipeline metrics (unused here, kept for API compat).
+
+    Returns:
+        Complete response text.
+    """
     if USAR_RECOMP_SYNTHESIS:
         contexto_str = sintetizar_contexto_recomp(fragmentos, query_usuario=pregunta)
     else:
@@ -1713,13 +1943,24 @@ def generar_respuesta_silenciosa(pregunta: str, fragmentos: List[Dict[str, Any]]
     return respuesta_completa
 
 
-# --- 10.5 Evaluación (RAGAS) ---
+# --- 10.5 Evaluation (RAGAS) ---
 
 def evaluar_pregunta_rag(
     pregunta: str,
     collection: chromadb.Collection
 ) -> Tuple[str, List[str]]:
-    """Pipeline completo silencioso: búsqueda → filtrado → expansión → generación. Retorna (respuesta, contextos)."""
+    """Run the full RAG pipeline silently for evaluation (RAGAS).
+
+    Performs search, filtering, neighbor expansion, and generation
+    without any terminal output.
+
+    Args:
+        pregunta: The evaluation question.
+        collection: ChromaDB collection to search.
+
+    Returns:
+        Tuple of (response text, list of context strings).
+    """
     import io
     import contextlib
     if len(pregunta.strip()) < MIN_LONGITUD_PREGUNTA_RAG:
@@ -1769,20 +2010,30 @@ def evaluar_pregunta_rag(
         return (respuesta, contexts)
 
 
-# =============================================================================
-# SECCIÓN 11: INDEXACIÓN Y COLECCIÓN
-# =============================================================================
-# PDFs → pymupdf4llm/pypdf → chunks → embeddings Ollama → ChromaDB.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 11: INDEXING AND COLLECTION MANAGEMENT
+# ─────────────────────────────────────────────
 
 
 # --- 11.1 Contextual retrieval ---
 
 def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
-    """2-3 frases de resumen global + contexto situacional. Usa MODELO_CONTEXTUAL."""
+    """Generate 2-3 sentences of situational context for a chunk using an LLM.
+
+    Produces a brief document summary plus a note on how the chunk fits
+    within the larger document, to improve retrieval accuracy.
+
+    Args:
+        chunk_text: The text of the chunk to contextualize.
+        texto_base: A representative excerpt of the full document.
+
+    Returns:
+        Situational context string (with trailing ``\\n\\n``), or empty
+        string if disabled or on failure.
+    """
     if not USAR_CONTEXTUAL_RETRIEVAL:
         return ""
-        
+
     system_prompt = (
         "You are an expert at analyzing academic documents. "
         "When given a full document and an excerpt from it, produce exactly 2-3 sentences: "
@@ -1796,7 +2047,7 @@ def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
         f"<document>\\n{texto_base}\\n</document>\\n\\n"
         f"<excerpt>\\n{chunk_text}\\n</excerpt>\\n"
     )
-    
+
     try:
         response = ollama.chat(
             model=MODELO_CONTEXTUAL,
@@ -1810,23 +2061,36 @@ def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
         if contexto:
             return f"{contexto}\\n\\n"
     except Exception as e:
-        logging.warning(f"Error generando contexto situacional: {e}")
+        logging.warning(f"Error generating situational context: {e}")
     return ""
 
 
-# --- 11.2 Indexación ---
+# --- 11.2 Indexing ---
 
 def indexar_documentos(
-    carpeta: str, 
+    carpeta: str,
     collection: chromadb.Collection,
     solo_archivos: Optional[List[str]] = None,
     silent: bool = False,
     progress_callback=None,
 ) -> int:
-    """Indexa PDFs de carpeta. pymupdf4llm preferente, pypdf fallback. Retorna total de chunks.
-    Si solo_archivos está definido, solo indexa esos archivos (para añadir sin reindexar todo).
-    silent=True suprime toda salida por pantalla (uso en background/web).
-    progress_callback(info) se llama al iniciar cada archivo con {"file", "file_index", "total_files"}.
+    """Index PDFs from a folder into ChromaDB.
+
+    Uses pymupdf4llm for Markdown extraction (preferred) with pypdf as
+    fallback. Each page is split into chunks, optionally enriched with
+    contextual retrieval, embedded via Ollama, and stored in ChromaDB.
+
+    Args:
+        carpeta: Path to the folder containing PDF files.
+        collection: ChromaDB collection to index into.
+        solo_archivos: If set, only index these specific filenames
+            (for incremental adds without full re-index).
+        silent: Suppress all terminal output (for background/web use).
+        progress_callback: Called with ``{"file", "file_index",
+            "total_files"}`` at the start of each file.
+
+    Returns:
+        Total number of chunks successfully indexed.
     """
     global PYMUPDF_AVAILABLE
 
@@ -1834,26 +2098,26 @@ def indexar_documentos(
     archivos_pdf = [f for f in os.listdir(carpeta) if f.endswith('.pdf')]
     if solo_archivos is not None:
         archivos_pdf = [f for f in archivos_pdf if f in solo_archivos]
-    
+
     if not archivos_pdf:
         if not silent:
-            ui.warning("No se encontraron archivos PDF en la carpeta")
+            ui.warning("No PDF files found in folder")
         return 0
 
     if not silent:
-        ui.pipeline_start("Indexando documentos...")
-    
+        ui.pipeline_start("Indexing documents...")
+
     total_chunks = 0
-    
-    def _indexar_chunk(id_doc: str, chunk_text: str, chunk_doc_text: str, 
+
+    def _indexar_chunk(id_doc: str, chunk_text: str, chunk_doc_text: str,
                        metadata: Dict, collection_ref: chromadb.Collection) -> bool:
-        """Embedding + add a ChromaDB. Reintento con truncado si falla por longitud."""
+        """Embed a chunk and add it to ChromaDB. Retries with truncation on length errors."""
         text_to_embed = f"{EMBED_PREFIX_DOC}{chunk_text[:MAX_CHARS_EMBED]}"
-        
+
         try:
             response = ollama.embeddings(model=MODELO_EMBEDDING, prompt=text_to_embed)
             embedding = response["embedding"]
-            
+
             collection_ref.add(
                 ids=[id_doc],
                 embeddings=[embedding],
@@ -1863,7 +2127,7 @@ def indexar_documentos(
             return True
         except Exception as e:
             if "context length" in str(e).lower() or "500" in str(e):
-                logging.warning(f"Chunk largo en {id_doc}, truncando a 1000 chars")
+                logging.warning(f"Long chunk at {id_doc}, truncating to 1000 chars")
                 text_to_embed = f"{EMBED_PREFIX_DOC}{chunk_text[:1000]}"
                 try:
                     response = ollama.embeddings(model=MODELO_EMBEDDING, prompt=text_to_embed)
@@ -1875,11 +2139,11 @@ def indexar_documentos(
                     )
                     return True
                 except Exception as e2:
-                    logging.error(f"Error persistente embeddeando {id_doc}: {e2}")
+                    logging.error(f"Persistent embedding error for {id_doc}: {e2}")
             else:
-                logging.error(f"Error embeddeando {id_doc}: {e}")
+                logging.error(f"Error embedding {id_doc}: {e}")
             return False
-    
+
     for idx, archivo in enumerate(archivos_pdf):
         if progress_callback:
             try:
@@ -1887,7 +2151,7 @@ def indexar_documentos(
             except Exception:
                 pass
         if not silent:
-            ui.pipeline_update(f"Procesando: {archivo}")
+            ui.pipeline_update(f"Processing: {archivo}")
         usar_pypdf_fallback = False
 
         try:
@@ -1934,7 +2198,7 @@ def indexar_documentos(
                                 total_chunks += 1
 
                 except Exception as e:
-                    logging.error(f"Error con pymupdf4llm en {archivo}: {e}, usando pypdf fallback")
+                    logging.error(f"Error with pymupdf4llm on {archivo}: {e}, using pypdf fallback")
                     usar_pypdf_fallback = True
 
             if not PYMUPDF_AVAILABLE or usar_pypdf_fallback:
@@ -1976,19 +2240,26 @@ def indexar_documentos(
                             total_chunks += 1
 
         except Exception as e:
-            logging.error(f"Error procesando {archivo}: {e}")
+            logging.error(f"Error processing {archivo}: {e}")
             if not silent:
-                ui.error(f"error en {archivo}: {e}")
-    
+                ui.error(f"error in {archivo}: {e}")
+
     if not silent:
         ui.pipeline_stop()
     return total_chunks
 
 
-# --- 11.3 Gestión de colección ---
+# --- 11.3 Collection management ---
 
 def obtener_documentos_indexados(collection: chromadb.Collection) -> List[str]:
-    """Lista de nombres únicos (source) en la colección."""
+    """List unique document names (``source``) in the collection.
+
+    Args:
+        collection: ChromaDB collection to inspect.
+
+    Returns:
+        Sorted list of document filenames.
+    """
     try:
         all_metadata = collection.get(include=['metadatas'])
         documentos = set()
@@ -2000,14 +2271,12 @@ def obtener_documentos_indexados(collection: chromadb.Collection) -> List[str]:
         return []
 
 
-# =============================================================================
-# SECCIÓN 12: PUNTO DE ENTRADA
-# =============================================================================
-# main() → MonkeyGrabCLI.run()
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 12: ENTRY POINT
+# ─────────────────────────────────────────────
 
 def main():
-    """Arranca MonkeyGrabCLI."""
+    """Launch the MonkeyGrab CLI application."""
     import rag.chat_pdfs as rag_engine
     from rag.cli import MonkeyGrabCLI
     cli = MonkeyGrabCLI(rag_engine)

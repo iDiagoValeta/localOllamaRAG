@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
 """
-Script para probar modelos auxiliares de Ollama con streaming,
-intentando que no razonen (sin bloques <think>).
+Streaming test for Ollama models with reasoning suppression.
 
-Uso:
-    python scripts/test_ollama_stream_nothink.py
-    python scripts/test_ollama_stream_nothink.py --model qwen3:14b --prompt "Hola"
-    python scripts/test_ollama_stream_nothink.py -m qwen3-base-direct -m qwen3:4b-instruct
+Tests one or more Ollama-hosted models using the streaming generate API,
+attempting to suppress <think> reasoning blocks. Supports configurable
+prompts, system messages, think mode toggling, and optional post-processing
+to strip any think blocks from the output. Reports whether each model
+successfully avoided producing reasoning content.
+
+Usage:
+    python scripts/tests/test_ollama_stream_nothink.py
+    python scripts/tests/test_ollama_stream_nothink.py --model qwen3:14b --prompt "Hello"
+    python scripts/tests/test_ollama_stream_nothink.py -m qwen3-base-direct -m qwen3:4b-instruct
+Dependencies:
+    - requests
+    - A running Ollama server with the target models loaded
 """
 import argparse
 import json
@@ -23,7 +31,7 @@ DEFAULT_SYSTEM = "You are a helpful assistant. Answer concisely."
 
 
 def stream_generate(payload: dict, timeout: int = 60):
-    """Genera con streaming y devuelve el texto completo."""
+    """Send a streaming generate request and return the full response text."""
     full = ""
     with requests.post(
         f"{OLLAMA_BASE_URL}/api/generate",
@@ -46,7 +54,7 @@ def stream_generate(payload: dict, timeout: int = 60):
 
 
 def strip_think_blocks(text: str) -> str:
-    """Elimina bloques <think>...</think> de la salida."""
+    """Remove <think>...</think> blocks from the output text."""
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
@@ -58,7 +66,19 @@ def run_model(
     strip_think: bool,
     suffix_prompt: str = "",
 ) -> tuple[str, str]:
-    """Ejecuta un modelo y devuelve (raw, processed)."""
+    """Run a model and return (raw_output, processed_output).
+
+    Args:
+        model: Ollama model name to query.
+        prompt: User prompt text.
+        system: System prompt text.
+        think: Whether to enable think mode in the request.
+        strip_think: Whether to strip think blocks from the output.
+        suffix_prompt: Optional suffix appended to the prompt.
+
+    Returns:
+        A tuple of (raw_response, processed_response).
+    """
     user_prompt = prompt + suffix_prompt
     payload = {
         "model": model,
@@ -74,25 +94,31 @@ def run_model(
 
 
 def assess(text: str) -> str:
-    """Evalúa si la salida contiene razonamiento."""
+    """Evaluate whether the output contains reasoning content.
+
+    Returns:
+        A string verdict: 'OK - no think' if no think block is present,
+        'OK - empty think' if the block is empty, or 'REASONS' if the
+        model produced reasoning content.
+    """
     if "<think>" not in text:
-        return "OK - sin think"
+        return "OK - no think"
     inner = text[text.find("<think>") + 7 :]
     closing = inner.find("</think>")
     if closing != -1 and len(inner[:closing].strip()) == 0:
-        return "OK - think vacío"
-    return "RAZONA"
+        return "OK - empty think"
+    return "REASONS"
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Probar modelos Ollama con streaming sin razonamiento")
-    parser.add_argument("-m", "--model", action="append", dest="models", help="Modelo(s) a probar")
-    parser.add_argument("-p", "--prompt", default=DEFAULT_PROMPT, help="Prompt de prueba")
+    parser = argparse.ArgumentParser(description="Test Ollama models with streaming and reasoning suppression")
+    parser.add_argument("-m", "--model", action="append", dest="models", help="Model(s) to test")
+    parser.add_argument("-p", "--prompt", default=DEFAULT_PROMPT, help="Test prompt")
     parser.add_argument("-s", "--system", default=DEFAULT_SYSTEM, help="System prompt")
-    parser.add_argument("--think", action="store_true", help="Forzar think=true (por defecto false)")
-    parser.add_argument("--no-strip", action="store_true", help="No filtrar bloques think en salida")
-    parser.add_argument("--suffix", default="", help="Sufijo al prompt (ej: ' /nothink')")
-    parser.add_argument("--raw-only", action="store_true", help="Solo mostrar raw, sin procesar")
+    parser.add_argument("--think", action="store_true", help="Force think=true (default is false)")
+    parser.add_argument("--no-strip", action="store_true", help="Do not filter think blocks from output")
+    parser.add_argument("--suffix", default="", help="Suffix to append to prompt (e.g. ' /nothink')")
+    parser.add_argument("--raw-only", action="store_true", help="Show raw output only, skip processing")
     args = parser.parse_args()
 
     models = args.models or DEFAULT_MODELS
@@ -100,7 +126,7 @@ def main():
     for i, model in enumerate(models):
         sep = "=" * 70
         print(f"\n{sep}")
-        print(f"  Modelo: {model}")
+        print(f"  Model: {model}")
         print(sep)
         try:
             raw, processed = run_model(
@@ -113,7 +139,7 @@ def main():
             )
             print(f"\n  [Raw] {assess(raw)}")
             if not args.raw_only and processed != raw:
-                print(f"  [Tras strip] {assess(processed)}")
+                print(f"  [After strip] {assess(processed)}")
         except requests.exceptions.RequestException as e:
             print(f"  ERROR: {e}", file=sys.stderr)
         except Exception as e:

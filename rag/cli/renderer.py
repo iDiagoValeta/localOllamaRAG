@@ -1,10 +1,19 @@
 """
-MonkeyGrab CLI — Renderer
-===========================
+MonkeyGrab CLI Renderer.
 
-Funciones de renderizado para la interfaz de terminal:
-banners, separadores, tablas, spinners, streaming y
-panels de información.
+Rendering functions for the terminal interface: banners, separators,
+tables, spinners, streaming output, and information panels. This module
+provides the visual layer that formats and displays all CLI output using
+ANSI escape codes and the centralized Theme configuration.
+
+Usage:
+    from rag.cli.renderer import render_banner, Spinner
+    render_banner("TITLE")
+    with Spinner("processing..."):
+        do_work()
+
+Dependencies:
+    - rag.cli.theme (Theme, MESSAGES)
 """
 
 import sys
@@ -14,17 +23,20 @@ from typing import List, Dict, Any, Optional
 
 from rag.cli.theme import Theme, MESSAGES
 
-# ─────────────────────────────────────────────────────────────
-# SPINNER — Indicador de progreso animado
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# SPINNER CLASS
+# ─────────────────────────────────────────────
 
 class Spinner:
     """
-    Spinner animado para operaciones de larga duración.
+    Animated spinner for long-running operations.
 
-    Uso:
-        with Spinner("buscando semánticamente..."):
-            resultado = operacion_lenta()
+    Displays a cycling animation on the terminal while a background
+    operation is in progress. Designed to be used as a context manager.
+
+    Usage:
+        with Spinner("searching semantically..."):
+            result = slow_operation()
     """
 
     def __init__(self, message: str, color: str = None):
@@ -59,7 +71,12 @@ class Spinner:
         sys.stdout.flush()
 
     def finish(self, message: str, success: bool = True):
-        """Reemplaza el spinner con un mensaje de finalización."""
+        """Replace the spinner with a completion message.
+
+        Args:
+            message: Text to display after the spinner stops.
+            success: If True, shows a success icon; otherwise shows a failure icon.
+        """
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=1)
@@ -70,18 +87,18 @@ class Spinner:
         sys.stdout.write(f"  {color}{icon}{Theme.RESET} {Theme.TEXT_MUTED}{message}{Theme.RESET}\n")
         sys.stdout.flush()
 
-# ─────────────────────────────────────────────────────────────
-# FUNCIONES DE RENDERIZADO
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# RENDERING FUNCTIONS
+# ─────────────────────────────────────────────
 
 def render_banner(title: str, style: str = "simple", color: str = None) -> None:
     """
-    Muestra un banner con bordes y título.
+    Display a banner with borders and a title.
 
     Args:
-        title: Texto del banner
-        style: 'simple' o 'doble'
-        color: Color ANSI override
+        title: Banner text to display.
+        style: 'simple' for single-line borders or 'doble' for double-line borders.
+        color: ANSI color override for the border.
     """
     col = color or Theme.BORDER
     width = Theme.terminal_width()
@@ -93,7 +110,7 @@ def render_banner(title: str, style: str = "simple", color: str = None) -> None:
 
 
 def render_separator(color: str = None) -> None:
-    """Muestra una línea separadora sutil."""
+    """Display a subtle separator line."""
     col = color or Theme.BG_DARK
     width = Theme.terminal_width()
     print(f"{col}{Theme.BOX_H * width}{Theme.RESET}")
@@ -101,54 +118,56 @@ def render_separator(color: str = None) -> None:
 
 def render_step(step_num: int, total: int, message: str, color: str = None) -> None:
     """
-    Muestra un paso del pipeline con formato [n/total].
+    Display a pipeline step with [n/total] format.
 
     Args:
-        step_num: Número del paso actual
-        total: Total de pasos
-        message: Descripción del paso
-        color: Color override
+        step_num: Current step number.
+        total: Total number of steps.
+        message: Description of the step.
+        color: ANSI color override.
     """
     col = color or Theme.BLUE
     print(f"\n  {col}[{step_num}/{total}]{Theme.RESET} {Theme.TEXT_MUTED}{message}{Theme.RESET}")
 
 
 def render_detail(message: str, icon: str = None, color: str = None) -> None:
-    """Muestra un detalle/sub-paso indentado."""
+    """Display an indented detail or sub-step."""
     col = color or Theme.TEXT_DIM
     ic = icon or Theme.ICON_INFO
     print(f"      {col}{ic}{Theme.RESET} {col}{message}{Theme.RESET}")
 
 
 def render_success(message: str) -> None:
-    """Muestra un mensaje de éxito."""
+    """Display a success message."""
     print(f"      {Theme.GREEN}{Theme.ICON_OK}{Theme.RESET} {Theme.TEXT_MUTED}{message}{Theme.RESET}")
 
 
 def render_warning(message: str) -> None:
-    """Muestra un mensaje de advertencia."""
+    """Display a warning message."""
     print(f"      {Theme.YELLOW}{Theme.ICON_WARN}{Theme.RESET} {Theme.TEXT_MUTED}{message}{Theme.RESET}")
 
 
 def render_error(message: str) -> None:
-    """Muestra un mensaje de error."""
+    """Display an error message."""
     print(f"      {Theme.RED}{Theme.ICON_FAIL}{Theme.RESET} {Theme.TEXT_MUTED}{message}{Theme.RESET}")
 
-# ─────────────────────────────────────────────────────────────────────
-# PROMPT DE ENTRADA
-# ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# INPUT PROMPT
+# ─────────────────────────────────────────────
 
 def build_prompt(mode: str, model: str = "") -> str:
     """
-    Construye el string del prompt con estilo profesional.
+    Build the styled input prompt string.
 
-    Formato:
-        ╭─ monkeygrab ── chat ── modelo ──╮
-        ╰─ ›
+    Renders a two-line prompt box showing the application name,
+    current mode, and active model.
 
     Args:
-        mode: 'chat' o 'rag'
-        model: Nombre del modelo activo
+        mode: Current interaction mode ('chat' or 'rag').
+        model: Name of the active model.
+
+    Returns:
+        The bottom-line prompt string ready for user input.
     """
     T = Theme
     width = T.terminal_width()
@@ -181,14 +200,12 @@ def build_prompt(mode: str, model: str = "") -> str:
     print(f"\n{top_line}")
     return bottom_line
 
-# ─────────────────────────────────────────────────────────────────────
-# PANTALLA DE BIENVENIDA
-# ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# WELCOME SCREEN
+# ─────────────────────────────────────────────
 
 def render_welcome() -> None:
-    """
-    Muestra la pantalla de bienvenida con comandos disponibles.
-    """
+    """Display the welcome screen with available commands and modes."""
     T = Theme
 
     print(f"\n  {T.TEXT}Dos modos de interacción disponibles:{T.RESET}\n")
@@ -214,33 +231,37 @@ def render_welcome() -> None:
     print(f"  {T.TEXT}Comandos:{T.RESET}\n")
     for cmd, desc in commands:
         print(f"    {T.BRAND}{cmd:<10}{T.RESET} {T.TEXT_DIM}{desc}{T.RESET}")
-        
+
     print()
 
-# ─────────────────────────────────────────────────────────────────────
-# PANTALLA DE AYUDA
-# ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# HELP SCREEN
+# ─────────────────────────────────────────────
 
 def render_help() -> None:
-    """Muestra la ayuda completa del sistema."""
+    """Display the full system help screen."""
     T = Theme
     render_banner("AYUDA", "simple", color=T.BRAND_DIM)
     render_welcome()
 
-# ─────────────────────────────────────────────────────────────────────
-# INICIALIZACIÓN
-# ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# INITIALIZATION
+# ─────────────────────────────────────────────
 
 def render_init_info(info: Dict[str, Any]) -> None:
     """
-    Muestra la información de inicialización del sistema.
+    Display system initialization information.
+
+    Shows model configuration, pipeline settings, and current database
+    status including document and fragment counts.
 
     Args:
-        info: Dict con cwd, pdfs_path, db_path, historial_path,
-              modelo_chat, modelo_chat, modelo_embedding,
-              extractor, busqueda, llm_decomp, reranker, reranker_model,
-              reranker_device, chunk_size, chunk_overlap, embed_max,
-              embed_prefix_desc, total_documentos, total_fragmentos
+        info: Dictionary containing initialization data with keys such as
+              cwd, pdfs_path, db_path, historial_path, modelo_chat,
+              modelo_rag, modelo_embedding, extractor, busqueda,
+              llm_decomp, reranker, reranker_model, reranker_device,
+              chunk_size, chunk_overlap, embed_max, embed_prefix_desc,
+              total_documentos, and total_fragmentos.
     """
     T = Theme
     L_WIDTH = 18
@@ -275,12 +296,17 @@ def render_init_info(info: Dict[str, Any]) -> None:
     print(f"    {T.TEXT_DIM}{'documentos':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{doc_count} PDF(s) detectados{T.RESET}")
     print(f"    {T.TEXT_DIM}{'fragmentos index.':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{frag_count} en base de datos{T.RESET}")
 
-# ─────────────────────────────────────────────────────────────────────
-# ESTADÍSTICAS, DOCUMENTOS, TEMAS
-# ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# STATISTICS, DOCUMENTS, TOPICS
+# ─────────────────────────────────────────────
 
 def render_stats(total_fragments: int, docs: List[str]) -> None:
-    """Muestra estadísticas de la base de datos."""
+    """Display database statistics including fragment and document counts.
+
+    Args:
+        total_fragments: Total number of indexed fragments.
+        docs: List of unique document names.
+    """
     T = Theme
     render_banner("ESTADÍSTICAS", "simple", color=T.BRAND_DIM)
 
@@ -296,7 +322,11 @@ def render_stats(total_fragments: int, docs: List[str]) -> None:
 
 
 def render_docs(docs: List[str]) -> None:
-    """Muestra la lista de documentos indexados."""
+    """Display the list of indexed documents.
+
+    Args:
+        docs: List of document names to display.
+    """
     T = Theme
     render_banner("DOCUMENTOS INDEXADOS", "simple", color=T.BRAND_DIM)
 
@@ -312,11 +342,11 @@ def render_docs(docs: List[str]) -> None:
 
 def render_topics(docs_data: List[Dict[str, Any]]) -> None:
     """
-    Muestra resumen de contenidos/temas.
+    Display a summary of available content and topics.
 
     Args:
-        docs_data: Lista de dicts con 'name', 'pages', 'fragments',
-                   'terms', 'sample'
+        docs_data: List of dicts, each containing 'name', 'pages',
+                   'fragments', 'terms', and 'sample' keys.
     """
     T = Theme
     render_banner("CONTENIDOS DISPONIBLES", "simple", color=T.BRAND_DIM)
@@ -346,12 +376,18 @@ def render_topics(docs_data: List[Dict[str, Any]]) -> None:
     print(f"  {T.BORDER}{Theme.BOX_H * (Theme.terminal_width() - 4)}{T.RESET}")
     print(f"\n  {T.TEXT_DIM}Escribe tu pregunta sobre cualquiera de estos temas.{T.RESET}\n")
 
-# ─────────────────────────────────────────────────────────────────────
-# STREAMING DE RESPUESTA
-# ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# RESPONSE STREAMING
+# ─────────────────────────────────────────────
 
 def render_response_header(mode: str, model: str = "", n_fragments: int = 0) -> None:
-    """Muestra el encabezado de la respuesta."""
+    """Display the response header with mode and model information.
+
+    Args:
+        mode: Current mode ('rag' or 'chat').
+        model: Name of the model generating the response.
+        n_fragments: Number of context fragments (RAG mode only).
+    """
     T = Theme
 
     if mode == "rag":
@@ -365,12 +401,16 @@ def render_response_header(mode: str, model: str = "", n_fragments: int = 0) -> 
 
 
 def stream_token(token: str) -> None:
-    """Imprime un token de respuesta en streaming."""
+    """Print a single streaming response token to stdout."""
     print(token, end='', flush=True)
 
 
 def render_response_footer(sources: Optional[str] = None) -> None:
-    """Muestra el pie de respuesta con fuentes opcionales."""
+    """Display the response footer with optional source citations.
+
+    Args:
+        sources: Pre-formatted sources string to display, or None.
+    """
     T = Theme
     print()
     render_separator()
@@ -381,18 +421,21 @@ def render_response_footer(sources: Optional[str] = None) -> None:
 
     print()
 
-# ─────────────────────────────────────────────────────────────────────
-# FORMATEO DE FUENTES Y CITAS
-# ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# SOURCE AND CITATION FORMATTING
+# ─────────────────────────────────────────────
 
 def format_citation(document: str, page: int, fragment: Optional[int] = None) -> str:
     """
-    Formatea una cita de forma consistente.
+    Format a citation string in a consistent style.
 
     Args:
-        document: Nombre del documento fuente
-        page: Número de página (0-indexed, se mostrará +1)
-        fragment: Número de fragmento opcional
+        document: Name of the source document.
+        page: Page number (0-indexed; displayed as page + 1).
+        fragment: Optional fragment number (0-indexed; displayed as fragment + 1).
+
+    Returns:
+        Formatted citation string.
     """
     cita = f"  [{document} | p.{page + 1}]"
     if fragment is not None:
@@ -402,10 +445,17 @@ def format_citation(document: str, page: int, fragment: Optional[int] = None) ->
 
 def format_sources(fragments: List[Dict]) -> str:
     """
-    Genera lista formateada de fuentes para la respuesta RAG.
+    Generate a formatted list of sources for a RAG response.
+
+    Aggregates fragments by document and collects unique page numbers,
+    then formats each document with its referenced pages.
 
     Args:
-        fragments: Lista de fragmentos con metadata
+        fragments: List of fragment dicts containing metadata with
+                   'source' and 'page' keys.
+
+    Returns:
+        Multi-line formatted string listing all sources and pages.
     """
     T = Theme
     sources_map = {}
@@ -427,12 +477,17 @@ def format_sources(fragments: List[Dict]) -> str:
 
     return "\n".join(lines)
 
-# ─────────────────────────────────────────────────────────────────────
-# MENSAJES DE MODO
-# ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# MODE MESSAGES
+# ─────────────────────────────────────────────
 
 def render_mode_change(mode: str, model: str = "") -> None:
-    """Muestra mensaje de cambio de modo."""
+    """Display a mode change notification.
+
+    Args:
+        mode: The new mode ('rag' or 'chat').
+        model: Name of the model for the new mode.
+    """
     T = Theme
 
     if mode == "rag":
@@ -444,26 +499,34 @@ def render_mode_change(mode: str, model: str = "") -> None:
 
 
 def render_history_loaded(n_messages: int) -> None:
-    """Muestra cuántos mensajes del historial se cargaron."""
+    """Display how many history messages were loaded from a previous session.
+
+    Args:
+        n_messages: Number of messages restored.
+    """
     T = Theme
     print(f"  {T.TEXT_DIM}{T.ICON_INFO} historial: {n_messages} mensaje(s) de sesión anterior{T.RESET}")
 
 
 def render_history_cleared() -> None:
-    """Muestra confirmación de historial limpiado."""
+    """Display confirmation that chat history has been cleared."""
     T = Theme
     print(f"  {T.GREEN}{T.ICON_OK}{T.RESET} {T.TEXT_MUTED}historial limpiado{T.RESET}")
 
 
 def render_unknown_command(cmd: str) -> None:
-    """Muestra error de comando no reconocido."""
+    """Display an unrecognized command error.
+
+    Args:
+        cmd: The command string that was not recognized.
+    """
     T = Theme
     print(f"  {T.YELLOW}{T.ICON_WARN}{T.RESET} {T.TEXT_DIM}comando no reconocido: {T.TEXT_MUTED}{cmd}{T.RESET}")
     print(f"      {T.TEXT_DIM}usa {T.BRAND}/ayuda{T.TEXT_DIM} para ver los comandos disponibles{T.RESET}")
 
 
 def render_reindex_start() -> None:
-    """Muestra inicio de re-indexación."""
+    """Display the start of a re-indexing operation."""
     T = Theme
     print(f"\n  {T.YELLOW}{T.ICON_GEAR}{T.RESET} {T.TEXT}Reindexando documentos...{T.RESET}")
     print(f"      {T.TEXT_DIM}Se eliminará la base de datos actual y se reconstruirá{T.RESET}")
@@ -471,7 +534,11 @@ def render_reindex_start() -> None:
 
 
 def render_reindex_complete(total: int) -> None:
-    """Muestra finalización de re-indexación."""
+    """Display completion of a re-indexing operation.
+
+    Args:
+        total: Total number of fragments indexed.
+    """
     T = Theme
     print(f"\n  {T.GREEN}{T.ICON_OK}{T.RESET} {T.TEXT}Reindexación completada: {total} fragmentos{T.RESET}")
     print(f"\n  {T.YELLOW}{T.ICON_WARN}{T.RESET} {T.TEXT_DIM}Reinicia el programa para usar la nueva base de datos{T.RESET}")

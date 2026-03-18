@@ -1,0 +1,1466 @@
+{
+  "metricas_empleadas": {
+    "Factual Correctness": "Precisión factual vs ground truth (TP/FP/FN, F1)",
+    "Faithfulness": "Consistencia factual de la respuesta con el contexto",
+    "Response Relevancy": "Grado en que la respuesta aborda la pregunta",
+    "Context Precision": "Precisión del ranking de fragmentos recuperados",
+    "Context Recall": "Cobertura de contextos necesarios"
+  },
+  "resultados": [
+    {
+      "indice": 1,
+      "pregunta": "According to the ragas.pdf document, what are the two main modules that compose a RAG system and what does each module do?",
+      "respuesta_modelo": "RAG systems are composed of a retrieval and an LLM based generation module. The retrieval system identifies relevant and focused context passages while the LLM exploits such passages in a faithful way to provide knowledge from a reference textual database, enabling them to act as a natural language layer between a user and textual databases, reducing the risk of hallucinations",
+      "ground_truth": "RAG systems are composed of a retrieval module and an LLM-based generation module. The retrieval module identifies relevant and focused context passages from a reference textual database, while the LLM-based generation module exploits these passages in a faithful way to provide knowledge to the user, reducing the risk of hallucinations.",
+      "contextos_recuperados_preview": [
+        "This document details the Ragas framework, a system designed for evaluating Retrieval Augmented Generation (RAG) pipelines. The excerpt focuses on the core purpose of Ragas: providing a reference-free method for assessing RAG systems, highlighting the challenges in evaluating these systems due to mu...",
+        "This section of the document outlines the core motivation behind Ragas, emphasizing the need for automated evaluation methods within the Retrieval Augmented Generation (RAG) framework. It highlights the limitations of current Large Language Models (LLMs) regarding knowledge cutoff dates and proposes..."
+      ],
+      "contextos_count": 2,
+      "puntuaciones": {
+        "Factual Correctness": 0.8240208220869065,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.7766794921478327,
+        "Context Precision": 0.9999999999,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['RAG systems are composed of a retrieval module.', 'RAG systems are composed of an LLM-based generation module.', 'The retrieval module identifies relevant and focused context passages from a reference textual database.', 'The LLM-based generation module exploits these passages in a faithful way to provide knowledge to the user.', 'The LLM-based generation module reduces the risk of hallucinations.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='RAG systems are composed of a retrieval module.', reason='This statement is directly supported by the ground truth.'), StatementsWithReason(statement='RAG systems are composed of an LLM based generation module.', reason='This statement is directly supported by the ground truth.'), StatementsWithReason(statement='The retrieval system identifies relevant and focused context passages.', reason='This statement is directly supported by the ground truth.'), Statemen"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9883909806553184"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['RAG systems are composed of a retrieval module and an LLM based generation module.', 'The retrieval system identifies relevant and focused context passages.', 'The LLM exploits context passages in a faithful way to provide knowledge from a reference textual database.', 'RAG systems act as a natural language layer between a user and textual databases.', 'RAG systems reduce the risk of hallucinations.']"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='RAG systems are composed of a retrieval module and an LLM based generation module.', reason='The abstract explicitly states that \"RAG systems are composed of a retrieval and an LLM based generation module\".', verdict=1), StatementFaithfulnessAnswer(statement='The retrieval system identifies relevant and focused context passages.', reason='The text mentions \"the ability of the retrieval system to identify relevant and focused context passages\".',"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='What are the components of RAG systems and how do they function?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context provided does not explicitly state the two main modules of a RAG system or their functions. It mainly discusses the motivation and purpose of Ragas as an evaluation tool for RAG systems, and the limitations of LLMs that RAG aims to address. Therefore, the context was not useful in arriving at the given answer.' verdict=0"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='RAG systems are composed of a retrieval module and an LLM-based generation module.', reason='The context explicitly states that RAG systems are composed of a retrieval and an LLM based generation module.', attributed=1), ContextRecallClassification(statement='The retrieval module identifies relevant and focused context passages from a reference textual database, while the LLM-based generation module exploits these passages in a faithful way"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 2,
+      "pregunta": "Based on the ragas.pdf paper, how many Wikipedia pages were selected to construct the WikiEval dataset, and what time period do they cover?",
+      "respuesta_modelo": "Based on the ragas.pdf paper, 50 Wikipedia pages were selected to construct the WikiEval dataset. These pages cover events that have happened since the start of 2022.",
+      "ground_truth": "To construct the WikiEval dataset, the authors selected 50 Wikipedia pages covering events that have happened since the start of 2022.",
+      "contextos_recuperados_preview": [
+        "The document details the development of Ragas, a framework for evaluating retrieval-augmented generation systems, particularly when reference answers are unavailable. It focuses on metrics like faithfulness, answer relevance, and context relevance, designed to assess the quality of RAG systems witho...",
+        "This document details the Ragas framework, a system designed for evaluating retrieval-augmented generation (RAG) systems. The framework focuses on assessing faithfulness, answer relevance, and context relevance, particularly in scenarios lacking human-annotated reference answers. It integrates with ...",
+        "This section details the methodology used to evaluate RAG systems, specifically focusing on the process of obtaining human judgments for assessing faithfulness, answer relevance, and context relevance. The excerpt highlights the use of ChatGPT to generate initial answers and then the subsequent eval..."
+      ],
+      "contextos_count": 3,
+      "puntuaciones": {
+        "Factual Correctness": 0.9856028885728595,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.9137414325798938,
+        "Context Precision": 0.9999999999,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['To construct the WikiEval dataset, the authors selected 50 Wikipedia pages.', 'The Wikipedia pages cover events that have happened since the start of 2022.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='Based on the ragas.pdf paper, 50 Wikipedia pages were selected to construct the WikiEval dataset.', reason='The ground truth states that the authors selected 50 Wikipedia pages to construct the WikiEval dataset, which directly supports the answer statement.'), StatementsWithReason(statement='The 50 Wikipedia pages cover events that have happened since the start of 2022.', reason='The ground truth explicitly mentions that the Wikipedia pages cover events that h"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9424115542914379"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Based on the ragas.pdf paper, 50 Wikipedia pages were selected to construct the WikiEval dataset.', 'The 50 Wikipedia pages cover events that have happened since the start of 2022.']"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='Based on the ragas.pdf paper, 50 Wikipedia pages were selected to construct the WikiEval dataset.', reason='The context describes the construction of the WikiEval dataset, mentioning the selection of 50 Wikipedia pages. It also mentions the Ragas framework and its evaluation. Therefore, it can be inferred that the 50 Wikipedia pages were selected to construct the WikiEval dataset in the context of the Ragas framework.', verdict=1), StatementFait"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='According to the ragas.pdf paper, how many Wikipedia pages were selected for the WikiEval dataset and what time period do they cover?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The provided context does not contain the specific details about the number of Wikipedia pages selected (50) or the time period they cover (since the start of 2022). The context mainly describes the methodology for evaluating RAG systems, the use of ChatGPT for generating answers, and the annotation process for assessing faithfulness, answer relevance, and context relevance. Therefore, the context was not useful in arriving at the answer.' verdict=0"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='To construct the WikiEval dataset, the authors selected 50 Wikipedia pages covering events that have happened since the start of 2022.', reason='The context states: \"To construct the dataset, we first selected 50 Wikipedia pages covering events that have happened since the start of 2022\".', attributed=1)]"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 3,
+      "pregunta": "According to the Ragas paper, what are the two specific cases that the Answer Relevance metric penalizes?",
+      "respuesta_modelo": "The Answer Relevance metric penalizes cases where the answer is incomplete or contains redundant information. These specific scenarios are identified and addressed within the Ragas framework to ensure accurate evaluation of retrieval-augmented generation systems.",
+      "ground_truth": "The Ragas framework focuses on settings where reference answers may not be available. The assessment of answer relevance penalises cases where the generated answer is incomplete or where it contains redundant information.",
+      "contextos_recuperados_preview": [
+        "This excerpt details the methodology behind the Context Relevance (Cont. Rel.) metric within the Ragas framework. It explains how the system assesses whether the retrieved context is sufficiently focused and contains only the necessary information to answer the initial question, penalizing redundanc...",
+        "This section details the methodology for assessing faithfulness, focusing on how the LLM verifies statements against the provided context. Specifically, it outlines the process of extracting relevant sentences, determining if they can be inferred, and then generating questions based on the answer to...",
+        "This excerpt discusses the evaluation of Ragas, a framework for retrieval augmented generation systems, focusing on its metrics and their alignment with human judgments. The text highlights that Ragas’s metrics, particularly faithfulness and context relevance, demonstrate a strong agreement with hum..."
+      ],
+      "contextos_count": 5,
+      "puntuaciones": {
+        "Factual Correctness": 0.657002677704097,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.7665762511564153,
+        "Context Precision": 0.99999999998,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The Ragas framework focuses on settings where reference answers may not be available.', 'The assessment of answer relevance penalises cases where the generated answer is incomplete.', 'The assessment of answer relevance penalises cases where the generated answer contains redundant information.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='The Answer Relevance metric penalizes cases where the answer is incomplete.', reason='This statement is directly supported by the ground truth statement: \"The assessment of answer relevance penalises cases where the generated answer is incomplete.\"'), StatementsWithReason(statement='The Answer Relevance metric penalizes cases where the answer contains redundant information.', reason='This statement is directly supported by the ground truth statement: \"The asse"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9137249965306737"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The Answer Relevance metric penalizes cases where the answer is incomplete.', 'The Answer Relevance metric penalizes cases where the answer contains redundant information.', 'These specific scenarios are identified and addressed within the Ragas framework.', 'The Ragas framework ensures accurate evaluation of retrieval-augmented generation systems.']"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='The Answer Relevance metric penalizes cases where the answer is incomplete.', reason='The excerpt states that the assessment of answer relevance penalizes cases where the answer is incomplete.', verdict=1), StatementFaithfulnessAnswer(statement='The Answer Relevance metric penalizes cases where the answer contains redundant information.', reason='The excerpt states that the assessment of answer relevance penalizes cases where the answer contains"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='How does the Answer Relevance metric address incomplete or redundant information in retrieval-augmented generation systems?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context mentions that the Ragas framework focuses on assessing answer relevance and that it penalizes the inclusion of redundant information. The answer also mentions that the framework penalizes cases where the generated answer is incomplete or contains redundant information. Therefore, the context was useful in arriving at the answer.' verdict=1"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='The Ragas framework focuses on settings where reference answers may not be available.', reason='The context mentions that the Ragas framework focuses on scenarios lacking human-annotated reference answers.', attributed=1), ContextRecallClassification(statement='The assessment of answer relevance penalises cases where the generated answer is incomplete or where it contains redundant information.', reason='The context explicitly states that a"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 4,
+      "pregunta": "According to the ragas.pdf document, what are two fundamental limitations of using LLMs as knowledge bases, and what is the standard solution to these issues?",
+      "respuesta_modelo": "The two fundamental limitations of using Large Language Models (LLMs) as knowledge bases are: first, LLMs are not able to answer questions about events that have happened after they were trained. Second, even the largest models struggle to memorise knowledge that is only rarely mentioned in the training corpus. The standard solution to these issues is to rely on Retrieval Augmented Generation (RAG).",
+      "ground_truth": "The document states that LLMs are not able to answer questions about events that have happened after they were trained, and they struggle to memorise knowledge that is only rarely mentioned in the training corpus. The standard solution to these issues is to rely on Retrieval Augmented Generation (RAG). Answering a question then essentially involves retrieving relevant passages from a corpus and feeding these passages, along with the original question, to the LM.",
+      "contextos_recuperados_preview": [
+        "This excerpt discusses the challenges and importance of evaluating Retrieval Augmented Generation (RAG) systems. It highlights the limitations of large language models regarding knowledge retention and the need for RAG as a solution, emphasizing that RAG systems involve retrieving relevant passages ...",
+        "This section of the document outlines the core motivation behind Ragas, emphasizing the need for automated evaluation methods within the Retrieval Augmented Generation (RAG) framework. It highlights the limitations of current Large Language Models (LLMs) regarding knowledge cutoff dates and proposes...",
+        "This document details the development of Ragas, a framework designed to automatically evaluate retrieval-augmented generation systems. The core focus is on creating metrics that don't require human reference answers, particularly useful when such answers are unavailable, and it integrates with popul..."
+      ],
+      "contextos_count": 4,
+      "puntuaciones": {
+        "Factual Correctness": 0.7387175847164479,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.8554522899427691,
+        "Context Precision": 0.99999999995,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The document states that Large Language Models are not able to answer questions about events that have happened after Large Language Models were trained.', 'The document states that Large Language Models struggle to memorise knowledge that is only rarely mentioned in the training corpus.', 'The standard solution to these issues is to rely on Retrieval Augmented Generation (RAG).', 'Answering a question then essentially involves retrieving relevant passages from a corpus.', 'Answerin"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='Large Language Models (LLMs) are not able to answer questions about events that have happened after Large Language Models (LLMs) were trained.', reason='This statement is directly supported by the ground truth, which states the same limitation of LLMs.'), StatementsWithReason(statement='Even the largest models struggle to memorise knowledge that is only rarely mentioned in the training corpus.', reason='This statement is directly supported by the ground truth,"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.954870338865792"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The two fundamental limitations of using Large Language Models (LLMs) as knowledge bases are as follows.', 'Large Language Models (LLMs) are not able to answer questions about events that have happened after Large Language Models (LLMs) were trained.', 'Even the largest models struggle to memorise knowledge that is only rarely mentioned in the training corpus.', 'The standard solution to these issues is to rely on Retrieval Augmented Generation (RAG).']"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='The two fundamental limitations of using Large Language Models (LLMs) as knowledge bases are as follows.', reason='The context explicitly mentions two fundamental limitations of using LLMs as knowledge bases.', verdict=1), StatementFaithfulnessAnswer(statement='Large Language Models (LLMs) are not able to answer questions about events that have happened after Large Language Models (LLMs) were trained.', reason='The context states that LLMs are n"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='What are the two fundamental limitations of using Large Language Models (LLMs) as knowledge bases, and what is the standard solution to these issues?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context introduces the Ragas framework for evaluating RAG pipelines but does not explicitly state the limitations of LLMs as knowledge bases or the standard solutions to these limitations. Therefore, the context is not directly useful in arriving at the given answer.' verdict=0"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='The document states that LLMs are not able to answer questions about events that have happened after they were trained, and they struggle to memorise knowledge that is only rarely mentioned in the training corpus.', reason='The context explicitly mentions these two limitations of LLMs.', attributed=1), ContextRecallClassification(statement='The standard solution to these issues is to rely on Retrieval Augmented Generation (RAG).', reason='T"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 5,
+      "pregunta": "Based on the ragas.pdf paper, what does the Faithfulness metric evaluate, and why is Context Relevance important?",
+      "respuesta_modelo": "The Faithfulness metric evaluates whether an answer is grounded in a given context. This is important to avoid hallucinations and ensure that the retrieved context can act as a justification for the generated answer. Context Relevance is also important because it ensures that the retrieved context contains as little irrelevant information as possible, which is crucial when feeding long context passages to LLMs.",
+      "ground_truth": "Faithfulness evaluates whether the claims made in the answer can be inferred from the given context, ensuring the answer is grounded, avoiding hallucinations, and ensuring that the retrieved context can act as a justification for the generated answer. Context Relevance ensures the retrieved context is focused and contains as little irrelevant information as possible, which is important given the cost associated with feeding long context passages to LLMs, as they are often less effective in exploiting that context, especially for information that is provided in the middle of the context passage.",
+      "contextos_recuperados_preview": [
+        "This excerpt discusses the evaluation of Ragas, a framework for retrieval augmented generation systems, focusing on its metrics and their alignment with human judgments. The text highlights that Ragas’s metrics, particularly faithfulness and context relevance, demonstrate a strong agreement with hum...",
+        "This section of the document outlines the core design principles of the Ragas framework, emphasizing its focus on automated evaluation without relying on human-annotated datasets. The excerpt details the three key quality aspects – Faithfulness, Answer Relevance, and Context Relevance – that Ragas p...",
+        "The document details the creation of Ragas, a framework designed for automatically assessing Retrieval Augmented Generation (RAG) systems, specifically when reference answers are unavailable. It focuses on key quality aspects like faithfulness, answer relevance, and context relevance, aiming for sel..."
+      ],
+      "contextos_count": 4,
+      "puntuaciones": {
+        "Factual Correctness": 0.6452099651036409,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.857487293880653,
+        "Context Precision": 0.999999999975,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Faithfulness evaluates whether the claims made in the answer can be inferred from the given context.', 'Faithfulness ensures the answer is grounded.', 'Faithfulness avoids hallucinations.', 'Faithfulness ensures that the retrieved context can act as a justification for the generated answer.', 'Context Relevance ensures the retrieved context is focused.', 'Context Relevance ensures the retrieved context contains as little irrelevant information as possible.', 'Context Relevance is im"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='The Faithfulness metric evaluates whether an answer is grounded in a given context.', reason='The ground truth states that faithfulness ensures the answer is grounded and evaluates whether the claims made in the answer can be inferred from the given context, which supports the answer statement.'), StatementsWithReason(statement='Faithfulness is important to avoid hallucinations.', reason='The ground truth explicitly states that faithfulness avoids hallucinatio"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9808398604145636"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The Faithfulness metric evaluates whether an answer is grounded in a given context.', 'This evaluation is important to avoid hallucinations.', 'This evaluation is important to ensure that the retrieved context can act as a justification for the generated answer.', 'Context Relevance is important because it ensures that the retrieved context contains as little irrelevant information as possible.', 'Having little irrelevant information in the retrieved context is crucial when feeding "
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='The Faithfulness metric evaluates whether an answer is grounded in a given context.', reason='The text explicitly states \"Faithfulness refers to the idea that the answer should be grounded in the given context.\"', verdict=1), StatementFaithfulnessAnswer(statement='This evaluation is important to avoid hallucinations.', reason='The text mentions \"This is important to avoid hallucinations, and to ensure that the retrieved context can act as a just"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='What do the Faithfulness and Context Relevance metrics evaluate, and why are they important?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context provides information about the Faithfulness and Context Relevance metrics within the Ragas framework. It explains that Faithfulness measures the agreement with human annotators and ensures the answer is grounded in the context. It also mentions that Context Relevance is one of the metrics used in the Ragas framework. The answer accurately reflects these points, making the context useful.' verdict=1"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='Faithfulness evaluates whether the claims made in the answer can be inferred from the given context, ensuring the answer is grounded, avoiding hallucinations, and ensuring that the retrieved context can act as a justification for the generated answer.', reason='The context explicitly defines Faithfulness as the answer being grounded in the given context to avoid hallucinations and ensure the retrieved context acts as a justification.', attr"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 6,
+      "pregunta": "According to the Ragas framework, what is the two-step process used to estimate faithfulness by prompting an LLM?",
+      "respuesta_modelo": "The two-step process used to estimate faithfulness by prompting an LLM is as follows: First, the LLM is prompted to extract a set of statements from the generated answer. The aim of this step is to decompose longer sentences into shorter and more focused assertions. Second, the LLM determines if each statement can be inferred from the provided context using a verification function. This verification step is carried out by prompting the LLM with a specific question about whether it believes that a given statement can be deduced from a particular piece of text or not.",
+      "ground_truth": "To estimate faithfulness, the first step uses an LLM to decompose longer sentences in the generated answer into shorter and more focused assertions. The second step uses a verification function via prompting where the LLM determines if each extracted statement can be inferred from the given context.",
+      "contextos_recuperados_preview": [
+        "This excerpt details the related work section of the Ragas framework, focusing on existing methods for evaluating retrieval augmented generation systems. It highlights the challenges in detecting hallucinations and the limitations of current approaches, such as reliance on external knowledge bases o...",
+        "This section details the methodology for automatically assessing the quality of Retrieval Augmented Generation (RAG) systems, specifically focusing on faithfulness. The approach involves prompting a large language model (LLM) to extract statements from the generated answer and then verifying if thos...",
+        "This excerpt details the methodology used to assess the quality of RAG systems, specifically focusing on two baseline approaches: GPT Score and GPT Ranking. These methods leverage ChatGPT to automatically evaluate faithfulness, answer relevance, and context relevance, utilizing prompts that define e..."
+      ],
+      "contextos_count": 4,
+      "puntuaciones": {
+        "Factual Correctness": 0.869251399514237,
+        "Faithfulness": 0.8571428571428571,
+        "Response Relevancy": 0.8857009505135546,
+        "Context Precision": 0.49999999995,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['To estimate faithfulness, the first step uses a Large Language Model to decompose longer sentences in the generated answer into shorter and more focused assertions.', 'The second step uses a verification function via prompting where the Large Language Model determines if each extracted statement can be inferred from the given context.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='The two-step process is used to estimate faithfulness by prompting a Large Language Model.', reason='The ground truth describes a two-step process for estimating faithfulness using a Large Language Model.'), StatementsWithReason(statement='The first step involves prompting the Large Language Model to extract a set of statements from the generated answer.', reason='The ground truth states that the first step uses a Large Language Model to decompose sentences fr"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.977005598056948"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The two-step process is used to estimate faithfulness by prompting a Large Language Model.', 'First, the Large Language Model is prompted to extract a set of statements from the generated answer.', 'The aim of this step is to decompose longer sentences into shorter assertions.', 'The aim of this step is to decompose longer sentences into more focused assertions.', 'Second, the Large Language Model determines if each statement can be inferred from the provided context using a verific"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='The two-step process is used to estimate faithfulness by prompting a Large Language Model.', reason='The excerpt describes a two-step process to estimate faithfulness using an LLM, involving statement extraction and verification.', verdict=1), StatementFaithfulnessAnswer(statement='First, the Large Language Model is prompted to extract a set of statements from the generated answer.', reason='The excerpt explicitly states that the first step invo"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='What is the two-step process used to estimate faithfulness by prompting an LLM?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context introduces the concept of Faithfulness within the Ragas framework but does not describe the two-step process for estimating it. Therefore, the context is not useful in arriving at the given answer.' verdict=0"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='To estimate faithfulness, the first step uses an LLM to decompose longer sentences in the generated answer into shorter and more focused assertions.', reason='The context describes the first step in estimating faithfulness as using an LLM to extract statements from the answer, which is essentially decomposing sentences into shorter assertions.', attributed=1), ContextRecallClassification(statement='The second step uses a verification functi"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 7,
+      "pregunta": "According to the LoRA.pdf paper, how does Low-Rank Adaptation (LoRA) reduce the number of trainable parameters?",
+      "respuesta_modelo": "Low-Rank Adaptation (LoRA) reduces the number of trainable parameters by introducing rank decomposition matrices into each layer of the Transformer architecture. This method freezes the pretrained model weights and injects trainable rank decomposition matrices, significantly reducing the number of trainable parameters for downstream tasks while maintaining or improving model performance.",
+      "ground_truth": "LoRA freezes the pre-trained model weights and injects trainable rank decomposition matrices into each layer of the Transformer architecture, greatly reducing the number of trainable parameters for downstream tasks while maintaining or improving model performance.",
+      "contextos_recuperados_preview": [
+        "This document details the development of LoRA, a method for adapting large language models to specific tasks. The excerpt introduces LoRA as a solution to the challenges of full fine-tuning, particularly the immense computational cost and memory requirements associated with models like GPT-3. It hig...",
+        "This document details a novel approach called LoRA for adapting large language models, aiming to reduce the computational burden of fine-tuning. The excerpt focuses on the practical application of LoRA within the Transformer architecture, specifically detailing how it can be applied to the self-atte...",
+        "This document details LORA, a method for adapting large language models with minimal trainable parameters. The excerpt focuses on the theoretical justification and motivations behind LORA, specifically highlighting its potential for adversarial training and its ability to reduce the number of traina..."
+      ],
+      "contextos_count": 4,
+      "puntuaciones": {
+        "Factual Correctness": 0.9943116027999681,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.8607830390545445,
+        "Context Precision": 0.9166666666361111,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Low-Rank Adaptation freezes the pre-trained model weights.', 'Low-Rank Adaptation injects trainable rank decomposition matrices into each layer of the Transformer architecture.', 'The injection of trainable rank decomposition matrices greatly reduces the number of trainable parameters for downstream tasks.', 'Low-Rank Adaptation maintains or improves model performance.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='Low-Rank Adaptation (LoRA) reduces the number of trainable parameters by introducing rank decomposition matrices into each layer of the Transformer architecture.', reason=\"The ground truth states that LoRA injects trainable rank decomposition matrices into each layer of the Transformer architecture, which directly supports the answer's claim about reducing trainable parameters through this injection.\"), StatementsWithReason(statement='The LoRA method freezes t"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9772464111998722"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Low-Rank Adaptation (LoRA) reduces the number of trainable parameters by introducing rank decomposition matrices into each layer of the Transformer architecture.', 'This method freezes the pretrained model weights.', 'This method injects trainable rank decomposition matrices.', 'This significantly reduces the number of trainable parameters for downstream tasks while maintaining or improving model performance.']"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='Low-Rank Adaptation (LoRA) reduces the number of trainable parameters by introducing rank decomposition matrices into each layer of the Transformer architecture.', reason='The abstract states that LoRA freezes the pretrained model weights and injects trainable rank decomposition matrices into each layer of the Transformer architecture, greatly reducing the number of trainable parameters.', verdict=1), StatementFaithfulnessAnswer(statement='This "
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='How does Low-Rank Adaptation (LoRA) reduce the number of trainable parameters?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context describes the LoRA method, including the injection of trainable parameters into each layer and the use of rank decomposition matrices. It also explains how LoRA reduces the number of trainable parameters compared to full fine-tuning. This information is directly relevant to the question and supports the answer.' verdict=1"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='LoRA freezes the pre-trained model weights and injects trainable rank decomposition matrices into each layer of the Transformer architecture, greatly reducing the number of trainable parameters for downstream tasks while maintaining or improving model performance.', reason=\"This statement is directly supported by the context, which describes LoRA's method of freezing pre-trained weights and injecting trainable rank decomposition matrices to"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 8,
+      "pregunta": "According to the LoRA document, by how many times can LoRA reduce the number of trainable parameters compared to a fully fine-tuned GPT-3 175B?",
+      "respuesta_modelo": "LoRA can reduce the number of trainable parameters compared to a fully fine-tuned GPT-3 175B by up to 10,000 times.",
+      "ground_truth": "Compared to GPT-3 175B fine-tuned with Adam, LoRA can reduce the number of trainable parameters by 10,000 times.",
+      "contextos_recuperados_preview": [
+        "This document details the development of LoRA, a method for adapting large language models to specific tasks. The excerpt introduces LoRA as a solution to the challenges of full fine-tuning, particularly the immense computational cost and memory requirements associated with models like GPT-3. It hig...",
+        "This excerpt details the experimental evaluation of LoRA, a method for adapting large language models. The authors demonstrate LoRA’s effectiveness by comparing it to full fine-tuning and adapter methods across several models, including RoBERTa, DeBERTa, and GPT-2, ultimately scaling to GPT-3 175B. ...",
+        "This document details the Low-Rank Adaptation (LoRA) method for efficiently adapting large language models. The excerpt focuses on the core advantages of LoRA, particularly its storage and compute efficiency, highlighting how it allows for sharing a single pre-trained model across numerous tasks by ..."
+      ],
+      "contextos_count": 3,
+      "puntuaciones": {
+        "Factual Correctness": 0.6221948424720745,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.8752354394370713,
+        "Context Precision": 0.9999999999,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Compared to GPT-3 175B fine-tuned with Adam, LoRA can reduce the number of trainable parameters by 10,000 times.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='The reduction in the number of trainable parameters can be up to 10,000 times.', reason='This statement is directly supported by the ground truth, which states that LoRA can reduce the number of trainable parameters by 10,000 times compared to a fully fine-tuned GPT-3 175B.')] FP=[StatementsWithReason(statement='LoRA can reduce the number of trainable parameters compared to a fully fine-tuned GPT-3 175B.', reason='While technically true based on the ground tru"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.988779369888298"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['LoRA can reduce the number of trainable parameters compared to a fully fine-tuned GPT-3 175B.', 'The reduction in the number of trainable parameters can be up to 10,000 times.']"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='LoRA can reduce the number of trainable parameters compared to a fully fine-tuned GPT-3 175B.', reason='The abstract states that LoRA reduces the number of trainable parameters for downstream tasks compared to GPT-3 175B fine-tuned with Adam.', verdict=1), StatementFaithfulnessAnswer(statement='The reduction in the number of trainable parameters can be up to 10,000 times.', reason='The abstract explicitly states that LoRA can reduce the number o"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='By how much can LoRA reduce the number of trainable parameters compared to a fully fine-tuned GPT-3 175B?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason=\"The context describes the LoRA method and its advantages, including storage and compute efficiency. While it mentions using GPT-3 175B as an example and discusses low-rank matrices, it doesn't explicitly state the factor by which LoRA reduces the number of trainable parameters compared to a fully fine-tuned GPT-3 175B (the 10,000 times reduction is not present).\" verdict=0"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='Compared to GPT-3 175B fine-tuned with Adam, LoRA can reduce the number of trainable parameters by 10,000 times.', reason='The context explicitly states: \"Compared to GPT-3 175B fine-tuned with Adam, LoRA can reduce the number of trainable parameters by 10,000 times\".', attributed=1)]"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 9,
+      "pregunta": "Why do adapter layers introduce inference latency according to the LoRA paper?",
+      "respuesta_modelo": "Adapter layers introduce inference latency because they must be processed sequentially, even with a small bottleneck dimension. This is particularly noticeable when running models on a single GPU or during online inference where the batch size is typically as small as one. The additional depth required by adapter layers also necessitates more synchronous GPU operations such as AllReduce and Broadcast, unless the adapter parameters are stored redundantly many times.",
+      "ground_truth": "Adapter layers introduce inference latency because large neural networks rely on hardware parallelism to keep latency low, and adapter layers have to be processed sequentially. This is especially significant in online inference settings where the batch size is typically as small as one, and the extra compute in adapter layers cannot be bypassed directly. The additional depth also requires more synchronous GPU operations such as AllReduce and Broadcast, unless the adapter parameters are stored redundantly many times.",
+      "contextos_recuperados_preview": [
+        "This document details a novel approach called LoRA for adapting large language models, aiming to reduce the computational burden of fine-tuning. The excerpt focuses on the practical implications of adapter layers, specifically highlighting how they introduce latency during inference, a problem LoRA ...",
+        "This document details the LORA (Low-Rank Adaptation) method for efficiently fine-tuning large language models. The excerpt focuses on the challenges introduced by adapter layers, specifically how they increase inference latency even with a small bottleneck dimension, particularly when running models...",
+        "This document details a novel approach to adapting large language models, termed LoRA, which focuses on reducing the number of trainable parameters during fine-tuning. The research investigates the efficiency of LoRA compared to traditional full fine-tuning and adapter methods, specifically examinin..."
+      ],
+      "contextos_count": 4,
+      "puntuaciones": {
+        "Factual Correctness": 0.6942379032164802,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.8753701701052298,
+        "Context Precision": 0.9999999999666667,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Adapter layers introduce inference latency because large neural networks rely on hardware parallelism to keep latency low.', 'Adapter layers have to be processed sequentially.', 'Sequential processing of adapter layers is especially significant in online inference settings where the batch size is typically as small as one.', 'The extra compute in adapter layers cannot be bypassed directly in online inference settings where the batch size is typically as small as one.', 'The addition"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='Adapter layers introduce inference latency because adapter layers must be processed sequentially.', reason=\"The ground truth states that adapter layers have to be processed sequentially, which directly supports the answer's claim that sequential processing introduces latency.\"), StatementsWithReason(statement='Sequential processing of adapter layers is particularly noticeable during online inference where the batch size is typically as small as one.', reason='"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9769516128659209"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Adapter layers introduce inference latency because adapter layers must be processed sequentially.', 'Adapter layers have a small bottleneck dimension.', 'Processing adapter layers sequentially introduces inference latency even with a small bottleneck dimension.', 'The inference latency is particularly noticeable when running models on a single GPU.', 'The inference latency is particularly noticeable during online inference where the batch size is typically as small as one.', 'Adapte"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='Adapter layers introduce inference latency because adapter layers must be processed sequentially.', reason='The text explicitly states that adapter layers introduce latency because they must be computed sequentially in addition to the base model.', verdict=1), StatementFaithfulnessAnswer(statement='Adapter layers have a small bottleneck dimension.', reason='The text mentions that adapter layers are designed to have few parameters by having a sma"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='Why do adapter layers introduce inference latency?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason=\"The context explains that LoRA's learned weights can be merged with the main weights during inference, thus not introducing any latency, which is not the case for the adapter layers. However, it does not explicitly state *why* adapter layers introduce latency. The answer provides a more detailed explanation about hardware parallelism, sequential processing, and synchronous GPU operations, which is not directly found in the context. Therefore, the context is not sufficient to arrive at th"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='Adapter layers introduce inference latency because large neural networks rely on hardware parallelism to keep latency low, and adapter layers have to be processed sequentially.', reason='The context explicitly states that adapter layers introduce latency because they must be processed sequentially, while large neural networks rely on hardware parallelism.', attributed=1), ContextRecallClassification(statement='This is especially significant"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 10,
+      "pregunta": "According to the LoRA.pdf paper, how are the matrices A and B initialized at the beginning of training, and what is the resulting value of the update matrix?",
+      "respuesta_modelo": "The matrices A and B are initialized with a random Gaussian initialization for A and zero for B, so the update matrix ∆W = BA is zero at the beginning of training. The resulting value of the update matrix is then scaled by αr, where α is a constant in r.",
+      "ground_truth": "The authors use a random Gaussian initialization for matrix A and zero for matrix B. As a result, the update matrix is zero at the beginning of training.",
+      "contextos_recuperados_preview": [
+        "This document details a novel approach to adapting large language models, termed LoRA, which focuses on reducing the number of trainable parameters. The research investigates how to efficiently fine-tune these models by constraining the updates to the weight matrices, specifically hypothesizing a lo...",
+        "This document details the LORA (Low-Rank Adaptation) method for efficiently adapting large language models. The core idea is to introduce a small number of trainable parameters to each layer of the model, minimizing the computational cost and memory footprint during fine-tuning, while maintaining pe...",
+        "This document details the LORA (Low-Rank Adaptation) method for efficiently adapting large language models. The core idea is to introduce trainable low-rank matrices within the model’s existing weights, minimizing the number of parameters updated during fine-tuning and thus reducing inference latenc..."
+      ],
+      "contextos_count": 3,
+      "puntuaciones": {
+        "Factual Correctness": 0.7979657778426285,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.8254117497636227,
+        "Context Precision": 0.99999999995,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The authors use a random Gaussian initialization for matrix A.', 'The authors use zero for matrix B.', 'The update matrix is zero at the beginning of training.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='Matrix A is initialized with a random Gaussian initialization.', reason='The ground truth states that the authors use a random Gaussian initialization for matrix A, which directly supports this statement.'), StatementsWithReason(statement='Matrix B is initialized with zero.', reason='The ground truth states that the authors use zero for matrix B, which directly supports this statement.'), StatementsWithReason(statement='The update matrix ∆W = BA is zero at the"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9418631113705143"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Matrix A is initialized with a random Gaussian initialization.', 'Matrix B is initialized with zero.', 'The update matrix ∆W = BA is zero at the beginning of training.', 'The resulting value of the update matrix is scaled by αr.', 'α is a constant in r.']"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='Matrix A is initialized with a random Gaussian initialization.', reason='The text states \"We use a random Gaussian initialization for _A_ and zero for _B_, so ∆ _W_ = _BA_ is zero at the beginning of training.\"', verdict=1), StatementFaithfulnessAnswer(statement='Matrix B is initialized with zero.', reason='The text states \"We use a random Gaussian initialization for _A_ and zero for _B_, so ∆ _W_ = _BA_ is zero at the beginning of training.\"', "
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='How are the matrices A and B initialized and how is the update matrix calculated?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason=\"The context does not explicitly state how matrices A and B are initialized. Therefore, it's not possible to verify the answer using the provided context.\" verdict=0"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='The authors use a random Gaussian initialization for matrix A and zero for matrix B.', reason='The context states: \"We use a random Gaussian initialization for _A_ and zero for _B_\"', attributed=1), ContextRecallClassification(statement='As a result, the update matrix is zero at the beginning of training.', reason='The context states: \"so ∆ _W_ = _BA_ is zero at the beginning of training.\"', attributed=1)]"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 11,
+      "pregunta": "Based on the LoRA document, which types of attention weights yield the best downstream performance when adapted, and what module is frozen for simplicity?",
+      "respuesta_modelo": "Based on the LoRA document, adapting both query and value attention weights yields the best downstream performance when adapted with a rank of four. This is achieved by freezing the MLP modules for simplicity and parameter-efficiency.",
+      "ground_truth": "Adapting both the query and value projection matrices (Wq and Wv) yields the best downstream performance overall, and even a rank of four captures enough information. The MLP modules are frozen so they are not trained in downstream tasks, prioritizing simplicity and parameter-efficiency.",
+      "contextos_recuperados_preview": [
+        "This document details a novel approach called LoRA for adapting large language models, aiming to reduce the computational burden of fine-tuning. The excerpt focuses on the practical application of LoRA within the Transformer architecture, specifically detailing how it can be applied to the self-atte...",
+        "This document details the LoRA (Low-Rank Adaptation) method for efficiently fine-tuning large language models. The excerpt focuses on applying LoRA to the GPT-3 model, specifically examining the impact of different rank values (_r_) on performance across the WikiSQL and MultiNLI datasets.  It demons...",
+        "This document details the LORA (Low-Rank Adaptation) method for efficiently adapting large language models. The excerpt focuses on the practical implementation of LoRA, specifically freezing the MLP modules and adapting only the query and value projection matrices within the Transformer architecture..."
+      ],
+      "contextos_count": 4,
+      "puntuaciones": {
+        "Factual Correctness": 0.576937824098364,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.8664081501280503,
+        "Context Precision": 0.999999999975,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Adapting both the query projection matrices yields the best downstream performance overall.', 'Adapting both the value projection matrices yields the best downstream performance overall.', 'A rank of four captures enough information.', 'The MLP modules are frozen.', 'The MLP modules are not trained in downstream tasks.', 'Freezing the MLP modules prioritizes simplicity.', 'Freezing the MLP modules prioritizes parameter-efficiency.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='Adapting both query and value attention weights yields the best downstream performance when adapted with a rank of four, according to the LoRA document.', reason='The ground truth states that adapting both query and value projection matrices yields the best downstream performance, and a rank of four captures enough information. Thus, the answer statement is supported by the ground truth.'), StatementsWithReason(statement='The MLP modules are frozen for simplic"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9231359117780717"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Adapting both query and value attention weights yields the best downstream performance when adapted with a rank of four, according to the LoRA document.', 'The MLP modules are frozen for simplicity.', 'The MLP modules are frozen for parameter-efficiency.']"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='Adapting both query and value attention weights yields the best downstream performance when adapted with a rank of four, according to the LoRA document.', reason='The document states that adapting both Wq and Wv gives the best performance overall and that with a parameter budget of 18M, adapting two types of attention weights corresponds to r=4. Table 5 shows that adapting Wq, Wv yields the best performance.', verdict=1), StatementFaithfulnessAn"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='According to the LoRA document, what attention weights and rank provide the best downstream performance, and which modules are frozen for efficiency?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context provides information about the LoRA adaptation method, specifically mentioning the consideration of weight matrices in the self-attention module and the parameter budget. It also refers to a table (Table 5) that likely contains the results of adapting different types of attention weights. The answer accurately reflects the information presented in the context regarding adapting query and value projection matrices for optimal performance. However, the context does not explicit"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='Adapting both the query and value projection matrices (Wq and Wv) yields the best downstream performance overall, and even a rank of four captures enough information.', reason='The context mentions that adapting both Wq and Wv gives the best performance overall and that a rank of four captures enough information.', attributed=1), ContextRecallClassification(statement='The MLP modules are frozen so they are not trained in downstream tasks, p"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 12,
+      "pregunta": "According to the LoRA paper, how does LoRA impact VRAM consumption during training on GPT-3 175B, and what causes this reduction?",
+      "respuesta_modelo": "LoRA significantly reduces VRAM consumption during training on GPT-3 175B from 1.2TB to 350GB by freezing the MLP modules and adapting only the query and value projection matrices within the Transformer architecture, minimizing memory usage and training time. This reduction is caused by not needing to store the optimizer states for the frozen parameters and having fewer trainable parameters.",
+      "ground_truth": "On GPT-3 175B, LoRA reduces the VRAM consumption during training from 1.2TB to 350GB. This reduction occurs because the system does not need to store the optimizer states for the frozen parameters. By freezing the MLP modules and adapting only Wq and Wv with low rank, the checkpoint size is further reduced from 350GB to 35MB.",
+      "contextos_recuperados_preview": [
+        "This document details the LORA (Low-Rank Adaptation) method for efficiently adapting large language models. The excerpt focuses on the practical implementation of LoRA, specifically freezing the MLP modules and adapting only the query and value projection matrices within the Transformer architecture...",
+        "This document details the development of LoRA, a method for adapting large language models to specific tasks. The excerpt introduces LoRA as a solution to the challenges of full fine-tuning, particularly the immense computational cost and memory requirements associated with models like GPT-3. It hig...",
+        "This excerpt details the experimental evaluation of LoRA, a method for adapting large language models. The authors demonstrate LoRA’s effectiveness by comparing it to full fine-tuning and adapter methods across several models, including RoBERTa, DeBERTa, and GPT-2, ultimately scaling to GPT-3 175B. ..."
+      ],
+      "contextos_count": 3,
+      "puntuaciones": {
+        "Factual Correctness": 0.6173491571819129,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.8772206425762268,
+        "Context Precision": 0.99999999995,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['On GPT-3 175B, LoRA reduces the VRAM consumption during training from 1.2TB to 350GB.', 'The VRAM reduction occurs because the system does not need to store the optimizer states for the frozen parameters.', 'The MLP modules are frozen.', 'Wq and Wv are adapted with low rank.', 'The checkpoint size is further reduced from 350GB to 35MB.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='LoRA significantly reduces VRAM consumption during training on GPT-3 175B from 1.2TB to 350GB.', reason='This statement is directly supported by the ground truth.'), StatementsWithReason(statement='LoRA freezes the MLP modules.', reason='This statement is directly supported by the ground truth.'), StatementsWithReason(statement='The reduction in VRAM consumption is caused by not needing to store the optimizer states for the frozen parameters.', reason='This st"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9693966287276514"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['LoRA significantly reduces VRAM consumption during training on GPT-3 175B from 1.2TB to 350GB.', 'LoRA freezes the MLP modules.', 'LoRA adapts only the query and value projection matrices within the Transformer architecture.', 'Freezing the MLP modules and adapting only the query and value projection matrices minimizes memory usage.', 'Freezing the MLP modules and adapting only the query and value projection matrices minimizes training time.', 'The reduction in VRAM consumption is c"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='LoRA significantly reduces VRAM consumption during training on GPT-3 175B from 1.2TB to 350GB.', reason='The context explicitly states: \"On GPT-3 175B, we reduce the VRAM consumption during training from 1.2TB to 350GB.\"', verdict=1), StatementFaithfulnessAnswer(statement='LoRA freezes the MLP modules.', reason='The context explicitly states: \"freezing the MLP modules\"', verdict=1), StatementFaithfulnessAnswer(statement='LoRA adapts only the que"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='How does LoRA reduce VRAM consumption during GPT-3 175B training?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason=\"The context provides information about LoRA's performance on GPT-3 175B, including a 25% speedup during training compared to full fine-tuning. However, it does not explicitly state the reduction in VRAM consumption from 1.2TB to 350GB or the reason for this reduction (not needing to store optimizer states for frozen parameters). The context mentions reducing trainable parameters and checkpoint size, but not the specific VRAM reduction numbers or the underlying cause related to optimizer "
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='On GPT-3 175B, LoRA reduces the VRAM consumption during training from 1.2TB to 350GB.', reason='The context explicitly states: \"On GPT-3 175B, we reduce the VRAM consumption during training from 1.2TB to 350GB.\"', attributed=1), ContextRecallClassification(statement='This reduction occurs because the system does not need to store the optimizer states for the frozen parameters.', reason='The context mentions: \"...we reduce that VRAM usage by"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 13,
+      "pregunta": "According to the qwen3.pdf technical report, what are the two distinct operating modes integrated into its unified framework, and what does this integration eliminate?",
+      "respuesta_modelo": "The two distinct operating modes integrated into the unified framework are thinking mode (for complex, multi-step reasoning) and non-thinking mode (for rapid, context-driven responses). This integration eliminates the need to switch between different models—such as chat-optimized models (e.g., GPT-4o) and dedicated reasoning models (e.g., QwQ32B)—and enables dynamic mode switching based on user queries or chat templates.",
+      "ground_truth": "Qwen3 integrates a thinking mode for complex, multi-step reasoning and a non-thinking mode for rapid, context-driven responses into a unified framework. This eliminates the need to switch between different models, such as chat-optimized models and dedicated reasoning models, and enables dynamic mode switching based on user queries.",
+      "contextos_recuperados_preview": [
+        "This excerpt details the technical specifications of the Qwen3 model family, focusing on its architecture and capabilities. Specifically, it elaborates on the design choices made for Qwen3-235B-A22B, highlighting its Mixture-of-Experts (MoE) structure and the strategic implementation of thinking mod...",
+        "This excerpt details the Qwen3 technical report, which introduces a new family of large language models focused on enhancing performance, efficiency, and multilingual capabilities. Specifically, the text highlights Qwen3’s innovative approach to integrating “thinking mode” and “non-thinking mode” in...",
+        "This technical report details the Qwen3 model family, a series of large language models designed to enhance performance, efficiency, and multilingual capabilities. The document presents Qwen3’s architecture, training methodologies, and performance benchmarks across various tasks, including coding, S..."
+      ],
+      "contextos_count": 4,
+      "puntuaciones": {
+        "Factual Correctness": 0.8604718151813344,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.8059373429574956,
+        "Context Precision": 0.999999999975,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Qwen3 integrates a thinking mode for complex, multi-step reasoning into a unified framework.', 'Qwen3 integrates a non-thinking mode for rapid, context-driven responses into a unified framework.', 'This integration eliminates the need to switch between different models.', 'The different models are chat-optimized models.', 'The different models are dedicated reasoning models.', 'This integration enables dynamic mode switching based on user queries.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='The two distinct operating modes integrated into the unified framework are thinking mode.', reason='The ground truth states that Qwen3 integrates a thinking mode into a unified framework.'), StatementsWithReason(statement='Thinking mode is for complex, multi-step reasoning.', reason='The ground truth states that Qwen3 integrates a thinking mode for complex, multi-step reasoning.'), StatementsWithReason(statement='The two distinct operating modes integrated int"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9155714712516534"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The two distinct operating modes integrated into the unified framework are thinking mode.', 'Thinking mode is for complex, multi-step reasoning.', 'The two distinct operating modes integrated into the unified framework are non-thinking mode.', 'Non-thinking mode is for rapid, context-driven responses.', 'The integration of thinking mode and non-thinking mode eliminates the need to switch between different models.', 'Chat-optimized models are examples of different models.', 'GPT-4o i"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='The two distinct operating modes integrated into the unified framework are thinking mode.', reason='The excerpt mentions the integration of two distinct operating modes, thinking mode and non-thinking mode, into a unified framework.', verdict=1), StatementFaithfulnessAnswer(statement='Thinking mode is for complex, multi-step reasoning.', reason='The excerpt states that thinking mode is for complex, multi-step reasoning.', verdict=1), StatementFa"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='What are the two distinct operating modes integrated into the unified framework?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context explicitly mentions that Qwen3 features both thinking and non-thinking modes. It also implies the integration allows dynamic management of tokens for complex tasks. The answer accurately reflects this information, stating the two modes and the benefit of not needing to switch between different models.' verdict=1"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='Qwen3 integrates a thinking mode for complex, multi-step reasoning and a non-thinking mode for rapid, context-driven responses into a unified framework.', reason='The context explicitly mentions the integration of thinking and non-thinking modes into a unified framework within Qwen3.', attributed=1), ContextRecallClassification(statement='This eliminates the need to switch between different models, such as chat-optimized models and dedicate"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 14,
+      "pregunta": "According to the qwen3.pdf document, how many parameters are activated per token in the Qwen3-235B-A22B model, and what is its total parameter count?",
+      "respuesta_modelo": "The Qwen3-235B-A22B model has a total of 235 billion parameters and activates 22 billion ones per token. This design ensures both high performance and efficient inference.",
+      "ground_truth": "The flagship model, Qwen3-235B-A22B, is an MoE model with 22 billion activated parameters per token out of a total of 235 billion parameters. This design ensures both high performance and efficient inference.",
+      "contextos_recuperados_preview": [
+        "This excerpt details the technical specifications of the Qwen3 model family, focusing on its architecture and capabilities. Specifically, it elaborates on the design choices made for Qwen3-235B-A22B, highlighting its Mixture-of-Experts (MoE) structure and the strategic implementation of thinking mod...",
+        "This excerpt details the introduction of Qwen3, the newest iteration of the Qwen model family, emphasizing its role as an open-source large language model designed to achieve state-of-the-art performance across diverse tasks and domains. The document’s core focus is on showcasing Qwen3’s capabilitie...",
+        "This technical report details the Qwen3 model family, the latest iteration of large language models developed by the Qwen team. The document outlines the design and performance of Qwen3, including its dense and Mixture-of-Expert models, alongside comparative benchmarks against other open-source mode..."
+      ],
+      "contextos_count": 4,
+      "puntuaciones": {
+        "Factual Correctness": 0.8849332966105589,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.8749074332119207,
+        "Context Precision": 0.999999999975,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Qwen3-235B-A22B is an MoE model.', 'Qwen3-235B-A22B has 22 billion activated parameters per token.', 'Qwen3-235B-A22B has a total of 235 billion parameters.', 'This design ensures both high performance and efficient inference.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='The Qwen3-235B-A22B model has a total of 235 billion parameters.', reason='The ground truth states that \"Qwen3-235B-A22B has a total of 235 billion parameters.\", which directly supports this statement.'), StatementsWithReason(statement='The Qwen3-235B-A22B model activates 22 billion parameters per token.', reason='The ground truth states that \"Qwen3-235B-A22B has 22 billion activated parameters per token.\", which directly supports this statement.'), Statements"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9683046150136644"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The Qwen3-235B-A22B model has a total of 235 billion parameters.', 'The Qwen3-235B-A22B model activates 22 billion parameters per token.', 'This design ensures both high performance and efficient inference.']"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='The Qwen3-235B-A22B model has a total of 235 billion parameters.', reason='The excerpt explicitly states that the Qwen3-235B-A22B model has a total of 235 billion parameters.', verdict=1), StatementFaithfulnessAnswer(statement='The Qwen3-235B-A22B model activates 22 billion parameters per token.', reason='The excerpt explicitly states that the Qwen3-235B-A22B model has 22 billion activated parameters per token.', verdict=1), StatementFaithfulnes"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='How many parameters does the Qwen3-235B-A22B model have, and how many are activated per token?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context directly provides the answer to the question. It states that the Qwen3-235B-A22B model has 235B total parameters and 22B activated parameters. The answer accurately reflects this information.' verdict=1"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='The flagship model, Qwen3-235B-A22B, is an MoE model with 22 billion activated parameters per token out of a total of 235 billion parameters.', reason='The context explicitly states \"Notably, the flagship model, Qwen3-235B-A22B, is an MoE model with a total of 235 billion parameters and 22 billion activated ones per token.\"', attributed=1), ContextRecallClassification(statement='This design ensures both high performance and efficient infere"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 15,
+      "pregunta": "Based on the qwen3.pdf paper, how many tokens were used in the pre-training dataset and what was the purpose of this dataset?",
+      "respuesta_modelo": "The Qwen3 model family was trained on an extensive dataset containing 36 trillion tokens. This large-scale training data ensured linguistic and domain diversity, enabling the model to understand and generate text in 119 languages and dialects. The pre-training process for Qwen3 utilized a multi-stage strategy, with the first stage focusing on building a strong foundation of general knowledge through training on about 30 trillion tokens.",
+      "ground_truth": "The pre-training process for Qwen3 utilizes a large-scale dataset consisting of approximately 36 trillion tokens, curated to ensure linguistic and domain diversity, enabling the model to understand and generate text in a wide range of languages and dialects.",
+      "contextos_recuperados_preview": [
+        "This excerpt details the design and pre-training methodology behind the Qwen3 model family, focusing on its enhanced multilingual capabilities. The document’s core purpose is to introduce Qwen3, a new generation of large language models, and this excerpt elaborates on the rationale behind its develo...",
+        "This excerpt details the fourth stage of development for the Qwen3 model, focusing on enhancing its general capabilities, instruction-following, and agent functionalities. Specifically, it highlights improvements in the “ThinkFollow” score, indicating accurate mode switching between thinking and non...",
+        "This technical report details the development of Qwen3, the latest iteration of the Qwen language model family, focusing on enhanced performance, efficiency, and multilingual capabilities. The excerpt specifically elaborates on the expansion of the pre-training corpus, highlighting a significant inc..."
+      ],
+      "contextos_count": 4,
+      "puntuaciones": {
+        "Factual Correctness": 0.7437226881065352,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.7979452408885782,
+        "Context Precision": 0.999999999975,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The pre-training process for Qwen3 utilizes a large-scale dataset.', 'The dataset consists of approximately 36 trillion tokens.', 'The dataset is curated to ensure linguistic and domain diversity.', 'The dataset enables the model to understand and generate text in a wide range of languages and dialects.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='The Qwen3 model family was trained on an extensive dataset containing 36 trillion tokens.', reason='The ground truth states that the dataset consists of approximately 36 trillion tokens, which directly supports this statement.'), StatementsWithReason(statement='This large-scale training data ensured linguistic and domain diversity.', reason='The ground truth states that the dataset is curated to ensure linguistic and domain diversity, which directly supports t"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9748907524261411"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The Qwen3 model family was trained on an extensive dataset containing 36 trillion tokens.', 'This large-scale training data ensured linguistic and domain diversity.', 'The large-scale training data enabled the model to understand and generate text in 119 languages and dialects.', 'The pre-training process for Qwen3 utilized a multi-stage strategy.', 'The first stage of the pre-training process focused on building a strong foundation of general knowledge through training on about 30 "
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='The Qwen3 model family was trained on an extensive dataset containing 36 trillion tokens.', reason='The text explicitly states that the Qwen3 model was pre-trained on an extensive dataset containing 36 trillion tokens.', verdict=1), StatementFaithfulnessAnswer(statement='This large-scale training data ensured linguistic and domain diversity.', reason='The text mentions that the dataset was curated to ensure linguistic and domain diversity.', ver"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='How many tokens were used to train the Qwen3 model family?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context provides the exact number of tokens used in the pre-training dataset for Qwen3 (36 trillion tokens) and also mentions the purpose of the dataset, which is to cover a wide range of languages and dialects. Therefore, the context was useful in arriving at the answer.' verdict=1"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='The pre-training process for Qwen3 utilizes a large-scale dataset consisting of approximately 36 trillion tokens, curated to ensure linguistic and domain diversity, enabling the model to understand and generate text in a wide range of languages and dialects.', reason='The context mentions that the pre-training process for Qwen3 uses a large-scale dataset of approximately 36 trillion tokens, curated for linguistic and domain diversity. It al"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 16,
+      "pregunta": "According to the qwen3.pdf technical report, what is the purpose of the Strong-to-Weak Distillation pipeline, and what are its two primary phases?",
+      "respuesta_modelo": "The Strong-to-Weak Distillation pipeline is specifically designed to optimize lightweight models, encompassing 5 dense models (Qwen3-0.6B, 1.7B, 4B, 8B, and 14B) and one MoE model (Qwen3-30B-A3B). This approach enhances model performance while effectively imparting robust mode-switching capabilities.\r\nThe distillation process is divided into two primary phases: (1) Off-policy Distillation : At this initial phase, we combine the outputs of teacher models generated with both `/think` and /no `hink` modes for response distillation. This helps lightweight student models develop basic reasoning skills and the ability to switch between different modes of thinking, laying a solid foundation for the next on-policy training phase.\r\n(2) On-policy Distillation : In this phase, the student model generates on-policy sequences for fine-tuning. Specifically, prompts are sampled, and the student model produces responses in either `/think` or /no `hink` mode. The student model is then fine-tuned by aligning its logits with those of a teacher model (Qwen3-32B or Qwen3-235B-A22B) to minimize the KL divergence.",
+      "ground_truth": "The Strong-to-Weak Distillation pipeline is designed to optimize lightweight models by reducing the computational costs and development efforts required for building smaller-scale models. Its two primary phases are Off-policy Distillation and On-policy Distillation. In the Off-policy phase, outputs from teacher models in both /think and /no think modes are combined for response distillation, helping student models develop basic reasoning skills and mode-switching capabilities. In the On-policy phase, the student model generates its own sequences and is fine-tuned by aligning its logits with those of a teacher model to minimize KL divergence.",
+      "contextos_recuperados_preview": [
+        "This technical report details the Qwen3 model family, a series of large language models designed to enhance performance, efficiency, and multilingual capabilities. The document presents Qwen3’s architecture, training methodologies, and performance benchmarks across various tasks, including coding, S...",
+        "This technical report details the Qwen3 model family, the latest iteration of large language models developed by the Qwen team. The document outlines Qwen3’s architecture, training data, and performance benchmarks across various tasks, including coding, multilingual understanding, and reasoning, sho...",
+        "This technical report details the development and performance of Qwen3, the latest iteration of the Qwen language model family. The document focuses on showcasing Qwen3’s advancements in performance, efficiency, and multilingual capabilities, particularly through its dense and Mixture-of-Expert (MoE..."
+      ],
+      "contextos_count": 4,
+      "puntuaciones": {
+        "Factual Correctness": 0.7358372784194056,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.8482731987662716,
+        "Context Precision": 0.5833333333041666,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The Strong-to-Weak Distillation pipeline is designed to optimize lightweight models.', 'The Strong-to-Weak Distillation pipeline reduces the computational costs required for building smaller-scale models.', 'The Strong-to-Weak Distillation pipeline reduces the development efforts required for building smaller-scale models.', 'The Strong-to-Weak Distillation pipeline has two primary phases.', 'The two primary phases of the Strong-to-Weak Distillation pipeline are Off-policy Distillat"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='The Strong-to-Weak Distillation pipeline is specifically designed to optimize lightweight models.', reason='This statement is directly supported by the ground truth.'), StatementsWithReason(statement='The distillation process is divided into two primary phases.', reason='This statement is directly supported by the ground truth.'), StatementsWithReason(statement='The first phase is Off-policy Distillation.', reason='This statement is directly supported by the g"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9433491136776231"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The Strong-to-Weak Distillation pipeline is specifically designed to optimize lightweight models.', 'The lightweight models encompass 5 dense models (Qwen3-0.6B, 1.7B, 4B, 8B, and 14B) and one MoE model (Qwen3-30B-A3B).', 'This approach enhances model performance.', 'This approach effectively imparts robust mode-switching capabilities.', 'The distillation process is divided into two primary phases.', 'The first phase is Off-policy Distillation.', 'At this initial phase, the outputs "
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='The Strong-to-Weak Distillation pipeline is specifically designed to optimize lightweight models.', reason='The text explicitly states that \"The Strong-to-Weak Distillation pipeline is specifically designed to optimize lightweight models\".', verdict=1), StatementFaithfulnessAnswer(statement='The lightweight models encompass 5 dense models (Qwen3-0.6B, 1.7B, 4B, 8B, and 14B) and one MoE model (Qwen3-30B-A3B).', reason='The text explicitly states "
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='Could you describe the Strong-to-Weak Distillation pipeline and its two primary phases?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason=\"The context provides information about the Qwen3 model family, its training methodology, and the Strong-to-Weak Distillation approach. However, it does not explicitly mention the two primary phases (Off-policy and On-policy Distillation) or their specific functionalities as described in the answer. Therefore, while the context is related, it doesn't directly provide the details necessary to fully answer the question.\" verdict=0"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='The Strong-to-Weak Distillation pipeline is designed to optimize lightweight models by reducing the computational costs and development efforts required for building smaller-scale models.', reason='The context states that \"Strong-to-Weak Distillation : This aims to streamline and optimize the post-training process for lightweight models. By leveraging the knowledge from large-scale models, we substantially reduce both the computational cost"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 17,
+      "pregunta": "Based on the qwen3.pdf document, what techniques are used during the Long Context Stage to extend the context length, and what is the maximum sequence length capacity?",
+      "respuesta_modelo": "During the Long Context Stage of training for Qwen3, techniques such as collecting high-quality long context corpora and increasing the base frequency of RoPE are employed to extend the context length of the model. Additionally, architectural modifications like introducing YARN and Dual Chunk Attention (DCA) are implemented during inference to achieve a four-fold increase in sequence length capacity. The maximum sequence length capacity for Qwen3 models is 32,768 tokens.",
+      "ground_truth": "During the Long Context Stage, the authors collect high-quality long context corpora to extend the context length, increase the base frequency of RoPE using the ABF technique, and introduce YARN and Dual Chunk Attention (DCA) to extend the capacity. This allows all models to be pre-trained on hundreds of billions of tokens with a maximum sequence length of 32,768 tokens.",
+      "contextos_recuperados_preview": [
+        "This excerpt details the design and pre-training methodology behind the Qwen3 model family, focusing on its enhanced multilingual capabilities. The document’s core purpose is to introduce Qwen3, a new generation of large language models, and this excerpt elaborates on the rationale behind its develo...",
+        "This technical report details the development of Qwen3, the latest iteration of the Qwen language model family, emphasizing its enhanced performance, efficiency, and multilingual capabilities. The excerpt specifically focuses on the final pre-training stage of Qwen3, outlining the strategies employe...",
+        "This technical report details the development of Qwen3, the latest iteration of the Qwen language model family, emphasizing its advancements in performance, efficiency, and multilingual capabilities. The document outlines the model’s architecture, training data, and performance benchmarks across var..."
+      ],
+      "contextos_count": 4,
+      "puntuaciones": {
+        "Factual Correctness": 0.9759655175928953,
+        "Faithfulness": 0.8,
+        "Response Relevancy": 0.8365395797453833,
+        "Context Precision": 0.9999999999666667,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['During the Long Context Stage, the authors collect high-quality long context corpora to extend the context length.', 'During the Long Context Stage, the authors increase the base frequency of RoPE using the ABF technique.', 'During the Long Context Stage, the authors introduce YARN and Dual Chunk Attention (DCA) to extend the capacity.', 'This allows all models to be pre-trained on hundreds of billions of tokens with a maximum sequence length of 32,768 tokens.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='During the Long Context Stage of training for Qwen3, techniques such as collecting high-quality long context corpora are employed to extend the context length of the model.', reason='This statement is directly supported by the ground truth statement: \"During the Long Context Stage, the authors collect high-quality long context corpora to extend the context length.\"'), StatementsWithReason(statement='During the Long Context Stage of training for Qwen3, techniqu"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9038620703715811"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['During the Long Context Stage of training for Qwen3, techniques such as collecting high-quality long context corpora are employed to extend the context length of the model.', 'During the Long Context Stage of training for Qwen3, techniques such as increasing the base frequency of RoPE are employed to extend the context length of the model.', 'Architectural modifications like introducing YARN are implemented during inference to achieve a four-fold increase in sequence length capacity"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='During the Long Context Stage of training for Qwen3, techniques such as collecting high-quality long context corpora are employed to extend the context length of the model.', reason='The text explicitly states that in the final pre-training stage (Long Context Stage), high-quality long context corpora are collected to extend the context length of Qwen3 models.', verdict=1), StatementFaithfulnessAnswer(statement='During the Long Context Stage of "
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='What techniques are used to extend the context length of Qwen3 models during training and inference, and what is the maximum sequence length capacity?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context provides information about the Qwen3 model family and its long-context processing capabilities, including the use of the RULER benchmark and YARN. However, it does not explicitly mention the techniques used during the Long Context Stage to extend the context length, such as collecting high-quality long context corpora, increasing the base frequency of RoPE using the ABF technique, and introducing Dual Chunk Attention (DCA). Also, the context mentions a thinking budget of 8192"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='During the Long Context Stage, the authors collect high-quality long context corpora to extend the context length, increase the base frequency of RoPE using the ABF technique, and introduce YARN and Dual Chunk Attention (DCA) to extend the capacity.', reason='The context mentions collecting high-quality long context corpora, increasing the base frequency of RoPE using ABF, and introducing YARN and DCA in the Long Context Stage.', attributed"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 18,
+      "pregunta": "According to qwen3.pdf, what tools are used to efficiently expand the training data, and what is the total number of languages and dialects covered?",
+      "respuesta_modelo": "Qwen3 utilizes Qwen2.5-VL to extract text from extensive PDF documents and generates synthetic data using domain-specific models: Qwen2.5-Math for mathematical content and Qwen2.5-Coder for code-related data. The pre-training process follows a three-stage strategy, with the first stage training on about 30 trillion tokens to build a strong foundation of general knowledge, the second stage further training on knowledge-intensive data to enhance reasoning abilities in areas like science, technology, engineering, and mathematics (STEM) and coding, and finally, the third stage training on long-context data to increase its maximum context length from 4,096 to 32,768 tokens. All Qwen3 models are trained on a large and diverse dataset consisting of 119 languages and dialects, with a total of 36 trillion tokens.",
+      "ground_truth": "To efficiently expand the training data, the authors use Qwen2.5-VL to extract text from PDF documents, and domain-specific models like Qwen2.5-Math and Qwen2.5-Coder to generate synthetic data. The pre-training follows a three-stage strategy: General Stage, Reasoning Stage for STEM and coding, and Long Context Stage. The total pre-training dataset covers 119 languages and dialects.",
+      "contextos_recuperados_preview": [
+        "This excerpt details the technical specifications of the Qwen3 model family, focusing on its architecture and capabilities. Specifically, it elaborates on the design choices made for Qwen3-235B-A22B, highlighting its Mixture-of-Experts (MoE) structure and the strategic implementation of thinking mod...",
+        "This excerpt details the design and pre-training methodology behind the Qwen3 model family, focusing on its enhanced multilingual capabilities. The document’s core purpose is to introduce Qwen3, a new generation of large language models, and this excerpt elaborates on the rationale behind its develo...",
+        "This technical report details the Qwen3 model family, the latest iteration of large language models developed by the Qwen team. The document outlines the model’s architecture, training data, and performance benchmarks, specifically comparing Qwen3 against other open-source models like Llama-4 and De..."
+      ],
+      "contextos_count": 4,
+      "puntuaciones": {
+        "Factual Correctness": 0.667413503864803,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.7567318401533948,
+        "Context Precision": 0.5833333333041666,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['To efficiently expand the training data, the authors use Qwen2.5-VL to extract text from PDF documents.', 'To efficiently expand the training data, the authors use domain-specific models like Qwen2.5-Math and Qwen2.5-Coder to generate synthetic data.', 'The pre-training follows a three-stage strategy: General Stage, Reasoning Stage for STEM and coding, and Long Context Stage.', 'The total pre-training dataset covers 119 languages and dialects.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='Qwen3 utilizes Qwen2.5-VL to extract text from extensive PDF documents.', reason='This statement is directly supported by the ground truth, which mentions using Qwen2.5-VL to extract text from PDF documents to expand training data.'), StatementsWithReason(statement='Qwen3 generates synthetic data using domain-specific models.', reason='This statement is directly supported by the ground truth, which mentions using domain-specific models like Qwen2.5-Math and Qw"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9553683011734975"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Qwen3 utilizes Qwen2.5-VL to extract text from extensive PDF documents.', 'Qwen3 generates synthetic data using domain-specific models.', 'Qwen3 uses Qwen2.5-Math for mathematical content.', 'Qwen3 uses Qwen2.5-Coder for code-related data.', 'The pre-training process follows a three-stage strategy.', 'The first stage involves training on about 30 trillion tokens to build a strong foundation of general knowledge.', 'The second stage involves further training on knowledge-intensive da"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='Qwen3 utilizes Qwen2.5-VL to extract text from extensive PDF documents.', reason='The excerpt states that \"Qwen2.5-VL (Bai et al., 2025) is finetuned to extract text from extensive PDF documents\" to expand the training data. Since Qwen3 uses this data, it can be inferred that Qwen3 utilizes Qwen2.5-VL.', verdict=1), StatementFaithfulnessAnswer(statement='Qwen3 generates synthetic data using domain-specific models.', reason='The excerpt states th"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='How does Qwen3 extract text from PDF documents and what is its pre-training process?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context provides information about the expansion of the pre-training corpus, the increase in supported languages (from 29 to 119), and the development of a multilingual data annotation system. It also mentions the three-stage pre-training process. However, the context does not explicitly mention the use of Qwen2.5-VL to extract text from PDF documents or the use of domain-specific models like Qwen2.5-Math and Qwen2.5-Coder to generate synthetic data. While the context is related to t"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='To efficiently expand the training data, the authors use Qwen2.5-VL to extract text from PDF documents, and domain-specific models like Qwen2.5-Math and Qwen2.5-Coder to generate synthetic data.', reason='The context mentions that \"To efficiently expand the training data, we employ a multi-modal approach: Qwen2.5-VL (Bai et al., 2025) is finetuned to extract text from extensive PDF documents. We also generate synthetic data using domain-spe"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 19,
+      "pregunta": "According to att.pdf, what two neural network mechanisms does the Transformer architecture dispense with entirely, and what does it rely on instead?",
+      "respuesta_modelo": "The Transformer architecture relies entirely on attention mechanisms, dispensing with recurrence and convolutions entirely. This model achieves superior performance in translation tasks while being more parallelizable and requiring significantly less time to train.",
+      "ground_truth": "The Transformer architecture dispenses with recurrence and convolutions entirely, relying solely on attention mechanisms to draw global dependencies between input and output. This allows for significantly more parallelization compared to recurrent or convolutional architectures.",
+      "contextos_recuperados_preview": [
+        "This document details the architecture and performance of the Transformer model, a novel approach to sequence transduction that relies entirely on attention mechanisms. The excerpt introduces the core paper, “Attention Is All You Need,” authored by Vaswani et al. at Google, highlighting the Transfor...",
+        "This paper details the development of the Transformer, a novel neural network architecture designed for sequence modeling and translation. The excerpt introduces the Transformer’s core concept – replacing recurrent networks with a purely attention-based mechanism – highlighting its potential for inc...",
+        "This section of the paper details the Transformer model’s architecture and rationale, framing it as a novel approach within the broader landscape of sequence transduction models. The excerpt elaborates on the established encoder-decoder structure commonly found in competitive models like GNMT and Co..."
+      ],
+      "contextos_count": 4,
+      "puntuaciones": {
+        "Factual Correctness": 0.7844682980629185,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.7419638411724648,
+        "Context Precision": 0.999999999975,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The Transformer architecture dispenses with recurrence entirely.', 'The Transformer architecture dispenses with convolutions entirely.', 'The Transformer architecture relies solely on attention mechanisms to draw global dependencies between input and output.', 'This allows for significantly more parallelization compared to recurrent or convolutional architectures.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='The Transformer architecture relies entirely on attention mechanisms.', reason='This statement is supported by the ground truth, which states that the Transformer architecture relies solely on attention mechanisms.'), StatementsWithReason(statement='The Transformer architecture dispenses with recurrence entirely.', reason='This statement is directly supported by the ground truth.'), StatementsWithReason(statement='The Transformer architecture dispenses with co"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9560550104334923"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The Transformer architecture relies entirely on attention mechanisms.', 'The Transformer architecture dispenses with recurrence entirely.', 'The Transformer architecture dispenses with convolutions entirely.', 'The Transformer architecture achieves superior performance in translation tasks.', 'The Transformer architecture is more parallelizable.', 'The Transformer architecture requires significantly less time to train.']"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='The Transformer architecture relies entirely on attention mechanisms.', reason='The text states that the Transformer model relies entirely on attention mechanisms.', verdict=1), StatementFaithfulnessAnswer(statement='The Transformer architecture dispenses with recurrence entirely.', reason='The text states that the Transformer dispenses with recurrence entirely.', verdict=1), StatementFaithfulnessAnswer(statement='The Transformer architecture di"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='What are the key features and advantages of the Transformer architecture?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context explicitly states that the Transformer model replaces recurrent layers with multi-headed self-attention and is based entirely on attention. It also mentions that the Transformer can be trained significantly faster than architectures based on recurrent or convolutional layers. This information directly supports the answer.' verdict=1"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='The Transformer architecture dispenses with recurrence and convolutions entirely, relying solely on attention mechanisms to draw global dependencies between input and output.', reason='The context states: \"...the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.\" and \"...relying entirely on an attention mechanism to draw global dependencies between input and output.\"', attributed=1), Co"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 20,
+      "pregunta": "According to the att.pdf paper, how many identical layers compose the encoder stack, and what two sub-layers does each layer contain?",
+      "respuesta_modelo": "Based on the information provided in the paper, the encoder stack of the Transformer is composed of six identical layers. Each layer contains two sub-layers: a multi-head self-attention mechanism and a fully connected feed-forward network.",
+      "ground_truth": "The encoder is composed of a stack of N = 6 identical layers. Each layer has two sub-layers: a multi-head self-attention mechanism and a simple, position-wise fully connected feed-forward network, with residual connections and layer normalization applied around each sub-layer.",
+      "contextos_recuperados_preview": [
+        "This paper details the architecture of the Transformer, a novel neural network model designed for sequence transduction tasks like language modeling and machine translation. The excerpt specifically focuses on the encoder component of the Transformer, outlining its structure which includes six ident...",
+        "This paper details the Transformer architecture, a novel approach to sequence modeling that utilizes self-attention mechanisms. The excerpt focuses on the core design of the Transformer, specifically outlining the structure of both the encoder and decoder stacks, and emphasizing the use of residual ...",
+        "This paper introduces the Transformer architecture, a novel approach to sequence modeling that utilizes self-attention mechanisms. Specifically, the excerpt details the encoder and decoder stacks, highlighting the core components of the Transformer, including scaled dot-product attention and multi-h..."
+      ],
+      "contextos_count": 4,
+      "puntuaciones": {
+        "Factual Correctness": 0.7391956344584771,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.8026811407970996,
+        "Context Precision": 0.9999999999666667,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The encoder is composed of a stack of N = 6 identical layers.', 'Each layer has two sub-layers.', 'One sub-layer is a multi-head self-attention mechanism.', 'Another sub-layer is a simple, position-wise fully connected feed-forward network.', 'Residual connections and layer normalization are applied around each sub-layer.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='The encoder stack of the Transformer is composed of six identical layers, according to the information provided in the paper.', reason='The ground truth states \"The encoder is composed of a stack of N = 6 identical layers.\", which directly supports this statement.'), StatementsWithReason(statement='Each layer contains a multi-head self-attention mechanism.', reason='The ground truth states \"One sub-layer is a multi-head self-attention mechanism.\", which direct"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9567825378339088"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The encoder stack of the Transformer is composed of six identical layers, according to the information provided in the paper.', 'Each layer contains a multi-head self-attention mechanism.', 'Each layer contains a fully connected feed-forward network.']"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='The encoder stack of the Transformer is composed of six identical layers, according to the information provided in the paper.', reason='The excerpt explicitly states \"The encoder is composed of a stack of _N_ = 6 identical layers.\"', verdict=1), StatementFaithfulnessAnswer(statement='Each layer contains a multi-head self-attention mechanism.', reason='The excerpt states \"Each layer has two sub-layers. The first is a multi-head self-attention mec"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='According to the paper, what is the structure of the encoder stack in the Transformer model?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason=\"The context provided does not contain the specific details about the number of layers in the encoder stack or the sub-layers within each layer. The context focuses on the limitations of recurrent neural networks and introduces the Transformer model as an alternative, but it doesn't delve into the architecture's specifics. Therefore, the context was not useful in answering the question.\" verdict=0"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='The encoder is composed of a stack of N = 6 identical layers.', reason='The context explicitly states \"The encoder is composed of a stack of _N_ = 6 identical layers.\"', attributed=1), ContextRecallClassification(statement='Each layer has two sub-layers: a multi-head self-attention mechanism and a simple, position-wise fully connected feed-forward network, with residual connections and layer normalization applied around each sub-layer.', re"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 21,
+      "pregunta": "How many parallel attention heads are employed in the multi-head attention mechanism according to att.pdf, and what is the dimension used per head?",
+      "respuesta_modelo": "The Transformer model employs _h_ = 8 parallel attention layers, or heads. For each of these we use _dk_ = _dv_ = _d_ model _/h_ = 64. Due to the reduced dimension of each head, the total computational cost is similar to that of single-head attention with full dimensionality.",
+      "ground_truth": "The authors employ h = 8 parallel attention layers, or heads. For each head, dk = dv = dmodel/h = 64. Due to the reduced dimension of each head, the total computational cost is similar to that of single-head attention with full dimensionality.",
+      "contextos_recuperados_preview": [
+        "This document details the architecture of the Transformer model, a novel approach to sequence transduction that utilizes self-attention mechanisms. The excerpt specifically focuses on the scaled dot-product attention component, explaining its operation and the rationale behind employing multiple att...",
+        "This paper details the architecture of the Transformer, a novel neural network model designed for sequence transduction tasks like language modeling and machine translation. The excerpt specifically focuses on the encoder component of the Transformer, outlining its structure which includes six ident...",
+        "This paper details the Transformer architecture, a novel approach to sequence modeling that utilizes self-attention mechanisms. The excerpt specifically focuses on the Scaled Dot-Product Attention component, outlining its mathematical formulation and implementation within the model’s architecture.\\n..."
+      ],
+      "contextos_count": 5,
+      "puntuaciones": {
+        "Factual Correctness": 0.9221337191796473,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.8133487269644415,
+        "Context Precision": 0.8874999999778125,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The authors employ h = 8 parallel attention layers.', 'The authors employ h = 8 parallel attention heads.', 'For each head, dk = dv = dmodel/h = 64.', 'Due to the reduced dimension of each head, the total computational cost is similar to that of single-head attention with full dimensionality.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='The Transformer model employs 8 parallel attention heads.', reason='This statement is directly supported by the ground truth statement \"The authors employ h = 8 parallel attention heads.\"'), StatementsWithReason(statement='For each attention head, the value of _dk_ is 64.', reason='This statement is supported by the ground truth statement \"For each head, dk = dv = dmodel/h = 64.\"'), StatementsWithReason(statement='For each attention head, the value of _dv_ is "
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9612621494458622"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The Transformer model employs 8 parallel attention layers.', 'The Transformer model employs 8 parallel attention heads.', 'For each attention head, the value of _dk_ is 64.', 'For each attention head, the value of _dv_ is 64.', 'For each attention head, the value of _d_ model _/h_ is 64.', 'The reduced dimension of each attention head makes the total computational cost similar to that of single-head attention with full dimensionality.']"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='The Transformer model employs 8 parallel attention layers.', reason='The text states \"In this work we employ _h_ = 8 parallel attention layers, or heads.\"', verdict=1), StatementFaithfulnessAnswer(statement='The Transformer model employs 8 parallel attention heads.', reason='The text states \"In this work we employ _h_ = 8 parallel attention layers, or heads.\"', verdict=1), StatementFaithfulnessAnswer(statement='For each attention head, the value"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='How many parallel attention layers does the Transformer model use, and what are the dimensions used for each head?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason=\"The context provides information about the multi-head attention mechanism, including the use of linear projections and the dimensions involved. It mentions 'h' times with different linear projections, which is relevant to the number of parallel attention heads. The context also alludes to the dimensions dk and dv. Therefore, the context is useful in arriving at the answer.\" verdict=1"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='The authors employ h = 8 parallel attention layers, or heads.', reason='The context states \"In this work we employ _h_ = 8 parallel attention layers, or heads.\"', attributed=1), ContextRecallClassification(statement='For each head, dk = dv = dmodel/h = 64.', reason='The context states \"For each of these we use _dk_ = _dv_ = _d_ model _/h_ = 64.\"', attributed=1), ContextRecallClassification(statement='Due to the reduced dimension of each hea"
+          }
+        ]
+      }
+    },
+    {
+      "indice": 22,
+      "pregunta": "According to att.pdf, what are the two most commonly used attention functions, and why is dot-product attention preferred in practice?",
+      "respuesta_modelo": "The two most commonly used attention functions are additive attention, and dot-product (multiplicative) attention. Dot-product attention is much faster and more space-efficient in practice, since it can be implemented using highly optimized matrix multiplication code. While for small values of _dk_ the two mechanisms perform similarly, additive attention outperforms dot product attention without scaling for larger values of _dk_. We suspect that for large values of _dk_, the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients. To counteract this effect, we scale the dot products by 1 .",
+      "ground_truth": "The two most commonly used attention functions are additive attention and dot-product (multiplicative) attention. While they are similar in theoretical complexity, dot-product attention is much faster and more space-efficient in practice because it can be implemented using highly optimized matrix multiplication code. For large values of dk, the dot products grow large in magnitude, pushing the softmax function into regions with extremely small gradients; to counteract this effect, the dot products are scaled by 1/sqrt(dk).",
+      "contextos_recuperados_preview": [
+        "This paper details the Transformer architecture, a novel approach to sequence modeling that utilizes self-attention mechanisms. The excerpt focuses on the core Scaled Dot-Product Attention function, outlining its mathematical formulation and implementation details, specifically contrasting it with a...",
+        "This paper details the Transformer architecture, a novel approach to sequence modeling that utilizes self-attention mechanisms. The excerpt specifically focuses on the Scaled Dot-Product Attention component, outlining its mathematical formulation and implementation within the model’s architecture.\\n...",
+        "This paper details the Transformer model, a novel architecture for sequence transduction that utilizes self-attention mechanisms. The excerpt focuses on the inner workings of the scaled dot-product attention component, specifically outlining the linear projections applied to queries, keys, and value..."
+      ],
+      "contextos_count": 3,
+      "puntuaciones": {
+        "Factual Correctness": 0.7707147527552158,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.7790429547835698,
+        "Context Precision": 0.8333333332916666,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The two most commonly used attention functions are additive attention and dot-product attention.', 'Additive attention and dot-product attention are similar in theoretical complexity.', 'Dot-product attention is much faster than additive attention in practice.', 'Dot-product attention is more space-efficient than additive attention in practice.', 'Dot-product attention can be implemented using highly optimized matrix multiplication code.', 'For large values of dk, the dot products g"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='The two most commonly used attention functions are additive attention and dot-product attention.', reason='This statement is directly supported by the first sentence in the ground truth.'), StatementsWithReason(statement='Dot-product attention is much faster in practice.', reason='This statement is directly supported by the ground truth.'), StatementsWithReason(statement='Dot-product attention is more space-efficient in practice.', reason='This statement is di"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9652119521973337"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The two most commonly used attention functions are additive attention.', 'The two most commonly used attention functions are dot-product (multiplicative) attention.', 'Dot-product attention is much faster in practice.', 'Dot-product attention is more space-efficient in practice.', 'Dot-product attention can be implemented using highly optimized matrix multiplication code.', 'For small values of _dk_ the additive attention and dot product attention perform similarly.', 'Additive atte"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='The two most commonly used attention functions are additive attention.', reason='The text states \"The two most commonly used attention functions are additive attention [2], and dot-product (multiplicative) attention.\"', verdict=1), StatementFaithfulnessAnswer(statement='The two most commonly used attention functions are dot-product (multiplicative) attention.', reason='The text states \"The two most commonly used attention functions are additive "
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='What are the two most commonly used attention functions, and what are their relative advantages and disadvantages?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason=\"The context provides information about dot-product attention, including its implementation and a potential scaling issue. It also mentions queries, keys, and values, which are relevant to understanding attention mechanisms. However, it does not explicitly mention additive attention as one of the two most commonly used attention functions, nor does it directly state the reasons for dot-product attention's preference in practice (speed and space efficiency). While the context is somewhat h"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='The two most commonly used attention functions are additive attention and dot-product (multiplicative) attention.', reason='The context explicitly states: \"The two most commonly used attention functions are additive attention [2], and dot-product (multiplicative) attention.\"', attributed=1), ContextRecallClassification(statement='While they are similar in theoretical complexity, dot-product attention is much faster and more space-efficient "
+          }
+        ]
+      }
+    },
+    {
+      "indice": 23,
+      "pregunta": "According to the att.pdf paper, why are positional encodings added to the input embeddings, and what specific functions are used for them?",
+      "respuesta_modelo": "Positional encodings are added to the input embeddings in order for the model to understand the order of tokens in a sequence due to the absence of recurrence or convolution. In this work, sine and cosine functions of different frequencies are used as positional encodings. These functions allow the model to easily learn to attend by relative positions, since for any fixed offset k, PEpos +k can be represented as a linear function of PEpos.",
+      "ground_truth": "Since the model contains no recurrence and no convolution, positional encodings are added to inject information about the relative or absolute position of the tokens in the sequence. The positional encodings have the same dimension dmodel as the embeddings, so that the two can be summed. There are many choices of positional encodings, learned and fixed. The authors use sine and cosine functions of different frequencies to form these encodings.",
+      "contextos_recuperados_preview": [
+        "This document details the architecture of the Transformer model, introduced as a novel approach to sequence transduction problems like language modeling and machine translation. The core of the Transformer relies on self-attention mechanisms, specifically scaled dot-product attention and multi-head ...",
+        "This paper introduces the Transformer architecture, a novel approach to sequence modeling that utilizes self-attention mechanisms. Specifically, the excerpt details the implementation of positional encodings within the Transformer, employing sine and cosine functions to represent sequence positions ...",
+        "This document details the architecture of the Transformer model, a novel approach to sequence transduction that utilizes self-attention mechanisms. The excerpt specifically focuses on the scaled dot-product attention component, explaining its operation and the rationale behind employing multiple att..."
+      ],
+      "contextos_count": 3,
+      "puntuaciones": {
+        "Factual Correctness": 0.6329436390809208,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.798040170189091,
+        "Context Precision": 0.99999999995,
+        "Context Recall": 1.0
+      },
+      "justificaciones": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The model contains no recurrence.', 'The model contains no convolution.', 'Positional encodings are added to inject information about the relative or absolute position of the tokens in the sequence.', 'The positional encodings have the same dimension dmodel as the embeddings.', 'The embeddings and the positional encodings can be summed.', 'There are many choices of positional encodings.', 'Some positional encodings are learned.', 'Some positional encodings are fixed.', 'The authors "
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='Positional encodings are added to the input embeddings.', reason='The ground truth states that positional encodings are added to inject information about the position of tokens.'), StatementsWithReason(statement='Recurrence is absent.', reason='The ground truth states that the model contains no recurrence.'), StatementsWithReason(statement='Convolution is absent.', reason='The ground truth states that the model contains no convolution.'), StatementsWithReason("
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9528271879026305"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Positional encodings are added to the input embeddings.', 'The model needs to understand the order of tokens in a sequence.', 'Recurrence is absent.', 'Convolution is absent.', 'Sine functions of different frequencies are used as positional encodings.', 'Cosine functions of different frequencies are used as positional encodings.', 'The model can easily learn to attend by relative positions.', 'For any fixed offset k, PEpos +k can be represented as a linear function of PEpos.']"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='Positional encodings are added to the input embeddings.', reason='The text explicitly states: \"To this end, we add \\\\\"positional encodings\\\\\" to the input embeddings at the bottoms of the encoder and decoder stacks.\"', verdict=1), StatementFaithfulnessAnswer(statement='The model needs to understand the order of tokens in a sequence.', reason='The text states: \"in order for the model to make use of the order of the sequence, we must inject some i"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='Why are positional encodings added to input embeddings in the Transformer model?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context provided does not mention why positional encodings are added to the input embeddings or the specific functions used for them. Therefore, the context was not useful in arriving at the given answer.' verdict=0"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='Since the model contains no recurrence and no convolution, positional encodings are added to inject information about the relative or absolute position of the tokens in the sequence.', reason='The context explicitly states that positional encodings are added because the model lacks recurrence and convolution, to provide information about token positions.', attributed=1), ContextRecallClassification(statement='The positional encodings have t"
+          }
+        ]
+      }
+    }
+  ],
+  "medias_globales": {
+    "Factual Correctness": 0.7713305473314055,
+    "Faithfulness": 0.9850931677018634,
+    "Response Relevancy": 0.8300642769963293,
+    "Context Precision": 0.9262681158997358,
+    "Context Recall": 1.0
+  }
+}

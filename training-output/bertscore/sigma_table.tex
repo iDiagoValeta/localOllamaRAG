@@ -1,0 +1,33 @@
+% ============================================================
+% LaTeX snippet: tab:bertscore_full  (mean +/- std, n=200 per cell)
+% ============================================================
+\begin{tabular}{|l|l|cc|cc|cc|}
+\hline
+\textbf{Modelo} & \textbf{Dataset} & \textbf{BS-F1 base} & \textbf{BS-F1 adj.} & \textbf{Token F1 base} & \textbf{Token F1 adj.} & \textbf{Faith. base} & \textbf{Faith. adj.} \\
+\hline
+  \multirow{3}{*}{Qwen3-14B} & Neural-Bridge RAG & $52.0 \pm 23.4$ & $77.7 \pm 20.9$ & $54.7 \pm 22.8$ & $79.7 \pm 19.1$ & $73.2 \pm 15.2$ & $90.0 \pm 10.6$ \\
+   & Dolly QA & $43.8 \pm 20.8$ & $49.5 \pm 24.6$ & $48.5 \pm 20.7$ & $52.4 \pm 23.8$ & $74.6 \pm 17.1$ & $91.9 \pm 15.0$ \\
+   & Aina RAG & $34.1 \pm 15.2$ & $46.9 \pm 13.8$ & $39.1 \pm 15.3$ & $55.8 \pm 12.3$ & $75.0 \pm 14.5$ & $73.5 \pm 13.2$ \\
+\hline
+  \multirow{3}{*}{Llama-3.1-8B} & Neural-Bridge RAG & $58.8 \pm 27.4$ & $77.5 \pm 21.3$ & $64.3 \pm 24.5$ & $79.7 \pm 19.4$ & $80.1 \pm 14.8$ & $89.5 \pm 11.8$ \\
+   & Dolly QA & $42.7 \pm 21.2$ & $47.9 \pm 25.1$ & $46.9 \pm 20.4$ & $51.5 \pm 24.3$ & $77.8 \pm 17.3$ & $92.4 \pm 14.5$ \\
+   & Aina RAG & $24.9 \pm 13.3$ & $46.6 \pm 14.0$ & $27.6 \pm 12.7$ & $55.9 \pm 11.8$ & $79.1 \pm 15.7$ & $72.6 \pm 12.8$ \\
+\hline
+  \multirow{3}{*}{Gemma-3-12B} & Neural-Bridge RAG & $58.8 \pm 21.8$ & $79.0 \pm 20.5$ & $62.3 \pm 19.2$ & $80.6 \pm 19.0$ & $78.0 \pm 12.8$ & $90.3 \pm 11.2$ \\
+   & Dolly QA & $45.9 \pm 20.3$ & $48.3 \pm 25.1$ & $48.4 \pm 18.7$ & $51.7 \pm 24.5$ & $74.7 \pm 14.0$ & $90.9 \pm 16.6$ \\
+   & Aina RAG & $31.4 \pm 14.6$ & $46.0 \pm 14.7$ & $35.1 \pm 15.1$ & $55.4 \pm 13.3$ & $74.8 \pm 14.0$ & $72.1 \pm 13.1$ \\
+\hline
+\end{tabular}
+
+% ============================================================
+% LaTeX snippet: tab:bertscore_global  (global mean +/- std)
+% ============================================================
+\begin{tabular}{|l|cc|c|c|}
+\hline
+\textbf{Dataset} & \textbf{BS-F1 base} & \textbf{BS-F1 adj.} & \textbf{$\Delta$ BS-F1} & \textbf{$\Delta$ Faithfulness} \\
+\hline
+  Neural-Bridge RAG & $56.6 \pm 24.5$ & $78.1 \pm 20.9$ & $+21.5$~pp & $+12.8$~pp \\
+  Dolly QA & $44.1 \pm 20.8$ & $48.6 \pm 24.9$ & $+4.4$~pp & $+16.0$~pp \\
+  Aina RAG & $30.1 \pm 14.9$ & $46.5 \pm 14.2$ & $+16.4$~pp & $-3.6$~pp \\
+\hline
+\end{tabular}

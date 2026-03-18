@@ -1,11 +1,19 @@
 """
-MonkeyGrab CLI
-===========================================
+MonkeyGrab CLI Display.
 
-Clase centralizada que encapsula toda la salida visual del sistema
-usando la librería `rich`. Reemplaza los prints ANSI manuales por
-componentes semánticos: paneles, tablas, spinners, markdown y progreso.
+Centralized class that encapsulates all visual output for the system
+using the `rich` library. Replaces manual ANSI print statements with
+semantic components: panels, tables, spinners, markdown, and progress
+indicators.
 
+Usage:
+    from rag.cli.display import ui
+    ui.logo()
+    ui.welcome()
+    ui.success("Operation completed")
+
+Dependencies:
+    - rich (Console, Panel, Table, Markdown, Status, etc.)
 """
 
 import os
@@ -28,26 +36,26 @@ from rich.status import Status
 from rich import box
 
 
-# ─────────────────────────────────────────────────────────────
-# TEMA GLOBAL — Paleta MonkeyGrab
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# GLOBAL THEME - MonkeyGrab Palette
+# ─────────────────────────────────────────────
 
 MONKEYGRAB_THEME = RichTheme({
-    # Marca
+    # Brand
     "brand":        "bold #d7875f",
     "brand.dim":    "#af5f00",
 
-    # Modos
+    # Modes
     "mode.chat":    "#af87d7",
     "mode.rag":     "#5fafaf",
 
-    # Funcional
+    # Functional
     "info":         "#5f87af",
     "success":      "#5faf5f",
     "warning":      "#d7af00",
     "error":        "#d75f5f",
 
-    # Texto
+    # Text
     "text":         "#dadada",
     "muted":        "#808080",
     "dim":          "#585858",
@@ -58,9 +66,9 @@ MONKEYGRAB_THEME = RichTheme({
 })
 
 
-# ─────────────────────────────────────────────────────────────
-# LOGO COMPACTO
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# COMPACT LOGO
+# ─────────────────────────────────────────────
 
 _MONKEY_MINI = r'''
                .-"""-.
@@ -84,16 +92,17 @@ _MONKEY_MINI = r'''
                        `"`'''
 
 
-# ─────────────────────────────────────────────────────────────
-# CLASE DISPLAY — Singleton de salida visual
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# DISPLAY CLASS - Visual Output Singleton
+# ─────────────────────────────────────────────
 
 class Display:
     """
-    Gestor centralizado de la interfaz de terminal de MonkeyGrab.
+    Centralized terminal interface manager for MonkeyGrab.
 
-    Todos los métodos de salida pasan por `self.console` (rich.Console),
-    asegurando cohesión visual y tema consistente.
+    All output methods route through `self.console` (rich.Console),
+    ensuring visual cohesion and a consistent theme across the
+    entire application.
     """
 
     def __init__(self):
@@ -104,12 +113,12 @@ class Display:
         self._status: Optional[Status] = None
         self._debug_mode = os.getenv("MONKEYGRAB_DEBUG", "").lower() in ("1", "true", "yes")
 
-    # ─────────────────────────────────────────────────────────────
-    # LOGO Y PANTALLA DE INICIO
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────
+    # LOGO AND STARTUP SCREEN
+    # ─────────────────────────────────────────────
 
     def logo(self) -> None:
-        """Muestra el logo ASCII del mono de MonkeyGrab."""
+        """Display the MonkeyGrab ASCII monkey logo."""
         self.console.print(_MONKEY_MINI, style="brand")
 
         title = Text("              M O N K E Y G R A B", style="brand")
@@ -118,8 +127,16 @@ class Display:
 
     def init_panel(self, info: Dict[str, Any]) -> None:
         """
-        Muestra panel de inicialización con información del sistema
-        en dos columnas: Modelos y Pipeline.
+        Display the initialization panel with system information.
+
+        Renders a two-column layout showing Models and Pipeline
+        configuration, followed by document and fragment counts.
+
+        Args:
+            info: Dictionary with system configuration keys such as
+                  modelo_rag, modelo_chat, modelo_embedding, extractor,
+                  busqueda, reranker, chunk_size, chunk_overlap,
+                  total_documentos, and total_fragmentos.
         """
         models = Table(show_header=False, box=None, padding=(0, 1), expand=True)
         models.add_column("key", style="dim", width=16)
@@ -161,12 +178,12 @@ class Display:
         self.console.print(f"  {status_line}")
         self.console.print()
 
-    # ─────────────────────────────────────────────────────────────
-    # BIENVENIDA Y AYUDA
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────
+    # WELCOME AND HELP
+    # ─────────────────────────────────────────────
 
     def welcome(self) -> None:
-        """Muestra la pantalla de bienvenida con modos y comandos."""
+        """Display the welcome screen with available modes and commands."""
         self.console.print()
         self.console.print("  [mode.chat]◆[/]  [bold]Modo CHAT[/]  [dim](activo por defecto)[/]")
         self.console.print("     [dim]Conversación libre. Preguntas generales, explicaciones.[/]")
@@ -203,42 +220,54 @@ class Display:
         self.console.print(cmd_table)
         self.console.print()
 
-    # ─────────────────────────────────────────────────────────────
-    # MENSAJES DE ESTADO
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────
+    # STATUS MESSAGES
+    # ─────────────────────────────────────────────
 
     def success(self, msg: str) -> None:
+        """Display a success message with a checkmark icon."""
         self.console.print(f"  [success]✓[/] [muted]{msg}[/]")
 
     def warning(self, msg: str) -> None:
+        """Display a warning message with an exclamation icon."""
         self.console.print(f"  [warning]![/] [muted]{msg}[/]")
 
     def error(self, msg: str) -> None:
+        """Display an error message with a cross icon."""
         self.console.print(f"  [error]✗[/] [muted]{msg}[/]")
 
     def info(self, msg: str) -> None:
+        """Display an informational message."""
         self.console.print(f"  [info]·[/] [dim]{msg}[/]")
 
     def debug(self, msg: str) -> None:
-        """Solo imprime si MONKEYGRAB_DEBUG está activo."""
+        """Print a debug message; only outputs if MONKEYGRAB_DEBUG is enabled."""
         if self._debug_mode:
             self.console.print(f"  [dim]⊡ {msg}[/]")
 
-    # ─────────────────────────────────────────────────────────────
-    # PIPELINE RAG
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────
+    # RAG PIPELINE
+    # ─────────────────────────────────────────────
 
     def pipeline_start(self, message: str = "Buscando en documentos...") -> Status:
         """
-        Inicia un spinner de pipeline. Devuelve el Status para actualizarlo.
+        Start a pipeline spinner and return the Status handle.
 
-        Uso:
-            status = ui.pipeline_start("Buscando...")
-            # ... operación ...
-            status.update("Re-ordenando resultados...")
-            # ... operación ...
+        The caller can update the spinner message and stop it when done.
+
+        Args:
+            message: Initial spinner message to display.
+
+        Returns:
+            A rich.Status object that can be updated or stopped.
+
+        Usage:
+            status = ui.pipeline_start("Searching...")
+            # ... operation ...
+            status.update("Re-ranking results...")
+            # ... operation ...
             status.stop()
-            ui.success("4 fragmentos recuperados")
+            ui.success("4 fragments retrieved")
         """
         self._status = self.console.status(
             f"[info]{message}[/]",
@@ -249,24 +278,37 @@ class Display:
         return self._status
 
     def pipeline_update(self, message: str) -> None:
-        """Actualiza el mensaje del spinner de pipeline activo."""
+        """Update the active pipeline spinner message.
+
+        Args:
+            message: New message to display on the spinner.
+        """
         if self._status:
             self._status.update(f"[info]{message}[/]")
 
     def pipeline_stop(self) -> None:
-        """Detiene el spinner sin mostrar resumen."""
+        """Stop the pipeline spinner without displaying a summary."""
         if self._status:
             self._status.stop()
             self._status = None
 
-    # ─────────────────────────────────────────────────────────────
-    # PROMPT DE ENTRADA
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────
+    # INPUT PROMPT
+    # ─────────────────────────────────────────────
 
     def prompt(self, mode: str, model: str = "") -> str:
         """
-        Construye y muestra el prompt Powerline.
-        Devuelve la cadena del input prompt (línea inferior).
+        Build and display the Powerline-style input prompt.
+
+        Renders a two-line prompt box and returns the bottom-line
+        string to be used with Python's built-in input() function.
+
+        Args:
+            mode: Current interaction mode ('chat' or 'rag').
+            model: Name of the active model.
+
+        Returns:
+            The prompt string for the input line.
         """
         width = self.console.width
         model_short = model.split(":")[0] if model else ""
@@ -298,12 +340,17 @@ class Display:
         dim = "\033[38;5;240m"
         return f"{dim}╰─{reset} {mode_ansi}›{reset} "
 
-    # ─────────────────────────────────────────────────────────────
-    # RESPUESTA — Streaming + Markdown
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────
+    # RESPONSE - Streaming + Markdown
+    # ─────────────────────────────────────────────
 
     def response_header(self, mode: str, model: str = "") -> None:
-        """Muestra header de la respuesta."""
+        """Display the response section header with mode and model info.
+
+        Args:
+            mode: Current mode ('rag' or 'chat').
+            model: Name of the model generating the response.
+        """
         if mode == "rag":
             title = f"RAG [dim]── {model.split(':')[0]}[/]"
             style = "mode.rag"
@@ -315,12 +362,16 @@ class Display:
         self.console.rule(title, style=style)
 
     def stream_token(self, token: str) -> None:
-        """Imprime un token de streaming (sin rich, directo a stdout)."""
+        """Print a streaming token directly to stdout (bypasses rich)."""
         sys.stdout.write(token)
         sys.stdout.flush()
 
     def render_markdown(self, text: str) -> None:
-        """Renderiza texto como Markdown con rich."""
+        """Render text as formatted Markdown using rich.
+
+        Args:
+            text: Raw markdown text to render.
+        """
         self.console.print()
         md = Markdown(text)
         self.console.print(md, width=min(self.console.width - 4, 100))
@@ -328,7 +379,14 @@ class Display:
 
     def sources_panel(self, fragments: List[Dict[str, Any]]) -> None:
         """
-        Muestra las fuentes de la respuesta RAG en un panel discreto.
+        Display RAG response sources in a discrete panel.
+
+        Aggregates fragments by document and lists unique page numbers
+        for each source.
+
+        Args:
+            fragments: List of fragment dicts with metadata containing
+                       'source' and 'page' keys.
         """
         if not fragments:
             return
@@ -359,16 +417,21 @@ class Display:
         self.console.print(panel)
 
     def response_footer(self) -> None:
-        """Separador final de respuesta."""
+        """Display the response end separator."""
         self.console.rule(style="dim")
         self.console.print()
 
-    # ─────────────────────────────────────────────────────────────
-    # STATS, DOCS, TEMAS
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────
+    # STATS, DOCS, TOPICS
+    # ─────────────────────────────────────────────
 
     def stats_table(self, total_fragments: int, docs: List[str]) -> None:
-        """Muestra estadísticas en tabla con bordes redondeados."""
+        """Display database statistics in a table with rounded borders.
+
+        Args:
+            total_fragments: Total number of indexed fragments.
+            docs: List of unique document names.
+        """
         table = Table(
             title="[info]Estadísticas[/]",
             box=box.ROUNDED,
@@ -393,7 +456,11 @@ class Display:
         self.console.print()
 
     def docs_table(self, docs: List[str]) -> None:
-        """Muestra lista de documentos indexados."""
+        """Display the list of indexed documents in a formatted table.
+
+        Args:
+            docs: List of document names to display.
+        """
         if not docs:
             self.warning("No hay documentos indexados.")
             return
@@ -416,7 +483,12 @@ class Display:
         self.console.print()
 
     def topics_display(self, docs_data: List[Dict[str, Any]]) -> None:
-        """Muestra resumen de contenidos/temas."""
+        """Display a summary of available content and topics.
+
+        Args:
+            docs_data: List of dicts with document info including 'name',
+                       'pages', 'fragments', and 'terms' keys.
+        """
         if not docs_data:
             self.warning("No hay documentos indexados.")
             return
@@ -450,24 +522,32 @@ class Display:
         self.console.print("  [dim]Escribe tu pregunta sobre cualquiera de estos temas.[/]")
         self.console.print()
 
-    # ─────────────────────────────────────────────────────────────
-    # CAMBIOS DE MODO / HISTORIAL / MISC
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────
+    # MODE CHANGES / HISTORY / MISC
+    # ─────────────────────────────────────────────
 
     def mode_change(self, mode: str, model: str = "") -> None:
-        """Silenciado a petición del usuario para evitar ruido visual."""
+        """Silenced by design to reduce visual noise."""
         pass
 
     def history_loaded(self, n: int) -> None:
+        """Notify that history messages were loaded (currently silent)."""
         pass
 
     def history_cleared(self) -> None:
+        """Display confirmation that chat history has been cleared."""
         self.success("historial limpiado")
 
     def unknown_command(self, cmd: str) -> None:
+        """Display an unrecognized command warning.
+
+        Args:
+            cmd: The command string that was not recognized.
+        """
         self.warning(f"Comando no reconocido: {cmd} [dim](usa /ayuda para ver los comandos)[/]")
 
     def reindex_start(self) -> None:
+        """Display the start of a re-indexing operation."""
         self.console.print()
         self.console.print("  [warning]⚙[/] [text]Reindexando documentos...[/]")
         self.console.print("     [dim]Se eliminará la base de datos actual y se reconstruirá.[/]")
@@ -475,16 +555,23 @@ class Display:
         self.console.print()
 
     def reindex_complete(self, total: int) -> None:
+        """Display completion of a re-indexing operation.
+
+        Args:
+            total: Total number of fragments indexed.
+        """
         self.success(f"Reindexación completada: {total} fragmentos")
         self.console.print()
         self.warning("Reinicia el programa para usar la nueva base de datos")
 
     def farewell(self) -> None:
+        """Display a farewell message when the session ends."""
         self.console.print()
         self.console.print("  [dim]Hasta luego. Sesión finalizada.[/]")
         self.console.print()
 
     def no_results(self) -> None:
+        """Display a panel indicating no relevant results were found."""
         panel = Panel(
             "[muted]No se encontró información relevante en los documentos.[/]\n\n"
             "[dim]• La información no está en los documentos indexados\n"
@@ -499,6 +586,12 @@ class Display:
         self.console.print(panel)
 
     def out_of_scope(self, score: float, threshold: float) -> None:
+        """Display a warning that the query is out of scope.
+
+        Args:
+            score: The relevance score achieved.
+            threshold: The minimum relevance score required.
+        """
         self.console.print(
             f"  [warning]![/] [muted]Pregunta fuera de ámbito[/]  "
             f"[dim](score: {score:.4f} < umbral: {threshold})[/]"
@@ -506,20 +599,26 @@ class Display:
         self.console.print(f"     [dim]Usa [brand]/temas[/brand] para ver contenidos.[/]")
 
     def question_too_short(self) -> None:
+        """Display a message indicating the question is too short for RAG mode."""
         self.console.print(
             f"  [dim]Pregunta demasiado corta. Formula una pregunta concreta "
             f"o usa [brand]/chat[/brand] para conversar.[/]"
         )
 
-    # ─────────────────────────────────────────────────────────────
-    # MISC
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────
+    # MISCELLANEOUS
+    # ─────────────────────────────────────────────
 
     def no_pdfs(self, folder: str) -> None:
+        """Display a warning that no PDFs were found in the given folder.
+
+        Args:
+            folder: Path to the folder that was checked.
+        """
         self.warning(f"No existe la carpeta de PDFs o está vacía: {folder}")
 
-# ─────────────────────────────────────────────────────────────
-# SINGLETON — Instancia global
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# SINGLETON - Global Instance
+# ─────────────────────────────────────────────
 
 ui = Display()

@@ -1,17 +1,20 @@
 """
-Visualización de comparativa base vs. modelo fine-tuneado
-==========================================================
+Base-vs-fine-tuned model comparison visualization.
 
-Genera gráficas de evaluación a partir de `evaluation_comparison.json` y
-`training_stats.json`, situados en `training-output/<model>/`.
+Generates evaluation charts from ``evaluation_comparison.json`` and
+``training_stats.json`` located in ``training-output/<model>/``.  Three
+figures are produced and saved to ``training-output/<model>/plots/eval/``:
 
-Salida en `training-output/<model>/plots/eval/`:
-  - eval_metrics_by_dataset.png  — 4 métricas × 3 datasets (barras agrupadas)
-  - eval_aggregate.png           — resumen agregado con deltas anotados
-  - eval_sample_pairs.png        — scatter F1 base vs. adaptado por dataset
+  - ``eval_metrics_by_dataset.png``  -- 4 metrics x 3 datasets (grouped bars)
+  - ``eval_aggregate.png``           -- aggregate summary with annotated deltas
+  - ``eval_sample_scatter.png``      -- scatter F1 base vs. adapted per dataset
 
-Uso:
-    python scripts/training/plot_comparison.py [--model qwen-3|llama-3]
+Usage:
+    python scripts/evaluation/plot_comparison.py [--model qwen-3|llama-3|gemma-3]
+
+Dependencies:
+    - matplotlib
+    - numpy
 """
 
 import argparse
@@ -26,13 +29,13 @@ try:
     matplotlib.use("Agg")
     import numpy as np
 except ImportError:
-    print("Instala dependencias: pip install matplotlib numpy")
+    print("Install dependencies: pip install matplotlib numpy")
     sys.exit(1)
 
 
-# =============================================================================
-# SECCIÓN 1: RUTAS
-# =============================================================================
+# ─────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────
 
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT  = os.path.dirname(os.path.dirname(SCRIPT_DIR))
@@ -47,14 +50,14 @@ STATS_FILE      = os.path.join(DATA_DIR, "training_stats.json")
 ADAPTED_LABEL   = MODEL_DISPLAY["qwen-3"]
 
 
-# =============================================================================
-# SECCIÓN 2: PALETA Y ESTILOS
-# =============================================================================
+# ─────────────────────────────────────────────
+# PALETTE AND STYLES
+# ─────────────────────────────────────────────
 
-BASE_COLOR    = "#64748b"   # slate-500 — modelo base
-ADAPT_COLOR   = "#2563eb"   # blue-600  — modelo fine-tuned
-DELTA_COLOR   = "#16a34a"   # green-600 — mejora positiva
-NEG_COLOR     = "#dc2626"   # red-600   — regresión
+BASE_COLOR    = "#64748b"   # slate-500 -- base model
+ADAPT_COLOR   = "#2563eb"   # blue-600  -- fine-tuned model
+DELTA_COLOR   = "#16a34a"   # green-600 -- positive improvement
+NEG_COLOR     = "#dc2626"   # red-600   -- regression
 BG_COLOR      = "#f8fafc"
 
 DATASET_LABELS = {
@@ -66,18 +69,26 @@ DATASET_LABELS = {
 METRIC_LABELS = {
     "Token_F1":                  "Token F1 (%)",
     "Context_Faithfulness_Pct":  "Faithfulness (%)",
-    "Avg_Response_Length_Words": "Longitud media (palabras)",
-    "Sentence_Completeness_Pct": "Completitud frases (%)",
+    "Avg_Response_Length_Words": "Mean length (words)",
+    "Sentence_Completeness_Pct": "Sentence completeness (%)",
 }
 
 
-# =============================================================================
-# SECCIÓN 3: HELPERS
-# =============================================================================
+# ─────────────────────────────────────────────
+# HELPERS
+# ─────────────────────────────────────────────
 
 def load_json(path: str) -> dict:
+    """Load a JSON file and return its contents as a dictionary.
+
+    Args:
+        path: Absolute or relative path to the JSON file.
+
+    Returns:
+        Parsed dictionary from the JSON file.
+    """
     if not os.path.exists(path):
-        print(f"Error: no existe {path}")
+        print(f"Error: file not found {path}")
         sys.exit(1)
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -85,7 +96,17 @@ def load_json(path: str) -> dict:
 
 def annotate_bar(ax, bar, value: float, fmt: str = "{:.1f}", color: str = "black",
                  fontsize: int = 8, offset: float = 0.5) -> None:
-    """Escribe el valor encima de una barra."""
+    """Draw a formatted value label above a single bar.
+
+    Args:
+        ax: Matplotlib axes containing the bar.
+        bar: A single bar rectangle from ``ax.bar()``.
+        value: Numeric value to display.
+        fmt: Format string for the label.
+        color: Text color.
+        fontsize: Font size for the label.
+        offset: Vertical offset above the bar top.
+    """
     ax.text(
         bar.get_x() + bar.get_width() / 2.0,
         bar.get_height() + offset,
@@ -96,6 +117,14 @@ def annotate_bar(ax, bar, value: float, fmt: str = "{:.1f}", color: str = "black
 
 
 def set_common_style(ax, title: str, ylabel: str, ylim: tuple | None = None) -> None:
+    """Apply a consistent visual style to an axes.
+
+    Args:
+        ax: Matplotlib axes to style.
+        title: Axes title text.
+        ylabel: Y-axis label text.
+        ylim: Optional ``(ymin, ymax)`` tuple to set the y-axis range.
+    """
     ax.set_title(title, fontsize=11, fontweight="bold", pad=8)
     ax.set_ylabel(ylabel, fontsize=9)
     ax.grid(axis="y", alpha=0.35, linestyle="--")
@@ -106,14 +135,16 @@ def set_common_style(ax, title: str, ylabel: str, ylim: tuple | None = None) -> 
         ax.set_ylim(*ylim)
 
 
-# =============================================================================
-# SECCIÓN 4: GRÁFICA 1 — Métricas por dataset
-# =============================================================================
+# ─────────────────────────────────────────────
+# FIGURE 1 -- Metrics by dataset
+# ─────────────────────────────────────────────
 
 def plot_metrics_by_dataset(data: dict) -> None:
-    """
-    2×2 grid con barras agrupadas (base vs. adaptado) para cada métrica,
-    desglosadas por dataset + barra Agregado.
+    """Generate a 2x2 grid of grouped bar charts (base vs. fine-tuned) for
+    each metric, broken down by dataset plus an aggregate bar.
+
+    Args:
+        data: Parsed contents of ``evaluation_comparison.json``.
     """
     per_ds   = data["per_dataset"]
     agg      = data["aggregate"]
@@ -121,9 +152,9 @@ def plot_metrics_by_dataset(data: dict) -> None:
 
     metrics = [
         ("Token_F1",                  "Token F1 (%)",             (0, 100)),
-        ("Context_Faithfulness_Pct",  "Faithfulness del contexto (%)", (0, 105)),
-        ("Avg_Response_Length_Words", "Longitud media respuesta (palabras)", None),
-        ("Sentence_Completeness_Pct", "Completitud de frases (%)",   (0, 105)),
+        ("Context_Faithfulness_Pct",  "Context Faithfulness (%)", (0, 105)),
+        ("Avg_Response_Length_Words", "Mean response length (words)", None),
+        ("Sentence_Completeness_Pct", "Sentence completeness (%)",   (0, 105)),
     ]
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
@@ -152,7 +183,7 @@ def plot_metrics_by_dataset(data: dict) -> None:
             base_vals.append(ds_data["base"].get(metric, 0))
             adapt_vals.append(ds_data["adapted"].get(metric, 0))
 
-        # Valor agregado
+        # Aggregate value from precomputed keys or fallback to mean
         b_key, a_key = agg_map[metric]
         if b_key and b_key in agg:
             base_vals.append(agg[b_key])
@@ -181,16 +212,20 @@ def plot_metrics_by_dataset(data: dict) -> None:
     out_path = os.path.join(IMAGES_DIR, "eval_metrics_by_dataset.png")
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close()
-    print(f"eval_metrics_by_dataset.png guardado en: {out_path}")
+    print(f"eval_metrics_by_dataset.png saved to: {out_path}")
 
 
-# =============================================================================
-# SECCIÓN 5: GRÁFICA 2 — Resumen agregado con deltas
-# =============================================================================
+# ─────────────────────────────────────────────
+# FIGURE 2 -- Aggregate summary with deltas
+# ─────────────────────────────────────────────
 
 def plot_aggregate(data: dict, stats: dict) -> None:
-    """
-    Panel de resumen: métricas agregadas + tabla de deltas + contexto training.
+    """Generate a summary panel with aggregate metric bars, a per-dataset
+    delta table, and a training statistics info box.
+
+    Args:
+        data: Parsed contents of ``evaluation_comparison.json``.
+        stats: Parsed contents of ``training_stats.json``.
     """
     agg = data["aggregate"]
 
@@ -199,7 +234,7 @@ def plot_aggregate(data: dict, stats: dict) -> None:
     fig.suptitle(f"Resumen agregado — Modelo base vs. {ADAPTED_LABEL} (600 muestras)",
                  fontsize=13, fontweight="bold")
 
-    # --- Subplot izquierdo: barras Token F1 y Faithfulness ---
+    # --- Left subplot: Token F1 and Faithfulness bars ---
     ax_bars = fig.add_subplot(1, 3, (1, 2))
 
     metrics_agg = [
@@ -224,7 +259,7 @@ def plot_aggregate(data: dict, stats: dict) -> None:
     for bar, val in zip(bars_a, adap_v):
         annotate_bar(ax_bars, bar, val, color=ADAPT_COLOR, offset=0.3, fontsize=9)
 
-    # Anotación delta
+    # Delta annotations between bar pairs
     for xi, (bar_b, bar_a, delta) in enumerate(zip(bars_b, bars_a, delta_v)):
         mid_x   = (bar_b.get_x() + bar_b.get_width() / 2 +
                    bar_a.get_x() + bar_a.get_width() / 2) / 2
@@ -242,7 +277,7 @@ def plot_aggregate(data: dict, stats: dict) -> None:
     ax_bars.legend(fontsize=9)
     set_common_style(ax_bars, "Métricas agregadas (n=600)", "Valor (%)")
 
-    # --- Subplot derecho: tabla de info del entrenamiento ---
+    # --- Right subplot: training info table ---
     ax_info = fig.add_subplot(1, 3, 3)
     ax_info.axis("off")
 
@@ -273,7 +308,7 @@ def plot_aggregate(data: dict, stats: dict) -> None:
     table.set_fontsize(9)
     table.scale(1.1, 1.6)
 
-    # Colorear celdas de deltas
+    # Color delta cells green for improvement, red for regression
     for row_idx in range(1, len(rows) + 1):
         for col_idx in [1, 2]:
             cell  = table[row_idx, col_idx]
@@ -283,15 +318,15 @@ def plot_aggregate(data: dict, stats: dict) -> None:
 
     ax_info.set_title("Δ por dataset", fontsize=10, fontweight="bold", pad=12)
 
-    # Stats box
+    # Training statistics info box
     ev_loss   = stats.get("eval_loss", "N/A")
     ppl       = stats.get("perplexity", "N/A")
     n_steps   = stats.get("total_steps", "N/A")
     ds_size   = stats.get("dataset_size", "N/A")
     info_text = (
-        f"Entrenamiento\n"
+        f"Training\n"
         f"  Steps:      {n_steps}\n"
-        f"  Dataset:    {ds_size} muestras\n"
+        f"  Dataset:    {ds_size} samples\n"
         f"  Eval loss:  {ev_loss:.4f}\n"
         f"  Perplexity: {ppl:.4f}"
     )
@@ -304,18 +339,20 @@ def plot_aggregate(data: dict, stats: dict) -> None:
     out_path = os.path.join(IMAGES_DIR, "eval_aggregate.png")
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close()
-    print(f"eval_aggregate.png guardado en: {out_path}")
+    print(f"eval_aggregate.png saved to: {out_path}")
 
 
-# =============================================================================
-# SECCIÓN 6: GRÁFICA 3 — Scatter F1 base vs. adaptado por dataset
-# =============================================================================
+# ─────────────────────────────────────────────
+# FIGURE 3 -- Scatter F1 base vs. adapted per dataset
+# ─────────────────────────────────────────────
 
 def plot_sample_scatter(data: dict) -> None:
-    """
-    Scatter plot: eje X = F1 base, eje Y = F1 adaptado.
-    Punto por encima de la diagonal → mejora; por debajo → regresión.
-    Un scatter por dataset.
+    """Generate per-dataset scatter plots where X = base F1 and Y = fine-tuned
+    F1.  Points above the diagonal indicate improvement; points below indicate
+    regression.
+
+    Args:
+        data: Parsed contents of ``evaluation_comparison.json``.
     """
     per_ds   = data["per_dataset"]
     datasets = list(DATASET_LABELS.items())
@@ -329,7 +366,7 @@ def plot_sample_scatter(data: dict) -> None:
     for ax, (ds_key, ds_label), color in zip(axes, datasets, ds_colors):
         pairs     = per_ds[ds_key].get("sample_pairs", [])
         if not pairs:
-            ax.text(0.5, 0.5, "Sin muestras", ha="center", va="center",
+            ax.text(0.5, 0.5, "No samples", ha="center", va="center",
                     transform=ax.transAxes, fontsize=10)
             continue
 
@@ -341,12 +378,12 @@ def plot_sample_scatter(data: dict) -> None:
 
         if improved:
             ax.scatter([p[0] for p in improved], [p[1] for p in improved],
-                       color=color, alpha=0.65, s=50, label="Mejora", zorder=3)
+                       color=color, alpha=0.65, s=50, label="Improved", zorder=3)
         if regress:
             ax.scatter([p[0] for p in regress],  [p[1] for p in regress],
-                       color=NEG_COLOR, alpha=0.65, s=50, marker="x", label="Regresión", zorder=3)
+                       color=NEG_COLOR, alpha=0.65, s=50, marker="x", label="Regression", zorder=3)
 
-        # Diagonal de referencia
+        # Reference diagonal (y = x)
         lim = max(max(base_f1 + adap_f1), 0.01)
         ax.plot([0, lim], [0, lim], "--", color="#94a3b8", linewidth=1, zorder=1)
         ax.fill_between([0, lim], [0, lim], [lim, lim],
@@ -364,20 +401,22 @@ def plot_sample_scatter(data: dict) -> None:
     out_path = os.path.join(IMAGES_DIR, "eval_sample_scatter.png")
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close()
-    print(f"eval_sample_scatter.png guardado en: {out_path}")
+    print(f"eval_sample_scatter.png saved to: {out_path}")
 
 
-# =============================================================================
-# SECCIÓN 7: MAIN
-# =============================================================================
+# ─────────────────────────────────────────────
+# MAIN
+# ─────────────────────────────────────────────
 
 def main() -> None:
+    """Parse CLI arguments, load data files, and generate all comparison
+    plots."""
     global DATA_DIR, IMAGES_DIR, COMPARISON_FILE, STATS_FILE, ADAPTED_LABEL
 
-    parser = argparse.ArgumentParser(description="Comparativa base vs. modelo fine-tuned.")
+    parser = argparse.ArgumentParser(description="Base vs. fine-tuned model comparison plots.")
     parser.add_argument(
         "--model", choices=VALID_MODELS, default="qwen-3",
-        help="Modelo a visualizar (default: qwen-3).",
+        help="Model to visualize (default: qwen-3).",
     )
     args = parser.parse_args()
 
@@ -392,16 +431,16 @@ def main() -> None:
     comparison = load_json(COMPARISON_FILE)
     stats      = load_json(STATS_FILE)
 
-    print("Generando eval_metrics_by_dataset.png ...")
+    print("Generating eval_metrics_by_dataset.png ...")
     plot_metrics_by_dataset(comparison)
 
-    print("Generando eval_aggregate.png ...")
+    print("Generating eval_aggregate.png ...")
     plot_aggregate(comparison, stats)
 
-    print("Generando eval_sample_scatter.png ...")
+    print("Generating eval_sample_scatter.png ...")
     plot_sample_scatter(comparison)
 
-    print(f"\nTodas las imágenes guardadas en: {IMAGES_DIR}")
+    print(f"\nAll images saved to: {IMAGES_DIR}")
 
 
 if __name__ == "__main__":

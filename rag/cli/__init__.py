@@ -1,13 +1,12 @@
 """
-MonkeyGrab CLI
-=======================================================
+MonkeyGrab CLI package.
 
-Paquete que encapsula toda la capa de presentación CLI del sistema.
-Usa `rich` para renderizado visual.
+Encapsulates the entire CLI presentation layer of the system.
+Uses `rich` for visual rendering.
 
-Módulos:
-    display  — Clase Display con Rich (singleton `ui`)
-    app      — Bucle principal de comandos y orquestación CLI
+Modules:
+    display  -- Display class with Rich (singleton `ui`)
+    app      -- Main command loop and CLI orchestration
 """
 
 from rag.cli.app import MonkeyGrabCLI

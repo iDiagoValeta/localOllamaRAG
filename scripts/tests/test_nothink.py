@@ -1,3 +1,20 @@
+"""
+Test suite for Ollama no-think mode suppression strategies.
+
+Validates three different approaches to suppress the <think> reasoning
+block in Qwen3-based models served through Ollama: (A) raw prompt with
+a pre-filled empty think block, (B) raw prompt with /no_think user
+directive, and (C) a derived Modelfile with the think parameter toggled.
+Results are summarized showing which strategies successfully suppressed
+reasoning output.
+
+Usage:
+    python scripts/tests/test_nothink.py
+Dependencies:
+    - requests
+    - A running Ollama server with the Qwen3-FineTuned model loaded
+"""
+
 import json, subprocess, tempfile, time
 from pathlib import Path
 import requests
@@ -23,12 +40,14 @@ QWEN3_TEMPLATE = (
 
 
 def sep(label):
+    """Print a visual separator line with a centered label."""
     print(f"\n{'=' * 70}")
     print(f"  {label}")
     print("=" * 70)
 
 
 def stream_generate(payload, timeout=30):
+    """Send a streaming generate request to Ollama and return the full response text."""
     full = ""
     try:
         with requests.post(f"{OLLAMA_BASE_URL}/api/generate",
@@ -50,16 +69,23 @@ def stream_generate(payload, timeout=30):
 
 
 def assess(text):
+    """Evaluate whether the output contains reasoning in a <think> block.
+
+    Returns:
+        A string verdict: 'OK - NO THINK' if no think block is present,
+        'OK - empty think' if the block is empty, or 'FAIL - REASONS' if
+        the model produced reasoning content.
+    """
     if "<think>" not in text:
-        return "OK - SIN THINK"
+        return "OK - NO THINK"
     inner = text[text.find("<think>") + 7:]
     closing = inner.find("</think>")
     if closing != -1 and len(inner[:closing].strip()) == 0:
-        return "OK - think vacio"
-    return "FALLO - RAZONA"
+        return "OK - empty think"
+    return "FAIL - REASONS"
 
 
-sep("A) raw:true + <think></think> pre-rellenado")
+sep("A) raw:true + <think></think> pre-filled")
 prompt_a = (f"<|im_start|>system\n{SYSTEM}<|im_end|>\n"
             f"<|im_start|>user\n{QUESTION}<|im_end|>\n"
             f"<|im_start|>assistant\n<think>\n</think>\n")
@@ -69,7 +95,7 @@ resp_a = stream_generate({"model": MODEL, "prompt": prompt_a, "raw": True,
 print(f"  -> {assess(resp_a)}")
 time.sleep(1)
 
-sep("B) raw:true + /no_think en usuario")
+sep("B) raw:true + /no_think in user message")
 prompt_b = (f"<|im_start|>system\n{SYSTEM}<|im_end|>\n"
             f"<|im_start|>user\n/no_think\n{QUESTION}<|im_end|>\n"
             f"<|im_start|>assistant\n")
@@ -79,7 +105,7 @@ resp_b = stream_generate({"model": MODEL, "prompt": prompt_b, "raw": True,
 print(f"  -> {assess(resp_b)}")
 time.sleep(1)
 
-sep("C) Modelfile derivado con plantilla Qwen3 nativa")
+sep("C) Derived Modelfile with native Qwen3 template")
 with tempfile.NamedTemporaryFile(mode="w", suffix=".Modelfile",
                                   delete=False, encoding="utf-8") as f:
     f.write("FROM Qwen3-FineTuned:latest\n\n")
@@ -96,25 +122,25 @@ resp_c_no = resp_c_yes = ""
 if res.returncode != 0:
     print(f"ERROR: {res.stderr}")
 else:
-    print("OK. Probando think:false ...")
+    print("OK. Testing think:false ...")
     resp_c_no = stream_generate({"model": MODEL_TEST, "system": SYSTEM,
         "prompt": QUESTION, "stream": True, "think": False,
         "options": {"temperature": 0.1, "num_ctx": 2048}})
     print(f"  -> {assess(resp_c_no)}")
     time.sleep(1)
-    print("Probando think:true ...")
+    print("Testing think:true ...")
     resp_c_yes = stream_generate({"model": MODEL_TEST, "system": SYSTEM,
         "prompt": QUESTION, "stream": True, "think": True,
         "options": {"temperature": 0.1, "num_ctx": 2048}})
     print(f"  -> {assess(resp_c_yes)}")
     subprocess.run(["ollama", "rm", MODEL_TEST], capture_output=True)
-    print("Modelo temporal eliminado.")
+    print("Temporary model deleted.")
 Path(mf_path).unlink(missing_ok=True)
 
 print("\n" + "=" * 70)
-print("  RESUMEN")
+print("  SUMMARY")
 print("=" * 70)
-for lbl, r in [("A raw+think_vacio", resp_a), ("B raw+no_think", resp_b),
+for lbl, r in [("A raw+empty_think", resp_a), ("B raw+no_think", resp_b),
                ("C modelfile think:false", resp_c_no),
                ("C modelfile think:true", resp_c_yes)]:
     print(f"  {assess(r):25s}  {lbl}")

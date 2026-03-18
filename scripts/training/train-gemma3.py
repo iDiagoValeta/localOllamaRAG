@@ -1,72 +1,74 @@
 """
-train-gemma3.py — Fine-tuning LoRA de Gemma-3-12B-IT para RAG (TFG) — v1.0
-=============================================================================
+LoRA fine-tuning of Gemma-3-12B-IT for RAG (v1.0).
 
-Pipeline de entrenamiento y evaluación comparativa en 5 etapas:
-  1. Cargar modelo base google/gemma-3-12b-it.
-  2. Evaluar el modelo base sobre un test set congelado (baseline).
-  3. Aplicar adaptador LoRA y fine-tunear sobre 3 datasets RAG nativos.
-  4. Evaluar el modelo adaptado sobre el MISMO test set.
-  5. Generar resumen comparativo con métricas específicas de RAG.
+Five-stage training and comparative evaluation pipeline:
+  1. Load base model google/gemma-3-12b-it.
+  2. Evaluate the base model on a frozen test set (baseline).
+  3. Apply LoRA adapter and fine-tune on 3 native RAG datasets.
+  4. Evaluate the adapted model on the SAME test set.
+  5. Generate a comparative summary with RAG-specific metrics.
 
-Objetivo: asistente de Q&A documental con adherencia estricta al contexto
-recuperado. Responde en el idioma del contexto (EN, ES o CA).
+Goal: document Q&A assistant with strict adherence to the retrieved context.
+Responds in the language of the context (EN, ES, or CA).
 
-Diferencias respecto a train-llama3.1.py (Llama-3.1-8B-Instruct):
-  - Modelo:         google/gemma-3-12b-it (gated — requiere HF_TOKEN).
-  - Chat template:  apply_chat_template estándar de Gemma.
-                    EOS de generación: <end_of_turn> + eos_token_id.
-                    Terminador de respuesta en tokenización: <end_of_turn>.
-  - LoRA:           r=32, alpha=64 (mismos que Llama-3.1).
+Differences from train-llama3.1.py (Llama-3.1-8B-Instruct):
+  - Model:         google/gemma-3-12b-it (gated -- requires HF_TOKEN).
+  - Chat template:  apply_chat_template standard for Gemma.
+                    Generation EOS: <end_of_turn> + eos_token_id.
+                    Response terminator in tokenization: <end_of_turn>.
+  - LoRA:           r=32, alpha=64 (same as Llama-3.1).
   - Output dir:     training-output-gemma.
   - Checkpoints:    save_total_limit=2.
-  - Early stopping: patience=2 evaluaciones.
+  - Early stopping: patience=2 evaluations.
 
-Uso:
+Usage:
     python train-gemma3.py
+
+Dependencies:
+    - torch, transformers, peft, datasets, tqdm
 """
 
-# =============================================================================
-# MAPA DEL MÓDULO — Índice de secciones
-# =============================================================================
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
 #
-#  CONFIGURACIÓN
-#  |-- 1. Entorno y constantes   variables de entorno CUDA, limites de tokens
-#  |        1.1 Tamaños de dataset   caps de train/val por fuente
-#  |        1.2 System prompt        alineado con SYSTEM_PROMPT_RAG de chat_pdfs
-#  `-- 2. Carga del modelo base  AutoModelForCausalLM + tokenizador Gemma-3-12B
+#  CONFIGURATION
+#  |-- 1. Environment and constants   CUDA env vars, token limits
+#  |        1.1 Dataset sizes            train/val caps per source
+#  |        1.2 System prompt            aligned with SYSTEM_PROMPT_RAG from chat_pdfs
+#  `-- 2. Base model loading          AutoModelForCausalLM + Gemma-3-12B tokenizer
 #
-#  EVALUACIÓN Y MÉTRICAS
-#  `-- 3. Métricas e inferencia
-#           3.1 Normalización de texto   (EN/ES/CA, sin artículos ni puntuación)
-#           3.2 Token F1                 overlap con gold answer (SQuAD-estándar)
-#           3.3 Context Faithfulness     métrica primaria del TFG
-#           3.4 Generación              apply_chat_template estándar de Gemma
-#           3.5 Bucle de evaluación     loop sobre eval_datasets congelado
+#  EVALUATION AND METRICS
+#  `-- 3. Metrics and inference
+#           3.1 Text normalization       (EN/ES/CA, strip articles and punctuation)
+#           3.2 Token F1                 overlap with gold answer (SQuAD-standard)
+#           3.3 Context Faithfulness     primary metric for the thesis
+#           3.4 Generation              apply_chat_template standard for Gemma
+#           3.5 Evaluation loop         loop over frozen eval_datasets
 #
-#  DATOS
-#  `-- 4. Carga de datasets
-#           4.1 Normalizadores          mapeo de esquemas -> instruction/context/response
-#           4.2 Filtros compartidos     valid, long_response, dolly_rag
-#           4.3 Neural-Bridge RAG       9 600 train / 2 400 test
-#           4.4 Dolly QA                15 000 -> filtrado RAG -> split 80/10/10
-#           4.5 Aina RAG Multilingual   42 300 train / 8 460 val / 5 640 test
-#           4.6 Conjunto de train       interleaving round-robin proporcional
-#           4.7 Conjunto de validación  Trainer (loss monitoring / early stopping)
-#           4.8 Test set congelado      FROZEN — mismo para BASE y ADAPTADO
+#  DATA
+#  `-- 4. Dataset loading
+#           4.1 Normalizers              schema mapping -> instruction/context/response
+#           4.2 Shared filters           valid, long_response, dolly_rag
+#           4.3 Neural-Bridge RAG        9 600 train / 2 400 test
+#           4.4 Dolly QA                 15 000 -> RAG filtered -> split 80/10/10
+#           4.5 Aina RAG Multilingual    42 300 train / 8 460 val / 5 640 test
+#           4.6 Training set             proportional round-robin interleaving
+#           4.7 Validation set           Trainer (loss monitoring / early stopping)
+#           4.8 Frozen test set          FROZEN -- same for BASE and ADAPTED
 #
 #  PIPELINE
-#  |-- 5. Evaluación modelo base    baseline pre-entrenamiento
-#  |-- 6. Adaptador LoRA            r=32, alpha=64, 7 módulos target
-#  |-- 7. Tokenización              Gemma chat template + máscara de pérdida en prompt
-#  |-- 8. Configuración Trainer     hiperparámetros, early stopping, checkpoints
-#  |-- 9. Bucle de entrenamiento    Trainer.train()
-#  |--10. Exportación del modelo    save_pretrained (mejor checkpoint)
-#  |--11. Evaluación adaptado       mismo test set congelado que sección 5
-#  |--12. Resumen comparativo       deltas por dataset + agregado ponderado
-#  `--13. Guardado de artefactos    training_stats.json, evaluation_comparison.json
+#  |-- 5. Base model evaluation     pre-training baseline
+#  |-- 6. LoRA adapter              r=32, alpha=64, 7 target modules
+#  |-- 7. Tokenization              Gemma chat template + prompt loss masking
+#  |-- 8. Training configuration    hyperparameters, early stopping, checkpoints
+#  |-- 9. Training loop             Trainer.train()
+#  |--10. Model export              save_pretrained (best checkpoint)
+#  |--11. Adapted model evaluation  same frozen test set as Section 5
+#  |--12. Comparative summary       deltas per dataset + weighted aggregate
+#  `--13. Artifact export           training_stats.json, evaluation_comparison.json
 #
-# =============================================================================
+# ─────────────────────────────────────────────
 
 import gc
 import os
@@ -88,19 +90,19 @@ from transformers import (
 )
 
 
-# =============================================================================
-# SECCIÓN 1: ENTORNO Y CONSTANTES
-# =============================================================================
-# Variables de entorno CUDA, rutas de salida, caps de dataset y system prompt.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 1: ENVIRONMENT AND CONSTANTS
+# ─────────────────────────────────────────────
+# CUDA environment variables, output paths, dataset caps, and system prompt.
+# ─────────────────────────────────────────────
 
-# google/gemma-3-12b-it es un modelo gated en HuggingFace; requiere autenticación.
+# google/gemma-3-12b-it is a gated model on HuggingFace; requires authentication.
 if not os.environ.get("HF_TOKEN") and not os.path.exists(
     os.path.expanduser("~/.cache/huggingface/token")
 ):
-    print("WARNING: HF_TOKEN no está configurado en el entorno.")
-    print("google/gemma-3-12b-it es un Gated Repo.")
-    print("Ejecuta 'huggingface-cli login' o exporta HF_TOKEN antes de continuar.\n")
+    print("WARNING: HF_TOKEN is not configured in the environment.")
+    print("google/gemma-3-12b-it is a Gated Repo.")
+    print("Run 'huggingface-cli login' or export HF_TOKEN before continuing.\n")
 
 os.environ["TORCH_COMPILE_DISABLE"] = "1"
 os.environ["TORCH_DYNAMO_DISABLE"] = "1"
@@ -144,14 +146,14 @@ SYSTEM_PROMPT = (
 )
 
 
-# =============================================================================
-# SECCIÓN 2: CARGA DEL MODELO BASE
-# =============================================================================
-# AutoModelForCausalLM en bfloat16 con device_map="auto" + SDPA attention.
-# Gemma-3-12B-IT requiere trust_remote_code=True para el tokenizador.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 2: BASE MODEL LOADING
+# ─────────────────────────────────────────────
+# AutoModelForCausalLM in bfloat16 with device_map="auto" + SDPA attention.
+# Gemma-3-12B-IT requires trust_remote_code=True for the tokenizer.
+# ─────────────────────────────────────────────
 
-print(f"\n--> [2] Cargando modelo base: {model_name}")
+print(f"\n--> [2] Loading base model: {model_name}")
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
     torch_dtype=torch.bfloat16,
@@ -166,31 +168,38 @@ tokenizer.padding_side = "right"
 print("--> Base model loaded.")
 
 
-# =============================================================================
-# SECCIÓN 3: MÉTRICAS E INFERENCIA
-# =============================================================================
-# Cuatro métricas RAG sin dependencias externas.
+# ─────────────────────────────────────────────
+# SECTION 3: METRICS AND INFERENCE
+# ─────────────────────────────────────────────
+# Four RAG metrics with no external dependencies.
 #
-# Primaria (evidencia principal del TFG):
-#   Context Faithfulness — % de tipos de token de la respuesta que aparecen
-#     en el contexto. Incremento post-fine-tuning demuestra que el modelo
-#     sintetiza desde el documento en lugar de usar conocimiento previo.
+# Primary (main evidence for the thesis):
+#   Context Faithfulness -- % of response word-types that also appear
+#     in the context. Post-fine-tuning increase demonstrates the model
+#     synthesizes from the document rather than using prior knowledge.
 #
-# Secundarias:
-#   Token F1              — overlap con gold answer, estándar SQuAD.
-#   Avg Response Length   — detecta cambios de verbosidad.
-#   Sentence Completeness — detecta respuestas fragmentadas (span-copying).
+# Secondary:
+#   Token F1              -- overlap with gold answer, SQuAD-standard.
+#   Avg Response Length   -- detects verbosity changes.
+#   Sentence Completeness -- detects fragmented responses (span-copying).
 #
-# Nota Gemma: Gemma-3 usa el chat template estándar sin enable_thinking.
-# El token de fin de turno es <end_of_turn> (id 107); el EOS nativo (<eos>,
-# id 1) también se usa como señal de parada en generate().
-# =============================================================================
+# Gemma note: Gemma-3 uses the standard chat template without enable_thinking.
+# The end-of-turn token is <end_of_turn> (id 107); the native EOS (<eos>,
+# id 1) is also used as a stop signal in generate().
+# ─────────────────────────────────────────────
 
 DOLLY_RAG_CATEGORIES = {"closed_qa", "information_extraction", "summarization"}
 
 
 def normalize_text(text: str) -> str:
-    """Lowercase, strip articles (EN/ES/CA) and punctuation."""
+    """Lowercase, strip articles (EN/ES/CA) and punctuation.
+
+    Args:
+        text: Raw text string to normalize.
+
+    Returns:
+        Cleaned, lowercased text with articles and punctuation removed.
+    """
     text = str(text).lower()
     text = re.sub(
         r'\b(a|an|the|el|la|los|las|un|una|unos|unas|les|els|uns|unes)\b',
@@ -201,7 +210,15 @@ def normalize_text(text: str) -> str:
 
 
 def compute_f1(prediction: str, ground_truth: str) -> float:
-    """Token-level F1 (SQuAD-standard)."""
+    """Compute token-level F1 score (SQuAD-standard).
+
+    Args:
+        prediction: Model-generated answer.
+        ground_truth: Reference answer.
+
+    Returns:
+        F1 score between 0.0 and 1.0.
+    """
     pred_tok  = normalize_text(prediction).split()
     truth_tok = normalize_text(ground_truth).split()
     if not pred_tok or not truth_tok:
@@ -216,18 +233,24 @@ def compute_f1(prediction: str, ground_truth: str) -> float:
 
 
 def compute_context_faithfulness(prediction: str, context: str) -> float:
-    """
-    Context Faithfulness: fraction of unique prediction word-types that
-    also appear in the context.
+    """Compute Context Faithfulness: fraction of unique prediction word-types
+    that also appear in the context.
 
     Interpretation:
-        > 0.70  Strongly grounded — almost all content comes from context.
+        > 0.70  Strongly grounded -- almost all content comes from context.
         0.50-0.70  Adequately grounded.
         < 0.50  Possible hallucination or excessive prior-knowledge use.
 
-    Expected behaviour:
+    Expected behavior:
         BASE model:    lower score (uses world knowledge freely).
         ADAPTED model: higher score (learned to stay in context).
+
+    Args:
+        prediction: Model-generated answer.
+        context: Source context provided to the model.
+
+    Returns:
+        Faithfulness ratio between 0.0 and 1.0.
     """
     pred_types = set(normalize_text(prediction).split())
     ctx_types  = set(normalize_text(context).split())
@@ -240,13 +263,23 @@ def generate_response(
     model, tokenizer, instruction: str, context: str,
     max_new_tokens: int = MAX_NEW_TOKENS,
 ) -> str:
-    """
-    Inference using the same prompt format as training.
+    """Run inference using the same prompt format as training.
+
     Context is truncated to MAX_CONTEXT_TOKENS (mirrors format_and_tokenize).
 
     Gemma-3 specifics:
-      - EOS tokens: <end_of_turn> (107, fin de turno) y eos_token_id
-        (<eos>, 1). Se pasan ambos a generate() para cobertura completa.
+      - EOS tokens: <end_of_turn> (107, end of turn) and eos_token_id
+        (<eos>, 1). Both are passed to generate() for full coverage.
+
+    Args:
+        model: The causal LM (base or adapted).
+        tokenizer: Corresponding tokenizer.
+        instruction: User question.
+        context: Document context for grounding.
+        max_new_tokens: Maximum tokens to generate.
+
+    Returns:
+        Generated response string.
     """
     ctx = (context or "").strip()
     if ctx:
@@ -266,7 +299,7 @@ def generate_response(
     )
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
-    # Gemma 3: parar en <end_of_turn> (fin de turno) O en eos_token_id
+    # Gemma 3: stop at <end_of_turn> (end of turn) OR at eos_token_id
     eot_id = tokenizer.encode("<end_of_turn>", add_special_tokens=False)[-1]
     eos_ids = list({tokenizer.eos_token_id, eot_id})
 
@@ -285,16 +318,28 @@ def generate_response(
 
 
 def evaluate_on_datasets(model, tokenizer, eval_datasets: dict, label: str = "MODEL") -> tuple:
-    """
-    Evaluate a model on the provided eval_datasets dict.
+    """Evaluate a model on the provided eval_datasets dict.
 
     IMPORTANT: eval_datasets must be the same frozen object for BASE and
     ADAPTED evaluations so that both models answer identical questions on
-    identical contexts. This is enforced by the caller — see Section 5 and 11.
+    identical contexts. This is enforced by the caller -- see Section 5 and 11.
+
+    Args:
+        model: The causal LM to evaluate.
+        tokenizer: Corresponding tokenizer.
+        eval_datasets: Dict mapping dataset name to HF Dataset.
+        label: Display label for progress bars (e.g. "BASE", "ADAPTED").
 
     Returns:
-        all_metrics  dict[ds_name → metric dict]
-        all_results  dict[ds_name → list of per-sample dicts]
+        Tuple of (all_metrics, all_results) where:
+            all_metrics: dict[ds_name -> metric dict]
+            all_results: dict[ds_name -> list of per-sample dicts]
+
+    Metrics per dataset:
+        Token_F1                    answer relevance vs gold (%)
+        Context_Faithfulness_Pct    grounding in provided context (%)
+        Avg_Response_Length_Words   mean word count
+        Sentence_Completeness_Pct  % responses ending with . ! ?
     """
     all_metrics = {}
     all_results = {}
@@ -359,25 +404,32 @@ def evaluate_on_datasets(model, tokenizer, eval_datasets: dict, label: str = "MO
     return all_metrics, all_results
 
 
-# =============================================================================
-# SECCIÓN 4: CARGA DE DATASETS
-# =============================================================================
-# Uso de splits:
-#   train -> SFT (interleaving round-robin proporcional)
-#   val   -> eval_dataset del Trainer (loss monitoring / early stopping)
-#   test  -> set congelado, cargado UNA vez, compartido por BASE y ADAPTADO
+# ─────────────────────────────────────────────
+# SECTION 4: DATASET LOADING
+# ─────────────────────────────────────────────
+# Split usage:
+#   train -> SFT (proportional round-robin interleaving)
+#   val   -> Trainer eval_dataset (loss monitoring / early stopping)
+#   test  -> frozen set, loaded ONCE, shared by BASE and ADAPTED
 #
-# Esquemas normalizados a: instruction | context | response
+# Schemas normalized to: instruction | context | response
 #   Neural-Bridge: context | question | answer
 #   Dolly:         instruction | context | response | category
 #   Aina:          instruction | context | response
-# =============================================================================
+# ─────────────────────────────────────────────
 
-print("\n--> [4] Cargando datasets...")
+print("\n--> [4] Loading datasets...")
 
 
 def _normalize_nb(example):
-    """Neural-Bridge: question→instruction, context, answer→response."""
+    """Normalize Neural-Bridge schema: question->instruction, answer->response.
+
+    Args:
+        example: Raw dataset row with question/context/answer fields.
+
+    Returns:
+        Dict with instruction/context/response keys.
+    """
     return {
         "instruction": (example.get("question") or "").strip(),
         "context":     (example.get("context")  or "").strip(),
@@ -386,10 +438,16 @@ def _normalize_nb(example):
 
 
 def _normalize_dolly(example):
-    """
-    Dolly: instruction, context, response.
+    """Normalize Dolly schema: instruction, context, response.
+
     Only RAG-relevant categories with non-empty context are kept.
-    Filtering happens AFTER normalisation via _filter_dolly_rag.
+    Filtering happens AFTER normalization via _filter_dolly_rag.
+
+    Args:
+        example: Raw dataset row with instruction/context/response/category fields.
+
+    Returns:
+        Dict with instruction/context/response/category keys.
     """
     return {
         "instruction": (example.get("instruction") or "").strip(),
@@ -400,10 +458,17 @@ def _normalize_dolly(example):
 
 
 def _normalize_aina(example):
-    """
-    Aina RAG Multilingual actual columns (verified from HuggingFace):
+    """Normalize Aina RAG Multilingual schema.
+
+    Actual columns (verified from HuggingFace):
       id | instruction | context | response | category | lang | extractive
     Maps directly to instruction/context/response (same schema as Dolly).
+
+    Args:
+        example: Raw dataset row.
+
+    Returns:
+        Dict with instruction/context/response keys.
     """
     return {
         "instruction": (example.get("instruction") or "").strip(),
@@ -421,12 +486,27 @@ def _filter_valid(ex):
 
 
 def _filter_long_response(ex, min_words: int = 15):
-    """Keep only responses with at least min_words words."""
+    """Keep only responses with at least min_words words.
+
+    Args:
+        ex: Dataset example with a 'response' field.
+        min_words: Minimum word count threshold.
+
+    Returns:
+        True if the response meets the minimum length.
+    """
     return len(ex["response"].split()) >= min_words
 
 
 def _filter_dolly_rag(ex):
-    """Keep only Dolly rows that are RAG-relevant (non-empty context + correct category)."""
+    """Keep only Dolly rows that are RAG-relevant (non-empty context + correct category).
+
+    Args:
+        ex: Dataset example with 'category' and 'context' fields.
+
+    Returns:
+        True if the row belongs to a RAG-relevant category with context.
+    """
     return (
         ex["category"] in DOLLY_RAG_CATEGORIES
         and bool(ex["context"].strip())
@@ -540,15 +620,15 @@ train_loaders = [
 ]
 
 
-# =============================================================================
-# SECCIÓN 5: EVALUACIÓN DEL MODELO BASE (baseline pre-entrenamiento)
-# =============================================================================
-# eval_datasets NO se modifica aquí. Se reutiliza tal cual en la sección 11.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 5: BASE MODEL EVALUATION
+# ─────────────────────────────────────────────
+# eval_datasets is NOT modified here. It is reused as-is in Section 11.
+# ─────────────────────────────────────────────
 
 print("\n" + "=" * 70)
-print("--> [5] Evaluando modelo BASE (baseline pre-entrenamiento)")
-print("    (Mismo test set congelado que se usará en la sección 11)")
+print("--> [5] Evaluating BASE model (pre-training baseline)")
+print("    (Same frozen test set that will be used in Section 11)")
 print("=" * 70)
 
 base_metrics, base_results = evaluate_on_datasets(
@@ -572,15 +652,15 @@ torch.cuda.empty_cache()
 print("--> GPU cache cleared after base evaluation.")
 
 
-# =============================================================================
-# SECCIÓN 6: ADAPTADOR LoRA
-# =============================================================================
-# r=32, alpha=64 (mismos que Llama-3.1-8B).
-# Dropout=0.05. Target: q/k/v/o_proj + gate/up/down_proj.
-# Gemma-3-12B usa las mismas nomenclaturas de módulos que Llama y Qwen.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 6: LoRA ADAPTER
+# ─────────────────────────────────────────────
+# r=32, alpha=64 (same as Llama-3.1-8B). dropout=0.05.
+# Target: q/k/v/o_proj + gate/up/down_proj.
+# Gemma-3-12B uses the same module naming conventions as Llama and Qwen.
+# ─────────────────────────────────────────────
 
-print("\n--> [6] Aplicando adaptador LoRA...")
+print("\n--> [6] Applying LoRA adapter...")
 model.gradient_checkpointing_enable()
 
 peft_config = LoraConfig(
@@ -597,23 +677,31 @@ print("--> LoRA adapter applied.")
 model.print_trainable_parameters()
 
 
-# =============================================================================
-# SECCIÓN 7: TOKENIZACIÓN Y FORMATO DE PROMPT
-# =============================================================================
-# Formato Gemma 3 via apply_chat_template estándar.
-# Mensaje usuario: f"{SYSTEM_PROMPT}\n\n{instruction}\n\n<context>{ctx}</context>"
-#   - Gemma 3 no soporta el rol "system" de forma nativa; el system prompt
-#     se integra en el primer turno de usuario.
-# Terminador de respuesta: <end_of_turn> (token de fin de turno de Gemma).
-# Pérdida enmascarada en tokens del prompt (-100): solo aprende la respuesta.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 7: TOKENIZATION AND FORMATTING
+# ─────────────────────────────────────────────
+# Gemma 3 format via standard apply_chat_template.
+# User message: f"{SYSTEM_PROMPT}\n\n{instruction}\n\n<context>{ctx}</context>"
+#   - Gemma 3 does not natively support the "system" role; the system prompt
+#     is integrated into the first user turn.
+# Response terminator: <end_of_turn> (Gemma end-of-turn token).
+# Loss masked on prompt tokens (-100): only the response is learned.
+# ─────────────────────────────────────────────
 
 def format_and_tokenize(examples):
+    """Tokenize examples into Gemma chat format with prompt loss masking.
+
+    Args:
+        examples: Batch dict with instruction/context/response lists.
+
+    Returns:
+        Dict with input_ids, labels, and attention_mask lists.
+    """
     all_input_ids    = []
     all_labels       = []
     all_attention    = []
 
-    # <end_of_turn> — token de fin de turno en Gemma 3
+    # <end_of_turn> -- end-of-turn token in Gemma 3
     eot_id = tokenizer.encode("<end_of_turn>", add_special_tokens=False)[-1:]
 
     for instruction, context, response in zip(
@@ -669,7 +757,7 @@ def format_and_tokenize(examples):
     }
 
 
-print("\n--> [7] Tokenizando datasets...")
+print("\n--> [7] Tokenizing datasets...")
 tokenized_train = dataset.map(
     format_and_tokenize, batched=True, batch_size=1000,
     remove_columns=dataset.column_names, desc="Tokenising train",
@@ -683,14 +771,14 @@ tokenized_eval = eval_dataset_raw.map(
 print(f"--> Train: {len(tokenized_train)} | Val: {len(tokenized_eval)} tokenised samples")
 
 
-# =============================================================================
-# SECCIÓN 8: CONFIGURACIÓN DEL ENTRENAMIENTO
-# =============================================================================
-# LR 5e-5 cosine. Batch efectivo 16.
+# ─────────────────────────────────────────────
+# SECTION 8: TRAINING CONFIGURATION
+# ─────────────────────────────────────────────
+# LR 5e-5 cosine. Effective batch 16.
 # save_total_limit=2.
-# EarlyStoppingCallback(patience=2): evita sobreajuste en modelo de 12B.
-# load_best_model_at_end=True: exporta el checkpoint con menor eval_loss.
-# =============================================================================
+# EarlyStoppingCallback(patience=2): prevents overfitting on 12B model.
+# load_best_model_at_end=True: exports the checkpoint with lowest eval_loss.
+# ─────────────────────────────────────────────
 
 data_collator = DataCollatorForSeq2Seq(
     tokenizer=tokenizer, padding=True, pad_to_multiple_of=8,
@@ -727,7 +815,7 @@ training_args = TrainingArguments(
     remove_unused_columns=False,
 )
 
-print("\n--> [8] Inicializando Trainer...")
+print("\n--> [8] Initializing Trainer...")
 trainer = Trainer(
     model=model,
     args=training_args,
@@ -739,39 +827,39 @@ trainer = Trainer(
 )
 
 
-# =============================================================================
-# SECCIÓN 9: BUCLE DE ENTRENAMIENTO
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 9: TRAINING LOOP
+# ─────────────────────────────────────────────
 
-print("\n--> [9] Iniciando entrenamiento...")
+print("\n--> [9] Starting training...")
 print(f"    Epochs:            {training_args.num_train_epochs}")
-print(f"    Batch efectivo:    {training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps}")
+print(f"    Effective batch:   {training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps}")
 print(f"    LR:                {training_args.learning_rate}  (cosine, patience=2)")
-print(f"    Mejor checkpoint:  load_best_model_at_end=True")
+print(f"    Best checkpoint:   load_best_model_at_end=True")
 trainer.train()
 
 
-# =============================================================================
-# SECCIÓN 10: EXPORTACIÓN DEL MODELO
-# =============================================================================
-# Se guarda el checkpoint de menor eval_loss (no el último paso).
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 10: MODEL EXPORT
+# ─────────────────────────────────────────────
+# Saves the checkpoint with lowest eval_loss (not the last step).
+# ─────────────────────────────────────────────
 
-print(f"\n--> [10] Guardando modelo adaptado en {output_dir}")
+print(f"\n--> [10] Saving adapted model to {output_dir}")
 model.save_pretrained(output_dir)
 tokenizer.save_pretrained(output_dir)
 print("--> Adapter + tokenizer saved.")
 
 
-# =============================================================================
-# SECCIÓN 11: EVALUACIÓN DEL MODELO ADAPTADO
-# =============================================================================
-# Mismo dict congelado que la sección 5 -> comparación objetiva BASE vs ADAPTADO.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 11: ADAPTED MODEL EVALUATION
+# ─────────────────────────────────────────────
+# Same frozen dict as Section 5 -> objective BASE vs ADAPTED comparison.
+# ─────────────────────────────────────────────
 
 print("\n" + "=" * 70)
-print("--> [11] Evaluando modelo ADAPTADO")
-print("    (Mismo test set congelado que la sección 5)")
+print("--> [11] Evaluating ADAPTED model")
+print("    (Same frozen test set as Section 5)")
 print("=" * 70)
 
 model.gradient_checkpointing_disable()
@@ -781,14 +869,14 @@ adapted_metrics, adapted_results = evaluate_on_datasets(
 )
 
 
-# =============================================================================
-# SECCIÓN 12: RESUMEN COMPARATIVO BASE vs ADAPTADO
-# =============================================================================
-# Deltas por dataset + agregado ponderado por número de muestras.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 12: COMPARATIVE SUMMARY
+# ─────────────────────────────────────────────
+# Deltas per dataset + weighted aggregate by sample count.
+# ─────────────────────────────────────────────
 
 print("\n" + "=" * 70)
-print("RESUMEN COMPARATIVO: BASE vs ADAPTADO")
+print("COMPARATIVE SUMMARY: BASE vs ADAPTED")
 print("=" * 70)
 
 METRIC_KEYS = [
@@ -855,20 +943,20 @@ if agg_n > 0:
     }
 
     print(f"\n{'=' * 70}")
-    print(f"AGREGADO PONDERADO ({agg_n} muestras — mismas preguntas para ambos modelos)")
-    print(f"  Token F1:             Base={agg_b_f1:.2f}%  → Adapted={agg_a_f1:.2f}%"
+    print(f"WEIGHTED AGGREGATE ({agg_n} samples -- same questions for both models)")
+    print(f"  Token F1:            Base={agg_b_f1:.2f}%  -> Adapted={agg_a_f1:.2f}%"
           f"   Δ={agg_a_f1 - agg_b_f1:+.2f}pp")
-    print(f"  Context Faithfulness: Base={agg_b_faith:.2f}%  → Adapted={agg_a_faith:.2f}%"
+    print(f"  Context Faithfulness: Base={agg_b_faith:.2f}%  -> Adapted={agg_a_faith:.2f}%"
           f"   Δ={agg_a_faith - agg_b_faith:+.2f}pp")
     print(f"{'=' * 70}")
 
 
-# =============================================================================
-# SECCIÓN 13: GUARDADO DE ARTEFACTOS
-# =============================================================================
-# training_stats.json        — resumen completo + log_history + muestras
-# evaluation_comparison.json — deltas por dataset + pares base/adaptado
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 13: ARTIFACT EXPORT
+# ─────────────────────────────────────────────
+# training_stats.json        -- full summary + log_history + samples
+# evaluation_comparison.json -- deltas per dataset + base/adapted pairs
+# ─────────────────────────────────────────────
 
 training_summary = {
     "model_name":       model_name,
@@ -883,7 +971,7 @@ training_summary = {
     "log_history":      trainer.state.log_history,
 }
 
-print("\n--> Calculando eval loss final...")
+print("\n--> Computing final eval loss...")
 try:
     ev = trainer.evaluate()
     if "eval_loss" in ev:
@@ -895,7 +983,7 @@ except Exception as e:
     print(f"    Warning: final eval failed: {e}")
 
 
-print("\n--> Generando muestras cualitativas de producción...")
+print("\n--> Generating qualitative production samples...")
 test_prompts = [
     {
         "instruction": "Why is the scaling factor (1/√dk) applied in Scaled Dot-Product Attention?",
@@ -910,7 +998,7 @@ test_prompts = [
             "extremely small gradients. To counteract this effect, we scale the dot products "
             "by 1/√dk."
         ),
-        "description": "[EN] Technical RAG — analytical answer expected",
+        "description": "[EN] Technical RAG -- analytical answer expected",
     },
     {
         "instruction": "¿Cuáles fueron las consecuencias territoriales del Tratado de Utrecht para España?",
@@ -922,7 +1010,7 @@ test_prompts = [
             "a Gran Bretaña el asiento, un contrato monopolístico para abastecer de esclavos "
             "africanos a las colonias españolas en América."
         ),
-        "description": "[ES] QA histórica — respuesta elaborada esperada",
+        "description": "[ES] Historical QA -- detailed answer expected",
     },
     {
         "instruction": "Quines eren les característiques principals del sistema de reg de l'Albufera?",
@@ -935,7 +1023,7 @@ test_prompts = [
             "i a la tardor s'asseca el terreny per permetre la collita. Aquesta gestió hídrica "
             "és fonamental per mantenir tanto la producció agrícola com l'ecosistema natural."
         ),
-        "description": "[CA] QA tècnica — resposta elaborada en català esperada",
+        "description": "[CA] Technical QA -- detailed answer in Catalan expected",
     },
 ]
 
@@ -965,7 +1053,7 @@ for path, obj in [
         print(f"    Warning: could not save {path}: {e}")
 
 print("\n" + "=" * 70)
-print("--> PROCESO COMPLETADO")
+print("--> PROCESS COMPLETED")
 print(f"    Adapted model:         {output_dir}")
 print(f"    Training stats:        {os.path.join(output_dir, 'training_stats.json')}")
 print(f"    Evaluation comparison: {os.path.join(output_dir, 'evaluation_comparison.json')}")

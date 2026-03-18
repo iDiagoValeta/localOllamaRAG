@@ -5,75 +5,295 @@
 <h1 align="center">MonkeyGrab</h1>
 
 <p align="center">
-  <strong>Asistente local de consulta documental con RAG académico</strong><br>
-  Conversación inteligente sobre PDFs indexados · 100% local · Sin APIs externas
+  <strong>A local, multilingual RAG system for academic PDF consultation with LoRA-fine-tuned LLMs</strong>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
   <img src="https://img.shields.io/badge/Ollama-Local%20LLM-000000?style=for-the-badge" alt="Ollama">
   <img src="https://img.shields.io/badge/ChromaDB-Vector%20Store-FF6B35?style=for-the-badge" alt="ChromaDB">
-  <img src="https://img.shields.io/badge/RAG-Híbrido-28A745?style=for-the-badge" alt="RAG">
-  <img src="https://img.shields.io/badge/Licencia-MIT-6B4C9A?style=for-the-badge" alt="License">
+  <img src="https://img.shields.io/badge/RAG-Hybrid-28A745?style=for-the-badge" alt="RAG">
 </p>
 
 ---
 
-## ¿Qué es MonkeyGrab?
+## Overview
 
-MonkeyGrab es un sistema RAG (Retrieval-Augmented Generation) local diseñado para consulta académica de documentos PDF. Combina recuperación híbrida, reranking y enriquecimiento general del contexto orquestando diversos modelos ejecutados localmente mediante Ollama.
+MonkeyGrab is a Retrieval-Augmented Generation (RAG) system that runs entirely on local hardware. It indexes PDF documents, retrieves relevant passages through a hybrid search pipeline, and generates grounded answers using a fine-tuned large language model served via Ollama. All data stays on the user's machine — no external API calls are made during normal operation.
 
-## Modos de uso
+The system was built as a Bachelor's Thesis (TFG) project at the Universitat Politecnica de Valencia (UPV). It targets researchers and students who need to query collections of academic documents in English, Spanish, and Catalan without sending their data to cloud services. The generator model (Qwen3-14B) was fine-tuned with LoRA on three RAG-specific datasets to improve context adherence and response quality compared to the base model.
 
-- `CHAT` — Conversación general, guía y soporte operativo
-- `RAG`  — Respuestas fundamentadas en PDFs indexados
+MonkeyGrab offers two interaction modes: **RAG mode** (document-grounded Q&A) and **CHAT mode** (general conversation), accessible through both a terminal CLI (Rich) and a web interface (Flask + React).
 
+---
 
-## Ejecución (CLI)
+## Architecture
+
+```
+PDF Corpus (rag/pdfs/)
+       |
+       v
+┌─────────────────────────────────────────────────────────┐
+│                    INDEXING PIPELINE                    │
+│                                                         │
+│  Text extraction (pymupdf4llm / pypdf)                  │
+│       → Hierarchical chunking (1500 chars, 350 overlap) │
+│       → [Optional] Contextual retrieval (gemma3:4b)     │
+│       → Embedding (embeddinggemma, 768d)                │
+│       → ChromaDB persistent storage                     │
+└─────────────────────────────────────────────────────────┘
+       |
+       v
+┌─────────────────────────────────────────────────────────┐
+│                   RETRIEVAL PIPELINE                    │
+│                                                         │
+│  User query                                             │
+│       → [Optional] LLM query decomposition (3 variants) │
+│       → Semantic search (ChromaDB, top-80)              │
+│       → Keyword search ($contains, top-40)              │
+│       → [Optional] Exhaustive term scan                 │
+│       → RRF score fusion (55% semantic + 45% lexical)   │
+│       → [Optional] Cross-encoder reranking (BAAI/bge)   │
+│       → Top-6 fragments                                 │
+│       → [Optional] Neighbor chunk expansion             │
+│       → Context optimization (PDF artifact removal)     │
+└─────────────────────────────────────────────────────────┘
+       |
+       v
+┌─────────────────────────────────────────────────────────┐
+│                      GENERATION                         │
+│                                                         │
+│  System prompt + context + question                     │
+│       → Qwen3-14B (Q4_K_M via Ollama, temp=0.15)        │
+│       → Streaming response                              │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Models
+
+| Role | Model | Details |
+|------|-------|---------|
+| **Generator** | Qwen3-14B-FineTuned | Q4_K_M quantization via llama.cpp, served by Ollama |
+| **Embedding** | embeddinggemma | Gemma 3 architecture, 307M params, 768 dimensions, BF16 |
+| **Reranker** | BAAI/bge-reranker-v2-m3 | 200M params cross-encoder (optional: ms-marco-MiniLM-L-6-v2 for speed) |
+| **Auxiliary** | gemma3:4b | Query decomposition, contextual retrieval, RECOMP synthesis |
+
+### Fine-tuning
+
+Three base models were fine-tuned with LoRA and evaluated:
+
+| Model | Parameters | LoRA r | LoRA alpha | Status |
+|-------|-----------|--------|------------|--------|
+| Qwen3-14B | 14B | 64 | 128 | Selected for production |
+| Llama-3.1-8B-Instruct | 8B | 32 | 64 | Published as open adapter |
+| Gemma-3-12B-IT | 12B | 32 | 64 | Published (GGUF incompatible with Ollama) |
+
+All adapters: dropout=0.05, 7 target modules (q/k/v/o_proj + gate/up/down_proj), trained on 3 datasets (Neural-Bridge RAG, Dolly QA, Aina RAG Multilingual) totaling ~20,500 samples.
+
+---
+
+## Repository Structure
+
+```
+localOllamaRAG/
+├── rag/
+│   ├── chat_pdfs.py              # Main RAG engine (indexing, retrieval, generation)
+│   ├── requirements.txt          # Core dependencies
+│   └── cli/                      # Rich terminal interface
+│       ├── app.py                # CLI main loop and command dispatch
+│       ├── display.py            # Rich UI singleton (panels, tables, spinners)
+│       ├── renderer.py           # Low-level ANSI rendering (legacy)
+│       └── theme.py              # Color palette and visual identity
+├── web/
+│   ├── app.py                    # Flask backend (REST + SSE API)
+│   ├── requirements.txt          # Web dependencies
+│   └── zip/                      # React frontend build
+├── scripts/
+│   ├── training/
+│   │   ├── train-qwen3.py        # Qwen3-14B LoRA fine-tuning
+│   │   ├── train-llama3.1.py     # Llama-3.1-8B LoRA fine-tuning
+│   │   ├── train-gemma3.py       # Gemma-3-12B LoRA fine-tuning
+│   │   └── plot_training.py      # Training curve visualization
+│   ├── evaluation/
+│   │   ├── eval_bertscore.py     # BERTScore evaluation (per-sample + summary)
+│   │   ├── plot_bertscore.py     # BERTScore visualization
+│   │   ├── plot_baseline_results.py  # Baseline model comparison plots
+│   │   └── plot_comparison.py    # Base vs fine-tuned comparison plots
+│   ├── conversion/
+│   │   └── merge_lora.py         # Merge LoRA adapter for GGUF export
+│   └── tests/                    # Ollama streaming/thinking tests
+├── evaluation/
+│   ├── run_eval.py               # RAGAS evaluation of RAG pipeline
+│   └── requirements.txt          # Evaluation dependencies
+├── training-output/
+│   ├── qwen-3/                   # Qwen3 adapter + evaluation artifacts
+│   ├── llama-3/                  # Llama adapter + evaluation artifacts
+│   ├── gemma-3/                  # Gemma adapter + evaluation artifacts
+│   ├── bertscore/                # BERTScore summary and per-sample CSVs
+│   └── baseline/
+│       └── evaluate_baselines.py # 6-model baseline benchmark
+├── compute_std.py                # Mean +/- sigma statistical analysis
+├── models/gguf-output/           # Quantized GGUF models (gitignored)
+├── AUDIT.md                      # Repository audit
+└── README.md                     # This file
+```
+
+---
+
+## Installation & Requirements
+
+### Prerequisites
+
+- Python 3.10+
+- [Ollama](https://ollama.ai/) installed and running locally
+- GPU recommended (CUDA) for reranking and fine-tuning; CPU works for inference
+
+### Setup
+
+```bash
+git clone <repository-url>
+cd localOllamaRAG
+
+# Core RAG dependencies
+pip install -r rag/requirements.txt
+
+# Web interface (optional)
+pip install -r web/requirements.txt
+
+# Evaluation tools (optional)
+pip install -r evaluation/requirements.txt
+
+# Fine-tuning (optional — requires GPU)
+pip install torch transformers peft datasets tqdm
+```
+
+### Ollama Models
+
+```bash
+# Required for RAG mode
+ollama pull Qwen3-FineTuned        # Or your fine-tuned model name
+
+# Required for embedding
+ollama pull embeddinggemma
+
+# Required for auxiliary tasks (query decomposition, contextual retrieval)
+ollama pull gemma3:4b
+```
+
+---
+
+## Usage
+
+### CLI
 
 ```bash
 cd rag
 python chat_pdfs.py
 ```
 
-Comandos principales en la CLI:
+Place PDF files in `rag/pdfs/` before starting. The system indexes them automatically on first launch.
 
-- `/rag`
-- `/chat`
-- `/docs`
-- `/temas`
-- `/stats`
-- `/reindex`
-- `/help`
-- `/salir`
+**Commands:**
+| Command | Description |
+|---------|-------------|
+| `/rag` | Switch to RAG mode (document Q&A) |
+| `/chat` | Switch to CHAT mode (general conversation) |
+| `/docs` | List indexed documents |
+| `/temas` | Show document topics summary |
+| `/stats` | Display database statistics |
+| `/reindex` | Re-index all documents |
+| `/help` | Show help |
+| `/salir` | Exit |
 
-## Pipeline RAG
+### Web Interface
 
-1. Extracción y chunking de PDFs → embeddings → ChromaDB
-2. Recuperación: semántica y búsqueda léxica
-3. Fusión RRF → Reranking
-4. Expansión de contexto y síntesis RECOMP
-5. Inferencia final con LLM
+```bash
+python web/app.py
+```
 
-## Obligatorio vs Opcionales
+Opens at `http://localhost:5000`. Supports file upload, streaming responses, and all pipeline settings via the UI.
 
-Obligatorio (mínimo para que el sistema funcione como RAG):
+---
 
-- Indexación básica: extracción de texto y `dividir_en_chunks()` → embeddings (`ollama.embeddings`) y persistencia en ChromaDB.
-- Recuperación semántica: consultas vectoriales (`collection.query`) en `realizar_busqueda_hibrida`.
-- Generación con LLM RAG: usar `MODELO_RAG` para producir la respuesta final basada en el contexto recuperado.
+## Fine-tuning
 
-Opcionales (activables por flags o que requieren dependencias externas):
+```bash
+# Train Qwen3-14B (requires GPU with ~24GB VRAM)
+python scripts/training/train-qwen3.py
 
-- `USAR_CONTEXTUAL_RETRIEVAL`: enriquece chunks con un modelo contextual al indexar.
-- `USAR_LLM_QUERY_DECOMPOSITION`: genera sub-queries con un LLM auxiliar para ampliar la cobertura de búsqueda.
-- `USAR_BUSQUEDA_HIBRIDA`: añade búsqueda por keywords/where_document junto a la búsqueda semántica.
-- `USAR_BUSQUEDA_EXHAUSTIVA`: escaneo profundo por términos críticos.
-- `USAR_RERANKER`: reranking mediante Cross-Encoder.
-- `USAR_OPTIMIZACION_CONTEXTO`: limpieza y normalización de texto extraído antes de generar la respuesta.
-- `USAR_RECOMP_SYNTHESIS`: síntesis RECOMP para resumir contextos antes de la generación.
-- `EXPANDIR_CONTEXTO`: recuperar chunks vecinos para dar contexto continuo al LLM.
+# Train Llama-3.1-8B
+python scripts/training/train-llama3.1.py
 
-Muchas de las opciones opcionales mejoran la calidad pero añaden coste computacional o dependencias (GPU, `sentence-transformers`, `pymupdf4llm`, etc.).
+# Train Gemma-3-12B
+python scripts/training/train-gemma3.py
 
-<p align="center">Hecho con 🐒 para el TFG · UPV · 2025–2026</p>
+# Merge adapter for GGUF export
+python scripts/conversion/merge_lora.py --model qwen-3
+
+# Visualize training curves
+python scripts/training/plot_training.py --model qwen-3
+```
+
+Training uses: lr=5e-5, cosine scheduler, warmup=0.05, batch=1x16 gradient accumulation, BF16, AdamW 8-bit, max_seq=4096, 3 epochs with early stopping.
+
+---
+
+## Evaluation
+
+### BERTScore + Token F1 + Faithfulness
+
+```bash
+python scripts/evaluation/eval_bertscore.py                 # All 3 models
+python scripts/evaluation/eval_bertscore.py --model qwen-3  # Single model
+python scripts/evaluation/plot_bertscore.py                  # Generate plots
+python compute_std.py                                        # Compute mean +/- std
+```
+
+### RAGAS (live pipeline evaluation)
+
+```bash
+python evaluation/run_eval.py
+```
+
+Metrics: Context Recall, Factual Correctness, Context Precision, Faithfulness, Response Relevancy. Uses Gemini 2.0 Flash as judge LLM.
+
+### Baseline Benchmark
+
+```bash
+python training-output/baseline/evaluate_baselines.py
+python scripts/evaluation/plot_baseline_results.py
+```
+
+Evaluates 6 base models (Llama-3.1-8B, Qwen3/3.5/2.5-14B, Gemma-3-12B, Phi-4) across 3 datasets with/without context.
+
+---
+
+## Code Documentation Style
+
+All Python files follow a consistent documentation convention:
+
+- **Module docstrings**: English, triple-quoted, with short description + longer explanation + Usage + Dependencies
+- **Section separators**: `# ─────` lines with `# SECTION NAME` in caps for logical code groupings
+- **Function docstrings**: Google-style with Args, Returns, and Raises sections
+- **Inline comments**: English, only for non-obvious logic; trivially obvious comments are omitted
+
+---
+
+## Status
+
+This project is under active development as part of a Bachelor's Thesis (TFG) at UPV.
+
+**Implemented:**
+- Full RAG pipeline (indexing, hybrid retrieval, reranking, generation)
+- CLI interface (Rich) and web interface (Flask + React)
+- LoRA fine-tuning pipeline for 3 models
+- BERTScore + Token F1 + Faithfulness evaluation
+- RAGAS evaluation integration
+- Per-sample metric logging and statistical analysis
+
+**Known limitations:**
+- Gemma-3-12B adapter cannot be deployed via Ollama (GGUF incompatibility)
+- Per-sample evaluation data requires re-running `eval_bertscore.py` to generate
+- RECOMP synthesis stage is disabled by default

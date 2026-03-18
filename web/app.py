@@ -1,17 +1,20 @@
 """
-MonkeyGrab — Interfaz web local
-================================
+MonkeyGrab -- Local web interface.
 
-Servidor Flask para el pipeline RAG completo. Ofrece la misma funcionalidad
-que la CLI: modo CHAT (conversación libre) y modo RAG (consulta documental).
+Flask server for the full RAG pipeline. Provides the same functionality
+as the CLI: CHAT mode (free conversation) and RAG mode (document query).
 
-Sirve la interfaz React (build en web/zip/dist/) y la API en /api/*.
+Serves the React interface (build in web/zip/dist/) and the API at /api/*.
 
-Uso (desde la raíz del proyecto):
+Usage (from project root):
     python web/app.py
-    # o: python -m web.app
+    # or: python -m web.app
 
-Abre http://127.0.0.1:5000 en el navegador.
+Open http://127.0.0.1:5000 in your browser.
+
+Dependencies:
+    - flask, flask-cors, chromadb, werkzeug
+    - rag.chat_pdfs (project internal module)
 """
 
 import gc
@@ -31,14 +34,19 @@ import chromadb
 from flask import Flask, request, jsonify, Response, stream_with_context, send_from_directory
 from flask_cors import CORS
 
-# Asegurar que el proyecto esté en sys.path
+
+# ─────────────────────────────────────────────
+# CONFIGURATION
+# ─────────────────────────────────────────────
+
+# Ensure project root is in sys.path
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 import rag.chat_pdfs as rag_engine
 
-# Directorio del build React (web/zip/dist/)
+# React build directory (web/zip/dist/)
 _web_dir = os.path.dirname(os.path.abspath(__file__))
 _react_dist = os.path.join(_web_dir, "zip", "dist")
 
@@ -49,25 +57,29 @@ app = Flask(
 app.config["JSON_AS_ASCII"] = False
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
 
-# CORS para desarrollo (Vite en :3000 → Flask en :5000)
+# CORS for development (Vite on :3000 -> Flask on :5000)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-# Estado global (sesión simple para uso local)
+# Global state (simple session for local use)
 _state = {
     "mode": "chat",
     "historial_chat": [],
     "collection": None,
     "indexing": False,
     "indexing_error": None,
-    "indexing_failed": False,       # True si el último intento falló permanentemente
-    "indexing_done_empty": False,   # True si indexación completó con 0 chunks (sin PDFs)
+    "indexing_failed": False,       # True if the last attempt failed permanently
+    "indexing_done_empty": False,   # True if indexing completed with 0 chunks (no PDFs)
     "indexing_progress": None,      # {"file": str, "file_index": int, "total_files": int}
 }
 _indexing_lock = threading.Lock()
 
 
+# ─────────────────────────────────────────────
+# COLLECTION MANAGEMENT
+# ─────────────────────────────────────────────
+
 def _invalidate_collection_if_deleted():
-    """Si la carpeta de la DB fue borrada, limpia el estado para arrancar de cero."""
+    """Clear state to start fresh if the DB folder was deleted."""
     path_db = rag_engine.PATH_DB
     if not os.path.exists(os.path.dirname(path_db)):
         _state["collection"] = None
@@ -78,7 +90,11 @@ def _invalidate_collection_if_deleted():
 
 
 def _get_collection():
-    """Obtiene o crea la colección ChromaDB. Invalida si la carpeta fue borrada."""
+    """Obtain or create the ChromaDB collection, invalidating if the folder was deleted.
+
+    Returns:
+        The ChromaDB collection object.
+    """
     _invalidate_collection_if_deleted()
     if _state["collection"] is None:
         os.makedirs(os.path.dirname(rag_engine.PATH_DB), exist_ok=True)
@@ -90,7 +106,7 @@ def _get_collection():
 
 
 def _run_indexing_bg():
-    """Ejecuta indexación en background en modo silencioso (sin display Rich)."""
+    """Run document indexing in the background in silent mode (no Rich display)."""
     try:
         coll = _get_collection()
 
@@ -106,7 +122,7 @@ def _run_indexing_bg():
         _state["indexing_error"] = None
         _state["indexing_failed"] = False
         if total_chunks == 0:
-            _state["indexing_done_empty"] = True  # No reiniciar indexación infinita
+            _state["indexing_done_empty"] = True
     except Exception as e:
         _state["indexing_error"] = str(e)
         _state["indexing_failed"] = True
@@ -116,9 +132,10 @@ def _run_indexing_bg():
 
 
 def _ensure_indexed():
-    """Inicia indexación en background si la colección está vacía. No bloquea.
-    No reinicia si el intento anterior falló (usa api_reindex para forzar).
-    No reinicia si ya se intentó y no hay PDFs (indexing_done_empty).
+    """Start background indexing if the collection is empty. Non-blocking.
+
+    Does not restart if the previous attempt failed (use api_reindex to force).
+    Does not restart if indexing already completed with no PDFs (indexing_done_empty).
     """
     if _state["indexing_failed"] or _state["indexing_done_empty"]:
         return
@@ -133,8 +150,10 @@ def _ensure_indexed():
 
 
 def _reset_db():
-    """Libera la colección ChromaDB y la elimina vía API (sin tocar el sistema de archivos).
-    Evita WinError 32 en Windows al re-indexar, usando delete_collection en lugar de rmtree.
+    """Release the ChromaDB collection and delete it via the API (without touching the filesystem).
+
+    Avoids WinError 32 on Windows during re-indexing by using delete_collection
+    instead of rmtree.
     """
     _state["collection"] = None
     _state["indexing_done_empty"] = False
@@ -147,15 +166,26 @@ def _reset_db():
             client.delete_collection(name=rag_engine.COLLECTION_NAME)
             return
         except ValueError:
-            return  # Colección no existía, listo
+            return  # Collection did not exist
         except Exception as e:
             last_error = e
             if attempt >= 4:
                 raise last_error
 
 
+# ─────────────────────────────────────────────
+# STREAMING HELPERS
+# ─────────────────────────────────────────────
+
 def _chat_stream(pregunta: str) -> Generator[str, None, None]:
-    """Genera tokens del modo chat en streaming."""
+    """Generate tokens from chat mode via streaming.
+
+    Args:
+        pregunta: User question text.
+
+    Yields:
+        Token strings as they are produced by the model.
+    """
     import ollama
 
     messages = [{"role": "system", "content": rag_engine.SYSTEM_PROMPT_CHAT}]
@@ -177,7 +207,14 @@ def _chat_stream(pregunta: str) -> Generator[str, None, None]:
 
 
 def _rag_stream(mensaje_usuario: str) -> Generator[str, None, None]:
-    """Genera tokens del modo RAG en streaming."""
+    """Generate tokens from RAG mode via streaming.
+
+    Args:
+        mensaje_usuario: Full user message including context.
+
+    Yields:
+        Token strings as they are produced by the model.
+    """
     import ollama
 
     stream = ollama.chat(
@@ -202,7 +239,14 @@ def _rag_stream(mensaje_usuario: str) -> Generator[str, None, None]:
 
 
 def _format_sources(fragments: list) -> list:
-    """Formatea fuentes para la respuesta JSON."""
+    """Format source references for the JSON response.
+
+    Args:
+        fragments: List of fragment dicts with metadata (source, page).
+
+    Returns:
+        List of dicts with 'document' and 'pages' keys, sorted by document name.
+    """
     sources_map = {}
     for frag in fragments:
         meta = frag.get("metadata", {})
@@ -219,14 +263,14 @@ def _format_sources(fragments: list) -> list:
     ]
 
 
-# =============================================================================
-# RUTAS
-# =============================================================================
+# ─────────────────────────────────────────────
+# API ROUTES
+# ─────────────────────────────────────────────
 
 
 @app.route("/")
 def index():
-    """Página principal — sirve el build React."""
+    """Serve the main page -- React build."""
     react_index = os.path.join(_react_dist, "index.html")
     if os.path.isfile(react_index):
         return send_from_directory(_react_dist, "index.html")
@@ -239,7 +283,11 @@ def index():
 
 @app.route("/assets/<path:filename>")
 def serve_assets(filename):
-    """Sirve archivos estáticos del build React (JS/CSS bundles)."""
+    """Serve static files from the React build (JS/CSS bundles).
+
+    Args:
+        filename: Relative path within the assets directory.
+    """
     assets_dir = os.path.join(_react_dist, "assets")
     return send_from_directory(assets_dir, filename)
 
@@ -247,7 +295,7 @@ def serve_assets(filename):
 @app.route("/logo.png")
 @app.route("/logo.jpg")
 def serve_logo():
-    """Sirve el logo MonkeyGrab."""
+    """Serve the MonkeyGrab logo."""
     for name in ("logo.jpg", "logo.png"):
         path = os.path.join(_react_dist, name)
         if os.path.isfile(path):
@@ -256,10 +304,14 @@ def serve_logo():
 
 
 def _api_init_logic():
-    """Lógica de api_init. Retorna (dict, status_code)."""
+    """Core logic for api_init.
+
+    Returns:
+        Tuple of (response_dict, status_code).
+    """
     _invalidate_collection_if_deleted()
 
-    # Si falló permanentemente, reportar error sin reiniciar el bucle
+    # If permanently failed, report error without restarting the loop
     if _state["indexing_failed"]:
         return {"ok": False, "error": _state["indexing_error"] or "La indexación falló"}, 500
 
@@ -307,12 +359,12 @@ def _api_init_logic():
 
 @app.route("/api/init", methods=["GET"])
 def api_init():
-    """Inicializa el sistema y devuelve estado."""
+    """Initialize the system and return its status."""
     try:
         resp, status = _api_init_logic()
         return jsonify(resp), status
     except Exception as e:
-        # DB corrupta o borrada: invalidar y reintentar una vez
+        # Corrupt or deleted DB: invalidate and retry once
         _state["collection"] = None
         _state["indexing_failed"] = False
         _state["indexing_error"] = None
@@ -327,7 +379,7 @@ def api_init():
 
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
-    """Procesa mensaje en modo chat. Soporta streaming SSE."""
+    """Process a message in chat mode. Supports SSE streaming."""
     data = request.get_json() or {}
     pregunta = (data.get("message") or "").strip()
     stream = data.get("stream", True)
@@ -357,7 +409,7 @@ def api_chat():
 
 @app.route("/api/rag", methods=["POST"])
 def api_rag():
-    """Procesa consulta RAG. Soporta streaming SSE."""
+    """Process a RAG query. Supports SSE streaming."""
     data = request.get_json() or {}
     pregunta = (data.get("message") or "").strip()
     stream = data.get("stream", True)
@@ -449,7 +501,7 @@ def api_rag():
 
     sources = _format_sources(fragmentos_finales)
 
-    # Construir contexto y mensaje de usuario (compartido por streaming y no-streaming)
+    # Build context and user message (shared by streaming and non-streaming)
     if rag_engine.USAR_RECOMP_SYNTHESIS:
         contexto_str = rag_engine.sintetizar_contexto_recomp(
             fragmentos_finales, query_usuario=pregunta
@@ -502,7 +554,7 @@ def api_rag():
 
 @app.route("/api/mode", methods=["POST"])
 def api_mode():
-    """Cambia el modo (chat/rag)."""
+    """Switch the active mode (chat/rag)."""
     data = request.get_json() or {}
     mode = (data.get("mode") or "chat").lower()
     if mode not in ("chat", "rag"):
@@ -513,7 +565,7 @@ def api_mode():
 
 @app.route("/api/clear", methods=["POST"])
 def api_clear():
-    """Limpia el historial de chat."""
+    """Clear the chat history."""
     rag_engine.limpiar_historial(_state["historial_chat"])
     _state["historial_chat"] = []
     return jsonify({"ok": True})
@@ -521,7 +573,7 @@ def api_clear():
 
 @app.route("/api/stats", methods=["GET"])
 def api_stats():
-    """Estadísticas de la base de datos."""
+    """Return database statistics."""
     coll = _get_collection()
     docs = rag_engine.obtener_documentos_indexados(coll)
     return jsonify({
@@ -533,7 +585,7 @@ def api_stats():
 
 @app.route("/api/docs", methods=["GET"])
 def api_docs():
-    """Lista de documentos indexados."""
+    """List indexed documents."""
     coll = _get_collection()
     docs = rag_engine.obtener_documentos_indexados(coll)
     return jsonify({"ok": True, "documents": docs})
@@ -541,7 +593,11 @@ def api_docs():
 
 @app.route("/api/docs/<path:filename>", methods=["DELETE"])
 def api_delete_doc(filename):
-    """Elimina un documento: borra sus chunks de ChromaDB y el archivo PDF del disco."""
+    """Delete a document: remove its chunks from ChromaDB and the PDF file from disk.
+
+    Args:
+        filename: Name of the PDF file to delete.
+    """
     if not filename or not filename.lower().endswith(".pdf"):
         return jsonify({"ok": False, "error": "Nombre de archivo inválido"}), 400
     filename = secure_filename(os.path.basename(filename))
@@ -559,7 +615,7 @@ def api_delete_doc(filename):
 
 @app.route("/api/topics", methods=["GET"])
 def api_topics():
-    """Resumen de contenidos/temas."""
+    """Return a summary of indexed content/topics."""
     coll = _get_collection()
     docs = rag_engine.obtener_documentos_indexados(coll)
     docs_data = []
@@ -597,7 +653,10 @@ def api_topics():
 
 @app.route("/api/reindex", methods=["POST"])
 def api_reindex():
-    """Re-indexa todo con los ajustes actuales del pipeline. Acepta PDFs opcionales para añadir antes."""
+    """Re-index everything with the current pipeline settings.
+
+    Accepts optional PDF files to add before re-indexing.
+    """
     try:
         files = request.files.getlist("file") or []
         for f in files:
@@ -608,7 +667,7 @@ def api_reindex():
                 f.save(dest)
 
         _reset_db()
-        # Resetear estado de fallo y empty para permitir nueva indexación
+        # Reset failure and empty state to allow new indexing
         _state["indexing_failed"] = False
         _state["indexing_error"] = None
         _state["indexing_done_empty"] = False
@@ -618,7 +677,7 @@ def api_reindex():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-# --- Pipeline settings mapping (nombre frontend → variable global del engine) ---
+# Pipeline settings mapping (frontend name -> engine global variable)
 _SETTINGS_MAP = {
     "contextualRetrieval": "USAR_CONTEXTUAL_RETRIEVAL",
     "queryDecomposition": "USAR_LLM_QUERY_DECOMPOSITION",
@@ -633,7 +692,7 @@ _SETTINGS_MAP = {
 
 @app.route("/api/settings", methods=["GET"])
 def api_settings_get():
-    """Devuelve el estado actual de los flags del pipeline."""
+    """Return the current state of the pipeline flags."""
     current = {}
     for fe_key, engine_var in _SETTINGS_MAP.items():
         current[fe_key] = getattr(rag_engine, engine_var, False)
@@ -642,13 +701,13 @@ def api_settings_get():
 
 @app.route("/api/settings", methods=["POST"])
 def api_settings_post():
-    """Actualiza los flags del pipeline RAG en caliente."""
+    """Update the RAG pipeline flags at runtime."""
     data = request.get_json() or {}
     updated = {}
     for fe_key, engine_var in _SETTINGS_MAP.items():
         if fe_key in data:
             val = bool(data[fe_key])
-            # El reranker solo se activa si la dependencia está disponible
+            # The reranker is only activated if the dependency is available
             if engine_var == "USAR_RERANKER" and val and not rag_engine.RERANKER_AVAILABLE:
                 updated[fe_key] = False
                 continue
@@ -659,7 +718,10 @@ def api_settings_post():
 
 @app.route("/api/upload", methods=["POST"])
 def api_upload():
-    """Sube PDF(s) y los indexa. add_only=1: añade sin reindexar (usa ajustes actuales)."""
+    """Upload PDF(s) and index them.
+
+    When add_only=1: add without full re-indexing (uses current settings).
+    """
     add_only = request.args.get("add_only", "").lower() in ("1", "true", "yes")
     files = request.files.getlist("file") or (request.files.get("file") and [request.files["file"]] or [])
     if not files:
@@ -704,6 +766,10 @@ def api_upload():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
+# ─────────────────────────────────────────────
+# ENTRY POINT
+# ─────────────────────────────────────────────
 
 def main():
     port = int(os.getenv("MONKEYGRAB_PORT", "5000"))

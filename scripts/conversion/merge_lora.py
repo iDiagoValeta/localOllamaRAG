@@ -1,13 +1,17 @@
 """
-Script de fusión LoRA + modelo base (TFG)
-==========================================
+LoRA adapter merger for base model consolidation.
 
-Este script carga el adaptador LoRA entrenado y lo fusiona con el modelo base
-original para generar una versión consolidada lista para exportación a GGUF.
+Loads a trained LoRA adapter and merges it with the original base model
+to produce a single consolidated model ready for GGUF export. The merged
+model and its tokenizer are saved together to preserve compatibility
+for downstream conversion and quantization steps.
 
-Resultado:
-- Modelo fusionado en `models/merged-model`.
-- Tokenizador guardado junto al modelo para mantener compatibilidad.
+Usage:
+    python scripts/conversion/merge_lora.py --model qwen-3
+Dependencies:
+    - torch
+    - peft (PeftModel, PeftConfig)
+    - transformers (AutoModelForCausalLM, AutoTokenizer)
 """
 
 import argparse
@@ -16,22 +20,21 @@ import torch
 from peft import PeftModel, PeftConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Lee el token de HuggingFace desde las variables de entorno (acepta ambos nombres)
+# Read the HuggingFace token from environment variables (accepts both names)
 HF_TOKEN = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN") or None
 
-# =============================================================================
-# SECCIÓN 1: RUTAS Y VALIDACIÓN DE ARTEFACTOS
-# =============================================================================
-# Define rutas del proyecto y valida que exista el adaptador LoRA entrenado
-# antes de iniciar el proceso de fusión.
-# =============================================================================
+# ─────────────────────────────────────────────
+# PATHS AND ARTIFACT VALIDATION
+# ─────────────────────────────────────────────
+# Define project paths and verify that the trained LoRA adapter exists
+# before starting the merge process.
 
 VALID_MODELS = ["qwen-3", "llama-3", "gemma-3"]
 
-parser = argparse.ArgumentParser(description="Fusiona adaptador LoRA con modelo base.")
+parser = argparse.ArgumentParser(description="Merge LoRA adapter with base model.")
 parser.add_argument(
     "--model", choices=VALID_MODELS, default="qwen-3",
-    help="Modelo a fusionar (default: qwen-3).",
+    help="Model to merge (default: qwen-3).",
 )
 args = parser.parse_args()
 
@@ -41,36 +44,34 @@ MERGED_PATH = os.path.join(PROJECT_ROOT, "models", "merged-model", args.model)
 
 if not os.path.exists(os.path.join(LORA_PATH, "adapter_config.json")):
     raise FileNotFoundError(
-        f"No se encontró el adaptador LoRA en {LORA_PATH}. "
-        "Ejecuta primero el entrenamiento (scripts/training/train-{args.model}.py)."
+        f"LoRA adapter not found at {LORA_PATH}. "
+        "Run training first (scripts/training/train-{args.model}.py)."
     )
 
 os.makedirs(MERGED_PATH, exist_ok=True)
 
-# =============================================================================
-# SECCIÓN 2: CARGA DE CONFIGURACIÓN DEL ADAPTADOR
-# =============================================================================
-# Recupera desde el adaptador LoRA el identificador del modelo base utilizado
-# durante entrenamiento, garantizando trazabilidad de la fusión.
-# =============================================================================
+# ─────────────────────────────────────────────
+# ADAPTER CONFIGURATION LOADING
+# ─────────────────────────────────────────────
+# Retrieve the base model identifier from the LoRA adapter config
+# to ensure traceability of the merge.
 
 print("=" * 60)
-print("[1/4] Cargando configuración del adaptador LoRA...")
+print("[1/4] Loading LoRA adapter configuration...")
 print("=" * 60)
 peft_config = PeftConfig.from_pretrained(LORA_PATH)
 base_model_name = peft_config.base_model_name_or_path
-print(f"  Modelo base: {base_model_name}")
-print(f"  Ruta LoRA:   {LORA_PATH}")
+print(f"  Base model: {base_model_name}")
+print(f"  LoRA path:  {LORA_PATH}")
 
-# =============================================================================
-# SECCIÓN 3: CARGA DEL MODELO BASE Y TOKENIZADOR
-# =============================================================================
-# Carga el modelo base en CPU para fusionar pesos de forma determinista y
-# sin requerir aceleración GPU en esta etapa de postproceso.
-# =============================================================================
+# ─────────────────────────────────────────────
+# BASE MODEL AND TOKENIZER LOADING
+# ─────────────────────────────────────────────
+# Load the base model on CPU for deterministic weight merging
+# without requiring GPU acceleration at this post-processing stage.
 
 print("\n" + "=" * 60)
-print("[2/4] Descargando/cargando modelo base (puede tardar)...")
+print("[2/4] Downloading/loading base model (may take a while)...")
 print("=" * 60)
 base_model = AutoModelForCausalLM.from_pretrained(
     base_model_name,
@@ -80,36 +81,34 @@ base_model = AutoModelForCausalLM.from_pretrained(
     token=HF_TOKEN,
 )
 tokenizer = AutoTokenizer.from_pretrained(base_model_name, token=HF_TOKEN)
-print("  Modelo base cargado.")
+print("  Base model loaded.")
 
-# =============================================================================
-# SECCIÓN 4: FUSIÓN DE ADAPTADOR LORA
-# =============================================================================
-# Inserta el adaptador sobre el modelo base y materializa los pesos finales
-# mediante `merge_and_unload`.
-# =============================================================================
+# ─────────────────────────────────────────────
+# LORA ADAPTER MERGE
+# ─────────────────────────────────────────────
+# Attach the adapter on top of the base model and materialize
+# the final weights via `merge_and_unload`.
 
 print("\n" + "=" * 60)
-print("[3/4] Fusionando adaptador LoRA con modelo base...")
+print("[3/4] Merging LoRA adapter with base model...")
 print("=" * 60)
 model = PeftModel.from_pretrained(base_model, LORA_PATH, token=HF_TOKEN)
 merged_model = model.merge_and_unload()
-print("  Fusión completada.")
+print("  Merge completed.")
 
-# =============================================================================
-# SECCIÓN 5: EXPORTACIÓN DEL MODELO FUSIONADO
-# =============================================================================
-# Guarda modelo y tokenizador en disco para etapas posteriores de conversión
-# a GGUF y cuantización.
-# =============================================================================
+# ─────────────────────────────────────────────
+# MERGED MODEL EXPORT
+# ─────────────────────────────────────────────
+# Save model and tokenizer to disk for subsequent GGUF conversion
+# and quantization stages.
 
 print("\n" + "=" * 60)
-print(f"[4/4] Guardando modelo fusionado en: {MERGED_PATH}")
+print(f"[4/4] Saving merged model to: {MERGED_PATH}")
 print("=" * 60)
 merged_model.save_pretrained(MERGED_PATH, safe_serialization=True)
 tokenizer.save_pretrained(MERGED_PATH)
 
 print("\n" + "=" * 60)
-print("¡COMPLETADO!")
-print(f"Modelo fusionado guardado en: {MERGED_PATH}")
+print("COMPLETED!")
+print(f"Merged model saved to: {MERGED_PATH}")
 print("=" * 60)

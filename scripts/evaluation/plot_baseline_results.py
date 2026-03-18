@@ -1,21 +1,18 @@
 """
-plot_baseline_results.py — Visualización de resultados de evaluación de modelos base
-=====================================================================================
+Baseline evaluation results visualization.
 
-Lee baseline_evaluation.json desde training-output/baseline-evaluation-output/
-y genera las siguientes figuras en training-output/baseline-evaluation-output/imgs/:
+Reads ``baseline_evaluation.json`` from ``training-output/baseline/`` and
+generates nine publication-ready figures that cover token-level F1, context
+faithfulness, grounding deltas, response verbosity, dev-vs-test stability,
+per-dataset breakdowns, radar profiles, metric heatmaps, and an aggregate
+overview.  All figures are saved to ``training-output/baseline/plots/``.
 
-  01_token_f1_with_without_context.png  — Token F1: con vs sin contexto
-  02_faithfulness_with_without_context.png — Faithfulness: con vs sin contexto
-  03_context_grounding_delta.png         — Delta de grounding (Δ Faithfulness)
-  04_response_length_verbosity.png       — Longitud de respuesta (verbosidad)
-  05_dev_vs_test_stability.png           — Estabilidad dev vs test
-  06_llama_per_dataset.png               — Llama: desglose por dataset
-  07_radar_overview.png                  — Radar global (test, con contexto)
-  08_performance_heatmap.png             — Heatmap completo de métricas
+Usage:
+    python scripts/evaluation/plot_baseline_results.py
 
-Uso:
-    python scripts/training/plot_baseline_results.py
+Dependencies:
+    - matplotlib
+    - numpy
 """
 
 import json
@@ -29,7 +26,9 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 
-# ── Rutas ────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR     = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 EVAL_DIR     = os.path.join(ROOT_DIR, "training-output", "baseline")
@@ -38,11 +37,15 @@ OUTPUT_DIR   = os.path.join(EVAL_DIR, "plots")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# ── Carga de datos ────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# DATA LOADING
+# ─────────────────────────────────────────────
 with open(EVAL_JSON, "r", encoding="utf-8") as f:
     data = json.load(f)
 
-# ── Configuración visual ──────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# VISUAL CONFIGURATION
+# ─────────────────────────────────────────────
 MODEL_LABELS = {
     "meta-llama/Llama-3.1-8B-Instruct": "Llama-3.1-8B",
     "Qwen/Qwen3-14B":                "Qwen3-14B",
@@ -88,7 +91,18 @@ plt.rcParams.update({
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def agg(model, mode, split, metric):
-    """Devuelve el valor de una métrica del agregado, o NaN si no existe."""
+    """Return a metric value from the aggregate results, or NaN if missing.
+
+    Args:
+        model: Full model identifier string.
+        mode: Evaluation mode (``"with_context"`` or ``"without_context"``).
+        split: Data split (``"dev"`` or ``"test"``).
+        metric: Metric key inside the aggregate dictionary.
+
+    Returns:
+        The numeric metric value, or ``float("nan")`` when the key path does
+        not exist.
+    """
     try:
         return data[model][mode][split]["aggregate"][metric]
     except (KeyError, TypeError):
@@ -96,7 +110,15 @@ def agg(model, mode, split, metric):
 
 
 def bar_label(ax, rects, fmt="{:.1f}", fontsize=8, pad=2):
-    """Etiquetas de valor sobre las barras."""
+    """Draw value labels above each bar in a bar chart.
+
+    Args:
+        ax: Matplotlib axes to annotate.
+        rects: Sequence of bar rectangles returned by ``ax.bar()``.
+        fmt: Format string applied to the bar height.
+        fontsize: Font size for the label text.
+        pad: Vertical padding between the bar top and the label.
+    """
     for rect in rects:
         h = rect.get_height()
         if not math.isnan(h) and h > 0:
@@ -110,6 +132,12 @@ def bar_label(ax, rects, fmt="{:.1f}", fontsize=8, pad=2):
 
 
 def save(fig, name):
+    """Save a figure to the output directory and close it.
+
+    Args:
+        fig: Matplotlib figure object.
+        name: Output filename (e.g. ``"01_token_f1.png"``).
+    """
     path = os.path.join(OUTPUT_DIR, name)
     fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
@@ -117,9 +145,11 @@ def save(fig, name):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FIG 1 — Token F1: con vs sin contexto (dev y test)
+# FIG 1 — Token F1: with vs without context (dev and test)
 # ═══════════════════════════════════════════════════════════════════════════════
 def fig_token_f1():
+    """Generate a side-by-side bar chart comparing Token F1 with and without
+    context for both the dev and test splits."""
     fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
     fig.suptitle("Token F1 — Con contexto vs Sin contexto", fontsize=13, fontweight="bold", y=1.01)
 
@@ -150,9 +180,11 @@ def fig_token_f1():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FIG 2 — Faithfulness: con vs sin contexto
+# FIG 2 — Faithfulness: with vs without context
 # ═══════════════════════════════════════════════════════════════════════════════
 def fig_faithfulness():
+    """Generate a side-by-side bar chart comparing Context Faithfulness with
+    and without context for both the dev and test splits."""
     fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
     fig.suptitle("Context Faithfulness — Con contexto vs Sin contexto", fontsize=13, fontweight="bold", y=1.01)
 
@@ -183,9 +215,11 @@ def fig_faithfulness():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FIG 3 — Delta de grounding (Faithfulness_with − Faithfulness_without)
+# FIG 3 — Grounding delta (Faithfulness_with - Faithfulness_without)
 # ═══════════════════════════════════════════════════════════════════════════════
 def fig_grounding_delta():
+    """Generate a grouped bar chart showing the faithfulness improvement each
+    model gains from having context, for both dev and test splits."""
     fig, ax = plt.subplots(figsize=(10, 5))
     fig.suptitle(
         "Δ Context Faithfulness (con − sin contexto)\n"
@@ -216,7 +250,7 @@ def fig_grounding_delta():
     ax.grid(axis="y", alpha=0.3)
     ax.set_ylim(0, 65)
 
-    # Anotaciones de referencia
+    # Reference annotation line at 40 percentage points
     ax.axhline(40, color="green", lw=0.8, linestyle=":", alpha=0.6)
     ax.text(len(MODELS) - 1.1, 41, "40 pp", fontsize=8, color="green", ha="right")
 
@@ -225,9 +259,11 @@ def fig_grounding_delta():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FIG 4 — Longitud de respuesta (verbosidad con vs sin contexto)
+# FIG 4 — Response length (verbosity with vs without context)
 # ═══════════════════════════════════════════════════════════════════════════════
 def fig_response_length():
+    """Generate a side-by-side bar chart comparing mean response length (in
+    words) with and without context for both splits."""
     fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
     fig.suptitle("Longitud Media de Respuesta (palabras) — Verbosidad", fontsize=13, fontweight="bold", y=1.01)
 
@@ -256,9 +292,11 @@ def fig_response_length():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FIG 5 — Estabilidad dev vs test (con contexto)
+# FIG 5 — Dev vs test stability (with context)
 # ═══════════════════════════════════════════════════════════════════════════════
 def fig_dev_vs_test():
+    """Generate paired bar charts showing dev-vs-test consistency for Token F1
+    and Context Faithfulness, with connector lines between splits."""
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     metrics = [
         ("Token_F1",               "Token F1 (%)"),
@@ -279,7 +317,7 @@ def fig_dev_vs_test():
         bar_label(ax, r1)
         bar_label(ax, r2)
 
-        # Líneas conectando dev→test para cada modelo
+        # Connector lines between dev and test for each model
         for i, (d, t) in enumerate(zip(dev_vals, test_vals)):
             if not (math.isnan(d) or math.isnan(t)):
                 ax.plot(
@@ -301,15 +339,17 @@ def fig_dev_vs_test():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FIG 6 — Llama-3.1-8B: desglose por dataset
+# FIG 6 — Llama-3.1-8B: breakdown by dataset
 # ═══════════════════════════════════════════════════════════════════════════════
 def fig_llama_per_dataset():
+    """Generate a 2x2 grid breaking down Llama-3.1-8B performance across
+    datasets, modes (with/without context), and splits (dev/test)."""
     model = "meta-llama/Llama-3.1-8B-Instruct"
     metrics = [
         ("Token_F1",               "Token F1 (%)"),
         ("Context_Faithfulness_Pct", "Faithfulness (%)"),
-        ("Avg_Response_Length_Words", "Long. respuesta (palabras)"),
-        ("Sentence_Completeness_Pct", "Completitud frases (%)"),
+        ("Avg_Response_Length_Words", "Response length (words)"),
+        ("Sentence_Completeness_Pct", "Sentence completeness (%)"),
     ]
 
     fig, axes = plt.subplots(2, 2, figsize=(13, 9))
@@ -351,22 +391,22 @@ def fig_llama_per_dataset():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FIG 7 — Radar: visión global (test, con contexto)
+# FIG 7 — Radar: global overview (test, with context)
 # ═══════════════════════════════════════════════════════════════════════════════
 def fig_radar():
-    """Radar chart de 4 métricas normalizadas. Usamos test + with_context."""
-    # Métricas: F1, Faithfulness, 1/ResponseLength (menor es mejor → invertimos), GroundingDelta
+    """Generate a radar chart of four normalized metrics (F1, Faithfulness,
+    Compactness, Grounding Delta) using the test split with context."""
     raw = {}
     for m in MODELS:
         f1   = agg(m, "with_context",    "test", "Token_F1")
         faith = agg(m, "with_context",   "test", "Context_Faithfulness_Pct")
-        # Compacidad: inverso de longitud normalizado al rango
+        # Compactness: inverse of length, normalized within the range
         length = agg(m, "with_context",  "test", "Avg_Response_Length_Words")
         delta  = (agg(m, "with_context", "test", "Context_Faithfulness_Pct") -
                   agg(m, "without_context", "test", "Context_Faithfulness_Pct"))
         raw[m] = [f1, faith, length, delta]
 
-    # Normalización 0-1 por dimensión
+    # Min-max normalization (0-1) per dimension
     n_dim = 4
     all_vals = np.array([[raw[m][d] for m in MODELS] for d in range(n_dim)])
     mins = all_vals.min(axis=1)
@@ -379,7 +419,7 @@ def fig_radar():
             if span < 1e-9:
                 normed.append(0.5)
             else:
-                # Para longitud, mejor = más corto → invertir
+                # For length, shorter is better so we invert the scale
                 if i == 2:
                     normed.append(1 - (v - mins[i]) / span)
                 else:
@@ -412,10 +452,11 @@ def fig_radar():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FIG 8 — Heatmap completo de métricas
+# FIG 8 — Full metrics heatmap
 # ═══════════════════════════════════════════════════════════════════════════════
 def fig_heatmap():
-    """Heatmap: filas = modelo × modo, columnas = split × métrica."""
+    """Generate a color-coded heatmap with rows for each model-mode pair and
+    columns for each split-metric combination, normalized per column."""
     metrics_short = {
         "Token_F1": "F1",
         "Context_Faithfulness_Pct": "Faith.",
@@ -424,7 +465,7 @@ def fig_heatmap():
     splits = ["dev", "test"]
     modes  = ["with_context", "without_context"]
 
-    # Construir filas y columnas
+    # Build rows and columns
     row_labels = []
     matrix     = []
 
@@ -441,12 +482,12 @@ def fig_heatmap():
 
     mat = np.array(matrix, dtype=float)
 
-    # Normalizar por columna para colorear
+    # Normalize per column for coloring
     col_min = np.nanmin(mat, axis=0)
     col_max = np.nanmax(mat, axis=0)
     mat_norm = (mat - col_min) / np.where(col_max - col_min < 1e-9, 1, col_max - col_min)
 
-    # Invertir Length (menos palabras = mejor → verde para valores bajos)
+    # Invert Length columns (fewer words = better = green for low values)
     n_m = len(metrics_short)
     length_idx = list(metrics_short.keys()).index("Avg_Response_Length_Words")
     for s_idx in range(len(splits)):
@@ -463,11 +504,11 @@ def fig_heatmap():
     ax.set_yticks(np.arange(len(row_labels)))
     ax.set_yticklabels(row_labels)
 
-    # Separador entre con/sin contexto (cada 2 filas, un separador por modelo)
+    # Horizontal separator between with/without context groups (every 2 rows)
     for y in [1.5, 3.5, 5.5, 7.5, 9.5]:
         ax.axhline(y, color="white", lw=2)
 
-    # Valores en las celdas
+    # Cell value annotations
     for i in range(mat.shape[0]):
         for j in range(mat.shape[1]):
             v = mat[i, j]
@@ -478,7 +519,7 @@ def fig_heatmap():
 
     plt.colorbar(im, ax=ax, label="Normalizado por columna (0=peor, 1=mejor)")
 
-    # Línea vertical entre dev y test
+    # Vertical separator between dev and test column groups
     ax.axvline(len(metrics_short) - 0.5, color="white", lw=2)
     ax.text(len(metrics_short) / 2 - 0.5,   -0.7, "Dev",  ha="center", fontsize=10, color="#555")
     ax.text(len(metrics_short) * 1.5 - 0.5, -0.7, "Test", ha="center", fontsize=10, color="#555")
@@ -488,10 +529,11 @@ def fig_heatmap():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# FIG 9 — Comparativa agregada: 4 métricas en 4 subplots, test split
+# FIG 9 — Aggregate overview: 3 metrics in 3 subplots, test split
 # ═══════════════════════════════════════════════════════════════════════════════
 def fig_aggregate_overview():
-    """4 gráficos de barras: todos los modelos, test split, ambos modos."""
+    """Generate three side-by-side bar charts summarizing all models on the
+    test split, comparing with-context and without-context modes."""
     metrics = [
         ("Token_F1",               "Token F1 (%)"),
         ("Context_Faithfulness_Pct", "Context Faithfulness (%)"),

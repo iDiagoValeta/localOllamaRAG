@@ -1,19 +1,22 @@
 """
-plot_bertscore.py — Visualización de resultados BERTScore (base vs. adaptado)
+BERTScore results visualization (base vs. adapted).
 ==============================================================================
 
-Lee bertscore_summary.csv desde training-output/bertscore/
-y genera las siguientes figuras en training-output/bertscore/plots/:
+Reads ``bertscore_summary.csv`` from ``training-output/bertscore/`` and
+generates the following figures in ``training-output/bertscore/plots/``:
 
-  01_bertscore_f1_by_model.png    — BERTScore F1 base vs adaptado por modelo/dataset
-  02_bertscore_components.png     — Componentes P, R, F1 por modelo (base vs adaptado)
-  03_improvement_delta.png        — Δ de todas las métricas (adaptado − base)
-  04_all_metrics_comparison.png   — BERTScore F1 + Token F1 + Faithfulness comparados
-  05_heatmap.png                  — Heatmap completo de métricas
-  06_radar.png                    — Radar de perfiles de modelos (adaptado)
+  01_bertscore_f1_by_model.png    -- BERTScore F1 base vs. adapted per model/dataset
+  02_bertscore_components.png     -- P, R, F1 components per model (base vs. adapted)
+  03_improvement_delta.png        -- Delta of all metrics (adapted - base)
+  04_all_metrics_comparison.png   -- BERTScore F1 + Token F1 + Faithfulness compared
+  05_heatmap.png                  -- Full metrics heatmap
+  06_radar.png                    -- Radar chart of adapted model profiles
 
-Uso:
+Usage:
     python scripts/training/plot_bertscore.py
+
+Dependencies:
+    matplotlib, numpy
 """
 
 import csv
@@ -26,7 +29,9 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 
-# ── Rutas ────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR    = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
 EVAL_DIR    = os.path.join(ROOT_DIR, "training-output", "bertscore")
@@ -35,7 +40,9 @@ OUTPUT_DIR  = os.path.join(EVAL_DIR, "plots")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# ── Carga de datos ────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# DATA LOADING
+# ─────────────────────────────────────────────
 rows = []
 with open(CSV_PATH, newline="", encoding="utf-8") as f:
     reader = csv.DictReader(f)
@@ -74,9 +81,22 @@ plt.rcParams.update({
 })
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# HELPERS
+# ─────────────────────────────────────────────
 
 def get(model, dataset, variant, metric):
+    """Look up a single metric value from the loaded CSV rows.
+
+    Args:
+        model: Model key (e.g. ``"qwen-3"``).
+        dataset: Dataset name (e.g. ``"Dolly QA"``).
+        variant: ``"base"`` or ``"adapted"``.
+        metric: Column name (e.g. ``"BERTScore_F1"``).
+
+    Returns:
+        The metric value as a float, or NaN if not found.
+    """
     for r in rows:
         if r["model"] == model and r["dataset"] == dataset and r["variant"] == variant:
             return r[metric]
@@ -84,6 +104,15 @@ def get(model, dataset, variant, metric):
 
 
 def bar_label(ax, rects, fmt="{:.1f}", fontsize=8, pad=2):
+    """Add value labels on top of bar chart rectangles.
+
+    Args:
+        ax: Matplotlib axes object.
+        rects: Bar container returned by ``ax.bar()``.
+        fmt: Format string for the label text.
+        fontsize: Font size for the labels.
+        pad: Vertical padding above the bar.
+    """
     for rect in rects:
         h = rect.get_height()
         if not math.isnan(h) and h > 0:
@@ -97,19 +126,26 @@ def bar_label(ax, rects, fmt="{:.1f}", fontsize=8, pad=2):
 
 
 def save(fig, name):
+    """Save a matplotlib figure to the output directory and close it.
+
+    Args:
+        fig: Matplotlib figure object.
+        name: Output filename (e.g. ``"01_bertscore_f1_by_model.png"``).
+    """
     path = os.path.join(OUTPUT_DIR, name)
     fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
     print(f"  OK  {name}")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# FIG 1 — BERTScore F1: base vs adaptado por modelo, desglosado por dataset
-# ═══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────
+# FIG 1 -- BERTScore F1: base vs. adapted per model, broken down by dataset
+# ─────────────────────────────────────────────
 def fig_bertscore_f1_by_model():
+    """Generate grouped bar chart of BERTScore F1 (base vs. adapted) per model."""
     fig, axes = plt.subplots(1, 3, figsize=(15, 5), sharey=True)
     fig.suptitle(
-        "BERTScore F1 — Base vs. Adaptado por Modelo y Dataset",
+        "BERTScore F1 — Base vs. Adapted per Model and Dataset",
         fontsize=13, fontweight="bold", y=1.02,
     )
 
@@ -121,12 +157,12 @@ def fig_bertscore_f1_by_model():
         adapted_vals = [get(model, ds, "adapted", "BERTScore_F1") for ds in DATASETS]
 
         r1 = ax.bar(x - w/2, base_vals,    w, label="Base",    color=BASE_COLOR,    alpha=0.88)
-        r2 = ax.bar(x + w/2, adapted_vals, w, label="Adaptado", color=ADAPTED_COLOR, alpha=0.88)
+        r2 = ax.bar(x + w/2, adapted_vals, w, label="Adapted", color=ADAPTED_COLOR, alpha=0.88)
 
         bar_label(ax, r1)
         bar_label(ax, r2)
 
-        # Líneas de mejora
+        # Improvement annotations
         for i, (b, a) in enumerate(zip(base_vals, adapted_vals)):
             if not (math.isnan(b) or math.isnan(a)):
                 ax.annotate(
@@ -148,19 +184,20 @@ def fig_bertscore_f1_by_model():
     save(fig, "01_bertscore_f1_by_model.png")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# FIG 2 — Componentes P, R, F1 por modelo: base vs adaptado
-# ═══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────
+# FIG 2 -- BERTScore components P, R, F1 per model: base vs. adapted
+# ─────────────────────────────────────────────
 def fig_bertscore_components():
+    """Generate a grid of P/R/F1 bar charts for each model and dataset."""
     components = [
-        ("BERTScore_P",  "Precisión (P)"),
+        ("BERTScore_P",  "Precision (P)"),
         ("BERTScore_R",  "Recall (R)"),
         ("BERTScore_F1", "F1"),
     ]
 
     fig, axes = plt.subplots(len(MODELS), 3, figsize=(14, 10), sharey="col")
     fig.suptitle(
-        "Componentes BERTScore (P / R / F1) — Base vs. Adaptado",
+        "BERTScore Components (P / R / F1) — Base vs. Adapted",
         fontsize=13, fontweight="bold", y=1.01,
     )
 
@@ -175,7 +212,7 @@ def fig_bertscore_components():
             adapted_vals = [get(model, ds, "adapted", metric) for ds in DATASETS]
 
             r1 = ax.bar(x - w/2, base_vals,    w, label="Base",    color=BASE_COLOR,             alpha=0.85)
-            r2 = ax.bar(x + w/2, adapted_vals, w, label="Adaptado", color=comp_colors[col_idx], alpha=0.85)
+            r2 = ax.bar(x + w/2, adapted_vals, w, label="Adapted", color=comp_colors[col_idx], alpha=0.85)
 
             bar_label(ax, r1, fontsize=7)
             bar_label(ax, r2, fontsize=7)
@@ -197,19 +234,20 @@ def fig_bertscore_components():
     save(fig, "02_bertscore_components.png")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# FIG 3 — Δ de mejora por métrica y dataset (adaptado − base)
-# ═══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────
+# FIG 3 -- Improvement delta per metric and dataset (adapted - base)
+# ─────────────────────────────────────────────
 def fig_improvement_delta():
+    """Generate bar chart showing fine-tuning improvement deltas."""
     delta_metrics = [
-        ("BERTScore_F1", "Δ BERTScore F1"),
-        ("Token_F1",     "Δ Token F1"),
-        ("Faithfulness", "Δ Faithfulness"),
+        ("BERTScore_F1", "Delta BERTScore F1"),
+        ("Token_F1",     "Delta Token F1"),
+        ("Faithfulness", "Delta Faithfulness"),
     ]
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
     fig.suptitle(
-        "Mejora por Fine-tuning (Δ = Adaptado − Base) — por Modelo y Dataset",
+        "Fine-tuning Improvement (Delta = Adapted - Base) — per Model and Dataset",
         fontsize=12, fontweight="bold", y=1.02,
     )
 
@@ -227,7 +265,7 @@ def fig_improvement_delta():
             bar_label(ax, rects, fmt="{:+.1f}", fontsize=7, pad=0.5)
 
         ax.set_title(ylabel)
-        ax.set_ylabel("Puntos porcentuales (pp)")
+        ax.set_ylabel("Percentage points (pp)")
         ax.set_xticks(x)
         ax.set_xticklabels(DATASETS, rotation=12, ha="right")
         ax.axhline(0, color="black", lw=0.8)
@@ -242,10 +280,11 @@ def fig_improvement_delta():
     save(fig, "03_improvement_delta.png")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# FIG 4 — Comparativa de métricas: BERTScore F1 + Token F1 + Faithfulness
-# ═══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────
+# FIG 4 -- Metrics comparison: BERTScore F1 + Token F1 + Faithfulness
+# ─────────────────────────────────────────────
 def fig_all_metrics_comparison():
+    """Generate aggregated metrics comparison (mean across datasets) per model."""
     metrics = [
         ("BERTScore_F1", "BERTScore F1 (%)"),
         ("Token_F1",     "Token F1 (%)"),
@@ -254,7 +293,7 @@ def fig_all_metrics_comparison():
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 5), sharey=False)
     fig.suptitle(
-        "Comparativa de Métricas — Agregado por Modelo (media de datasets)",
+        "Metrics Comparison — Aggregated per Model (mean across datasets)",
         fontsize=12, fontweight="bold", y=1.02,
     )
 
@@ -274,7 +313,7 @@ def fig_all_metrics_comparison():
         ]
 
         r1 = ax.bar(x - w/2, base_vals,    w, label="Base",    color=BASE_COLOR,    alpha=0.88)
-        r2 = ax.bar(x + w/2, adapted_vals, w, label="Adaptado", color=ADAPTED_COLOR, alpha=0.88)
+        r2 = ax.bar(x + w/2, adapted_vals, w, label="Adapted", color=ADAPTED_COLOR, alpha=0.88)
 
         bar_label(ax, r1)
         bar_label(ax, r2)
@@ -292,10 +331,11 @@ def fig_all_metrics_comparison():
     save(fig, "04_all_metrics_comparison.png")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# FIG 5 — Heatmap: modelos × datasets × variante
-# ═══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────
+# FIG 5 -- Heatmap: models x datasets x variant
+# ─────────────────────────────────────────────
 def fig_heatmap():
+    """Generate a full metrics heatmap across all models, datasets and variants."""
     show_metrics = [
         ("BERTScore_P",  "BS-P"),
         ("BERTScore_R",  "BS-R"),
@@ -318,7 +358,7 @@ def fig_heatmap():
     col_labels = [ml for _, ml in show_metrics]
     mat = np.array(matrix, dtype=float)
 
-    # Normalizar por columna
+    # Normalize by column
     col_min  = np.nanmin(mat, axis=0)
     col_max  = np.nanmax(mat, axis=0)
     span     = np.where(col_max - col_min < 1e-9, 1, col_max - col_min)
@@ -326,7 +366,7 @@ def fig_heatmap():
 
     fig, ax = plt.subplots(figsize=(10, 14))
     fig.suptitle(
-        "Heatmap BERTScore — Todos los Modelos, Datasets y Variantes",
+        "BERTScore Heatmap — All Models, Datasets and Variants",
         fontsize=12, fontweight="bold",
     )
 
@@ -337,14 +377,14 @@ def fig_heatmap():
     ax.set_yticks(np.arange(len(row_labels)))
     ax.set_yticklabels(row_labels, fontsize=8)
 
-    # Separadores: cada 6 filas (2 variantes × 3 datasets) = 1 modelo
+    # Separators: every 6 rows (2 variants x 3 datasets) = 1 model
     for y in [5.5, 11.5]:
         ax.axhline(y, color="white", lw=3)
-    # Separadores entre variantes dentro de cada modelo (cada 3 filas)
+    # Separators between variants within each model (every 3 rows)
     for y in [2.5, 8.5, 14.5]:
         ax.axhline(y, color="white", lw=1.5)
 
-    # Valores en las celdas
+    # Cell values
     for i in range(mat.shape[0]):
         for j in range(mat.shape[1]):
             v = mat[i, j]
@@ -353,24 +393,25 @@ def fig_heatmap():
                 ax.text(j, i, f"{v:.1f}", ha="center", va="center",
                         fontsize=8, color=text_color, fontweight="bold")
 
-    plt.colorbar(im, ax=ax, label="Normalizado por columna (0=peor, 1=mejor)", shrink=0.6)
+    plt.colorbar(im, ax=ax, label="Normalized by column (0=worst, 1=best)", shrink=0.6)
     fig.tight_layout()
     save(fig, "05_heatmap.png")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# FIG 6 — Radar: perfil de modelos adaptados (media sobre datasets)
-# ═══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────
+# FIG 6 -- Radar: adapted model profiles (mean across datasets)
+# ─────────────────────────────────────────────
 def fig_radar():
+    """Generate radar charts comparing model metric profiles (base and adapted)."""
     radar_metrics = [
-        ("BERTScore_P",  "BS-Precisión"),
+        ("BERTScore_P",  "BS-Precision"),
         ("BERTScore_R",  "BS-Recall"),
         ("BERTScore_F1", "BS-F1"),
         ("Token_F1",     "Token F1"),
         ("Faithfulness", "Faithfulness"),
     ]
 
-    # Valores medios por variante
+    # Mean values per variant
     raw = {variant: {} for variant in ("base", "adapted")}
     for variant in raw:
         for model in MODELS:
@@ -379,7 +420,7 @@ def fig_radar():
                 for m, _ in radar_metrics
             ]
 
-    # Normalizar 0-1 usando el rango global (base + adapted juntos)
+    # Normalize 0-1 using the global range (base + adapted together)
     all_vals = np.array(
         [raw[v][m] for v in ("base", "adapted") for m in MODELS]
     )
@@ -398,11 +439,11 @@ def fig_radar():
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 6), subplot_kw=dict(polar=True))
     fig.suptitle(
-        "Radar de Métricas BERTScore — Base vs. Adaptado (media sobre datasets)",
+        "BERTScore Metrics Radar — Base vs. Adapted (mean across datasets)",
         fontsize=12, fontweight="bold",
     )
 
-    for ax, (variant, title) in zip(axes, [("base", "Modelos Base"), ("adapted", "Modelos Adaptados")]):
+    for ax, (variant, title) in zip(axes, [("base", "Base Models"), ("adapted", "Adapted Models")]):
         ax.set_title(title, fontweight="bold", pad=15)
         for model in MODELS:
             values = normalize(raw[variant][model])
@@ -421,11 +462,11 @@ def fig_radar():
     save(fig, "06_radar.png")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────
 # MAIN
-# ═══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────
 if __name__ == "__main__":
-    print(f"\nGenerando visualizaciones en: {OUTPUT_DIR}\n")
+    print(f"\nGenerating visualizations in: {OUTPUT_DIR}\n")
 
     fig_bertscore_f1_by_model()
     fig_bertscore_components()
@@ -434,4 +475,4 @@ if __name__ == "__main__":
     fig_heatmap()
     fig_radar()
 
-    print(f"\nListo — {len(os.listdir(OUTPUT_DIR))} archivos en {OUTPUT_DIR}")
+    print(f"\nDone — {len(os.listdir(OUTPUT_DIR))} files in {OUTPUT_DIR}")

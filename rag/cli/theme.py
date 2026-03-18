@@ -1,18 +1,17 @@
 """
-MonkeyGrab CLI — Theme & Visual Identity
-==========================================
+MonkeyGrab CLI -- Theme and Visual Identity.
 
-Paleta de colores oscura profesional, tipografía de terminal,
-iconografía y logo ASCII con la identidad MonkeyGrab.
+Dark professional color palette, terminal typography, iconography,
+and ASCII logo carrying the MonkeyGrab brand identity.
 
-Inspirado en las CLI de Claude Code y Gemini CLI:
-colores apagados, bajo contraste, acentos sutiles.
+Inspired by the CLIs of Claude Code and Gemini CLI:
+muted colors, low contrast, subtle accents.
 """
 
 import os
 
 # ─────────────────────────────────────────────────────────────────────
-# Soporte de colores multiplataforma
+# Cross-platform color support
 # ─────────────────────────────────────────────────────────────────────
 try:
     from colorama import init as _colorama_init
@@ -21,15 +20,15 @@ except ImportError:
     pass
 
 # ─────────────────────────────────────────────────────────────────────
-# CLASE THEME — Paleta de colores dark profesional
+# THEME CLASS -- Professional dark color palette
 # ─────────────────────────────────────────────────────────────────────
 
 class Theme:
     """
-    Sistema de diseño visual para la CLI de MonkeyGrab.
+    Visual design system for the MonkeyGrab CLI.
 
-    Paleta oscura con acentos sutiles. Todos los valores son
-    secuencias de escape ANSI 256-color para máxima compatibilidad.
+    Dark palette with subtle accents. All values are ANSI 256-color
+    escape sequences for maximum terminal compatibility.
     """
 
     RESET       = "\033[0m"
@@ -97,7 +96,7 @@ class Theme:
 
     @staticmethod
     def terminal_width() -> int:
-        """Obtiene el ancho actual de la terminal."""
+        """Return the current terminal width in columns."""
         try:
             return os.get_terminal_size().columns
         except Exception:
@@ -105,7 +104,16 @@ class Theme:
 
     @classmethod
     def hline(cls, char: str = None, width: int = None, color: str = None) -> str:
-        """Genera una línea horizontal del ancho de la terminal."""
+        """Generate a horizontal line spanning the terminal width.
+
+        Args:
+            char: Character used to draw the line (default: BOX_H).
+            width: Override width in columns (default: terminal width).
+            color: ANSI color escape to apply (default: BORDER).
+
+        Returns:
+            A colored string representing the horizontal line.
+        """
         w = width or cls.terminal_width()
         c = char or cls.BOX_H
         col = color or cls.BORDER
@@ -113,20 +121,30 @@ class Theme:
 
     @classmethod
     def styled(cls, text: str, *styles: str) -> str:
-        """Aplica múltiples estilos ANSI a un texto."""
+        """Apply multiple ANSI style sequences to a text string.
+
+        Args:
+            text: The text to style.
+            *styles: One or more ANSI escape sequences to prepend.
+
+        Returns:
+            The styled string with a trailing RESET.
+        """
         prefix = "".join(styles)
         return f"{prefix}{text}{cls.RESET}"
 
 # ─────────────────────────────────────────────────────────────────────
-# LOGO ASCII — MonkeyGrab
+# ASCII LOGO -- MonkeyGrab
 # ─────────────────────────────────────────────────────────────────────
 
 def get_logo(modelo_desc: str = "") -> str:
-    """
-    Genera el logo ASCII de MonkeyGrab con gradiente oscuro.
+    """Generate the MonkeyGrab ASCII logo with a dark gradient.
 
     Args:
-        modelo_desc: Descripción del modelo base para mostrar en el subtítulo
+        modelo_desc: Base model description to display in the subtitle.
+
+    Returns:
+        A multi-line string containing the colored ASCII logo.
     """
     T = Theme
 
@@ -158,7 +176,7 @@ def get_logo(modelo_desc: str = "") -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────
-# MENSAJES DEL SISTEMA
+# SYSTEM MESSAGES
 # ─────────────────────────────────────────────────────────────────────
 
 MESSAGES = {

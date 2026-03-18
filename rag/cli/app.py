@@ -1,11 +1,19 @@
 """
-MonkeyGrab CLI
-==============================
+MonkeyGrab CLI Application.
 
-Bucle principal de la interfaz interactiva. Orquesta el prompt,
-el dispatch de comandos y la integración con el motor RAG.
+Main interactive loop for the MonkeyGrab command-line interface. Orchestrates
+the user prompt, slash command dispatch, and integration with the RAG engine.
+Uses the Display class (rich) for all visual output.
 
-Usa la clase Display (rich) para toda la salida visual.
+Usage:
+    from rag.cli.app import MonkeyGrabCLI
+    cli = MonkeyGrabCLI(rag_engine)
+    cli.run()
+
+Dependencies:
+    - chromadb
+    - rag.cli.display (ui singleton)
+    - A RAG engine module providing search, indexing, and generation functions
 """
 
 import os
@@ -19,19 +27,31 @@ import chromadb
 from rag.cli.display import ui
 
 
+# ─────────────────────────────────────────────
+# MAIN CLI CLASS
+# ─────────────────────────────────────────────
+
 class MonkeyGrabCLI:
     """
-    Aplicación CLI principal de MonkeyGrab.
+    Main CLI application for MonkeyGrab.
 
-    Encapsula el bucle de interacción, gestión de estado (modo, historial)
-    y dispatch de comandos slash. Delega la lógica RAG a chat_pdfs.
+    Encapsulates the interaction loop, state management (mode, history),
+    and slash command dispatch. Delegates RAG logic to the provided
+    rag_engine module.
     """
+
+    # ─────────────────────────────────────────────
+    # INITIALIZATION
+    # ─────────────────────────────────────────────
 
     def __init__(self, rag_engine):
         """
+        Initialize the CLI application.
+
         Args:
-            rag_engine: Módulo o namespace con las funciones RAG
+            rag_engine: Module or namespace providing RAG functions
                         (realizar_busqueda_hibrida, generar_respuesta, etc.)
+                        and configuration constants.
         """
         self.rag = rag_engine
         self.mode = "chat"
@@ -53,12 +73,12 @@ class MonkeyGrabCLI:
             "/exit":    self._cmd_exit,
         }
 
-    # ─────────────────────────────────────────────────────────────
-    # ARRANQUE
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────
+    # STARTUP
+    # ─────────────────────────────────────────────
 
     def run(self) -> None:
-        """Punto de entrada principal. Inicializa y arranca el bucle."""
+        """Entry point. Initialize the system and start the main loop."""
         ui.logo()
 
         client = chromadb.PersistentClient(path=self.rag.PATH_DB)
@@ -101,12 +121,12 @@ class MonkeyGrabCLI:
 
         self._loop()
 
-    # ─────────────────────────────────────────────────────────────
-    # BUCLE PRINCIPAL
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────
+    # MAIN LOOP
+    # ─────────────────────────────────────────────
 
     def _loop(self) -> None:
-        """Bucle de lectura → dispatch → respuesta."""
+        """Read-dispatch-respond loop. Runs until the user exits."""
         while True:
             model = (self.rag.MODELO_CHAT if self.mode == "chat"
                      else self.rag.MODELO_RAG)
@@ -138,12 +158,16 @@ class MonkeyGrabCLI:
             else:
                 self._process_chat(pregunta)
 
-    # ─────────────────────────────────────────────────────────────
-    # PROCESAMIENTO DE PREGUNTAS
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────
+    # CHAT / RAG PROCESSING
+    # ─────────────────────────────────────────────
 
     def _process_chat(self, pregunta: str) -> None:
-        """Procesa una pregunta en modo chat."""
+        """Process a question in chat mode.
+
+        Args:
+            pregunta: The user's input question.
+        """
         ui.response_header("chat", self.rag.MODELO_CHAT)
 
         respuesta = self._chat_stream(pregunta)
@@ -155,7 +179,17 @@ class MonkeyGrabCLI:
         self.rag.guardar_historial(self.historial_chat)
 
     def _chat_stream(self, pregunta: str) -> str:
-        """Ejecuta streaming del modo chat usando el modelo chat."""
+        """Execute streaming chat using the chat model.
+
+        Builds the message list from the system prompt and recent history,
+        then streams the response token by token.
+
+        Args:
+            pregunta: The user's input question.
+
+        Returns:
+            The full assembled response text.
+        """
         import ollama
 
         messages = [{"role": "system", "content": self.rag.SYSTEM_PROMPT_CHAT}]
@@ -183,7 +217,15 @@ class MonkeyGrabCLI:
         return respuesta
 
     def _process_rag(self, pregunta: str) -> None:
-        """Procesa una pregunta en modo RAG."""
+        """Process a question in RAG mode.
+
+        Validates the question length, runs hybrid search, applies
+        reranker filtering if enabled, expands context with adjacent
+        chunks, and generates a response with source citations.
+
+        Args:
+            pregunta: The user's input question.
+        """
         if len(pregunta.strip()) < self.rag.MIN_LONGITUD_PREGUNTA_RAG:
             ui.question_too_short()
             self.rag.guardar_debug_rag(
@@ -247,6 +289,7 @@ class MonkeyGrabCLI:
                 and 'chunk' in fragmentos_finales[0]['metadata']):
             self._expand_context(fragmentos_finales, ids_usados)
 
+        # Truncate context if total character count exceeds the limit
         contexto_total = sum(len(f['doc']) for f in fragmentos_finales)
         if contexto_total > self.rag.MAX_CONTEXTO_CHARS:
             fragmentos_truncados = []
@@ -268,7 +311,15 @@ class MonkeyGrabCLI:
         ui.response_footer()
 
     def _expand_context(self, fragmentos: list, ids_usados: set) -> None:
-        """Expande contexto con chunks adyacentes."""
+        """Expand context by retrieving adjacent chunks from the collection.
+
+        For each top fragment, fetches neighboring chunks and appends
+        them to the fragment list if they haven't been included yet.
+
+        Args:
+            fragmentos: List of selected fragments (modified in place).
+            ids_usados: Set of already-used fragment IDs (modified in place).
+        """
         chunks_adicionales = []
 
         for frag in fragmentos[:self.rag.N_TOP_PARA_EXPANSION]:
@@ -301,44 +352,56 @@ class MonkeyGrabCLI:
         if chunks_adicionales:
             fragmentos.extend(chunks_adicionales)
 
-    # ─────────────────────────────────────────────────────────────
-    # COMANDOS
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────
+    # COMMAND HANDLERS
+    # ─────────────────────────────────────────────
 
     def _cmd_rag(self) -> bool:
+        """Switch to RAG mode."""
         self.mode = "rag"
         ui.mode_change("rag", self.rag.MODELO_RAG)
         return False
 
     def _cmd_chat(self) -> bool:
+        """Switch to chat mode."""
         self.mode = "chat"
         ui.mode_change("chat", self.rag.MODELO_CHAT)
         return False
 
     def _cmd_clear(self) -> bool:
+        """Clear the chat history."""
         self.rag.limpiar_historial(self.historial_chat)
         ui.history_cleared()
         return False
 
     def _cmd_stats(self) -> bool:
+        """Display database statistics."""
         docs = self.rag.obtener_documentos_indexados(self.collection)
         ui.stats_table(self.collection.count(), docs)
         return False
 
     def _cmd_help(self) -> bool:
+        """Display the help/welcome screen."""
         ui.welcome()
         return False
 
     def _cmd_docs(self) -> bool:
+        """Display the list of indexed documents."""
         docs = self.rag.obtener_documentos_indexados(self.collection)
         ui.docs_table(docs)
         return False
 
     def _cmd_topics(self) -> bool:
+        """Display the topics summary."""
         self._show_topics()
         return False
 
     def _cmd_reindex(self) -> bool:
+        """Delete the current database and re-index all documents.
+
+        Returns:
+            True to signal the main loop to exit (restart required).
+        """
         ui.reindex_start()
         try:
             if os.path.exists(self.rag.PATH_DB):
@@ -360,16 +423,26 @@ class MonkeyGrabCLI:
             return False
 
     def _cmd_exit(self) -> bool:
+        """Save history and exit the application.
+
+        Returns:
+            True to signal the main loop to exit.
+        """
         self.rag.guardar_historial(self.historial_chat)
         ui.farewell()
         return True
 
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────
     # HELPERS
-    # ─────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────
 
     def _show_init_info(self, total_documentos: int = 0, total_fragmentos: int = 0) -> None:
-        """Recopila y muestra info de inicialización."""
+        """Gather and display initialization information.
+
+        Args:
+            total_documentos: Number of PDF files detected.
+            total_fragmentos: Number of fragments in the database.
+        """
         rag = self.rag
 
         reranker_info = 'on' if rag.USAR_RERANKER else 'off'
@@ -402,7 +475,7 @@ class MonkeyGrabCLI:
         })
 
     def _show_topics(self) -> None:
-        """Recopila información de temas y los muestra."""
+        """Gather topic information from indexed documents and display it."""
         docs = self.rag.obtener_documentos_indexados(self.collection)
 
         if not docs:
@@ -423,6 +496,7 @@ class MonkeyGrabCLI:
                     doc_info['pages'] = len(pages)
                     doc_info['fragments'] = len(all_data['documents'])
 
+                    # Extract significant terms by frequency from the first 20 fragments
                     texto = " ".join(all_data['documents'][:20])
                     palabras = texto.split()
                     significativas = [
