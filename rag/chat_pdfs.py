@@ -23,8 +23,8 @@ Usage:
 # ─────────────────────────────────────────────
 #
 #  CONFIGURATION (startup)
-#  +-- 1. Imports            stdlib -> third-party (ollama, chromadb, pypdf) -> local
-#  +-- 2. Optional deps      pymupdf4llm (PDF), CrossEncoder (reranking)
+#  +-- 1. Imports             stdlib -> third-party (ollama, chromadb, pypdf) -> local
+#  +-- 2. Optional deps       pymupdf4llm (PDF), CrossEncoder (reranking)
 #  +-- 3. Global config
 #  |      +-- 3.1 Terminal runtime (UTF-8)
 #  |      +-- 3.2 Ollama models (RAG, CHAT, embedding, contextual, RECOMP)
@@ -34,7 +34,7 @@ Usage:
 #  |      +-- 3.6 Logging and environment
 #  |
 #  BUSINESS LOGIC
-#  +-- 4. System prompts      RAG (empty), CHAT (identity + language)
+#  +-- 4. System prompts      CHAT (identity + language); RAG prompt baked into Modelfile
 #  +-- 5. History persistence  local JSON for CHAT mode
 #  +-- 6. Preprocessing and chunking  text -> Markdown chunks with overlap
 #  +-- 7. Keywords and lexical search  acronyms, bigrams, where_document
@@ -48,8 +48,9 @@ Usage:
 #  |      +-- 10.5 Evaluation    silent pipeline for RAGAS
 #  +--11. Indexing and collection management
 #  |      +-- 11.1 Contextual retrieval  chunk enrichment with LLM
-#  |      +-- 11.2 Indexing              PDFs -> pymupdf4llm/pypdf -> ChromaDB
-#  |      +-- 11.3 Collection mgmt      list indexed documents
+#  |      +-- 11.2 Image extraction      fitz page images + MODELO_VISION description
+#  |      +-- 11.3 Indexing              PDFs -> pymupdf4llm/pypdf + images -> ChromaDB
+#  |      +-- 11.4 Collection mgmt      list indexed documents
 #  |
 #  ENTRY
 #  +--12. Entry point   main() -> MonkeyGrabCLI.run()
@@ -63,6 +64,7 @@ Usage:
 
 # --- 1.1 Standard library ---
 
+import base64
 import io
 import json
 import logging
@@ -105,6 +107,12 @@ except ImportError:
     PYMUPDF_AVAILABLE = False
 
 try:
+    import fitz  # PyMuPDF -- used for image extraction
+    FITZ_DISPONIBLE = True
+except ImportError:
+    FITZ_DISPONIBLE = False
+
+try:
     from sentence_transformers import CrossEncoder
     RERANKER_AVAILABLE = True
 except ImportError:
@@ -136,6 +144,7 @@ MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:4b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma3:4b")
 MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma3:4b")
+MODELO_VISION = os.getenv("OLLAMA_VISION_MODEL", "gemma3:4b")
 
 
 def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
@@ -162,6 +171,7 @@ USAR_RERANKER = RERANKER_AVAILABLE
 EXPANDIR_CONTEXTO = True
 USAR_OPTIMIZACION_CONTEXTO = True
 USAR_RECOMP_SYNTHESIS = False
+USAR_EMBEDDINGS_IMAGEN = True
 LOGGING_METRICAS = True
 GUARDAR_DEBUG_RAG = True
 
@@ -197,6 +207,9 @@ MAX_CHARS_EMBED = 4000
 CHUNK_SIZE = 1500
 CHUNK_OVERLAP = 350
 MIN_CHUNK_LENGTH = 80
+MAX_IMAGENES_POR_PAGINA = 5
+MIN_IMAGEN_SIZE_PX = 100
+_IMAGEN_CHUNK_OFFSET = 10_000
 
 N_RESULTADOS_SEMANTICOS = 80
 N_RESULTADOS_KEYWORD = 40
@@ -237,17 +250,6 @@ os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 # ─────────────────────────────────────────────
 
 
-SYSTEM_PROMPT_RAG = """You are a professional document analysis assistant. Your role is to answer questions accurately based on the provided document context.
-
-Guidelines:
-- Base your answers strictly on the information within the <context> tags.
-- Do not add information beyond what the context provides.
-- Formulate clear, well-structured responses in complete sentences.
-- For factual questions, be direct and precise.
-- For analytical or complex questions, provide detailed explanations referencing specific information from the context.
-- Always respond in the same language as the context (English, Spanish/Castellano, or Catalan/Català).
-- Synthesize information naturally rather than copying text verbatim."""
-
 SYSTEM_PROMPT_CHAT = f"""
 You are MonkeyGrab, the conversational assistant for a local academic RAG system (TFG project).
 Your purpose is to help users query indexed PDF documents and understand the system itself.
@@ -272,6 +274,8 @@ Use this reference to explain how the system works or which parts are mandatory 
     * **Embeddings:** Converting text to vectors and saving to ChromaDB.
 * **OPTIONAL (Flag: `USAR_CONTEXTUAL_RETRIEVAL`):**
     * **Contextual Retrieval:** Uses an LLM to generate a summary/context for each chunk before indexing to improve retrieval accuracy.
+* **OPTIONAL (Flag: `USAR_EMBEDDINGS_IMAGEN`):**
+    * **Image Indexing:** Extracts raster images from each PDF page with PyMuPDF (fitz), describes them with `MODELO_VISION` (vision-capable LLM), and stores the description as a regular text chunk in ChromaDB. Requires `fitz` (PyMuPDF) and a vision-capable Ollama model (default: `gemma3:4b`).
 
 #### 2. RETRIEVAL PHASE
 Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; optional components extend it.
@@ -1687,7 +1691,6 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
 
 def guardar_debug_rag(
     pregunta: str,
-    system_prompt: str = "",
     mensaje_usuario: str = "",
     respuesta: str = "",
     fragmentos: Optional[List[Dict[str, Any]]] = None,
@@ -1702,7 +1705,6 @@ def guardar_debug_rag(
 
     Args:
         pregunta: Original user question.
-        system_prompt: System prompt sent to the model.
         mensaje_usuario: Complete user message (with ``<context>``).
         respuesta: Model response text.
         fragmentos: Retrieved fragments used for context.
@@ -1785,7 +1787,7 @@ def guardar_debug_rag(
             f.write("─" * 80 + "\n")
             f.write("  SYSTEM PROMPT\n")
             f.write("─" * 80 + "\n")
-            f.write(f"{system_prompt or '(not sent)'}\n\n")
+            f.write("(baked into Modelfile — not sent via API)\n\n")
 
             context_match = re.search(r'<context>(.*?)</context>', mensaje_usuario, re.DOTALL)
             contexto_enviado = context_match.group(1).strip() if context_match else "(empty)"
@@ -1845,12 +1847,15 @@ def guardar_debug_rag(
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 
-def _ollama_generate_stream(model: str, system: str, prompt: str, options: dict):
+def _ollama_generate_stream(model: str, prompt: str, options: dict):
     """Stream tokens from the Ollama ``/api/generate`` endpoint.
+
+    The system prompt is intentionally omitted here: it is baked directly
+    into the model's Modelfile, so re-sending it via the API would be
+    redundant and would override the Modelfile default unnecessarily.
 
     Args:
         model: Ollama model name.
-        system: System prompt.
         prompt: User prompt.
         options: Generation options (temperature, top_p, etc.).
 
@@ -1859,7 +1864,6 @@ def _ollama_generate_stream(model: str, system: str, prompt: str, options: dict)
     """
     payload = {
         "model": model,
-        "system": system,
         "prompt": prompt,
         "stream": True,
         "options": options,
@@ -1894,7 +1898,6 @@ def generar_respuesta(pregunta: str, fragmentos: List[Dict[str, Any]], metricas:
     respuesta_completa = ""
     for chunk in _ollama_generate_stream(
         model=MODELO_RAG,
-        system=SYSTEM_PROMPT_RAG,
         prompt=mensaje_usuario,
         options={"temperature": 0.15, "top_p": 0.9, "repeat_penalty": 1.15, "num_ctx": 8192},
     ):
@@ -1906,7 +1909,7 @@ def generar_respuesta(pregunta: str, fragmentos: List[Dict[str, Any]], metricas:
     ui.stream_token(respuesta_completa)
     print()
 
-    guardar_debug_rag(pregunta, SYSTEM_PROMPT_RAG, mensaje_usuario, respuesta_completa, fragmentos, metricas=metricas)
+    guardar_debug_rag(pregunta, mensaje_usuario, respuesta_completa, fragmentos, metricas=metricas)
     return respuesta_completa
 
 
@@ -1933,7 +1936,6 @@ def generar_respuesta_silenciosa(pregunta: str, fragmentos: List[Dict[str, Any]]
     respuesta_completa = ""
     for chunk in _ollama_generate_stream(
         model=MODELO_RAG,
-        system=SYSTEM_PROMPT_RAG,
         prompt=mensaje_usuario,
         options={"temperature": 0.15, "top_p": 0.9, "repeat_penalty": 1.15, "num_ctx": 8192},
     ):
@@ -2065,7 +2067,135 @@ def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
     return ""
 
 
-# --- 11.2 Indexing ---
+# --- 11.2 Image extraction ---
+
+
+def extraer_imagenes_pdf(
+    ruta_pdf: str,
+    max_por_pagina: int = MAX_IMAGENES_POR_PAGINA,
+    min_size_px: int = MIN_IMAGEN_SIZE_PX,
+) -> Dict[int, List[Dict[str, Any]]]:
+    """Extract all raster images from a PDF, grouped by zero-based page number.
+
+    Opens the PDF once with PyMuPDF (fitz) and iterates over every page.
+    Images below ``min_size_px`` on either side (icons, decorations) are
+    discarded.  At most ``max_por_pagina`` images are kept per page,
+    in document order.
+
+    Args:
+        ruta_pdf: Absolute path to the PDF file.
+        max_por_pagina: Maximum number of images to keep per page.
+        min_size_px: Minimum width **and** height in pixels; smaller images
+            are skipped.
+
+    Returns:
+        Dict mapping zero-based page number to a list of image dicts.
+        Each dict has keys ``"image_bytes"`` (raw bytes), ``"width"``,
+        ``"height"``, and ``"ext"`` (format string, e.g. ``"png"``).
+        Pages with no qualifying images are omitted from the dict.
+    """
+    if not FITZ_DISPONIBLE:
+        return {}
+
+    imagenes_por_pagina: Dict[int, List[Dict[str, Any]]] = {}
+
+    try:
+        doc = fitz.open(ruta_pdf)
+
+        for num_pag in range(len(doc)):
+            page = doc[num_pag]
+            image_list = page.get_images(full=True)
+            imagenes_pagina: List[Dict[str, Any]] = []
+
+            for img_info in image_list:
+                if len(imagenes_pagina) >= max_por_pagina:
+                    break
+
+                xref = img_info[0]
+                try:
+                    img_data = doc.extract_image(xref)
+                    width = img_data.get("width", 0)
+                    height = img_data.get("height", 0)
+
+                    if width < min_size_px or height < min_size_px:
+                        continue
+
+                    imagenes_pagina.append({
+                        "image_bytes": img_data["image"],
+                        "width": width,
+                        "height": height,
+                        "ext": img_data.get("ext", "png"),
+                    })
+                except Exception as e:
+                    logging.warning(
+                        f"Error extracting image xref={xref} from {ruta_pdf} page {num_pag}: {e}"
+                    )
+
+            if imagenes_pagina:
+                imagenes_por_pagina[num_pag] = imagenes_pagina
+
+        doc.close()
+
+    except Exception as e:
+        logging.warning(f"Error reading {ruta_pdf} with fitz for image extraction: {e}")
+
+    return imagenes_por_pagina
+
+
+def describir_imagen_con_llm(image_bytes: bytes) -> str:
+    """Generate a textual description of an academic image using ``MODELO_VISION``.
+
+    Sends the raw image bytes to the configured vision-capable Ollama model
+    and returns a detailed, retrieval-optimised description.  The description
+    is later embedded with the standard ``MODELO_EMBEDDING`` and stored in
+    ChromaDB alongside text chunks, so cross-modal retrieval requires no
+    extra infrastructure.
+
+    The function is a no-op (returns ``""``) when ``USAR_EMBEDDINGS_IMAGEN``
+    is ``False`` or when the Ollama call fails.
+
+    Args:
+        image_bytes: Raw image bytes in any format supported by Ollama
+            (PNG, JPEG, WebP, …).
+
+    Returns:
+        Non-empty description string on success, or ``""`` on failure or
+        when image embeddings are disabled.
+    """
+    if not USAR_EMBEDDINGS_IMAGEN:
+        return ""
+
+    try:
+        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+
+        response = ollama.chat(
+            model=MODELO_VISION,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "Describe this academic figure or image in detail. "
+                    "Include: the type of figure (chart, diagram, table, photograph, "
+                    "equation, architecture diagram, etc.), all visible text, labels, "
+                    "axis names, legend entries, and numerical values, and the main "
+                    "finding or information conveyed. "
+                    "Respond in the same language as the labels "
+                    "(English, Spanish, or Catalan). "
+                    "Be precise and comprehensive for academic retrieval purposes."
+                ),
+                "images": [image_b64],
+            }],
+            options={"temperature": 0.1, "num_predict": 500},
+        )
+
+        descripcion = response["message"]["content"].strip()
+        return descripcion if len(descripcion) > 10 else ""
+
+    except Exception as e:
+        logging.warning(f"Error describing image with {MODELO_VISION}: {e}")
+        return ""
+
+
+# --- 11.3 Indexing ---
 
 def indexar_documentos(
     carpeta: str,
@@ -2157,6 +2287,13 @@ def indexar_documentos(
         try:
             ruta_pdf = os.path.join(carpeta, archivo)
 
+            imagenes_pdf: Dict[int, List[Dict[str, Any]]] = {}
+            if USAR_EMBEDDINGS_IMAGEN and FITZ_DISPONIBLE:
+                imagenes_pdf = extraer_imagenes_pdf(ruta_pdf)
+                n_imgs_total = sum(len(v) for v in imagenes_pdf.values())
+                if n_imgs_total > 0 and not silent:
+                    ui.debug(f"  {n_imgs_total} images found across {len(imagenes_pdf)} page(s)")
+
             if PYMUPDF_AVAILABLE:
                 try:
                     page_chunks = pymupdf4llm.to_markdown(ruta_pdf, page_chunks=True)
@@ -2239,6 +2376,34 @@ def indexar_documentos(
                         if _indexar_chunk(id_doc, chunk_text_con_contexto, chunk_text_con_contexto, metadata, collection):
                             total_chunks += 1
 
+            # Image chunks — independent of the text extraction path used above.
+            # Each image is described by MODELO_VISION and embedded as a text chunk
+            # so retrieval is transparent to the rest of the pipeline.
+            if imagenes_pdf:
+                if not silent:
+                    ui.debug("  describing and indexing images...")
+                for num_pag, pagina_imagenes in imagenes_pdf.items():
+                    for img_idx, img_info in enumerate(pagina_imagenes):
+                        descripcion = describir_imagen_con_llm(img_info["image_bytes"])
+                        if not descripcion:
+                            continue
+
+                        img_chunk_idx = _IMAGEN_CHUNK_OFFSET + img_idx
+                        id_img = f"{archivo}_pag{num_pag}_chunk{img_chunk_idx}"
+
+                        metadata_img: Dict[str, Any] = {
+                            "source": archivo,
+                            "page": num_pag,
+                            "chunk": img_chunk_idx,
+                            "format": "image",
+                            "section_header": "",
+                            "image_width": img_info["width"],
+                            "image_height": img_info["height"],
+                        }
+
+                        if _indexar_chunk(id_img, descripcion, descripcion, metadata_img, collection):
+                            total_chunks += 1
+
         except Exception as e:
             logging.error(f"Error processing {archivo}: {e}")
             if not silent:
@@ -2249,7 +2414,7 @@ def indexar_documentos(
     return total_chunks
 
 
-# --- 11.3 Collection management ---
+# --- 11.4 Collection management ---
 
 def obtener_documentos_indexados(collection: chromadb.Collection) -> List[str]:
     """List unique document names (``source``) in the collection.
