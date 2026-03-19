@@ -39,6 +39,7 @@ PDF Corpus (rag/pdfs/)
 │  Text extraction (pymupdf4llm / pypdf)                  │
 │       → Hierarchical chunking (1500 chars, 350 overlap) │
 │       → [Optional] Contextual retrieval (gemma3:4b)     │
+│       → [Optional] Image description (llama3.2-vl:11b)  │
 │       → Embedding (embeddinggemma, 768d)                │
 │       → ChromaDB persistent storage                     │
 └─────────────────────────────────────────────────────────┘
@@ -75,10 +76,11 @@ PDF Corpus (rag/pdfs/)
 
 | Role | Model | Details |
 |------|-------|---------|
-| **Generator** | Qwen3-14B-FineTuned | Q4_K_M quantization via llama.cpp, served by Ollama |
-| **Embedding** | embeddinggemma | Gemma 3 architecture, 307M params, 768 dimensions, BF16 |
-| **Reranker** | BAAI/bge-reranker-v2-m3 | 200M params cross-encoder (optional: ms-marco-MiniLM-L-6-v2 for speed) |
-| **Auxiliary** | gemma3:4b | Query decomposition, contextual retrieval, RECOMP synthesis |
+| **Generator** | Qwen3-14B-FineTuned | **Generation.** Q4_K_M (llama.cpp); served by Ollama. |
+| **Embedding** | embeddinggemma | **Embeddings.** Gemma 3, 307M params, 768-d, BF16. |
+| **Reranker** | BAAI/bge-reranker-v2-m3 | **Reranking.** ~200M cross-encoder. Faster alt: ms-marco-MiniLM-L-6-v2. |
+| **Auxiliary** | gemma3:4b | **Orchestration.** Query decomposition, contextual retrieval, RECOMP synthesis. |
+| **Vision (image chunks)** | llama3.2-vision:11b | **Figure captioning.** Llama 3.2 Vision, 11B params, multimodal, Ollama. |
 
 ### Fine-tuning
 
@@ -180,6 +182,9 @@ ollama pull embeddinggemma
 
 # Required for auxiliary tasks (query decomposition, contextual retrieval)
 ollama pull gemma3:4b
+
+# Required for optional image indexing (PDF figures → text descriptions)
+ollama pull llama3.2-vision:11b
 ```
 
 ---

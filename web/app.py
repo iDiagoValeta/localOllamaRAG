@@ -217,12 +217,10 @@ def _rag_stream(mensaje_usuario: str) -> Generator[str, None, None]:
     """
     import ollama
 
+    # System prompt is baked into the RAG model Modelfile (not sent via API).
     stream = ollama.chat(
         model=rag_engine.MODELO_RAG,
-        messages=[
-            {"role": "system", "content": rag_engine.SYSTEM_PROMPT_RAG},
-            {"role": "user", "content": mensaje_usuario},
-        ],
+        messages=[{"role": "user", "content": mensaje_usuario}],
         stream=True,
         options={
             "temperature": 0.15,
@@ -518,7 +516,6 @@ def api_rag():
                 raw += token
             rag_engine.guardar_debug_rag(
                 pregunta,
-                rag_engine.SYSTEM_PROMPT_RAG,
                 mensaje_usuario,
                 raw,
                 fragmentos_finales,
@@ -539,7 +536,6 @@ def api_rag():
     respuesta = rag_engine.generar_respuesta_silenciosa(pregunta, fragmentos_finales)
     rag_engine.guardar_debug_rag(
         pregunta,
-        rag_engine.SYSTEM_PROMPT_RAG,
         mensaje_usuario,
         respuesta,
         fragmentos_finales,

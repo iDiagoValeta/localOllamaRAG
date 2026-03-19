@@ -144,7 +144,7 @@ MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:4b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma3:4b")
 MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma3:4b")
-MODELO_VISION = os.getenv("OLLAMA_VISION_MODEL", "gemma3:4b")
+MODELO_VISION = os.getenv("OLLAMA_VISION_MODEL", "llama3.2-vision:11b")
 
 
 def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
@@ -275,7 +275,7 @@ Use this reference to explain how the system works or which parts are mandatory 
 * **OPTIONAL (Flag: `USAR_CONTEXTUAL_RETRIEVAL`):**
     * **Contextual Retrieval:** Uses an LLM to generate a summary/context for each chunk before indexing to improve retrieval accuracy.
 * **OPTIONAL (Flag: `USAR_EMBEDDINGS_IMAGEN`):**
-    * **Image Indexing:** Extracts raster images from each PDF page with PyMuPDF (fitz), describes them with `MODELO_VISION` (vision-capable LLM), and stores the description as a regular text chunk in ChromaDB. Requires `fitz` (PyMuPDF) and a vision-capable Ollama model (default: `gemma3:4b`).
+    * **Image Indexing:** Extracts raster images from each PDF page with PyMuPDF (fitz), describes them with `MODELO_VISION` (vision-capable LLM), and stores the description as a regular text chunk in ChromaDB. Requires `fitz` (PyMuPDF) and a vision-capable Ollama model (default: `llama3.2-vision:11b`; override with `OLLAMA_VISION_MODEL`, e.g. `qwen2.5vl:7b`).
 
 #### 2. RETRIEVAL PHASE
 Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; optional components extend it.
