@@ -143,7 +143,7 @@ MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "Qwen3-FineTuned:latest")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:4b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma3:4b")
-MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma3:4b")
+MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "qwen3.5:2b")
 MODELO_VISION = os.getenv("OLLAMA_VISION_MODEL", "llama3.2-vision:11b")
 
 
@@ -170,7 +170,7 @@ USAR_BUSQUEDA_EXHAUSTIVA = True
 USAR_RERANKER = RERANKER_AVAILABLE
 EXPANDIR_CONTEXTO = True
 USAR_OPTIMIZACION_CONTEXTO = True
-USAR_RECOMP_SYNTHESIS = False
+USAR_RECOMP_SYNTHESIS = True
 USAR_EMBEDDINGS_IMAGEN = True
 LOGGING_METRICAS = True
 GUARDAR_DEBUG_RAG = True
@@ -1549,6 +1549,47 @@ def _marcar_fragmento_incompleto(texto: str) -> str:
     return texto
 
 
+def _texto_fuente_fragmento(doc: str) -> str:
+    """Return chunk body without the contextual-retrieval summary prefix.
+
+    Indexed chunks may store ``<summary>\\n\\n<body>`` using a literal
+    ``\\n\\n`` separator (see ``generar_contexto_situacional``). RECOMP
+    should ground on the body only so it does not parrot meta-summaries.
+
+    Args:
+        doc: Raw ``fragment['doc']`` string.
+
+    Returns:
+        Source body text, or full ``doc`` if no separator is present.
+    """
+    if "\\n\\n" in doc:
+        _, cuerpo = doc.split("\\n\\n", 1)
+        return cuerpo.strip()
+    return doc.strip()
+
+
+def _strip_ollama_think_blocks(text: str) -> str:
+    """Remove ``...</think>`` wrappers often emitted by Qwen-style Ollama models."""
+    if not text:
+        return text
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
+
+_RECOMP_FACTS_HEADER = "## Facts relevant to the question"
+
+
+def _normalizar_salida_recomp(texto: str) -> str:
+    """Ensure RECOMP briefing has the expected markdown header when possible."""
+    t = texto.strip()
+    if not t:
+        return t
+    if _RECOMP_FACTS_HEADER.lower() in t.lower():
+        return t
+    if re.search(r"^-\s+\S", t, flags=re.MULTILINE):
+        return f"{_RECOMP_FACTS_HEADER}\n{t}"
+    return t
+
+
 def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
     """Build the context string for the RAG model from retrieved fragments.
 
@@ -1611,12 +1652,17 @@ def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
 def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: str = "") -> str:
     """Synthesize context using MODELO_RECOMP instead of raw chunks.
 
+    Uses the original user question and a fixed markdown outline (``## Facts
+    relevant to the question`` + bullets). Evidence is taken from chunk
+    *body* only, omitting contextual-retrieval summaries, to avoid
+    meta-descriptive prose in the briefing.
+
     Falls back to ``construir_contexto_para_modelo`` if synthesis is
     disabled, fails, or produces too little output.
 
     Args:
         fragmentos: Retrieved chunk dicts.
-        query_usuario: The user query for focused synthesis.
+        query_usuario: Original user question (required for focused synthesis).
 
     Returns:
         Synthesized context string or raw formatted context on fallback.
@@ -1625,59 +1671,91 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
         return construir_contexto_para_modelo(fragmentos)
 
     textos_preparados = []
-    for i, f in enumerate(fragmentos):
-        content = f['doc'].replace("\n", " ").strip()
-        textos_preparados.append(f"Fragment {i+1}:\n{content}")
+    for f in fragmentos:
+        cuerpo = _texto_fuente_fragmento(f.get("doc", "") or "")
+        content = cuerpo.replace("\n", " ").strip()
+        if content:
+            n = len(textos_preparados) + 1
+            textos_preparados.append(f"Fragment {n}:\n{content}")
 
     contexto_raw = "\n\n".join(textos_preparados)
+    if not contexto_raw.strip():
+        return construir_contexto_para_modelo(fragmentos)
 
-    system_prompt = (
-        "You are a context synthesizer. Your task is to distill the key concepts "
-        "from text fragments into a clear, concise summary.\n"
-        "RULES:\n"
-        "1. Extract ONLY the crucial concepts, definitions, and technical details "
-        "that directly answer the user's question.\n"
-        "2. ONLY use information EXPLICITLY written in the fragments. "
-        "NEVER add external knowledge.\n"
-        "3. Do NOT cite or reference fragment numbers, sources, pages, "
-        "or any document metadata. Write as continuous prose.\n"
-        "4. Preserve technical terms, formulas, and numerical values exactly.\n"
-        "5. Be concise: include only what is essential to understand the concepts.\n"
-        "6. Output in the same language as the input fragments."
+    q = (query_usuario or "").strip()
+    bloque_pregunta = (
+        f"## User question\n{q}\n"
+        if q
+        else "## User question\n(No question provided; extract the main technical facts from the excerpts.)\n"
     )
 
-    focus_instruction = (
-        f"Focus specifically on information answering: '{query_usuario}'. "
-        "Include only the essential details."
-        if query_usuario else
-        "Summarize the key technical definitions and comparisons."
+    system_prompt = (
+        "You compress retrieved document excerpts into a brief briefing for a downstream "
+        "answer model.\n"
+        "GROUNDING:\n"
+        "- Use ONLY information stated in the evidence excerpts. No outside knowledge.\n"
+        "- Preserve technical terms, notation, formulas, and numbers exactly.\n"
+        "STYLE (critical):\n"
+        "- Write ONLY facts that help answer the user question. Do NOT describe the documents, "
+        "the paper, or the excerpts (forbidden openers: \"This paper\", \"The excerpt\", "
+        "\"This section\", \"The document\", \"The text\", \"The fragment\").\n"
+        "- Do NOT restate meta-summaries; every bullet must be substantive content from the excerpts.\n"
+        "- Do NOT cite fragment numbers, sources, or page numbers.\n"
+        "OUTPUT FORMAT (exactly this structure, markdown):\n"
+        "## Facts relevant to the question\n"
+        "- (first grounded fact)\n"
+        "- (second grounded fact)\n"
+        "Use one bullet per distinct fact; merge duplicates. If nothing in the excerpts bears "
+        "on the question, output exactly one bullet: "
+        "\"Insufficient evidence in the excerpts to answer the question.\"\n"
+        "Language: same as the evidence excerpts (or the user question if excerpts mix languages)."
     )
 
     user_prompt = (
-        f"{focus_instruction}\n\n"
-        f"--- INPUT FRAGMENTS ---\n{contexto_raw}\n-----------------------\n\n"
-        "Concise synthesis:"
+        f"{bloque_pregunta}"
+        "## Evidence excerpts (verbatim from retrieval; may be partial)\n"
+        f"{contexto_raw}\n\n"
+        "Produce the briefing using the required OUTPUT FORMAT. No text before "
+        "## Facts relevant to the question."
     )
 
     try:
-        response = ollama.chat(
-            model=MODELO_RECOMP,
-            messages=[
+        payload = {
+            "model": MODELO_RECOMP,
+            "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt},
             ],
-            options={
+            "stream": False,
+            "think": False,
+            "options": {
                 "temperature": 0.1,
-                "num_predict": 2048,
+                "num_predict": 10000,
                 "top_p": 0.9,
                 "repeat_penalty": 1.15,
-                "num_ctx": 8192
-            }
-        )
+                "num_ctx": 8192,
+            },
+        }
+        resp = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=60)
+        resp.raise_for_status()
+        raw = resp.json().get("message", {}).get("content", "")
 
-        sintesis = response['message']['content'].strip()
+        sintesis = _strip_ollama_think_blocks(raw.strip())
+        sintesis = _normalizar_salida_recomp(sintesis)
 
         if len(sintesis) < 20:
+            logging.info(
+                "RECOMP: falling back to raw chunks (synthesis too short after "
+                "stripping think blocks; check %s / OLLAMA_RECOMP_MODEL)",
+                MODELO_RECOMP,
+            )
+            return construir_contexto_para_modelo(fragmentos)
+
+        if _RECOMP_FACTS_HEADER.lower() not in sintesis.lower():
+            logging.info(
+                "RECOMP: falling back to raw chunks (missing '%s' in model output)",
+                _RECOMP_FACTS_HEADER,
+            )
             return construir_contexto_para_modelo(fragmentos)
 
         return sintesis
