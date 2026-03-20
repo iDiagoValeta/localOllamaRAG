@@ -90,5 +90,133 @@
   {
     "question": "According to the att.pdf paper, why are positional encodings added to the input embeddings, and what specific functions are used for them?",
     "ground_truth": "Since the model contains no recurrence and no convolution, positional encodings are added to inject information about the relative or absolute position of the tokens in the sequence. The positional encodings have the same dimension dmodel as the embeddings, so that the two can be summed. There are many choices of positional encodings, learned and fixed. The authors use sine and cosine functions of different frequencies to form these encodings."
+  },
+  {
+    "question": "What does Ragas stand for?",
+    "ground_truth": "Ragas stands for Retrieval Augmented Generation Assessment."
+  },
+  {
+    "question": "According to the Ragas paper, what language model was used to evaluate all prompts in the implementation and experiments?",
+    "ground_truth": "The gpt-3.5-turbo-16k model was used to evaluate all prompts in the Ragas implementation and experiments."
+  },
+  {
+    "question": "According to the Ragas paper, which embedding model is used to obtain embeddings for questions when calculating answer relevance?",
+    "ground_truth": "The text-embedding-ada-002 model is used to obtain embeddings for all questions when calculating answer relevance."
+  },
+  {
+    "question": "According to the Ragas paper, what accuracy score did Ragas achieve in agreement with human annotators for faithfulness?",
+    "ground_truth": "Ragas achieved an accuracy score of 0.95 in agreement with human annotators for faithfulness."
+  },
+  {
+    "question": "According to the Ragas paper, what accuracy score did Ragas achieve in agreement with human annotators for answer relevance?",
+    "ground_truth": "Ragas achieved an accuracy score of 0.78 in agreement with human annotators for answer relevance."
+  },
+  {
+    "question": "According to the Ragas paper, what accuracy score did Ragas achieve in agreement with human annotators for context relevance?",
+    "ground_truth": "Ragas achieved an accuracy score of 0.70 in agreement with human annotators for context relevance."
+  },
+  {
+    "question": "What were the two baseline methods used to compare against Ragas in the evaluation study?",
+    "ground_truth": "The two baseline methods used to compare against Ragas were GPT Score and GPT Ranking."
+  },
+  {
+    "question": "In what percentage of cases did the two human annotators agree on faithfulness and context relevance in the WikiEval annotation study?",
+    "ground_truth": "The two human annotators agreed on faithfulness and context relevance in around 95% of cases."
+  },
+  {
+    "question": "In what percentage of cases did the two human annotators agree on answer relevance in the WikiEval annotation study?",
+    "ground_truth": "The two human annotators agreed on answer relevance in around 90% of the cases."
+  },
+  {
+    "question": "According to the Ragas paper, what is the exact formula used to compute the faithfulness score F?",
+    "ground_truth": "The faithfulness score F is computed as F = |V| / |S|, where |V| is the number of statements that were supported by the context according to the LLM and |S| is the total number of statements."
+  },
+  {
+    "question": "What does LoRA stand for?",
+    "ground_truth": "LoRA stands for Low-Rank Adaptation."
+  },
+  {
+    "question": "According to the LoRA paper, on which models does LoRA perform on-par or better than fine-tuning in model quality?",
+    "ground_truth": "LoRA performs on-par or better than fine-tuning in model quality on RoBERTa, DeBERTa, GPT-2, and GPT-3."
+  },
+  {
+    "question": "According to the LoRA paper, what do the authors hypothesize about the weight updates during model adaptation?",
+    "ground_truth": "The authors hypothesize that the change in weights during model adaptation also has a low intrinsic rank."
+  },
+  {
+    "question": "According to the LoRA paper, what training speedup is achieved when using LoRA on GPT-3 175B compared to full fine-tuning?",
+    "ground_truth": "A 25% speedup during training on GPT-3 175B is observed compared to full fine-tuning."
+  },
+  {
+    "question": "According to the LoRA paper, what is the training throughput comparison between full fine-tuning and LoRA on GPT-3 175B?",
+    "ground_truth": "The training throughput for full fine-tuning is 32.5 tokens/s per V100 GPU, while with LoRA the throughput is 43.1 tokens/s per V100 GPU using the same number of weight shards for model parallelism."
+  },
+  {
+    "question": "What are the specific names of the 6 dense models in the Qwen3 series?",
+    "ground_truth": "The six dense models in the Qwen3 series are Qwen3-0.6B, Qwen3-1.7B, Qwen3-4B, Qwen3-8B, Qwen3-14B, and Qwen3-32B."
+  },
+  {
+    "question": "What are the specific names of the 2 MoE models in the Qwen3 series?",
+    "ground_truth": "The two MoE models in the Qwen3 series are Qwen3-30B-A3B and Qwen3-235B-A22B."
+  },
+  {
+    "question": "According to the Qwen3 paper, what algorithm was employed in the Reasoning RL stage to update the model parameters?",
+    "ground_truth": "The GRPO algorithm was employed in the Reasoning RL stage to update the model parameters."
+  },
+  {
+    "question": "According to the Qwen3 paper, what are the four stages of the post-training pipeline for flagship models?",
+    "ground_truth": "The four stages of the post-training pipeline for flagship models are Stage 1 Long-CoT Cold Start, Stage 2 Reasoning RL, Stage 3 Thinking Mode Fusion, and Stage 4 General RL."
+  },
+  {
+    "question": "According to the Qwen3 paper, what scores does the flagship model Qwen3-235B-A22B achieve on AIME'24 and AIME'25?",
+    "ground_truth": "The flagship model Qwen3-235B-A22B achieves a score of 85.7 on AIME'24 and 81.5 on AIME'25."
+  },
+  {
+    "question": "According to the Qwen3 paper, what score does the flagship model Qwen3-235B-A22B achieve on LiveCodeBench v5?",
+    "ground_truth": "The flagship model Qwen3-235B-A22B achieves a score of 70.7 on LiveCodeBench v5."
+  },
+  {
+    "question": "According to the Qwen3 paper, what tokenizer does Qwen3 utilize and what is its vocabulary size?",
+    "ground_truth": "Qwen3 utilizes byte-level byte-pair encoding (BBPE) with a vocabulary size of 151,669."
+  },
+  {
+    "question": "According to the Qwen3 paper, what flags are introduced in the user query or system message to allow the model to select the appropriate thinking mode?",
+    "ground_truth": "The /think and /no think flags are introduced in the user query or system message to allow the model to select the appropriate thinking mode."
+  },
+  {
+    "question": "What do the authors of the att.pdf paper call their particular attention mechanism?",
+    "ground_truth": "The authors call their particular attention mechanism Scaled Dot-Product Attention."
+  },
+  {
+    "question": "According to the att.pdf paper, what BLEU score did the big transformer model achieve on the WMT 2014 English-to-German translation task?",
+    "ground_truth": "The big transformer model achieved a new state-of-the-art BLEU score of 28.4 on the WMT 2014 English-to-German translation task."
+  },
+  {
+    "question": "According to att.pdf, what optimizer was used to train the Transformer models, and what were the specific beta values and epsilon used?",
+    "ground_truth": "The Adam optimizer was used, with beta1 = 0.9, beta2 = 0.98, and epsilon = 10^-9."
+  },
+  {
+    "question": "According to att.pdf, what hardware was used to train the Transformer models?",
+    "ground_truth": "The models were trained on one machine with 8 NVIDIA P100 GPUs."
+  },
+  {
+    "question": "According to att.pdf, what were the parameter counts for the base model and the big Transformer model?",
+    "ground_truth": "The base model had 65 x 10^6 parameters and the big model had 213 x 10^6 parameters."
+  },
+  {
+    "question": "According to att.pdf, what is the computational complexity per layer for a self-attention layer?",
+    "ground_truth": "The computational complexity per layer for a self-attention layer is O(n^2 * d), where n is the sequence length and d is the representation dimension."
+  },
+  {
+    "question": "According to att.pdf, what is the maximum path length between any two positions for a self-attention layer compared to a recurrent layer?",
+    "ground_truth": "The maximum path length for a self-attention layer is O(1), while for a recurrent layer it is O(n). This means that self-attention layers can connect any two positions with a constant number of operations, regardless of sequence length."
+  },
+  {
+    "question": "According to att.pdf, what BLEU score did the big model achieve on the WMT 2014 English-to-French translation task?",
+    "ground_truth": "The big model achieved a new single-model state-of-the-art BLEU score of 41.8 on the WMT 2014 English-to-French translation task."
+  },
+  {
+    "question": "According to att.pdf, how long did training take for the base models and for the big models?",
+    "ground_truth": "Training the base models took a total of 100,000 steps or 12 hours, while training the big models took 300,000 steps, which corresponds to 3.5 days."
   }
 ]
