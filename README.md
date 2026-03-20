@@ -250,8 +250,8 @@ Training uses: lr=5e-5, cosine scheduler, warmup=0.05, batch=1x16 gradient accum
 ### BERTScore + Token F1 + Faithfulness
 
 ```bash
-python scripts/evaluation/eval_bertscore.py                 # All 3 models
-python scripts/evaluation/eval_bertscore.py --model qwen-3  # Single model
+python scripts/evaluation/eval_bertscore.py                  # All 3 models
+python scripts/evaluation/eval_bertscore.py --model qwen-3   # Single model
 python scripts/evaluation/plot_bertscore.py                  # Generate plots
 python compute_std.py                                        # Compute mean +/- std
 ```
