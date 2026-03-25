@@ -137,8 +137,10 @@ localOllamaRAG/
 │   └── baseline/
 │       └── evaluate_baselines.py # 6-model baseline benchmark
 ├── compute_std.py                # Mean +/- sigma statistical analysis
+├── generate_diagram.py           # Architecture diagram generator
 ├── models/gguf-output/           # Quantized GGUF models (gitignored)
 ├── AUDIT.md                      # Repository audit
+├── CLAUDE.md                     # AI assistant context and contribution guide
 └── README.md                     # This file
 ```
 
@@ -155,7 +157,7 @@ localOllamaRAG/
 ### Setup
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/your-username/localOllamaRAG
 cd localOllamaRAG
 
 # Core RAG dependencies
@@ -275,14 +277,20 @@ Evaluates 6 base models (Llama-3.1-8B, Qwen3/3.5/2.5-14B, Gemma-3-12B, Phi-4) ac
 
 ---
 
-## Code Documentation Style
+## Contributing
 
-All Python files follow a consistent documentation convention:
+For contributors and AI assistants working on this codebase, see [`CLAUDE.md`](CLAUDE.md) for:
 
+- Code and documentation style conventions
+- Pipeline architecture details
+- Known technical debt and design decisions
+- Environment setup and build commands
+
+**Code style at a glance:**
 - **Module docstrings**: English, triple-quoted, with short description + longer explanation + Usage + Dependencies
 - **Section separators**: `# ─────` lines with `# SECTION NAME` in caps for logical code groupings
 - **Function docstrings**: Google-style with Args, Returns, and Raises sections
-- **Inline comments**: English, only for non-obvious logic; trivially obvious comments are omitted
+- **Inline comments**: English, only for non-obvious logic
 
 ---
 
@@ -301,4 +309,8 @@ This project is under active development as part of a Bachelor's Thesis (TFG) at
 **Known limitations:**
 - Gemma-3-12B adapter cannot be deployed via Ollama (GGUF incompatibility)
 - Per-sample evaluation data requires re-running `eval_bertscore.py` to generate
-- RECOMP synthesis stage is disabled by default
+- RECOMP synthesis stage is disabled by default (opt-in via `USE_RECOMP = True`)
+
+---
+
+*Bachelor's Thesis — Universitat Politècnica de València (UPV)*
