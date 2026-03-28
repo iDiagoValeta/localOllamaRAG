@@ -17,6 +17,27 @@ Dependencies:
     - rag.chat_pdfs (project internal module)
 """
 
+
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
+#
+#  CONFIGURATION
+#  +-- 1. Imports and Flask setup
+#         sys.path, rag_engine import, Flask + CORS, global _state
+#
+#  BACKEND
+#  +-- 2. COLLECTION MANAGEMENT   ChromaDB init, reindex, DB invalidation
+#  +-- 3. STREAMING HELPERS       _chat_stream, _rag_stream, _format_sources
+#
+#  API
+#  +-- 4. API ROUTES              all Flask @app.route endpoints
+#
+#  ENTRY
+#  +-- 5. ENTRY POINT             main()
+#
+# ─────────────────────────────────────────────
+
 import gc
 import io
 import os
@@ -36,17 +57,16 @@ from flask_cors import CORS
 
 
 # ─────────────────────────────────────────────
-# CONFIGURATION
+# SECTION 1: IMPORTS AND FLASK SETUP
 # ─────────────────────────────────────────────
 
-# Ensure project root is in sys.path
+# sys.path must include project root so `rag.chat_pdfs` resolves from web/
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 import rag.chat_pdfs as rag_engine
 
-# React build directory (web/zip/dist/)
 _web_dir = os.path.dirname(os.path.abspath(__file__))
 _react_dist = os.path.join(_web_dir, "zip", "dist")
 
@@ -60,7 +80,6 @@ app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
 # CORS for development (Vite on :3000 -> Flask on :5000)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-# Global state (simple session for local use)
 _state = {
     "mode": "chat",
     "historial_chat": [],
@@ -75,7 +94,7 @@ _indexing_lock = threading.Lock()
 
 
 # ─────────────────────────────────────────────
-# COLLECTION MANAGEMENT
+# SECTION 2: COLLECTION MANAGEMENT
 # ─────────────────────────────────────────────
 
 def _invalidate_collection_if_deleted():
@@ -174,7 +193,7 @@ def _reset_db():
 
 
 # ─────────────────────────────────────────────
-# STREAMING HELPERS
+# SECTION 3: STREAMING HELPERS
 # ─────────────────────────────────────────────
 
 def _chat_stream(pregunta: str) -> Generator[str, None, None]:
@@ -262,7 +281,7 @@ def _format_sources(fragments: list) -> list:
 
 
 # ─────────────────────────────────────────────
-# API ROUTES
+# SECTION 4: API ROUTES
 # ─────────────────────────────────────────────
 
 
@@ -673,7 +692,6 @@ def api_reindex():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-# Pipeline settings mapping (frontend name -> engine global variable)
 _SETTINGS_MAP = {
     "contextualRetrieval": "USAR_CONTEXTUAL_RETRIEVAL",
     "queryDecomposition": "USAR_LLM_QUERY_DECOMPOSITION",
@@ -764,7 +782,7 @@ def api_upload():
 
 
 # ─────────────────────────────────────────────
-# ENTRY POINT
+# SECTION 5: ENTRY POINT
 # ─────────────────────────────────────────────
 
 def main():

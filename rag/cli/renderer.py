@@ -16,6 +16,28 @@ Dependencies:
     - rag.cli.theme (Theme, MESSAGES)
 """
 
+
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
+#
+#  CONFIGURATION
+#  +-- 1. Imports
+#
+#  COMPONENTS
+#  +-- 2. SPINNER CLASS         animated progress indicator (context manager)
+#  +-- 3. RENDERING FUNCTIONS   banners, separators, steps, detail lines
+#  +-- 4. INPUT PROMPT          build_prompt
+#  +-- 5. WELCOME SCREEN        render_welcome
+#  +-- 6. HELP SCREEN           render_help
+#  +-- 7. INITIALIZATION        render_init_info
+#  +-- 8. STATISTICS, DOCUMENTS, TOPICS
+#  +-- 9. RESPONSE STREAMING    render_response_header, stream_token, footer
+#  +--10. SOURCE AND CITATION FORMATTING
+#  +--11. MODE MESSAGES
+#
+# ─────────────────────────────────────────────
+
 import sys
 import threading
 import time
@@ -24,7 +46,7 @@ from typing import List, Dict, Any, Optional
 from rag.cli.theme import Theme, MESSAGES
 
 # ─────────────────────────────────────────────
-# SPINNER CLASS
+# SECTION 2: SPINNER CLASS
 # ─────────────────────────────────────────────
 
 class Spinner:
@@ -88,7 +110,7 @@ class Spinner:
         sys.stdout.flush()
 
 # ─────────────────────────────────────────────
-# RENDERING FUNCTIONS
+# SECTION 3: RENDERING FUNCTIONS
 # ─────────────────────────────────────────────
 
 def render_banner(title: str, style: str = "simple", color: str = None) -> None:
@@ -152,7 +174,7 @@ def render_error(message: str) -> None:
     print(f"      {Theme.RED}{Theme.ICON_FAIL}{Theme.RESET} {Theme.TEXT_MUTED}{message}{Theme.RESET}")
 
 # ─────────────────────────────────────────────
-# INPUT PROMPT
+# SECTION 4: INPUT PROMPT
 # ─────────────────────────────────────────────
 
 def build_prompt(mode: str, model: str = "") -> str:
@@ -201,7 +223,7 @@ def build_prompt(mode: str, model: str = "") -> str:
     return bottom_line
 
 # ─────────────────────────────────────────────
-# WELCOME SCREEN
+# SECTION 5: WELCOME SCREEN
 # ─────────────────────────────────────────────
 
 def render_welcome() -> None:
@@ -235,7 +257,7 @@ def render_welcome() -> None:
     print()
 
 # ─────────────────────────────────────────────
-# HELP SCREEN
+# SECTION 6: HELP SCREEN
 # ─────────────────────────────────────────────
 
 def render_help() -> None:
@@ -245,7 +267,7 @@ def render_help() -> None:
     render_welcome()
 
 # ─────────────────────────────────────────────
-# INITIALIZATION
+# SECTION 7: INITIALIZATION
 # ─────────────────────────────────────────────
 
 def render_init_info(info: Dict[str, Any]) -> None:
@@ -297,7 +319,7 @@ def render_init_info(info: Dict[str, Any]) -> None:
     print(f"    {T.TEXT_DIM}{'fragmentos index.':<{L_WIDTH-2}}{T.RESET}{T.TEXT_MUTED}{frag_count} en base de datos{T.RESET}")
 
 # ─────────────────────────────────────────────
-# STATISTICS, DOCUMENTS, TOPICS
+# SECTION 8: STATISTICS, DOCUMENTS, TOPICS
 # ─────────────────────────────────────────────
 
 def render_stats(total_fragments: int, docs: List[str]) -> None:
@@ -377,7 +399,7 @@ def render_topics(docs_data: List[Dict[str, Any]]) -> None:
     print(f"\n  {T.TEXT_DIM}Escribe tu pregunta sobre cualquiera de estos temas.{T.RESET}\n")
 
 # ─────────────────────────────────────────────
-# RESPONSE STREAMING
+# SECTION 9: RESPONSE STREAMING
 # ─────────────────────────────────────────────
 
 def render_response_header(mode: str, model: str = "", n_fragments: int = 0) -> None:
@@ -422,7 +444,7 @@ def render_response_footer(sources: Optional[str] = None) -> None:
     print()
 
 # ─────────────────────────────────────────────
-# SOURCE AND CITATION FORMATTING
+# SECTION 10: SOURCE AND CITATION FORMATTING
 # ─────────────────────────────────────────────
 
 def format_citation(document: str, page: int, fragment: Optional[int] = None) -> str:
@@ -478,7 +500,7 @@ def format_sources(fragments: List[Dict]) -> str:
     return "\n".join(lines)
 
 # ─────────────────────────────────────────────
-# MODE MESSAGES
+# SECTION 11: MODE MESSAGES
 # ─────────────────────────────────────────────
 
 def render_mode_change(mode: str, model: str = "") -> None:

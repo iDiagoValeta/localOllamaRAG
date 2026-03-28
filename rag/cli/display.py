@@ -16,6 +16,22 @@ Dependencies:
     - rich (Console, Panel, Table, Markdown, Status, etc.)
 """
 
+
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
+#
+#  CONFIGURATION
+#  +-- 1. Imports
+#  +-- 2. GLOBAL THEME         RichTheme with MonkeyGrab palette
+#  +-- 3. COMPACT LOGO         ASCII brand mark (single line)
+#
+#  COMPONENTS
+#  +-- 4. DISPLAY CLASS        visual output singleton (panels, tables, spinners)
+#  +-- 5. SINGLETON            `ui` global instance
+#
+# ─────────────────────────────────────────────
+
 import os
 import sys
 import time
@@ -37,7 +53,7 @@ from rich import box
 
 
 # ─────────────────────────────────────────────
-# GLOBAL THEME - MonkeyGrab Palette
+# SECTION 2: GLOBAL THEME
 # ─────────────────────────────────────────────
 
 MONKEYGRAB_THEME = RichTheme({
@@ -67,7 +83,7 @@ MONKEYGRAB_THEME = RichTheme({
 
 
 # ─────────────────────────────────────────────
-# COMPACT LOGO
+# SECTION 3: COMPACT LOGO
 # ─────────────────────────────────────────────
 
 _MONKEY_MINI = r'''
@@ -93,7 +109,7 @@ _MONKEY_MINI = r'''
 
 
 # ─────────────────────────────────────────────
-# DISPLAY CLASS - Visual Output Singleton
+# SECTION 4: DISPLAY CLASS
 # ─────────────────────────────────────────────
 
 class Display:
@@ -618,7 +634,7 @@ class Display:
         self.warning(f"No existe la carpeta de PDFs o está vacía: {folder}")
 
 # ─────────────────────────────────────────────
-# SINGLETON - Global Instance
+# SECTION 5: SINGLETON
 # ─────────────────────────────────────────────
 
 ui = Display()

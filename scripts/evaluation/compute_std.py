@@ -18,6 +18,23 @@ Dependencies:
     - Standard library only (argparse, csv, math, os, re)
 """
 
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
+#
+#  CONFIGURATION
+#  +-- 1. Imports and CLI
+#  +-- 2. Helpers
+#         +-- mean, std, read_csv_column, slug_to_display
+#
+#  PIPELINE
+#  +-- 3. Parse filenames and collect data
+#  +-- 4. Compute statistics
+#  +-- 5. Print summary table
+#  +-- 6. Generate LaTeX table snippets
+#
+# ─────────────────────────────────────────────
+
 import argparse
 import csv
 import math
@@ -25,7 +42,7 @@ import os
 import re
 
 # ─────────────────────────────────────────────
-# CLI
+# SECTION 1: IMPORTS AND CLI
 # ─────────────────────────────────────────────
 parser = argparse.ArgumentParser(description="Compute mean +/- std over per-sample CSVs.")
 parser.add_argument(
@@ -44,7 +61,7 @@ BERTSCORE_DIR = args.bertscore_dir
 
 
 # ─────────────────────────────────────────────
-# HELPERS
+# SECTION 2: HELPERS
 # ─────────────────────────────────────────────
 
 def mean(values):
@@ -98,7 +115,7 @@ def slug_to_display(slug):
 
 
 # ─────────────────────────────────────────────
-# PARSE FILENAMES AND COLLECT DATA
+# SECTION 3: PARSE FILENAMES AND COLLECT DATA
 # ─────────────────────────────────────────────
 # Expected filename patterns:
 #   bertscore_per_sample_{model}_{dataset}_{variant}.csv
@@ -120,7 +137,7 @@ def ensure(model, ds, variant):
 
 if not os.path.isdir(BERTSCORE_DIR):
     print(f"[ERROR] Directory not found: {BERTSCORE_DIR}")
-    print("  Run eval_bertscore.py first to generate the per-sample CSVs.")
+    print("  Re-run train-qwen3.py (Section 12) to regenerate the per-sample CSVs.")
     raise SystemExit(1)
 
 found_any = False
@@ -155,12 +172,12 @@ for fname in sorted(os.listdir(BERTSCORE_DIR)):
 
 if not found_any:
     print("[ERROR] No per-sample CSVs found in:", BERTSCORE_DIR)
-    print("  Run eval_bertscore.py first to generate them.")
+    print("  Re-run train-qwen3.py (Section 12) to generate them.")
     raise SystemExit(1)
 
 
 # ─────────────────────────────────────────────
-# COMPUTE STATISTICS
+# SECTION 4: COMPUTE STATISTICS
 # ─────────────────────────────────────────────
 
 def stats(values):
@@ -173,7 +190,7 @@ def stats(values):
 
 
 # ─────────────────────────────────────────────
-# PRINT SUMMARY TABLE
+# SECTION 5: PRINT SUMMARY TABLE
 # ─────────────────────────────────────────────
 
 print("\n" + "=" * 90)
@@ -210,7 +227,7 @@ for model_slug in MODELS:
 
 
 # ─────────────────────────────────────────────
-# GENERATE LATEX TABLE SNIPPETS
+# SECTION 6: GENERATE LATEX TABLE SNIPPETS
 # ─────────────────────────────────────────────
 
 latex_lines = []

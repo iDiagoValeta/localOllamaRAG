@@ -13,6 +13,23 @@ Dependencies:
     requests  (pip install requests)
 """
 
+
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
+#
+#  CONFIGURATION
+#  +-- 1. Imports
+#  +-- 2. Diagram definition   (Mermaid flowchart source)
+#
+#  PIPELINE
+#  +-- 3. Rendering            build_url, fetch_image, save
+#
+#  ENTRY
+#  +-- 4. CLI                  parse_args, main
+#
+# ─────────────────────────────────────────────
+
 import argparse
 import sys
 from pathlib import Path
@@ -24,7 +41,7 @@ except ImportError:
 
 
 # ─────────────────────────────────────────────
-# DIAGRAM DEFINITION
+# SECTION 2: DIAGRAM DEFINITION
 # ─────────────────────────────────────────────
 
 DIAGRAM = """\
@@ -104,7 +121,7 @@ flowchart TD
 
 
 # ─────────────────────────────────────────────
-# RENDERING  (Kroki.io POST API)
+# SECTION 3: RENDERING  (Kroki.io POST API)
 # ─────────────────────────────────────────────
 
 KROKI_BASE = "https://kroki.io"
@@ -176,7 +193,7 @@ def save(data: bytes, path: Path) -> None:
 
 
 # ─────────────────────────────────────────────
-# CLI
+# SECTION 4: CLI
 # ─────────────────────────────────────────────
 
 def parse_args() -> argparse.Namespace:

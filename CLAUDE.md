@@ -32,7 +32,8 @@ localOllamaRAG/
 ├── rag/
 │   ├── chat_pdfs.py              # Motor RAG principal: indexacion, recuperacion, generacion
 │   ├── requirements.txt          # Dependencias del nucleo RAG
-│   ├── pdfs/                     # PDFs a indexar (no versionados)
+│   ├── pdfs/                     # PDFs a indexar con el sistema RAG (no versionados)
+│   ├── ragbench_pdfs/            # PDFs del benchmark RAGBench — uso exclusivo de run_eval_ragbench.py (gitignored)
 │   ├── mi_vector_db/             # ChromaDB persistente (gitignored)
 │   ├── historial_chat.json       # Historial CHAT mode (gitignored)
 │   └── cli/
@@ -46,39 +47,50 @@ localOllamaRAG/
 │   └── zip/dist/                 # Build React (assets estaticos)
 ├── scripts/
 │   ├── training/
-│   │   ├── train-qwen3.py        # Fine-tuning LoRA Qwen3-14B (v7.2) - MODELO DE PRODUCCION
+│   │   ├── train-qwen3.py        # Fine-tuning LoRA Qwen3-14B (v9) - MODELO DE PRODUCCION
 │   │   ├── train-llama3.1.py     # Fine-tuning LoRA Llama-3.1-8B
 │   │   ├── train-gemma3.py       # Fine-tuning LoRA Gemma-3-12B-IT
 │   │   ├── plot_training.py      # Visualizacion de curvas de entrenamiento
-│   │   └── requirements.txt      # torch, transformers, peft, datasets, etc.
+│   │   ├── run-qwen3.sh          # Script de lanzamiento en cluster (SLURM)
+│   │   ├── run-llama3.sh         # Script de lanzamiento en cluster (SLURM)
+│   │   ├── run-gemma3.sh         # Script de lanzamiento en cluster (SLURM)
+│   │   └── requirements.txt      # torch, transformers, peft, datasets, bert-score, etc.
 │   ├── evaluation/
-│   │   ├── eval_bertscore.py     # Evaluacion BERTScore (base vs adaptado, 3 modelos)
-│   │   ├── plot_bertscore.py     # Graficas BERTScore
-│   │   ├── plot_baseline_results.py  # Graficas comparacion baselines
-│   │   └── plot_comparison.py    # Graficas base vs fine-tuned
+│   │   ├── evaluate_baselines.py # Benchmark de 7 modelos base (Token F1, BERTScore, CF-lexica)
+│   │   ├── compute_std.py        # Analisis mean +/- sigma sobre CSVs (historico; std no va en tablas TFG)
+│   │   └── run.sh                # Script de lanzamiento en cluster (SLURM)
 │   ├── conversion/
-│   │   └── merge_lora.py         # Fusiona adaptador LoRA con base para exportar a GGUF
+│   │   ├── merge_lora.py         # Fusiona adaptador LoRA con base para exportar a GGUF
+│   │   ├── build_ollama.bat      # Automatiza creacion del modelo en Ollama (Windows)
+│   │   └── quantize_to_q4km.ps1  # Cuantiza modelo merged a Q4_K_M con llama-bin
 │   ├── tests/
 │   │   ├── test_nothink.py       # Test supresion de <think> en Qwen3 via Ollama
 │   │   └── test_ollama_stream_nothink.py
 │   └── generate_diagram.py       # Renderiza el diagrama de arquitectura via Kroki.io
 ├── evaluation/
 │   ├── run_eval.py               # Evaluacion RAGAS del pipeline RAG en vivo
+│   ├── run_eval_ragbench.py      # Evaluacion RAGAS sobre PDFs de RAGBench (Vectara)
 │   └── requirements.txt          # ragas, langchain-google-genai, pandas, etc.
 ├── training-output/
 │   ├── qwen-3/                   # Adaptador LoRA + artefactos de eval (JSON, CSV, plots)
+│   │   └── explore-rank/         # Artefactos de la exploracion de rango LoRA (r=32 vs r=64)
 │   ├── llama-3/                  # Adaptador LoRA Llama-3.1
 │   ├── gemma-3/                  # Adaptador LoRA Gemma-3
-│   ├── bertscore/                # CSVs por muestra y resumen global BERTScore
-│   └── baseline/
-│       └── evaluate_baselines.py # Benchmark de 6 modelos base
+│   ├── bertscore/                # CSVs por muestra, resumen BERTScore (DATOS OBSOLETOS — re-ejecutar)
+│   │   └── plots/                # Graficas BERTScore generadas
+│   └── baseline/                 # Resultados del benchmark de modelos base (JSONs, plots)
+├── docs/
+│   ├── monkeygrab_architecture.png       # Diagrama de arquitectura (PNG)
+│   ├── monkeygrab_architecture.svg       # Diagrama de arquitectura (SVG)
+│   ├── tensor.pdf                        # Guia de uso del cluster tensor (UPV)
+│   ├── EVALUACION_DATASETS_PUBLICOS.md  # Documentacion del protocolo de evaluacion publica
+│   └── MODIFICACIONES_EVALUACION.md     # Registro de cambios en scripts de eval/training (v7.2→v9)
+├── llama-bin/                    # Binarios llama.cpp compilados para Windows (llama-quantize, etc.)
 ├── models/
 │   ├── gguf-output/              # Modelos GGUF cuantizados (gitignored)
 │   └── merged-model/             # Modelos merged antes de convertir (gitignored)
-├── compute_std.py                # Analisis estadistico mean +/- sigma sobre CSVs
 ├── llama.cpp/                    # Submodulo llama.cpp para conversion/cuantizacion GGUF
-├── README.md
-└── AUDIT.md
+└── README.md
 ```
 
 ---
@@ -173,36 +185,31 @@ python scripts/training/plot_training.py --model qwen-3
 ### Evaluacion
 
 ```bash
-# BERTScore (base vs adaptado, los 3 modelos)
-python scripts/evaluation/eval_bertscore.py
+# Benchmark de 7 modelos base — Token F1, BERTScore, CF-lexica (dev + test, con/sin contexto)
+# Aina evaluado desglosado por idioma: Aina-EN, Aina-ES, Aina-CA
+python scripts/evaluation/evaluate_baselines.py
+# Salida en: baseline-evaluation-output/  (generado, no versionado)
 
-# Solo un modelo
-python scripts/evaluation/eval_bertscore.py --model qwen-3
-
-# Estadisticas mean +/- std sobre los CSVs por muestra
-python compute_std.py
-
-# Graficas BERTScore
-python scripts/evaluation/plot_bertscore.py
+# Estadisticas mean +/- std sobre los CSVs de training-output/bertscore/ (historico)
+python scripts/evaluation/compute_std.py
 
 # RAGAS sobre el pipeline en vivo (necesita GOOGLE_API_KEY en .env)
 python evaluation/run_eval.py
 python evaluation/run_eval.py --dataset evaluation/mi_dataset.json --verbose
 
-# Benchmark de 6 modelos base
-python training-output/baseline/evaluate_baselines.py
-python scripts/evaluation/plot_baseline_results.py
+# RAGAS sobre PDFs de RAGBench (Vectara)
+python evaluation/run_eval_ragbench.py
 
-# Graficas comparacion base vs fine-tuned
-python scripts/evaluation/plot_comparison.py
+# NOTA: BERTScore ya NO requiere un script separado.
+# Se computa dentro de train-qwen3.py (Section 12) y evaluate_baselines.py.
 ```
 
 ### Generacion de diagrama de arquitectura
 
 ```bash
 python scripts/generate_diagram.py
-python scripts/generate_diagram.py --output docs/architecture.png
-python scripts/generate_diagram.py --format svg --output docs/architecture.svg
+python scripts/generate_diagram.py --output docs/monkeygrab_architecture.png
+python scripts/generate_diagram.py --format svg --output docs/monkeygrab_architecture.svg
 ```
 
 ### Variables de entorno relevantes
@@ -223,9 +230,9 @@ python scripts/generate_diagram.py --format svg --output docs/architecture.svg
 
 ## Patrones de programacion — seguir al escribir codigo nuevo
 
-### 1. MODULE MAP al inicio de cada modulo
+### 1. MODULE MAP al inicio de cada modulo (OBLIGATORIO)
 
-Todo archivo Python no trivial abre con un MODULE MAP comentado que indexa sus secciones:
+Todo archivo Python no trivial abre con un MODULE MAP comentado que indexa sus secciones. **Todos los archivos del proyecto ya siguen este patron** (verificado 2026-03-28). Al anadir un archivo nuevo, incluir el MODULE MAP desde el inicio.
 
 ```python
 # ─────────────────────────────────────────────
@@ -304,6 +311,17 @@ Nombrar y separar visualmente cada fase: carga -> preparacion -> inferencia -> e
 ### 7. Salida orientada a artefactos
 
 Los scripts experimentales siempre exportan: JSON de metricas, CSV por muestra, plots. Nunca solo stdout.
+
+### 11. Tablas de resultados — sin desviacion tipica, preferir mejora relativa
+
+Por indicacion del tutor: las tablas de resultados del TFG **no incluyen desviacion tipica**. El formato preferido para cuantificar el efecto del fine-tuning es:
+
+- **Δ absoluto** (en pp): diferencia entre base y adaptado. Ej: `+3.2 pp`.
+- **Δ relativo** (en %): `(adaptado - base) / base × 100`. Ej: `+7.4 %`.
+
+Los artefactos JSON (`evaluation_comparison.json`) ya incluyen ambos campos (`delta_pp` y `delta_rel_pct`). No es necesario recomputarlos.
+
+El script `compute_std.py` existe por razones historicas; **no usarlo para tablas definitivas** del TFG.
 
 ### 8. Naming mixto ES/EN (convension establecida del proyecto)
 
@@ -395,6 +413,7 @@ USAR_RECOMP_SYNTHESIS = False        # experimental: disabled by default
 5. **No activar `USAR_RECOMP_SYNTHESIS = True`** por defecto: esta deshabilitado intencionalmente en produccion.
 6. **No tocar llama.cpp/**: es un submodulo externo, no codigo del proyecto.
 7. Al proponer cambios en `chat_pdfs.py`: tener en cuenta que `web/app.py` importa directamente constantes y funciones de ese modulo (`PATH_DB`, `COLLECTION_NAME`, `indexar_documentos`, `evaluar_pregunta_rag`, etc.). Un renombrado rompe el backend web.
+8. **Los datos en `training-output/bertscore/` son obsoletos** (version anterior del experimento). No citarlos como resultados definitivos. Los resultados definitivos vendran de re-ejecutar `train-qwen3.py` y `evaluate_baselines.py` en cluster con el nuevo esquema (Aina por idioma, BERTScore integrado).
 
 ---
 
@@ -451,7 +470,8 @@ bert-score>=0.3.13
 
 ### Deuda activa
 
-- **Duplicacion entre scripts de entrenamiento**: `train-qwen3.py`, `train-llama3.1.py` y `train-gemma3.py` comparten ~80% del codigo (carga de datasets, metricas, bucle de evaluacion). Si se modifica la logica de evaluacion, hay que replicar el cambio en los tres archivos.
+- **Duplicacion entre scripts de entrenamiento**: `train-qwen3.py` esta en v9 (con Aina por idioma, BERTScore integrado, dev+test separados). `train-llama3.1.py` y `train-gemma3.py` estan desactualizados respecto a ese esquema. Si se repiten los experimentos de Llama y Gemma, hay que alinearlos con la logica de Qwen3 v9.
+- **`training-output/bertscore/`**: los CSVs y JSON existentes corresponden a la version anterior del experimento (Aina como bloque unico, caps de muestras). Son datos obsoletos; seran reemplazados cuando finalicen los experimentos en cluster. No usar para tablas definitivas del TFG.
 - **Mezcla de idioma en nombres**: funciones de dominio en espanol (`realizar_busqueda_hibrida`) junto a constantes en ingles (`CHUNK_SIZE`). Es una convencion establecida, no un error, pero puede resultar sorprendente.
 - **Logica concentrada en scripts largos**: `chat_pdfs.py` supera las 1000 lineas. Toda la logica RAG vive ahi. Refactorizar requeriria actualizar los imports en `web/app.py` y `evaluation/run_eval.py`.
 
@@ -460,7 +480,7 @@ bert-score>=0.3.13
 - **Gemma-3-12B**: el adaptador LoRA no puede desplegarse via Ollama por incompatibilidad GGUF. El adaptador existe y esta publicado, pero no se usa en produccion.
 - **RECOMP synthesis** (`USAR_RECOMP_SYNTHESIS`): implementado pero deshabilitado por defecto. Aumenta latencia sin mejora consistente.
 - **Evaluacion RAGAS**: requiere `GOOGLE_API_KEY` (Gemini 2.0 Flash como juez LLM). No es totalmente local.
-- **Re-generacion de datos de evaluacion por muestra**: los CSVs de `training-output/bertscore/` requieren re-ejecutar `eval_bertscore.py` para regenerarse.
+- **Re-generacion de datos de evaluacion por muestra**: los artefactos de `training-output/bertscore/` se regeneran re-ejecutando `train-qwen3.py` completo (Section 12 genera BERTScore). No hay script separado de BERTScore.
 
 ### Decisiones de disenyo relevantes
 
@@ -474,15 +494,19 @@ bert-score>=0.3.13
 
 ## Artefactos de evaluacion
 
-Los resultados de los experimentos estan en `training-output/`:
+Los resultados de los experimentos estan en `training-output/`. Los datos marcados como (OBSOLETOS) corresponden a la version anterior del experimento (Aina como bloque unico, caps de muestras); seran reemplazados al terminar el cluster.
 
 | Artefacto | Ubicacion | Descripcion |
 |-----------|-----------|-------------|
 | Adaptador LoRA Qwen3 | `training-output/qwen-3/` | `adapter_config.json`, `adapter_model.safetensors` |
-| Comparacion base/adaptado | `training-output/qwen-3/evaluation_comparison.json` | Deltas por dataset y agregado ponderado |
-| Estadisticas de training | `training-output/qwen-3/training_stats.json` | Loss, pasos, tiempo |
-| BERTScore resumen | `training-output/bertscore/bertscore_summary.csv` | P/R/F1 por modelo y dataset |
-| BERTScore por muestra | `training-output/bertscore/bertscore_per_sample_*.csv` | 200 muestras por combinacion |
-| Token F1 + Faithfulness | `training-output/bertscore/metrics_per_sample_*.csv` | Metricas complementarias por muestra |
-| Sigma table | `training-output/bertscore/sigma_table.log` / `.tex` | Tabla mean +/- std lista para LaTeX |
-| Diagrama arquitectura | `training-output/monkeygrab_architecture.png` / `.svg` | Generado por `generate_diagram.py` |
+| Comparacion base/adaptado | `training-output/qwen-3/evaluation_comparison.json` | Deltas per-dataset con Token F1, BERTScore F1, CF-lexica; separados por dev/test |
+| Estadisticas de training | `training-output/qwen-3/training_stats.json` | Loss, pasos, tiempo (v9) |
+| Predicciones checkpoint | `training-output/qwen-3/predictions_base.json` / `predictions_adapted.json` | Predicciones + Token F1 + CF-lexica por muestra; permite recomputar BERTScore sin regenerar |
+| BERTScore checkpoint | `training-output/qwen-3/bertscore_checkpoint.json` | BERTScore P/R/F1 por dataset (BASE y ADAPTED) |
+| Exploracion rango LoRA | `training-output/qwen-3/explore-rank/` | Artefactos comparacion r=32 vs r=64 |
+| Baseline completo | `training-output/baseline/baseline_evaluation.json` | Token F1, BERTScore F1, CF-lexica para 6 modelos x 5 datasets x dev/test x con/sin contexto |
+| Baseline checkpoint | `training-output/baseline/baseline_checkpoint.json` | Checkpoint incremental (permite reanudar si falla) |
+| BERTScore por muestra (OBSOLETOS) | `training-output/bertscore/bertscore_per_sample_*.csv` | Datos de evaluacion anterior; seran reemplazados |
+| Metricas por muestra (OBSOLETOS) | `training-output/bertscore/metrics_per_sample_*.csv` | Datos de evaluacion anterior; seran reemplazados |
+| Sigma table (OBSOLETOS) | `training-output/bertscore/sigma_table.log` / `.tex` | Basada en datos anteriores; regenear con `compute_std.py` tras nuevo cluster |
+| Diagrama arquitectura | `docs/monkeygrab_architecture.png` / `.svg` | Generado por `scripts/generate_diagram.py` |

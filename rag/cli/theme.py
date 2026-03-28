@@ -8,20 +8,33 @@ Inspired by the CLIs of Claude Code and Gemini CLI:
 muted colors, low contrast, subtle accents.
 """
 
+
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
+#
+#  CONFIGURATION
+#  +-- 1. Imports and cross-platform color support
+#  +-- 2. THEME CLASS          256-color ANSI palette and icons
+#  +-- 3. ASCII LOGO           MonkeyGrab brand banner
+#  +-- 4. SYSTEM MESSAGES      mode labels and status strings
+#
+# ─────────────────────────────────────────────
+
 import os
 
-# ─────────────────────────────────────────────────────────────────────
-# Cross-platform color support
-# ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# SECTION 1: IMPORTS AND CROSS-PLATFORM COLOR SUPPORT
+# ─────────────────────────────────────────────
 try:
     from colorama import init as _colorama_init
     _colorama_init()
 except ImportError:
     pass
 
-# ─────────────────────────────────────────────────────────────────────
-# THEME CLASS -- Professional dark color palette
-# ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# SECTION 2: THEME CLASS
+# ─────────────────────────────────────────────
 
 class Theme:
     """
@@ -133,9 +146,9 @@ class Theme:
         prefix = "".join(styles)
         return f"{prefix}{text}{cls.RESET}"
 
-# ─────────────────────────────────────────────────────────────────────
-# ASCII LOGO -- MonkeyGrab
-# ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# SECTION 3: ASCII LOGO
+# ─────────────────────────────────────────────
 
 def get_logo(modelo_desc: str = "") -> str:
     """Generate the MonkeyGrab ASCII logo with a dark gradient.
@@ -175,9 +188,9 @@ def get_logo(modelo_desc: str = "") -> str:
     return logo
 
 
-# ─────────────────────────────────────────────────────────────────────
-# SYSTEM MESSAGES
-# ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────
+# SECTION 4: SYSTEM MESSAGES
+# ─────────────────────────────────────────────
 
 MESSAGES = {
     "farewell": f"{Theme.TEXT_DIM}Hasta luego. Sesión finalizada.{Theme.RESET}",

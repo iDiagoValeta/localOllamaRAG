@@ -16,6 +16,24 @@ Dependencies:
     matplotlib
 """
 
+
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
+#
+#  CONFIGURATION
+#  +-- 1. Imports and paths
+#         parse_args(), get_paths(), find_stats_file()
+#
+#  PIPELINE
+#  +-- 2. Loading, processing and plotting metrics
+#         main() — load JSON, extract series, generate PNG
+#
+#  ENTRY
+#  +-- 3. Script execution
+#
+# ─────────────────────────────────────────────
+
 import argparse
 import json
 import sys
@@ -31,10 +49,8 @@ except ImportError:
 
 
 # ─────────────────────────────────────────────
-# PATHS AND METRICS FILE LOOKUP
+# SECTION 1: IMPORTS AND PATHS
 # ─────────────────────────────────────────────
-# Defines candidate locations for locating ``training_stats.json`` when the
-# user does not supply an explicit path via the command line.
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
@@ -90,12 +106,8 @@ def find_stats_file(stats_path: str) -> str:
 
 
 # ─────────────────────────────────────────────
-# LOADING, PROCESSING AND PLOTTING METRICS
+# SECTION 2: LOADING, PROCESSING AND PLOTTING METRICS
 # ─────────────────────────────────────────────
-# Executes the full analysis workflow:
-# - Locates and validates ``training_stats.json``.
-# - Extracts train/eval/lr/grad_norm series from ``log_history``.
-# - Generates and saves a PNG with the curves for reporting and review.
 
 def main():
     """Main entry point for generating training curves.
@@ -200,9 +212,8 @@ def main():
 
 
 # ─────────────────────────────────────────────
-# SCRIPT EXECUTION
+# SECTION 3: SCRIPT EXECUTION
 # ─────────────────────────────────────────────
-# Allows invoking this file directly from the terminal.
 
 if __name__ == "__main__":
     main()

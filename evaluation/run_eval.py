@@ -23,6 +23,25 @@ Dependencies:
     - python-dotenv (optional)
 """
 
+
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
+#
+#  CONFIGURATION
+#  +-- 1. Environment setup    imports, .env loading, sys.path
+#  +-- 2. Dataset loading      cargar_dataset, normalizar_columnas
+#  +-- 3. Evaluation LLM       configurar_llm_evaluacion (Gemini + embeddings)
+#
+#  PIPELINE
+#  +-- 4. Result formatting    imprimir_resultados
+#  +-- 5. Debug output         _extraer_justificaciones_traces, guardar_debug
+#
+#  ENTRY
+#  +-- 6. Main                 main()
+#
+# ─────────────────────────────────────────────
+
 import os
 import sys
 import json
@@ -30,7 +49,7 @@ import argparse
 import time
 
 # ─────────────────────────────────────────────
-# ENVIRONMENT SETUP
+# SECTION 1: ENVIRONMENT SETUP
 # ─────────────────────────────────────────────
 
 try:
@@ -56,7 +75,7 @@ from rag.chat_pdfs import (
 )
 
 # ─────────────────────────────────────────────
-# DATASET LOADING
+# SECTION 2: DATASET LOADING
 # ─────────────────────────────────────────────
 
 def cargar_dataset(ruta: str) -> pd.DataFrame:
@@ -118,7 +137,7 @@ def normalizar_columnas(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ─────────────────────────────────────────────
-# EVALUATION LLM AND EMBEDDINGS
+# SECTION 3: EVALUATION LLM AND EMBEDDINGS
 # ─────────────────────────────────────────────
 
 def configurar_llm_evaluacion():
@@ -157,7 +176,7 @@ def configurar_llm_evaluacion():
         raise SystemExit(1)
 
 # ─────────────────────────────────────────────
-# RESULT FORMATTING
+# SECTION 4: RESULT FORMATTING
 # ─────────────────────────────────────────────
 
 METRIC_NAMES = [
@@ -240,7 +259,7 @@ def imprimir_resultados(df_scores: pd.DataFrame, questions: list[str]):
 
 
 # ─────────────────────────────────────────────
-# DEBUG OUTPUT
+# SECTION 5: DEBUG OUTPUT
 # ─────────────────────────────────────────────
 
 def _extraer_justificaciones_traces(traces: list, metric_cols: list) -> list[dict]:
@@ -354,7 +373,7 @@ def guardar_debug(
 
 
 # ─────────────────────────────────────────────
-# MAIN
+# SECTION 6: MAIN
 # ─────────────────────────────────────────────
 
 def main():

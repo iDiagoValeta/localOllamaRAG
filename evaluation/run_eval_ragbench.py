@@ -108,7 +108,7 @@ HF_METADATA_FILES = ["queries.json", "qrels.json", "answers.json", "pdf_urls.jso
 # --- 2.4 Paths ---
 EVAL_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJ_ROOT = os.path.dirname(EVAL_DIR)
-RAGBENCH_PDFS_DIR = os.path.join(EVAL_DIR, "ragbench_pdfs")
+RAGBENCH_PDFS_DIR = os.path.join(PROJ_ROOT, "rag", "ragbench_pdfs")
 RAGBENCH_DB_PATH = os.path.join(PROJ_ROOT, "rag", "ragbench_vector_db")
 RAGBENCH_COLLECTION = "ragbench_arxiv_eval"
 
@@ -631,7 +631,7 @@ def main():
     )
     parser.add_argument(
         "--skip-download", action="store_true",
-        help="Skip PDF download phase and use existing files in ragbench_pdfs/"
+        help="Skip PDF download phase and use existing files in rag/ragbench_pdfs/"
     )
     parser.add_argument(
         "--force-reindex", action="store_true",

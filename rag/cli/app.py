@@ -16,6 +16,24 @@ Dependencies:
     - A RAG engine module providing search, indexing, and generation functions
 """
 
+
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
+#
+#  CONFIGURATION
+#  +-- 1. Imports
+#
+#  MonkeyGrabCLI CLASS
+#  +-- 2. INITIALIZATION       __init__, ChromaDB + engine wiring
+#  +-- 3. STARTUP              print_startup_info, banner
+#  +-- 4. MAIN LOOP            run() — prompt dispatch
+#  +-- 5. CHAT / RAG PROCESSING  handle_chat, handle_rag
+#  +-- 6. COMMAND HANDLERS     /docs, /stats, /reindex, /temas, /help, /salir
+#  +-- 7. HELPERS              context truncation, term extraction
+#
+# ─────────────────────────────────────────────
+
 import os
 import shutil
 import time
@@ -28,7 +46,7 @@ from rag.cli.display import ui
 
 
 # ─────────────────────────────────────────────
-# MAIN CLI CLASS
+# SECTION 2: MAIN CLI CLASS
 # ─────────────────────────────────────────────
 
 class MonkeyGrabCLI:

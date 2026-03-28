@@ -82,11 +82,11 @@ rag/debug_rag/
 # Resultados de la evaluación con RAGAS
 ragas_scores.csv
 
-# Evaluación — RAGBench (PDFs locales) y documentación local del TFG
-evaluation/ragbench_pdfs/
-evaluation/MODIFICACIONES_EVALUACION.md
-evaluation/EVALUACION_DATASETS_PUBLICOS.md
+# Evaluación — RAGBench (PDFs locales)
+rag/ragbench_pdfs/
 
 .pytest_cache/
 
 .claude/
+
+MODIFICACIONES_EVALUACION.md

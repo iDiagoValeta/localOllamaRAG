@@ -1,20 +1,23 @@
 """
-LoRA fine-tuning of Qwen3-14B for RAG (v7.2).
+LoRA fine-tuning of Qwen3-14B for RAG (v9).
 
-Five-stage training and comparative evaluation pipeline:
-  1. Load base model Qwen/Qwen3-14B.
-  2. Evaluate the base model on a frozen test set (baseline).
-  3. Apply LoRA adapter and fine-tune on 3 native RAG datasets.
-  4. Evaluate the adapted model on the SAME test set.
-  5. Generate a comparative summary with RAG-specific metrics.
+Full training and evaluation pipeline for a RAQ Q&A model that responds
+strictly from the retrieved context in EN, ES or CA.
 
-Goal: document Q&A assistant with strict adherence to the retrieved context.
-Responds in the language of the context (EN, ES, or CA).
+Phases:
+  1-2.  Load base Qwen/Qwen3-14B and evaluate on frozen dev+test sets.
+  3-4.  Load datasets: Neural-Bridge RAG, Dolly QA, Aina-EN/ES/CA.
+        5-source proportional round-robin interleaving.
+  5-10. Apply LoRA (r=32), tokenize, train, export best checkpoint.
+  11.   Re-evaluate adapted model on same frozen dev+test sets.
+  12.   BERTScore computation (DeBERTa-xlarge-mnli) after unloading main model.
+  13.   Comparative summary: Token F1, BERTScore F1, CF-lexica per dataset x split.
+  14.   Export training_stats.json and evaluation_comparison.json.
 
 Usage:
-    python train.py
+    python train-qwen3.py
 Dependencies:
-    - torch, transformers, peft, datasets, tqdm
+    - torch, transformers, peft, datasets, tqdm, bert-score
 """
 
 # ─────────────────────────────────────────────

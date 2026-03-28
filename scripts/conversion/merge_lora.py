@@ -14,20 +14,39 @@ Dependencies:
     - transformers (AutoModelForCausalLM, AutoTokenizer)
 """
 
+
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
+#
+#  CONFIGURATION
+#  +-- 1. Imports and CLI args
+#  +-- 2. Paths and artifact validation
+#
+#  PIPELINE
+#  +-- 3. Adapter configuration loading
+#  +-- 4. Base model and tokenizer loading
+#  +-- 5. LoRA adapter merge
+#  +-- 6. Merged model export
+#
+# ─────────────────────────────────────────────
+
 import argparse
 import os
 import torch
 from peft import PeftModel, PeftConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# Read the HuggingFace token from environment variables (accepts both names)
+# ─────────────────────────────────────────────
+# SECTION 1: IMPORTS AND CLI ARGS
+# ─────────────────────────────────────────────
+
+# Accepts both HF_TOKEN and HUGGINGFACE_HUB_TOKEN for compatibility.
 HF_TOKEN = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN") or None
 
 # ─────────────────────────────────────────────
-# PATHS AND ARTIFACT VALIDATION
+# SECTION 2: PATHS AND ARTIFACT VALIDATION
 # ─────────────────────────────────────────────
-# Define project paths and verify that the trained LoRA adapter exists
-# before starting the merge process.
 
 VALID_MODELS = ["qwen-3", "llama-3", "gemma-3"]
 
@@ -51,10 +70,8 @@ if not os.path.exists(os.path.join(LORA_PATH, "adapter_config.json")):
 os.makedirs(MERGED_PATH, exist_ok=True)
 
 # ─────────────────────────────────────────────
-# ADAPTER CONFIGURATION LOADING
+# SECTION 3: ADAPTER CONFIGURATION LOADING
 # ─────────────────────────────────────────────
-# Retrieve the base model identifier from the LoRA adapter config
-# to ensure traceability of the merge.
 
 print("=" * 60)
 print("[1/4] Loading LoRA adapter configuration...")
@@ -65,10 +82,8 @@ print(f"  Base model: {base_model_name}")
 print(f"  LoRA path:  {LORA_PATH}")
 
 # ─────────────────────────────────────────────
-# BASE MODEL AND TOKENIZER LOADING
+# SECTION 4: BASE MODEL AND TOKENIZER LOADING
 # ─────────────────────────────────────────────
-# Load the base model on CPU for deterministic weight merging
-# without requiring GPU acceleration at this post-processing stage.
 
 print("\n" + "=" * 60)
 print("[2/4] Downloading/loading base model (may take a while)...")
@@ -84,10 +99,8 @@ tokenizer = AutoTokenizer.from_pretrained(base_model_name, token=HF_TOKEN)
 print("  Base model loaded.")
 
 # ─────────────────────────────────────────────
-# LORA ADAPTER MERGE
+# SECTION 5: LORA ADAPTER MERGE
 # ─────────────────────────────────────────────
-# Attach the adapter on top of the base model and materialize
-# the final weights via `merge_and_unload`.
 
 print("\n" + "=" * 60)
 print("[3/4] Merging LoRA adapter with base model...")
@@ -97,10 +110,8 @@ merged_model = model.merge_and_unload()
 print("  Merge completed.")
 
 # ─────────────────────────────────────────────
-# MERGED MODEL EXPORT
+# SECTION 6: MERGED MODEL EXPORT
 # ─────────────────────────────────────────────
-# Save model and tokenizer to disk for subsequent GGUF conversion
-# and quantization stages.
 
 print("\n" + "=" * 60)
 print(f"[4/4] Saving merged model to: {MERGED_PATH}")
