@@ -16,6 +16,22 @@ Dependencies:
     - requests
     - A running Ollama server with the target models loaded
 """
+
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
+#
+#  CONFIGURATION
+#  +-- 1. Constants
+#
+#  HELPERS
+#  +-- 2. stream_generate, strip_think_blocks, run_model, assess
+#
+#  CLI
+#  +-- 3. main() -- argument parsing and test loop
+#
+# ─────────────────────────────────────────────
+
 import argparse
 import json
 import re
@@ -24,11 +40,19 @@ from pathlib import Path
 
 import requests
 
+# ─────────────────────────────────────────────
+# SECTION 1: CONSTANTS
+# ─────────────────────────────────────────────
+
 OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_MODELS = ["qwen3:14b", "qwen3.5:9b"]
 DEFAULT_PROMPT = "What is 2+2? Answer in one brief sentence."
 DEFAULT_SYSTEM = "You are a helpful assistant. Answer concisely."
 
+
+# ─────────────────────────────────────────────
+# SECTION 2: HELPERS
+# ─────────────────────────────────────────────
 
 def stream_generate(payload: dict, timeout: int = 60):
     """Send a streaming generate request and return the full response text."""
@@ -109,6 +133,10 @@ def assess(text: str) -> str:
         return "OK - empty think"
     return "REASONS"
 
+
+# ─────────────────────────────────────────────
+# SECTION 3: CLI
+# ─────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description="Test Ollama models with streaming and reasoning suppression")

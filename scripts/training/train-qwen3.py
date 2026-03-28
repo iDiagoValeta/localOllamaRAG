@@ -21,17 +21,17 @@ Dependencies:
 """
 
 # ─────────────────────────────────────────────
-# MODULE MAP — Section index
+# MODULE MAP -- Section index
 # ─────────────────────────────────────────────
 #
 #  CONFIGURATION
-#  |-- 1. Environment and constants   CUDA env vars, token limits
+#  +-- 1. Environment and constants   CUDA env vars, token limits
 #  |        1.1 Dataset sizes            train/val caps per source
 #  |        1.2 System prompt            aligned with SYSTEM_PROMPT_RAG from chat_pdfs
-#  `-- 2. Base model loading          AutoModelForCausalLM + Qwen3-14B tokenizer
+#  +-- 2. Base model loading          AutoModelForCausalLM + Qwen3-14B tokenizer
 #
 #  EVALUATION AND METRICS
-#  `-- 3. Metrics and inference
+#  +-- 3. Metrics and inference
 #           3.1 Text normalization       (EN/ES/CA, strip articles and punctuation)
 #           3.2 Token F1                 overlap with gold answer (SQuAD-standard)
 #           3.3 Context Faithfulness     primary metric for the thesis
@@ -41,7 +41,7 @@ Dependencies:
 #           3.7 Checkpoint helpers       save/load predictions for crash recovery
 #
 #  DATA
-#  `-- 4. Dataset loading
+#  +-- 4. Dataset loading
 #           4.1 Normalizers              schema mapping -> instruction/context/response
 #           4.2 Shared filters           valid, long_response, dolly_rag
 #           4.3 Neural-Bridge RAG        9 600 train / 2 400 test
@@ -49,19 +49,19 @@ Dependencies:
 #           4.5 Aina RAG (EN/ES/CA)      split by lang, per-language partitions
 #           4.6 Training set             5-source proportional round-robin
 #           4.7 Validation set           Trainer (loss monitoring / early stopping)
-#           4.8 Frozen dev+test sets     FROZEN — same for BASE and ADAPTED
+#           4.8 Frozen dev+test sets     FROZEN -- same for BASE and ADAPTED
 #
 #  PIPELINE
-#  |-- 5. Base model evaluation     pre-training baseline
-#  |-- 6. LoRA adapter              r=32, alpha=64 (exploration), 7 target modules
-#  |-- 7. Tokenization              ChatML + prompt loss masking
-#  |-- 8. Training configuration    hyperparameters, early stopping, checkpoints
-#  |-- 9. Training loop             Trainer.train()
-#  |--10. Model export              save_pretrained (best checkpoint)
-#  |--11. Adapted model evaluation  same frozen test set as Section 5
-#  |--12. BERTScore computation     unload main model, DeBERTa, merge metrics
-#  |--13. Comparative summary       deltas per dataset×split + weighted aggregate
-#  `--14. Artifact export           training_stats.json, evaluation_comparison.json
+#  +-- 5. Base model evaluation     pre-training baseline
+#  +-- 6. LoRA adapter              r=32, alpha=64 (exploration), 7 target modules
+#  +-- 7. Tokenization              ChatML + prompt loss masking
+#  +-- 8. Training configuration    hyperparameters, early stopping, checkpoints
+#  +-- 9. Training loop             Trainer.train()
+#  +--10. Model export              save_pretrained (best checkpoint)
+#  +--11. Adapted model evaluation  same frozen test set as Section 5
+#  +--12. BERTScore computation     unload main model, DeBERTa, merge metrics
+#  +--13. Comparative summary       deltas per dataset×split + weighted aggregate
+#  +--14. Artifact export           training_stats.json, evaluation_comparison.json
 #
 # ─────────────────────────────────────────────
 

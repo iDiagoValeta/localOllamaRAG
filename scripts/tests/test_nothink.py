@@ -15,9 +15,31 @@ Dependencies:
     - A running Ollama server with the Qwen3-FineTuned model loaded
 """
 
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
+#
+#  CONFIGURATION
+#  +-- 1. Constants and Qwen3 template
+#
+#  HELPERS
+#  +-- 2. sep, stream_generate, assess
+#
+#  TEST CASES
+#  +-- 3. Strategy A  raw prompt + pre-filled empty think block
+#  +-- 4. Strategy B  raw prompt + /no_think directive
+#  +-- 5. Strategy C  derived Modelfile with native Qwen3 template
+#  +-- 6. Summary
+#
+# ─────────────────────────────────────────────
+
 import json, subprocess, tempfile, time
 from pathlib import Path
 import requests
+
+# ─────────────────────────────────────────────
+# SECTION 1: CONSTANTS AND QWEN3 TEMPLATE
+# ─────────────────────────────────────────────
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 MODEL = "Qwen3-FineTuned:latest"
@@ -38,6 +60,10 @@ QWEN3_TEMPLATE = (
     "{%- end %}{{ .Response }}"
 )
 
+
+# ─────────────────────────────────────────────
+# SECTION 2: HELPERS
+# ─────────────────────────────────────────────
 
 def sep(label):
     """Print a visual separator line with a centered label."""
@@ -85,6 +111,10 @@ def assess(text):
     return "FAIL - REASONS"
 
 
+# ─────────────────────────────────────────────
+# SECTION 3: STRATEGY A -- raw prompt + pre-filled empty think block
+# ─────────────────────────────────────────────
+
 sep("A) raw:true + <think></think> pre-filled")
 prompt_a = (f"<|im_start|>system\n{SYSTEM}<|im_end|>\n"
             f"<|im_start|>user\n{QUESTION}<|im_end|>\n"
@@ -95,6 +125,10 @@ resp_a = stream_generate({"model": MODEL, "prompt": prompt_a, "raw": True,
 print(f"  -> {assess(resp_a)}")
 time.sleep(1)
 
+# ─────────────────────────────────────────────
+# SECTION 4: STRATEGY B -- raw prompt + /no_think directive
+# ─────────────────────────────────────────────
+
 sep("B) raw:true + /no_think in user message")
 prompt_b = (f"<|im_start|>system\n{SYSTEM}<|im_end|>\n"
             f"<|im_start|>user\n/no_think\n{QUESTION}<|im_end|>\n"
@@ -104,6 +138,10 @@ resp_b = stream_generate({"model": MODEL, "prompt": prompt_b, "raw": True,
     "stop": ["<|im_end|>", "<|im_start|>"]}})
 print(f"  -> {assess(resp_b)}")
 time.sleep(1)
+
+# ─────────────────────────────────────────────
+# SECTION 5: STRATEGY C -- derived Modelfile with native Qwen3 template
+# ─────────────────────────────────────────────
 
 sep("C) Derived Modelfile with native Qwen3 template")
 with tempfile.NamedTemporaryFile(mode="w", suffix=".Modelfile",
@@ -136,6 +174,10 @@ else:
     subprocess.run(["ollama", "rm", MODEL_TEST], capture_output=True)
     print("Temporary model deleted.")
 Path(mf_path).unlink(missing_ok=True)
+
+# ─────────────────────────────────────────────
+# SECTION 6: SUMMARY
+# ─────────────────────────────────────────────
 
 print("\n" + "=" * 70)
 print("  SUMMARY")

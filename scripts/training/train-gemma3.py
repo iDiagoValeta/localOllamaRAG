@@ -33,13 +33,13 @@ Dependencies:
 # ─────────────────────────────────────────────
 #
 #  CONFIGURATION
-#  |-- 1. Environment and constants   CUDA env vars, token limits
+#  +-- 1. Environment and constants   CUDA env vars, token limits
 #  |        1.1 Dataset sizes            train/val caps per source
 #  |        1.2 System prompt            aligned with SYSTEM_PROMPT_RAG from chat_pdfs
-#  `-- 2. Base model loading          AutoModelForCausalLM + Gemma-3-12B tokenizer
+#  +-- 2. Base model loading          AutoModelForCausalLM + Gemma-3-12B tokenizer
 #
 #  EVALUATION AND METRICS
-#  `-- 3. Metrics and inference
+#  +-- 3. Metrics and inference
 #           3.1 Text normalization       (EN/ES/CA, strip articles and punctuation)
 #           3.2 Token F1                 overlap with gold answer (SQuAD-standard)
 #           3.3 Context Faithfulness     primary metric for the thesis
@@ -47,7 +47,7 @@ Dependencies:
 #           3.5 Evaluation loop         loop over frozen eval_datasets
 #
 #  DATA
-#  `-- 4. Dataset loading
+#  +-- 4. Dataset loading
 #           4.1 Normalizers              schema mapping -> instruction/context/response
 #           4.2 Shared filters           valid, long_response, dolly_rag
 #           4.3 Neural-Bridge RAG        9 600 train / 2 400 test
@@ -58,15 +58,15 @@ Dependencies:
 #           4.8 Frozen test set          FROZEN -- same for BASE and ADAPTED
 #
 #  PIPELINE
-#  |-- 5. Base model evaluation     pre-training baseline
-#  |-- 6. LoRA adapter              r=32, alpha=64, 7 target modules
-#  |-- 7. Tokenization              Gemma chat template + prompt loss masking
-#  |-- 8. Training configuration    hyperparameters, early stopping, checkpoints
-#  |-- 9. Training loop             Trainer.train()
-#  |--10. Model export              save_pretrained (best checkpoint)
-#  |--11. Adapted model evaluation  same frozen test set as Section 5
-#  |--12. Comparative summary       deltas per dataset + weighted aggregate
-#  `--13. Artifact export           training_stats.json, evaluation_comparison.json
+#  +-- 5. Base model evaluation     pre-training baseline
+#  +-- 6. LoRA adapter              r=32, alpha=64, 7 target modules
+#  +-- 7. Tokenization              Gemma chat template + prompt loss masking
+#  +-- 8. Training configuration    hyperparameters, early stopping, checkpoints
+#  +-- 9. Training loop             Trainer.train()
+#  +--10. Model export              save_pretrained (best checkpoint)
+#  +--11. Adapted model evaluation  same frozen test set as Section 5
+#  +--12. Comparative summary       deltas per dataset + weighted aggregate
+#  +--13. Artifact export           training_stats.json, evaluation_comparison.json
 #
 # ─────────────────────────────────────────────
 
