@@ -34,6 +34,8 @@ Dependencies:
 #           3.3 Context Faithfulness     primary metric for the thesis
 #           3.4 Generation              apply_chat_template + enable_thinking=False
 #           3.5 Evaluation loop         loop over frozen eval_datasets
+#           3.6 BERTScore batch          DeBERTa-xlarge-mnli, per-dataset
+#           3.7 Checkpoint helpers       save/load predictions for crash recovery
 #
 #  DATA
 #  `-- 4. Dataset loading
@@ -41,10 +43,10 @@ Dependencies:
 #           4.2 Shared filters           valid, long_response, dolly_rag
 #           4.3 Neural-Bridge RAG        9 600 train / 2 400 test
 #           4.4 Dolly QA                 15 000 -> RAG filtered -> split 80/10/10
-#           4.5 Aina RAG Multilingual    42 300 train / 8 460 val / 5 640 test
-#           4.6 Training set             proportional round-robin interleaving
+#           4.5 Aina RAG (EN/ES/CA)      split by lang, per-language partitions
+#           4.6 Training set             5-source proportional round-robin
 #           4.7 Validation set           Trainer (loss monitoring / early stopping)
-#           4.8 Frozen test set          FROZEN — same for BASE and ADAPTED
+#           4.8 Frozen dev+test sets     FROZEN — same for BASE and ADAPTED
 #
 #  PIPELINE
 #  |-- 5. Base model evaluation     pre-training baseline
@@ -54,14 +56,33 @@ Dependencies:
 #  |-- 9. Training loop             Trainer.train()
 #  |--10. Model export              save_pretrained (best checkpoint)
 #  |--11. Adapted model evaluation  same frozen test set as Section 5
-#  |--12. Comparative summary       deltas per dataset + weighted aggregate
-#  `--13. Artifact export           training_stats.json, evaluation_comparison.json
+#  |--12. BERTScore computation     unload main model, DeBERTa, merge metrics
+#  |--13. Comparative summary       deltas per dataset×split + weighted aggregate
+#  `--14. Artifact export           training_stats.json, evaluation_comparison.json
 #
 # ─────────────────────────────────────────────
 
 # ─────────────────────────────────────────────
 # VERSION HISTORY
 # ─────────────────────────────────────────────
+#
+# v9 vs v8
+#   - BASE vs ADAPTED comparison now evaluates on BOTH dev and test splits
+#     (previously only test). Aligns with tutor's criterion: dev for decisions.
+#   - Removed dead constants: SAMPLES_DOLLY_TRAIN (cap never reached),
+#     SAMPLES_DOLLY_VAL (declared but never used).
+#   - Dolly train size is now the real 80% of RAG-filtered rows (no cap).
+#   - evaluation_comparison.json restructured: per_split.{dev,test}.{dataset}
+#     with deltas and deltas_rel_pct (relative improvement %).
+#   - BERTScore computation runs over "DatasetName|split" keys.
+#
+# v8 vs v7.2
+#   - Aina RAG split into 3 per-language subsets (Aina-EN, Aina-ES, Aina-CA)
+#     with independent train/val/test partitions.
+#   - 5-source round-robin interleaving (NB, Dolly, Aina-EN, Aina-ES, Aina-CA).
+#   - Full dev and test partitions (removed EVAL_SAMPLES_PER_DATASET cap).
+#   - BERTScore integrated (DeBERTa-xlarge-mnli), with memory-safe pipeline.
+#   - Evaluation reports per-language results for Aina.
 #
 # v7.2 vs v7.1
 #   - Removed QASPER (too few samples after filtering).
@@ -111,6 +132,7 @@ Dependencies:
 #
 # ─────────────────────────────────────────────
 
+import gc
 import os
 import re
 import json
@@ -128,6 +150,24 @@ from transformers import (
     EarlyStoppingCallback,
     DataCollatorForSeq2Seq,
 )
+
+from bert_score import score as bert_score_fn
+import bert_score.utils as _bsu
+
+
+# ---------------------------------------------------------------------------
+# MONKEY-PATCH: bert_score.utils.sent_encode
+# ---------------------------------------------------------------------------
+# DeBERTa reports sys.maxsize as model_max_length, which the Rust tokenizer
+# backend cannot store as a 32-bit int.  Force max_length=512 (physical
+# limit of DeBERTa) and truncation=True.
+# ---------------------------------------------------------------------------
+def _safe_sent_encode(tokenizer, a):
+    return tokenizer.encode(
+        a.strip(), add_special_tokens=True, max_length=512, truncation=True,
+    )
+
+_bsu.sent_encode = _safe_sent_encode
 
 
 # ─────────────────────────────────────────────
@@ -147,20 +187,20 @@ os.makedirs(output_dir, exist_ok=True)
 model_name = "Qwen/Qwen3-14B"
 
 SAMPLES_NEURAL_BRIDGE_TRAIN = 8000
-SAMPLES_DOLLY_TRAIN         = 10000
-SAMPLES_AINA_TRAIN          = 10000
+SAMPLES_AINA_EN_TRAIN       = 3333
+SAMPLES_AINA_ES_TRAIN       = 3333
+SAMPLES_AINA_CA_TRAIN       = 3334
 
-SAMPLES_NEURAL_BRIDGE_VAL   = 300
-SAMPLES_DOLLY_VAL           = 1000
-SAMPLES_AINA_VAL            = 500
-
-EVAL_SAMPLES_PER_DATASET = 200
+SAMPLES_NEURAL_BRIDGE_VAL   = 1000
 
 MAX_NEW_TOKENS      = 2048
 EVAL_MAX_NEW_TOKENS = 2048
 
 MAX_LENGTH         = 4096
 MAX_CONTEXT_TOKENS = 2048
+
+BERTSCORE_MODEL      = "microsoft/deberta-xlarge-mnli"
+BERTSCORE_BATCH_SIZE = 32
 
 SYSTEM_PROMPT = (
     "You are a professional document analysis assistant. Your role is to answer "
@@ -425,6 +465,79 @@ def evaluate_on_datasets(model, tokenizer, eval_datasets: dict, label: str = "MO
     return all_metrics, all_results
 
 
+# --- 3.6 BERTScore batch computation ---
+
+def compute_bertscore_all(predictions: dict, ground_truths: dict) -> dict:
+    """Compute BERTScore (P, R, F1) for every dataset in the predictions dict.
+
+    Args:
+        predictions:   {ds_name: [pred_str, ...]}.
+        ground_truths: {ds_name: [gt_str, ...]}.
+
+    Returns:
+        {ds_name: {P: [...], R: [...], F1: [...], avg_P, avg_R, avg_F1}}.
+        Averages are percentages (0-100).  Per-sample values are raw (0-1).
+    """
+    results = {}
+    for ds_name in predictions:
+        preds = predictions[ds_name]
+        refs  = ground_truths[ds_name]
+        print(f"  BERTScore | {ds_name} ({len(preds)} samples)...")
+        P, R, F1 = bert_score_fn(
+            preds, refs,
+            model_type=BERTSCORE_MODEL,
+            lang="en",
+            rescale_with_baseline=True,
+            batch_size=BERTSCORE_BATCH_SIZE,
+            verbose=False,
+        )
+        p_list  = P.tolist()
+        r_list  = R.tolist()
+        f1_list = F1.tolist()
+        results[ds_name] = {
+            "P":      [round(x, 4) for x in p_list],
+            "R":      [round(x, 4) for x in r_list],
+            "F1":     [round(x, 4) for x in f1_list],
+            "avg_P":  round(sum(p_list)  / len(p_list)  * 100, 2),
+            "avg_R":  round(sum(r_list)  / len(r_list)  * 100, 2),
+            "avg_F1": round(sum(f1_list) / len(f1_list) * 100, 2),
+        }
+        print(f"    P={results[ds_name]['avg_P']:.2f}%  "
+              f"R={results[ds_name]['avg_R']:.2f}%  "
+              f"F1={results[ds_name]['avg_F1']:.2f}%")
+    return results
+
+
+# --- 3.7 Checkpoint helpers ---
+
+def _save_predictions_checkpoint(eval_results: dict, path: str):
+    """Persist predictions + per-sample metrics so BERTScore can be computed
+    even if the script is restarted after a crash."""
+    data = {}
+    for ds_name, samples in eval_results.items():
+        data[ds_name] = {
+            "predictions":   [s["prediction"]   for s in samples],
+            "ground_truths": [s["ground_truth"]  for s in samples],
+            "token_f1":      [s["f1"]            for s in samples],
+            "faithfulness":  [s["faithfulness"]  for s in samples],
+            "words":         [s["words"]         for s in samples],
+        }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+    print(f"--> Predictions checkpoint saved: {path}")
+
+
+def _extract_preds_gts(eval_results: dict) -> tuple:
+    """Extract parallel pred/gt lists from evaluate_on_datasets output.
+
+    Returns:
+        (predictions, ground_truths) — both ``{ds_name: [str, ...]}``.
+    """
+    preds = {ds: [r["prediction"]   for r in rs] for ds, rs in eval_results.items()}
+    gts   = {ds: [r["ground_truth"] for r in rs] for ds, rs in eval_results.items()}
+    return preds, gts
+
+
 # ─────────────────────────────────────────────
 # SECTION 4: DATASET LOADING
 # ─────────────────────────────────────────────
@@ -495,6 +608,7 @@ def _normalize_aina(example):
         "instruction": (example.get("instruction") or "").strip(),
         "context":     (example.get("context")     or "").strip(),
         "response":    (example.get("response")    or "").strip(),
+        "lang":        (example.get("lang")        or "").strip(),
     }
 
 
@@ -568,7 +682,7 @@ _dolly_all = (
 nd = len(_dolly_all)
 nd_train = int(nd * 0.80)
 nd_val   = int(nd * 0.10)
-dolly_train = _dolly_all.select(range(min(SAMPLES_DOLLY_TRAIN, nd_train)))
+dolly_train = _dolly_all.select(range(nd_train))
 dolly_val   = _dolly_all.select(range(nd_train, nd_train + nd_val))
 dolly_test  = _dolly_all.select(range(nd_train + nd_val, nd))
 print(f"    RAG rows total: {nd}")
@@ -578,35 +692,55 @@ print(f"    train={len(dolly_train)}, val={len(dolly_val)}, test={len(dolly_test
 print("  Aina RAG Multilingual...")
 
 
-_AINA_EXTRA_COLS = ["id", "category", "lang", "extractive"]
+_AINA_EXTRA_COLS = ["id", "category", "extractive"]
+_AINA_LANGS = [("en", "Aina-EN"), ("es", "Aina-ES"), ("ca", "Aina-CA")]
 
 
-def _load_aina(split):
+def _load_aina_by_lang(split):
+    """Load Aina RAG split and return ``{lang_label: Dataset}`` per language."""
     ds = load_dataset("projecte-aina/RAG_Multilingual", split=split)
     cols_to_remove = [c for c in _AINA_EXTRA_COLS if c in ds.column_names]
-    return (
+    ds = (
         ds
         .map(_normalize_aina, remove_columns=cols_to_remove)
         .filter(_filter_valid)
         .filter(_filter_long_response)
-        .shuffle(seed=42)
     )
+    result = {}
+    for lang_code, lang_label in _AINA_LANGS:
+        sub = ds.filter(lambda ex, lc=lang_code: ex["lang"] == lc)
+        result[lang_label] = sub.remove_columns(["lang"]).shuffle(seed=42)
+    return result
 
 
-_aina_train_full = _load_aina("train")
-aina_train = _aina_train_full.select(range(min(SAMPLES_AINA_TRAIN, len(_aina_train_full))))
-_aina_val_full = _load_aina("validation")
-aina_val   = _aina_val_full.select(range(min(SAMPLES_AINA_VAL, len(_aina_val_full))))
-aina_test  = _load_aina("test")
-print(f"    train={len(aina_train)}, val={len(aina_val)}, test={len(aina_test)}")
+_aina_train_by_lang = _load_aina_by_lang("train")
+_aina_val_by_lang   = _load_aina_by_lang("validation")
+_aina_test_by_lang  = _load_aina_by_lang("test")
 
-_train_list  = [nb_train, dolly_train, aina_train]
+_AINA_TRAIN_CAPS = {
+    "Aina-EN": SAMPLES_AINA_EN_TRAIN,
+    "Aina-ES": SAMPLES_AINA_ES_TRAIN,
+    "Aina-CA": SAMPLES_AINA_CA_TRAIN,
+}
+aina_trains = {}
+for lang_label in ["Aina-EN", "Aina-ES", "Aina-CA"]:
+    cap = _AINA_TRAIN_CAPS[lang_label]
+    tr = _aina_train_by_lang[lang_label]
+    aina_trains[lang_label] = tr.select(range(min(cap, len(tr))))
+    vl = _aina_val_by_lang[lang_label]
+    ts = _aina_test_by_lang[lang_label]
+    print(f"    {lang_label}: train={len(aina_trains[lang_label])}, "
+          f"val={len(vl)}, test={len(ts)}")
+
+_train_list  = [nb_train, dolly_train,
+                aina_trains["Aina-EN"], aina_trains["Aina-ES"], aina_trains["Aina-CA"]]
+_train_names = ["Neural-Bridge", "Dolly", "Aina-EN", "Aina-ES", "Aina-CA"]
 _train_sizes = [len(d) for d in _train_list]
 _total       = sum(_train_sizes)
 _probs       = [s / _total for s in _train_sizes]
 
 print("\n  Interleaving training datasets (round-robin, proportional probs):")
-for name, n, p in zip(["Neural-Bridge", "Dolly", "Aina"], _train_sizes, _probs):
+for name, n, p in zip(_train_names, _train_sizes, _probs):
     print(f"    {name:16s}: {n:6d} samples  p={p:.3f}")
 
 dataset = interleave_datasets(
@@ -617,45 +751,73 @@ dataset = interleave_datasets(
 )
 print(f"--> Combined train dataset: {len(dataset)} samples")
 
-_val_raw       = concatenate_datasets([nb_val, dolly_val, aina_val]).shuffle(seed=42)
+_val_raw = concatenate_datasets([
+    nb_val, dolly_val,
+    _aina_val_by_lang["Aina-EN"], _aina_val_by_lang["Aina-ES"], _aina_val_by_lang["Aina-CA"],
+]).shuffle(seed=42)
 eval_dataset_raw = _val_raw
 print(f"--> Validation (Trainer): {len(eval_dataset_raw)} samples")
-print(f"    NB={len(nb_val)}, Dolly={len(dolly_val)}, Aina={len(aina_val)}")
+print(f"    NB={len(nb_val)}, Dolly={len(dolly_val)}, "
+      f"Aina-EN={len(_aina_val_by_lang['Aina-EN'])}, "
+      f"Aina-ES={len(_aina_val_by_lang['Aina-ES'])}, "
+      f"Aina-CA={len(_aina_val_by_lang['Aina-CA'])}")
 
-print("\n  Fixed Frozen Test Sets (Base vs Adapted):")
-eval_datasets = {}
-for name, test_ds in [
-    ("Neural-Bridge RAG", nb_test),
-    ("Dolly QA",          dolly_test),
-    ("Aina RAG",          aina_test),
-]:
-    n = min(EVAL_SAMPLES_PER_DATASET, len(test_ds))
-    eval_datasets[name] = test_ds.select(range(n))
-    print(f"    {name}: {n} samples (FROZEN — same for BASE and ADAPTED)")
+print("\n  Fixed Frozen Evaluation Sets (Base vs Adapted):")
 
-print(f"--> Total evaluation samples: {sum(len(d) for d in eval_datasets.values())}")
+eval_datasets_dev = {
+    "Neural-Bridge RAG": nb_val,
+    "Dolly QA":          dolly_val,
+    "Aina-EN":           _aina_val_by_lang["Aina-EN"],
+    "Aina-ES":           _aina_val_by_lang["Aina-ES"],
+    "Aina-CA":           _aina_val_by_lang["Aina-CA"],
+}
+eval_datasets_test = {
+    "Neural-Bridge RAG": nb_test,
+    "Dolly QA":          dolly_test,
+    "Aina-EN":           _aina_test_by_lang["Aina-EN"],
+    "Aina-ES":           _aina_test_by_lang["Aina-ES"],
+    "Aina-CA":           _aina_test_by_lang["Aina-CA"],
+}
+
+for split_label, eds in [("dev", eval_datasets_dev), ("test", eval_datasets_test)]:
+    for name, ds in eds.items():
+        print(f"    {split_label} | {name}: {len(ds)} samples (FROZEN)")
+
+total_dev  = sum(len(d) for d in eval_datasets_dev.values())
+total_test = sum(len(d) for d in eval_datasets_test.values())
+print(f"--> Total dev samples:  {total_dev}")
+print(f"--> Total test samples: {total_test}")
 
 train_loaders = [
     ("Neural-Bridge RAG", None, SAMPLES_NEURAL_BRIDGE_TRAIN),
-    ("Dolly QA",          None, SAMPLES_DOLLY_TRAIN),
-    ("Aina RAG",          None, SAMPLES_AINA_TRAIN),
+    ("Dolly QA",          None, nd_train),
+    ("Aina-EN",           None, SAMPLES_AINA_EN_TRAIN),
+    ("Aina-ES",           None, SAMPLES_AINA_ES_TRAIN),
+    ("Aina-CA",           None, SAMPLES_AINA_CA_TRAIN),
 ]
 
 
 # ─────────────────────────────────────────────
 # SECTION 5: BASE MODEL EVALUATION
 # ─────────────────────────────────────────────
-# eval_datasets is NOT modified here. It is reused as-is in Section 11.
+# Evaluates on both dev and test splits. Reused as-is in Section 11.
 # ─────────────────────────────────────────────
 
 print("\n" + "=" * 70)
 print("--> [5] Evaluating BASE model (pre-training baseline)")
-print("    (Same frozen test set that will be used in Section 11)")
+print("    (Same frozen dev+test sets that will be used in Section 11)")
 print("=" * 70)
 
-base_metrics, base_results = evaluate_on_datasets(
-    model, tokenizer, eval_datasets, label="BASE"
-)
+base_metrics  = {}
+base_results  = {}
+
+for split_label, eval_ds in [("dev", eval_datasets_dev), ("test", eval_datasets_test)]:
+    print(f"\n  -- Split: {split_label.upper()} --")
+    m, r = evaluate_on_datasets(model, tokenizer, eval_ds, label=f"BASE-{split_label}")
+    for ds_name in m:
+        key = f"{ds_name}|{split_label}"
+        base_metrics[key] = m[ds_name]
+        base_results[key] = r[ds_name]
 
 base_eval_path = os.path.join(output_dir, "eval_base.json")
 try:
@@ -669,7 +831,10 @@ try:
 except Exception as e:
     print(f"    Warning: could not save base eval: {e}")
 
-import gc
+_save_predictions_checkpoint(
+    base_results, os.path.join(output_dir, "predictions_base.json"),
+)
+
 gc.collect()
 torch.cuda.empty_cache()
 print("--> GPU cache cleared after base evaluation.")
@@ -873,135 +1038,45 @@ print("--> Adapter + tokenizer saved.")
 # ─────────────────────────────────────────────
 # SECTION 11: ADAPTED MODEL EVALUATION
 # ─────────────────────────────────────────────
-# Same frozen dict as Section 5 -> objective BASE vs ADAPTED comparison.
+# Same frozen dev+test dicts as Section 5 -> objective BASE vs ADAPTED comparison.
 # ─────────────────────────────────────────────
 
 print("\n" + "=" * 70)
 print("--> [11] Evaluating ADAPTED model")
-print("    (Same frozen test set as Section 5)")
+print("    (Same frozen dev+test sets as Section 5)")
 print("=" * 70)
 
 model.gradient_checkpointing_disable()
 
-adapted_metrics, adapted_results = evaluate_on_datasets(
-    model, tokenizer, eval_datasets, label="ADAPTED"
+adapted_metrics  = {}
+adapted_results  = {}
+
+for split_label, eval_ds in [("dev", eval_datasets_dev), ("test", eval_datasets_test)]:
+    print(f"\n  -- Split: {split_label.upper()} --")
+    m, r = evaluate_on_datasets(model, tokenizer, eval_ds, label=f"ADAPTED-{split_label}")
+    for ds_name in m:
+        key = f"{ds_name}|{split_label}"
+        adapted_metrics[key] = m[ds_name]
+        adapted_results[key] = r[ds_name]
+
+_save_predictions_checkpoint(
+    adapted_results, os.path.join(output_dir, "predictions_adapted.json"),
 )
 
-
-# ─────────────────────────────────────────────
-# SECTION 12: COMPARATIVE SUMMARY
-# ─────────────────────────────────────────────
-# Deltas per dataset + weighted aggregate by sample count.
-# ─────────────────────────────────────────────
-
-print("\n" + "=" * 70)
-print("COMPARATIVE SUMMARY: BASE vs ADAPTED")
-print("=" * 70)
-
-METRIC_KEYS = [
-    ("Token_F1",               "Token F1",               "%"),
-    ("Context_Faithfulness_Pct","Context Faithfulness",   "%"),
-    ("Avg_Response_Length_Words","Avg Response Length",   "words"),
-    ("Sentence_Completeness_Pct","Sentence Completeness", "%"),
-]
-
-comparison  = {"per_dataset": {}, "aggregate": {}}
-agg_base_f1 = agg_adapted_f1 = agg_base_faith = agg_adapted_faith = 0.0
-agg_n = 0
-
-for ds_name in eval_datasets:
-    b = base_metrics[ds_name]
-    a = adapted_metrics[ds_name]
-    n = b["n_samples"]
-    agg_n += n
-
-    agg_base_f1      += b["Token_F1"]               * n
-    agg_adapted_f1   += a["Token_F1"]               * n
-    agg_base_faith   += b["Context_Faithfulness_Pct"] * n
-    agg_adapted_faith += a["Context_Faithfulness_Pct"] * n
-
-    print(f"\n  {ds_name} ({n} samples):")
-    for key, label, unit in METRIC_KEYS:
-        delta = a[key] - b[key]
-        sign  = "+" if delta >= 0 else ""
-        print(f"    {label:26s}  Base={b[key]:.2f}{unit}  "
-              f"Adapted={a[key]:.2f}{unit}  Δ={sign}{delta:.2f}{unit}")
-
-    deltas = {key: round(a[key] - b[key], 2) for key, *_ in METRIC_KEYS}
-    comparison["per_dataset"][ds_name] = {
-        "base": b, "adapted": a, "deltas": deltas,
-        "sample_pairs": [
-            {
-                "instruction":       br["instruction"],
-                "ground_truth":      br["ground_truth"],
-                "base_prediction":   br["prediction"],
-                "adapted_prediction": ar["prediction"],
-                "base_f1":           br["f1"],
-                "adapted_f1":        ar["f1"],
-                "base_faithfulness": br["faithfulness"],
-                "adapted_faithfulness": ar["faithfulness"],
-            }
-            for br, ar in zip(base_results[ds_name][:5], adapted_results[ds_name][:5])
-        ],
-    }
-
-if agg_n > 0:
-    agg_b_f1    = agg_base_f1    / agg_n
-    agg_a_f1    = agg_adapted_f1 / agg_n
-    agg_b_faith = agg_base_faith / agg_n
-    agg_a_faith = agg_adapted_faith / agg_n
-
-    comparison["aggregate"] = {
-        "Total_Samples":          agg_n,
-        "Base_Token_F1":          round(agg_b_f1,    2),
-        "Adapted_Token_F1":       round(agg_a_f1,    2),
-        "Delta_Token_F1":         round(agg_a_f1  - agg_b_f1,    2),
-        "Base_Faithfulness":      round(agg_b_faith, 2),
-        "Adapted_Faithfulness":   round(agg_a_faith, 2),
-        "Delta_Faithfulness":     round(agg_a_faith - agg_b_faith, 2),
-    }
-
-    print(f"\n{'=' * 70}")
-    print(f"WEIGHTED AGGREGATE ({agg_n} samples -- same questions for both models)")
-    print(f"  Token F1:            Base={agg_b_f1:.2f}%  -> Adapted={agg_a_f1:.2f}%"
-          f"   Δ={agg_a_f1 - agg_b_f1:+.2f}pp")
-    print(f"  Context Faithfulness: Base={agg_b_faith:.2f}%  -> Adapted={agg_a_faith:.2f}%"
-          f"   Δ={agg_a_faith - agg_b_faith:+.2f}pp")
-    print(f"{'=' * 70}")
-
-
-# ─────────────────────────────────────────────
-# SECTION 13: ARTIFACT EXPORT
-# ─────────────────────────────────────────────
-# training_stats.json        -- full summary + log_history + samples
-# evaluation_comparison.json -- deltas per dataset + base/adapted pairs
-# ─────────────────────────────────────────────
-
-training_summary = {
-    "model_name":       model_name,
-    "version":          "v7.2",
-    "total_steps":      trainer.state.global_step,
-    "dataset_size":     len(tokenized_train),
-    "effective_batch":  training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps,
-    "datasets":         [name for name, _, _ in train_loaders],
-    "eval_loss":        None,
-    "perplexity":       None,
-    "comparison":       comparison,
-    "log_history":      trainer.state.log_history,
-}
-
+# --- Final eval loss (requires model + trainer alive) ---
 print("\n--> Computing final eval loss...")
+_eval_loss = None
+_perplexity = None
 try:
     ev = trainer.evaluate()
     if "eval_loss" in ev:
-        training_summary["eval_loss"]    = ev["eval_loss"]
-        training_summary["perplexity"]   = math.exp(ev["eval_loss"])
-        print(f"    Eval Loss: {ev['eval_loss']:.4f}  "
-              f"Perplexity: {training_summary['perplexity']:.2f}")
+        _eval_loss  = ev["eval_loss"]
+        _perplexity = math.exp(ev["eval_loss"])
+        print(f"    Eval Loss: {_eval_loss:.4f}  Perplexity: {_perplexity:.2f}")
 except Exception as e:
     print(f"    Warning: final eval failed: {e}")
 
-
+# --- Qualitative production samples (requires model alive) ---
 print("\n--> Generating qualitative production samples...")
 test_prompts = [
     {
@@ -1058,7 +1133,193 @@ for i, t in enumerate(test_prompts, 1):
     except Exception as e:
         print(f"  Error: {e}")
 
-training_summary["generated_samples"] = gen_samples
+
+# ─────────────────────────────────────────────
+# SECTION 12: BERTSCORE COMPUTATION
+# ─────────────────────────────────────────────
+# BERTScore uses DeBERTa-xlarge-mnli (~1.3 GB).  The main model (14B) is
+# unloaded first to free GPU memory and avoid OOM.  Predictions were saved
+# to disk in Sections 5 and 11, so the script can also resume here after a
+# crash without re-generating predictions.
+# ─────────────────────────────────────────────
+
+# Capture trainer state before deletion (needed in Section 14)
+_trainer_global_step   = trainer.state.global_step
+_trainer_dataset_size  = len(tokenized_train)
+_trainer_effective_batch = training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps
+_trainer_log_history   = trainer.state.log_history
+
+print("\n" + "=" * 70)
+print("--> [12] Computing BERTScore (semantic similarity vs ground truth)")
+print("    Unloading main model to free GPU memory...")
+print("=" * 70)
+
+model.gradient_checkpointing_disable()
+del model, tokenizer, trainer
+gc.collect()
+torch.cuda.empty_cache()
+print("--> GPU memory freed.")
+
+base_preds, base_gts       = _extract_preds_gts(base_results)
+adapted_preds, adapted_gts = _extract_preds_gts(adapted_results)
+
+print("\n--> BERTScore for BASE predictions...")
+base_bertscore = compute_bertscore_all(base_preds, base_gts)
+
+print("\n--> BERTScore for ADAPTED predictions...")
+adapted_bertscore = compute_bertscore_all(adapted_preds, adapted_gts)
+
+# Merge BERTScore averages into the metrics dicts so the comparison
+# section can treat them like any other metric.
+# Keys in base_results/adapted_results are "DatasetName|split".
+for combo_key in base_bertscore:
+    for label, bs_data, m_dict in [
+        ("base",    base_bertscore,    base_metrics),
+        ("adapted", adapted_bertscore, adapted_metrics),
+    ]:
+        m_dict[combo_key]["BERTScore_P"]  = bs_data[combo_key]["avg_P"]
+        m_dict[combo_key]["BERTScore_R"]  = bs_data[combo_key]["avg_R"]
+        m_dict[combo_key]["BERTScore_F1"] = bs_data[combo_key]["avg_F1"]
+
+# Save BERTScore checkpoint
+_bs_ckpt = {
+    "bertscore_model": BERTSCORE_MODEL,
+    "base":    {ds: {k: v for k, v in d.items() if k.startswith("avg_")} for ds, d in base_bertscore.items()},
+    "adapted": {ds: {k: v for k, v in d.items() if k.startswith("avg_")} for ds, d in adapted_bertscore.items()},
+}
+with open(os.path.join(output_dir, "bertscore_checkpoint.json"), "w", encoding="utf-8") as f:
+    json.dump(_bs_ckpt, f, indent=4, ensure_ascii=False)
+
+# Free BERTScore GPU memory before the comparison section
+gc.collect()
+torch.cuda.empty_cache()
+
+
+# ─────────────────────────────────────────────
+# SECTION 13: COMPARATIVE SUMMARY
+# ─────────────────────────────────────────────
+# Deltas per dataset + weighted aggregate by sample count.
+# ─────────────────────────────────────────────
+
+print("\n" + "=" * 70)
+print("COMPARATIVE SUMMARY: BASE vs ADAPTED")
+print("=" * 70)
+
+METRIC_KEYS = [
+    ("Token_F1",               "Token F1",               "%"),
+    ("BERTScore_F1",           "BERTScore F1",           "%"),
+    ("Context_Faithfulness_Pct","Context Faithfulness",   "%"),
+    ("Avg_Response_Length_Words","Avg Response Length",   "words"),
+    ("Sentence_Completeness_Pct","Sentence Completeness", "%"),
+]
+
+AGG_KEYS = ["Token_F1", "BERTScore_F1", "Context_Faithfulness_Pct"]
+
+comparison = {"per_split": {}, "aggregate": {}}
+
+_ds_names = list(eval_datasets_dev.keys())
+
+for split_label in ["dev", "test"]:
+    print(f"\n{'─' * 70}")
+    print(f"  Split: {split_label.upper()}")
+    print(f"{'─' * 70}")
+
+    split_comp = {}
+    agg_base  = {k: 0.0 for k in AGG_KEYS}
+    agg_adapt = {k: 0.0 for k in AGG_KEYS}
+    agg_n = 0
+
+    for ds_name in _ds_names:
+        key = f"{ds_name}|{split_label}"
+        b = base_metrics[key]
+        a = adapted_metrics[key]
+        n = b["n_samples"]
+        agg_n += n
+        for k in AGG_KEYS:
+            agg_base[k]  += b[k] * n
+            agg_adapt[k] += a[k] * n
+
+        print(f"\n  {ds_name} ({n} samples):")
+        for mkey, label, unit in METRIC_KEYS:
+            delta     = a[mkey] - b[mkey]
+            delta_rel = (delta / b[mkey] * 100) if b[mkey] != 0 else float("nan")
+            sign      = "+" if delta >= 0 else ""
+            sign_rel  = "+" if delta_rel >= 0 else ""
+            rel_str   = f"{sign_rel}{delta_rel:.1f}%" if not (delta_rel != delta_rel) else "n/a"
+            print(f"    {label:26s}  Base={b[mkey]:.2f}{unit}  "
+                  f"Adapted={a[mkey]:.2f}{unit}  Δ={sign}{delta:.2f}pp  "
+                  f"Δrel={rel_str}")
+
+        deltas     = {mkey: round(a[mkey] - b[mkey], 2) for mkey, *_ in METRIC_KEYS}
+        deltas_rel = {
+            mkey: round((a[mkey] - b[mkey]) / b[mkey] * 100, 2) if b[mkey] != 0 else None
+            for mkey, *_ in METRIC_KEYS
+        }
+        split_comp[ds_name] = {
+            "base": b, "adapted": a, "deltas": deltas, "deltas_rel_pct": deltas_rel,
+            "sample_pairs": [
+                {
+                    "instruction":          br["instruction"],
+                    "ground_truth":         br["ground_truth"],
+                    "base_prediction":      br["prediction"],
+                    "adapted_prediction":   ar["prediction"],
+                    "base_f1":              br["f1"],
+                    "adapted_f1":           ar["f1"],
+                    "base_faithfulness":    br["faithfulness"],
+                    "adapted_faithfulness": ar["faithfulness"],
+                }
+                for br, ar in zip(base_results[key][:5], adapted_results[key][:5])
+            ],
+        }
+
+    comparison["per_split"][split_label] = split_comp
+
+    if agg_n > 0:
+        agg_b = {k: agg_base[k]  / agg_n for k in AGG_KEYS}
+        agg_a = {k: agg_adapt[k] / agg_n for k in AGG_KEYS}
+
+        agg_entry = {"Total_Samples": agg_n}
+        for k in AGG_KEYS:
+            d_abs = round(agg_a[k] - agg_b[k], 2)
+            d_rel = round((agg_a[k] - agg_b[k]) / agg_b[k] * 100, 2) if agg_b[k] != 0 else None
+            agg_entry[f"Base_{k}"]     = round(agg_b[k], 2)
+            agg_entry[f"Adapted_{k}"]  = round(agg_a[k], 2)
+            agg_entry[f"Delta_{k}"]    = d_abs
+            agg_entry[f"DeltaRel_{k}"] = d_rel
+
+        comparison["aggregate"][split_label] = agg_entry
+
+        print(f"\n{'=' * 70}")
+        print(f"WEIGHTED AGGREGATE {split_label.upper()} ({agg_n} samples)")
+        for k in AGG_KEYS:
+            d_abs = agg_a[k] - agg_b[k]
+            d_rel = (d_abs / agg_b[k] * 100) if agg_b[k] != 0 else float("nan")
+            rel_str = f"{d_rel:+.1f}%" if not (d_rel != d_rel) else "n/a"
+            print(f"  {k:30s}  Base={agg_b[k]:.2f}%  -> Adapted={agg_a[k]:.2f}%"
+                  f"   Δ={d_abs:+.2f}pp  Δrel={rel_str}")
+        print(f"{'=' * 70}")
+
+
+# ─────────────────────────────────────────────
+# SECTION 14: ARTIFACT EXPORT
+# ─────────────────────────────────────────────
+# training_stats.json        -- full summary + log_history + samples
+# evaluation_comparison.json -- deltas per dataset + base/adapted pairs
+# ─────────────────────────────────────────────
+
+training_summary = {
+    "model_name":       model_name,
+    "version":          "v9",
+    "total_steps":      _trainer_global_step,
+    "dataset_size":     _trainer_dataset_size,
+    "effective_batch":  _trainer_effective_batch,
+    "datasets":         [name for name, _, _ in train_loaders],
+    "eval_loss":        _eval_loss,
+    "perplexity":       _perplexity,
+    "comparison":       comparison,
+    "log_history":      _trainer_log_history,
+    "generated_samples": gen_samples,
+}
 
 for path, obj in [
     (os.path.join(output_dir, "training_stats.json"),       training_summary),

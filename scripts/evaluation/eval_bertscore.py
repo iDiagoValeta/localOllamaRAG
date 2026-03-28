@@ -94,7 +94,6 @@ from peft import PeftModel, PeftConfig
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-EVAL_SAMPLES_PER_DATASET = 200
 MAX_NEW_TOKENS           = 2048
 MAX_CONTEXT_TOKENS       = 2048
 BERTSCORE_MODEL          = "microsoft/deberta-xlarge-mnli"
@@ -190,11 +189,12 @@ def _normalize_dolly(example):
 
 
 def _normalize_aina(example):
-    """Normalize Aina RAG Multilingual fields to the common schema."""
+    """Normalize Aina RAG Multilingual fields, preserving ``lang`` for splitting."""
     return {
         "instruction": (example.get("instruction") or "").strip(),
         "context":     (example.get("context")     or "").strip(),
         "response":    (example.get("response")    or "").strip(),
+        "lang":        (example.get("lang")        or "").strip(),
     }
 
 
@@ -221,11 +221,13 @@ def _filter_dolly_rag(ex):
 
 
 def load_eval_datasets() -> dict:
-    """Load the 3 frozen test sets (identical to those used in train-*.py).
+    """Load the 5 frozen test sets (identical splits to train-*.py v8).
+
+    Aina RAG is split into 3 per-language subsets (EN, ES, CA).
+    Full test partitions are used (no sample cap).
 
     Returns:
-        Dictionary mapping dataset names to HuggingFace Dataset objects,
-        each capped at ``EVAL_SAMPLES_PER_DATASET`` samples.
+        Dictionary mapping dataset names to HuggingFace Dataset objects.
     """
     print("\n--> Loading evaluation datasets...")
 
@@ -254,28 +256,28 @@ def load_eval_datasets() -> dict:
     nd_val   = int(nd * 0.10)
     dolly_test = _dolly_all.select(range(nd_train + nd_val, nd))
 
-    # Aina RAG Multilingual (test split)
-    print("  Aina RAG Multilingual...")
-    _AINA_EXTRA_COLS = ["id", "category", "lang", "extractive"]
+    # Aina RAG Multilingual (test split, per language)
+    print("  Aina RAG Multilingual (split by language)...")
+    _AINA_EXTRA_COLS = ["id", "category", "extractive"]
     ds = load_dataset("projecte-aina/RAG_Multilingual", split="test")
     cols_to_remove = [c for c in _AINA_EXTRA_COLS if c in ds.column_names]
-    aina_test = (
+    aina_all = (
         ds
         .map(_normalize_aina, remove_columns=cols_to_remove)
         .filter(_filter_valid)
         .filter(_filter_long_response)
-        .shuffle(seed=42)
     )
 
-    eval_datasets = {}
-    for name, test_ds in [
-        ("Neural-Bridge RAG", nb_test),
-        ("Dolly QA",          dolly_test),
-        ("Aina RAG",          aina_test),
-    ]:
-        n = min(EVAL_SAMPLES_PER_DATASET, len(test_ds))
-        eval_datasets[name] = test_ds.select(range(n))
-        print(f"    {name}: {n} samples (FROZEN)")
+    eval_datasets = {
+        "Neural-Bridge RAG": nb_test,
+        "Dolly QA":          dolly_test,
+    }
+    for lang_code, lang_label in [("en", "Aina-EN"), ("es", "Aina-ES"), ("ca", "Aina-CA")]:
+        sub = aina_all.filter(lambda ex, lc=lang_code: ex["lang"] == lc)
+        eval_datasets[lang_label] = sub.remove_columns(["lang"]).shuffle(seed=42)
+
+    for name, ds in eval_datasets.items():
+        print(f"    {name}: {len(ds)} samples (FROZEN)")
 
     return eval_datasets
 
@@ -552,8 +554,8 @@ def plot_bertscore_comparison(all_results, output_path):
         return
 
     models_in = list(all_results.keys())
-    datasets  = ["Neural-Bridge RAG", "Dolly QA", "Aina RAG"]
-    ds_short  = ["Neural-Bridge", "Dolly QA", "Aina RAG"]
+    datasets  = ["Neural-Bridge RAG", "Dolly QA", "Aina-EN", "Aina-ES", "Aina-CA"]
+    ds_short  = ["Neural-Bridge", "Dolly QA", "Aina-EN", "Aina-ES", "Aina-CA"]
 
     BASE_COLOR  = "#64748b"
     ADAPT_COLOR = "#2563eb"
@@ -561,7 +563,7 @@ def plot_bertscore_comparison(all_results, output_path):
     NEG_COLOR   = "#dc2626"
 
     n_models = len(models_in)
-    fig, axes = plt.subplots(1, n_models, figsize=(6 * n_models, 5), squeeze=False)
+    fig, axes = plt.subplots(1, n_models, figsize=(8 * n_models, 5), squeeze=False)
 
     for idx, model_key in enumerate(models_in):
         ax = axes[0, idx]
@@ -617,14 +619,14 @@ def plot_bertscore_aggregate(all_results, output_path):
         return
 
     models_in = list(all_results.keys())
-    datasets  = ["Neural-Bridge RAG", "Dolly QA", "Aina RAG"]
+    datasets  = ["Neural-Bridge RAG", "Dolly QA", "Aina-EN", "Aina-ES", "Aina-CA"]
 
     BASE_COLOR  = "#64748b"
     ADAPT_COLOR = "#2563eb"
     metrics = ["avg_P", "avg_R", "avg_F1"]
     metric_labels = ["Precision", "Recall", "F1"]
 
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5), squeeze=False)
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5), squeeze=False)
 
     for m_idx, (metric, m_label) in enumerate(zip(metrics, metric_labels)):
         ax = axes[0, m_idx]

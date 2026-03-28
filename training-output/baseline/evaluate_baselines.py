@@ -1,18 +1,19 @@
 """
 Baseline model evaluation benchmark for RAG.
 
-Comparative benchmark of 6 base models (without fine-tuning) across 3 RAG
-datasets, evaluated in two modes (with context / without context) and two
-splits (dev / test). Each model is loaded and unloaded sequentially to
-avoid GPU OOM errors.
+Comparative benchmark of 7 base models (without fine-tuning) across 5 RAG
+datasets (3 sources × language split), evaluated in two modes (with context /
+without context) and two splits (dev / test). Each model is loaded and
+unloaded sequentially to avoid GPU OOM errors.
 
 Models evaluated:
-  1. meta-llama/Llama-3.1-8B-Instruct  -- standard instruction-tuned
-  2. Qwen/Qwen3-14B                    -- reasoner, thinking disabled
-  3. Qwen/Qwen3.5-9B                   -- reasoner, thinking disabled
-  4. Qwen/Qwen2.5-14B-Instruct         -- standard instruction-tuned
-  5. google/gemma-3-12b-it              -- standard instruction-tuned
-  6. microsoft/phi-4                    -- standard instruction-tuned
+  1. meta-llama/Llama-3.1-8B-Instruct      -- standard instruction-tuned
+  2. mistralai/Mistral-7B-Instruct-v0.3    -- standard instruction-tuned
+  3. Qwen/Qwen3-14B                        -- reasoner, thinking disabled
+  4. Qwen/Qwen3.5-9B                       -- reasoner, thinking disabled
+  5. Qwen/Qwen2.5-14B-Instruct             -- standard instruction-tuned
+  6. google/gemma-3-12b-it                  -- standard instruction-tuned
+  7. microsoft/phi-4                        -- standard instruction-tuned
 
 Datasets:
   - neural-bridge/rag-dataset-12000       (EN, professional QA)
@@ -51,11 +52,9 @@ Dependencies:
 #           2.2 compute_f1()              Token F1 (SQuAD-standard)
 #           2.3 compute_context_faithfulness()  primary thesis metric
 #           2.4 generate_response()       inference with chat template
-#                                         (Qwen3/3.5: enable_thinking=False;
-#                                          Gemma-3: EOS=<end_of_turn>;
-#                                          Phi-4: EOS=<|im_end|>;
-#                                          Qwen2.5/Llama: standard template)
 #           2.5 evaluate_on_datasets()    loop over eval_datasets
+#           2.6 compute_bertscore_all()   DeBERTa-xlarge-mnli
+#           2.7 _extract_preds_gts()     helper for BERTScore input
 #
 #  DATA
 #  `-- 3. Dataset loading (ONCE, before loading models)
@@ -67,7 +66,7 @@ Dependencies:
 #           3.6 Frozen dictionaries: eval_datasets_dev, eval_datasets_test
 #
 #  PIPELINE
-#  |-- 4. Main loop   6 models x 2 modes x 2 splits (sequential)
+#  |-- 4. Main loop   7 models x 2 modes x 2 splits + BERTScore
 #  `-- 5. Summary table + save baseline_evaluation.json
 #
 # ─────────────────────────────────────────────
@@ -81,6 +80,23 @@ from collections import Counter
 from datasets import load_dataset
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from bert_score import score as bert_score_fn
+import bert_score.utils as _bsu
+
+
+# ---------------------------------------------------------------------------
+# MONKEY-PATCH: bert_score.utils.sent_encode
+# ---------------------------------------------------------------------------
+# DeBERTa reports sys.maxsize as model_max_length, causing OverflowError in
+# the Rust tokenizer backend.  Force max_length=512 and truncation=True.
+# ---------------------------------------------------------------------------
+def _safe_sent_encode(tokenizer, a):
+    return tokenizer.encode(
+        a.strip(), add_special_tokens=True, max_length=512, truncation=True,
+    )
+
+_bsu.sent_encode = _safe_sent_encode
 
 
 # ─────────────────────────────────────────────
@@ -110,20 +126,24 @@ os.makedirs(output_dir, exist_ok=True)
 # standard chat template (none have active reasoning mode).
 MODELS = [
     "meta-llama/Llama-3.1-8B-Instruct",
+    "mistralai/Mistral-7B-Instruct-v0.3",
     "Qwen/Qwen3-14B",
     "Qwen/Qwen3.5-9B",
     "Qwen/Qwen2.5-14B-Instruct",
     "google/gemma-3-12b-it",
-    "microsoft/phi-4"
+    "microsoft/phi-4",
 ]
 
-# -- Caps per split ---------------------------------------------------------
-EVAL_SAMPLES_DEV  = 150   # per dataset, validation split
-EVAL_SAMPLES_TEST = 200   # per dataset, test split (frozen)
+# NB has no natural validation split; carve from train (same as train.py)
+SAMPLES_NEURAL_BRIDGE_DEV = 1000
 
 # -- Tokens -----------------------------------------------------------------
 EVAL_MAX_NEW_TOKENS = 2048
 MAX_CONTEXT_TOKENS  = 2048
+
+# -- BERTScore --------------------------------------------------------------
+BERTSCORE_MODEL      = "microsoft/deberta-xlarge-mnli"
+BERTSCORE_BATCH_SIZE = 32
 
 # -- System prompt (identical to train.py v7.2) -----------------------------
 SYSTEM_PROMPT = (
@@ -280,7 +300,7 @@ def generate_response(
     # Determine EOS token(s):
     #   Qwen + Phi-4  -> <|im_end|>  (ChatML convention)
     #   Gemma-3       -> [<eos>, <end_of_turn>]  (both needed for clean stop)
-    #   Llama + rest  -> tokenizer.eos_token_id native
+    #   Llama, Mistral + rest  -> tokenizer.eos_token_id native
     if "Qwen" in model_name or "phi-4" in model_name.lower():
         eos_id = tokenizer.encode("<|im_end|>", add_special_tokens=False)[0]
     elif "gemma" in model_name.lower():
@@ -396,6 +416,53 @@ def evaluate_on_datasets(
     return all_metrics, all_results
 
 
+def compute_bertscore_all(predictions: dict, ground_truths: dict) -> dict:
+    """Compute BERTScore (P, R, F1) for every dataset in the predictions dict.
+
+    Args:
+        predictions:   {ds_name: [pred_str, ...]}.
+        ground_truths: {ds_name: [gt_str, ...]}.
+
+    Returns:
+        {ds_name: {P, R, F1 (per-sample lists), avg_P, avg_R, avg_F1 (%)}}.
+    """
+    results = {}
+    for ds_name in predictions:
+        preds = predictions[ds_name]
+        refs  = ground_truths[ds_name]
+        print(f"    BERTScore | {ds_name} ({len(preds)} samples)...")
+        P, R, F1 = bert_score_fn(
+            preds, refs,
+            model_type=BERTSCORE_MODEL,
+            lang="en",
+            rescale_with_baseline=True,
+            batch_size=BERTSCORE_BATCH_SIZE,
+            verbose=False,
+        )
+        p_list  = P.tolist()
+        r_list  = R.tolist()
+        f1_list = F1.tolist()
+        results[ds_name] = {
+            "P":      [round(x, 4) for x in p_list],
+            "R":      [round(x, 4) for x in r_list],
+            "F1":     [round(x, 4) for x in f1_list],
+            "avg_P":  round(sum(p_list)  / len(p_list)  * 100, 2),
+            "avg_R":  round(sum(r_list)  / len(r_list)  * 100, 2),
+            "avg_F1": round(sum(f1_list) / len(f1_list) * 100, 2),
+        }
+        print(f"      P={results[ds_name]['avg_P']:.2f}%  "
+              f"R={results[ds_name]['avg_R']:.2f}%  "
+              f"F1={results[ds_name]['avg_F1']:.2f}%")
+    return results
+
+
+def _extract_preds_gts(eval_results: dict) -> tuple:
+    """Extract parallel pred/gt lists from evaluate_on_datasets output."""
+    preds = {ds: [r["prediction"]   for r in rs] for ds, rs in eval_results.items()}
+    gts   = {ds: [r["ground_truth"] for r in rs] for ds, rs in eval_results.items()}
+    return preds, gts
+
+
 # ─────────────────────────────────────────────
 # SECTION 3: DATASET LOADING (once, before loading models)
 # ─────────────────────────────────────────────
@@ -428,11 +495,12 @@ def _normalize_dolly(example):
 
 
 def _normalize_aina(example):
-    """Aina RAG Multilingual: instruction/context/response (direct mapping)."""
+    """Aina RAG Multilingual: instruction/context/response + lang for splitting."""
     return {
         "instruction": (example.get("instruction") or "").strip(),
         "context":     (example.get("context")     or "").strip(),
         "response":    (example.get("response")    or "").strip(),
+        "lang":        (example.get("lang")        or "").strip(),
     }
 
 
@@ -472,9 +540,9 @@ _nb_train_full = (
     .shuffle(seed=42)
 )
 nb_n = len(_nb_train_full)
-# Take last EVAL_SAMPLES_DEV from train as dev (mirroring train.py val split)
-nb_dev_start = nb_n - EVAL_SAMPLES_DEV
-nb_dev = _nb_train_full.select(range(nb_dev_start, min(nb_dev_start + EVAL_SAMPLES_DEV, nb_n)))
+# Take last N from train as dev (mirroring train.py val split)
+nb_dev_start = nb_n - SAMPLES_NEURAL_BRIDGE_DEV
+nb_dev = _nb_train_full.select(range(nb_dev_start, min(nb_dev_start + SAMPLES_NEURAL_BRIDGE_DEV, nb_n)))
 
 # Test split: natural test split from HuggingFace
 nb_test = (
@@ -512,46 +580,51 @@ print(f"    dev={len(dolly_dev)}, test={len(dolly_test)}")
 
 print("  Aina RAG Multilingual...")
 
-_AINA_EXTRA_COLS = ["id", "category", "lang", "extractive"]
+_AINA_EXTRA_COLS = ["id", "category", "extractive"]
+_AINA_LANGS = [("en", "Aina-EN"), ("es", "Aina-ES"), ("ca", "Aina-CA")]
 
 
-def _load_aina(split):
+def _load_aina_by_lang(split):
+    """Load Aina RAG split and return ``{lang_label: Dataset}`` per language."""
     ds = load_dataset("projecte-aina/RAG_Multilingual", split=split)
     cols_to_remove = [c for c in _AINA_EXTRA_COLS if c in ds.column_names]
-    return (
+    ds = (
         ds
         .map(_normalize_aina, remove_columns=cols_to_remove)
         .filter(_filter_valid)
         .filter(_filter_long_response)
-        .shuffle(seed=42)
     )
+    result = {}
+    for lang_code, lang_label in _AINA_LANGS:
+        sub = ds.filter(lambda ex, lc=lang_code: ex["lang"] == lc)
+        result[lang_label] = sub.remove_columns(["lang"]).shuffle(seed=42)
+    return result
 
 
-_aina_val_full = _load_aina("validation")
-aina_dev  = _aina_val_full.select(range(min(EVAL_SAMPLES_DEV, len(_aina_val_full))))
-aina_test = _load_aina("test")
-print(f"    dev={len(aina_dev)}, test={len(aina_test)}")
+_aina_dev_by_lang  = _load_aina_by_lang("validation")
+_aina_test_by_lang = _load_aina_by_lang("test")
+for lang_label in ["Aina-EN", "Aina-ES", "Aina-CA"]:
+    print(f"    {lang_label}: dev={len(_aina_dev_by_lang[lang_label])}, "
+          f"test={len(_aina_test_by_lang[lang_label])}")
 
 
 # -- Build frozen evaluation dictionaries ----------------------------------
 
-def _build_eval_dict(nb_ds, dolly_ds, aina_ds, cap: int, split_label: str) -> dict:
-    """Build a frozen eval dict capping each dataset to `cap` samples."""
+def _build_eval_dict(nb_ds, dolly_ds, aina_by_lang, split_label: str) -> dict:
+    """Build a frozen eval dict using full partitions (no sample cap)."""
     out = {}
-    for name, ds in [
-        ("Neural-Bridge RAG", nb_ds),
-        ("Dolly QA",          dolly_ds),
-        ("Aina RAG",          aina_ds),
-    ]:
-        n = min(cap, len(ds))
-        out[name] = ds.select(range(n))
-        print(f"    {split_label} | {name}: {n} samples (FROZEN)")
+    for name, ds in [("Neural-Bridge RAG", nb_ds), ("Dolly QA", dolly_ds)]:
+        out[name] = ds
+        print(f"    {split_label} | {name}: {len(ds)} samples (FROZEN)")
+    for lang_label in ["Aina-EN", "Aina-ES", "Aina-CA"]:
+        out[lang_label] = aina_by_lang[lang_label]
+        print(f"    {split_label} | {lang_label}: {len(aina_by_lang[lang_label])} samples (FROZEN)")
     return out
 
 
 print("\n  Building frozen evaluation splits:")
-eval_datasets_dev  = _build_eval_dict(nb_dev, dolly_dev, aina_dev, EVAL_SAMPLES_DEV, "dev")
-eval_datasets_test = _build_eval_dict(nb_test, dolly_test, aina_test, EVAL_SAMPLES_TEST, "test")
+eval_datasets_dev  = _build_eval_dict(nb_dev, dolly_dev, _aina_dev_by_lang, "dev")
+eval_datasets_test = _build_eval_dict(nb_test, dolly_test, _aina_test_by_lang, "test")
 
 total_dev  = sum(len(d) for d in eval_datasets_dev.values())
 total_test = sum(len(d) for d in eval_datasets_test.values())
@@ -560,10 +633,9 @@ print(f"--> Total test samples: {total_test}")
 
 
 # ─────────────────────────────────────────────
-# SECTION 4: MAIN LOOP -- 6 Models x 2 Modes x 2 Splits
+# SECTION 4: MAIN LOOP -- 7 Models x 2 Modes x 2 Splits
 # ─────────────────────────────────────────────
-# Order: Llama-3.1-8B -> Qwen3-14B -> Qwen3.5-9B -> Qwen2.5-14B ->
-#        Gemma-3-12b-it -> Phi-4
+# Order: defined by MODELS list (modifiable for parallel job distribution)
 # Each model is loaded, evaluated across 4 combinations (mode x split),
 # and unloaded with gc.collect() + torch.cuda.empty_cache() before the next.
 
@@ -586,6 +658,15 @@ for model_idx, model_name in enumerate(MODELS, 1):
     print(f"[{model_idx}/{len(MODELS)}] Evaluating model: {model_name}")
     print("=" * 70)
 
+    # Re-read checkpoint from disk: another concurrent job may have completed
+    # this model since this job started.
+    if os.path.exists(CHECKPOINT_PATH):
+        try:
+            with open(CHECKPOINT_PATH, "r", encoding="utf-8") as _f:
+                _disk_ckpt = json.load(_f)
+            all_results.update({k: v for k, v in _disk_ckpt.items() if k not in all_results})
+        except Exception:
+            pass
     if model_name in all_results:
         print(f"--> Model {model_name} already evaluated (skipping).")
         continue
@@ -607,6 +688,11 @@ for model_idx, model_name in enumerate(MODELS, 1):
     print(f"--> Model loaded: {model_name}")
 
     model_results = {"with_context": {}, "without_context": {}}
+    model_slug = model_name.split("/")[-1]
+
+    # Collect raw eval_results (per-sample) for BERTScore later.
+    # Structure: {mode_key: {split_name: all_results_dict}}.
+    _raw_results = {}
 
     # -- Evaluate in both modes ---------------------------------------------
     for with_context in [True, False]:
@@ -618,6 +704,7 @@ for model_idx, model_name in enumerate(MODELS, 1):
         print(f"{'─' * 60}")
 
         mode_results = {}
+        _raw_results[mode_key] = {}
 
         # -- Evaluate in both splits ----------------------------------------
         for split_name, eval_ds in [("dev", eval_datasets_dev), ("test", eval_datasets_test)]:
@@ -625,10 +712,11 @@ for model_idx, model_name in enumerate(MODELS, 1):
 
             metrics, results = evaluate_on_datasets(
                 model, tokenizer, eval_ds,
-                label=f"{model_name.split('/')[-1]}",
+                label=f"{model_slug}",
                 with_context=with_context,
                 model_name=model_name,
             )
+            _raw_results[mode_key][split_name] = results
 
             # Compute weighted aggregate
             agg_f1 = agg_faith = agg_words = agg_complete = 0.0
@@ -663,23 +751,80 @@ for model_idx, model_name in enumerate(MODELS, 1):
 
         model_results[mode_key] = mode_results
 
+    # -- Save predictions checkpoint (crash recovery) -----------------------
+    _pred_ckpt_path = os.path.join(output_dir, f"predictions_{model_slug}.json")
+    try:
+        _pred_ckpt = {}
+        for mode_key in _raw_results:
+            _pred_ckpt[mode_key] = {}
+            for split_name, res in _raw_results[mode_key].items():
+                _pred_ckpt[mode_key][split_name] = {
+                    ds: {
+                        "predictions":  [r["prediction"]   for r in samples],
+                        "ground_truths": [r["ground_truth"] for r in samples],
+                    }
+                    for ds, samples in res.items()
+                }
+        with open(_pred_ckpt_path, "w", encoding="utf-8") as f:
+            json.dump(_pred_ckpt, f, ensure_ascii=False)
+        print(f"--> Predictions checkpoint saved: {_pred_ckpt_path}")
+    except Exception as e:
+        print(f"    Warning: could not save predictions checkpoint: {e}")
+
+    # -- Unload LLM and free GPU memory before BERTScore --------------------
+    print(f"\n--> Unloading model {model_name} for BERTScore computation...")
+    del model, tokenizer
+    gc.collect()
+    torch.cuda.empty_cache()
+
+    # -- BERTScore computation (DeBERTa-xlarge-mnli, ~1.3 GB) ---------------
+    print(f"\n--> Computing BERTScore for {model_slug}...")
+
+    for mode_key in ["with_context", "without_context"]:
+        for split_name in ["dev", "test"]:
+            raw_res = _raw_results[mode_key][split_name]
+            preds, gts = _extract_preds_gts(raw_res)
+
+            print(f"\n  [{mode_key} | {split_name}]")
+            bs = compute_bertscore_all(preds, gts)
+
+            # Merge BERTScore averages into the metrics dict
+            for ds_name in bs:
+                model_results[mode_key][split_name][ds_name]["BERTScore_P"]  = bs[ds_name]["avg_P"]
+                model_results[mode_key][split_name][ds_name]["BERTScore_R"]  = bs[ds_name]["avg_R"]
+                model_results[mode_key][split_name][ds_name]["BERTScore_F1"] = bs[ds_name]["avg_F1"]
+
+            # Recompute aggregate including BERTScore
+            agg = model_results[mode_key][split_name]["aggregate"]
+            agg_bs_f1 = 0.0
+            for ds_name in bs:
+                n = model_results[mode_key][split_name][ds_name]["n_samples"]
+                agg_bs_f1 += bs[ds_name]["avg_F1"] * n
+            agg["BERTScore_F1"] = round(agg_bs_f1 / agg["n_samples"], 2) if agg["n_samples"] else 0.0
+
+    # Free BERTScore GPU memory
+    gc.collect()
+    torch.cuda.empty_cache()
+    print(f"--> BERTScore complete for {model_slug}. GPU cache cleared.")
+
     all_results[model_name] = model_results
 
-    # -- Save checkpoint ----------------------------------------------------
+    # -- Save checkpoint (with BERTScore) -----------------------------------
+    # Safe for concurrent jobs: read from disk, merge, atomic rename.
+    # os.replace() is atomic on POSIX and Windows (same filesystem).
     try:
-        with open(CHECKPOINT_PATH, "w", encoding="utf-8") as f:
-            json.dump(all_results, f, indent=4, ensure_ascii=False)
+        _disk = {}
+        if os.path.exists(CHECKPOINT_PATH):
+            with open(CHECKPOINT_PATH, "r", encoding="utf-8") as f:
+                _disk = json.load(f)
+        _disk.update(all_results)
+        _tmp_path = CHECKPOINT_PATH + ".tmp"
+        with open(_tmp_path, "w", encoding="utf-8") as f:
+            json.dump(_disk, f, indent=4, ensure_ascii=False)
+        os.replace(_tmp_path, CHECKPOINT_PATH)
         print(f"--> Checkpoint saved: {CHECKPOINT_PATH}")
     except Exception as e:
         print(f"--> Warning: could not save checkpoint: {e}")
-
-    # -- Unload model and free memory ---------------------------------------
-    print(f"\n--> Unloading model {model_name} and freeing GPU memory...")
-    del model
-    del tokenizer
-    gc.collect()
-    torch.cuda.empty_cache()
-    print("--> GPU cache cleared.\n")
 
 
 # ─────────────────────────────────────────────
@@ -693,22 +838,27 @@ print("BASELINE EVALUATION SUMMARY TABLE")
 print("=" * 70)
 
 # Table header
-header = f"{'Model':<35s} | {'Split':<5s} | {'Mode':<12s} | {'Token_F1':>9s} | {'Ctx_Faith':>10s} | {'Avg_Len':>8s}"
+header = (f"{'Model':<35s} | {'Split':<5s} | {'Mode':<12s} | "
+          f"{'Token_F1':>9s} | {'BS_F1':>9s} | {'Ctx_Faith':>10s} | {'Avg_Len':>8s}")
 print(header)
 print("─" * len(header))
 
 for model_name in MODELS:
     short_name = model_name.split("/")[-1]
+    if model_name not in all_results:
+        continue
     for mode_key, mode_label in [("with_context", "with context"), ("without_context", "no context")]:
         for split_name in ["dev", "test"]:
             agg = all_results[model_name][mode_key][split_name].get("aggregate", {})
             f1      = agg.get("Token_F1", 0.0)
+            bs_f1   = agg.get("BERTScore_F1", 0.0)
             faith   = agg.get("Context_Faithfulness_Pct", 0.0)
             avg_len = agg.get("Avg_Response_Length_Words", 0.0)
 
             faith_str = f"{faith:>9.2f}%" if mode_key == "with_context" else "   N/A    "
 
-            print(f"{short_name:<35s} | {split_name:<5s} | {mode_label:<12s} | {f1:>8.2f}% | {faith_str} | {avg_len:>7.1f}w")
+            print(f"{short_name:<35s} | {split_name:<5s} | {mode_label:<12s} | "
+                  f"{f1:>8.2f}% | {bs_f1:>8.2f}% | {faith_str} | {avg_len:>7.1f}w")
 
 print("─" * len(header))
 
