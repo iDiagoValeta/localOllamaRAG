@@ -23,6 +23,7 @@ Datasets:
 Metrics (per dataset + weighted aggregate):
   - Token F1 (SQuAD-standard)
   - Context Faithfulness (%)
+  - BERTScore P/R/F1 (DeBERTa-xlarge-mnli)
   - Avg Response Length (words)
   - Sentence Completeness (%)
 
@@ -44,30 +45,39 @@ Dependencies:
 # ─────────────────────────────────────────────
 #
 #  CONFIGURATION
-#  `-- 1. Environment and constants    CUDA env, models, caps, system prompts
+#  `-- 1. Environment and constants
+#           CUDA env, output_dir, MODELS (order tweakable for parallel jobs),
+#           Neural-Bridge dev carve, token caps, BERTScore model/batch,
+#           SYSTEM_PROMPT / SYSTEM_PROMPT_NO_CONTEXT (aligned with train-qwen3),
+#           DOLLY_RAG_CATEGORIES
 #
 #  EVALUATION AND METRICS
 #  `-- 2. Metrics and inference
-#           2.1 normalize_text()          EN/ES/CA normalization
-#           2.2 compute_f1()              Token F1 (SQuAD-standard)
-#           2.3 compute_context_faithfulness()  primary thesis metric
-#           2.4 generate_response()       inference with chat template
-#           2.5 evaluate_on_datasets()    loop over eval_datasets
-#           2.6 compute_bertscore_all()   DeBERTa-xlarge-mnli
-#           2.7 _extract_preds_gts()     helper for BERTScore input
+#           2.0 Monkey-patch bert_score sent_encode (DeBERTa max_length 512)
+#           2.1 normalize_text, compute_f1, compute_context_faithfulness
+#           2.2 generate_response — context truncation; Qwen3/3.5 enable_thinking=False;
+#               EOS families: Qwen+Phi-4 ChatML; Gemma eos + end_of_turn; else native eos
+#           2.3 evaluate_on_datasets — per-dataset metrics; faithfulness always
+#               vs dataset context even when generation omits context; macro-style
+#               per-sample means then ×100 for percentages; weighted aggregates
+#               across datasets by n_samples
+#           2.4 compute_bertscore_all, _extract_preds_gts
 #
 #  DATA
-#  `-- 3. Dataset loading (ONCE, before loading models)
-#           3.1 Normalizers: _normalize_nb, _normalize_dolly, _normalize_aina
-#           3.2 Filters: _filter_valid, _filter_long_response, _filter_dolly_rag
-#           3.3 Neural-Bridge RAG      dev (train tail) + test (natural split)
-#           3.4 Dolly QA               dev/test (manual 80/10/10)
-#           3.5 Aina RAG Multilingual  dev (validation) + test (natural split)
-#           3.6 Frozen dictionaries: eval_datasets_dev, eval_datasets_test
+#  `-- 3. Dataset loading (once; shared by all models)
+#           3.1 Normalizers _normalize_nb / _dolly / _aina
+#           3.2 Filters _filter_valid, _filter_long_response, _filter_dolly_rag
+#           3.3 Neural-Bridge: dev = last SAMPLES_NEURAL_BRIDGE_DEV of train; test = HF test
+#           3.4 Dolly: 80/10/10 on RAG-filtered shuffle
+#           3.5 Aina: validation/test per language Aina-EN/ES/CA
+#           3.6 eval_datasets_dev, eval_datasets_test via _build_eval_dict
 #
 #  PIPELINE
-#  |-- 4. Main loop   7 models x 2 modes x 2 splits + BERTScore
-#  `-- 5. Summary table + save baseline_evaluation.json
+#  `-- 4. Main loop (per model: load LLM, both modes x both splits, prediction
+#           JSON, unload LLM, BERTScore, merge into all_results)
+#           Checkpoint baseline_checkpoint.json: reload before each model for
+#           parallel jobs; save via read-merge-write + os.replace (.tmp atomic)
+#  `-- 5. Summary table, baseline_evaluation.json, baseline_evaluation_samples.json
 #
 # ─────────────────────────────────────────────
 
@@ -85,45 +95,26 @@ from bert_score import score as bert_score_fn
 import bert_score.utils as _bsu
 
 
-# ---------------------------------------------------------------------------
-# MONKEY-PATCH: bert_score.utils.sent_encode
-# ---------------------------------------------------------------------------
-# DeBERTa reports sys.maxsize as model_max_length, causing OverflowError in
-# the Rust tokenizer backend.  Force max_length=512 and truncation=True.
-# ---------------------------------------------------------------------------
-def _safe_sent_encode(tokenizer, a):
-    return tokenizer.encode(
-        a.strip(), add_special_tokens=True, max_length=512, truncation=True,
-    )
-
-_bsu.sent_encode = _safe_sent_encode
-
-
 # ─────────────────────────────────────────────
 # SECTION 1: ENVIRONMENT AND CONSTANTS
 # ─────────────────────────────────────────────
-# CUDA environment variables, model list, evaluation caps, max tokens,
-# and system prompts (with/without context).
 
-# ─────────────────────────────────────────────
-# Hugging Face Token Verification
-# ─────────────────────────────────────────────
-import os
+# --- 1.1 Optional Hugging Face token warning (Gemma, private hubs) ---
 if not os.environ.get("HF_TOKEN") and not os.path.exists(os.path.expanduser("~/.cache/huggingface/token")):
     print("WARNING: HF_TOKEN is not set in the environment.")
 
+# --- 1.2 CUDA / PyTorch runtime guards ---
 os.environ["TORCH_COMPILE_DISABLE"] = "1"
 os.environ["TORCH_DYNAMO_DISABLE"] = "1"
 os.environ["TRITON_DISABLE"] = "1"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
+# --- 1.3 Output directory (JSON checkpoints and final reports) ---
 output_dir = os.path.join(os.getcwd(), "baseline-evaluation-output")
 os.makedirs(output_dir, exist_ok=True)
 
-# -- Models to evaluate (sequentially, one at a time to avoid OOM) ----------
-# Qwen3 and Qwen3.5 are reasoners: thinking is disabled for RAG.
-# Qwen2.5-Instruct, Llama-3.1-Instruct, Gemma-3-12b-it and Phi-4 use
-# standard chat template (none have active reasoning mode).
+# --- 1.4 Model list (one loaded at a time; reorder for parallel job shards) ---
+# Qwen3 / Qwen3.5 use enable_thinking=False in generate_response; others use default chat templates.
 MODELS = [
     "meta-llama/Llama-3.1-8B-Instruct",
     "mistralai/Mistral-7B-Instruct-v0.3",
@@ -134,18 +125,16 @@ MODELS = [
     "microsoft/phi-4",
 ]
 
-# NB has no natural validation split; carve from train (same as train.py)
+# --- 1.5 Dataset and generation limits (Neural-Bridge dev = tail of train, same as train-qwen3) ---
 SAMPLES_NEURAL_BRIDGE_DEV = 1000
-
-# -- Tokens -----------------------------------------------------------------
 EVAL_MAX_NEW_TOKENS = 2048
 MAX_CONTEXT_TOKENS  = 2048
 
-# -- BERTScore --------------------------------------------------------------
+# --- 1.6 BERTScore backend ---
 BERTSCORE_MODEL      = "microsoft/deberta-xlarge-mnli"
 BERTSCORE_BATCH_SIZE = 32
 
-# -- System prompt (identical to train.py v7.2) -----------------------------
+# --- 1.7 System prompts (with-context aligned train-qwen3 v7.2; no-context omits <context> wording) ---
 SYSTEM_PROMPT = (
     "You are a professional document analysis assistant. Your role is to answer "
     "questions accurately based on the provided document context.\n\n"
@@ -161,7 +150,6 @@ SYSTEM_PROMPT = (
     "- Synthesize information naturally rather than copying text verbatim."
 )
 
-# System prompt for no-context mode (no reference to <context> tags)
 SYSTEM_PROMPT_NO_CONTEXT = (
     "You are a professional knowledge assistant. Your role is to answer "
     "questions accurately using your general knowledge.\n\n"
@@ -172,24 +160,27 @@ SYSTEM_PROMPT_NO_CONTEXT = (
     "- Respond in the same language as the question."
 )
 
+# --- 1.8 Dolly subset filter (RAG-style rows only) ---
 DOLLY_RAG_CATEGORIES = {"closed_qa", "information_extraction", "summarization"}
 
 
 # ─────────────────────────────────────────────
 # SECTION 2: METRICS AND INFERENCE
 # ─────────────────────────────────────────────
-# Four RAG metrics with no external dependencies.
-#
-# Primary (main thesis evidence):
-#   Context Faithfulness -- % of response token types that also appear
-#     in the context. The difference between with_context and without_context
-#     demonstrates how much the model relies on the provided document.
-#
-# Secondary:
-#   Token F1              -- overlap with gold answer, SQuAD standard.
-#   Avg Response Length   -- detects verbosity changes across models.
-#   Sentence Completeness -- detects fragmented responses.
+# Lexical metrics need no extra models. BERTScore runs after each LLM is unloaded.
+# Primary thesis signal: context faithfulness (overlap of response types with context).
+# Secondary: Token F1 vs reference; length and sentence-ending rate for style checks.
 
+# --- 2.0 bert_score: force DeBERTa encode cap (Rust tokenizer OverflowError on sys.maxsize) ---
+def _safe_sent_encode(tokenizer, a):
+    return tokenizer.encode(
+        a.strip(), add_special_tokens=True, max_length=512, truncation=True,
+    )
+
+
+_bsu.sent_encode = _safe_sent_encode
+
+# --- 2.1 Text normalization, Token F1, context faithfulness ---
 def normalize_text(text: str) -> str:
     """Lowercase, strip articles (EN/ES/CA) and punctuation."""
     text = str(text).lower()
@@ -234,6 +225,7 @@ def compute_context_faithfulness(prediction: str, context: str) -> float:
     return len(pred_types & ctx_types) / len(pred_types)
 
 
+# --- 2.2 Generation (chat template, context cap, family-specific EOS, Qwen3 thinking off) ---
 def generate_response(
     model, tokenizer, instruction: str, context: str,
     max_new_tokens: int = EVAL_MAX_NEW_TOKENS,
@@ -269,7 +261,7 @@ def generate_response(
     Returns:
         The generated response text, stripped of whitespace.
     """
-    is_qwen3 = "Qwen3" in model_name  # covers Qwen3-14B and Qwen3.5-9B
+    is_qwen3 = "Qwen3" in model_name
 
     ctx = (context or "").strip()
     if ctx:
@@ -297,10 +289,6 @@ def generate_response(
     )
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
-    # Determine EOS token(s):
-    #   Qwen + Phi-4  -> <|im_end|>  (ChatML convention)
-    #   Gemma-3       -> [<eos>, <end_of_turn>]  (both needed for clean stop)
-    #   Llama, Mistral + rest  -> tokenizer.eos_token_id native
     if "Qwen" in model_name or "phi-4" in model_name.lower():
         eos_id = tokenizer.encode("<|im_end|>", add_special_tokens=False)[0]
     elif "gemma" in model_name.lower():
@@ -372,7 +360,6 @@ def evaluate_on_datasets(
             )
 
             f1    = compute_f1(pred, ground_truth)
-            # Faithfulness: compute against original context even if not passed
             original_ctx = example["context"]
             faith = compute_context_faithfulness(pred, original_ctx)
             words = len(pred.split())
@@ -472,9 +459,6 @@ print("\n" + "=" * 70)
 print("SECTION 3: Loading and freezing datasets")
 print("=" * 70)
 
-
-# -- Normalizers ------------------------------------------------------------
-
 def _normalize_nb(example):
     """Neural-Bridge: question->instruction, context, answer->response."""
     return {
@@ -504,8 +488,6 @@ def _normalize_aina(example):
     }
 
 
-# -- Filters ----------------------------------------------------------------
-
 def _filter_valid(ex):
     return (
         bool(ex["instruction"].strip())
@@ -526,12 +508,8 @@ def _filter_dolly_rag(ex):
         and bool(ex["context"].strip())
     )
 
-
-# -- Neural-Bridge RAG -----------------------------------------------------
-
 print("\n  Neural-Bridge RAG...")
 
-# Dev split: carved from the main train split (same logic as train.py)
 _nb_train_full = (
     load_dataset("neural-bridge/rag-dataset-12000", split="train")
     .map(_normalize_nb, remove_columns=["context", "question", "answer"])
@@ -540,11 +518,9 @@ _nb_train_full = (
     .shuffle(seed=42)
 )
 nb_n = len(_nb_train_full)
-# Take last N from train as dev (mirroring train.py val split)
 nb_dev_start = nb_n - SAMPLES_NEURAL_BRIDGE_DEV
 nb_dev = _nb_train_full.select(range(nb_dev_start, min(nb_dev_start + SAMPLES_NEURAL_BRIDGE_DEV, nb_n)))
 
-# Test split: natural test split from HuggingFace
 nb_test = (
     load_dataset("neural-bridge/rag-dataset-12000", split="test")
     .map(_normalize_nb, remove_columns=["context", "question", "answer"])
@@ -553,9 +529,6 @@ nb_test = (
     .shuffle(seed=42)
 )
 print(f"    dev={len(nb_dev)}, test={len(nb_test)}")
-
-
-# -- Dolly QA ---------------------------------------------------------------
 
 print("  Dolly QA (RAG-relevant categories only, manual 80/10/10)...")
 _dolly_all = (
@@ -574,9 +547,6 @@ dolly_dev  = _dolly_all.select(range(nd_train, nd_train + nd_val))
 dolly_test = _dolly_all.select(range(nd_train + nd_val, nd))
 print(f"    RAG rows total: {nd}")
 print(f"    dev={len(dolly_dev)}, test={len(dolly_test)}")
-
-
-# -- Aina RAG Multilingual -------------------------------------------------
 
 print("  Aina RAG Multilingual...")
 
@@ -606,9 +576,6 @@ _aina_test_by_lang = _load_aina_by_lang("test")
 for lang_label in ["Aina-EN", "Aina-ES", "Aina-CA"]:
     print(f"    {lang_label}: dev={len(_aina_dev_by_lang[lang_label])}, "
           f"test={len(_aina_test_by_lang[lang_label])}")
-
-
-# -- Build frozen evaluation dictionaries ----------------------------------
 
 def _build_eval_dict(nb_ds, dolly_ds, aina_by_lang, split_label: str) -> dict:
     """Build a frozen eval dict using full partitions (no sample cap)."""
@@ -658,8 +625,6 @@ for model_idx, model_name in enumerate(MODELS, 1):
     print(f"[{model_idx}/{len(MODELS)}] Evaluating model: {model_name}")
     print("=" * 70)
 
-    # Re-read checkpoint from disk: another concurrent job may have completed
-    # this model since this job started.
     if os.path.exists(CHECKPOINT_PATH):
         try:
             with open(CHECKPOINT_PATH, "r", encoding="utf-8") as _f:
@@ -671,7 +636,6 @@ for model_idx, model_name in enumerate(MODELS, 1):
         print(f"--> Model {model_name} already evaluated (skipping).")
         continue
 
-    # -- Load model ---------------------------------------------------------
     print(f"\n--> Loading {model_name}...")
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
@@ -690,11 +654,8 @@ for model_idx, model_name in enumerate(MODELS, 1):
     model_results = {"with_context": {}, "without_context": {}}
     model_slug = model_name.split("/")[-1]
 
-    # Collect raw eval_results (per-sample) for BERTScore later.
-    # Structure: {mode_key: {split_name: all_results_dict}}.
     _raw_results = {}
 
-    # -- Evaluate in both modes ---------------------------------------------
     for with_context in [True, False]:
         mode_key = "with_context" if with_context else "without_context"
         mode_label = "WITH CONTEXT" if with_context else "WITHOUT CONTEXT"
@@ -706,7 +667,6 @@ for model_idx, model_name in enumerate(MODELS, 1):
         mode_results = {}
         _raw_results[mode_key] = {}
 
-        # -- Evaluate in both splits ----------------------------------------
         for split_name, eval_ds in [("dev", eval_datasets_dev), ("test", eval_datasets_test)]:
             print(f"\n  -- Split: {split_name.upper()} --")
 
@@ -718,7 +678,6 @@ for model_idx, model_name in enumerate(MODELS, 1):
             )
             _raw_results[mode_key][split_name] = results
 
-            # Compute weighted aggregate
             agg_f1 = agg_faith = agg_words = agg_complete = 0.0
             agg_n = 0
             for ds_name, m in metrics.items():
@@ -751,7 +710,6 @@ for model_idx, model_name in enumerate(MODELS, 1):
 
         model_results[mode_key] = mode_results
 
-    # -- Save predictions checkpoint (crash recovery) -----------------------
     _pred_ckpt_path = os.path.join(output_dir, f"predictions_{model_slug}.json")
     try:
         _pred_ckpt = {}
@@ -771,13 +729,11 @@ for model_idx, model_name in enumerate(MODELS, 1):
     except Exception as e:
         print(f"    Warning: could not save predictions checkpoint: {e}")
 
-    # -- Unload LLM and free GPU memory before BERTScore --------------------
     print(f"\n--> Unloading model {model_name} for BERTScore computation...")
     del model, tokenizer
     gc.collect()
     torch.cuda.empty_cache()
 
-    # -- BERTScore computation (DeBERTa-xlarge-mnli, ~1.3 GB) ---------------
     print(f"\n--> Computing BERTScore for {model_slug}...")
 
     for mode_key in ["with_context", "without_context"]:
@@ -788,13 +744,11 @@ for model_idx, model_name in enumerate(MODELS, 1):
             print(f"\n  [{mode_key} | {split_name}]")
             bs = compute_bertscore_all(preds, gts)
 
-            # Merge BERTScore averages into the metrics dict
             for ds_name in bs:
                 model_results[mode_key][split_name][ds_name]["BERTScore_P"]  = bs[ds_name]["avg_P"]
                 model_results[mode_key][split_name][ds_name]["BERTScore_R"]  = bs[ds_name]["avg_R"]
                 model_results[mode_key][split_name][ds_name]["BERTScore_F1"] = bs[ds_name]["avg_F1"]
 
-            # Recompute aggregate including BERTScore
             agg = model_results[mode_key][split_name]["aggregate"]
             agg_bs_f1 = 0.0
             for ds_name in bs:
@@ -802,16 +756,12 @@ for model_idx, model_name in enumerate(MODELS, 1):
                 agg_bs_f1 += bs[ds_name]["avg_F1"] * n
             agg["BERTScore_F1"] = round(agg_bs_f1 / agg["n_samples"], 2) if agg["n_samples"] else 0.0
 
-    # Free BERTScore GPU memory
     gc.collect()
     torch.cuda.empty_cache()
     print(f"--> BERTScore complete for {model_slug}. GPU cache cleared.")
 
     all_results[model_name] = model_results
 
-    # -- Save checkpoint (with BERTScore) -----------------------------------
-    # Safe for concurrent jobs: read from disk, merge, atomic rename.
-    # os.replace() is atomic on POSIX and Windows (same filesystem).
     try:
         _disk = {}
         if os.path.exists(CHECKPOINT_PATH):
@@ -837,7 +787,6 @@ print("\n" + "=" * 70)
 print("BASELINE EVALUATION SUMMARY TABLE")
 print("=" * 70)
 
-# Table header
 header = (f"{'Model':<35s} | {'Split':<5s} | {'Mode':<12s} | "
           f"{'Token_F1':>9s} | {'BS_F1':>9s} | {'Ctx_Faith':>10s} | {'Avg_Len':>8s}")
 print(header)
@@ -862,8 +811,6 @@ for model_name in MODELS:
 
 print("─" * len(header))
 
-# -- Save JSON --------------------------------------------------------------
-
 output_path = os.path.join(output_dir, "baseline_evaluation.json")
 try:
     with open(output_path, "w", encoding="utf-8") as f:
@@ -872,7 +819,6 @@ try:
 except Exception as e:
     print(f"\n    Warning: could not save file: {e}")
 
-# Also save compact samples for manual inspection
 samples_path = os.path.join(output_dir, "baseline_evaluation_samples.json")
 try:
     compact = {}
