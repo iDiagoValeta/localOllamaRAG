@@ -90,3 +90,5 @@ rag/ragbench_pdfs/
 .claude/
 
 MODIFICACIONES_EVALUACION.md
+
+ragbench_vector_db/

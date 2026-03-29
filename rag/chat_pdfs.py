@@ -139,7 +139,7 @@ if hasattr(sys.stderr, "reconfigure"):
 
 # --- 3.2 Ollama models ---
 
-MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "Qwen3-FineTuned")
+MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "llama3.1")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:4b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma3:4b")
@@ -171,7 +171,7 @@ USAR_RERANKER = RERANKER_AVAILABLE
 EXPANDIR_CONTEXTO = True
 USAR_OPTIMIZACION_CONTEXTO = True
 USAR_RECOMP_SYNTHESIS = False
-USAR_EMBEDDINGS_IMAGEN = True
+USAR_EMBEDDINGS_IMAGEN = False
 LOGGING_METRICAS = True
 GUARDAR_DEBUG_RAG = True
 

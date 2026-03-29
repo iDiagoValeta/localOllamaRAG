@@ -1,0 +1,147 @@
+{
+  "dataset": "vectara/open_ragbench",
+  "metrics_used": {
+    "Factual Correctness": "Factual precision vs ground truth (TP/FP/FN, F1)",
+    "Faithfulness": "Factual consistency of the answer with the context",
+    "Response Relevancy": "Degree to which the answer addresses the question",
+    "Context Precision": "Ranking precision of retrieved fragments",
+    "Context Recall": "Coverage of required contexts"
+  },
+  "results": [
+    {
+      "index": 1,
+      "paper_id": "2403.20331v2",
+      "question": "Is there a strong correlation between OC-Dual accuracy and Dual accuracy?",
+      "model_answer": "According to Fragment 2, there is a strong correlation between OC-Dual accuracy and Dual accuracy. The analysis revealed that the correlation coefficient (r) and Spearman's rank correlation coefficient (ρ) are very high, indicating a strong relationship between these two metrics.\n\nIn particular, it states: \"We plotted the relationship between OC-Dual accuracy and Dual accuracy in Fig A. To quantify the relationship between these scores, we calculated the correlation coefficient (...) and Spearman’s rank correlation coefficient (...). The analysis revealed a very strong correlation between the two metrics.\"\n\nThis suggests that as OC-Dual accuracy increases, Dual accuracy also tends to increase, indicating a positive correlation between the two metrics.\n\nIn contrast, Fragment 1 mentions that there is no strong correlation between UPD accuracy and Original Standard accuracy (Max: 39.1, Min: 6.5), but it does not specifically mention the relationship between OC-Dual accuracy and Dual accuracy.",
+      "ground_truth": "Yes.",
+      "retrieved_contexts_preview": [
+        "This document details research into the evaluation of large multimodal models (LMMs) using multiple-choice question answering (MCQA) benchmarks, specifically focusing on a novel “UPD” (Unsolvable Problem Detection) scenario. The excerpt elaborates on the evaluation metrics, particularly the Original...",
+        "This document details a research project investigating the reliability of large multimodal model (LMM) evaluations using multiple-choice question answering (MCQA) benchmarks, specifically focusing on a newly developed “UPD” (Unsolvable Problem Detection) variant. The excerpt highlights a key finding...",
+        "This document investigates the reliability of multimodal models’ performance on Multiple Choice Question Answering (MCQA) benchmarks, specifically addressing vulnerabilities in their predictions. The excerpt details a strategy to mitigate these issues by simplifying the matching algorithm and adapti..."
+      ],
+      "contexts_count": 3,
+      "scores": {
+        "Factual Correctness": 0.7939914205134193,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.8413027882366508,
+        "Context Precision": 0.9999999999666667,
+        "Context Recall": 1.0
+      },
+      "justifications": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Yes, there is a strong correlation between OC-Dual accuracy and Dual accuracy.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='Fragment 2 indicates a strong correlation between OC-Dual accuracy and Dual accuracy.', reason='This statement directly supports the ground truth that there is a strong correlation between OC-Dual accuracy and Dual accuracy.'), StatementsWithReason(statement='The analysis revealed that the correlation coefficient (r) is very high.', reason='This statement supports the ground truth by providing evidence of a strong correlation through a high correlation coeffic"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.7214202275082227"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Fragment 2 indicates a strong correlation between OC-Dual accuracy and Dual accuracy.', 'The analysis revealed that the correlation coefficient (r) is very high.', \"The analysis revealed that Spearman's rank correlation coefficient (ρ) is very high.\", \"The high correlation coefficient (r) and Spearman's rank correlation coefficient (ρ) indicate a strong relationship between OC-Dual accuracy and Dual accuracy.\", 'The text states: \\\\\"The relationship between OC-Dual accuracy and Dual "
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='Fragment 2 indicates a strong correlation between OC-Dual accuracy and Dual accuracy.', reason='The text states: \"The analysis revealed a very strong correlation between the two metrics.\"', verdict=1), StatementFaithfulnessAnswer(statement='The analysis revealed that the correlation coefficient (r) is very high.', reason='The text states that the analysis revealed a very strong correlation between the two metrics, and that the correlation coeffi"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='What is the relationship between OC-Dual accuracy and Dual accuracy according to Fragment 2?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context mentions \"Figure A: Relationship between OC-Dual accuracy and Dual accuracy.\" which directly implies a relationship exists and is being analyzed. Therefore, the context is useful in answering the question.' verdict=1"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='Yes.', reason='The context mentions that the analysis revealed a very strong correlation between OC-Dual accuracy and Dual accuracy. Therefore, the answer \"Yes\" can be attributed to the context.', attributed=1)]"
+          }
+        ]
+      }
+    },
+    {
+      "index": 2,
+      "paper_id": "2403.20331v2",
+      "question": "Does self-reflection allow models to evaluate their own answers?",
+      "model_answer": "According to Fragment 3, self-reflection is a method that allows models to evaluate their own answers. Specifically, it mentions that \"Self-reflection... has been shown that LLMs might have preliminary capabilities for judging and evaluating their own answers\" (Kadavath et al., 2022; Feng et al., 2024). In the experiment described in Fragment 3, self-reflection is used to prompt the model to reflect on its own response after generating an answer. If the model outputs \"2. False\", indicating that it believes its original answer was incorrect, then the response will be withdrawn.\n\nHowever, this does not necessarily mean that the model can evaluate its own answers in a more general sense or provide a deeper understanding of why its answer is correct or incorrect. The self-reflection method used here seems to be limited to simply checking whether the model's confidence in its original answer is high enough (i.e., outputting \"1. True\" instead of \"2. False\").\n\nTherefore, while self-reflection does allow models to evaluate their own answers to some extent, it may not necessarily enable them to provide a more nuanced or accurate understanding of their own performance.",
+      "ground_truth": "Yes.",
+      "retrieved_contexts_preview": [
+        "This document details research into the reliability of Large Multimodal Models (LMMs) evaluated using Multiple Choice Question Answering (MCQA) benchmarks, specifically focusing on a newly identified vulnerability termed “Unsolvable Problem Detection” (UPD). The excerpt elaborates on experimental me...",
+        "This document details a new evaluation method, Unsolvable Problem Detection (UPD), designed to assess the genuine understanding of Large Multimodal Models (LMMs) beyond simply selecting correct answers. The excerpt introduces the UPD task itself, defining it as a method to determine if an LMM can re...",
+        "This document details a study evaluating Large Multimodal Models (LMMs) using a novel Multiple Choice Question Answering (MCQA) benchmark designed to uncover vulnerabilities. The excerpt focuses on the limitations of the MMMU-AAD benchmark, specifically highlighting why the Option and Instruction ap..."
+      ],
+      "contexts_count": 3,
+      "scores": {
+        "Factual Correctness": 0.3821760736067451,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.855327458179444,
+        "Context Precision": 0.99999999995,
+        "Context Recall": 1.0
+      },
+      "justifications": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Self-reflection allows models to evaluate their own answers.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement=\"Self-reflection does allow models to evaluate the model's own answers to some extent.\", reason=\"This statement aligns with the ground truth that self-reflection allows models to evaluate their own answers, even if it's to some extent.\"), StatementsWithReason(statement='According to Fragment 3, self-reflection is a method that allows models to evaluate their own answers.', reason='This statement directly reflects the ground truth, attributing the concept to Fra"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.6715614372841232"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['According to Fragment 3, self-reflection is a method that allows models to evaluate their own answers.', 'Fragment 3 mentions that Large Language Models might have preliminary capabilities for judging and evaluating their own answers.', 'Kadavath et al., 2022; Feng et al., 2024 support that Large Language Models might have preliminary capabilities for judging and evaluating their own answers.', 'In the experiment described in Fragment 3, self-reflection is used to prompt the model t"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='According to Fragment 3, self-reflection is a method that allows models to evaluate their own answers.', reason='The excerpt states: \"Self-reflection is a method that allows the model to reflect on its own responses (Kadavath et al., 2022). It has been shown that LLMs might have preliminary capabilities for judging and evaluating their own answers (Kadavath et al., 2022; Feng et al., 2024).\"', verdict=1), StatementFaithfulnessAnswer(statement='F"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='How does self-reflection enable models to evaluate their own answers, according to Fragment 3?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason=\"The context discusses the evaluation of Large Multimodal Models (LMMs) using a benchmark designed to uncover vulnerabilities, focusing on the limitations of the MMMU-AAD benchmark. While it mentions the models' lack of capability and reasoning ability, it doesn't directly address whether self-reflection allows models to evaluate their own answers. Therefore, the context is not useful in arriving at the given answer.\" verdict=0"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='Yes.', reason='The context mentions that \"Self-reflection is a method that allows the model to reflect on its own responses (Kadavath et al., 2022). It has been shown that LLMs might have preliminary capabilities for judging and evaluating their own answers (Kadavath et al., 2022; Feng et al., 2024).\"', attributed=1)]"
+          }
+        ]
+      }
+    }
+  ],
+  "global_averages": {
+    "Factual Correctness": 0.5880837470600822,
+    "Faithfulness": 1.0,
+    "Response Relevancy": 0.8483151232080475,
+    "Context Precision": 0.9999999999583333,
+    "Context Recall": 1.0
+  }
+}
