@@ -1,11 +1,9 @@
-#!/bin/bash
-
-#SBATCH -p docencia
+#SBATCH -p long
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=96G
-#SBATCH --time=24:00:00
-#SBATCH --job-name=baseEval
+#SBATCH --mem=48G
+#SBATCH --time=72:00:00
+#SBATCH --job-name=Qwen3RAG
 #SBATCH -o salida_%j.log
 
 echo "--> Nodo asignado: $(hostname)"

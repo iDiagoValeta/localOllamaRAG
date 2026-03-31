@@ -21,7 +21,7 @@ Modelos en uso:
 | Embedding | embeddinggemma | Gemma 3, 307M params, 768-d, BF16 |
 | Reranker | BAAI/bge-reranker-v2-m3 | Cross-encoder ~200M. Alt rapida: ms-marco-MiniLM-L-6-v2 |
 | Auxiliar | gemma3:4b | Descomposicion de query, contextual retrieval, RECOMP |
-| Vision | llama3.2-vision:11b | Descripcion de figuras en PDFs |
+| Vision/OCR | glm-ocr | Descripcion e indexado de imagenes en PDFs (via OLLAMA_OCR_MODEL) |
 
 ---
 
@@ -47,7 +47,7 @@ localOllamaRAG/
 │   └── zip/dist/                 # Build React (assets estaticos)
 ├── scripts/
 │   ├── training/
-│   │   ├── train-qwen3.py        # Fine-tuning LoRA Qwen3-14B (v9) - MODELO DE PRODUCCION
+│   │   ├── train-qwen3.py        # Fine-tuning LoRA Qwen3-14B (v10) - MODELO DE PRODUCCION
 │   │   ├── train-llama3.1.py     # Fine-tuning LoRA Llama-3.1-8B
 │   │   ├── train-gemma3.py       # Fine-tuning LoRA Gemma-3-12B-IT
 │   │   ├── plot_training.py      # Visualizacion de curvas de entrenamiento
@@ -220,7 +220,7 @@ python scripts/generate_diagram.py --format svg --output docs/monkeygrab_archite
 | `OLLAMA_CHAT_MODEL` | `gemma3:4b` | Modelo modo chat |
 | `OLLAMA_EMBED_MODEL` | `embeddinggemma:latest` | Modelo de embeddings |
 | `OLLAMA_CONTEXTUAL_MODEL` | `gemma3:4b` | Modelo contextual retrieval |
-| `OLLAMA_VISION_MODEL` | `llama3.2-vision:11b` | Modelo de vision para imagenes |
+| `OLLAMA_OCR_MODEL` | `glm-ocr` | Modelo OCR/vision para indexado de imagenes en PDFs |
 | `DOCS_FOLDER` | `rag/pdfs/` | Carpeta de PDFs a indexar |
 | `RERANKER_QUALITY` | `quality` | `quality` (BAAI/bge) o `speed` (MiniLM) |
 | `HF_TOKEN` | — | Token HuggingFace (necesario para Gemma-3) |

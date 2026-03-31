@@ -1459,7 +1459,7 @@ for split_label in ["dev", "test"]:
 
 training_summary = {
     "model_name":       model_name,
-    "version":          "v9",
+    "version":          "v10",
     "total_steps":      _trainer_global_step,
     "dataset_size":     _trainer_dataset_size,
     "effective_batch":  _trainer_effective_batch,
