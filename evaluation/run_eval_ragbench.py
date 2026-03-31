@@ -782,16 +782,18 @@ def main():
     source_filter = None if args.source == "all" else args.source
     print(f"\nFiltro de fuente: {args.source}")
 
-    # --- Importar RAGAS ---
+    import warnings
     try:
         from ragas import evaluate
-        from ragas.metrics import (
-            faithfulness,
-            answer_relevancy,
-            context_precision,
-            context_recall,
-            answer_correctness,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            from ragas.metrics import (
+                faithfulness,
+                answer_relevancy,
+                context_precision,
+                context_recall,
+                answer_correctness,
+            )
         from ragas.dataset_schema import SingleTurnSample, EvaluationDataset
         from ragas.run_config import RunConfig
     except ImportError as e:
@@ -799,8 +801,6 @@ def main():
         print("  Instala con: pip install -r evaluation/requirements.txt")
         raise SystemExit(1) from e
 
-    # RAGAS >= 0.2 puede exportar clases en vez de instancias según la versión.
-    # Instanciar cualquier símbolo que sea una clase para que evaluate() no falle.
     def _ensure_instance(m):
         return m() if isinstance(m, type) else m
 
