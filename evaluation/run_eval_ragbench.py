@@ -785,28 +785,30 @@ def main():
     # --- Importar RAGAS ---
     try:
         from ragas import evaluate
-        try:
-            from ragas.metrics.collections import (
-                faithfulness,
-                answer_relevancy,
-                context_precision,
-                context_recall,
-                answer_correctness,
-            )
-        except ImportError:
-            from ragas.metrics import (
-                faithfulness,
-                answer_relevancy,
-                context_precision,
-                context_recall,
-                answer_correctness,
-            )
+        from ragas.metrics import (
+            faithfulness,
+            answer_relevancy,
+            context_precision,
+            context_recall,
+            answer_correctness,
+        )
         from ragas.dataset_schema import SingleTurnSample, EvaluationDataset
         from ragas.run_config import RunConfig
     except ImportError as e:
         print(f"ERROR importando RAGAS: {e}")
         print("  Instala con: pip install -r evaluation/requirements.txt")
         raise SystemExit(1) from e
+
+    # RAGAS >= 0.2 puede exportar clases en vez de instancias según la versión.
+    # Instanciar cualquier símbolo que sea una clase para que evaluate() no falle.
+    def _ensure_instance(m):
+        return m() if isinstance(m, type) else m
+
+    faithfulness       = _ensure_instance(faithfulness)
+    answer_relevancy   = _ensure_instance(answer_relevancy)
+    context_precision  = _ensure_instance(context_precision)
+    context_recall     = _ensure_instance(context_recall)
+    answer_correctness = _ensure_instance(answer_correctness)
 
     eval_llm, eval_embeddings = configurar_llm_evaluacion()
 
