@@ -14,8 +14,29 @@ Pipeline stages (each togglable via flags):
     6. Generation      RECOMP synthesis (opt.) + streaming
     7. Observability   metrics and debug dumps
 
-Usage:
-    python chat_pdfs.py
+How to run (interactive CLI):
+    From the repository root (recommended, matches docs and imports):
+
+        python rag/chat_pdfs.py
+
+    From inside ``rag/``:
+
+        cd rag
+        python chat_pdfs.py
+
+    On Windows (PowerShell), same commands from the project root or ``rag/``.
+
+    This starts ``MonkeyGrabCLI`` (see ``rag/cli/app.py``): slash commands
+    such as ``/rag``, ``/chat``, ``/reindex``, ``/docs``, ``/salir``.
+
+    The Flask web app does **not** execute this file as ``__main__``; it imports
+    functions and constants from here. Start the UI with ``python web/app.py``
+    from the repository root.
+
+    Prerequisites: Ollama running; PDFs under ``rag/pdfs/`` unless ``DOCS_FOLDER``
+    points elsewhere. Model names via ``OLLAMA_RAG_MODEL``, ``OLLAMA_EMBED_MODEL``,
+    ``OLLAMA_OCR_MODEL`` (image indexing), etc., as documented in the project README
+    / ``CLAUDE.md``.
 """
 
 # ─────────────────────────────────────────────
@@ -48,7 +69,7 @@ Usage:
 #  |      +-- 10.5 Evaluation    silent pipeline for RAGAS
 #  +--11. Indexing and collection management
 #  |      +-- 11.1 Contextual retrieval  chunk enrichment with LLM
-#  |      +-- 11.2 Image extraction      fitz page images + MODELO_VISION description
+#  |      +-- 11.2 Image extraction      fitz page images + glm-ocr description
 #  |      +-- 11.3 Indexing              PDFs -> pymupdf4llm/pypdf + images -> ChromaDB
 #  |      +-- 11.4 Collection mgmt      list indexed documents
 #  |
@@ -144,7 +165,7 @@ MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:4b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma3:4b")
 MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "qwen3.5:2b")
-MODELO_VISION = os.getenv("OLLAMA_VISION_MODEL", "llama3.2-vision:11b")
+MODELO_OCR = os.getenv("OLLAMA_OCR_MODEL", "glm-ocr")
 
 
 def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
@@ -275,7 +296,7 @@ Use this reference to explain how the system works or which parts are mandatory 
 * **OPTIONAL (Flag: `USAR_CONTEXTUAL_RETRIEVAL`):**
     * **Contextual Retrieval:** Uses an LLM to generate a summary/context for each chunk before indexing to improve retrieval accuracy.
 * **OPTIONAL (Flag: `USAR_EMBEDDINGS_IMAGEN`):**
-    * **Image Indexing:** Extracts raster images from each PDF page with PyMuPDF (fitz), describes them with `MODELO_VISION` (vision-capable LLM), and stores the description as a regular text chunk in ChromaDB. Requires `fitz` (PyMuPDF) and a vision-capable Ollama model (default: `llama3.2-vision:11b`; override with `OLLAMA_VISION_MODEL`, e.g. `qwen2.5vl:7b`).
+    * **Image Indexing:** Extracts raster images from each PDF page with PyMuPDF (fitz), describes them with `MODELO_OCR` (default: `glm-ocr`, override with `OLLAMA_OCR_MODEL`) using a structured OCR prompt that transcribes tables cell by cell, chart axes and legends, diagram components, and equations, then stores the result as a regular text chunk in ChromaDB.
 
 #### 2. RETRIEVAL PHASE
 Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; optional components extend it.
@@ -2221,13 +2242,16 @@ def extraer_imagenes_pdf(
 
 
 def describir_imagen_con_llm(image_bytes: bytes) -> str:
-    """Generate a textual description of an academic image using ``MODELO_VISION``.
+    """Generate a textual description of an academic image using ``MODELO_OCR``.
 
-    Sends the raw image bytes to the configured vision-capable Ollama model
-    and returns a detailed, retrieval-optimised description.  The description
-    is later embedded with the standard ``MODELO_EMBEDDING`` and stored in
-    ChromaDB alongside text chunks, so cross-modal retrieval requires no
-    extra infrastructure.
+    Sends the raw image bytes to ``glm-ocr`` (or the model set in
+    ``OLLAMA_OCR_MODEL``) via Ollama and returns a structured description
+    that transcribes tables cell by cell, chart axes and legends, diagram
+    components, and any visible equations or annotations.
+
+    The returned string is plain text embedded with ``MODELO_EMBEDDING``
+    and stored as a regular chunk in ChromaDB — no extra infrastructure
+    is required for cross-modal retrieval.
 
     The function is a no-op (returns ``""``) when ``USAR_EMBEDDINGS_IMAGEN``
     is ``False`` or when the Ollama call fails.
@@ -2247,29 +2271,28 @@ def describir_imagen_con_llm(image_bytes: bytes) -> str:
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
         response = ollama.chat(
-            model=MODELO_VISION,
+            model=MODELO_OCR,
             messages=[{
                 "role": "user",
                 "content": (
-                    "Describe this academic figure or image in detail. "
-                    "Include: the type of figure (chart, diagram, table, photograph, "
-                    "equation, architecture diagram, etc.), all visible text, labels, "
-                    "axis names, legend entries, and numerical values, and the main "
-                    "finding or information conveyed. "
-                    "Respond in the same language as the labels "
-                    "(English, Spanish, or Catalan). "
-                    "Be precise and comprehensive for academic retrieval purposes."
+                    "Describe the image in detail. "
+                    "If it contains a table, transcribe all rows, columns, headers, and cell values. "
+                    "If it contains a chart or diagram, list all axis labels, legend entries, "
+                    "data series names, and key numerical values. "
+                    "If it contains an architecture or flowchart, enumerate all components, "
+                    "arrows, and labels. "
+                    "Also transcribe any equations, captions, or annotations visible. "
+                    "Conclude with a one-sentence summary of the main finding or information conveyed."
                 ),
                 "images": [image_b64],
             }],
-            options={"temperature": 0.1, "num_predict": 500},
+            options={"temperature": 0.1, "num_predict": 800},
         )
-
         descripcion = response["message"]["content"].strip()
         return descripcion if len(descripcion) > 10 else ""
 
     except Exception as e:
-        logging.warning(f"Error describing image with {MODELO_VISION}: {e}")
+        logging.warning(f"Error describing image with {MODELO_OCR}: {e}")
         return ""
 
 
@@ -2455,7 +2478,7 @@ def indexar_documentos(
                             total_chunks += 1
 
             # Image chunks — independent of the text extraction path used above.
-            # Each image is described by MODELO_VISION and embedded as a text chunk
+            # Each image is described by MODELO_OCR and embedded as a text chunk
             # so retrieval is transparent to the rest of the pipeline.
             if imagenes_pdf:
                 if not silent:

@@ -1,29 +1,54 @@
 """
-run_eval_ragbench.py -- Evaluación RAG con el dataset público vectara/open_ragbench.
+run_eval_ragbench.py -- Evaluación RAG sobre el dataset público vectara/open_ragbench.
 
-Downloads a subset of arXiv PDFs from the open_ragbench HuggingFace dataset,
-indexes them into a dedicated ChromaDB collection, and evaluates the MonkeyGrab
-RAG pipeline end-to-end using RAGAS v0.2+ metrics:
+Descarga un subconjunto de PDFs arXiv del dataset de HuggingFace, los indexa
+en una colección ChromaDB dedicada y evalúa el pipeline RAG end-to-end con RAGAS:
 
-    PDFs (arXiv) → ChromaDB (indexing) → Hybrid retrieval → Generation → RAGAS
+    PDFs (arXiv) → ChromaDB (indexado) → Recuperación híbrida → Generación → RAGAS
 
-This script complements run_eval.py (private TFG dataset) with a reproducible,
-public benchmark that any reviewer can verify. Paper selection is automatic:
-the top-N papers by question count are chosen from the dataset's text-only
-query subset (no multimodal dependency required by default).
+Por defecto solo se usan preguntas de tipo ``text-image`` (preguntas sobre imágenes
+del paper). Usa ``--source all`` para incluir todos los tipos.
 
-Usage:
+Uso desde la raíz del repositorio:
+    python evaluation/run_eval_ragbench.py [opciones]
+
+Invocaciones habituales:
+    # Solo preguntas de imagen (por defecto), top-N papers:
     python evaluation/run_eval_ragbench.py
-    python evaluation/run_eval_ragbench.py --n-papers 5 --max-q 3 --verbose
-    python evaluation/run_eval_ragbench.py --skip-download --force-reindex
-    python evaluation/run_eval_ragbench.py --all-sources   # include multimodal queries
+
+    # Un paper concreto, PDFs ya descargados, forzar re-indexado:
+    python evaluation/run_eval_ragbench.py --only-doc 2403.20331v2 --skip-download --force-reindex
+
+    # Todos los tipos de pregunta:
+    python evaluation/run_eval_ragbench.py --source all
+
+    # Verbose con pocos papers:
+    python evaluation/run_eval_ragbench.py --n-papers 3 --max-q 5 --verbose
+
+CLI flags:
+    --source SOURCE     Tipo de fuente: text-image | text-table | text | all (default: text-image)
+    --only-doc DOC_ID   Evalúa un solo paper (ej: 2403.20331v2). Sobreescribe --n-papers.
+    --n-papers N        Número de papers a seleccionar (default: 10)
+    --max-q N           Máximo de preguntas por paper (default: 5)
+    --skip-download     No descarga PDFs; usa los que ya hay en rag/ragbench_pdfs/
+    --force-reindex     Borra y reconstruye la colección ChromaDB
+    --verbose           Imprime cada pregunta mientras se procesa
+    --no-debug          No guarda ragas_ragbench_debug.json
+
+Prerequisitos:
+    - GOOGLE_API_KEY o GEMINI_API_KEY en .env (juez RAGAS: Gemini)
+    - Ollama corriendo con los modelos de rag/chat_pdfs.py
+    - pip install -r evaluation/requirements.txt
+
+Salidas (en evaluation/):
+    - ragas_ragbench_scores.csv
+    - ragas_ragbench_debug.json (salvo --no-debug)
 
 Dependencies:
-    - huggingface_hub
-    - requests
+    - huggingface_hub, requests
     - ragas, langchain-google-genai
     - pandas, chromadb
-    - python-dotenv (optional)
+    - python-dotenv (opcional)
 """
 
 # ─────────────────────────────────────────────
@@ -31,25 +56,25 @@ Dependencies:
 # ─────────────────────────────────────────────
 #
 #  CONFIGURATION
-#  +-- 1. Imports & environment setup
-#  +-- 2. Global constants
+#  +-- 1. Imports & entorno      sys.path, .env, imports
+#  +-- 2. Constantes globales    rutas, parámetros, nombres de métricas
 #
-#  DATA ACQUISITION
-#  +-- 3. Download dataset metadata (HuggingFace)
-#  +-- 4. Select papers (top-N by question count)
-#  +-- 5. Build question set
-#  +-- 6. Download PDFs (arXiv)
+#  SELECCIÓN DE DATOS
+#  +-- 3. Metadatos HF           descargar_metadatos
+#  +-- 4. Selección de papers    seleccionar_papers
+#  +-- 5. Construcción preguntas construir_preguntas, filtrar_por_pdfs_disponibles
 #
-#  EVALUATION PIPELINE
-#  +-- 7. Index PDFs into ChromaDB
-#  +-- 8. Configure RAGAS evaluation LLM
-#  +-- 9. Run RAG pipeline per question
-#  +-- 10. Run RAGAS evaluation
+#  PIPELINE
+#  +-- 6. Descarga PDFs          descargar_pdfs
+#  +-- 7. Indexado ChromaDB      conectar_e_indexar
+#  +-- 8. LLM evaluación         configurar_llm_evaluacion
 #
-#  OUTPUT
-#  +-- 11. Display results
-#  +-- 12. Save CSV + debug JSON
-#  +-- 13. main()
+#  SALIDA
+#  +-- 9. Resultados             imprimir_resultados
+#  +-- 10. Debug JSON            guardar_debug
+#
+#  ENTRY
+#  +-- 11. main()
 #
 # ─────────────────────────────────────────────
 
@@ -61,7 +86,7 @@ import time
 from collections import Counter
 
 # ─────────────────────────────────────────────
-# SECTION 1: ENVIRONMENT SETUP
+# SECTION 1: IMPORTS Y ENTORNO
 # ─────────────────────────────────────────────
 
 try:
@@ -85,38 +110,39 @@ from rag.chat_pdfs import (
 )
 
 # ─────────────────────────────────────────────
-# SECTION 2: GLOBAL CONSTANTS
+# SECTION 2: CONSTANTES GLOBALES
 # ─────────────────────────────────────────────
 
-# --- 2.1 Dataset selection parameters ---
-N_PAPERS = 10                 # number of arXiv papers to download and evaluate
-MAX_QUESTIONS_PER_PAPER = 5   # cap per paper to keep evaluation balanced (~50 q total)
-QUERY_SOURCE_FILTER = "text"  # "text" | "text-image" | "text-table" | None (all sources)
-
-# --- 2.2 arXiv download settings ---
-ARXIV_DELAY_SECS = 5          # seconds between downloads (be polite to arXiv)
-ARXIV_TIMEOUT_SECS = 60       # per-request HTTP timeout
-ARXIV_HEADERS = {
-    "User-Agent": "MonkeyGrab-TFG-Eval/1.0 (academic research; Universitat Politecnica de Valencia)"
-}
-
-# --- 2.3 HuggingFace dataset ---
+# --- 2.1 Dataset ---
 HF_REPO = "vectara/open_ragbench"
 HF_SUBDIR = "pdf/arxiv"
 HF_METADATA_FILES = ["queries.json", "qrels.json", "answers.json", "pdf_urls.json"]
 
-# --- 2.4 Paths ---
+# Tipos de fuente disponibles en RAGBench:
+#   "text"        → preguntas sobre texto plano
+#   "text-image"  → preguntas sobre figuras/imágenes del paper
+#   "text-table"  → preguntas sobre tablas del paper
+DEFAULT_SOURCE = "text-image"
+
+# --- 2.2 Parámetros por defecto ---
+N_PAPERS = 10
+MAX_QUESTIONS_PER_PAPER = 5
+ARXIV_DELAY_SECS = 5
+ARXIV_TIMEOUT_SECS = 60
+ARXIV_HEADERS = {
+    "User-Agent": "MonkeyGrab-TFG-Eval/1.0 (academic research; Universitat Politecnica de Valencia)"
+}
+
+# --- 2.3 Rutas ---
 EVAL_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJ_ROOT = os.path.dirname(EVAL_DIR)
 RAGBENCH_PDFS_DIR = os.path.join(PROJ_ROOT, "rag", "ragbench_pdfs")
 RAGBENCH_DB_PATH = os.path.join(PROJ_ROOT, "rag", "ragbench_vector_db")
 RAGBENCH_COLLECTION = "ragbench_arxiv_eval"
-
-# --- 2.5 Output files ---
 OUTPUT_CSV = os.path.join(EVAL_DIR, "ragas_ragbench_scores.csv")
 OUTPUT_DEBUG = os.path.join(EVAL_DIR, "ragas_ragbench_debug.json")
 
-# --- 2.6 RAGAS metric labels ---
+# --- 2.4 Métricas RAGAS ---
 METRIC_NAMES = [
     "answer_correctness",
     "faithfulness",
@@ -124,7 +150,6 @@ METRIC_NAMES = [
     "context_precision",
     "context_recall",
 ]
-
 METRIC_DISPLAY_NAMES = {
     "answer_correctness": "Factual Correctness",
     "faithfulness":       "Faithfulness",
@@ -132,7 +157,6 @@ METRIC_DISPLAY_NAMES = {
     "context_precision":  "Context Precision",
     "context_recall":     "Context Recall",
 }
-
 METRIC_DESCRIPTIONS = {
     "answer_correctness": "Factual precision vs ground truth (TP/FP/FN, F1)",
     "faithfulness":       "Factual consistency of the answer with the context",
@@ -143,17 +167,16 @@ METRIC_DESCRIPTIONS = {
 
 
 # ─────────────────────────────────────────────
-# SECTION 3: DOWNLOAD DATASET METADATA
+# SECTION 3: METADATOS HUGGINGFACE
 # ─────────────────────────────────────────────
 
 def descargar_metadatos() -> tuple[dict, dict, dict, dict]:
     """Download the four metadata JSON files from vectara/open_ragbench on HuggingFace.
 
     Uses the HuggingFace Hub cache so subsequent runs avoid re-downloading.
-    Files are stored in the default HF cache directory (~/.cache/huggingface/).
 
     Returns:
-        Tuple of (queries, qrels, answers, pdf_urls) dictionaries.
+        Tuple of (queries, qrels, answers, pdf_urls) dicts.
 
     Raises:
         SystemExit: If huggingface_hub is not installed.
@@ -161,11 +184,10 @@ def descargar_metadatos() -> tuple[dict, dict, dict, dict]:
     try:
         from huggingface_hub import hf_hub_download
     except ImportError:
-        print("ERROR: huggingface_hub not found. Install with:")
-        print("   pip install huggingface-hub")
+        print("ERROR: huggingface_hub no instalado. Ejecuta: pip install huggingface-hub")
         raise SystemExit(1)
 
-    print("Downloading dataset metadata from HuggingFace (cached after first run)...")
+    print("Descargando metadatos del dataset desde HuggingFace (caché tras la primera vez)...")
     loaded = {}
     for fname in HF_METADATA_FILES:
         print(f"   {fname}...", end=" ", flush=True)
@@ -187,7 +209,7 @@ def descargar_metadatos() -> tuple[dict, dict, dict, dict]:
 
 
 # ─────────────────────────────────────────────
-# SECTION 4: SELECT PAPERS
+# SECTION 4: SELECCIÓN DE PAPERS
 # ─────────────────────────────────────────────
 
 def seleccionar_papers(
@@ -197,45 +219,90 @@ def seleccionar_papers(
     n_papers: int,
     source_filter: str | None,
 ) -> list[str]:
-    """Select the top-N papers by number of associated questions.
+    """Select the top-N papers by number of eligible questions.
 
-    Filters by query source type and ensures every selected paper has a
-    downloadable PDF URL. Papers are ranked descending by question count
-    so the evaluation covers the richest portion of the benchmark first.
+    Papers without a downloadable PDF URL are excluded. Ranked descending
+    by question count so the richest part of the benchmark is covered first.
 
     Args:
-        queries: queries.json dict (UUID -> {query, type, source}).
-        qrels: qrels.json dict (UUID -> {doc_id, section_id}).
-        pdf_urls: pdf_urls.json dict (doc_id -> URL).
+        queries: queries.json dict.
+        qrels: qrels.json dict.
+        pdf_urls: pdf_urls.json dict.
         n_papers: Number of papers to select.
         source_filter: If set, only count queries with this source value.
             Pass None to include all source types.
 
     Returns:
-        Ordered list of doc_id strings (arXiv IDs with version suffix).
+        Ordered list of doc_id strings.
     """
     paper_counts: Counter = Counter()
     for qid, qrel in qrels.items():
-        if qid not in queries:
+        doc_id = qrel.get("doc_id")
+        if not doc_id or qid not in queries or doc_id not in pdf_urls:
             continue
-        if qrel["doc_id"] not in pdf_urls:
-            continue  # skip papers without a downloadable URL
         if source_filter and queries[qid].get("source") != source_filter:
             continue
-        paper_counts[qrel["doc_id"]] += 1
+        paper_counts[doc_id] += 1
 
     selected = [pid for pid, _ in paper_counts.most_common(n_papers)]
-
-    src_label = f"source='{source_filter}'" if source_filter else "all sources"
-    print(f"\nSelected {len(selected)} papers (top-{n_papers} by question count, {src_label}):")
+    src_label = f"source='{source_filter}'" if source_filter else "todos los tipos"
+    print(f"\nPapers seleccionados ({src_label}, top-{n_papers} por nº de preguntas):")
     for pid in selected:
-        print(f"   arxiv:{pid}  ({paper_counts[pid]} eligible questions)")
-
+        print(f"   {pid}  ({paper_counts[pid]} preguntas elegibles)")
     return selected
 
 
+def seleccionar_papers_objetivo(
+    args: argparse.Namespace,
+    queries: dict,
+    qrels: dict,
+    pdf_urls: dict,
+    source_filter: str | None,
+) -> list[str]:
+    """Resolve the target paper list from CLI arguments.
+
+    Supports single-document mode (--only-doc) and top-N mode.
+
+    Args:
+        args: Parsed CLI arguments.
+        queries: queries.json dict.
+        qrels: qrels.json dict.
+        pdf_urls: pdf_urls.json dict.
+        source_filter: Query source filter (None = all sources).
+
+    Returns:
+        Ordered list of paper IDs.
+
+    Raises:
+        SystemExit: If --only-doc is invalid or has no eligible questions.
+    """
+    if not args.only_doc:
+        return seleccionar_papers(queries, qrels, pdf_urls, args.n_papers, source_filter)
+
+    doc_id = args.only_doc.strip()
+    if doc_id not in pdf_urls:
+        print(f"ERROR: doc_id '{doc_id}' no encontrado en pdf_urls del dataset.")
+        raise SystemExit(1)
+
+    n_eligible = sum(
+        1 for qid, qrel in qrels.items()
+        if qrel.get("doc_id") == doc_id
+        and qid in queries
+        and (not source_filter or queries[qid].get("source") == source_filter)
+    )
+    if n_eligible == 0:
+        print(
+            f"ERROR: no hay preguntas para '{doc_id}' con source='{source_filter}'. "
+            "Prueba con --source all."
+        )
+        raise SystemExit(1)
+
+    print(f"\n--only-doc: paper único {doc_id} ({n_eligible} preguntas elegibles)")
+    return [doc_id]
+
+
 # ─────────────────────────────────────────────
-# SECTION 5: BUILD QUESTION SET
+# SECTION 5: CONSTRUCCIÓN DE PREGUNTAS
 # ─────────────────────────────────────────────
 
 def construir_preguntas(
@@ -248,8 +315,7 @@ def construir_preguntas(
 ) -> tuple[list[str], list[str], list[str]]:
     """Build the evaluation question set from the selected papers.
 
-    Collects up to max_per_paper questions per paper, filtered by source type,
-    preserving the paper order defined in selected_papers.
+    Collects up to max_per_paper questions per paper, filtered by source type.
 
     Args:
         queries: queries.json dict.
@@ -266,10 +332,8 @@ def construir_preguntas(
     per_paper: dict[str, list[str]] = {p: [] for p in selected_papers}
 
     for qid, qrel in qrels.items():
-        doc_id = qrel["doc_id"]
-        if doc_id not in selected_set:
-            continue
-        if qid not in queries:
+        doc_id = qrel.get("doc_id")
+        if doc_id not in selected_set or qid not in queries:
             continue
         if source_filter and queries[qid].get("source") != source_filter:
             continue
@@ -280,18 +344,51 @@ def construir_preguntas(
     paper_ids: list[str] = []
 
     for paper_id in selected_papers:
-        for qid in per_paper[paper_id][:max_per_paper]:
+        chosen = per_paper[paper_id][:max_per_paper]
+        if chosen:
+            by_src = Counter(queries[q].get("source", "?") for q in chosen)
+            print(f"   {paper_id}: {dict(by_src)}")
+        for qid in chosen:
             questions.append(queries[qid]["query"])
             ground_truths.append(answers.get(qid, ""))
             paper_ids.append(paper_id)
 
-    print(f"\nQuestion set: {len(questions)} questions from {len(selected_papers)} papers "
-          f"(max {max_per_paper}/paper)")
+    print(f"\nTotal preguntas: {len(questions)} de {len(selected_papers)} papers "
+          f"(máx {max_per_paper}/paper)")
     return questions, ground_truths, paper_ids
 
 
+def filtrar_por_pdfs_disponibles(
+    questions: list[str],
+    ground_truths: list[str],
+    paper_ids: list[str],
+    available_papers: list[str],
+) -> tuple[list[str], list[str], list[str]]:
+    """Filter question triples to only include papers with a local PDF.
+
+    Args:
+        questions: Questions aligned by index.
+        ground_truths: Ground truths aligned by index.
+        paper_ids: Paper ID for each question.
+        available_papers: Paper IDs that have a local PDF.
+
+    Returns:
+        Filtered (questions, ground_truths, paper_ids) tuple.
+    """
+    available_set = set(available_papers)
+    filtered = [
+        (q, gt, pid)
+        for q, gt, pid in zip(questions, ground_truths, paper_ids)
+        if pid in available_set
+    ]
+    if not filtered:
+        return [], [], []
+    out_q, out_gt, out_pid = map(list, zip(*filtered))
+    return out_q, out_gt, out_pid
+
+
 # ─────────────────────────────────────────────
-# SECTION 6: DOWNLOAD PDFs
+# SECTION 6: DESCARGA DE PDFs
 # ─────────────────────────────────────────────
 
 def descargar_pdfs(
@@ -302,29 +399,26 @@ def descargar_pdfs(
 ) -> list[str]:
     """Download PDFs from arXiv for the selected papers.
 
-    Saves each PDF to pdfs_dir/{paper_id}.pdf. By default, skips papers
-    whose PDF file already exists so re-runs avoid redundant downloads.
-    Validates the response to detect arXiv rate-limit HTML pages.
+    Validates each response to detect arXiv rate-limit HTML pages.
 
     Args:
         selected_papers: List of arXiv paper IDs to download.
         pdf_urls: pdf_urls.json dict (paper_id -> URL).
         pdfs_dir: Local directory where PDFs will be saved.
-        skip_existing: Skip already-downloaded files when True.
+        skip_existing: Skip already-downloaded files.
 
     Returns:
-        List of paper IDs for which a valid PDF is available locally
-        (downloaded now or pre-existing).
+        List of paper IDs with a valid local PDF.
     """
     os.makedirs(pdfs_dir, exist_ok=True)
     successful: list[str] = []
 
-    print(f"\nDownloading {len(selected_papers)} PDFs to {pdfs_dir}/")
+    print(f"\nDescargando {len(selected_papers)} PDFs en {pdfs_dir}/")
     for i, paper_id in enumerate(selected_papers):
         out_path = os.path.join(pdfs_dir, f"{paper_id}.pdf")
 
         if skip_existing and os.path.exists(out_path) and os.path.getsize(out_path) > 0:
-            print(f"   [{i+1}/{len(selected_papers)}] {paper_id}  (cached, skipping)")
+            print(f"   [{i+1}/{len(selected_papers)}] {paper_id}  (en caché, omitido)")
             successful.append(paper_id)
             continue
 
@@ -335,74 +429,99 @@ def descargar_pdfs(
             resp = requests.get(url, headers=ARXIV_HEADERS, timeout=ARXIV_TIMEOUT_SECS)
             resp.raise_for_status()
         except requests.RequestException as e:
-            print(f"      ERROR (download): {e}")
+            print(f"      ERROR al descargar: {e}")
             continue
 
-        # arXiv may serve an HTML rate-limit page instead of a PDF
         content_type = resp.headers.get("Content-Type", "")
         if "application/pdf" not in content_type and not resp.content.startswith(b"%PDF"):
-            print(f"      WARNING: unexpected Content-Type '{content_type}' — skipping")
+            print(f"      AVISO: Content-Type inesperado '{content_type}' — omitido")
             continue
 
         with open(out_path, "wb") as fh:
             fh.write(resp.content)
-        print(f"      {len(resp.content) / 1024:.0f} KB saved")
+        print(f"      {len(resp.content) / 1024:.0f} KB guardados")
         successful.append(paper_id)
 
-        # Be polite between requests (not after the last one)
         if i < len(selected_papers) - 1:
             time.sleep(ARXIV_DELAY_SECS)
 
     return successful
 
 
+def obtener_pdfs_disponibles(selected_papers: list[str], pdfs_dir: str) -> list[str]:
+    """Return paper IDs whose PDF already exists locally and is non-empty.
+
+    Args:
+        selected_papers: Candidate paper IDs.
+        pdfs_dir: Directory where PDFs should exist.
+
+    Returns:
+        Paper IDs with a valid local PDF file.
+    """
+    return [
+        pid for pid in selected_papers
+        if os.path.exists(os.path.join(pdfs_dir, f"{pid}.pdf"))
+        and os.path.getsize(os.path.join(pdfs_dir, f"{pid}.pdf")) > 0
+    ]
+
+
 # ─────────────────────────────────────────────
-# SECTION 7: CHROMADB INDEXING
+# SECTION 7: INDEXADO CHROMADB
 # ─────────────────────────────────────────────
 
-def conectar_e_indexar(pdfs_dir: str, force_reindex: bool) -> chromadb.Collection:
+def conectar_e_indexar(
+    pdfs_dir: str,
+    force_reindex: bool,
+    solo_archivos: list[str] | None = None,
+) -> chromadb.Collection:
     """Connect to the dedicated ragbench ChromaDB and index PDFs if needed.
 
-    Uses a separate database path (ragbench_vector_db) so the ragbench
-    evaluation never contaminates the main production collection.
+    Uses a separate DB path (ragbench_vector_db) so the ragbench evaluation
+    never contaminates the production collection.
 
     Args:
         pdfs_dir: Directory containing the downloaded arXiv PDFs.
-        force_reindex: If True, drop and rebuild the collection even when
-            it already has data.
+        force_reindex: If True, drop and rebuild the collection.
+        solo_archivos: If set, only index these PDF filenames.
 
     Returns:
         The ChromaDB Collection ready for querying.
     """
-    print(f"\nConnecting to ChromaDB (ragbench): {RAGBENCH_DB_PATH}")
+    print(f"\nConectando a ChromaDB (ragbench): {RAGBENCH_DB_PATH}")
     client = chromadb.PersistentClient(path=RAGBENCH_DB_PATH)
     collection = client.get_or_create_collection(name=RAGBENCH_COLLECTION)
 
     if force_reindex and collection.count() > 0:
-        print("   --force-reindex: clearing existing collection...")
+        print("   --force-reindex: eliminando colección existente...")
         client.delete_collection(RAGBENCH_COLLECTION)
         collection = client.get_or_create_collection(name=RAGBENCH_COLLECTION)
 
     if collection.count() == 0:
-        print("   Collection empty. Indexing PDFs (this may take several minutes)...")
-        total = indexar_documentos(pdfs_dir, collection)
-        print(f"   Indexed {total} fragments.")
+        print("   Colección vacía. Indexando PDFs (puede tardar varios minutos)...")
+        if solo_archivos:
+            print(f"   Solo indexando: {solo_archivos}")
+        total = indexar_documentos(pdfs_dir, collection, solo_archivos=solo_archivos)
+        print(f"   {total} fragmentos indexados.")
     else:
-        print(f"   Collection has {collection.count()} fragments. "
-              "Use --force-reindex to rebuild.")
+        print(f"   Colección con {collection.count()} fragmentos. "
+              "Usa --force-reindex para reconstruir.")
+        if solo_archivos:
+            print(
+                "   AVISO: --only-doc activo pero se reutiliza la colección existente. "
+                "Usa --force-reindex para aislar ese documento."
+            )
 
     return collection
 
 
 # ─────────────────────────────────────────────
-# SECTION 8: RAGAS EVALUATION LLM
+# SECTION 8: LLM DE EVALUACIÓN
 # ─────────────────────────────────────────────
 
 def configurar_llm_evaluacion():
     """Configure the Gemini LLM and embeddings used by RAGAS as evaluation judge.
 
-    Reads GEMINI_API_KEY (or GOOGLE_API_KEY) from the environment. The same
-    judge is used as in run_eval.py to ensure metric comparability.
+    Reads GEMINI_API_KEY or GOOGLE_API_KEY from the environment.
 
     Returns:
         Tuple of (eval_llm, eval_embeddings).
@@ -412,7 +531,7 @@ def configurar_llm_evaluacion():
     """
     gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not gemini_key:
-        print("ERROR: GEMINI_API_KEY or GOOGLE_API_KEY not set in environment.")
+        print("ERROR: GEMINI_API_KEY o GOOGLE_API_KEY no encontrada en el entorno.")
         raise SystemExit(1)
 
     try:
@@ -426,17 +545,17 @@ def configurar_llm_evaluacion():
             model="models/gemini-embedding-001",
             google_api_key=gemini_key,
         )
-        print("Evaluation LLM:        Gemini 2.0 Flash (langchain-google-genai)")
-        print("Evaluation embeddings: gemini-embedding-001 (langchain-google-genai)")
+        print("LLM evaluación:        Gemini 2.0 Flash (langchain-google-genai)")
+        print("Embeddings evaluación: gemini-embedding-001 (langchain-google-genai)")
         return eval_llm, eval_embeddings
     except ImportError as err:
         print(f"ERROR: {err}")
-        print("  Install with: pip install langchain-google-genai")
+        print("  Instala con: pip install langchain-google-genai")
         raise SystemExit(1)
 
 
 # ─────────────────────────────────────────────
-# SECTION 9: DISPLAY RESULTS
+# SECTION 9: RESULTADOS
 # ─────────────────────────────────────────────
 
 def imprimir_resultados(df_scores: pd.DataFrame, questions: list[str]):
@@ -448,12 +567,12 @@ def imprimir_resultados(df_scores: pd.DataFrame, questions: list[str]):
     """
     metric_cols = [c for c in METRIC_NAMES if c in df_scores.columns]
     if not metric_cols:
-        print("\nNo metric columns found in results.")
-        print(f"   Available columns: {list(df_scores.columns)}")
+        print("\nNo se encontraron columnas de métricas en los resultados.")
+        print(f"   Columnas disponibles: {list(df_scores.columns)}")
         return
 
     print("\n" + "=" * 70)
-    print("  RAGAS RESULTS — vectara/open_ragbench — GLOBAL AVERAGES")
+    print("  RAGAS RESULTS — vectara/open_ragbench — MEDIAS GLOBALES")
     print("=" * 70)
 
     medias = df_scores[metric_cols].mean(numeric_only=True).sort_values(ascending=False)
@@ -469,7 +588,7 @@ def imprimir_resultados(df_scores: pd.DataFrame, questions: list[str]):
         print(f"\n  {'OVERALL MEAN SCORE':25s}  {media_global:8.4f}")
 
     print("\n" + "=" * 70)
-    print("  PER-QUESTION DETAIL")
+    print("  DETALLE POR PREGUNTA")
     print("=" * 70)
 
     for i, row in df_scores.iterrows():
@@ -491,7 +610,7 @@ def imprimir_resultados(df_scores: pd.DataFrame, questions: list[str]):
 
 
 # ─────────────────────────────────────────────
-# SECTION 10: SAVE DEBUG JSON
+# SECTION 10: DEBUG JSON
 # ─────────────────────────────────────────────
 
 def _extraer_justificaciones_traces(traces: list, metric_cols: list) -> list[dict]:
@@ -502,8 +621,7 @@ def _extraer_justificaciones_traces(traces: list, metric_cols: list) -> list[dic
         metric_cols: Metric column names to look for in each trace.
 
     Returns:
-        List of dicts (one per question) mapping metric names to
-        their extracted justification payloads.
+        List of dicts (one per question) mapping metric names to justifications.
     """
     justificaciones = []
     for trace in traces:
@@ -541,9 +659,6 @@ def guardar_debug(
     paper_ids: list[str],
 ) -> str:
     """Save a debug JSON with model answers, contexts, scores, and justifications.
-
-    Adds a paper_id field per entry (not present in run_eval.py) to allow
-    grouping results by arXiv paper for analysis.
 
     Args:
         result: The RAGAS EvaluationResult object.
@@ -615,121 +730,133 @@ def guardar_debug(
 def main():
     """Entry point: download ragbench subset, index, run RAG, evaluate with RAGAS."""
     parser = argparse.ArgumentParser(
-        description="Evaluate MonkeyGrab RAG with vectara/open_ragbench (arXiv subset)"
+        description="Evalúa MonkeyGrab RAG con vectara/open_ragbench (subconjunto arXiv)"
+    )
+    parser.add_argument(
+        "--source",
+        default=DEFAULT_SOURCE,
+        choices=["text-image", "text-table", "text", "all"],
+        help=f"Tipo de fuente de preguntas (default: {DEFAULT_SOURCE}). "
+             "Usa 'all' para incluir todos los tipos.",
+    )
+    parser.add_argument(
+        "--only-doc",
+        metavar="DOC_ID",
+        default=None,
+        help="Evalúa un solo paper por doc_id (ej: 2403.20331v2). "
+             "Sobreescribe --n-papers; indexa solo DOC_ID.pdf al construir la colección.",
     )
     parser.add_argument(
         "--n-papers", type=int, default=N_PAPERS,
-        help=f"Number of arXiv papers to select and download (default: {N_PAPERS})"
+        help=f"Número de papers arXiv a seleccionar (default: {N_PAPERS})"
     )
     parser.add_argument(
         "--max-q", type=int, default=MAX_QUESTIONS_PER_PAPER,
-        help=f"Max questions per paper (default: {MAX_QUESTIONS_PER_PAPER})"
-    )
-    parser.add_argument(
-        "--all-sources", action="store_true",
-        help="Include multimodal queries (text-image, text-table). Default: text-only"
+        help=f"Máximo de preguntas por paper (default: {MAX_QUESTIONS_PER_PAPER})"
     )
     parser.add_argument(
         "--skip-download", action="store_true",
-        help="Skip PDF download phase and use existing files in rag/ragbench_pdfs/"
+        help="Omite la descarga de PDFs y usa los existentes en rag/ragbench_pdfs/"
     )
     parser.add_argument(
         "--force-reindex", action="store_true",
-        help="Drop and rebuild the ChromaDB collection even if it already has data"
+        help="Borra y reconstruye la colección ChromaDB aunque ya tenga datos"
     )
     parser.add_argument(
         "--verbose", action="store_true",
-        help="Print each question as it is processed"
+        help="Imprime cada pregunta mientras se procesa"
     )
     parser.add_argument(
         "--no-debug", action="store_true",
-        help="Skip saving ragas_ragbench_debug.json"
+        help="No guarda ragas_ragbench_debug.json"
     )
     args = parser.parse_args()
 
-    source_filter = None if args.all_sources else QUERY_SOURCE_FILTER
+    if args.max_q < 1:
+        print("ERROR: --max-q debe ser >= 1.")
+        raise SystemExit(1)
+    if not args.only_doc and args.n_papers < 1:
+        print("ERROR: --n-papers debe ser >= 1.")
+        raise SystemExit(1)
 
-    # ─────────────────────────────────────────────
-    # 1. IMPORT RAGAS METRICS
-    # ─────────────────────────────────────────────
+    source_filter = None if args.source == "all" else args.source
+    print(f"\nFiltro de fuente: {args.source}")
 
+    # --- Importar RAGAS ---
     try:
         from ragas import evaluate
-        from ragas.metrics import (
-            faithfulness,
-            answer_relevancy,
-            context_precision,
-            context_recall,
-            answer_correctness,
-        )
+        try:
+            from ragas.metrics.collections import (
+                faithfulness,
+                answer_relevancy,
+                context_precision,
+                context_recall,
+                answer_correctness,
+            )
+        except ImportError:
+            from ragas.metrics import (
+                faithfulness,
+                answer_relevancy,
+                context_precision,
+                context_recall,
+                answer_correctness,
+            )
         from ragas.dataset_schema import SingleTurnSample, EvaluationDataset
         from ragas.run_config import RunConfig
     except ImportError as e:
-        print("Install RAGAS: pip install -r evaluation/requirements.txt")
+        print(f"ERROR importando RAGAS: {e}")
+        print("  Instala con: pip install -r evaluation/requirements.txt")
         raise SystemExit(1) from e
-
-    # ─────────────────────────────────────────────
-    # 2. CONFIGURE EVALUATION LLM
-    # ─────────────────────────────────────────────
 
     eval_llm, eval_embeddings = configurar_llm_evaluacion()
 
-    # ─────────────────────────────────────────────
-    # 3. DOWNLOAD DATASET METADATA
-    # ─────────────────────────────────────────────
-
+    # --- Metadatos del dataset ---
     queries, qrels, answers_gt, pdf_urls = descargar_metadatos()
 
-    # ─────────────────────────────────────────────
-    # 4. SELECT PAPERS
-    # ─────────────────────────────────────────────
-
-    selected_papers = seleccionar_papers(
-        queries, qrels, pdf_urls, args.n_papers, source_filter
+    # --- Selección de papers ---
+    selected_papers = seleccionar_papers_objetivo(
+        args=args,
+        queries=queries,
+        qrels=qrels,
+        pdf_urls=pdf_urls,
+        source_filter=source_filter,
     )
 
-    # ─────────────────────────────────────────────
-    # 5. BUILD QUESTION SET
-    # ─────────────────────────────────────────────
-
+    # --- Construcción del conjunto de preguntas ---
+    print("\nSeleccionando preguntas:")
     questions, ground_truths, paper_ids_per_q = construir_preguntas(
         queries, qrels, answers_gt, selected_papers, source_filter, args.max_q
     )
+    if not questions:
+        print("ERROR: No se seleccionaron preguntas con los filtros actuales.")
+        raise SystemExit(1)
 
-    # ─────────────────────────────────────────────
-    # 6. DOWNLOAD PDFs
-    # ─────────────────────────────────────────────
-
+    # --- Descarga de PDFs ---
     if not args.skip_download:
         successful_papers = descargar_pdfs(selected_papers, pdf_urls, RAGBENCH_PDFS_DIR)
-
-        if len(successful_papers) < len(selected_papers):
-            print(f"\nWARNING: {len(successful_papers)}/{len(selected_papers)} PDFs available.")
-            downloaded_set = set(successful_papers)
-            filtered = [
-                (q, gt, pid)
-                for q, gt, pid in zip(questions, ground_truths, paper_ids_per_q)
-                if pid in downloaded_set
-            ]
-            if filtered:
-                questions, ground_truths, paper_ids_per_q = map(list, zip(*filtered))
-            else:
-                print("ERROR: No questions remain after filtering. Aborting.")
-                raise SystemExit(1)
     else:
-        print(f"\n--skip-download: using existing PDFs in {RAGBENCH_PDFS_DIR}/")
+        print(f"\n--skip-download: usando PDFs existentes en {RAGBENCH_PDFS_DIR}/")
+        successful_papers = obtener_pdfs_disponibles(selected_papers, RAGBENCH_PDFS_DIR)
 
-    # ─────────────────────────────────────────────
-    # 7. INDEX INTO CHROMADB
-    # ─────────────────────────────────────────────
+    if len(successful_papers) < len(selected_papers):
+        missing = set(selected_papers) - set(successful_papers)
+        print(f"\nAVISO: {len(successful_papers)}/{len(selected_papers)} PDFs disponibles.")
+        print(f"   Faltantes: {missing}")
 
-    collection = conectar_e_indexar(RAGBENCH_PDFS_DIR, args.force_reindex)
+    questions, ground_truths, paper_ids_per_q = filtrar_por_pdfs_disponibles(
+        questions, ground_truths, paper_ids_per_q, successful_papers
+    )
+    if not questions:
+        print("ERROR: No quedan preguntas tras filtrar por PDFs disponibles.")
+        print("   Ejecuta sin --skip-download para descargar los PDFs necesarios.")
+        raise SystemExit(1)
 
-    # ─────────────────────────────────────────────
-    # 8. RUN RAG PIPELINE PER QUESTION
-    # ─────────────────────────────────────────────
+    # --- Indexado ChromaDB ---
+    solo_pdf = [f"{args.only_doc.strip()}.pdf"] if args.only_doc else None
+    collection = conectar_e_indexar(RAGBENCH_PDFS_DIR, args.force_reindex, solo_archivos=solo_pdf)
 
-    print(f"\nRunning RAG pipeline for {len(questions)} questions...")
+    # --- Pipeline RAG ---
+    print(f"\nEjecutando pipeline RAG para {len(questions)} preguntas...")
     gen_answers: list[str] = []
     contexts_list: list[list[str]] = []
     t_start = time.time()
@@ -742,18 +869,15 @@ def main():
             gen_answers.append(answer)
             contexts_list.append(contexts)
     except ConnectionError as e:
-        print(f"\nERROR: Could not connect to Ollama: {e}")
-        print("   Make sure Ollama is running: ollama serve")
+        print(f"\nERROR: No se pudo conectar a Ollama: {e}")
+        print("   Asegúrate de que Ollama está corriendo: ollama serve")
         raise SystemExit(1)
 
     t_rag = time.time() - t_start
-    print(f"   Completed in {t_rag:.1f}s ({t_rag / max(len(questions), 1):.1f}s/question)")
+    print(f"   Completado en {t_rag:.1f}s ({t_rag / max(len(questions), 1):.1f}s/pregunta)")
 
-    # ─────────────────────────────────────────────
-    # 9. BUILD RAGAS EVALUATION DATASET
-    # ─────────────────────────────────────────────
-
-    print("\nBuilding EvaluationDataset for RAGAS...")
+    # --- Dataset RAGAS ---
+    print("\nConstruyendo EvaluationDataset para RAGAS...")
     samples = [
         SingleTurnSample(
             user_input=questions[i],
@@ -765,19 +889,14 @@ def main():
     ]
     eval_dataset = EvaluationDataset(samples=samples)
 
-    # ─────────────────────────────────────────────
-    # 10. RUN RAGAS EVALUATION
-    # ─────────────────────────────────────────────
+    # Incluir answer_correctness solo si hay ground truth disponible
+    tiene_ground_truth = any(gt.strip() for gt in ground_truths)
+    metrics = [faithfulness, answer_relevancy, context_precision, context_recall]
+    if tiene_ground_truth:
+        metrics.insert(0, answer_correctness)
 
-    metrics = [
-        answer_correctness,
-        faithfulness,
-        answer_relevancy,
-        context_precision,
-        context_recall,
-    ]
-
-    print("\nRunning RAGAS evaluation (this may take several minutes)...")
+    # --- Evaluación RAGAS ---
+    print("\nEjecutando evaluación RAGAS (puede tardar varios minutos)...")
     t_eval_start = time.time()
 
     result = evaluate(
@@ -789,25 +908,14 @@ def main():
     )
 
     t_eval = time.time() - t_eval_start
-    print(f"   Evaluation completed in {t_eval:.1f}s")
+    print(f"   Evaluación completada en {t_eval:.1f}s")
 
-    # ─────────────────────────────────────────────
-    # 11. DISPLAY RESULTS
-    # ─────────────────────────────────────────────
-
+    # --- Resultados ---
     df_scores = result.to_pandas()
     imprimir_resultados(df_scores, questions)
 
-    # ─────────────────────────────────────────────
-    # 12. SAVE CSV
-    # ─────────────────────────────────────────────
-
     df_scores.to_csv(OUTPUT_CSV, index=False, encoding="utf-8")
-    print(f"\nResults CSV:   {OUTPUT_CSV}")
-
-    # ─────────────────────────────────────────────
-    # 13. SAVE DEBUG JSON
-    # ─────────────────────────────────────────────
+    print(f"\nCSV resultados: {OUTPUT_CSV}")
 
     if not args.no_debug:
         debug_path = guardar_debug(
@@ -818,7 +926,7 @@ def main():
             contexts_list=contexts_list,
             paper_ids=paper_ids_per_q,
         )
-        print(f"Debug JSON:    {debug_path}")
+        print(f"Debug JSON:     {debug_path}")
 
 
 if __name__ == "__main__":
