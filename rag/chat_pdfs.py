@@ -2478,8 +2478,8 @@ def indexar_documentos(
                             total_chunks += 1
 
             # Image chunks — independent of the text extraction path used above.
-            # Each image is described by MODELO_OCR and embedded as a text chunk
-            # so retrieval is transparent to the rest of the pipeline.
+            # Each image is described by MODELO_OCR, optionally enriched with
+            # contextual retrieval (same flag as text chunks), then embedded.
             if imagenes_pdf:
                 if not silent:
                     ui.debug("  describing and indexing images...")
@@ -2488,6 +2488,11 @@ def indexar_documentos(
                         descripcion = describir_imagen_con_llm(img_info["image_bytes"])
                         if not descripcion:
                             continue
+
+                        # Enrich the raw OCR description with situational context
+                        # so its embedding lands closer to topic-aware queries.
+                        contexto_img = generar_contexto_situacional(descripcion, texto_base_doc)
+                        descripcion_enriquecida = (contexto_img + descripcion).strip()
 
                         img_chunk_idx = _IMAGEN_CHUNK_OFFSET + img_idx
                         id_img = f"{archivo}_pag{num_pag}_chunk{img_chunk_idx}"
@@ -2502,7 +2507,7 @@ def indexar_documentos(
                             "image_height": img_info["height"],
                         }
 
-                        if _indexar_chunk(id_img, descripcion, descripcion, metadata_img, collection):
+                        if _indexar_chunk(id_img, descripcion_enriquecida, descripcion_enriquecida, metadata_img, collection):
                             total_chunks += 1
 
         except Exception as e:

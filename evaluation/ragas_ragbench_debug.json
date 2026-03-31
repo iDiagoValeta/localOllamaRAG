@@ -12,18 +12,18 @@
       "index": 1,
       "paper_id": "2408.07618v3",
       "question": "How does immune system activation affect tissue damage during viral infections?",
-      "model_answer": "The fragments you provided discuss a computational model for simulating viral infections within the respiratory tract, focusing on how spatial structure and immune response dynamics affect infection outcomes. Here's a summary of how immune system activation affects tissue damage during viral infections based on these fragments:\n\n1.  **Immune Response Model**: The authors introduce a simple model for the immune response in the respiratory tract (Figure 8(a)). Once an infection meets a specified threshold (_F_ [thresh]), the immune response is triggered, taking _t_ act hours to activate and immediately clearing the infection upon activation.\n\n2.  **Cumulative Damage Measurement**: The cumulative infected proportion of the tissue at this point (_F_ _[∞]_) is reported as a measure of damage to the tissue (Figure 8(a)).\n\n3.  **Influence of Immune Response Parameters**: The authors examine how different parameters of the immune response, specifically its sensitivity and response time (_t_ act), affect infection outcomes when infections are seeded on different edges of the modeled branching tree (Figures 9(c)–(d)). They find that a more sensitive and quicker immune response is effective in targeting infections seeded on the open edge, while a slower and less sensitive response targets those seeded on the branched edge.\n\n4.  **Tissue Damage Outcomes**: The authors plot heatmaps of _F_ _[∞]_ values for different combinations of _F_ [thresh] and _t_ act (Figure 9(c)–(d)). They observe that when the immune response is both sensitive and quick to activate, very little damage is sustained. Conversely, if the immune response requires a higher threshold of detection and more time to become active, the tissue is mostly destroyed.\n\n5.  **Comparison of Scenarios**: By plotting the _F_ _[∞]_ = 0 _._ 5 contours from both cases on the same axes (Figure 9(e)), the authors illustrate how different immune response parameters lead to distinct outcomes in terms of cumulative damage and survival of the host.\n\nIn summary, the fragments suggest that the effectiveness of the immune system's activation in clearing viral infections depends significantly on its sensitivity and response time. A more sensitive and quicker immune response can effectively target infections seeded on certain edges of the branching tree, leading to less tissue damage.",
+      "model_answer": "The fragments you provided discuss a computational model designed to simulate viral infections within the complex geometry of the respiratory tract. The research focuses on how spatial structure, specifically the branching airways of the lung, impacts viral dynamics.\n\nTo answer your question about how immune system activation affects tissue damage during viral infections, I'll summarize the key points from Fragment 3 and Fragment 4:\n\n1. **Immune response model**: A simplified model of the immune response is introduced in Fragment 3, which assumes a threshold-based activation mechanism. Once the infection meets this threshold, the immune response takes some time to activate (t_act hours) before immediately clearing the infection.\n2. **Cumulative infected proportion**: The cumulative infected proportion (F_[∞]) is used as a measure of tissue damage after the immune response has cleared the infection.\n3. **Impact of immune parameters on tissue damage**: Fragment 4 shows that varying the threshold for immune activation (F_thresh) and the time to activate (t_act) affects the final cumulative damage to the tissue.\n\nThe key findings are:\n\n* When the immune response is both sensitive and quick to activate, very little damage is sustained.\n* When the immune response requires a higher threshold of detection and more time to become active, the tissue is mostly destroyed.\n* The shape of the contours between these extremes differs depending on whether the infection is seeded on the open edge or the branched edge.\n\nIn summary, the model suggests that an effective immune response can mitigate tissue damage during viral infections by quickly activating and clearing the infection. However, if the immune system takes too long to respond or requires a high threshold of detection, significant tissue damage may occur.",
       "ground_truth": "Immune system activation affects tissue damage by determining how quickly an infection is cleared after reaching a threshold of infected cells. Delays in activation can lead to increased cumulative tissue damage, especially if detection thresholds are high.",
       "retrieved_contexts_preview": [
         "This document details a computational model designed to simulate viral infections within the complex geometry of the respiratory tract, specifically focusing on the influence of diffusion and branching airways. The research utilizes a spatially explicit model incorporating discrete epithelial cells ...",
         "This document details a computational model designed to simulate viral infections within the complex geometry of the respiratory tract. The research focuses on how spatial structure, specifically the branching airways of the lung, impacts viral dynamics, utilizing a discrete cell model coupled with ...",
-        "This document details a computational model designed to simulate viral infections within the complex geometry of the respiratory tract. The research focuses on how spatial structure, specifically the branching airways of the lung, significantly impacts viral dynamics, challenging the typical assumpt..."
+        "This document investigates the complexities of viral infection dynamics within the respiratory tract, specifically addressing the limitations of traditional models that assume a homogenous tissue. The excerpt details a subsequent analysis utilizing a moving band approach to quantify lineage and clus..."
       ],
       "contexts_count": 4,
       "scores": {
-        "Factual Correctness": 0.5418556337923721,
+        "Factual Correctness": 0.46969980737171807,
         "Faithfulness": 1.0,
-        "Response Relevancy": 0.8337216385081074,
+        "Response Relevancy": 0.8429293891996683,
         "Context Precision": 0.9166666666361111,
         "Context Recall": 1.0
       },
@@ -35,39 +35,39 @@
           },
           {
             "prompt": "correctness_classifier",
-            "output": "TP=[StatementsWithReason(statement='The infection must meet a specified threshold for the immune response to be triggered.', reason=\"This statement aligns with the ground truth's mention of an infection needing to reach a threshold of infected cells to trigger the immune response.\"), StatementsWithReason(statement='The cumulative infected proportion of the tissue is reported as a measure of damage to the tissue.', reason=\"This statement is related to the ground truth's discussion of cumulative t"
+            "output": "TP=[StatementsWithReason(statement='Delays in immune system activation can lead to increased cumulative tissue damage.', reason=\"This statement aligns with the ground truth that delays in immune system activation lead to increased cumulative tissue damage, as supported by the model's findings described in the answer.\"), StatementsWithReason(statement='Increased cumulative tissue damage is more likely if detection thresholds are high.', reason='This statement is supported by the ground truth, as "
           },
           {
             "prompt": "answer_similarity",
-            "output": "0.8817082494552027"
+            "output": "0.8787992294868723"
           }
         ],
         "faithfulness": [
           {
             "prompt": "statement_generator_prompt",
-            "output": "statements=['The provided fragments discuss a computational model for simulating viral infections within the respiratory tract.', 'The model focuses on how spatial structure and immune response dynamics affect infection outcomes.', 'The authors introduce a simple model for the immune response in the respiratory tract.', 'The infection must meet a specified threshold for the immune response to be triggered.', 'The immune response takes a certain amount of time to activate.', 'The immune response "
+            "output": "statements=['The provided fragments discuss a computational model designed to simulate viral infections within the complex geometry of the respiratory tract.', 'The research focuses on how spatial structure impacts viral dynamics.', 'The spatial structure is specifically the branching airways of the lung.', 'A simplified model of the immune response is introduced in Fragment 3.', 'The simplified model assumes a threshold-based activation mechanism.', 'Once the infection meets the threshold, the "
           },
           {
             "prompt": "n_l_i_statement_prompt",
-            "output": "statements=[StatementFaithfulnessAnswer(statement='The provided fragments discuss a computational model for simulating viral infections within the respiratory tract.', reason='The context explicitly states that the document details a computational model designed to simulate viral infections within the complex geometry of the respiratory tract.', verdict=1), StatementFaithfulnessAnswer(statement='The model focuses on how spatial structure and immune response dynamics affect infection outcomes.', "
+            "output": "statements=[StatementFaithfulnessAnswer(statement='The provided fragments discuss a computational model designed to simulate viral infections within the complex geometry of the respiratory tract.', reason='The context explicitly states that the document details a computational model designed to simulate viral infections within the complex geometry of the respiratory tract.', verdict=1), StatementFaithfulnessAnswer(statement='The research focuses on how spatial structure impacts viral dynamics.',"
           }
         ],
         "answer_relevancy": [
           {
             "prompt": "response_relevance_prompt",
-            "output": "question=\"According to the provided fragments, how does the immune system's activation affect tissue damage during viral infections in the respiratory tract?\" noncommittal=0"
+            "output": "question='How does immune system activation affect tissue damage during viral infections, according to the computational model?' noncommittal=0"
           }
         ],
         "context_precision": [
           {
             "prompt": "context_precision_prompt",
-            "output": "reason='The context discusses a computational model simulating viral infections and the impact of immune response on tissue damage. It mentions how the model computes the final cumulative infected proportion as a measure of cumulative damage to the tissue and explores different infection scenarios. This information is relevant to understanding how immune system activation affects tissue damage during viral infections, making the context useful for answering the question.' verdict=1"
+            "output": "reason=\"The context discusses a computational model investigating viral infections in the respiratory tract and how the immune response affects the cumulative infected proportion, which relates to tissue damage. It mentions that when the immune response is active, the infection is immediately cleared, and the final cumulative infected proportion is computed as a measure of tissue damage. This supports the answer's claim that immune system activation affects tissue damage by determining how quick"
           }
         ],
         "context_recall": [
           {
             "prompt": "context_recall_classification_prompt",
-            "output": "classifications=[ContextRecallClassification(statement='Immune system activation affects tissue damage by determining how quickly an infection is cleared after reaching a threshold of infected cells.', reason='The context discusses how the timing and sensitivity of the immune response (activation) affect the final cumulative infected proportion, which is a measure of tissue damage. The context mentions a threshold for cumulative infected cell proportion that triggers the immune response.', attri"
+            "output": "classifications=[ContextRecallClassification(statement='Immune system activation affects tissue damage by determining how quickly an infection is cleared after reaching a threshold of infected cells.', reason='The context describes a model where immune activation clears infection after a threshold is reached, and the timing of this clearance impacts tissue damage.', attributed=1), ContextRecallClassification(statement='Delays in activation can lead to increased cumulative tissue damage, especial"
           }
         ]
       }
@@ -76,18 +76,18 @@
       "index": 2,
       "paper_id": "2408.07618v3",
       "question": "Is there a difference in infection dynamics between zero diffusion and infinite diffusion conditions?",
-      "model_answer": "Yes, there is a significant difference in infection dynamics between zero diffusion and infinite diffusion conditions.\n\nIn the context of this computational model, simulations with zero diffusion (where infection can only progress through cell-to-cell contact) exhibit very different time scales of infection compared to those with infinite diffusion (where viral concentration is uniform). The presence or absence of viral diffusion has a substantial impact on the rate at which infections spread within the tissue.\n\nThe key findings are:\n\n1. **Infinite diffusion leads to faster infection times**: In simulations where viral diffusion is infinite, the time taken to infect 95% of the tissue is significantly shorter compared to scenarios with finite or zero diffusion.\n2. **Zero diffusion results in slower infection times**: When viral diffusion is absent (zero diffusion), infections are much slower due to limited access to neighboring susceptible cells at the infection front.\n3. **Tissue geometry plays a crucial role**: The aspect ratio of the tissue, which represents the ratio of circumference to length, has a significant impact on the sensitivity of infection dynamics to viral diffusion. Narrow tubes with high aspect ratios exhibit more pronounced effects of zero diffusion compared to wide tubes.\n\nThese findings highlight the importance of considering spatial structure and viral diffusion in modeling viral infections within complex tissues like the respiratory tract. The model demonstrates that even with fairly large diffusion coefficients, significantly different dynamics can arise due to the interplay between viral diffusion and tissue geometry.",
+      "model_answer": "Yes, there is a significant difference in infection dynamics between zero diffusion and infinite diffusion conditions.\n\nThe simulations show that:\n\n1. **Zero diffusion**: Infections progress much slower when viral diffusion is absent (zero diffusion). This is because the virus can only spread through direct cell-to-cell contact, which limits its ability to infect neighboring cells.\n2. **Infinite diffusion**: When viral diffusion is unlimited (infinite diffusion), infections occur faster and more uniformly throughout the tissue.\n\nThe difference in infection times between these two scenarios is highly dependent on the tissue aspect ratio (i.e., the ratio of circumference to length). On narrow tubes, the zero diffusion case takes significantly longer than the infinite diffusion case. However, as the tube width increases, the difference in infection times decreases.\n\nThis suggests that viral diffusion plays a crucial role in determining the speed and spread of infections within branching airway structures like the lungs. The model highlights the importance of considering tissue geometry and spatial structure when studying viral dynamics.\n\nIn particular:\n\n* On narrow tubes (high aspect ratio), cell-to-cell transmission is limited, making viral diffusion essential for infection progression.\n* On wide tubes (low aspect ratio), viral diffusion has a smaller impact on infection times, but still influences the spread of infections.\n\nOverall, these results demonstrate that ignoring or oversimplifying viral diffusion can lead to inaccurate predictions of infection dynamics in complex tissues like the lungs.",
       "ground_truth": "Yes, infections progress slower with zero diffusion compared to infinite diffusion.",
       "retrieved_contexts_preview": [
-        "This document details a computational model designed to investigate viral dynamics within the complex geometry of the respiratory tract. The research addresses the common assumption in spatial modeling that tissues are simple, wide, and homogeneous, recognizing that the lung’s branching airways crea...",
-        "This document details a computational model designed to investigate viral infection dynamics within the complex geometry of the respiratory tract. The research focuses on how spatial diffusion influences infection spread, specifically examining the impact of varying diffusion coefficients on infecti...",
+        "This document details a computational model designed to investigate viral dynamics within the complex geometry of the respiratory tract. The research addresses the common assumption in spatial models that the host tissue is a simple, wide, and homogeneous patch, recognizing that the lung’s branching...",
+        "This document details a computational model designed to investigate viral infection dynamics within the complex geometry of the respiratory tract. The research focuses on how spatial diffusion influences viral spread, specifically examining the impact of varying diffusion coefficients on infection p...",
         "This document details a computational model designed to investigate viral dynamics within the complex geometry of the respiratory tract. The research focuses on how spatial diffusion, specifically the diffusion of extracellular virions, significantly impacts infection progression within branching tu..."
       ],
       "contexts_count": 4,
       "scores": {
-        "Factual Correctness": 0.4743695988852701,
+        "Factual Correctness": 0.43835896022905824,
         "Faithfulness": 1.0,
-        "Response Relevancy": 0.9215377013316656,
+        "Response Relevancy": 0.9072674174277202,
         "Context Precision": 0.999999999975,
         "Context Recall": 1.0
       },
@@ -99,39 +99,39 @@
           },
           {
             "prompt": "correctness_classifier",
-            "output": "TP=[StatementsWithReason(statement='Yes, there is a significant difference in infection dynamics between zero diffusion and infinite diffusion conditions.', reason='This statement is directly supported by the first statement in the ground truth.'), StatementsWithReason(statement='Infinite diffusion leads to faster infection times.', reason='This statement is directly supported by the third statement in the ground truth.'), StatementsWithReason(statement='Zero diffusion results in slower infectio"
+            "output": "TP=[StatementsWithReason(statement='There is a significant difference in infection dynamics between zero diffusion and infinite diffusion conditions.', reason='This statement is directly supported by the first statement in the ground truth.'), StatementsWithReason(statement='Simulations show that infections progress much slower when viral diffusion is absent (zero diffusion).', reason='This statement is supported by the second statement in the ground truth, which states that infections progress "
           },
           {
             "prompt": "answer_similarity",
-            "output": "0.8974783955410804"
+            "output": "0.8962929837733759"
           }
         ],
         "faithfulness": [
           {
             "prompt": "statement_generator_prompt",
-            "output": "statements=['Yes, there is a significant difference in infection dynamics between zero diffusion and infinite diffusion conditions.', 'In the context of this computational model, simulations with zero diffusion exhibit very different time scales of infection compared to simulations with infinite diffusion.', 'In zero diffusion, infection can only progress through cell-to-cell contact.', 'In infinite diffusion, viral concentration is uniform.', 'The presence or absence of viral diffusion has a su"
+            "output": "statements=['There is a significant difference in infection dynamics between zero diffusion and infinite diffusion conditions.', 'Simulations show that infections progress much slower when viral diffusion is absent (zero diffusion).', 'The virus can only spread through direct cell-to-cell contact when viral diffusion is absent.', \"Direct cell-to-cell contact limits the virus's ability to infect neighboring cells when viral diffusion is absent.\", 'When viral diffusion is unlimited (infinite diffu"
           },
           {
             "prompt": "n_l_i_statement_prompt",
-            "output": "statements=[StatementFaithfulnessAnswer(statement='Yes, there is a significant difference in infection dynamics between zero diffusion and infinite diffusion conditions.', reason='The text explicitly states that simulations with zero diffusion and infinite diffusion exhibit very different time scales of infection.', verdict=1), StatementFaithfulnessAnswer(statement='In the context of this computational model, simulations with zero diffusion exhibit very different time scales of infection compare"
+            "output": "statements=[StatementFaithfulnessAnswer(statement='There is a significant difference in infection dynamics between zero diffusion and infinite diffusion conditions.', reason='The text explicitly states that simulations with zero diffusion and infinite diffusion exhibit very different time scales of infection.', verdict=1), StatementFaithfulnessAnswer(statement='Simulations show that infections progress much slower when viral diffusion is absent (zero diffusion).', reason='The text mentions that "
           }
         ],
         "answer_relevancy": [
           {
             "prompt": "response_relevance_prompt",
-            "output": "question='Is there a significant difference in infection dynamics between zero diffusion and infinite diffusion conditions?' noncommittal=0"
+            "output": "question='What are the differences in infection dynamics between zero diffusion and infinite diffusion conditions, according to the simulations?' noncommittal=0"
           }
         ],
         "context_precision": [
           {
             "prompt": "context_precision_prompt",
-            "output": "reason='The context discusses a computational model investigating viral infection dynamics and mentions simulations with varying diffusion coefficients, including zero and a high value (representing near-infinite diffusion). It also refers to the time taken to infect 95% of the tissue under different diffusion conditions. This information directly supports the answer that there is a difference in infection dynamics between zero and infinite diffusion conditions, with infections progressing slowe"
+            "output": "reason='The context discusses a computational model investigating viral infection dynamics and the influence of viral diffusion coefficient D on the spread of infection. Specifically, Figure 2(e) mentions diffusion sensitivity as the ratio between the time taken to infect 95% of the tissue with zero diffusion compared to infinite diffusion. Figure 2(d) shows time series of the cumulative infected cell proportion for varying D. This information directly supports the answer that there is a differe"
           }
         ],
         "context_recall": [
           {
             "prompt": "context_recall_classification_prompt",
-            "output": "classifications=[ContextRecallClassification(statement='Yes, infections progress slower with zero diffusion compared to infinite diffusion.', reason='The context explicitly states that simulations with zero diffusion exhibit very different time scales of infection compared to those where diffusion is infinite, and that infinite viral diffusion results in a faster 95% infection time than in simulations with finite or zero viral diffusion.', attributed=1)]"
+            "output": "classifications=[ContextRecallClassification(statement='Yes, infections progress slower with zero diffusion compared to infinite diffusion.', reason='The context discusses the difference in infection times between zero and infinite diffusion, stating that infinite diffusion results in faster infection times than zero diffusion. Therefore, infections progress slower with zero diffusion compared to infinite diffusion.', attributed=1)]"
           }
         ]
       }
@@ -140,18 +140,18 @@
       "index": 3,
       "paper_id": "2408.07618v3",
       "question": "How do narrow and wide tube configurations differ in terms of viral lineage competition?",
-      "model_answer": "Based on the provided fragments, here's a summary of how narrow and wide tube configurations differ in terms of viral lineage competition:\n\n**Key findings:**\n\n1. **Lineage mixing:** In narrow tubes (circumference = 8 cells), lineages are well-mixed near the seeding edge but rapidly disappear as you move down the tube, leaving only one or a few dominant lineages.\n2. **Dominance by single lineage:** In narrow tubes, there is a high likelihood of a single lineage dominating the tissue (>90% infected by that lineage).\n3. **Lineage extinction:** Narrow tubes promote rapid crowding and competition among lineages, leading to their extinction before they can be separated.\n4. **Wide tube dynamics:** In wide tubes (circumference = 64 cells), all four viral lineages coexist throughout the tube, albeit in unequal proportions.\n5. **Toroid comparison:** Toroids exhibit a more even split of tissue between the four lineages (~20-30% infected by each lineage).\n\n**Key differences:**\n\n1. **Lineage mixing and competition:** Narrow tubes lead to rapid crowding and extinction of lineages, while wide tubes allow for coexistence.\n2. **Dominance patterns:** In narrow tubes, a single lineage often dominates the tissue, whereas in wide tubes, multiple lineages coexist.\n\n**Implications:**\n\n1. **Geometry matters:** The branching structure of airways can significantly impact viral dynamics and competition among lineages.\n2. **Lineage extinction:** Narrow tube geometries promote rapid lineage extinction due to crowding and competition.\n3. **Viral spread modeling:** Simplified, homogenous tissue models (e.g., toroids) may not accurately capture the complex interactions between lineages in branching airways.\n\nThese findings highlight the importance of considering the spatial structure of respiratory tract geometry when modeling viral infections and lineage dynamics.",
+      "model_answer": "Based on the provided fragments, here's a summary of how narrow and wide tube configurations differ in terms of viral lineage competition:\n\n**Key differences:**\n\n1. **Lineage distribution:** In narrow tubes (circumference of 8 cells), lineages near the infection source are well-mixed but rapidly disappear as you move down the tube, leading to dominance by a single or few lineages.\n2. **Competition and crowding:** The narrow tube structure promotes lineage extinction due to crowding, which reduces competition between lineages.\n3. **Lineage diversity:** In contrast, wide tubes (circumference of 64 cells) exhibit a more even distribution of viral populations throughout the tissue, allowing multiple lineages to coexist.\n\n**Tradeoff in branching structures:**\n\n1. **Spatial restriction vs. physical separation:** Branching tissues can either accelerate lineage extinction due to crowding or reduce it by preventing competition between lineages.\n2. **Effect on overall infection dynamics:** The branching structure slightly decreases lineage extinction compared to a tissue of the same size without branching (the wide tube geometry).\n\n**Comparison with toroids:**\n\n1. **Lineage distribution:** Toroid instances exhibit a more even split of the tissue between four lineages, with all populations coexisting in relatively similar amounts.\n2. **Density and competition:** The distributions for toroids are qualitatively different from those of tubes, indicating reduced dominance by single or few lineages.\n\nThese findings suggest that tube geometry plays a significant role in shaping viral lineage competition, with narrow tubes promoting the extinction of lineages due to crowding and wide tubes allowing multiple lineages to coexist. The branching structure introduces a tradeoff between spatial restriction and physical separation, which can either accelerate or reduce lineage extinction.",
       "ground_truth": "In narrow tube configurations, one or few viral lineages tend to dominate due to slower spread along the tube's length. In contrast, wide tubes allow multiple lineages to coexist more evenly.",
       "retrieved_contexts_preview": [
         "This document investigates the impact of complex respiratory tract geometry on viral infection dynamics, specifically utilizing a spatially explicit model of branching airways. The research focuses on how the branching structure, particularly the assumption of a small, homogeneous patch, influences ...",
-        "This document details a computational model designed to simulate viral infections within the complex geometry of the respiratory tract. The research focuses on how branching airways, with their varying diameters and spatial organization, impact viral dynamics, specifically examining the influence of...",
+        "This document details a computational model designed to simulate viral infections within the complex geometry of the respiratory tract. The research focuses on how branching airways, with their varying diameters and generations, impact viral spread, specifically examining the influence of diffusion ...",
         "This document details a computational model designed to investigate viral dynamics within the complex geometry of the respiratory tract. The research focuses on how spatial structure, specifically branching airways, impacts infection spread, challenging the common assumption of simplified, homogenou..."
       ],
       "contexts_count": 3,
       "scores": {
-        "Factual Correctness": 0.4916789334981994,
-        "Faithfulness": 0.9444444444444444,
-        "Response Relevancy": 0.9247912411323027,
+        "Factual Correctness": 0.40643830317981466,
+        "Faithfulness": 0.9473684210526315,
+        "Response Relevancy": 0.8966792051648971,
         "Context Precision": 0.9999999999666667,
         "Context Recall": 1.0
       },
@@ -163,27 +163,27 @@
           },
           {
             "prompt": "correctness_classifier",
-            "output": "TP=[StatementsWithReason(statement='In narrow tubes, there is a high likelihood of a single viral lineage dominating the tissue with more than 90% infected by that viral lineage.', reason='This statement aligns with the ground truth that in narrow tube configurations, one viral lineage tends to dominate.'), StatementsWithReason(statement='In narrow tubes, a single viral lineage often dominates the tissue.', reason='This statement aligns with the ground truth that in narrow tube configurations, o"
+            "output": "TP=[StatementsWithReason(statement='Narrow tube configurations and wide tube configurations differ in terms of viral lineage competition.', reason='This statement is a general observation supported by the ground truth, which describes different lineage dynamics in narrow versus wide tubes.'), StatementsWithReason(statement='Wide tubes allow multiple lineages to coexist.', reason='This statement is directly supported by the ground truth: \"In contrast, wide tubes allow multiple viral lineages to c"
           },
           {
             "prompt": "answer_similarity",
-            "output": "0.9232374731232322"
+            "output": "0.9334455204115664"
           }
         ],
         "faithfulness": [
           {
             "prompt": "statement_generator_prompt",
-            "output": "statements=['In narrow tubes with a circumference of 8 cells, viral lineages are well-mixed near the seeding edge.', 'In narrow tubes with a circumference of 8 cells, viral lineages rapidly disappear as the location moves down the tube.', 'In narrow tubes with a circumference of 8 cells, only one or a few dominant viral lineages remain.', 'In narrow tubes, there is a high likelihood of a single viral lineage dominating the tissue with more than 90% infected by that viral lineage.', 'Narrow tubes"
+            "output": "statements=['Narrow tube configurations and wide tube configurations differ in terms of viral lineage competition.', 'In narrow tubes with a circumference of 8 cells, lineages near the infection source are well-mixed.', 'In narrow tubes with a circumference of 8 cells, lineages rapidly disappear as movement occurs down the tube.', 'In narrow tubes with a circumference of 8 cells, a single or few lineages become dominant.', 'The narrow tube structure promotes lineage extinction due to crowding.',"
           },
           {
             "prompt": "n_l_i_statement_prompt",
-            "output": "statements=[StatementFaithfulnessAnswer(statement='In narrow tubes with a circumference of 8 cells, viral lineages are well-mixed near the seeding edge.', reason='The excerpt states: \"In the snapshot of the narrow tube, the lineages are well-mixed near the left edge of the tube (where infection was seeded)\"', verdict=1), StatementFaithfulnessAnswer(statement='In narrow tubes with a circumference of 8 cells, viral lineages rapidly disappear as the location moves down the tube.', reason='The excer"
+            "output": "statements=[StatementFaithfulnessAnswer(statement='Narrow tube configurations and wide tube configurations differ in terms of viral lineage competition.', reason='The text explicitly compares narrow and wide tubes and their impact on viral infection dynamics and lineage distribution, implying a difference in lineage competition.', verdict=1), StatementFaithfulnessAnswer(statement='In narrow tubes with a circumference of 8 cells, lineages near the infection source are well-mixed.', reason='The te"
           }
         ],
         "answer_relevancy": [
           {
             "prompt": "response_relevance_prompt",
-            "output": "question='How do narrow and wide tube configurations differ in terms of viral lineage competition?' noncommittal=0"
+            "output": "question='How do narrow and wide tube configurations differ in terms of viral lineage competition, according to the provided fragments?' noncommittal=0"
           }
         ],
         "context_precision": [
@@ -195,17 +195,145 @@
         "context_recall": [
           {
             "prompt": "context_recall_classification_prompt",
-            "output": "classifications=[ContextRecallClassification(statement=\"In narrow tube configurations, one or few viral lineages tend to dominate due to slower spread along the tube's length.\", reason='The context describes how in narrow tubes, some lineages disappear rapidly, leaving only one or a few lineages, indicating dominance. It also mentions the lineages are well-mixed near the left edge of the tube.', attributed=1), ContextRecallClassification(statement='In contrast, wide tubes allow multiple lineages"
+            "output": "classifications=[ContextRecallClassification(statement=\"In narrow tube configurations, one or few viral lineages tend to dominate due to slower spread along the tube's length.\", reason='The context mentions that in narrow tubes, lineages rapidly disappear and dominance by a single lineage is observed. It also mentions that lineages are well-mixed near the infection source but the orange and green populations rapidly disappear.', attributed=1), ContextRecallClassification(statement='In contrast, "
+          }
+        ]
+      }
+    },
+    {
+      "index": 4,
+      "paper_id": "2408.07618v3",
+      "question": "What factors influence the proportion of cell-to-cell viral infections in tube-shaped tissues?",
+      "model_answer": "The proportion of cell-to-cell viral infections in tube-shaped tissues is influenced by several factors:\n\n1. **Viral diffusion coefficient**: The speed at which extracellular viruses diffuse through the tissue affects the balance between cell-to-cell infection and free virus transmission.\n2. **Tissue geometry (aspect ratio)**: The shape and size of the tissue, particularly its aspect ratio (length vs. circumference), influence viral dynamics and the proportion of cell-to-cell infections.\n3. **Diffusion coefficient value**: Even with a fairly large diffusion coefficient (e.g., 100 CD^2 h^-1), significant differences in infection time are observed compared to infinite diffusion.\n\nThese factors interact with each other, leading to distinct dynamics in tube-shaped tissues:\n\n* Infection begins on the left end of the tube and accelerates as it invades deeper into the tissue.\n* A wide infection front forms, followed by a region of dead cells.\n* Distal foci form due to extracellular viral diffusion away from the infected front.\n\nThe proportion of cell-to-cell infections is not significantly affected by changes in the balance between free virus transmission and cell-to-cell infection. However, the dynamics are highly sensitive to the rate of viral diffusion, with even a moderate value (e.g., 100 CD^2 h^-1) leading to significant differences compared to infinite diffusion.\n\nThese findings challenge the common assumption that extracellular viral density is uniform across tissues, highlighting the importance of considering tissue geometry and viral diffusion in spatial models of viral dynamics.",
+      "ground_truth": "The proportion of cell-to-cell viral infections in tube-shaped tissues is influenced by aspect ratios and viral diffusion coefficients.",
+      "retrieved_contexts_preview": [
+        "This document details a computational model designed to investigate viral dynamics within the complex geometry of the respiratory tract. The research addresses the common assumption in spatial models that the host tissue is a simple, wide, and homogeneous patch, recognizing that the lung’s branching...",
+        "This document details a computational model designed to investigate viral dynamics within the complex geometry of the respiratory tract. The research challenges a common assumption in spatial modeling – that extracellular viral density is uniform – and specifically tests its validity using a tube-sh...",
+        "This document details a computational model designed to investigate viral infections within the complex geometry of the respiratory tract. The research focuses on how spatial structure, specifically the branching airways of the lung, influences viral dynamics, challenging the traditional assumption ..."
+      ],
+      "contexts_count": 3,
+      "scores": {
+        "Factual Correctness": 0.4380484339565758,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.9079468886447856,
+        "Context Precision": 0.9999999999666667,
+        "Context Recall": 1.0
+      },
+      "justifications": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['Aspect ratios influence the proportion of cell-to-cell viral infections in tube-shaped tissues.', 'Viral diffusion coefficients influence the proportion of cell-to-cell viral infections in tube-shaped tissues.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='The proportion of cell-to-cell viral infections in tube-shaped tissues is influenced by several factors.', reason='This is a general statement that is supported by the ground truth, which identifies specific factors influencing cell-to-cell viral infections.'), StatementsWithReason(statement='Viral diffusion coefficient influences the proportion of cell-to-cell viral infections in tube-shaped tissues.', reason='This statement is directly supported by the groun"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9340119176444851"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['The proportion of cell-to-cell viral infections in tube-shaped tissues is influenced by several factors.', 'Viral diffusion coefficient influences the proportion of cell-to-cell viral infections in tube-shaped tissues.', 'The speed at which extracellular viruses diffuse through the tissue affects the balance between cell-to-cell infection and free virus transmission.', 'Tissue geometry influences the proportion of cell-to-cell viral infections in tube-shaped tissues.', 'The shape an"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='The proportion of cell-to-cell viral infections in tube-shaped tissues is influenced by several factors.', reason='The text mentions that the dynamics of viral infections are sensitive to the rate of viral diffusion and that the interplay between viral diffusion and tissue geometry affects the dynamics. While it doesn\\'t explicitly state \"several factors\", it implies that multiple factors are at play.', verdict=1), StatementFaithfulnessAnswer(st"
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='What factors influence the proportion of cell-to-cell viral infections in tube-shaped tissues?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context discusses a computational model investigating viral infections in tube-shaped tissues, specifically focusing on how spatial structure and viral dynamics are influenced by factors like aspect ratio and diffusion coefficient. The answer accurately identifies these factors as influencing the proportion of cell-to-cell viral infections, making the context useful.' verdict=1"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='The proportion of cell-to-cell viral infections in tube-shaped tissues is influenced by aspect ratios and viral diffusion coefficients.', reason='The context discusses the influence of tissue aspect ratios and viral diffusion coefficients on viral dynamics, including cell-to-cell infections, in tube-shaped tissues.', attributed=1)]"
+          }
+        ]
+      }
+    },
+    {
+      "index": 5,
+      "paper_id": "2408.07618v3",
+      "question": "What is an agent-based model in the context of viral infections?",
+      "model_answer": "An agent-based model is a computational modeling approach used to simulate the behavior of complex systems, such as biological or social networks, by representing individual entities (agents) that interact with each other and their environment. In the context of viral infections, an agent-based model can be used to simulate the spread of viruses within a host organism.\n\nIn this specific case, the references provided suggest that the researchers are using agent-based modeling to study viral infections in the respiratory tract. The models likely represent individual cells or tissues as agents that interact with each other and the virus, taking into account factors such as diffusion, branching geometry, and spatial characteristics of the lung.\n\nThe use of agent-based modeling allows for a more realistic representation of complex biological systems than traditional compartmental models, which often assume a homogeneous tissue patch. By simulating individual cells or tissues, researchers can better understand how viruses interact with their environment and spread within the host organism.\n\nSome key features of agent-based modeling in this context include:\n\n1. **Spatially explicit**: The model represents the spatial structure of the respiratory tract, including branching geometry and diffusion.\n2. **Individual-level representation**: Each cell or tissue is represented as an individual agent that interacts with other agents and the virus.\n3. **Stochasticity**: The behavior of each agent can be influenced by random events, such as viral mutations or immune responses.\n\nBy using agent-based modeling to study viral infections in the respiratory tract, researchers aim to gain a deeper understanding of how viruses spread within the host organism and develop more effective treatments for infectious diseases.",
+      "ground_truth": "An agent-based model in viral infections simulates interactions between individual cells and viruses, allowing researchers to study infection dynamics by representing each cell as an agent with specific states like susceptible, infected, or dead.",
+      "retrieved_contexts_preview": [
+        "This document details a computational model designed to accurately represent viral infections within the complex geometry of the respiratory tract. The research focuses on refining existing models by incorporating the branching structure and spatial characteristics of the lung, specifically addressi...",
+        "This document details a computational model designed to investigate viral infections within the complex geometry of the respiratory tract. The research acknowledges a common simplification in existing models, which assumes a small, homogeneous tissue patch, and argues for a more realistic approach c...",
+        "This document details a computational model designed to simulate viral infections within the complex geometry of the respiratory tract, specifically focusing on the influence of diffusion. The research utilizes a spatially explicit model of epithelial cells coupled with a viral density surface, ackn..."
+      ],
+      "contexts_count": 4,
+      "scores": {
+        "Factual Correctness": 0.48750267606065234,
+        "Faithfulness": 1.0,
+        "Response Relevancy": 0.8278538171713657,
+        "Context Precision": 0.5833333333041666,
+        "Context Recall": 1.0
+      },
+      "justifications": {
+        "answer_correctness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['An agent-based model in viral infections simulates interactions between individual cells and viruses.', 'The agent-based model allows researchers to study infection dynamics.', 'The agent-based model represents each cell as an agent.', 'Each cell has specific states like susceptible, infected, or dead.']"
+          },
+          {
+            "prompt": "correctness_classifier",
+            "output": "TP=[StatementsWithReason(statement='An agent-based model is a computational modeling approach.', reason=\"While the ground truth doesn't explicitly state this, it implies it by describing the model's function in simulating interactions, which aligns with the general nature of computational models.\"), StatementsWithReason(statement='The agent-based model represents individual entities (agents).', reason='The ground truth states \"The agent-based model represents each cell as an agent,\" which direct"
+          },
+          {
+            "prompt": "answer_similarity",
+            "output": "0.9155279456219199"
+          }
+        ],
+        "faithfulness": [
+          {
+            "prompt": "statement_generator_prompt",
+            "output": "statements=['An agent-based model is a computational modeling approach.', 'The agent-based model is used to simulate the behavior of complex systems.', 'The complex systems can be biological or social networks.', 'The agent-based model represents individual entities (agents).', 'The agents interact with each other and the environment.', 'In the context of viral infections, an agent-based model can be used to simulate the spread of viruses within a host organism.', 'Researchers are using agent-ba"
+          },
+          {
+            "prompt": "n_l_i_statement_prompt",
+            "output": "statements=[StatementFaithfulnessAnswer(statement='An agent-based model is a computational modeling approach.', reason='The context mentions agent-based models in the references and describes the computational model, implying it is a computational modeling approach.', verdict=1), StatementFaithfulnessAnswer(statement='The agent-based model is used to simulate the behavior of complex systems.', reason='The context discusses modeling viral infections within the complex geometry of the respiratory "
+          }
+        ],
+        "answer_relevancy": [
+          {
+            "prompt": "response_relevance_prompt",
+            "output": "question='How can agent-based modeling be used to study viral infections in the respiratory tract?' noncommittal=0"
+          }
+        ],
+        "context_precision": [
+          {
+            "prompt": "context_precision_prompt",
+            "output": "reason='The context provided focuses on the anatomical structure of the respiratory tract and its dimensions, but it does not define or explain what an agent-based model is in the context of viral infections. Therefore, the context was not useful in arriving at the given answer.' verdict=0"
+          }
+        ],
+        "context_recall": [
+          {
+            "prompt": "context_recall_classification_prompt",
+            "output": "classifications=[ContextRecallClassification(statement='An agent-based model in viral infections simulates interactions between individual cells and viruses, allowing researchers to study infection dynamics by representing each cell as an agent with specific states like susceptible, infected, or dead.', reason='The context discusses computational models designed to represent viral infections and mentions agent-based models in the references. The description of the model simulating interactions b"
           }
         ]
       }
     }
   ],
   "global_averages": {
-    "Factual Correctness": 0.5026347220586139,
-    "Faithfulness": 0.9814814814814815,
-    "Response Relevancy": 0.8933501936573585,
-    "Context Precision": 0.9722222221925926,
+    "Factual Correctness": 0.44800963615956385,
+    "Faithfulness": 0.9894736842105264,
+    "Response Relevancy": 0.8765353435216874,
+    "Context Precision": 0.8999999999697221,
     "Context Recall": 1.0
   }
 }
