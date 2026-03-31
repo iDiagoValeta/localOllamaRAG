@@ -1,5 +1,5 @@
 """
-LoRA fine-tuning of Qwen3-14B for RAG (v9).
+LoRA fine-tuning of Qwen3-14B for RAG (v10).
 
 Full training and evaluation pipeline for a RAQ Q&A model that responds
 strictly from the retrieved context in EN, ES or CA.
@@ -11,7 +11,7 @@ Phases:
   5-10. Apply LoRA (r=32), tokenize, train, export best checkpoint.
   11.   Re-evaluate adapted model on same frozen dev+test sets.
   12.   BERTScore computation (DeBERTa-xlarge-mnli) after unloading main model.
-  13.   Comparative summary: Token F1, BERTScore F1, CF-lexica per dataset x split.
+  13.   Comparative summary: Token F1, ROUGE-L F1, BERTScore F1 per dataset x split.
   14.   Export training_stats.json and evaluation_comparison.json.
 
 Usage:
@@ -43,7 +43,7 @@ Dependencies:
 #  DATA
 #  +-- 4. Dataset loading
 #           4.1 Normalizers              schema mapping -> instruction/context/response
-#           4.2 Shared filters           valid, long_response, dolly_rag
+#           4.2 Shared filters           valid, dolly_rag
 #           4.3 Neural-Bridge RAG        9 600 train / 2 400 test
 #           4.4 Dolly QA                 15 000 -> RAG filtered -> split 80/10/10
 #           4.5 Aina RAG (EN/ES/CA)      split by lang, per-language partitions
@@ -68,6 +68,16 @@ Dependencies:
 # ─────────────────────────────────────────────
 # VERSION HISTORY
 # ─────────────────────────────────────────────
+#
+# v10 vs v9
+#   - Added ROUGE-L F1 (LCS-based) as second lexical metric alongside Token F1.
+#     AGG_KEYS now ["Token_F1", "ROUGE_L_F1", "BERTScore_F1"]; Context_Faithfulness
+#     remains in METRIC_KEYS as an auxiliary indicator.
+#   - Added Phase-2 evaluation caps for frozen dev/test sets (EVAL_CAP_*).
+#   - Removed _filter_long_response (F2) completely from all splits.
+#   - Section 5 (base eval): skips if predictions_base.json already exists.
+#   - Section 9 (training): auto-resumes from latest checkpoint-* directory.
+#   - Section 11 (adapted eval): skips if predictions_adapted.json already exists.
 #
 # v9 vs v8
 #   - BASE vs ADAPTED comparison now evaluates on BOTH dev and test splits
@@ -205,6 +215,13 @@ MAX_CONTEXT_TOKENS = 2048
 BERTSCORE_MODEL      = "microsoft/deberta-xlarge-mnli"
 BERTSCORE_BATCH_SIZE = 32
 
+# --- 1.3 Phase-2 evaluation caps (frozen val and test sets) ---
+EVAL_CAP_NB      = 700    # Neural-Bridge val and test
+EVAL_CAP_DOLLY   = 400    # Dolly val and test (naturally small, cap rarely active)
+EVAL_CAP_AINA_EN = 1000   # Aina-EN val and test
+EVAL_CAP_AINA_ES =  800   # Aina-ES val and test
+EVAL_CAP_AINA_CA = 1000   # Aina-CA val and test
+
 SYSTEM_PROMPT = (
     "You are a professional document analysis assistant. Your role is to answer "
     "questions accurately based on the provided document context.\n\n"
@@ -300,6 +317,43 @@ def compute_f1(prediction: str, ground_truth: str) -> float:
         return 0.0
     prec = n / len(pred_tok)
     rec  = n / len(truth_tok)
+    return 2 * prec * rec / (prec + rec)
+
+
+def _lcs_length(x: list, y: list) -> int:
+    """Dynamic programming LCS length (token lists)."""
+    m, n = len(x), len(y)
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if x[i - 1] == y[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1] + 1
+            else:
+                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+    return dp[m][n]
+
+
+def compute_rouge_l(prediction: str, ground_truth: str) -> float:
+    """ROUGE-L F1 based on Longest Common Subsequence (token-level).
+
+    Uses the same normalization as compute_f1 (EN/ES/CA articles + punctuation).
+
+    Args:
+        prediction:   The model's generated response text.
+        ground_truth: The reference answer text.
+
+    Returns:
+        ROUGE-L F1 score between 0.0 and 1.0.
+    """
+    pred_tok  = normalize_text(prediction).split()
+    truth_tok = normalize_text(ground_truth).split()
+    if not pred_tok or not truth_tok:
+        return 1.0 if pred_tok == truth_tok else 0.0
+    lcs = _lcs_length(pred_tok, truth_tok)
+    if lcs == 0:
+        return 0.0
+    prec = lcs / len(pred_tok)
+    rec  = lcs / len(truth_tok)
     return 2 * prec * rec / (prec + rec)
 
 
@@ -401,6 +455,7 @@ def evaluate_on_datasets(model, tokenizer, eval_datasets: dict, label: str = "MO
 
     Metrics per dataset:
         Token_F1                    answer relevance vs gold (%)
+        ROUGE_L_F1                  LCS-based overlap with gold answer (%)
         Context_Faithfulness_Pct    grounding in provided context (%)
         Avg_Response_Length_Words   mean word count
         Sentence_Completeness_Pct  % responses ending with . ! ?
@@ -412,6 +467,7 @@ def evaluate_on_datasets(model, tokenizer, eval_datasets: dict, label: str = "MO
 
     for ds_name, ds in eval_datasets.items():
         total_f1         = 0.0
+        total_rouge_l    = 0.0
         total_faith      = 0.0
         total_words      = 0
         n_complete       = 0
@@ -428,14 +484,16 @@ def evaluate_on_datasets(model, tokenizer, eval_datasets: dict, label: str = "MO
                 max_new_tokens=EVAL_MAX_NEW_TOKENS,
             )
 
-            f1    = compute_f1(pred, ground_truth)
-            faith = compute_context_faithfulness(pred, context)
-            words = len(pred.split())
+            f1      = compute_f1(pred, ground_truth)
+            rouge_l = compute_rouge_l(pred, ground_truth)
+            faith   = compute_context_faithfulness(pred, context)
+            words   = len(pred.split())
             is_complete = bool(pred.rstrip()) and pred.rstrip()[-1] in ".!?"
 
-            total_f1    += f1
-            total_faith += faith
-            total_words += words
+            total_f1      += f1
+            total_rouge_l += rouge_l
+            total_faith   += faith
+            total_words   += words
             if is_complete:
                 n_complete += 1
 
@@ -444,23 +502,26 @@ def evaluate_on_datasets(model, tokenizer, eval_datasets: dict, label: str = "MO
                 "context":      context[:200] + "..." if len(context) > 200 else context,
                 "ground_truth": ground_truth,
                 "prediction":   pred,
-                "f1":           round(f1,    4),
-                "faithfulness": round(faith, 4),
+                "f1":           round(f1,      4),
+                "rouge_l":      round(rouge_l, 4),
+                "faithfulness": round(faith,   4),
                 "words":        words,
             })
 
         metrics = {
             "n_samples":                   n,
-            "Token_F1":                    round((total_f1    / n) * 100, 2) if n else 0.0,
-            "Context_Faithfulness_Pct":    round((total_faith / n) * 100, 2) if n else 0.0,
-            "Avg_Response_Length_Words":   round( total_words / n,         1) if n else 0.0,
-            "Sentence_Completeness_Pct":   round((n_complete  / n) * 100, 1) if n else 0.0,
+            "Token_F1":                    round((total_f1      / n) * 100, 2) if n else 0.0,
+            "ROUGE_L_F1":                  round((total_rouge_l / n) * 100, 2) if n else 0.0,
+            "Context_Faithfulness_Pct":    round((total_faith   / n) * 100, 2) if n else 0.0,
+            "Avg_Response_Length_Words":   round( total_words   / n,         1) if n else 0.0,
+            "Sentence_Completeness_Pct":   round((n_complete    / n) * 100, 1) if n else 0.0,
         }
         all_metrics[ds_name] = metrics
         all_results[ds_name] = results
 
         print(f"\n  {ds_name} ({n} samples):")
         print(f"    Token F1:               {metrics['Token_F1']:.2f}%")
+        print(f"    ROUGE-L F1:             {metrics['ROUGE_L_F1']:.2f}%")
         print(f"    Context Faithfulness:   {metrics['Context_Faithfulness_Pct']:.2f}%")
         print(f"    Avg Response Length:    {metrics['Avg_Response_Length_Words']:.1f} words")
         print(f"    Sentence Completeness:  {metrics['Sentence_Completeness_Pct']:.1f}%")
@@ -522,6 +583,7 @@ def _save_predictions_checkpoint(eval_results: dict, path: str):
             "predictions":   [s["prediction"]   for s in samples],
             "ground_truths": [s["ground_truth"]  for s in samples],
             "token_f1":      [s["f1"]            for s in samples],
+            "rouge_l":       [s["rouge_l"]       for s in samples],
             "faithfulness":  [s["faithfulness"]  for s in samples],
             "words":         [s["words"]         for s in samples],
         }
@@ -623,18 +685,6 @@ def _filter_valid(ex):
     )
 
 
-def _filter_long_response(ex, min_words: int = 15):
-    """Keep only responses with at least min_words words.
-
-    Args:
-        ex: Dataset example with a 'response' field.
-        min_words: Minimum word count threshold.
-
-    Returns:
-        True if the response meets the minimum length.
-    """
-    return len(ex["response"].split()) >= min_words
-
 
 def _filter_dolly_rag(ex):
     """Keep only Dolly rows that are RAG-relevant (non-empty context + correct category).
@@ -656,14 +706,13 @@ _nb_train_full = (
     load_dataset("neural-bridge/rag-dataset-12000", split="train")
     .map(_normalize_nb, remove_columns=["context", "question", "answer"])
     .filter(_filter_valid)
-    .filter(_filter_long_response)
     .shuffle(seed=42)
 )
 nb_n = len(_nb_train_full)
 nb_val_start = nb_n - SAMPLES_NEURAL_BRIDGE_VAL
 nb_train = _nb_train_full.select(range(min(SAMPLES_NEURAL_BRIDGE_TRAIN, nb_val_start)))
 nb_val   = _nb_train_full.select(range(nb_val_start, nb_n))
-nb_test  = (
+nb_test = (
     load_dataset("neural-bridge/rag-dataset-12000", split="test")
     .map(_normalize_nb, remove_columns=["context", "question", "answer"])
     .filter(_filter_valid)
@@ -678,7 +727,6 @@ _dolly_all = (
     .map(_normalize_dolly, remove_columns=["instruction", "context", "response", "category"])
     .filter(_filter_dolly_rag)
     .filter(_filter_valid)
-    .filter(_filter_long_response)
     .shuffle(seed=42)
     .remove_columns(["category"])
 )
@@ -703,12 +751,7 @@ def _load_aina_by_lang(split):
     """Load Aina RAG split and return ``{lang_label: Dataset}`` per language."""
     ds = load_dataset("projecte-aina/RAG_Multilingual", split=split)
     cols_to_remove = [c for c in _AINA_EXTRA_COLS if c in ds.column_names]
-    ds = (
-        ds
-        .map(_normalize_aina, remove_columns=cols_to_remove)
-        .filter(_filter_valid)
-        .filter(_filter_long_response)
-    )
+    ds = ds.map(_normalize_aina, remove_columns=cols_to_remove).filter(_filter_valid)
     result = {}
     for lang_code, lang_label in _AINA_LANGS:
         sub = ds.filter(lambda ex, lc=lang_code: ex["lang"] == lc)
@@ -782,6 +825,19 @@ eval_datasets_test = {
     "Aina-CA":           _aina_test_by_lang["Aina-CA"],
 }
 
+# Apply Phase-2 evaluation caps to frozen dev/test sets
+_EVAL_CAPS = {
+    "Neural-Bridge RAG": EVAL_CAP_NB,
+    "Dolly QA":          EVAL_CAP_DOLLY,
+    "Aina-EN":           EVAL_CAP_AINA_EN,
+    "Aina-ES":           EVAL_CAP_AINA_ES,
+    "Aina-CA":           EVAL_CAP_AINA_CA,
+}
+for eds in [eval_datasets_dev, eval_datasets_test]:
+    for ds_name in list(eds.keys()):
+        cap = _EVAL_CAPS.get(ds_name, len(eds[ds_name]))
+        eds[ds_name] = eds[ds_name].select(range(min(cap, len(eds[ds_name]))))
+
 for split_label, eds in [("dev", eval_datasets_dev), ("test", eval_datasets_test)]:
     for name, ds in eds.items():
         print(f"    {split_label} | {name}: {len(ds)} samples (FROZEN)")
@@ -804,6 +860,7 @@ train_loaders = [
 # SECTION 5: BASE MODEL EVALUATION
 # ─────────────────────────────────────────────
 # Evaluates on both dev and test splits. Reused as-is in Section 11.
+# Skips if predictions_base.json already exists (crash-resume support).
 # ─────────────────────────────────────────────
 
 print("\n" + "=" * 70)
@@ -811,36 +868,75 @@ print("--> [5] Evaluating BASE model (pre-training baseline)")
 print("    (Same frozen dev+test sets that will be used in Section 11)")
 print("=" * 70)
 
-base_metrics  = {}
-base_results  = {}
+_base_pred_path = os.path.join(output_dir, "predictions_base.json")
+base_metrics    = {}
+base_results    = {}
 
-for split_label, eval_ds in [("dev", eval_datasets_dev), ("test", eval_datasets_test)]:
-    print(f"\n  -- Split: {split_label.upper()} --")
-    m, r = evaluate_on_datasets(model, tokenizer, eval_ds, label=f"BASE-{split_label}")
-    for ds_name in m:
-        key = f"{ds_name}|{split_label}"
-        base_metrics[key] = m[ds_name]
-        base_results[key] = r[ds_name]
+if os.path.exists(_base_pred_path):
+    print(f"--> [5] SKIP: {_base_pred_path} found. Loading base results from checkpoint.")
+    try:
+        with open(_base_pred_path, encoding="utf-8") as _f:
+            _base_ckpt = json.load(_f)
+        for key, d in _base_ckpt.items():
+            # Reconstruct per-sample dicts from checkpoint lists
+            base_results[key] = [
+                {
+                    "prediction":   p,
+                    "ground_truth": g,
+                    "f1":           f1,
+                    "rouge_l":      rl,
+                    "faithfulness": fa,
+                    "words":        w,
+                    "instruction":  "",
+                    "context":      "",
+                }
+                for p, g, f1, rl, fa, w in zip(
+                    d["predictions"], d["ground_truths"],
+                    d["token_f1"],    d["rouge_l"],
+                    d["faithfulness"], d["words"],
+                )
+            ]
+            n = len(base_results[key])
+            base_metrics[key] = {
+                "n_samples":                 n,
+                "Token_F1":                  round(sum(d["token_f1"])    / n * 100, 2) if n else 0.0,
+                "ROUGE_L_F1":                round(sum(d["rouge_l"])     / n * 100, 2) if n else 0.0,
+                "Context_Faithfulness_Pct":  round(sum(d["faithfulness"])/ n * 100, 2) if n else 0.0,
+                "Avg_Response_Length_Words": round(sum(d["words"])       / n,       1) if n else 0.0,
+                "Sentence_Completeness_Pct": 0.0,  # not stored in checkpoint; auxiliary only
+            }
+        print("--> Base checkpoint loaded successfully.")
+    except Exception as e:
+        print(f"    Warning: failed to load base checkpoint ({e}). Re-evaluating.")
+        base_metrics = {}
+        base_results = {}
 
-base_eval_path = os.path.join(output_dir, "eval_base.json")
-try:
-    with open(base_eval_path, "w", encoding="utf-8") as f:
-        json.dump(
-            {"metrics": base_metrics,
-             "samples": {k: v[:10] for k, v in base_results.items()}},
-            f, indent=4, ensure_ascii=False,
-        )
-    print(f"--> Base evaluation saved: {base_eval_path}")
-except Exception as e:
-    print(f"    Warning: could not save base eval: {e}")
+if not base_results:
+    for split_label, eval_ds in [("dev", eval_datasets_dev), ("test", eval_datasets_test)]:
+        print(f"\n  -- Split: {split_label.upper()} --")
+        m, r = evaluate_on_datasets(model, tokenizer, eval_ds, label=f"BASE-{split_label}")
+        for ds_name in m:
+            key = f"{ds_name}|{split_label}"
+            base_metrics[key] = m[ds_name]
+            base_results[key] = r[ds_name]
 
-_save_predictions_checkpoint(
-    base_results, os.path.join(output_dir, "predictions_base.json"),
-)
+    base_eval_path = os.path.join(output_dir, "eval_base.json")
+    try:
+        with open(base_eval_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {"metrics": base_metrics,
+                 "samples": {k: v[:10] for k, v in base_results.items()}},
+                f, indent=4, ensure_ascii=False,
+            )
+        print(f"--> Base evaluation saved: {base_eval_path}")
+    except Exception as e:
+        print(f"    Warning: could not save base eval: {e}")
 
-gc.collect()
-torch.cuda.empty_cache()
-print("--> GPU cache cleared after base evaluation.")
+    _save_predictions_checkpoint(base_results, _base_pred_path)
+
+    gc.collect()
+    torch.cuda.empty_cache()
+    print("--> GPU cache cleared after base evaluation.")
 
 
 # ─────────────────────────────────────────────
@@ -1017,13 +1113,23 @@ trainer = Trainer(
 # ─────────────────────────────────────────────
 # SECTION 9: TRAINING LOOP
 # ─────────────────────────────────────────────
+# Auto-resumes from the latest checkpoint-* directory if one exists.
+
+import glob as _glob
+
+_ckpt_dirs   = sorted(_glob.glob(os.path.join(output_dir, "checkpoint-*")))
+_resume_from = _ckpt_dirs[-1] if _ckpt_dirs else None
 
 print("\n--> [9] Starting training...")
 print(f"    Epochs:            {training_args.num_train_epochs}")
 print(f"    Effective batch:   {training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps}")
 print(f"    LR:                {training_args.learning_rate}  (cosine, patience=5)")
 print(f"    Best checkpoint:   load_best_model_at_end=True")
-trainer.train()
+if _resume_from:
+    print(f"    Resuming from:     {_resume_from}")
+else:
+    print("    Starting from scratch (no checkpoint found).")
+trainer.train(resume_from_checkpoint=_resume_from)
 
 
 # ─────────────────────────────────────────────
@@ -1042,6 +1148,7 @@ print("--> Adapter + tokenizer saved.")
 # SECTION 11: ADAPTED MODEL EVALUATION
 # ─────────────────────────────────────────────
 # Same frozen dev+test dicts as Section 5 -> objective BASE vs ADAPTED comparison.
+# Skips if predictions_adapted.json already exists (crash-resume support).
 # ─────────────────────────────────────────────
 
 print("\n" + "=" * 70)
@@ -1049,22 +1156,60 @@ print("--> [11] Evaluating ADAPTED model")
 print("    (Same frozen dev+test sets as Section 5)")
 print("=" * 70)
 
-model.gradient_checkpointing_disable()
+_adapted_pred_path = os.path.join(output_dir, "predictions_adapted.json")
+adapted_metrics    = {}
+adapted_results    = {}
 
-adapted_metrics  = {}
-adapted_results  = {}
+if os.path.exists(_adapted_pred_path):
+    print(f"--> [11] SKIP: {_adapted_pred_path} found. Loading adapted results from checkpoint.")
+    try:
+        with open(_adapted_pred_path, encoding="utf-8") as _f:
+            _adapted_ckpt = json.load(_f)
+        for key, d in _adapted_ckpt.items():
+            adapted_results[key] = [
+                {
+                    "prediction":   p,
+                    "ground_truth": g,
+                    "f1":           f1,
+                    "rouge_l":      rl,
+                    "faithfulness": fa,
+                    "words":        w,
+                    "instruction":  "",
+                    "context":      "",
+                }
+                for p, g, f1, rl, fa, w in zip(
+                    d["predictions"], d["ground_truths"],
+                    d["token_f1"],    d["rouge_l"],
+                    d["faithfulness"], d["words"],
+                )
+            ]
+            n = len(adapted_results[key])
+            adapted_metrics[key] = {
+                "n_samples":                 n,
+                "Token_F1":                  round(sum(d["token_f1"])    / n * 100, 2) if n else 0.0,
+                "ROUGE_L_F1":                round(sum(d["rouge_l"])     / n * 100, 2) if n else 0.0,
+                "Context_Faithfulness_Pct":  round(sum(d["faithfulness"])/ n * 100, 2) if n else 0.0,
+                "Avg_Response_Length_Words": round(sum(d["words"])       / n,       1) if n else 0.0,
+                "Sentence_Completeness_Pct": 0.0,
+            }
+        print("--> Adapted checkpoint loaded successfully.")
+    except Exception as e:
+        print(f"    Warning: failed to load adapted checkpoint ({e}). Re-evaluating.")
+        adapted_metrics = {}
+        adapted_results = {}
 
-for split_label, eval_ds in [("dev", eval_datasets_dev), ("test", eval_datasets_test)]:
-    print(f"\n  -- Split: {split_label.upper()} --")
-    m, r = evaluate_on_datasets(model, tokenizer, eval_ds, label=f"ADAPTED-{split_label}")
-    for ds_name in m:
-        key = f"{ds_name}|{split_label}"
-        adapted_metrics[key] = m[ds_name]
-        adapted_results[key] = r[ds_name]
+if not adapted_results:
+    model.gradient_checkpointing_disable()
 
-_save_predictions_checkpoint(
-    adapted_results, os.path.join(output_dir, "predictions_adapted.json"),
-)
+    for split_label, eval_ds in [("dev", eval_datasets_dev), ("test", eval_datasets_test)]:
+        print(f"\n  -- Split: {split_label.upper()} --")
+        m, r = evaluate_on_datasets(model, tokenizer, eval_ds, label=f"ADAPTED-{split_label}")
+        for ds_name in m:
+            key = f"{ds_name}|{split_label}"
+            adapted_metrics[key] = m[ds_name]
+            adapted_results[key] = r[ds_name]
+
+    _save_predictions_checkpoint(adapted_results, _adapted_pred_path)
 
 # --- Final eval loss (requires model + trainer alive) ---
 print("\n--> Computing final eval loss...")
@@ -1209,14 +1354,16 @@ print("COMPARATIVE SUMMARY: BASE vs ADAPTED")
 print("=" * 70)
 
 METRIC_KEYS = [
-    ("Token_F1",               "Token F1",               "%"),
-    ("BERTScore_F1",           "BERTScore F1",           "%"),
-    ("Context_Faithfulness_Pct","Context Faithfulness",   "%"),
+    ("Token_F1",                "Token F1",               "%"),
+    ("ROUGE_L_F1",              "ROUGE-L F1",             "%"),
+    ("BERTScore_F1",            "BERTScore F1",           "%"),
+    ("Context_Faithfulness_Pct","Context Faithfulness",   "%"),   # auxiliary
     ("Avg_Response_Length_Words","Avg Response Length",   "words"),
     ("Sentence_Completeness_Pct","Sentence Completeness", "%"),
 ]
 
-AGG_KEYS = ["Token_F1", "BERTScore_F1", "Context_Faithfulness_Pct"]
+# Primary metrics used in thesis tables (splits.md / investigacionMetricas.md)
+AGG_KEYS = ["Token_F1", "ROUGE_L_F1", "BERTScore_F1"]
 
 comparison = {"per_split": {}, "aggregate": {}}
 

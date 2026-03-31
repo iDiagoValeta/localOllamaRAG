@@ -66,7 +66,7 @@ Dependencies:
 #  DATA
 #  `-- 3. Dataset loading (once; shared by all models)
 #           3.1 Normalizers _normalize_nb / _dolly / _aina
-#           3.2 Filters _filter_valid, _filter_long_response, _filter_dolly_rag
+#           3.2 Filters _filter_valid, _filter_dolly_rag
 #           3.3 Neural-Bridge: dev = last SAMPLES_NEURAL_BRIDGE_DEV of train; test = HF test
 #           3.4 Dolly: 80/10/10 on RAG-filtered shuffle
 #           3.5 Aina: validation/test per language Aina-EN/ES/CA
@@ -129,6 +129,11 @@ MODELS = [
 SAMPLES_NEURAL_BRIDGE_DEV = 1000
 EVAL_MAX_NEW_TOKENS = 2048
 MAX_CONTEXT_TOKENS  = 2048
+
+# --- 1.5b Evaluation caps (dev only; test is frozen for train-qwen3.py) ---
+EVAL_CAP_NB_DEV    = 250   # Neural-Bridge dev
+EVAL_CAP_DOLLY_DEV = 350   # Dolly (more heterogeneous post-F3 -> more weight)
+EVAL_CAP_AINA_DEV  = 250   # per-language Aina
 
 # --- 1.6 BERTScore backend ---
 BERTSCORE_MODEL      = "microsoft/deberta-xlarge-mnli"
@@ -204,6 +209,43 @@ def compute_f1(prediction: str, ground_truth: str) -> float:
         return 0.0
     prec = n / len(pred_tok)
     rec  = n / len(truth_tok)
+    return 2 * prec * rec / (prec + rec)
+
+
+def _lcs_length(x: list, y: list) -> int:
+    """Dynamic programming LCS length (token lists)."""
+    m, n = len(x), len(y)
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if x[i - 1] == y[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1] + 1
+            else:
+                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+    return dp[m][n]
+
+
+def compute_rouge_l(prediction: str, ground_truth: str) -> float:
+    """ROUGE-L F1 based on Longest Common Subsequence (token-level).
+
+    Uses the same normalization as compute_f1 (EN/ES/CA articles + punctuation).
+
+    Args:
+        prediction:   The model's generated response text.
+        ground_truth: The reference answer text.
+
+    Returns:
+        ROUGE-L F1 score between 0.0 and 1.0.
+    """
+    pred_tok  = normalize_text(prediction).split()
+    truth_tok = normalize_text(ground_truth).split()
+    if not pred_tok or not truth_tok:
+        return 1.0 if pred_tok == truth_tok else 0.0
+    lcs = _lcs_length(pred_tok, truth_tok)
+    if lcs == 0:
+        return 0.0
+    prec = lcs / len(pred_tok)
+    rec  = lcs / len(truth_tok)
     return 2 * prec * rec / (prec + rec)
 
 
@@ -342,6 +384,7 @@ def evaluate_on_datasets(
 
     for ds_name, ds in eval_datasets.items():
         total_f1         = 0.0
+        total_rouge_l    = 0.0
         total_faith      = 0.0
         total_words      = 0
         n_complete       = 0
@@ -359,15 +402,17 @@ def evaluate_on_datasets(
                 model_name=model_name,
             )
 
-            f1    = compute_f1(pred, ground_truth)
+            f1      = compute_f1(pred, ground_truth)
+            rouge_l = compute_rouge_l(pred, ground_truth)
             original_ctx = example["context"]
             faith = compute_context_faithfulness(pred, original_ctx)
             words = len(pred.split())
             is_complete = bool(pred.rstrip()) and pred.rstrip()[-1] in ".!?"
 
-            total_f1    += f1
-            total_faith += faith
-            total_words += words
+            total_f1      += f1
+            total_rouge_l += rouge_l
+            total_faith   += faith
+            total_words   += words
             if is_complete:
                 n_complete += 1
 
@@ -376,17 +421,19 @@ def evaluate_on_datasets(
                 "context":      original_ctx[:200] + "..." if len(original_ctx) > 200 else original_ctx,
                 "ground_truth": ground_truth,
                 "prediction":   pred,
-                "f1":           round(f1,    4),
-                "faithfulness": round(faith, 4),
+                "f1":           round(f1,      4),
+                "rouge_l":      round(rouge_l, 4),
+                "faithfulness": round(faith,   4),
                 "words":        words,
             })
 
         metrics = {
             "n_samples":                   n,
-            "Token_F1":                    round((total_f1    / n) * 100, 2) if n else 0.0,
-            "Context_Faithfulness_Pct":    round((total_faith / n) * 100, 2) if n else 0.0,
-            "Avg_Response_Length_Words":   round( total_words / n,         1) if n else 0.0,
-            "Sentence_Completeness_Pct":   round((n_complete  / n) * 100, 1) if n else 0.0,
+            "Token_F1":                    round((total_f1      / n) * 100, 2) if n else 0.0,
+            "ROUGE_L_F1":                  round((total_rouge_l / n) * 100, 2) if n else 0.0,
+            "Context_Faithfulness_Pct":    round((total_faith   / n) * 100, 2) if n else 0.0,
+            "Avg_Response_Length_Words":   round( total_words   / n,         1) if n else 0.0,
+            "Sentence_Completeness_Pct":   round((n_complete    / n) * 100, 1) if n else 0.0,
         }
         if not with_context:
             metrics["Context_Faithfulness_Note"] = "Computed vs unseen context (baseline overlap)"
@@ -396,6 +443,7 @@ def evaluate_on_datasets(
         faith_note = "" if with_context else "  [N/A -- no context]"
         print(f"\n  {ds_name} ({n} samples):")
         print(f"    Token F1:               {metrics['Token_F1']:.2f}%")
+        print(f"    ROUGE-L F1:             {metrics['ROUGE_L_F1']:.2f}%")
         print(f"    Context Faithfulness:   {metrics['Context_Faithfulness_Pct']:.2f}%{faith_note}")
         print(f"    Avg Response Length:    {metrics['Avg_Response_Length_Words']:.1f} words")
         print(f"    Sentence Completeness:  {metrics['Sentence_Completeness_Pct']:.1f}%")
@@ -496,10 +544,6 @@ def _filter_valid(ex):
     )
 
 
-def _filter_long_response(ex, min_words: int = 15):
-    """Keep only responses with at least min_words words."""
-    return len(ex["response"].split()) >= min_words
-
 
 def _filter_dolly_rag(ex):
     """Keep only Dolly rows that are RAG-relevant (non-empty context + correct category)."""
@@ -514,21 +558,13 @@ _nb_train_full = (
     load_dataset("neural-bridge/rag-dataset-12000", split="train")
     .map(_normalize_nb, remove_columns=["context", "question", "answer"])
     .filter(_filter_valid)
-    .filter(_filter_long_response)
     .shuffle(seed=42)
 )
 nb_n = len(_nb_train_full)
 nb_dev_start = nb_n - SAMPLES_NEURAL_BRIDGE_DEV
 nb_dev = _nb_train_full.select(range(nb_dev_start, min(nb_dev_start + SAMPLES_NEURAL_BRIDGE_DEV, nb_n)))
 
-nb_test = (
-    load_dataset("neural-bridge/rag-dataset-12000", split="test")
-    .map(_normalize_nb, remove_columns=["context", "question", "answer"])
-    .filter(_filter_valid)
-    .filter(_filter_long_response)
-    .shuffle(seed=42)
-)
-print(f"    dev={len(nb_dev)}, test={len(nb_test)}")
+print(f"    dev={len(nb_dev)}  (test frozen for train-qwen3.py)")
 
 print("  Dolly QA (RAG-relevant categories only, manual 80/10/10)...")
 _dolly_all = (
@@ -536,7 +572,6 @@ _dolly_all = (
     .map(_normalize_dolly, remove_columns=["instruction", "context", "response", "category"])
     .filter(_filter_dolly_rag)
     .filter(_filter_valid)
-    .filter(_filter_long_response)
     .shuffle(seed=42)
     .remove_columns(["category"])
 )
@@ -544,9 +579,8 @@ nd = len(_dolly_all)
 nd_train = int(nd * 0.80)
 nd_val   = int(nd * 0.10)
 dolly_dev  = _dolly_all.select(range(nd_train, nd_train + nd_val))
-dolly_test = _dolly_all.select(range(nd_train + nd_val, nd))
 print(f"    RAG rows total: {nd}")
-print(f"    dev={len(dolly_dev)}, test={len(dolly_test)}")
+print(f"    dev={len(dolly_dev)}  (test frozen for train-qwen3.py)")
 
 print("  Aina RAG Multilingual...")
 
@@ -562,7 +596,6 @@ def _load_aina_by_lang(split):
         ds
         .map(_normalize_aina, remove_columns=cols_to_remove)
         .filter(_filter_valid)
-        .filter(_filter_long_response)
     )
     result = {}
     for lang_code, lang_label in _AINA_LANGS:
@@ -571,11 +604,9 @@ def _load_aina_by_lang(split):
     return result
 
 
-_aina_dev_by_lang  = _load_aina_by_lang("validation")
-_aina_test_by_lang = _load_aina_by_lang("test")
+_aina_dev_by_lang = _load_aina_by_lang("validation")
 for lang_label in ["Aina-EN", "Aina-ES", "Aina-CA"]:
-    print(f"    {lang_label}: dev={len(_aina_dev_by_lang[lang_label])}, "
-          f"test={len(_aina_test_by_lang[lang_label])}")
+    print(f"    {lang_label}: dev={len(_aina_dev_by_lang[lang_label])}  (test frozen for train-qwen3.py)")
 
 def _build_eval_dict(nb_ds, dolly_ds, aina_by_lang, split_label: str) -> dict:
     """Build a frozen eval dict using full partitions (no sample cap)."""
@@ -590,21 +621,34 @@ def _build_eval_dict(nb_ds, dolly_ds, aina_by_lang, split_label: str) -> dict:
 
 
 print("\n  Building frozen evaluation splits:")
-eval_datasets_dev  = _build_eval_dict(nb_dev, dolly_dev, _aina_dev_by_lang, "dev")
-eval_datasets_test = _build_eval_dict(nb_test, dolly_test, _aina_test_by_lang, "test")
+eval_datasets_dev = _build_eval_dict(nb_dev, dolly_dev, _aina_dev_by_lang, "dev")
 
-total_dev  = sum(len(d) for d in eval_datasets_dev.values())
-total_test = sum(len(d) for d in eval_datasets_test.values())
-print(f"\n--> Total dev samples:  {total_dev}")
-print(f"--> Total test samples: {total_test}")
+# Apply Phase-1 caps to dev (reproducible subsets per splits.md)
+_CAPS_DEV = {
+    "Neural-Bridge RAG": EVAL_CAP_NB_DEV,
+    "Dolly QA":          EVAL_CAP_DOLLY_DEV,
+    "Aina-EN":           EVAL_CAP_AINA_DEV,
+    "Aina-ES":           EVAL_CAP_AINA_DEV,
+    "Aina-CA":           EVAL_CAP_AINA_DEV,
+}
+for ds_name in list(eval_datasets_dev.keys()):
+    cap = _CAPS_DEV.get(ds_name, len(eval_datasets_dev[ds_name]))
+    eval_datasets_dev[ds_name] = eval_datasets_dev[ds_name].select(
+        range(min(cap, len(eval_datasets_dev[ds_name])))
+    )
+    print(f"    dev | {ds_name}: capped to {len(eval_datasets_dev[ds_name])} samples")
+
+total_dev = sum(len(d) for d in eval_datasets_dev.values())
+print(f"\n--> Total dev samples: {total_dev}")
+print("--> Test split: frozen (evaluated in train-qwen3.py only)")
 
 
 # ─────────────────────────────────────────────
-# SECTION 4: MAIN LOOP -- 7 Models x 2 Modes x 2 Splits
+# SECTION 4: MAIN LOOP -- 7 Models x 2 Modes x dev only
 # ─────────────────────────────────────────────
 # Order: defined by MODELS list (modifiable for parallel job distribution)
-# Each model is loaded, evaluated across 4 combinations (mode x split),
-# and unloaded with gc.collect() + torch.cuda.empty_cache() before the next.
+# Each model is loaded, evaluated on dev (2 modes), unloaded.
+# Test split is frozen -- evaluated only in train-qwen3.py.
 
 all_results = {}
 CHECKPOINT_PATH = os.path.join(output_dir, "baseline_checkpoint.json")
@@ -667,7 +711,7 @@ for model_idx, model_name in enumerate(MODELS, 1):
         mode_results = {}
         _raw_results[mode_key] = {}
 
-        for split_name, eval_ds in [("dev", eval_datasets_dev), ("test", eval_datasets_test)]:
+        for split_name, eval_ds in [("dev", eval_datasets_dev)]:
             print(f"\n  -- Split: {split_name.upper()} --")
 
             metrics, results = evaluate_on_datasets(
@@ -678,21 +722,23 @@ for model_idx, model_name in enumerate(MODELS, 1):
             )
             _raw_results[mode_key][split_name] = results
 
-            agg_f1 = agg_faith = agg_words = agg_complete = 0.0
+            agg_f1 = agg_rouge_l = agg_faith = agg_words = agg_complete = 0.0
             agg_n = 0
             for ds_name, m in metrics.items():
                 n = m["n_samples"]
                 agg_n        += n
-                agg_f1       += m["Token_F1"] * n
-                agg_faith    += m["Context_Faithfulness_Pct"] * n
-                agg_words    += m["Avg_Response_Length_Words"] * n
+                agg_f1       += m["Token_F1"]                  * n
+                agg_rouge_l  += m["ROUGE_L_F1"]                * n
+                agg_faith    += m["Context_Faithfulness_Pct"]  * n
+                agg_words    += m["Avg_Response_Length_Words"]  * n
                 agg_complete += m["Sentence_Completeness_Pct"] * n
 
             aggregate = {
                 "n_samples":                   agg_n,
-                "Token_F1":                    round(agg_f1 / agg_n, 2) if agg_n else 0.0,
-                "Context_Faithfulness_Pct":    round(agg_faith / agg_n, 2) if agg_n else 0.0,
-                "Avg_Response_Length_Words":   round(agg_words / agg_n, 1) if agg_n else 0.0,
+                "Token_F1":                    round(agg_f1      / agg_n, 2) if agg_n else 0.0,
+                "ROUGE_L_F1":                  round(agg_rouge_l / agg_n, 2) if agg_n else 0.0,
+                "Context_Faithfulness_Pct":    round(agg_faith   / agg_n, 2) if agg_n else 0.0,
+                "Avg_Response_Length_Words":   round(agg_words   / agg_n, 1) if agg_n else 0.0,
                 "Sentence_Completeness_Pct":   round(agg_complete / agg_n, 1) if agg_n else 0.0,
             }
             if not with_context:
@@ -704,6 +750,7 @@ for model_idx, model_name in enumerate(MODELS, 1):
 
             print(f"\n  Aggregate ({split_name}, {mode_label}):")
             print(f"    Token F1:             {aggregate['Token_F1']:.2f}%")
+            print(f"    ROUGE-L F1:           {aggregate['ROUGE_L_F1']:.2f}%")
             faith_note = "  [N/A -- no context]" if not with_context else ""
             print(f"    Context Faithfulness: {aggregate['Context_Faithfulness_Pct']:.2f}%{faith_note}")
             print(f"    Avg Response Length:  {aggregate['Avg_Response_Length_Words']:.1f} words")
@@ -737,7 +784,7 @@ for model_idx, model_name in enumerate(MODELS, 1):
     print(f"\n--> Computing BERTScore for {model_slug}...")
 
     for mode_key in ["with_context", "without_context"]:
-        for split_name in ["dev", "test"]:
+        for split_name in ["dev"]:
             raw_res = _raw_results[mode_key][split_name]
             preds, gts = _extract_preds_gts(raw_res)
 
@@ -755,6 +802,7 @@ for model_idx, model_name in enumerate(MODELS, 1):
                 n = model_results[mode_key][split_name][ds_name]["n_samples"]
                 agg_bs_f1 += bs[ds_name]["avg_F1"] * n
             agg["BERTScore_F1"] = round(agg_bs_f1 / agg["n_samples"], 2) if agg["n_samples"] else 0.0
+            print(f"      Aggregate BERTScore F1: {agg['BERTScore_F1']:.2f}%")
 
     gc.collect()
     torch.cuda.empty_cache()
@@ -788,7 +836,7 @@ print("BASELINE EVALUATION SUMMARY TABLE")
 print("=" * 70)
 
 header = (f"{'Model':<35s} | {'Split':<5s} | {'Mode':<12s} | "
-          f"{'Token_F1':>9s} | {'BS_F1':>9s} | {'Ctx_Faith':>10s} | {'Avg_Len':>8s}")
+          f"{'Token_F1':>9s} | {'ROUGE-L':>9s} | {'BS_F1':>9s} | {'Ctx_Faith':>10s} | {'Avg_Len':>8s}")
 print(header)
 print("─" * len(header))
 
@@ -797,17 +845,18 @@ for model_name in MODELS:
     if model_name not in all_results:
         continue
     for mode_key, mode_label in [("with_context", "with context"), ("without_context", "no context")]:
-        for split_name in ["dev", "test"]:
-            agg = all_results[model_name][mode_key][split_name].get("aggregate", {})
-            f1      = agg.get("Token_F1", 0.0)
-            bs_f1   = agg.get("BERTScore_F1", 0.0)
-            faith   = agg.get("Context_Faithfulness_Pct", 0.0)
-            avg_len = agg.get("Avg_Response_Length_Words", 0.0)
+        for split_name in ["dev"]:
+            agg = all_results[model_name][mode_key].get(split_name, {}).get("aggregate", {})
+            f1      = agg.get("Token_F1",                  0.0)
+            rl      = agg.get("ROUGE_L_F1",                0.0)
+            bs_f1   = agg.get("BERTScore_F1",              0.0)
+            faith   = agg.get("Context_Faithfulness_Pct",  0.0)
+            avg_len = agg.get("Avg_Response_Length_Words",  0.0)
 
             faith_str = f"{faith:>9.2f}%" if mode_key == "with_context" else "   N/A    "
 
             print(f"{short_name:<35s} | {split_name:<5s} | {mode_label:<12s} | "
-                  f"{f1:>8.2f}% | {bs_f1:>8.2f}% | {faith_str} | {avg_len:>7.1f}w")
+                  f"{f1:>8.2f}% | {rl:>8.2f}% | {bs_f1:>8.2f}% | {faith_str} | {avg_len:>7.1f}w")
 
 print("─" * len(header))
 
@@ -826,9 +875,8 @@ try:
         compact[model_name] = {}
         for mode_key in ["with_context", "without_context"]:
             compact[model_name][mode_key] = {}
-            for split_name in ["dev", "test"]:
-                compact[model_name][mode_key][split_name] = {
-                    "aggregate": all_results[model_name][mode_key][split_name].get("aggregate", {})
+            compact[model_name][mode_key]["dev"] = {
+                    "aggregate": all_results[model_name][mode_key]["dev"].get("aggregate", {})
                 }
     with open(samples_path, "w", encoding="utf-8") as f:
         json.dump(compact, f, indent=4, ensure_ascii=False)
