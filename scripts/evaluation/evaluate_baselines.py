@@ -99,22 +99,17 @@ import bert_score.utils as _bsu
 # SECTION 1: ENVIRONMENT AND CONSTANTS
 # ─────────────────────────────────────────────
 
-# --- 1.1 Optional Hugging Face token warning (Gemma, private hubs) ---
 if not os.environ.get("HF_TOKEN") and not os.path.exists(os.path.expanduser("~/.cache/huggingface/token")):
     print("WARNING: HF_TOKEN is not set in the environment.")
 
-# --- 1.2 CUDA / PyTorch runtime guards ---
 os.environ["TORCH_COMPILE_DISABLE"] = "1"
 os.environ["TORCH_DYNAMO_DISABLE"] = "1"
 os.environ["TRITON_DISABLE"] = "1"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-# --- 1.3 Output directory (JSON checkpoints and final reports) ---
 output_dir = os.path.join(os.getcwd(), "baseline-evaluation-output")
 os.makedirs(output_dir, exist_ok=True)
 
-# --- 1.4 Model list (one loaded at a time; reorder for parallel job shards) ---
-# Qwen3 / Qwen3.5 use enable_thinking=False in generate_response; others use default chat templates.
 MODELS = [
     "meta-llama/Llama-3.1-8B-Instruct",
     "mistralai/Mistral-7B-Instruct-v0.3",
@@ -125,21 +120,17 @@ MODELS = [
     "microsoft/phi-4",
 ]
 
-# --- 1.5 Dataset and generation limits (Neural-Bridge dev = tail of train, same as train-qwen3) ---
 SAMPLES_NEURAL_BRIDGE_DEV = 1000
 EVAL_MAX_NEW_TOKENS = 2048
 MAX_CONTEXT_TOKENS  = 2048
 
-# --- 1.5b Evaluation caps (dev only; test is frozen for train-qwen3.py) ---
-EVAL_CAP_NB_DEV    = 250   # Neural-Bridge dev
+EVAL_CAP_NB_DEV    = 250   # Neural-Bridge
 EVAL_CAP_DOLLY_DEV = 350   # Dolly (more heterogeneous post-F3 -> more weight)
 EVAL_CAP_AINA_DEV  = 250   # per-language Aina
 
-# --- 1.6 BERTScore backend ---
 BERTSCORE_MODEL      = "microsoft/deberta-xlarge-mnli"
 BERTSCORE_BATCH_SIZE = 32
 
-# --- 1.7 System prompts (with-context aligned train-qwen3 v7.2; no-context omits <context> wording) ---
 SYSTEM_PROMPT = (
     "You are a professional document analysis assistant. Your role is to answer "
     "questions accurately based on the provided document context.\n\n"
@@ -165,18 +156,13 @@ SYSTEM_PROMPT_NO_CONTEXT = (
     "- Respond in the same language as the question."
 )
 
-# --- 1.8 Dolly subset filter (RAG-style rows only) ---
 DOLLY_RAG_CATEGORIES = {"closed_qa", "information_extraction", "summarization"}
 
 
 # ─────────────────────────────────────────────
 # SECTION 2: METRICS AND INFERENCE
 # ─────────────────────────────────────────────
-# Lexical metrics need no extra models. BERTScore runs after each LLM is unloaded.
-# Primary thesis signal: context faithfulness (overlap of response types with context).
-# Secondary: Token F1 vs reference; length and sentence-ending rate for style checks.
 
-# --- 2.0 bert_score: force DeBERTa encode cap (Rust tokenizer OverflowError on sys.maxsize) ---
 def _safe_sent_encode(tokenizer, a):
     return tokenizer.encode(
         a.strip(), add_special_tokens=True, max_length=512, truncation=True,
@@ -185,7 +171,6 @@ def _safe_sent_encode(tokenizer, a):
 
 _bsu.sent_encode = _safe_sent_encode
 
-# --- 2.1 Text normalization, Token F1, context faithfulness ---
 def normalize_text(text: str) -> str:
     """Lowercase, strip articles (EN/ES/CA) and punctuation."""
     text = str(text).lower()
@@ -267,7 +252,6 @@ def compute_context_faithfulness(prediction: str, context: str) -> float:
     return len(pred_types & ctx_types) / len(pred_types)
 
 
-# --- 2.2 Generation (chat template, context cap, family-specific EOS, Qwen3 thinking off) ---
 def generate_response(
     model, tokenizer, instruction: str, context: str,
     max_new_tokens: int = EVAL_MAX_NEW_TOKENS,
@@ -501,7 +485,6 @@ def _extract_preds_gts(eval_results: dict) -> tuple:
 # ─────────────────────────────────────────────
 # SECTION 3: DATASET LOADING (once, before loading models)
 # ─────────────────────────────────────────────
-# Splits are loaded and frozen here. They are reused for ALL models.
 
 print("\n" + "=" * 70)
 print("SECTION 3: Loading and freezing datasets")
@@ -542,7 +525,6 @@ def _filter_valid(ex):
         and bool(ex["context"].strip())
         and bool(ex["response"].strip())
     )
-
 
 
 def _filter_dolly_rag(ex):
@@ -623,7 +605,6 @@ def _build_eval_dict(nb_ds, dolly_ds, aina_by_lang, split_label: str) -> dict:
 print("\n  Building frozen evaluation splits:")
 eval_datasets_dev = _build_eval_dict(nb_dev, dolly_dev, _aina_dev_by_lang, "dev")
 
-# Apply Phase-1 caps to dev (reproducible subsets per splits.md)
 _CAPS_DEV = {
     "Neural-Bridge RAG": EVAL_CAP_NB_DEV,
     "Dolly QA":          EVAL_CAP_DOLLY_DEV,
@@ -646,9 +627,6 @@ print("--> Test split: frozen (evaluated in train-qwen3.py only)")
 # ─────────────────────────────────────────────
 # SECTION 4: MAIN LOOP -- 7 Models x 2 Modes x dev only
 # ─────────────────────────────────────────────
-# Order: defined by MODELS list (modifiable for parallel job distribution)
-# Each model is loaded, evaluated on dev (2 modes), unloaded.
-# Test split is frozen -- evaluated only in train-qwen3.py.
 
 all_results = {}
 CHECKPOINT_PATH = os.path.join(output_dir, "baseline_checkpoint.json")
@@ -828,8 +806,6 @@ for model_idx, model_name in enumerate(MODELS, 1):
 # ─────────────────────────────────────────────
 # SECTION 5: SUMMARY TABLE AND SAVE
 # ─────────────────────────────────────────────
-# Print table with weighted aggregates per model/split/mode.
-# Save baseline_evaluation.json (full) and _samples.json (aggregates only).
 
 print("\n" + "=" * 70)
 print("BASELINE EVALUATION SUMMARY TABLE")

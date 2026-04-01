@@ -57,9 +57,9 @@ How to run (interactive CLI):
 #  BUSINESS LOGIC
 #  +-- 4. System prompts      CHAT (identity + language); RAG prompt baked into Modelfile
 #  +-- 5. History persistence  local JSON for CHAT mode
-#  +-- 6. Preprocessing and chunking  text -> Markdown chunks with overlap
+#  +-- 6. Preprocessing and chunking  text -> Markdown chunks with overlap; expandir_con_chunks_adyacentes
 #  +-- 7. Keywords and lexical search  acronyms, bigrams, where_document
-#  +-- 8. Semantic reranking   CrossEncoder singleton, CUDA/CPU
+#  +-- 8. Semantic reranking   CrossEncoder singleton; generar_queries_con_llm, _validar_coherencia_query, _filtrar_terminos_criticos
 #  +-- 9. Hybrid retrieval pipeline  semantic + keywords + exhaustive -> RRF -> rerank
 #  +--10. Context and generation
 #  |      +-- 10.1 PDF text optimization (artifacts, footers, paragraphs)
@@ -83,7 +83,6 @@ How to run (interactive CLI):
 # SECTION 1: IMPORTS
 # ─────────────────────────────────────────────
 
-# --- 1.1 Standard library ---
 
 import base64
 import io
@@ -98,19 +97,16 @@ from collections import Counter
 from contextlib import redirect_stderr, redirect_stdout
 from typing import Any, Dict, List, Optional, Tuple
 
-# --- 1.2 Third-party (Ollama, ChromaDB, pypdf) ---
 
 import chromadb
 import ollama
 from pypdf import PdfReader
 
-# --- 1.3 Bootstrap: project path ---
 
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-# --- 1.4 Local ---
 
 from rag.cli.display import ui
 
@@ -128,7 +124,7 @@ except ImportError:
     PYMUPDF_AVAILABLE = False
 
 try:
-    import fitz  # PyMuPDF -- used for image extraction
+    import fitz
     FITZ_DISPONIBLE = True
 except ImportError:
     FITZ_DISPONIBLE = False
@@ -145,8 +141,6 @@ except ImportError:
 # ─────────────────────────────────────────────
 
 
-# --- 3.1 Terminal runtime (UTF-8 encoding) ---
-
 if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -158,7 +152,6 @@ if hasattr(sys.stderr, "reconfigure"):
     except Exception:
         pass
 
-# --- 3.2 Ollama models ---
 
 MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "llama3.1")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:4b")
@@ -182,7 +175,6 @@ def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
 
 MODELO_DESC = os.getenv("MODELO_DESC", _inferir_descripcion_modelo(MODELO_RAG))
 
-# --- 3.3 Pipeline flags (per-stage toggle) ---
 
 USAR_CONTEXTUAL_RETRIEVAL = True
 USAR_LLM_QUERY_DECOMPOSITION = True
@@ -196,7 +188,6 @@ USAR_EMBEDDINGS_IMAGEN = True
 LOGGING_METRICAS = True
 GUARDAR_DEBUG_RAG = True
 
-# --- 3.4 Paths and persistence ---
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "pdfs"))
@@ -212,7 +203,6 @@ MAX_HISTORIAL_MENSAJES = 40
 
 CARPETA_DEBUG_RAG = os.path.join(BASE_DIR, "debug_rag")
 
-# --- 3.5 Retrieval and generation parameters ---
 
 _embed_name_lower = MODELO_EMBEDDING.lower().split(":")[0]
 if "nomic" in _embed_name_lower:
@@ -246,7 +236,6 @@ UMBRAL_SCORE_RERANKER = 0.40
 MIN_LONGITUD_PREGUNTA_RAG = 10
 MAX_CONTEXTO_CHARS = 8192
 
-# --- 3.6 Logging and environment ---
 
 LOG_LEVEL = logging.ERROR
 
@@ -569,7 +558,6 @@ def expandir_con_chunks_adyacentes(
         if chunk_num - i >= 0:
             ids_adyacentes.append(f"{archivo}_pag{pagina}_chunk{chunk_num - i}")
 
-    # Cross-page: last chunks of previous page
     if chunk_num == 0 and pagina > 0:
         for last_c in range(3):
             ids_adyacentes.append(f"{archivo}_pag{pagina - 1}_chunk{last_c}")
@@ -579,7 +567,6 @@ def expandir_con_chunks_adyacentes(
             if chunk_num + i < total_in_page:
                 ids_adyacentes.append(f"{archivo}_pag{pagina}_chunk{chunk_num + i}")
 
-        # Cross-page: first chunks of next page
         if chunk_num >= total_in_page - 1:
             for first_c in range(min(2, n_vecinos + 1)):
                 ids_adyacentes.append(f"{archivo}_pag{pagina + 1}_chunk{first_c}")
@@ -1017,7 +1004,6 @@ def rerank_resultados(
         textos_documentos = []
         for doc in documentos_recuperados:
             texto = doc['doc']
-            # Strip contextual retrieval prefix if present
             if '\\n\\n' in texto:
                 partes = texto.split('\\n\\n', 1)
                 texto = partes[-1]
@@ -1279,7 +1265,6 @@ def realizar_busqueda_hibrida(
                     'query_matches': []
                 }
 
-            # RRF scoring: accumulate reciprocal rank
             all_semantic_results[chunk_id]['score_semantic'] += 1.0 / (idx + 60)
             all_semantic_results[chunk_id]['query_matches'].append(q_idx + 1)
             if distancia < all_semantic_results[chunk_id]['distancia']:
@@ -1409,8 +1394,6 @@ def realizar_busqueda_hibrida(
 # SECTION 10: CONTEXT AND GENERATION
 # ─────────────────────────────────────────────
 
-
-# --- 10.1 PDF text optimization ---
 
 def _es_continuacion_parrafo(linea_previa: str, linea_actual: str) -> bool:
     """Heuristic to detect whether the current line continues a paragraph.
@@ -1550,9 +1533,6 @@ def optimizar_texto_contexto(texto: str) -> str:
     return texto.strip()
 
 
-# --- 10.2 Context construction ---
-
-
 def _marcar_fragmento_incompleto(texto: str) -> str:
     """Append ``[incomplete fragment]`` if text lacks closing punctuation.
 
@@ -1646,7 +1626,6 @@ def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
         if not texto:
             continue
 
-        # Separate Contextual Retrieval summary from source text
         if '\\n\\n' in texto:
             ctx_summary, raw_content = texto.split('\\n\\n', 1)
             raw_content = _marcar_fragmento_incompleto(raw_content.strip())
@@ -1785,8 +1764,6 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
         logging.warning(f"Critical error in RECOMP synthesis ({MODELO_RECOMP}): {e}")
         return construir_contexto_para_modelo(fragmentos)
 
-
-# --- 10.3 Debug ---
 
 def guardar_debug_rag(
     pregunta: str,
@@ -1941,8 +1918,6 @@ def guardar_debug_rag(
         logging.warning(f"Error saving debug RAG: {e}")
 
 
-# --- 10.4 Response generation ---
-
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 
@@ -2043,8 +2018,6 @@ def generar_respuesta_silenciosa(pregunta: str, fragmentos: List[Dict[str, Any]]
             respuesta_completa += content
     return respuesta_completa
 
-
-# --- 10.5 Evaluation (RAGAS) ---
 
 def evaluar_pregunta_rag(
     pregunta: str,
@@ -2164,9 +2137,6 @@ def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
     except Exception as e:
         logging.warning(f"Error generating situational context: {e}")
     return ""
-
-
-# --- 11.2 Image extraction ---
 
 
 def extraer_imagenes_pdf(
@@ -2295,8 +2265,6 @@ def describir_imagen_con_llm(image_bytes: bytes) -> str:
         logging.warning(f"Error describing image with {MODELO_OCR}: {e}")
         return ""
 
-
-# --- 11.3 Indexing ---
 
 def indexar_documentos(
     carpeta: str,
@@ -2477,9 +2445,6 @@ def indexar_documentos(
                         if _indexar_chunk(id_doc, chunk_text_con_contexto, chunk_text_con_contexto, metadata, collection):
                             total_chunks += 1
 
-            # Image chunks — independent of the text extraction path used above.
-            # Each image is described by MODELO_OCR, optionally enriched with
-            # contextual retrieval (same flag as text chunks), then embedded.
             if imagenes_pdf:
                 if not silent:
                     ui.debug("  describing and indexing images...")
@@ -2489,8 +2454,6 @@ def indexar_documentos(
                         if not descripcion:
                             continue
 
-                        # Enrich the raw OCR description with situational context
-                        # so its embedding lands closer to topic-aware queries.
                         contexto_img = generar_contexto_situacional(descripcion, texto_base_doc)
                         descripcion_enriquecida = (contexto_img + descripcion).strip()
 
@@ -2519,8 +2482,6 @@ def indexar_documentos(
         ui.pipeline_stop()
     return total_chunks
 
-
-# --- 11.4 Collection management ---
 
 def obtener_documentos_indexados(collection: chromadb.Collection) -> List[str]:
     """List unique document names (``source``) in the collection.

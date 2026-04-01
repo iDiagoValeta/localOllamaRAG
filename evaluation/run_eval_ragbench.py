@@ -113,7 +113,6 @@ from rag.chat_pdfs import (
 # SECTION 2: CONSTANTES GLOBALES
 # ─────────────────────────────────────────────
 
-# --- 2.1 Dataset ---
 HF_REPO = "vectara/open_ragbench"
 HF_SUBDIR = "pdf/arxiv"
 HF_METADATA_FILES = ["queries.json", "qrels.json", "answers.json", "pdf_urls.json"]
@@ -122,9 +121,8 @@ HF_METADATA_FILES = ["queries.json", "qrels.json", "answers.json", "pdf_urls.jso
 #   "text"        → preguntas sobre texto plano
 #   "text-image"  → preguntas sobre figuras/imágenes del paper
 #   "text-table"  → preguntas sobre tablas del paper
-DEFAULT_SOURCE = "text-image"
+DEFAULT_SOURCE = "text"
 
-# --- 2.2 Parámetros por defecto ---
 N_PAPERS = 10
 MAX_QUESTIONS_PER_PAPER = 5
 ARXIV_DELAY_SECS = 5
@@ -133,7 +131,6 @@ ARXIV_HEADERS = {
     "User-Agent": "MonkeyGrab-TFG-Eval/1.0 (academic research; Universitat Politecnica de Valencia)"
 }
 
-# --- 2.3 Rutas ---
 EVAL_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJ_ROOT = os.path.dirname(EVAL_DIR)
 RAGBENCH_PDFS_DIR = os.path.join(PROJ_ROOT, "rag", "ragbench_pdfs")
@@ -142,7 +139,6 @@ RAGBENCH_COLLECTION = "ragbench_arxiv_eval"
 OUTPUT_CSV = os.path.join(EVAL_DIR, "ragas_ragbench_scores.csv")
 OUTPUT_DEBUG = os.path.join(EVAL_DIR, "ragas_ragbench_debug.json")
 
-# --- 2.4 Métricas RAGAS ---
 METRIC_NAMES = [
     "answer_correctness",
     "faithfulness",
@@ -812,10 +808,8 @@ def main():
 
     eval_llm, eval_embeddings = configurar_llm_evaluacion()
 
-    # --- Metadatos del dataset ---
     queries, qrels, answers_gt, pdf_urls = descargar_metadatos()
 
-    # --- Selección de papers ---
     selected_papers = seleccionar_papers_objetivo(
         args=args,
         queries=queries,
@@ -824,7 +818,6 @@ def main():
         source_filter=source_filter,
     )
 
-    # --- Construcción del conjunto de preguntas ---
     print("\nSeleccionando preguntas:")
     questions, ground_truths, paper_ids_per_q = construir_preguntas(
         queries, qrels, answers_gt, selected_papers, source_filter, args.max_q
@@ -833,7 +826,6 @@ def main():
         print("ERROR: No se seleccionaron preguntas con los filtros actuales.")
         raise SystemExit(1)
 
-    # --- Descarga de PDFs ---
     if not args.skip_download:
         successful_papers = descargar_pdfs(selected_papers, pdf_urls, RAGBENCH_PDFS_DIR)
     else:
@@ -853,11 +845,9 @@ def main():
         print("   Ejecuta sin --skip-download para descargar los PDFs necesarios.")
         raise SystemExit(1)
 
-    # --- Indexado ChromaDB ---
     solo_pdf = [f"{args.only_doc.strip()}.pdf"] if args.only_doc else None
     collection = conectar_e_indexar(RAGBENCH_PDFS_DIR, args.force_reindex, solo_archivos=solo_pdf)
 
-    # --- Pipeline RAG ---
     print(f"\nEjecutando pipeline RAG para {len(questions)} preguntas...")
     gen_answers: list[str] = []
     contexts_list: list[list[str]] = []
@@ -878,7 +868,6 @@ def main():
     t_rag = time.time() - t_start
     print(f"   Completado en {t_rag:.1f}s ({t_rag / max(len(questions), 1):.1f}s/pregunta)")
 
-    # --- Dataset RAGAS ---
     print("\nConstruyendo EvaluationDataset para RAGAS...")
     samples = [
         SingleTurnSample(
@@ -891,13 +880,11 @@ def main():
     ]
     eval_dataset = EvaluationDataset(samples=samples)
 
-    # Incluir answer_correctness solo si hay ground truth disponible
     tiene_ground_truth = any(gt.strip() for gt in ground_truths)
     metrics = [faithfulness, answer_relevancy, context_precision, context_recall]
     if tiene_ground_truth:
         metrics.insert(0, answer_correctness)
 
-    # --- Evaluación RAGAS ---
     print("\nEjecutando evaluación RAGAS (puede tardar varios minutos)...")
     t_eval_start = time.time()
 
@@ -912,7 +899,6 @@ def main():
     t_eval = time.time() - t_eval_start
     print(f"   Evaluación completada en {t_eval:.1f}s")
 
-    # --- Resultados ---
     df_scores = result.to_pandas()
     imprimir_resultados(df_scores, questions)
 

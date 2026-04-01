@@ -26,19 +26,27 @@ Dependencies:
 #
 #  CONFIGURATION
 #  +-- 1. Environment and constants   CUDA env vars, token limits
-#  |        1.1 Dataset sizes            train/val caps per source
-#  |        1.2 System prompt            aligned with SYSTEM_PROMPT_RAG from chat_pdfs
+#  |        1.1 CUDA / PyTorch runtime guards
+#  |        1.2 Output directory and model
+#  |        1.3 Dataset size caps         train/val caps per source
+#  |        1.4 Token length limits
+#  |        1.5 BERTScore backend
+#  |        1.6 Phase-2 evaluation caps   frozen val and test sets
+#  |        1.7 System prompt             aligned with SYSTEM_PROMPT_RAG from chat_pdfs
+#  |        1.8 Dolly RAG category filter
 #  +-- 2. Base model loading          AutoModelForCausalLM + Qwen3-14B tokenizer
 #
 #  EVALUATION AND METRICS
 #  +-- 3. Metrics and inference
-#           3.1 Text normalization       (EN/ES/CA, strip articles and punctuation)
-#           3.2 Token F1                 overlap with gold answer (SQuAD-standard)
-#           3.3 Context Faithfulness     primary metric for the thesis
-#           3.4 Generation              apply_chat_template + enable_thinking=False
-#           3.5 Evaluation loop         loop over frozen eval_datasets
-#           3.6 BERTScore batch          DeBERTa-xlarge-mnli, per-dataset
-#           3.7 Checkpoint helpers       save/load predictions for crash recovery
+#           3.0 bert_score monkey-patch   DeBERTa max_length 512
+#           3.1 Text normalization        (EN/ES/CA, strip articles and punctuation)
+#           3.2 Token F1                  overlap with gold answer (SQuAD-standard)
+#           3.3 ROUGE-L F1               LCS-based overlap with gold answer
+#           3.4 Context Faithfulness      auxiliary metric
+#           3.5 Generation               apply_chat_template + enable_thinking=False
+#           3.6 Evaluation loop          loop over frozen eval_datasets
+#           3.7 BERTScore batch          DeBERTa-xlarge-mnli, per-dataset
+#           3.8 Checkpoint helpers       save/load predictions for crash recovery
 #
 #  DATA
 #  +-- 4. Dataset loading
@@ -59,6 +67,8 @@ Dependencies:
 #  +-- 9. Training loop             Trainer.train()
 #  +--10. Model export              save_pretrained (best checkpoint)
 #  +--11. Adapted model evaluation  same frozen test set as Section 5
+#           11.1 Final eval loss         trainer.evaluate() after training
+#           11.2 Qualitative samples     3 production prompts EN/ES/CA
 #  +--12. BERTScore computation     unload main model, DeBERTa, merge metrics
 #  +--13. Comparative summary       deltas per dataset×split + weighted aggregate
 #  +--14. Artifact export           training_stats.json, evaluation_comparison.json
@@ -168,25 +178,8 @@ from bert_score import score as bert_score_fn
 import bert_score.utils as _bsu
 
 
-# ---------------------------------------------------------------------------
-# MONKEY-PATCH: bert_score.utils.sent_encode
-# ---------------------------------------------------------------------------
-# DeBERTa reports sys.maxsize as model_max_length, which the Rust tokenizer
-# backend cannot store as a 32-bit int.  Force max_length=512 (physical
-# limit of DeBERTa) and truncation=True.
-# ---------------------------------------------------------------------------
-def _safe_sent_encode(tokenizer, a):
-    return tokenizer.encode(
-        a.strip(), add_special_tokens=True, max_length=512, truncation=True,
-    )
-
-_bsu.sent_encode = _safe_sent_encode
-
-
 # ─────────────────────────────────────────────
 # SECTION 1: ENVIRONMENT AND CONSTANTS
-# ─────────────────────────────────────────────
-# CUDA environment variables, output paths, dataset caps, and system prompt.
 # ─────────────────────────────────────────────
 
 os.environ["TORCH_COMPILE_DISABLE"] = "1"
@@ -215,7 +208,6 @@ MAX_CONTEXT_TOKENS = 2048
 BERTSCORE_MODEL      = "microsoft/deberta-xlarge-mnli"
 BERTSCORE_BATCH_SIZE = 32
 
-# --- 1.3 Phase-2 evaluation caps (frozen val and test sets) ---
 EVAL_CAP_NB      = 700    # Neural-Bridge val and test
 EVAL_CAP_DOLLY   = 400    # Dolly val and test (naturally small, cap rarely active)
 EVAL_CAP_AINA_EN = 1000   # Aina-EN val and test
@@ -237,11 +229,11 @@ SYSTEM_PROMPT = (
     "- Synthesize information naturally rather than copying text verbatim."
 )
 
+DOLLY_RAG_CATEGORIES = {"closed_qa", "information_extraction", "summarization"}
+
 
 # ─────────────────────────────────────────────
 # SECTION 2: BASE MODEL LOADING
-# ─────────────────────────────────────────────
-# AutoModelForCausalLM in bfloat16 with device_map="auto" + SDPA attention.
 # ─────────────────────────────────────────────
 
 print(f"\n--> [2] Loading base model: {model_name}")
@@ -263,21 +255,14 @@ print("--> Base model loaded.")
 # ─────────────────────────────────────────────
 # SECTION 3: METRICS AND INFERENCE
 # ─────────────────────────────────────────────
-# Four RAG metrics with no external dependencies.
-#
-# Primary (main evidence for the thesis):
-#   Context Faithfulness — % of response word-types that also appear
-#     in the context. Post-fine-tuning increase demonstrates the model
-#     synthesizes from the document rather than using prior knowledge.
-#
-# Secondary:
-#   Token F1              — overlap with gold answer, SQuAD-standard.
-#   Avg Response Length   — detects verbosity changes.
-#   Sentence Completeness — detects fragmented responses (span-copying).
-# ─────────────────────────────────────────────
 
-DOLLY_RAG_CATEGORIES = {"closed_qa", "information_extraction", "summarization"}
 
+def _safe_sent_encode(tokenizer, a):
+    return tokenizer.encode(
+        a.strip(), add_special_tokens=True, max_length=512, truncation=True,
+    )
+
+_bsu.sent_encode = _safe_sent_encode
 
 def normalize_text(text: str) -> str:
     """Lowercase, strip articles (EN/ES/CA) and punctuation.
@@ -529,8 +514,6 @@ def evaluate_on_datasets(model, tokenizer, eval_datasets: dict, label: str = "MO
     return all_metrics, all_results
 
 
-# --- 3.6 BERTScore batch computation ---
-
 def compute_bertscore_all(predictions: dict, ground_truths: dict) -> dict:
     """Compute BERTScore (P, R, F1) for every dataset in the predictions dict.
 
@@ -572,8 +555,6 @@ def compute_bertscore_all(predictions: dict, ground_truths: dict) -> dict:
     return results
 
 
-# --- 3.7 Checkpoint helpers ---
-
 def _save_predictions_checkpoint(eval_results: dict, path: str):
     """Persist predictions + per-sample metrics so BERTScore can be computed
     even if the script is restarted after a crash."""
@@ -605,16 +586,6 @@ def _extract_preds_gts(eval_results: dict) -> tuple:
 
 # ─────────────────────────────────────────────
 # SECTION 4: DATASET LOADING
-# ─────────────────────────────────────────────
-# Split usage:
-#   train -> SFT (proportional round-robin interleaving)
-#   val   -> Trainer eval_dataset (loss monitoring / early stopping)
-#   test  -> frozen set, loaded ONCE, shared by BASE and ADAPTED
-#
-# Schemas normalized to: instruction | context | response
-#   Neural-Bridge: context | question | answer
-#   Dolly:         instruction | context | response | category
-#   Aina:          instruction | context | response
 # ─────────────────────────────────────────────
 
 print("\n--> [4] Loading datasets...")
@@ -825,7 +796,6 @@ eval_datasets_test = {
     "Aina-CA":           _aina_test_by_lang["Aina-CA"],
 }
 
-# Apply Phase-2 evaluation caps to frozen dev/test sets
 _EVAL_CAPS = {
     "Neural-Bridge RAG": EVAL_CAP_NB,
     "Dolly QA":          EVAL_CAP_DOLLY,
@@ -859,9 +829,6 @@ train_loaders = [
 # ─────────────────────────────────────────────
 # SECTION 5: BASE MODEL EVALUATION
 # ─────────────────────────────────────────────
-# Evaluates on both dev and test splits. Reused as-is in Section 11.
-# Skips if predictions_base.json already exists (crash-resume support).
-# ─────────────────────────────────────────────
 
 print("\n" + "=" * 70)
 print("--> [5] Evaluating BASE model (pre-training baseline)")
@@ -878,7 +845,6 @@ if os.path.exists(_base_pred_path):
         with open(_base_pred_path, encoding="utf-8") as _f:
             _base_ckpt = json.load(_f)
         for key, d in _base_ckpt.items():
-            # Reconstruct per-sample dicts from checkpoint lists
             base_results[key] = [
                 {
                     "prediction":   p,
@@ -942,9 +908,6 @@ if not base_results:
 # ─────────────────────────────────────────────
 # SECTION 6: LoRA ADAPTER
 # ─────────────────────────────────────────────
-# r=32, alpha=64 (exploration: half of r=64, alpha=128). dropout=0.05.
-# Target: q/k/v/o_proj + gate/up/down_proj.
-# ─────────────────────────────────────────────
 
 print("\n--> [6] Applying LoRA adapter...")
 model.gradient_checkpointing_enable()
@@ -965,11 +928,6 @@ model.print_trainable_parameters()
 
 # ─────────────────────────────────────────────
 # SECTION 7: TOKENIZATION AND FORMATTING
-# ─────────────────────────────────────────────
-# Qwen3 ChatML format via apply_chat_template(enable_thinking=False).
-# User message: f"{instruction}\n\n<context>{ctx}</context>"
-#   - identical to generate_response() in chat_pdfs.py.
-# Loss masked on prompt tokens (-100): only the response is learned.
 # ─────────────────────────────────────────────
 
 def format_and_tokenize(examples):
@@ -1059,9 +1017,6 @@ print(f"--> Train: {len(tokenized_train)} | Val: {len(tokenized_eval)} tokenised
 # ─────────────────────────────────────────────
 # SECTION 8: TRAINING CONFIGURATION
 # ─────────────────────────────────────────────
-# LR 5e-5 cosine (1e-4 caused collapse in v6). Effective batch 16.
-# load_best_model_at_end=True: exports the checkpoint with lowest eval_loss.
-# ─────────────────────────────────────────────
 
 data_collator = DataCollatorForSeq2Seq(
     tokenizer=tokenizer, padding=True, pad_to_multiple_of=8,
@@ -1113,7 +1068,6 @@ trainer = Trainer(
 # ─────────────────────────────────────────────
 # SECTION 9: TRAINING LOOP
 # ─────────────────────────────────────────────
-# Auto-resumes from the latest checkpoint-* directory if one exists.
 
 import glob as _glob
 
@@ -1135,8 +1089,6 @@ trainer.train(resume_from_checkpoint=_resume_from)
 # ─────────────────────────────────────────────
 # SECTION 10: MODEL EXPORT
 # ─────────────────────────────────────────────
-# Saves the checkpoint with lowest eval_loss (not the last step).
-# ─────────────────────────────────────────────
 
 print(f"\n--> [10] Saving adapted model to {output_dir}")
 model.save_pretrained(output_dir)
@@ -1146,9 +1098,6 @@ print("--> Adapter + tokenizer saved.")
 
 # ─────────────────────────────────────────────
 # SECTION 11: ADAPTED MODEL EVALUATION
-# ─────────────────────────────────────────────
-# Same frozen dev+test dicts as Section 5 -> objective BASE vs ADAPTED comparison.
-# Skips if predictions_adapted.json already exists (crash-resume support).
 # ─────────────────────────────────────────────
 
 print("\n" + "=" * 70)
@@ -1211,7 +1160,6 @@ if not adapted_results:
 
     _save_predictions_checkpoint(adapted_results, _adapted_pred_path)
 
-# --- Final eval loss (requires model + trainer alive) ---
 print("\n--> Computing final eval loss...")
 _eval_loss = None
 _perplexity = None
@@ -1224,7 +1172,6 @@ try:
 except Exception as e:
     print(f"    Warning: final eval failed: {e}")
 
-# --- Qualitative production samples (requires model alive) ---
 print("\n--> Generating qualitative production samples...")
 test_prompts = [
     {
@@ -1285,13 +1232,8 @@ for i, t in enumerate(test_prompts, 1):
 # ─────────────────────────────────────────────
 # SECTION 12: BERTSCORE COMPUTATION
 # ─────────────────────────────────────────────
-# BERTScore uses DeBERTa-xlarge-mnli (~1.3 GB).  The main model (14B) is
-# unloaded first to free GPU memory and avoid OOM.  Predictions were saved
-# to disk in Sections 5 and 11, so the script can also resume here after a
-# crash without re-generating predictions.
-# ─────────────────────────────────────────────
 
-# Capture trainer state before deletion (needed in Section 14)
+
 _trainer_global_step   = trainer.state.global_step
 _trainer_dataset_size  = len(tokenized_train)
 _trainer_effective_batch = training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps
@@ -1317,9 +1259,6 @@ base_bertscore = compute_bertscore_all(base_preds, base_gts)
 print("\n--> BERTScore for ADAPTED predictions...")
 adapted_bertscore = compute_bertscore_all(adapted_preds, adapted_gts)
 
-# Merge BERTScore averages into the metrics dicts so the comparison
-# section can treat them like any other metric.
-# Keys in base_results/adapted_results are "DatasetName|split".
 for combo_key in base_bertscore:
     for label, bs_data, m_dict in [
         ("base",    base_bertscore,    base_metrics),
@@ -1329,7 +1268,6 @@ for combo_key in base_bertscore:
         m_dict[combo_key]["BERTScore_R"]  = bs_data[combo_key]["avg_R"]
         m_dict[combo_key]["BERTScore_F1"] = bs_data[combo_key]["avg_F1"]
 
-# Save BERTScore checkpoint
 _bs_ckpt = {
     "bertscore_model": BERTSCORE_MODEL,
     "base":    {ds: {k: v for k, v in d.items() if k.startswith("avg_")} for ds, d in base_bertscore.items()},
@@ -1338,15 +1276,12 @@ _bs_ckpt = {
 with open(os.path.join(output_dir, "bertscore_checkpoint.json"), "w", encoding="utf-8") as f:
     json.dump(_bs_ckpt, f, indent=4, ensure_ascii=False)
 
-# Free BERTScore GPU memory before the comparison section
 gc.collect()
 torch.cuda.empty_cache()
 
 
 # ─────────────────────────────────────────────
 # SECTION 13: COMPARATIVE SUMMARY
-# ─────────────────────────────────────────────
-# Deltas per dataset + weighted aggregate by sample count.
 # ─────────────────────────────────────────────
 
 print("\n" + "=" * 70)
@@ -1362,7 +1297,6 @@ METRIC_KEYS = [
     ("Sentence_Completeness_Pct","Sentence Completeness", "%"),
 ]
 
-# Primary metrics used in thesis tables (splits.md / investigacionMetricas.md)
 AGG_KEYS = ["Token_F1", "ROUGE_L_F1", "BERTScore_F1"]
 
 comparison = {"per_split": {}, "aggregate": {}}
@@ -1452,9 +1386,6 @@ for split_label in ["dev", "test"]:
 
 # ─────────────────────────────────────────────
 # SECTION 14: ARTIFACT EXPORT
-# ─────────────────────────────────────────────
-# training_stats.json        -- full summary + log_history + samples
-# evaluation_comparison.json -- deltas per dataset + base/adapted pairs
 # ─────────────────────────────────────────────
 
 training_summary = {
