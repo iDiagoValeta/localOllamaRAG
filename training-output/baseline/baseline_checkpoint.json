@@ -1,0 +1,1010 @@
+{
+    "meta-llama/Llama-3.1-8B-Instruct": {
+        "with_context": {
+            "dev": {
+                "Neural-Bridge RAG": {
+                    "n_samples": 200,
+                    "Token_F1": 64.09,
+                    "ROUGE_L_F1": 58.15,
+                    "Context_Faithfulness_Pct": 80.8,
+                    "Avg_Response_Length_Words": 65.3,
+                    "Sentence_Completeness_Pct": 90.5,
+                    "BERTScore_P": 50.92,
+                    "BERTScore_R": 66.45,
+                    "BERTScore_F1": 57.8
+                },
+                "Dolly QA": {
+                    "n_samples": 200,
+                    "Token_F1": 45.03,
+                    "ROUGE_L_F1": 38.17,
+                    "Context_Faithfulness_Pct": 77.65,
+                    "Avg_Response_Length_Words": 39.2,
+                    "Sentence_Completeness_Pct": 85.0,
+                    "BERTScore_P": 40.68,
+                    "BERTScore_R": 43.0,
+                    "BERTScore_F1": 40.11
+                },
+                "Aina-EN": {
+                    "n_samples": 200,
+                    "Token_F1": 29.12,
+                    "ROUGE_L_F1": 24.71,
+                    "Context_Faithfulness_Pct": 77.74,
+                    "Avg_Response_Length_Words": 18.4,
+                    "Sentence_Completeness_Pct": 96.5,
+                    "BERTScore_P": 55.29,
+                    "BERTScore_R": 10.77,
+                    "BERTScore_F1": 29.1
+                },
+                "Aina-ES": {
+                    "n_samples": 200,
+                    "Token_F1": 25.5,
+                    "ROUGE_L_F1": 21.4,
+                    "Context_Faithfulness_Pct": 73.95,
+                    "Avg_Response_Length_Words": 22.4,
+                    "Sentence_Completeness_Pct": 98.5,
+                    "BERTScore_P": 43.99,
+                    "BERTScore_R": 6.68,
+                    "BERTScore_F1": 22.21
+                },
+                "Aina-CA": {
+                    "n_samples": 200,
+                    "Token_F1": 28.36,
+                    "ROUGE_L_F1": 23.07,
+                    "Context_Faithfulness_Pct": 80.01,
+                    "Avg_Response_Length_Words": 23.2,
+                    "Sentence_Completeness_Pct": 99.0,
+                    "BERTScore_P": 43.75,
+                    "BERTScore_R": 8.35,
+                    "BERTScore_F1": 23.4
+                },
+                "aggregate": {
+                    "n_samples": 1000,
+                    "Token_F1": 38.42,
+                    "ROUGE_L_F1": 33.1,
+                    "Context_Faithfulness_Pct": 78.03,
+                    "Avg_Response_Length_Words": 33.7,
+                    "Sentence_Completeness_Pct": 93.9,
+                    "BERTScore_F1": 34.52
+                }
+            }
+        },
+        "without_context": {
+            "dev": {
+                "Neural-Bridge RAG": {
+                    "n_samples": 200,
+                    "Token_F1": 22.26,
+                    "ROUGE_L_F1": 17.74,
+                    "Context_Faithfulness_Pct": 44.12,
+                    "Avg_Response_Length_Words": 175.7,
+                    "Sentence_Completeness_Pct": 96.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 1.61,
+                    "BERTScore_R": 25.06,
+                    "BERTScore_F1": 11.77
+                },
+                "Dolly QA": {
+                    "n_samples": 200,
+                    "Token_F1": 18.12,
+                    "ROUGE_L_F1": 13.98,
+                    "Context_Faithfulness_Pct": 31.37,
+                    "Avg_Response_Length_Words": 136.1,
+                    "Sentence_Completeness_Pct": 98.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": -2.03,
+                    "BERTScore_R": 15.81,
+                    "BERTScore_F1": 5.43
+                },
+                "Aina-EN": {
+                    "n_samples": 200,
+                    "Token_F1": 24.56,
+                    "ROUGE_L_F1": 17.49,
+                    "Context_Faithfulness_Pct": 34.66,
+                    "Avg_Response_Length_Words": 157.7,
+                    "Sentence_Completeness_Pct": 94.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 18.25,
+                    "BERTScore_R": 12.42,
+                    "BERTScore_F1": 14.27
+                },
+                "Aina-ES": {
+                    "n_samples": 200,
+                    "Token_F1": 22.03,
+                    "ROUGE_L_F1": 15.92,
+                    "Context_Faithfulness_Pct": 29.89,
+                    "Avg_Response_Length_Words": 137.5,
+                    "Sentence_Completeness_Pct": 98.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 12.26,
+                    "BERTScore_R": 10.01,
+                    "BERTScore_F1": 10.8
+                },
+                "Aina-CA": {
+                    "n_samples": 200,
+                    "Token_F1": 17.2,
+                    "ROUGE_L_F1": 11.95,
+                    "Context_Faithfulness_Pct": 21.81,
+                    "Avg_Response_Length_Words": 124.9,
+                    "Sentence_Completeness_Pct": 99.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 9.33,
+                    "BERTScore_R": 8.53,
+                    "BERTScore_F1": 8.85
+                },
+                "aggregate": {
+                    "n_samples": 1000,
+                    "Token_F1": 20.83,
+                    "ROUGE_L_F1": 15.42,
+                    "Context_Faithfulness_Pct": 32.37,
+                    "Avg_Response_Length_Words": 146.4,
+                    "Sentence_Completeness_Pct": 97.0,
+                    "Context_Faithfulness_Note": "N/A (no context provided to model)",
+                    "BERTScore_F1": 10.22
+                }
+            }
+        }
+    },
+    "mistralai/Mistral-7B-Instruct-v0.3": {
+        "with_context": {
+            "dev": {
+                "Neural-Bridge RAG": {
+                    "n_samples": 200,
+                    "Token_F1": 57.26,
+                    "ROUGE_L_F1": 51.51,
+                    "Context_Faithfulness_Pct": 79.66,
+                    "Avg_Response_Length_Words": 83.2,
+                    "Sentence_Completeness_Pct": 94.5,
+                    "BERTScore_P": 42.65,
+                    "BERTScore_R": 67.14,
+                    "BERTScore_F1": 53.52
+                },
+                "Dolly QA": {
+                    "n_samples": 200,
+                    "Token_F1": 42.4,
+                    "ROUGE_L_F1": 35.34,
+                    "Context_Faithfulness_Pct": 76.76,
+                    "Avg_Response_Length_Words": 68.7,
+                    "Sentence_Completeness_Pct": 94.0,
+                    "BERTScore_P": 31.23,
+                    "BERTScore_R": 47.02,
+                    "BERTScore_F1": 37.67
+                },
+                "Aina-EN": {
+                    "n_samples": 200,
+                    "Token_F1": 38.1,
+                    "ROUGE_L_F1": 30.86,
+                    "Context_Faithfulness_Pct": 73.96,
+                    "Avg_Response_Length_Words": 34.0,
+                    "Sentence_Completeness_Pct": 98.0,
+                    "BERTScore_P": 55.7,
+                    "BERTScore_R": 21.64,
+                    "BERTScore_F1": 35.99
+                },
+                "Aina-ES": {
+                    "n_samples": 200,
+                    "Token_F1": 30.46,
+                    "ROUGE_L_F1": 23.96,
+                    "Context_Faithfulness_Pct": 72.49,
+                    "Avg_Response_Length_Words": 37.0,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "BERTScore_P": 42.65,
+                    "BERTScore_R": 12.18,
+                    "BERTScore_F1": 24.86
+                },
+                "Aina-CA": {
+                    "n_samples": 200,
+                    "Token_F1": 34.23,
+                    "ROUGE_L_F1": 26.79,
+                    "Context_Faithfulness_Pct": 76.9,
+                    "Avg_Response_Length_Words": 41.7,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "BERTScore_P": 43.94,
+                    "BERTScore_R": 16.63,
+                    "BERTScore_F1": 28.15
+                },
+                "aggregate": {
+                    "n_samples": 1000,
+                    "Token_F1": 40.49,
+                    "ROUGE_L_F1": 33.69,
+                    "Context_Faithfulness_Pct": 75.95,
+                    "Avg_Response_Length_Words": 52.9,
+                    "Sentence_Completeness_Pct": 97.3,
+                    "BERTScore_F1": 36.04
+                }
+            }
+        },
+        "without_context": {
+            "dev": {
+                "Neural-Bridge RAG": {
+                    "n_samples": 200,
+                    "Token_F1": 22.83,
+                    "ROUGE_L_F1": 18.01,
+                    "Context_Faithfulness_Pct": 41.16,
+                    "Avg_Response_Length_Words": 132.5,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 6.16,
+                    "BERTScore_R": 32.49,
+                    "BERTScore_F1": 17.85
+                },
+                "Dolly QA": {
+                    "n_samples": 200,
+                    "Token_F1": 22.86,
+                    "ROUGE_L_F1": 16.74,
+                    "Context_Faithfulness_Pct": 35.01,
+                    "Avg_Response_Length_Words": 109.9,
+                    "Sentence_Completeness_Pct": 94.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 5.95,
+                    "BERTScore_R": 28.28,
+                    "BERTScore_F1": 15.55
+                },
+                "Aina-EN": {
+                    "n_samples": 200,
+                    "Token_F1": 30.55,
+                    "ROUGE_L_F1": 20.32,
+                    "Context_Faithfulness_Pct": 29.34,
+                    "Avg_Response_Length_Words": 94.9,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 19.77,
+                    "BERTScore_R": 20.36,
+                    "BERTScore_F1": 20.05
+                },
+                "Aina-ES": {
+                    "n_samples": 200,
+                    "Token_F1": 17.6,
+                    "ROUGE_L_F1": 12.91,
+                    "Context_Faithfulness_Pct": 21.58,
+                    "Avg_Response_Length_Words": 76.8,
+                    "Sentence_Completeness_Pct": 99.5,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 9.76,
+                    "BERTScore_R": 0.31,
+                    "BERTScore_F1": 4.78
+                },
+                "Aina-CA": {
+                    "n_samples": 200,
+                    "Token_F1": 10.81,
+                    "ROUGE_L_F1": 8.12,
+                    "Context_Faithfulness_Pct": 12.86,
+                    "Avg_Response_Length_Words": 78.6,
+                    "Sentence_Completeness_Pct": 99.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 1.01,
+                    "BERTScore_R": -9.58,
+                    "BERTScore_F1": -4.52
+                },
+                "aggregate": {
+                    "n_samples": 1000,
+                    "Token_F1": 20.93,
+                    "ROUGE_L_F1": 15.22,
+                    "Context_Faithfulness_Pct": 27.99,
+                    "Avg_Response_Length_Words": 98.5,
+                    "Sentence_Completeness_Pct": 98.5,
+                    "Context_Faithfulness_Note": "N/A (no context provided to model)",
+                    "BERTScore_F1": 10.74
+                }
+            }
+        }
+    },
+    "Qwen/Qwen3-14B": {
+        "with_context": {
+            "dev": {
+                "Neural-Bridge RAG": {
+                    "n_samples": 200,
+                    "Token_F1": 61.23,
+                    "ROUGE_L_F1": 55.17,
+                    "Context_Faithfulness_Pct": 77.29,
+                    "Avg_Response_Length_Words": 83.5,
+                    "Sentence_Completeness_Pct": 93.0,
+                    "BERTScore_P": 45.53,
+                    "BERTScore_R": 70.28,
+                    "BERTScore_F1": 56.58
+                },
+                "Dolly QA": {
+                    "n_samples": 200,
+                    "Token_F1": 46.67,
+                    "ROUGE_L_F1": 38.96,
+                    "Context_Faithfulness_Pct": 77.99,
+                    "Avg_Response_Length_Words": 62.4,
+                    "Sentence_Completeness_Pct": 90.0,
+                    "BERTScore_P": 34.53,
+                    "BERTScore_R": 49.79,
+                    "BERTScore_F1": 40.74
+                },
+                "Aina-EN": {
+                    "n_samples": 200,
+                    "Token_F1": 37.49,
+                    "ROUGE_L_F1": 30.87,
+                    "Context_Faithfulness_Pct": 77.81,
+                    "Avg_Response_Length_Words": 28.3,
+                    "Sentence_Completeness_Pct": 97.0,
+                    "BERTScore_P": 57.71,
+                    "BERTScore_R": 20.95,
+                    "BERTScore_F1": 36.42
+                },
+                "Aina-ES": {
+                    "n_samples": 200,
+                    "Token_F1": 33.61,
+                    "ROUGE_L_F1": 27.39,
+                    "Context_Faithfulness_Pct": 73.31,
+                    "Avg_Response_Length_Words": 35.4,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "BERTScore_P": 45.68,
+                    "BERTScore_R": 16.5,
+                    "BERTScore_F1": 28.77
+                },
+                "Aina-CA": {
+                    "n_samples": 200,
+                    "Token_F1": 37.85,
+                    "ROUGE_L_F1": 30.6,
+                    "Context_Faithfulness_Pct": 80.5,
+                    "Avg_Response_Length_Words": 36.8,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "BERTScore_P": 47.4,
+                    "BERTScore_R": 19.59,
+                    "BERTScore_F1": 31.69
+                },
+                "aggregate": {
+                    "n_samples": 1000,
+                    "Token_F1": 43.37,
+                    "ROUGE_L_F1": 36.6,
+                    "Context_Faithfulness_Pct": 77.38,
+                    "Avg_Response_Length_Words": 49.3,
+                    "Sentence_Completeness_Pct": 96.0,
+                    "BERTScore_F1": 38.84
+                }
+            }
+        },
+        "without_context": {
+            "dev": {
+                "Neural-Bridge RAG": {
+                    "n_samples": 200,
+                    "Token_F1": 22.55,
+                    "ROUGE_L_F1": 17.57,
+                    "Context_Faithfulness_Pct": 40.1,
+                    "Avg_Response_Length_Words": 142.0,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 2.97,
+                    "BERTScore_R": 31.98,
+                    "BERTScore_F1": 15.63
+                },
+                "Dolly QA": {
+                    "n_samples": 200,
+                    "Token_F1": 21.45,
+                    "ROUGE_L_F1": 15.66,
+                    "Context_Faithfulness_Pct": 32.54,
+                    "Avg_Response_Length_Words": 120.1,
+                    "Sentence_Completeness_Pct": 95.5,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 1.71,
+                    "BERTScore_R": 24.31,
+                    "BERTScore_F1": 11.3
+                },
+                "Aina-EN": {
+                    "n_samples": 200,
+                    "Token_F1": 31.12,
+                    "ROUGE_L_F1": 20.32,
+                    "Context_Faithfulness_Pct": 27.17,
+                    "Avg_Response_Length_Words": 120.2,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 16.87,
+                    "BERTScore_R": 22.64,
+                    "BERTScore_F1": 19.56
+                },
+                "Aina-ES": {
+                    "n_samples": 200,
+                    "Token_F1": 26.96,
+                    "ROUGE_L_F1": 17.73,
+                    "Context_Faithfulness_Pct": 26.06,
+                    "Avg_Response_Length_Words": 131.5,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 11.72,
+                    "BERTScore_R": 16.39,
+                    "BERTScore_F1": 13.98
+                },
+                "Aina-CA": {
+                    "n_samples": 200,
+                    "Token_F1": 23.71,
+                    "ROUGE_L_F1": 15.69,
+                    "Context_Faithfulness_Pct": 21.74,
+                    "Avg_Response_Length_Words": 130.6,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 11.75,
+                    "BERTScore_R": 17.15,
+                    "BERTScore_F1": 14.52
+                },
+                "aggregate": {
+                    "n_samples": 1000,
+                    "Token_F1": 25.16,
+                    "ROUGE_L_F1": 17.39,
+                    "Context_Faithfulness_Pct": 29.52,
+                    "Avg_Response_Length_Words": 128.9,
+                    "Sentence_Completeness_Pct": 99.1,
+                    "Context_Faithfulness_Note": "N/A (no context provided to model)",
+                    "BERTScore_F1": 15.0
+                }
+            }
+        }
+    },
+    "Qwen/Qwen3.5-9B": {
+        "with_context": {
+            "dev": {
+                "Neural-Bridge RAG": {
+                    "n_samples": 200,
+                    "Token_F1": 47.54,
+                    "ROUGE_L_F1": 41.06,
+                    "Context_Faithfulness_Pct": 72.98,
+                    "Avg_Response_Length_Words": 115.5,
+                    "Sentence_Completeness_Pct": 83.5,
+                    "BERTScore_P": 19.33,
+                    "BERTScore_R": 60.36,
+                    "BERTScore_F1": 36.74
+                },
+                "Dolly QA": {
+                    "n_samples": 200,
+                    "Token_F1": 40.74,
+                    "ROUGE_L_F1": 34.59,
+                    "Context_Faithfulness_Pct": 72.43,
+                    "Avg_Response_Length_Words": 87.3,
+                    "Sentence_Completeness_Pct": 81.0,
+                    "BERTScore_P": 18.76,
+                    "BERTScore_R": 46.98,
+                    "BERTScore_F1": 30.38
+                },
+                "Aina-EN": {
+                    "n_samples": 200,
+                    "Token_F1": 40.95,
+                    "ROUGE_L_F1": 31.67,
+                    "Context_Faithfulness_Pct": 68.89,
+                    "Avg_Response_Length_Words": 43.6,
+                    "Sentence_Completeness_Pct": 85.0,
+                    "BERTScore_P": 40.13,
+                    "BERTScore_R": 25.62,
+                    "BERTScore_F1": 32.08
+                },
+                "Aina-ES": {
+                    "n_samples": 200,
+                    "Token_F1": 30.79,
+                    "ROUGE_L_F1": 24.16,
+                    "Context_Faithfulness_Pct": 70.78,
+                    "Avg_Response_Length_Words": 36.7,
+                    "Sentence_Completeness_Pct": 99.0,
+                    "BERTScore_P": 38.85,
+                    "BERTScore_R": 14.8,
+                    "BERTScore_F1": 25.11
+                },
+                "Aina-CA": {
+                    "n_samples": 200,
+                    "Token_F1": 34.93,
+                    "ROUGE_L_F1": 27.93,
+                    "Context_Faithfulness_Pct": 75.73,
+                    "Avg_Response_Length_Words": 36.8,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "BERTScore_P": 41.7,
+                    "BERTScore_R": 17.94,
+                    "BERTScore_F1": 28.34
+                },
+                "aggregate": {
+                    "n_samples": 1000,
+                    "Token_F1": 38.99,
+                    "ROUGE_L_F1": 31.88,
+                    "Context_Faithfulness_Pct": 72.16,
+                    "Avg_Response_Length_Words": 64.0,
+                    "Sentence_Completeness_Pct": 89.7,
+                    "BERTScore_F1": 30.53
+                }
+            }
+        },
+        "without_context": {
+            "dev": {
+                "Neural-Bridge RAG": {
+                    "n_samples": 200,
+                    "Token_F1": 14.89,
+                    "ROUGE_L_F1": 11.15,
+                    "Context_Faithfulness_Pct": 32.09,
+                    "Avg_Response_Length_Words": 261.2,
+                    "Sentence_Completeness_Pct": 96.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": -10.53,
+                    "BERTScore_R": 26.98,
+                    "BERTScore_F1": 5.09
+                },
+                "Dolly QA": {
+                    "n_samples": 200,
+                    "Token_F1": 15.32,
+                    "ROUGE_L_F1": 10.76,
+                    "Context_Faithfulness_Pct": 24.41,
+                    "Avg_Response_Length_Words": 235.6,
+                    "Sentence_Completeness_Pct": 91.5,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": -13.09,
+                    "BERTScore_R": 22.37,
+                    "BERTScore_F1": 1.22
+                },
+                "Aina-EN": {
+                    "n_samples": 200,
+                    "Token_F1": 24.71,
+                    "ROUGE_L_F1": 15.1,
+                    "Context_Faithfulness_Pct": 19.52,
+                    "Avg_Response_Length_Words": 261.4,
+                    "Sentence_Completeness_Pct": 94.5,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 1.48,
+                    "BERTScore_R": 21.18,
+                    "BERTScore_F1": 10.51
+                },
+                "Aina-ES": {
+                    "n_samples": 200,
+                    "Token_F1": 23.71,
+                    "ROUGE_L_F1": 15.21,
+                    "Context_Faithfulness_Pct": 19.73,
+                    "Avg_Response_Length_Words": 238.5,
+                    "Sentence_Completeness_Pct": 97.5,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 4.87,
+                    "BERTScore_R": 17.35,
+                    "BERTScore_F1": 10.87
+                },
+                "Aina-CA": {
+                    "n_samples": 200,
+                    "Token_F1": 19.88,
+                    "ROUGE_L_F1": 12.62,
+                    "Context_Faithfulness_Pct": 16.51,
+                    "Avg_Response_Length_Words": 236.8,
+                    "Sentence_Completeness_Pct": 98.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 6.18,
+                    "BERTScore_R": 18.56,
+                    "BERTScore_F1": 12.21
+                },
+                "aggregate": {
+                    "n_samples": 1000,
+                    "Token_F1": 19.7,
+                    "ROUGE_L_F1": 12.97,
+                    "Context_Faithfulness_Pct": 22.45,
+                    "Avg_Response_Length_Words": 246.7,
+                    "Sentence_Completeness_Pct": 95.5,
+                    "Context_Faithfulness_Note": "N/A (no context provided to model)",
+                    "BERTScore_F1": 7.98
+                }
+            }
+        }
+    },
+    "Qwen/Qwen2.5-14B-Instruct": {
+        "with_context": {
+            "dev": {
+                "Neural-Bridge RAG": {
+                    "n_samples": 200,
+                    "Token_F1": 62.64,
+                    "ROUGE_L_F1": 56.8,
+                    "Context_Faithfulness_Pct": 74.07,
+                    "Avg_Response_Length_Words": 69.7,
+                    "Sentence_Completeness_Pct": 93.5,
+                    "BERTScore_P": 50.83,
+                    "BERTScore_R": 69.98,
+                    "BERTScore_F1": 59.5
+                },
+                "Dolly QA": {
+                    "n_samples": 200,
+                    "Token_F1": 45.73,
+                    "ROUGE_L_F1": 38.42,
+                    "Context_Faithfulness_Pct": 72.25,
+                    "Avg_Response_Length_Words": 56.8,
+                    "Sentence_Completeness_Pct": 90.5,
+                    "BERTScore_P": 36.43,
+                    "BERTScore_R": 49.18,
+                    "BERTScore_F1": 41.54
+                },
+                "Aina-EN": {
+                    "n_samples": 200,
+                    "Token_F1": 33.87,
+                    "ROUGE_L_F1": 27.87,
+                    "Context_Faithfulness_Pct": 78.51,
+                    "Avg_Response_Length_Words": 23.7,
+                    "Sentence_Completeness_Pct": 95.5,
+                    "BERTScore_P": 58.51,
+                    "BERTScore_R": 16.94,
+                    "BERTScore_F1": 34.31
+                },
+                "Aina-ES": {
+                    "n_samples": 200,
+                    "Token_F1": 30.43,
+                    "ROUGE_L_F1": 24.61,
+                    "Context_Faithfulness_Pct": 70.72,
+                    "Avg_Response_Length_Words": 31.4,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "BERTScore_P": 44.07,
+                    "BERTScore_R": 13.42,
+                    "BERTScore_F1": 26.41
+                },
+                "Aina-CA": {
+                    "n_samples": 200,
+                    "Token_F1": 32.67,
+                    "ROUGE_L_F1": 26.63,
+                    "Context_Faithfulness_Pct": 79.03,
+                    "Avg_Response_Length_Words": 31.1,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "BERTScore_P": 45.71,
+                    "BERTScore_R": 14.42,
+                    "BERTScore_F1": 27.76
+                },
+                "aggregate": {
+                    "n_samples": 1000,
+                    "Token_F1": 41.07,
+                    "ROUGE_L_F1": 34.87,
+                    "Context_Faithfulness_Pct": 74.92,
+                    "Avg_Response_Length_Words": 42.5,
+                    "Sentence_Completeness_Pct": 95.9,
+                    "BERTScore_F1": 37.9
+                }
+            }
+        },
+        "without_context": {
+            "dev": {
+                "Neural-Bridge RAG": {
+                    "n_samples": 200,
+                    "Token_F1": 23.71,
+                    "ROUGE_L_F1": 18.53,
+                    "Context_Faithfulness_Pct": 41.42,
+                    "Avg_Response_Length_Words": 130.8,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 6.26,
+                    "BERTScore_R": 32.83,
+                    "BERTScore_F1": 17.95
+                },
+                "Dolly QA": {
+                    "n_samples": 200,
+                    "Token_F1": 22.13,
+                    "ROUGE_L_F1": 16.24,
+                    "Context_Faithfulness_Pct": 32.22,
+                    "Avg_Response_Length_Words": 89.0,
+                    "Sentence_Completeness_Pct": 97.5,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 4.55,
+                    "BERTScore_R": 22.89,
+                    "BERTScore_F1": 12.35
+                },
+                "Aina-EN": {
+                    "n_samples": 200,
+                    "Token_F1": 30.03,
+                    "ROUGE_L_F1": 19.93,
+                    "Context_Faithfulness_Pct": 31.2,
+                    "Avg_Response_Length_Words": 84.5,
+                    "Sentence_Completeness_Pct": 98.5,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 22.7,
+                    "BERTScore_R": 19.26,
+                    "BERTScore_F1": 20.57
+                },
+                "Aina-ES": {
+                    "n_samples": 200,
+                    "Token_F1": 24.07,
+                    "ROUGE_L_F1": 16.21,
+                    "Context_Faithfulness_Pct": 26.6,
+                    "Avg_Response_Length_Words": 84.8,
+                    "Sentence_Completeness_Pct": 99.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 11.98,
+                    "BERTScore_R": 11.81,
+                    "BERTScore_F1": 11.87
+                },
+                "Aina-CA": {
+                    "n_samples": 200,
+                    "Token_F1": 19.44,
+                    "ROUGE_L_F1": 12.45,
+                    "Context_Faithfulness_Pct": 20.24,
+                    "Avg_Response_Length_Words": 88.3,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 10.94,
+                    "BERTScore_R": 11.73,
+                    "BERTScore_F1": 11.49
+                },
+                "aggregate": {
+                    "n_samples": 1000,
+                    "Token_F1": 23.88,
+                    "ROUGE_L_F1": 16.67,
+                    "Context_Faithfulness_Pct": 30.34,
+                    "Avg_Response_Length_Words": 95.5,
+                    "Sentence_Completeness_Pct": 99.0,
+                    "Context_Faithfulness_Note": "N/A (no context provided to model)",
+                    "BERTScore_F1": 14.85
+                }
+            }
+        }
+    },
+    "google/gemma-3-12b-it": {
+        "with_context": {
+            "dev": {
+                "Neural-Bridge RAG": {
+                    "n_samples": 200,
+                    "Token_F1": 68.54,
+                    "ROUGE_L_F1": 62.18,
+                    "Context_Faithfulness_Pct": 83.61,
+                    "Avg_Response_Length_Words": 52.1,
+                    "Sentence_Completeness_Pct": 89.0,
+                    "BERTScore_P": 56.93,
+                    "BERTScore_R": 72.26,
+                    "BERTScore_F1": 63.84
+                },
+                "Dolly QA": {
+                    "n_samples": 200,
+                    "Token_F1": 47.45,
+                    "ROUGE_L_F1": 40.34,
+                    "Context_Faithfulness_Pct": 80.56,
+                    "Avg_Response_Length_Words": 44.9,
+                    "Sentence_Completeness_Pct": 91.5,
+                    "BERTScore_P": 39.4,
+                    "BERTScore_R": 48.87,
+                    "BERTScore_F1": 43.02
+                },
+                "Aina-EN": {
+                    "n_samples": 200,
+                    "Token_F1": 34.73,
+                    "ROUGE_L_F1": 28.18,
+                    "Context_Faithfulness_Pct": 78.6,
+                    "Avg_Response_Length_Words": 24.0,
+                    "Sentence_Completeness_Pct": 97.0,
+                    "BERTScore_P": 56.4,
+                    "BERTScore_R": 18.54,
+                    "BERTScore_F1": 34.7
+                },
+                "Aina-ES": {
+                    "n_samples": 200,
+                    "Token_F1": 27.68,
+                    "ROUGE_L_F1": 23.24,
+                    "Context_Faithfulness_Pct": 78.58,
+                    "Avg_Response_Length_Words": 25.6,
+                    "Sentence_Completeness_Pct": 99.5,
+                    "BERTScore_P": 45.28,
+                    "BERTScore_R": 10.71,
+                    "BERTScore_F1": 25.25
+                },
+                "Aina-CA": {
+                    "n_samples": 200,
+                    "Token_F1": 32.64,
+                    "ROUGE_L_F1": 27.32,
+                    "Context_Faithfulness_Pct": 84.32,
+                    "Avg_Response_Length_Words": 26.4,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "BERTScore_P": 46.76,
+                    "BERTScore_R": 13.42,
+                    "BERTScore_F1": 27.78
+                },
+                "aggregate": {
+                    "n_samples": 1000,
+                    "Token_F1": 42.21,
+                    "ROUGE_L_F1": 36.25,
+                    "Context_Faithfulness_Pct": 81.13,
+                    "Avg_Response_Length_Words": 34.6,
+                    "Sentence_Completeness_Pct": 95.4,
+                    "BERTScore_F1": 38.92
+                }
+            }
+        },
+        "without_context": {
+            "dev": {
+                "Neural-Bridge RAG": {
+                    "n_samples": 200,
+                    "Token_F1": 18.55,
+                    "ROUGE_L_F1": 14.5,
+                    "Context_Faithfulness_Pct": 34.79,
+                    "Avg_Response_Length_Words": 258.2,
+                    "Sentence_Completeness_Pct": 86.5,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": -5.19,
+                    "BERTScore_R": 29.69,
+                    "BERTScore_F1": 9.34
+                },
+                "Dolly QA": {
+                    "n_samples": 200,
+                    "Token_F1": 15.9,
+                    "ROUGE_L_F1": 11.78,
+                    "Context_Faithfulness_Pct": 25.09,
+                    "Avg_Response_Length_Words": 185.7,
+                    "Sentence_Completeness_Pct": 95.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": -8.71,
+                    "BERTScore_R": 15.34,
+                    "BERTScore_F1": 1.28
+                },
+                "Aina-EN": {
+                    "n_samples": 200,
+                    "Token_F1": 25.52,
+                    "ROUGE_L_F1": 16.58,
+                    "Context_Faithfulness_Pct": 21.7,
+                    "Avg_Response_Length_Words": 221.2,
+                    "Sentence_Completeness_Pct": 92.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 4.43,
+                    "BERTScore_R": 20.57,
+                    "BERTScore_F1": 11.73
+                },
+                "Aina-ES": {
+                    "n_samples": 200,
+                    "Token_F1": 25.22,
+                    "ROUGE_L_F1": 17.47,
+                    "Context_Faithfulness_Pct": 25.89,
+                    "Avg_Response_Length_Words": 172.5,
+                    "Sentence_Completeness_Pct": 97.5,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 12.91,
+                    "BERTScore_R": 16.06,
+                    "BERTScore_F1": 14.12
+                },
+                "Aina-CA": {
+                    "n_samples": 200,
+                    "Token_F1": 21.31,
+                    "ROUGE_L_F1": 14.9,
+                    "Context_Faithfulness_Pct": 22.04,
+                    "Avg_Response_Length_Words": 161.3,
+                    "Sentence_Completeness_Pct": 96.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 10.52,
+                    "BERTScore_R": 15.35,
+                    "BERTScore_F1": 12.75
+                },
+                "aggregate": {
+                    "n_samples": 1000,
+                    "Token_F1": 21.3,
+                    "ROUGE_L_F1": 15.05,
+                    "Context_Faithfulness_Pct": 25.9,
+                    "Avg_Response_Length_Words": 199.8,
+                    "Sentence_Completeness_Pct": 93.4,
+                    "Context_Faithfulness_Note": "N/A (no context provided to model)",
+                    "BERTScore_F1": 9.84
+                }
+            }
+        }
+    },
+    "microsoft/phi-4": {
+        "with_context": {
+            "dev": {
+                "Neural-Bridge RAG": {
+                    "n_samples": 200,
+                    "Token_F1": 50.27,
+                    "ROUGE_L_F1": 44.98,
+                    "Context_Faithfulness_Pct": 75.4,
+                    "Avg_Response_Length_Words": 107.6,
+                    "Sentence_Completeness_Pct": 92.0,
+                    "BERTScore_P": 31.97,
+                    "BERTScore_R": 65.47,
+                    "BERTScore_F1": 46.6
+                },
+                "Dolly QA": {
+                    "n_samples": 200,
+                    "Token_F1": 43.17,
+                    "ROUGE_L_F1": 36.49,
+                    "Context_Faithfulness_Pct": 77.89,
+                    "Avg_Response_Length_Words": 77.6,
+                    "Sentence_Completeness_Pct": 93.5,
+                    "BERTScore_P": 28.6,
+                    "BERTScore_R": 49.98,
+                    "BERTScore_F1": 37.58
+                },
+                "Aina-EN": {
+                    "n_samples": 200,
+                    "Token_F1": 45.15,
+                    "ROUGE_L_F1": 35.57,
+                    "Context_Faithfulness_Pct": 77.49,
+                    "Avg_Response_Length_Words": 41.3,
+                    "Sentence_Completeness_Pct": 95.0,
+                    "BERTScore_P": 57.6,
+                    "BERTScore_R": 30.64,
+                    "BERTScore_F1": 42.34
+                },
+                "Aina-ES": {
+                    "n_samples": 200,
+                    "Token_F1": 39.82,
+                    "ROUGE_L_F1": 31.27,
+                    "Context_Faithfulness_Pct": 76.6,
+                    "Avg_Response_Length_Words": 49.4,
+                    "Sentence_Completeness_Pct": 99.0,
+                    "BERTScore_P": 45.85,
+                    "BERTScore_R": 23.02,
+                    "BERTScore_F1": 32.61
+                },
+                "Aina-CA": {
+                    "n_samples": 200,
+                    "Token_F1": 45.52,
+                    "ROUGE_L_F1": 35.53,
+                    "Context_Faithfulness_Pct": 79.19,
+                    "Avg_Response_Length_Words": 55.6,
+                    "Sentence_Completeness_Pct": 98.0,
+                    "BERTScore_P": 46.07,
+                    "BERTScore_R": 30.05,
+                    "BERTScore_F1": 37.2
+                },
+                "aggregate": {
+                    "n_samples": 1000,
+                    "Token_F1": 44.79,
+                    "ROUGE_L_F1": 36.77,
+                    "Context_Faithfulness_Pct": 77.31,
+                    "Avg_Response_Length_Words": 66.3,
+                    "Sentence_Completeness_Pct": 95.5,
+                    "BERTScore_F1": 39.27
+                }
+            }
+        },
+        "without_context": {
+            "dev": {
+                "Neural-Bridge RAG": {
+                    "n_samples": 200,
+                    "Token_F1": 19.97,
+                    "ROUGE_L_F1": 15.26,
+                    "Context_Faithfulness_Pct": 37.66,
+                    "Avg_Response_Length_Words": 170.7,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": -0.1,
+                    "BERTScore_R": 30.59,
+                    "BERTScore_F1": 13.27
+                },
+                "Dolly QA": {
+                    "n_samples": 200,
+                    "Token_F1": 19.39,
+                    "ROUGE_L_F1": 14.07,
+                    "Context_Faithfulness_Pct": 30.43,
+                    "Avg_Response_Length_Words": 149.8,
+                    "Sentence_Completeness_Pct": 99.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": -2.65,
+                    "BERTScore_R": 25.71,
+                    "BERTScore_F1": 9.36
+                },
+                "Aina-EN": {
+                    "n_samples": 200,
+                    "Token_F1": 30.23,
+                    "ROUGE_L_F1": 19.54,
+                    "Context_Faithfulness_Pct": 26.16,
+                    "Avg_Response_Length_Words": 138.4,
+                    "Sentence_Completeness_Pct": 99.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 17.2,
+                    "BERTScore_R": 23.58,
+                    "BERTScore_F1": 20.22
+                },
+                "Aina-ES": {
+                    "n_samples": 200,
+                    "Token_F1": 26.75,
+                    "ROUGE_L_F1": 17.87,
+                    "Context_Faithfulness_Pct": 25.06,
+                    "Avg_Response_Length_Words": 139.4,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 12.76,
+                    "BERTScore_R": 17.3,
+                    "BERTScore_F1": 14.95
+                },
+                "Aina-CA": {
+                    "n_samples": 200,
+                    "Token_F1": 21.56,
+                    "ROUGE_L_F1": 14.26,
+                    "Context_Faithfulness_Pct": 19.38,
+                    "Avg_Response_Length_Words": 159.4,
+                    "Sentence_Completeness_Pct": 100.0,
+                    "Context_Faithfulness_Note": "Computed vs unseen context (baseline overlap)",
+                    "BERTScore_P": 10.63,
+                    "BERTScore_R": 17.26,
+                    "BERTScore_F1": 13.97
+                },
+                "aggregate": {
+                    "n_samples": 1000,
+                    "Token_F1": 23.58,
+                    "ROUGE_L_F1": 16.2,
+                    "Context_Faithfulness_Pct": 27.74,
+                    "Avg_Response_Length_Words": 151.5,
+                    "Sentence_Completeness_Pct": 99.6,
+                    "Context_Faithfulness_Note": "N/A (no context provided to model)",
+                    "BERTScore_F1": 14.35
+                }
+            }
+        }
+    }
+}

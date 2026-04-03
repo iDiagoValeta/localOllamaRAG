@@ -46,7 +46,8 @@ Dependencies:
 #
 #  CONFIGURATION
 #  `-- 1. Environment and constants
-#           CUDA env, output_dir, MODELS (order tweakable for parallel jobs),
+#           CUDA env, output_dir, SEED=42 (torch + CUDA seeded here),
+#           MODELS (order tweakable for parallel jobs),
 #           Neural-Bridge dev carve, token caps, BERTScore model/batch,
 #           SYSTEM_PROMPT / SYSTEM_PROMPT_NO_CONTEXT (aligned with train-qwen3),
 #           DOLLY_RAG_CATEGORIES
@@ -73,10 +74,13 @@ Dependencies:
 #           3.6 eval_datasets_dev, eval_datasets_test via _build_eval_dict
 #
 #  PIPELINE
-#  `-- 4. Main loop (per model: load LLM, both modes x both splits, prediction
-#           JSON, unload LLM, BERTScore, merge into all_results)
-#           Checkpoint baseline_checkpoint.json: reload before each model for
-#           parallel jobs; save via read-merge-write + os.replace (.tmp atomic)
+#  `-- 4. Main loop (per model: per-dataset predictions checkpoint, load LLM
+#           only for missing combos, both modes x dev, unload LLM, BERTScore,
+#           rebuild metrics from cached samples, merge into all_results)
+#           predictions_{slug}.json: updated after each (mode, dataset) pair —
+#           per-dataset crash recovery; indent=2; stores instructions,
+#           token_f1, rouge_l, faithfulness, words per sample.
+#           baseline_checkpoint.json: saved per-model after BERTScore, atomic.
 #  `-- 5. Summary table, baseline_evaluation.json, baseline_evaluation_samples.json
 #
 # ─────────────────────────────────────────────
@@ -110,6 +114,10 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 output_dir = os.path.join(os.getcwd(), "baseline-evaluation-output")
 os.makedirs(output_dir, exist_ok=True)
 
+SEED = 42
+torch.manual_seed(SEED)
+torch.cuda.manual_seed_all(SEED)
+
 MODELS = [
     "meta-llama/Llama-3.1-8B-Instruct",
     "mistralai/Mistral-7B-Instruct-v0.3",
@@ -124,9 +132,12 @@ SAMPLES_NEURAL_BRIDGE_DEV = 1000
 EVAL_MAX_NEW_TOKENS = 2048
 MAX_CONTEXT_TOKENS  = 2048
 
-EVAL_CAP_NB_DEV    = 250   # Neural-Bridge
-EVAL_CAP_DOLLY_DEV = 350   # Dolly (more heterogeneous post-F3 -> more weight)
-EVAL_CAP_AINA_DEV  = 250   # per-language Aina
+# Dev caps — aligned with train-qwen3.py EVAL_CAP_DEV_* for cross-experiment comparability.
+# Equal sizes across all datasets (balanced, per tutor's guidance).
+# 5 × 200 = 1 000 samples per mode → ~18 h for 7 models × 2 modes on the cluster.
+EVAL_CAP_NB_DEV    = 200   # Neural-Bridge
+EVAL_CAP_DOLLY_DEV = 200   # Dolly
+EVAL_CAP_AINA_DEV  = 200   # per-language Aina (EN / ES / CA)
 
 BERTSCORE_MODEL      = "microsoft/deberta-xlarge-mnli"
 BERTSCORE_BATCH_SIZE = 32
@@ -137,13 +148,13 @@ SYSTEM_PROMPT = (
     "Guidelines:\n"
     "- Base your answers strictly on the information within the <context> tags.\n"
     "- Do not add information beyond what the context provides.\n"
+    "- Preserve technical terms, notation, formulas, and numbers exactly as they appear.\n"
     "- Formulate clear, well-structured responses in complete sentences.\n"
     "- For factual questions, be direct and precise.\n"
     "- For analytical or complex questions, provide detailed explanations "
     "referencing specific information from the context.\n"
     "- Always respond in the same language as the context "
-    "(English, Spanish/Castellano, or Catalan/Català).\n"
-    "- Synthesize information naturally rather than copying text verbatim."
+    "(English, Spanish/Castellano, or Catalan/Català)."
 )
 
 SYSTEM_PROMPT_NO_CONTEXT = (
@@ -642,6 +653,106 @@ if os.path.exists(CHECKPOINT_PATH):
 else:
     all_results = {}
 
+
+def _atomic_json_save(path: str, data: dict, indent: int = 2):
+    """Write data to path atomically via a .tmp swap file."""
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=indent, ensure_ascii=False)
+    os.replace(tmp, path)
+
+
+def _samples_to_pred_entry(samples: list) -> dict:
+    """Convert a per-sample result list to a predictions checkpoint entry.
+
+    Stores all raw values needed to recompute any aggregate metric without
+    re-running inference.
+
+    Args:
+        samples: List of per-sample dicts with prediction, ground_truth,
+                 instruction, f1, rouge_l, faithfulness, words keys.
+
+    Returns:
+        Dict with parallel lists for each field.
+    """
+    return {
+        "predictions":   [s["prediction"]          for s in samples],
+        "ground_truths": [s["ground_truth"]         for s in samples],
+        "instructions":  [s.get("instruction", "")  for s in samples],
+        "token_f1":      [s["f1"]                   for s in samples],
+        "rouge_l":       [s["rouge_l"]              for s in samples],
+        "faithfulness":  [s["faithfulness"]         for s in samples],
+        "words":         [s["words"]                for s in samples],
+    }
+
+
+def _pred_entry_to_samples(entry: dict) -> list:
+    """Reconstruct per-sample result list from a predictions checkpoint entry.
+
+    Args:
+        entry: Checkpoint entry dict produced by _samples_to_pred_entry.
+
+    Returns:
+        List of per-sample dicts with all fields needed for metric recomputation.
+    """
+    instrs = entry.get("instructions", [""] * len(entry["predictions"]))
+    return [
+        {
+            "prediction":   pred,
+            "ground_truth": gt,
+            "instruction":  instr,
+            "context":      "",
+            "f1":           f1,
+            "rouge_l":      rl,
+            "faithfulness": fa,
+            "words":        w,
+        }
+        for pred, gt, instr, f1, rl, fa, w in zip(
+            entry["predictions"], entry["ground_truths"], instrs,
+            entry["token_f1"], entry["rouge_l"],
+            entry["faithfulness"], entry["words"],
+        )
+    ]
+
+
+def _recompute_metrics(samples: list, with_context: bool) -> dict:
+    """Recompute aggregate metrics from a list of per-sample dicts.
+
+    Used when loading cached results so metrics are consistent whether
+    produced by fresh inference or checkpoint reload.
+
+    Args:
+        samples: Per-sample list with f1, rouge_l, faithfulness, words,
+                 and prediction fields.
+        with_context: Whether the context was provided to the model.
+
+    Returns:
+        Metric dict matching the format produced by evaluate_on_datasets.
+    """
+    n = len(samples)
+    if not n:
+        return {"n_samples": 0}
+    total_f1      = sum(s["f1"]          for s in samples)
+    total_rouge_l = sum(s["rouge_l"]     for s in samples)
+    total_faith   = sum(s["faithfulness"] for s in samples)
+    total_words   = sum(s["words"]       for s in samples)
+    n_complete    = sum(
+        1 for s in samples
+        if s["prediction"].rstrip() and s["prediction"].rstrip()[-1] in ".!?"
+    )
+    m = {
+        "n_samples":                   n,
+        "Token_F1":                    round(total_f1      / n * 100, 2),
+        "ROUGE_L_F1":                  round(total_rouge_l / n * 100, 2),
+        "Context_Faithfulness_Pct":    round(total_faith   / n * 100, 2),
+        "Avg_Response_Length_Words":   round(total_words   / n,       1),
+        "Sentence_Completeness_Pct":   round(n_complete    / n * 100, 1),
+    }
+    if not with_context:
+        m["Context_Faithfulness_Note"] = "Computed vs unseen context (baseline overlap)"
+    return m
+
+
 for model_idx, model_name in enumerate(MODELS, 1):
     print("\n" + "=" * 70)
     print(f"[{model_idx}/{len(MODELS)}] Evaluating model: {model_name}")
@@ -658,129 +769,167 @@ for model_idx, model_name in enumerate(MODELS, 1):
         print(f"--> Model {model_name} already evaluated (skipping).")
         continue
 
-    print(f"\n--> Loading {model_name}...")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        dtype=torch.bfloat16,
-        device_map="auto",
-        trust_remote_code=True,
-        attn_implementation="sdpa",
-    )
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.pad_token_id = tokenizer.eos_token_id
-    tokenizer.padding_side = "right"
-    print(f"--> Model loaded: {model_name}")
-
-    model_results = {"with_context": {}, "without_context": {}}
     model_slug = model_name.split("/")[-1]
+    _pred_ckpt_path = os.path.join(output_dir, f"predictions_{model_slug}.json")
 
-    _raw_results = {}
+    _pred_ckpt: dict = {}
+    if os.path.exists(_pred_ckpt_path):
+        try:
+            with open(_pred_ckpt_path, "r", encoding="utf-8") as f:
+                _pred_ckpt = json.load(f)
+            _n_cached = sum(
+                len(_pred_ckpt.get(m, {}).get("dev", {}))
+                for m in ["with_context", "without_context"]
+            )
+            print(f"--> Loaded predictions checkpoint: {_pred_ckpt_path} "
+                  f"({_n_cached} dataset-mode combos cached)")
+        except Exception as e:
+            print(f"    Warning: could not load predictions checkpoint: {e}")
+            _pred_ckpt = {}
+
+    _ds_names = list(eval_datasets_dev.keys())
+    _combos_needed = [
+        (mode, ds)
+        for mode in ["with_context", "without_context"]
+        for ds in _ds_names
+        if _pred_ckpt.get(mode, {}).get("dev", {}).get(ds) is None
+    ]
+
+    model = None
+    tokenizer = None
+
+    if _combos_needed:
+        print(f"\n--> Loading {model_name}...")
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            dtype=torch.bfloat16,
+            device_map="auto",
+            trust_remote_code=True,
+            attn_implementation="sdpa",
+        )
+        tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+            tokenizer.pad_token_id = tokenizer.eos_token_id
+        tokenizer.padding_side = "right"
+        print(f"--> Model loaded: {model_name}")
+    else:
+        print(f"--> All inference cached. Proceeding to BERTScore for {model_slug}.")
+
+    _raw_results: dict = {}
 
     for with_context in [True, False]:
-        mode_key = "with_context" if with_context else "without_context"
+        mode_key   = "with_context" if with_context else "without_context"
         mode_label = "WITH CONTEXT" if with_context else "WITHOUT CONTEXT"
 
         print(f"\n{'─' * 60}")
         print(f"  Mode: {mode_label}")
         print(f"{'─' * 60}")
 
-        mode_results = {}
-        _raw_results[mode_key] = {}
+        _raw_results[mode_key] = {"dev": {}}
 
-        for split_name, eval_ds in [("dev", eval_datasets_dev)]:
-            print(f"\n  -- Split: {split_name.upper()} --")
+        for ds_name, ds in eval_datasets_dev.items():
+            cached = _pred_ckpt.get(mode_key, {}).get("dev", {}).get(ds_name)
+            if cached is not None:
+                print(f"  -- {ds_name}: loaded from checkpoint "
+                      f"({len(cached['predictions'])} samples) --")
+                _raw_results[mode_key]["dev"][ds_name] = _pred_entry_to_samples(cached)
+                continue
 
-            metrics, results = evaluate_on_datasets(
-                model, tokenizer, eval_ds,
-                label=f"{model_slug}",
+            print(f"\n  -- {mode_label} | dev | {ds_name} --")
+            _, results_single = evaluate_on_datasets(
+                model, tokenizer, {ds_name: ds},
+                label=model_slug,
                 with_context=with_context,
                 model_name=model_name,
             )
-            _raw_results[mode_key][split_name] = results
+            _raw_results[mode_key]["dev"][ds_name] = results_single[ds_name]
 
-            agg_f1 = agg_rouge_l = agg_faith = agg_words = agg_complete = 0.0
-            agg_n = 0
-            for ds_name, m in metrics.items():
-                n = m["n_samples"]
-                agg_n        += n
-                agg_f1       += m["Token_F1"]                  * n
-                agg_rouge_l  += m["ROUGE_L_F1"]                * n
-                agg_faith    += m["Context_Faithfulness_Pct"]  * n
-                agg_words    += m["Avg_Response_Length_Words"]  * n
-                agg_complete += m["Sentence_Completeness_Pct"] * n
+            if mode_key not in _pred_ckpt:
+                _pred_ckpt[mode_key] = {}
+            if "dev" not in _pred_ckpt[mode_key]:
+                _pred_ckpt[mode_key]["dev"] = {}
+            _pred_ckpt[mode_key]["dev"][ds_name] = _samples_to_pred_entry(
+                results_single[ds_name]
+            )
+            try:
+                _atomic_json_save(_pred_ckpt_path, _pred_ckpt, indent=2)
+                print(f"    --> Predictions checkpoint updated: {_pred_ckpt_path}")
+            except Exception as e:
+                print(f"    Warning: could not update predictions checkpoint: {e}")
 
-            aggregate = {
-                "n_samples":                   agg_n,
-                "Token_F1":                    round(agg_f1      / agg_n, 2) if agg_n else 0.0,
-                "ROUGE_L_F1":                  round(agg_rouge_l / agg_n, 2) if agg_n else 0.0,
-                "Context_Faithfulness_Pct":    round(agg_faith   / agg_n, 2) if agg_n else 0.0,
-                "Avg_Response_Length_Words":   round(agg_words   / agg_n, 1) if agg_n else 0.0,
-                "Sentence_Completeness_Pct":   round(agg_complete / agg_n, 1) if agg_n else 0.0,
-            }
-            if not with_context:
-                aggregate["Context_Faithfulness_Note"] = "N/A (no context provided to model)"
+    if model is not None:
+        print(f"\n--> Unloading model {model_name} for BERTScore computation...")
+        del model, tokenizer
+        gc.collect()
+        torch.cuda.empty_cache()
 
-            split_data = dict(metrics)
-            split_data["aggregate"] = aggregate
-            mode_results[split_name] = split_data
+    model_results = {"with_context": {}, "without_context": {}}
 
-            print(f"\n  Aggregate ({split_name}, {mode_label}):")
-            print(f"    Token F1:             {aggregate['Token_F1']:.2f}%")
-            print(f"    ROUGE-L F1:           {aggregate['ROUGE_L_F1']:.2f}%")
-            faith_note = "  [N/A -- no context]" if not with_context else ""
-            print(f"    Context Faithfulness: {aggregate['Context_Faithfulness_Pct']:.2f}%{faith_note}")
-            print(f"    Avg Response Length:  {aggregate['Avg_Response_Length_Words']:.1f} words")
+    for with_context in [True, False]:
+        mode_key   = "with_context" if with_context else "without_context"
+        mode_label = "WITH CONTEXT" if with_context else "WITHOUT CONTEXT"
 
-        model_results[mode_key] = mode_results
+        raw_ds = _raw_results[mode_key]["dev"]
+        per_ds_metrics = {
+            ds: _recompute_metrics(samples, with_context)
+            for ds, samples in raw_ds.items()
+        }
 
-    _pred_ckpt_path = os.path.join(output_dir, f"predictions_{model_slug}.json")
-    try:
-        _pred_ckpt = {}
-        for mode_key in _raw_results:
-            _pred_ckpt[mode_key] = {}
-            for split_name, res in _raw_results[mode_key].items():
-                _pred_ckpt[mode_key][split_name] = {
-                    ds: {
-                        "predictions":  [r["prediction"]   for r in samples],
-                        "ground_truths": [r["ground_truth"] for r in samples],
-                    }
-                    for ds, samples in res.items()
-                }
-        with open(_pred_ckpt_path, "w", encoding="utf-8") as f:
-            json.dump(_pred_ckpt, f, ensure_ascii=False)
-        print(f"--> Predictions checkpoint saved: {_pred_ckpt_path}")
-    except Exception as e:
-        print(f"    Warning: could not save predictions checkpoint: {e}")
+        agg_f1 = agg_rouge_l = agg_faith = agg_words = agg_complete = 0.0
+        agg_n = 0
+        for ds_name, m in per_ds_metrics.items():
+            n = m["n_samples"]
+            agg_n        += n
+            agg_f1       += m["Token_F1"]                  * n
+            agg_rouge_l  += m["ROUGE_L_F1"]                * n
+            agg_faith    += m["Context_Faithfulness_Pct"]  * n
+            agg_words    += m["Avg_Response_Length_Words"]  * n
+            agg_complete += m["Sentence_Completeness_Pct"] * n
 
-    print(f"\n--> Unloading model {model_name} for BERTScore computation...")
-    del model, tokenizer
-    gc.collect()
-    torch.cuda.empty_cache()
+        aggregate = {
+            "n_samples":                   agg_n,
+            "Token_F1":                    round(agg_f1      / agg_n, 2) if agg_n else 0.0,
+            "ROUGE_L_F1":                  round(agg_rouge_l / agg_n, 2) if agg_n else 0.0,
+            "Context_Faithfulness_Pct":    round(agg_faith   / agg_n, 2) if agg_n else 0.0,
+            "Avg_Response_Length_Words":   round(agg_words   / agg_n, 1) if agg_n else 0.0,
+            "Sentence_Completeness_Pct":   round(agg_complete / agg_n, 1) if agg_n else 0.0,
+        }
+        if not with_context:
+            aggregate["Context_Faithfulness_Note"] = "N/A (no context provided to model)"
+
+        split_data = dict(per_ds_metrics)
+        split_data["aggregate"] = aggregate
+        model_results[mode_key]["dev"] = split_data
+
+        print(f"\n  Aggregate (dev, {mode_label}):")
+        print(f"    Token F1:             {aggregate['Token_F1']:.2f}%")
+        print(f"    ROUGE-L F1:           {aggregate['ROUGE_L_F1']:.2f}%")
+        faith_note = "  [N/A -- no context]" if not with_context else ""
+        print(f"    Context Faithfulness: {aggregate['Context_Faithfulness_Pct']:.2f}%{faith_note}")
+        print(f"    Avg Response Length:  {aggregate['Avg_Response_Length_Words']:.1f} words")
 
     print(f"\n--> Computing BERTScore for {model_slug}...")
 
     for mode_key in ["with_context", "without_context"]:
-        for split_name in ["dev"]:
-            raw_res = _raw_results[mode_key][split_name]
-            preds, gts = _extract_preds_gts(raw_res)
+        raw_ds = _raw_results[mode_key]["dev"]
+        preds, gts = _extract_preds_gts(raw_ds)
 
-            print(f"\n  [{mode_key} | {split_name}]")
-            bs = compute_bertscore_all(preds, gts)
+        print(f"\n  [{mode_key} | dev]")
+        bs = compute_bertscore_all(preds, gts)
 
-            for ds_name in bs:
-                model_results[mode_key][split_name][ds_name]["BERTScore_P"]  = bs[ds_name]["avg_P"]
-                model_results[mode_key][split_name][ds_name]["BERTScore_R"]  = bs[ds_name]["avg_R"]
-                model_results[mode_key][split_name][ds_name]["BERTScore_F1"] = bs[ds_name]["avg_F1"]
+        for ds_name in bs:
+            model_results[mode_key]["dev"][ds_name]["BERTScore_P"]  = bs[ds_name]["avg_P"]
+            model_results[mode_key]["dev"][ds_name]["BERTScore_R"]  = bs[ds_name]["avg_R"]
+            model_results[mode_key]["dev"][ds_name]["BERTScore_F1"] = bs[ds_name]["avg_F1"]
 
-            agg = model_results[mode_key][split_name]["aggregate"]
-            agg_bs_f1 = 0.0
-            for ds_name in bs:
-                n = model_results[mode_key][split_name][ds_name]["n_samples"]
-                agg_bs_f1 += bs[ds_name]["avg_F1"] * n
-            agg["BERTScore_F1"] = round(agg_bs_f1 / agg["n_samples"], 2) if agg["n_samples"] else 0.0
-            print(f"      Aggregate BERTScore F1: {agg['BERTScore_F1']:.2f}%")
+        agg = model_results[mode_key]["dev"]["aggregate"]
+        agg_bs_f1 = 0.0
+        for ds_name in bs:
+            n = model_results[mode_key]["dev"][ds_name]["n_samples"]
+            agg_bs_f1 += bs[ds_name]["avg_F1"] * n
+        agg["BERTScore_F1"] = round(agg_bs_f1 / agg["n_samples"], 2) if agg["n_samples"] else 0.0
+        print(f"      Aggregate BERTScore F1: {agg['BERTScore_F1']:.2f}%")
 
     gc.collect()
     torch.cuda.empty_cache()
@@ -794,10 +943,7 @@ for model_idx, model_name in enumerate(MODELS, 1):
             with open(CHECKPOINT_PATH, "r", encoding="utf-8") as f:
                 _disk = json.load(f)
         _disk.update(all_results)
-        _tmp_path = CHECKPOINT_PATH + ".tmp"
-        with open(_tmp_path, "w", encoding="utf-8") as f:
-            json.dump(_disk, f, indent=4, ensure_ascii=False)
-        os.replace(_tmp_path, CHECKPOINT_PATH)
+        _atomic_json_save(CHECKPOINT_PATH, _disk, indent=4)
         print(f"--> Checkpoint saved: {CHECKPOINT_PATH}")
     except Exception as e:
         print(f"--> Warning: could not save checkpoint: {e}")
