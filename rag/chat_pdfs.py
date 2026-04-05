@@ -69,7 +69,12 @@ How to run (interactive CLI):
 #  |      +-- 10.5 Evaluation    silent pipeline for RAGAS
 #  +--11. Indexing and collection management
 #  |      +-- 11.1 Contextual retrieval  chunk enrichment with LLM
-#  |      +-- 11.2 Image extraction      fitz page images + glm-ocr description
+#  |      +-- 11.2 Image extraction      fitz raster images + positional caption extraction
+#  |      |      +-- _es_descripcion_spam    degenerate OCR spam / repetition detector
+#  |      |      +-- _es_prompt_echo         prompt-echo detector
+#  |      |      +-- _es_solo_caption        caption-echo detector
+#  |      |      +-- extraer_imagenes_pdf    extract images + captions per page
+#  |      |      +-- describir_imagen_con_llm  glm-ocr vision description
 #  |      +-- 11.3 Indexing              PDFs -> pymupdf4llm/pypdf + images -> ChromaDB
 #  |      +-- 11.4 Collection mgmt      list indexed documents
 #  |
@@ -220,6 +225,7 @@ CHUNK_OVERLAP = 350
 MIN_CHUNK_LENGTH = 80
 MAX_IMAGENES_POR_PAGINA = 5
 MIN_IMAGEN_SIZE_PX = 100
+CAPTION_MARGIN_PX = 80          # px below image bbox to search for figure caption text
 _IMAGEN_CHUNK_OFFSET = 10_000
 
 N_RESULTADOS_SEMANTICOS = 80
@@ -2139,6 +2145,79 @@ def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
     return ""
 
 
+# --- 11.2 Image extraction ---
+
+
+_PROMPT_ECHO_MARKERS = (
+    "Using this caption as context, describe the visual content",
+    "describe the visual content of this image in detail",
+    "Focus on what is depicted, not on any text overlaid",
+)
+
+
+def _es_descripcion_spam(texto: str) -> bool:
+    """Detect degenerate OCR output: repeated phrases or 'no text' spam.
+
+    Two complementary checks:
+    - Low lexical diversity: if unique words / total words < 0.35, the text
+      is almost certainly a repetitive loop (any pattern, not only 'no text').
+    - 'no text' specific: ratio of 'no' + 'text' tokens > 20%.
+
+    Args:
+        texto: Raw description returned by the vision model.
+
+    Returns:
+        True if the description is considered degenerate spam.
+    """
+    palabras = texto.lower().split()
+    if len(palabras) < 10:
+        return False
+    # Low lexical diversity catches "the image is a row, and the image is a row..."
+    diversidad = len(set(palabras)) / len(palabras)
+    if diversidad < 0.35:
+        return True
+    # Specific check for "no text, no text, no text..." pattern
+    ratio_no_text = (palabras.count("no") + palabras.count("text")) / len(palabras)
+    return ratio_no_text > 0.20
+
+
+def _es_prompt_echo(descripcion: str) -> bool:
+    """Detect when the vision model echoes back the prompt instead of describing the image.
+
+    Some vision models (e.g. glm-ocr) occasionally treat the text content of the
+    prompt as image text to transcribe, returning the prompt verbatim.
+
+    Args:
+        descripcion: Raw description returned by the vision model.
+
+    Returns:
+        True if the description contains a literal fragment of the system prompt.
+    """
+    desc_lower = descripcion.lower()
+    return any(marker.lower() in desc_lower for marker in _PROMPT_ECHO_MARKERS)
+
+
+def _es_solo_caption(descripcion: str, caption: str) -> bool:
+    """Check if the description merely echoes the caption with no new visual content.
+
+    Args:
+        descripcion: Description returned by the vision model.
+        caption: Caption text used as context in the prompt.
+
+    Returns:
+        True if >85% of caption tokens appear in the description and the
+        description is not substantially longer than the caption.
+    """
+    if not caption:
+        return False
+    tokens_desc = set(descripcion.lower().split())
+    tokens_cap  = set(caption.lower().split())
+    if not tokens_cap:
+        return False
+    overlap = len(tokens_desc & tokens_cap) / len(tokens_cap)
+    return overlap > 0.85 and len(tokens_desc) < len(tokens_cap) * 1.3
+
+
 def extraer_imagenes_pdf(
     ruta_pdf: str,
     max_por_pagina: int = MAX_IMAGENES_POR_PAGINA,
@@ -2160,7 +2239,9 @@ def extraer_imagenes_pdf(
     Returns:
         Dict mapping zero-based page number to a list of image dicts.
         Each dict has keys ``"image_bytes"`` (raw bytes), ``"width"``,
-        ``"height"``, and ``"ext"`` (format string, e.g. ``"png"``).
+        ``"height"``, ``"ext"`` (format string, e.g. ``"png"``), and
+        ``"caption"`` (text found immediately below the image bbox on the
+        same page; empty string if not found).
         Pages with no qualifying images are omitted from the dict.
     """
     if not FITZ_DISPONIBLE:
@@ -2189,11 +2270,31 @@ def extraer_imagenes_pdf(
                     if width < min_size_px or height < min_size_px:
                         continue
 
+                    caption_text = ""
+                    try:
+                        img_rects = page.get_image_rects(xref)
+                        if img_rects:
+                            img_rect = img_rects[0]
+                            below_rect = fitz.Rect(
+                                img_rect.x0,
+                                img_rect.y1,
+                                img_rect.x1,
+                                img_rect.y1 + CAPTION_MARGIN_PX,
+                            )
+                            candidate = page.get_text("text", clip=below_rect).strip()
+                            # Normalize: collapse newlines and extra spaces
+                            candidate = " ".join(candidate.split())
+                            if candidate and len(candidate) <= 300:
+                                caption_text = candidate
+                    except Exception:
+                        pass  # caption is optional; never interrupt image extraction
+
                     imagenes_pagina.append({
                         "image_bytes": img_data["image"],
                         "width": width,
                         "height": height,
                         "ext": img_data.get("ext", "png"),
+                        "caption": caption_text,
                     })
                 except Exception as e:
                     logging.warning(
@@ -2211,13 +2312,21 @@ def extraer_imagenes_pdf(
     return imagenes_por_pagina
 
 
-def describir_imagen_con_llm(image_bytes: bytes) -> str:
+def describir_imagen_con_llm(image_bytes: bytes, caption: str = "") -> str:
     """Generate a textual description of an academic image using ``MODELO_OCR``.
 
     Sends the raw image bytes to ``glm-ocr`` (or the model set in
-    ``OLLAMA_OCR_MODEL``) via Ollama and returns a structured description
-    that transcribes tables cell by cell, chart axes and legends, diagram
-    components, and any visible equations or annotations.
+    ``OLLAMA_OCR_MODEL``) via Ollama and returns a description focused on
+    the visual content: architecture components and data flow for diagrams,
+    column structure for tables, axis labels and trends for charts.
+
+    If a ``caption`` is provided, it is injected as context at the start of
+    the prompt so the model can anchor its description to the figure's topic
+    without simply echoing the caption text.
+
+    Degenerate outputs are filtered before returning:
+    - OCR spam (>20% of words are 'no'/'text') → returns ``""``
+    - Description that merely echoes the caption → returns ``""``
 
     The returned string is plain text embedded with ``MODELO_EMBEDDING``
     and stored as a regular chunk in ChromaDB — no extra infrastructure
@@ -2229,10 +2338,12 @@ def describir_imagen_con_llm(image_bytes: bytes) -> str:
     Args:
         image_bytes: Raw image bytes in any format supported by Ollama
             (PNG, JPEG, WebP, …).
+        caption: Optional caption text extracted from the PDF near the image.
+            Used as context to orient the description; not transcribed literally.
 
     Returns:
-        Non-empty description string on success, or ``""`` on failure or
-        when image embeddings are disabled.
+        Non-empty description string on success, or ``""`` on failure,
+        degenerate output, or when image embeddings are disabled.
     """
     if not USAR_EMBEDDINGS_IMAGEN:
         return ""
@@ -2245,25 +2356,45 @@ def describir_imagen_con_llm(image_bytes: bytes) -> str:
             messages=[{
                 "role": "user",
                 "content": (
-                    "Describe the image in detail. "
-                    "If it contains a table, transcribe all rows, columns, headers, and cell values. "
-                    "If it contains a chart or diagram, list all axis labels, legend entries, "
-                    "data series names, and key numerical values. "
-                    "If it contains an architecture or flowchart, enumerate all components, "
-                    "arrows, and labels. "
-                    "Also transcribe any equations, captions, or annotations visible. "
-                    "Conclude with a one-sentence summary of the main finding or information conveyed."
+                    (f"The figure caption reads: '{caption}'. "
+                     "Using this caption as context, " if caption else "")
+                    + "Describe the visual content of this image in detail. "
+                    "Focus on what is depicted, not on any text overlaid on it. "
+                    "If it is a neural network architecture or block diagram, name each "
+                    "component (e.g. encoder, decoder, attention head, feed-forward layer), "
+                    "describe the data flow between them (arrows, residual connections), and "
+                    "identify the overall architecture family (Transformer, CNN, RNN, etc.). "
+                    "If it is a table, describe its structure: number of rows and columns, "
+                    "column headers, and the type of values in each column "
+                    "(e.g. model names, BLEU scores, parameter counts). "
+                    "If it is a chart, name the axes, the metric being plotted, "
+                    "and the key trend or comparison shown. "
+                    "End with one sentence stating the main contribution or finding "
+                    "this figure represents."
                 ),
                 "images": [image_b64],
             }],
-            options={"temperature": 0.1, "num_predict": 800},
+            options={"temperature": 0.1, "num_predict": 1200},
         )
         descripcion = response["message"]["content"].strip()
+
+        if _es_descripcion_spam(descripcion):
+            logging.warning(f"Discarding degenerate OCR output (spam) from {MODELO_OCR}")
+            return ""
+        if _es_prompt_echo(descripcion):
+            logging.warning(f"Discarding prompt echo from {MODELO_OCR}")
+            return ""
+        if caption and _es_solo_caption(descripcion, caption):
+            logging.warning(f"Discarding description that merely echoes the caption from {MODELO_OCR}")
+            return ""
         return descripcion if len(descripcion) > 10 else ""
 
     except Exception as e:
         logging.warning(f"Error describing image with {MODELO_OCR}: {e}")
         return ""
+
+
+# --- 11.3 Indexing ---
 
 
 def indexar_documentos(
@@ -2450,7 +2581,8 @@ def indexar_documentos(
                     ui.debug("  describing and indexing images...")
                 for num_pag, pagina_imagenes in imagenes_pdf.items():
                     for img_idx, img_info in enumerate(pagina_imagenes):
-                        descripcion = describir_imagen_con_llm(img_info["image_bytes"])
+                        caption = img_info.get("caption", "")
+                        descripcion = describir_imagen_con_llm(img_info["image_bytes"], caption=caption)
                         if not descripcion:
                             continue
 

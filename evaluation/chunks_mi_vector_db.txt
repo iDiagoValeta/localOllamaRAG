@@ -1,13 +1,29 @@
 # ChromaDB — exportación de fragmentos
 # almacén: mi_vector_db (producción)
 # carpeta PDFs (referencia): C:\Users\nadiv\repos\localOllamaRAG\rag\pdfs
-# total fragmentos: 40
+# total fragmentos: 41
 # Resumen por tipo:
 #   - imagen: 3
-#   - texto_markdown: 37
+#   - texto_markdown: 38
 
 ========================================================================
-FRAGMENTO 1 / 40
+FRAGMENTO 1 / 41
+tipo_contenido: Texto (Markdown / pymupdf4llm)
+tipo (clave): texto_markdown
+id: att.pdf_pag1_chunk0
+meta.chunk: 0
+meta.format: markdown
+meta.page: 1
+meta.section_header: 
+meta.source: att.pdf
+meta.total_chunks_in_page: 4
+------------------------------------------------------------------------
+This section of the paper outlines the permissions granted for reproducing the paper’s visual elements, specifically the tables and figures, for journalistic or scholarly purposes, provided appropriate attribution is given. The document’s core focus is introducing the Transformer model and its architecture, detailing its components like scaled dot-product attention and multi-head attention, alongside its performance improvements compared to existing models.\n\nProvided proper attribution is provided, Google hereby grants permission to
+reproduce the tables and figures in this paper solely for use in journalistic or
+scholarly works.
+
+========================================================================
+FRAGMENTO 2 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag1_chunk1
@@ -79,7 +95,7 @@ Illia Polosukhin _[∗‡]_
 Abstract
 
 ========================================================================
-FRAGMENTO 2 / 40
+FRAGMENTO 3 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag1_chunk2
@@ -90,7 +106,7 @@ meta.section_header: ## Attention Is All You Need
 meta.source: att.pdf
 meta.total_chunks_in_page: 4
 ------------------------------------------------------------------------
-This document details the architecture and performance of the Transformer model, a novel approach to sequence transduction that relies entirely on attention mechanisms. The excerpt introduces the core research team behind the Transformer – Ashish Vaswani, Llion Jones, Noam Shazeer, Aidan Gomez, Niki Parmar, Jakob Uszkoreit, and Łukasz Kaiser – and highlights the model’s significant improvements over existing recurrent and convolutional models in machine translation tasks, specifically demonstrating superior BLEU scores and reduced training costs.\n\nN. Gomez _[∗†]_
+This document details the architecture and performance of the Transformer model, a novel approach to sequence transduction that relies entirely on attention mechanisms. The excerpt introduces the core research team behind the Transformer – Ashish Vaswani, Llion Jones, Noam Shazeer, Aidan Gomez, Niki Parmar, Jakob Uszkoreit, and Łukasz Kaiser – and highlights the model’s significant advancements in machine translation, achieving state-of-the-art results with improved training efficiency and parallelizability compared to previous recurrent and convolutional models.\n\nN. Gomez _[∗†]_
 University of Toronto
 ```
 aidan@cs.toronto.edu
@@ -141,7 +157,7 @@ other tasks by applying it successfully to English constituency parsing both wit
 large and limited training data.
 
 ========================================================================
-FRAGMENTO 3 / 40
+FRAGMENTO 4 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag1_chunk3
@@ -174,7 +190,7 @@ _‡_ Work performed while at Google Research.
 31st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA.
 
 ========================================================================
-FRAGMENTO 4 / 40
+FRAGMENTO 5 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag2_chunk0
@@ -185,7 +201,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 4
 ------------------------------------------------------------------------
-This document introduces the Transformer model, a novel architecture for sequence modeling that builds upon previous recurrent neural network approaches. The excerpt specifically focuses on the limitations of recurrent models, highlighting their sequential computation and the resulting challenges with parallelization and memory constraints, particularly when dealing with longer sequence lengths.\n\n1 Introduction
+This document introduces the Transformer model, a novel architecture for sequence modeling that builds upon previous recurrent neural network approaches. The excerpt specifically details the limitations of recurrent models, highlighting their sequential computation and the resulting challenges with parallelization and memory constraints, particularly when dealing with longer sequence lengths.\n\n1 Introduction
 
 Recurrent neural networks, long short-term memory [13] and gated recurrent [7] neural networks
 in particular, have been firmly established as state of the art approaches in sequence modeling and
@@ -203,7 +219,7 @@ computation [32], while also improving model performance in case of the latter. 
 constraint of sequential computation, however, remains.
 
 ========================================================================
-FRAGMENTO 5 / 40
+FRAGMENTO 6 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag2_chunk1
@@ -214,7 +230,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 4
 ------------------------------------------------------------------------
-This paper details the development of the Transformer, a novel neural network architecture designed for sequence modeling and translation. The excerpt introduces the Transformer’s core concept – replacing recurrent networks with a purely attention-based mechanism – highlighting its potential for increased parallelization and improved translation quality achieved with relatively low computational cost.\n\nlengths, as memory constraints limit batching across examples. Recent work has achieved
+This paper details the development of the Transformer, a novel neural network architecture designed for sequence modeling and translation. The excerpt introduces the Transformer’s core concept: a model that replaces recurrent networks with a purely attention-based mechanism, enabling greater parallelization and improved translation quality.\n\nlengths, as memory constraints limit batching across examples. Recent work has achieved
 significant improvements in computational efficiency through factorization tricks [21] and conditional
 computation [32], while also improving model performance in case of the latter. The fundamental
 constraint of sequential computation, however, remains. Attention mechanisms have become an integral part of compelling sequence modeling and transduction models in various tasks, allowing modeling of dependencies without regard to their distance in
@@ -231,7 +247,7 @@ translation quality after being trained for as little as twelve hours on eight P
 The goal of reducing sequential computation also forms the foundation of the Extended Neural GPU
 
 ========================================================================
-FRAGMENTO 6 / 40
+FRAGMENTO 7 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag2_chunk2
@@ -242,7 +258,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 4
 ------------------------------------------------------------------------
-This section of the paper details the Transformer architecture, focusing on its encoder and decoder stacks and the underlying mechanisms of self-attention. Specifically, it introduces scaled dot-product attention and multi-head attention as key components designed to capture long-range dependencies within sequences, contrasting them with the limitations of recurrent models in handling such relationships.\n\nglobal dependencies between input and output.
+This section of the paper details the Transformer architecture, focusing on its encoder and decoder stacks and the underlying mechanisms of self-attention. Specifically, it introduces scaled dot-product attention and multi-head attention as key components that enable the model to capture long-range dependencies and achieve state-of-the-art results in translation tasks.\n\nglobal dependencies between input and output.
 The Transformer allows for significantly more parallelization and can reach a new state of the art in
 translation quality after being trained for as little as twelve hours on eight P100 GPUs.
 
@@ -266,7 +282,7 @@ End-to-end memory networks are based on a recurrent attention mechanism instead 
 language modeling tasks [34].
 
 ========================================================================
-FRAGMENTO 7 / 40
+FRAGMENTO 8 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag2_chunk3
@@ -277,7 +293,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 4
 ------------------------------------------------------------------------
-This section of the paper details the Transformer model’s architecture and rationale, framing it as a novel approach within the broader landscape of sequence transduction models. The excerpt elaborates on the established encoder-decoder structure prevalent in competitive models like GNMT and ConvS2S, highlighting the Transformer’s departure from sequence-aligned recurrent networks and convolutional approaches by exclusively utilizing self-attention for representation computation.\n\nabstractive summarization,
+This section of the paper details the Transformer model’s architecture and rationale, framing it as a novel approach within the broader landscape of sequence transduction models. The excerpt elaborates on the established encoder-decoder structure prevalent in competitive models like GNMT and ConvS2S, highlighting the Transformer’s departure from sequence-aligned recurrent networks and convolutional approaches by exclusively utilizing self-attention mechanisms for representation computation.\n\nabstractive summarization,
 textual entailment and learning task-independent sentence representations [4, 27, 28, 22].
 
 End-to-end memory networks are based on a recurrent attention mechanism instead of sequencealigned recurrence and have been shown to perform well on simple-language question answering and
@@ -297,7 +313,7 @@ sequence ( _y_ 1 _, ..., ym_ ) of symbols one element at a time. At each step th
 2
 
 ========================================================================
-FRAGMENTO 8 / 40
+FRAGMENTO 9 / 41
 tipo_contenido: Imagen (descripción indexada)
 tipo (clave): imagen
 id: att.pdf_pag2_chunk10000
@@ -309,12 +325,10 @@ meta.page: 2
 meta.section_header: 
 meta.source: att.pdf
 ------------------------------------------------------------------------
-This document details the “Attention Is All You Need” paper, introducing the Transformer architecture, a novel approach to sequence modeling that relies entirely on self-attention mechanisms. The paper outlines the core components of the Transformer, including the encoder and decoder stacks, scaled dot-product attention, and multi-head attention, all designed to improve performance in tasks like language translation. 
-
-The excerpt focuses on the encoder portion of the Transformer, specifically detailing the structure of the encoder stacks, the multi-head attention mechanism, and the scaled dot-product attention, highlighting their roles in processing input sequences and generating output values.  It further explains the computational complexity and path lengths associated with this layer type, providing a technical breakdown of the model’s architecture.\n\n<table bordered by row, no text, no text, no text, no text, no text, no text, no text, no text, no other content, no other content, no other, no other content, no other, no other, no other, no other, no other, no other, no other, no other, no other, no other, no other, no other, no other, no other, no other, no other, no other, no other, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no
+This paper details the development of the Transformer, a novel neural network architecture designed for sequence modeling. The excerpt focuses on the Scaled Dot-Product Attention mechanism, explaining its function of weighting values based on compatibility between queries and keys, and how this differs from single-head attention which inhibits joint representation subspaces.\n\nThe image is a row, and the image is a row, and the image is a row, and the image, and the image is a row, and the image is a row, and the image.
 
 ========================================================================
-FRAGMENTO 9 / 40
+FRAGMENTO 10 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag3_chunk0
@@ -325,7 +339,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This paper details the architecture of the Transformer, a novel neural network model designed for sequence transduction tasks like language modeling and machine translation. The excerpt specifically focuses on the encoder component of the Transformer, outlining its structure which includes six identical layers, each containing a multi-head self-attention mechanism and a fully connected feed-forward network.  It further elaborates on the implementation details, such as residual connections and layer normalization, that contribute to the model’s functionality.\n\nFigure 1: The Transformer - model architecture.
+This paper details the architecture of the Transformer, a novel neural network model designed for sequence transduction tasks like language modeling and machine translation. The excerpt specifically focuses on the encoder component of the Transformer, outlining its structure which includes six identical layers each containing a multi-head self-attention mechanism and a fully connected feed-forward network.  It further elaborates on the key design choices, such as residual connections and layer normalization, that contribute to the model’s functionality.\n\nFigure 1: The Transformer - model architecture.
 
 The Transformer follows this overall architecture using stacked self-attention and point-wise, fully
 connected layers for both the encoder and decoder, shown in the left and right halves of Figure 1,
@@ -341,7 +355,7 @@ itself. To facilitate these residual connections, all sub-layers in the model, a
 layers, produce outputs of dimension _d_ model = 512.
 
 ========================================================================
-FRAGMENTO 10 / 40
+FRAGMENTO 11 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag3_chunk1
@@ -352,7 +366,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This paper details the Transformer architecture, a novel approach to sequence modeling that utilizes self-attention mechanisms. The excerpt focuses on the core design of the Transformer, specifically outlining the structure of both the encoder and decoder stacks, and emphasizing the use of residual connections and layer normalization to facilitate training.\n\nsub-layers, followed by layer normalization [1]. That is, the output of each sub-layer is
+This paper details the Transformer architecture, a novel approach to sequence modeling that utilizes self-attention mechanisms. The excerpt focuses on the core design of the Transformer, specifically outlining the structure of both the encoder and decoder stacks, including the use of residual connections and layer normalization to facilitate training.\n\nsub-layers, followed by layer normalization [1]. That is, the output of each sub-layer is
 LayerNorm( _x_ + Sublayer( _x_ )), where Sublayer( _x_ ) is the function implemented by the sub-layer
 itself. To facilitate these residual connections, all sub-layers in the model, as well as the embedding
 layers, produce outputs of dimension _d_ model = 512. Decoder: The decoder is also composed of a stack of _N_ = 6 identical layers. In addition to the two
@@ -371,7 +385,7 @@ where the query, keys, values, and output are all vectors. The output is compute
 3
 
 ========================================================================
-FRAGMENTO 11 / 40
+FRAGMENTO 12 / 41
 tipo_contenido: Imagen (descripción indexada)
 tipo (clave): imagen
 id: att.pdf_pag3_chunk10000
@@ -383,10 +397,11 @@ meta.page: 3
 meta.section_header: 
 meta.source: att.pdf
 ------------------------------------------------------------------------
-This paper details the architecture of the Transformer, a novel neural network model designed for sequence transduction tasks like language modeling and machine translation. Specifically, the excerpt focuses on the core components of the Transformer, illustrating the Scaled Dot-Product Attention and Multi-Head Attention mechanisms through a flowchart diagram.\n\nThe image is a flowchart with nodes labeled "MatMul", "SoftMax", "Mask (opt.)", "Scale", and "MatMul". Arrows connect these nodes in a sequential order. At the bottom, there are two arrows labeled "Q" and "K" leading to "V". The flowchart is simple with no additional text or complex data.
+This paper details the “Attention Is All You Need” model, a novel architecture for sequence transduction based on the Transformer. The excerpt focuses on the Scaled Dot-Product Attention mechanism, specifically illustrating its components and how it operates within the broader Transformer framework.\n\nThe visual content of the figure caption reads 'Scaled Dot-Prod
+unning in paralle'. Using this caption as context, describe the visual content of this image in detail. Focus on what is depicted, not on any text overlaid on it. If it is a neural network architecture or block diagram, name each component (e.g. encoder, decoder, attention head, feed-forward layer), describe the data flow between them (arrows, residual connections), and identify the overall architecture family (Transformer, CNN, RNN, etc.). If it is a table, describe its structure: number of rows and columns, column headers, and the type of values in each column (e.g. model names, BLEU scores, parameter counts). If it is a chart, name the axes, the metric being plotted, and the key trend or comparison shown. End with one sentence stating the main contribution or finding this figure represents.
 
 ========================================================================
-FRAGMENTO 12 / 40
+FRAGMENTO 13 / 41
 tipo_contenido: Imagen (descripción indexada)
 tipo (clave): imagen
 id: att.pdf_pag3_chunk10001
@@ -398,10 +413,10 @@ meta.page: 3
 meta.section_header: 
 meta.source: att.pdf
 ------------------------------------------------------------------------
-This paper details the architecture of the Transformer, a novel neural network model designed for sequence transduction tasks like language modeling and machine translation. The excerpt provides a visual representation of the Transformer’s core components, specifically focusing on the Scaled Dot-Product Attention mechanism and its associated linear projections represented by “V”, “K”, and “Q” blocks.\n\nThe image is a flowchart diagram representing a neural network architecture. At the top, there is a "Linear" block. Below it, a "Concat" block is shown. The "Scaled Dot-Product Attention" block is centrally located, with three "Linear" blocks below it. Each "Linear" block has a label "V", "K", and "Q" respectively. Arrows connect the blocks, indicating the flow of information. The diagram includes a label "h" in the middle of the "Scaled Dot-Product Attention" block. The background is a light purple gradient.
+This paper details the Transformer model, a novel architecture for sequence transduction that utilizes self-attention mechanisms. The excerpt specifically describes the core components of the multi-head attention block within the Transformer, outlining its structure including linear layers, scaled dot-product attention, and bidirectional data flow facilitated by residual connections.\n\nMulti-Head Attention consists of multi-head attention blocks. Each block consists of a linear layer, a scaled dot-product attention layer, and a linear layer. The data flow between them is bidirectional, with residual connections. The overall architecture family is Transformer.
 
 ========================================================================
-FRAGMENTO 13 / 40
+FRAGMENTO 14 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag4_chunk0
@@ -435,7 +450,7 @@ Attention( _Q, K, V_ ) = softmax( _[QK]_  _[T]_ ) _V_ (1)
 _dk_
 
 ========================================================================
-FRAGMENTO 14 / 40
+FRAGMENTO 15 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag4_chunk1
@@ -476,7 +491,7 @@ linear projections to _dk_, _dk_ and _dv_ dimensions, respectively. On each of t
 queries, keys and values we then perform the attention function in parallel, yielding _dv_ -dimensional
 
 ========================================================================
-FRAGMENTO 15 / 40
+FRAGMENTO 16 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag4_chunk2
@@ -487,7 +502,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This paper details the Transformer model, a novel architecture for sequence transduction that utilizes self-attention mechanisms. The excerpt focuses on the inner workings of the scaled dot-product attention component, specifically outlining the linear projections applied to the queries, keys, and values before the attention function is computed.\n\nkeys, values and queries,
+This paper details the Transformer model, a novel architecture for sequence transduction that utilizes self-attention mechanisms. The excerpt focuses on the inner workings of the scaled dot-product attention component, specifically outlining the linear projections applied to queries, keys, and values before the attention function is computed.\n\nkeys, values and queries,
 we found it beneficial to linearly project the queries, keys and values _h_ times with different, learned
 linear projections to _dk_, _dk_ and _dv_ dimensions, respectively. On each of these projected versions of
 queries, keys and values we then perform the attention function in parallel, yielding _dv_ -dimensional 4To illustrate why the dot products get large, assume that the components of _q_ and _k_ are independent random
@@ -496,7 +511,7 @@ variables with mean 0 and variance 1. Then their dot product, _q · k_ = [�] _
 4
 
 ========================================================================
-FRAGMENTO 16 / 40
+FRAGMENTO 17 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag5_chunk0
@@ -536,7 +551,7 @@ typical encoder-decoder attention mechanisms in sequence-to-sequence models such
 [38, 2, 9].
 
 ========================================================================
-FRAGMENTO 17 / 40
+FRAGMENTO 18 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag5_chunk1
@@ -579,7 +594,7 @@ _dff_ = 2048.
 3.4 Embeddings and Softmax
 
 ========================================================================
-FRAGMENTO 18 / 40
+FRAGMENTO 19 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag5_chunk2
@@ -604,7 +619,7 @@ our model, we share the same weight matrix between the two embedding layers and 
 5
 
 ========================================================================
-FRAGMENTO 19 / 40
+FRAGMENTO 20 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag6_chunk0
@@ -615,9 +630,9 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document details the architecture of the Transformer model, introduced as a novel approach to sequence transduction problems like language modeling and machine translation. The core innovation lies in utilizing self-attention mechanisms, specifically scaled dot-product attention and multi-head attention, to capture relationships within sequences, moving away from the limitations of recurrent models. 
+This document details the architecture of the Transformer model, introduced as a novel approach to sequence transduction problems like language modeling and machine translation. The core of the Transformer relies on self-attention mechanisms, specifically scaled dot-product attention and multi-head attention, to capture relationships between sequence elements, moving beyond the limitations of recurrent models. 
 
-The excerpt focuses on the encoder stack within the Transformer, outlining the layered structure and computational complexity of each layer, including self-attention, recurrent, and convolutional approaches. It further introduces the concept of positional encoding to account for the sequential nature of the input data, a crucial element absent in the model’s architecture due to the lack of recurrence or convolution.\n\nTable 1: Maximum path lengths, per-layer complexity and minimum number of sequential operations
+The excerpt focuses on the encoder stack within the Transformer, outlining the layered structure and computational complexity of each layer, including self-attention, recurrent, and convolutional approaches, alongside a method for incorporating positional information to account for the sequential nature of the input data.\n\nTable 1: Maximum path lengths, per-layer complexity and minimum number of sequential operations
 for different layer types. _n_ is the sequence length, _d_ is the representation dimension, _k_ is the kernel
 size of convolutions and _r_ the size of the neighborhood in restricted self-attention.
 
@@ -644,7 +659,7 @@ _PE_ ( _pos,_ 2 _i_ ) = _sin_ ( _pos/_ 10000 [2] _[i/d]_ [model] )
 _PE_ ( _pos,_ 2 _i_ +1) = _cos_ ( _pos/_ 10000 [2] _[i/d]_ [model] )
 
 ========================================================================
-FRAGMENTO 20 / 40
+FRAGMENTO 21 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag6_chunk1
@@ -685,7 +700,7 @@ One is the total computational complexity per layer. Another is the amount of co
 be parallelized, as measured by the minimum number of sequential operations required.
 
 ========================================================================
-FRAGMENTO 21 / 40
+FRAGMENTO 22 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag6_chunk2
@@ -716,7 +731,7 @@ computational complexity, self-attention layers are faster than recurrent layers
 6
 
 ========================================================================
-FRAGMENTO 22 / 40
+FRAGMENTO 23 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag7_chunk0
@@ -727,7 +742,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This section discusses the Transformer architecture, detailing its encoder and decoder stacks and the core mechanisms of self-attention. Specifically, it explains how scaled dot-product attention and multi-head attention are utilized to process sequential data, highlighting the model’s ability to jointly attend to information across different representation subspaces.\n\nlength _n_ is smaller than the representation dimensionality _d_, which is most often the case with
+This section discusses the architectural choices within the Transformer model, specifically detailing how self-attention mechanisms are implemented and optimized for handling long sequences. The excerpt focuses on strategies to mitigate the computational cost associated with connecting all pairs of positions in a sequence, such as restricting attention to a local neighborhood or utilizing separable convolutions.\n\nlength _n_ is smaller than the representation dimensionality _d_, which is most often the case with
 sentence representations used by state-of-the-art models in machine translations, such as word-piece
 
 [38] and byte-pair [31] representations. To improve computational performance for tasks involving
@@ -745,7 +760,7 @@ convolution is equal to the combination of a self-attention layer and a point-wi
 the approach we take in our model.
 
 ========================================================================
-FRAGMENTO 23 / 40
+FRAGMENTO 24 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag7_chunk1
@@ -756,7 +771,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-The document details the architecture and training of the “Attention Is All You Need” model, a novel approach to sequence transduction utilizing self-attention mechanisms. Specifically, the excerpt focuses on the encoder stack within the Transformer model, outlining the structure of individual layers, including multi-head attention and point-wise feed-forward networks, and highlighting the potential for interpretability through examining attention distributions.\n\nlayers, by a factor of _k_ . Separable convolutions [6], however, decrease the complexity
+The document details the architecture and training of the “Attention Is All You Need” model, a novel approach to sequence transduction utilizing self-attention mechanisms. The excerpt focuses on the encoder stack within the Transformer model, specifically describing the multi-head self-attention layers and their role in processing input sequences, alongside the rationale for choosing a separable convolution approach for the feed-forward layers.\n\nlayers, by a factor of _k_ . Separable convolutions [6], however, decrease the complexity
 considerably, to _O_ ( _k · n · d_ + _n · d_ [2] ). Even with _k_ = _n_, however, the complexity of a separable
 convolution is equal to the combination of a self-attention layer and a point-wise feed-forward layer,
 the approach we take in our model. As side benefit, self-attention could yield more interpretable models. We inspect attention distributions
@@ -788,7 +803,7 @@ bottom line of table 3), step time was 1.0 seconds. The big models were trained 
 5.3 Optimizer
 
 ========================================================================
-FRAGMENTO 24 / 40
+FRAGMENTO 25 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag7_chunk2
@@ -821,7 +836,7 @@ We employ three types of regularization during training:
 7
 
 ========================================================================
-FRAGMENTO 25 / 40
+FRAGMENTO 26 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag8_chunk0
@@ -871,7 +886,7 @@ hurts perplexity, as the model learns to be more unsure, but improves accuracy a
 6.1 Machine Translation
 
 ========================================================================
-FRAGMENTO 26 / 40
+FRAGMENTO 27 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag8_chunk1
@@ -882,7 +897,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This section of the paper details the specific hyperparameters and training procedures employed within the Transformer model, particularly focusing on the larger “big” model used for translation tasks. The excerpt elaborates on the use of dropout and label smoothing during training, alongside the configuration of the model’s architecture, including the chosen beam search parameters and output length settings.\n\nthe
+This section of the paper details the specific hyperparameters and training procedures employed within the Transformer model, particularly focusing on the larger “big” model used for translation tasks. The excerpt elaborates on the use of dropout, label smoothing, and the averaging of model checkpoints to optimize performance during training and inference.\n\nthe
 positional encodings in both the encoder and decoder stacks. For the base model, we use a rate of
 _Pdrop_ = 0 _._ 1.
 
@@ -910,7 +925,7 @@ were chosen after experimentation on the development set. We set the maximum out
 inference to input length + 50, but terminate early when possible [38].
 
 ========================================================================
-FRAGMENTO 27 / 40
+FRAGMENTO 28 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag8_chunk2
@@ -921,7 +936,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This paper details the architecture of the Transformer, a novel neural network model designed for sequence transduction tasks like language modeling and machine translation. Specifically, the excerpt focuses on the implementation details of the Transformer’s attention mechanisms, particularly Scaled Dot-Product Attention and Multi-Head Attention, outlining their structure and operation within the encoder.\n\nintervals. For the big models, we averaged the last 20 checkpoints. We
+This paper details the architecture of the Transformer, a novel neural network model designed for sequence transduction tasks like language modeling and machine translation. Specifically, the excerpt focuses on the implementation details of the Transformer’s attention mechanisms, particularly the scaled dot-product attention and multi-head attention, outlining their mathematical formulations and intended functionality within the model’s encoder and decoder stacks.\n\nintervals. For the big models, we averaged the last 20 checkpoints. We
 used beam search with a beam size of 4 and length penalty _α_ = 0 _._ 6 [38]. These hyperparameters
 were chosen after experimentation on the development set. We set the maximum output length during
 inference to input length + 50, but terminate early when possible [38]. Table 2 summarizes our results and compares our translation quality and training costs to other model
@@ -939,7 +954,7 @@ in different ways, measuring the change in performance on English-to-German tran
 8
 
 ========================================================================
-FRAGMENTO 28 / 40
+FRAGMENTO 29 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag9_chunk0
@@ -950,7 +965,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This table details variations on the Transformer architecture, specifically for the English-to-German translation task using the newstest2013 development set. The excerpt focuses on presenting a series of experimental configurations, outlining differences in layer size, number of layers, and associated performance metrics like perplexity and BLEU score, alongside computational parameters.\n\nTable 3: Variations on the Transformer architecture. Unlisted values are identical to those of the base
+This table details variations on the Transformer architecture, specifically focusing on the English-to-German translation task using the newstest2013 development set. The excerpt presents a comparative analysis of several model configurations, outlining key parameters like layer dimensions, number of heads, and training costs alongside perplexity and BLEU scores.\n\nTable 3: Variations on the Transformer architecture. Unlisted values are identical to those of the base
 model. All metrics are on the English-to-German translation development set, newstest2013. Listed
 perplexities are per-wordpiece, according to our byte-pair encoding, and should not be compared to
 per-word perplexities.
@@ -969,7 +984,7 @@ development set, newstest2013. We used beam search as described in the previous 
 checkpoint averaging. We present these results in Table 3.
 
 ========================================================================
-FRAGMENTO 29 / 40
+FRAGMENTO 30 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag9_chunk1
@@ -1003,7 +1018,7 @@ constraints and is significantly longer than the input. Furthermore, RNN sequenc
 models have not been able to attain state-of-the-art results in small-data regimes [37].
 
 ========================================================================
-FRAGMENTO 30 / 40
+FRAGMENTO 31 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag9_chunk2
@@ -1014,7 +1029,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This paper details the architecture of the Transformer, a novel neural network design for sequence transduction problems like language modeling and machine translation. The excerpt focuses on an experimental evaluation of the Transformer’s capabilities, specifically its application to English constituency parsing, highlighting the model’s ability to handle structurally constrained and longer outputs compared to traditional recurrent models.\n\ngeneralize to other tasks we performed experiments on English
+This paper details the architecture of the Transformer, a novel neural network model designed for sequence transduction tasks like language modeling and machine translation. The excerpt focuses on an experimental evaluation of the Transformer’s capabilities, specifically exploring its application to English constituency parsing.\n\ngeneralize to other tasks we performed experiments on English
 constituency parsing. This task presents specific challenges: the output is subject to strong structural
 constraints and is significantly longer than the input. Furthermore, RNN sequence-to-sequence
 models have not been able to attain state-of-the-art results in small-data regimes [37]. We trained a 4-layer transformer with _dmodel_ = 1024 on the Wall Street Journal (WSJ) portion of the
@@ -1031,7 +1046,7 @@ remained unchanged from the English-to-German base translation model. During inf
 9
 
 ========================================================================
-FRAGMENTO 31 / 40
+FRAGMENTO 32 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag10_chunk0
@@ -1064,7 +1079,7 @@ In contrast to RNN sequence-to-sequence models [37], the Transformer outperforms
 7 Conclusion
 
 ========================================================================
-FRAGMENTO 32 / 40
+FRAGMENTO 33 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag10_chunk1
@@ -1075,7 +1090,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This section of the paper details the Transformer’s performance and future directions, building upon the architecture’s core principles. Specifically, the excerpt highlights the model’s superior results compared to established sequence-to-sequence models like RNNs and BerkeleyParser, even when trained on a limited dataset, emphasizing the effectiveness of the attention-based approach.\n\nour model performs surprisingly well, yielding better results than all previously reported models with the exception of the
+This section of the paper details the Transformer’s performance and future directions, building upon the architecture’s core principles. Specifically, the excerpt highlights the model’s superior results compared to established sequence-to-sequence models like RNNs and BerkeleyParser, even with limited training data, emphasizing the effectiveness of the attention-based approach.\n\nour model performs surprisingly well, yielding better results than all previously reported models with the exception of the
 Recurrent Neural Network Grammar [8].
 
 In contrast to RNN sequence-to-sequence models [37], the Transformer outperforms the BerkeleyParser [29] even when training only on the WSJ training set of 40K sentences.
@@ -1106,7 +1121,7 @@ References
 _[arXiv:1607.06450](http://arxiv.org/abs/1607.06450)_, 2016.
 
 ========================================================================
-FRAGMENTO 33 / 40
+FRAGMENTO 34 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag10_chunk2
@@ -1137,7 +1152,7 @@ reading. _[arXiv preprint arXiv:1601.06733](http://arxiv.org/abs/1601.06733)_, 2
 10
 
 ========================================================================
-FRAGMENTO 34 / 40
+FRAGMENTO 35 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag11_chunk0
@@ -1148,7 +1163,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This section introduces the Transformer architecture, detailing its stacked self-attention and fully connected layers, alongside the encoder and decoder components. The excerpt provides a list of cited research papers that contribute to the foundational concepts and techniques utilized within the Transformer model, specifically regarding recurrent neural networks and sequence modeling.\n\n[5] Kyunghyun Cho, Bart van Merrienboer, Caglar Gulcehre, Fethi Bougares, Holger Schwenk,
+This section introduces the Transformer architecture, detailing its stacked self-attention and fully connected layers, alongside the encoder and decoder components. The excerpt provides a list of cited research papers that contextualize the Transformer’s development, specifically referencing earlier work on recurrent neural networks and related models like ByteNet and GNMT, alongside foundational research on deep learning and convolutional approaches.\n\n[5] Kyunghyun Cho, Bart van Merrienboer, Caglar Gulcehre, Fethi Bougares, Holger Schwenk,
 and Yoshua Bengio. Learning phrase representations using rnn encoder-decoder for statistical
 machine translation. _CoRR_, abs/1406.1078, 2014.
 
@@ -1173,7 +1188,7 @@ _Recognition_, pages 770–778, 2016.
 recurrent nets: the difficulty of learning long-term dependencies, 2001.
 
 ========================================================================
-FRAGMENTO 35 / 40
+FRAGMENTO 36 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag11_chunk1
@@ -1216,7 +1231,7 @@ In _International Conference on Learning Representations_, 2017.
 _[arXiv:1703.10722](http://arxiv.org/abs/1703.10722)_, 2017.
 
 ========================================================================
-FRAGMENTO 36 / 40
+FRAGMENTO 37 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag11_chunk2
@@ -1227,7 +1242,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document details the architecture and implementation of the Transformer model, a novel approach to sequence transduction that utilizes self-attention mechanisms. The excerpt focuses on prior work in recurrent and attention-based neural networks, specifically referencing models like GNMT and ByteNet, alongside related research on optimization techniques and structured sentence embeddings.\n\nattention networks.
+This document details the architecture and implementation of the Transformer model, a novel approach to sequence transduction that utilizes self-attention mechanisms. The excerpt focuses on prior work in recurrent and attention-based neural networks, specifically referencing models like GNMT and ByteNet, alongside related research on optimization techniques and sentence embeddings.\n\nattention networks.
 In _International Conference on Learning Representations_, 2017.
 
 [20] Diederik Kingma and Jimmy Ba. Adam: A method for stochastic optimization. In _ICLR_, 2015.
@@ -1245,7 +1260,7 @@ sequence to sequence learning. _[arXiv preprint arXiv:1511.06114](http://arxiv.o
 11
 
 ========================================================================
-FRAGMENTO 37 / 40
+FRAGMENTO 38 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag12_chunk0
@@ -1256,7 +1271,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document details the architecture and implementation of the “Attention Is All You Need” model, a novel approach to sequence transduction utilizing self-attention mechanisms. The excerpt provides a list of cited research papers that influenced and were referenced within the development of this model, specifically focusing on earlier work in recurrent neural networks, encoder-decoder architectures, and techniques for handling long sequences in machine translation.\n\n[25] Mitchell P Marcus, Mary Ann Marcinkiewicz, and Beatrice Santorini. Building a large annotated
+This document details the architecture and implementation of the “Attention Is All You Need” model, a novel approach to sequence transduction utilizing self-attention mechanisms. The excerpt provides a list of cited research papers that influenced and were subsequently referenced within the development of this model, specifically focusing on earlier work in recurrent neural networks, encoder-decoder architectures, and techniques for handling long sequences in machine translation.\n\n[25] Mitchell P Marcus, Mary Ann Marcinkiewicz, and Beatrice Santorini. Building a large annotated
 corpus of english: The penn treebank. _Computational linguistics_, 19(2):313–330, 1993.
 
 [26] David McClosky, Eugene Charniak, and Mark Johnson. Effective self-training for parsing. In
@@ -1281,7 +1296,7 @@ _[preprint arXiv:1608.05859](http://arxiv.org/abs/1608.05859)_, 2016.
 with subword units. _[arXiv preprint arXiv:1508.07909](http://arxiv.org/abs/1508.07909)_, 2015.
 
 ========================================================================
-FRAGMENTO 38 / 40
+FRAGMENTO 39 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag12_chunk1
@@ -1292,7 +1307,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document details the “Attention Is All You Need” paper, introducing the Transformer architecture for sequence modeling, specifically focusing on its encoder and decoder components. The excerpt cites a related arXiv preprint by Press and Wolf, discussing the use of output embeddings to improve language models, highlighting the broader research context surrounding the Transformer’s development and application.\n\nPress and Lior Wolf. Using the output embedding to improve language models. _arXiv_
+This document details the “Attention Is All You Need” paper, introducing the Transformer architecture for sequence modeling, specifically focusing on its encoder and decoder components. The excerpt cites a related arXiv preprint by Press and Wolf, discussing the use of output embeddings to improve language models, indicating a broader exploration of techniques within the Transformer framework.\n\nPress and Lior Wolf. Using the output embedding to improve language models. _arXiv_
 _[preprint arXiv:1608.05859](http://arxiv.org/abs/1608.05859)_, 2016.
 
 [31] Rico Sennrich, Barry Haddow, and Alexandra Birch. Neural machine translation of rare words
@@ -1318,7 +1333,7 @@ Rethinking the inception architecture for computer vision. _CoRR_, abs/1512.0056
 _Advances in Neural Information Processing Systems_, 2015.
 
 ========================================================================
-FRAGMENTO 39 / 40
+FRAGMENTO 40 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag12_chunk2
@@ -1329,9 +1344,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This paper details the architecture of the Transformer, a novel neural network model designed for sequence transduction tasks like language modeling and machine translation. Specifically, the document outlines the Transformer’s encoder and decoder stacks, utilizing multi-head self-attention mechanisms to process sequential data efficiently. 
-
-The excerpt provides a list of cited research papers, including those related to ByteNet, Deep-Att + PosUnk, GNMT, ConvS2S, and MoE models, all of which were evaluated against the Transformer in terms of BLEU scores and training costs. These references contextualize the Transformer’s development within the broader landscape of machine translation research.\n\n2014.
+This paper details the architecture of the Transformer, a novel neural network model designed for sequence transduction tasks like language modeling and machine translation. Specifically, the document outlines the Transformer’s encoder and decoder stacks, utilizing multi-head self-attention mechanisms to process sequential data, and introduces Scaled Dot-Product Attention and Multi-Head Attention as key components.\n\n2014.
 
 [36] Christian Szegedy, Vincent Vanhoucke, Sergey Ioffe, Jonathon Shlens, and Zbigniew Wojna.
 Rethinking the inception architecture for computer vision. _CoRR_, abs/1512.00567, 2015.
@@ -1352,7 +1365,7 @@ _1:_ _Long Papers)_, pages 434–443. ACL, August 2013.
 12
 
 ========================================================================
-FRAGMENTO 40 / 40
+FRAGMENTO 41 / 41
 tipo_contenido: Texto (Markdown / pymupdf4llm)
 tipo (clave): texto_markdown
 id: att.pdf_pag13_chunk0
@@ -1363,7 +1376,7 @@ meta.section_header:
 meta.source: att.pdf
 meta.total_chunks_in_page: 1
 ------------------------------------------------------------------------
-This paper details the development of the Transformer model, a novel architecture for sequence transduction that relies entirely on attention mechanisms rather than recurrent layers. Specifically, the excerpt focuses on the encoder’s self-attention mechanism, illustrating how it captures long-distance dependencies within a sentence, as demonstrated through the attention heads attending to the verb “making” in layer 5 of 6.\n\nFigure 3: An example of the attention mechanism following long-distance dependencies in the
+This paper details the development of the Transformer model, a novel architecture for sequence transduction that relies entirely on attention mechanisms rather than recurrent layers. Specifically, the excerpt focuses on the encoder’s self-attention mechanism, illustrating how it allows the model to capture long-distance dependencies within a sequence, as exemplified by the attention heads attending to the verb “making” despite its distance within the phrase “making…more difficult”.\n\nFigure 3: An example of the attention mechanism following long-distance dependencies in the
 encoder self-attention in layer 5 of 6. Many of the attention heads attend to a distant dependency of
 the verb ‘making’, completing the phrase ‘making...more difficult’. Attentions here shown only for
 the word ‘making’. Different colors represent different heads. Best viewed in color.
