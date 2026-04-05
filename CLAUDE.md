@@ -1,10 +1,5 @@
 # CLAUDE.md — MonkeyGrab (localOllamaRAG)
 
-Contexto permanente para Claude Code en este repositorio.
-Responde siempre en **español** en este proyecto.
-
----
-
 ## Descripción del proyecto
 
 **MonkeyGrab** es un sistema RAG (Retrieval-Augmented Generation) completamente local desarrollado por Nacho como Trabajo de Fin de Grado (TFG) en la Universidad Politécnica de Valencia (UPV). El sistema indexa PDFs, recupera fragmentos relevantes mediante búsqueda híbrida y genera respuestas fundamentadas usando un LLM servido por Ollama. Ningún dato sale de la máquina del usuario en uso normal.
@@ -88,18 +83,18 @@ localOllamaRAG/
 │   ├── bertscore/                # CSVs por muestra, resumen BERTScore (DATOS OBSOLETOS — re-ejecutar)
 │   │   └── plots/                # Gráficas BERTScore generadas
 │   └── baseline/                 # Resultados del benchmark de 7 modelos base
-│       ├── baseline_evaluation.json         # 7 modelos x 5 datasets x dev/test x con/sin contexto
-│       ├── baseline_evaluation_samples.json # Predicciones cualitativas por muestra
-│       ├── baseline_checkpoint.json         # Checkpoint incremental (permite reanudar)
-│       ├── predictions_{modelo}.json        # Predicciones por modelo (7 archivos)
-│       ├── generate_reports.py             # Genera tablas Markdown + CSVs desde baseline_evaluation.json
-│       ├── reports/                        # Tablas comparativas + CSVs + figuras (generado, gitignored)
-│       └── 200/                            # Versión anterior con cap de 200 muestras (referencia)
+│       ├── baseline_evaluation.json          # 7 modelos x 5 datasets x dev/test x con/sin contexto
+│       ├── baseline_evaluation_samples.json  # Predicciones cualitativas por muestra
+│       ├── baseline_checkpoint.json          # Checkpoint incremental (permite reanudar)
+│       ├── predictions_{modelo}.json         # Predicciones por modelo (7 archivos)
+│       ├── generate_reports.py               # Genera tablas Markdown + CSVs desde baseline_evaluation.json
+│       ├── reports/                          # Tablas comparativas + CSVs + figuras (generado, gitignored)
+│       └── 200/                              # Versión anterior con cap de 200 muestras (referencia)
 ├── docs/
-│   ├── monkeygrab_architecture.svg       # Diagrama de arquitectura (exportable también a PNG vía generate_diagram.py)
-│   ├── investigacionMetricas.md          # Investigación sobre métricas de evaluación RAG
-│   ├── palabras.md                       # Notas de vocabulario y terminología del TFG
-│   └── splits.md                         # Análisis de splits de datasets
+│   ├── monkeygrab_architecture.svg           # Diagrama de arquitectura (exportable también a PNG vía generate_diagram.py)
+│   ├── investigacionMetricas.md              # Investigación sobre métricas de evaluación RAG
+│   ├── palabras.md                           # Notas de vocabulario y terminología del TFG
+│   └── splits.md                             # Análisis de splits de datasets
 ├── llama-bin/                    # Binarios llama.cpp compilados para Windows (llama-quantize, etc.; gitignored)
 ├── models/
 │   ├── gguf-output/              # Modelos GGUF cuantizados (gitignored)
@@ -115,38 +110,39 @@ localOllamaRAG/
 
 ### Pipeline de indexación (al arrancar o con /reindex)
 
+Constantes y rutas en `rag/chat_pdfs.py` (`CARPETA_DOCS` / `DOCS_FOLDER`, `PATH_DB`, `COLLECTION_NAME`, etc.).
+
 ```
-PDFs (rag/pdfs/)
+PDFs (CARPETA_DOCS)
   -> Extracción texto: pymupdf4llm (preferido) / pypdf (fallback)
-  -> Extracción imágenes: fitz (PyMuPDF) + caption por posición (CAPTION_MARGIN_PX=80px)
-  -> Descripción visual: $OLLAMA_OCR_MODEL vía Ollama (filtros: spam, prompt-echo, caption-echo)
-  -> Chunking jerárquico: 1500 chars, 350 overlap, min 80 chars
-  -> [Opt] Contextual retrieval: enriquecimiento de chunks con $OLLAMA_CONTEXTUAL_MODEL
-  -> Embedding: $OLLAMA_EMBED_MODEL
-  -> Almacenamiento: ChromaDB persistente
+  -> [Opt] USAR_EMBEDDINGS_IMAGEN: fitz + caption por posición (CAPTION_MARGIN_PX) + MODELO_OCR (OLLAMA_OCR_MODEL)
+  -> Chunking: CHUNK_SIZE, CHUNK_OVERLAP, MIN_CHUNK_LENGTH
+  -> [Opt] USAR_CONTEXTUAL_RETRIEVAL: enriquecimiento con MODELO_CONTEXTUAL (OLLAMA_CONTEXTUAL_MODEL)
+  -> Embedding: MODELO_EMBEDDING (OLLAMA_EMBED_MODEL); prefijos EMBED_PREFIX_* si el modelo lo requiere
+  -> Persistencia: ChromaDB en PATH_DB
 ```
 
 ### Pipeline de recuperación (por cada query en modo RAG)
 
 ```
-Query usuario
-  -> [Opt] Descomposición LLM: 3 sub-queries con $OLLAMA_CONTEXTUAL_MODEL
-  -> Búsqueda semántica: ChromaDB top-80
-  -> Búsqueda keyword: $contains top-40
-  -> [Opt] Búsqueda exhaustiva por términos críticos
-  -> Fusión RRF: 55% semántica + 45% léxica
-  -> [Opt] Reranking: CrossEncoder ($RERANKER_QUALITY)
-  -> Top-6 fragmentos finales
-  -> [Opt] Expansion con chunks adyacentes
-  -> Optimización de contexto (limpieza de artefactos PDF)
+Query usuario (MIN_LONGITUD_PREGUNTA_RAG)
+  -> [Opt] USAR_LLM_QUERY_DECOMPOSITION: sub-consultas vía MODELO_CHAT (OLLAMA_CHAT_MODEL), hasta 3; activación según longitud de pregunta en realizar_busqueda_hibrida
+  -> Búsqueda semántica: embeddings MODELO_EMBEDDING, N_RESULTADOS_SEMANTICOS
+  -> [Opt] USAR_BUSQUEDA_HIBRIDA: búsqueda léxica, N_RESULTADOS_KEYWORD
+  -> [Opt] USAR_BUSQUEDA_EXHAUSTIVA: términos críticos filtrados
+  -> Fusión: score_semantic + score_keyword -> score_final (pesos en realizar_busqueda_hibrida)
+  -> [Opt] USAR_RERANKER: CrossEncoder (RERANKER_QUALITY), TOP_K_RERANK_CANDIDATES, TOP_K_AFTER_RERANK
+  -> Filtrado: UMBRAL_RELEVANCIA; con reranker activo, UMBRAL_SCORE_RERANKER
+  -> Selección: TOP_K_FINAL
+  -> [Opt] EXPANDIR_CONTEXTO: N_TOP_PARA_EXPANSION + expandir_con_chunks_adyacentes
+  -> [Opt] USAR_OPTIMIZACION_CONTEXTO; recorte de contexto con MAX_CONTEXTO_CHARS
 ```
 
 ### Generación
 
 ```
-System prompt + <context> + pregunta
-  -> $OLLAMA_RAG_MODEL (Ollama, temp=0.15)
-  -> Streaming token a token
+Pregunta + <context> (construir_contexto_para_modelo u opcionalmente sintetizar_contexto_recomp si USAR_RECOMP_SYNTHESIS)
+  -> MODELO_RAG (OLLAMA_RAG_MODEL): streaming vía Ollama; opciones numéricas en la llamada (temperature, top_p, repeat_penalty, num_ctx) en generar_respuesta / generar_respuesta_silenciosa
 ```
 
 ---
@@ -528,7 +524,6 @@ bert-score>=0.3.13
 - **`enable_thinking=False` en Qwen3**: el modelo fine-tuneado usa razonamiento interno. La inferencia en producción suprime el bloque `<think>` para reducir latencia y tokens de salida. Ver `scripts/tests/test_nothink.py`.
 
 ---
-
 ## Artefactos de evaluación
 
 Los resultados de los experimentos están en `training-output/`. Los datos marcados como (OBSOLETOS) corresponden a la versión anterior del experimento (Aina como bloque único, caps de muestras); serán reemplazados al terminar el cluster.
@@ -547,3 +542,4 @@ Los resultados de los experimentos están en `training-output/`. Los datos marca
 | Tablas de resultados | `training-output/baseline/reports/` | Markdown + CSVs + figuras; generado por `generate_reports.py` |
 | Baseline 200-sample | `training-output/baseline/200/` | Versión anterior con cap de 200 muestras (referencia histórica) |
 | Diagrama arquitectura | `docs/monkeygrab_architecture.png` / `.svg` | Generado por `generate_diagram.py` (raíz del repo) |
+
