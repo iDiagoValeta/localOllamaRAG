@@ -153,11 +153,11 @@ if hasattr(sys.stderr, "reconfigure"):
         pass
 
 
-MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "llama3.1")
+MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "phi4:latest")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:4b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma3:4b")
-MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "qwen3.5:2b")
+MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma3:4b")
 MODELO_OCR = os.getenv("OLLAMA_OCR_MODEL", "glm-ocr")
 
 
