@@ -3,27 +3,27 @@
         "with_context": {
             "dev": {
                 "aggregate": {
-                    "n_samples": 1000,
-                    "Token_F1": 38.42,
-                    "ROUGE_L_F1": 33.1,
-                    "Context_Faithfulness_Pct": 78.03,
-                    "Avg_Response_Length_Words": 33.7,
-                    "Sentence_Completeness_Pct": 93.9,
-                    "BERTScore_F1": 34.52
+                    "n_samples": 1600,
+                    "Token_F1": 38.73,
+                    "ROUGE_L_F1": 33.5,
+                    "Context_Faithfulness_Pct": 78.56,
+                    "Avg_Response_Length_Words": 33.6,
+                    "Sentence_Completeness_Pct": 94.1,
+                    "BERTScore_F1": 34.89
                 }
             }
         },
         "without_context": {
             "dev": {
                 "aggregate": {
-                    "n_samples": 1000,
-                    "Token_F1": 20.83,
-                    "ROUGE_L_F1": 15.42,
-                    "Context_Faithfulness_Pct": 32.37,
-                    "Avg_Response_Length_Words": 146.4,
-                    "Sentence_Completeness_Pct": 97.0,
+                    "n_samples": 1600,
+                    "Token_F1": 20.98,
+                    "ROUGE_L_F1": 15.64,
+                    "Context_Faithfulness_Pct": 33.45,
+                    "Avg_Response_Length_Words": 136.9,
+                    "Sentence_Completeness_Pct": 97.2,
                     "Context_Faithfulness_Note": "N/A (no context provided to model)",
-                    "BERTScore_F1": 10.22
+                    "BERTScore_F1": 10.74
                 }
             }
         }
@@ -32,27 +32,27 @@
         "with_context": {
             "dev": {
                 "aggregate": {
-                    "n_samples": 1000,
-                    "Token_F1": 40.49,
-                    "ROUGE_L_F1": 33.69,
-                    "Context_Faithfulness_Pct": 75.95,
-                    "Avg_Response_Length_Words": 52.9,
-                    "Sentence_Completeness_Pct": 97.3,
-                    "BERTScore_F1": 36.04
+                    "n_samples": 1600,
+                    "Token_F1": 40.91,
+                    "ROUGE_L_F1": 34.06,
+                    "Context_Faithfulness_Pct": 75.82,
+                    "Avg_Response_Length_Words": 53.1,
+                    "Sentence_Completeness_Pct": 97.6,
+                    "BERTScore_F1": 36.33
                 }
             }
         },
         "without_context": {
             "dev": {
                 "aggregate": {
-                    "n_samples": 1000,
-                    "Token_F1": 20.93,
-                    "ROUGE_L_F1": 15.22,
-                    "Context_Faithfulness_Pct": 27.99,
-                    "Avg_Response_Length_Words": 98.5,
+                    "n_samples": 1600,
+                    "Token_F1": 20.84,
+                    "ROUGE_L_F1": 15.16,
+                    "Context_Faithfulness_Pct": 28.92,
+                    "Avg_Response_Length_Words": 97.0,
                     "Sentence_Completeness_Pct": 98.5,
                     "Context_Faithfulness_Note": "N/A (no context provided to model)",
-                    "BERTScore_F1": 10.74
+                    "BERTScore_F1": 10.98
                 }
             }
         }
@@ -61,27 +61,27 @@
         "with_context": {
             "dev": {
                 "aggregate": {
-                    "n_samples": 1000,
-                    "Token_F1": 43.37,
-                    "ROUGE_L_F1": 36.6,
-                    "Context_Faithfulness_Pct": 77.38,
-                    "Avg_Response_Length_Words": 49.3,
-                    "Sentence_Completeness_Pct": 96.0,
-                    "BERTScore_F1": 38.84
+                    "n_samples": 1600,
+                    "Token_F1": 43.33,
+                    "ROUGE_L_F1": 36.62,
+                    "Context_Faithfulness_Pct": 77.87,
+                    "Avg_Response_Length_Words": 48.8,
+                    "Sentence_Completeness_Pct": 96.7,
+                    "BERTScore_F1": 38.94
                 }
             }
         },
         "without_context": {
             "dev": {
                 "aggregate": {
-                    "n_samples": 1000,
-                    "Token_F1": 25.16,
-                    "ROUGE_L_F1": 17.39,
-                    "Context_Faithfulness_Pct": 29.52,
-                    "Avg_Response_Length_Words": 128.9,
+                    "n_samples": 1600,
+                    "Token_F1": 24.78,
+                    "ROUGE_L_F1": 17.18,
+                    "Context_Faithfulness_Pct": 29.98,
+                    "Avg_Response_Length_Words": 127.7,
                     "Sentence_Completeness_Pct": 99.1,
                     "Context_Faithfulness_Note": "N/A (no context provided to model)",
-                    "BERTScore_F1": 15.0
+                    "BERTScore_F1": 14.67
                 }
             }
         }
@@ -90,27 +90,27 @@
         "with_context": {
             "dev": {
                 "aggregate": {
-                    "n_samples": 1000,
-                    "Token_F1": 38.99,
-                    "ROUGE_L_F1": 31.88,
-                    "Context_Faithfulness_Pct": 72.16,
-                    "Avg_Response_Length_Words": 64.0,
-                    "Sentence_Completeness_Pct": 89.7,
-                    "BERTScore_F1": 30.53
+                    "n_samples": 1600,
+                    "Token_F1": 39.09,
+                    "ROUGE_L_F1": 32.18,
+                    "Context_Faithfulness_Pct": 72.52,
+                    "Avg_Response_Length_Words": 62.1,
+                    "Sentence_Completeness_Pct": 90.2,
+                    "BERTScore_F1": 30.71
                 }
             }
         },
         "without_context": {
             "dev": {
                 "aggregate": {
-                    "n_samples": 1000,
-                    "Token_F1": 19.7,
+                    "n_samples": 1600,
+                    "Token_F1": 19.63,
                     "ROUGE_L_F1": 12.97,
-                    "Context_Faithfulness_Pct": 22.45,
-                    "Avg_Response_Length_Words": 246.7,
-                    "Sentence_Completeness_Pct": 95.5,
+                    "Context_Faithfulness_Pct": 22.76,
+                    "Avg_Response_Length_Words": 243.3,
+                    "Sentence_Completeness_Pct": 95.9,
                     "Context_Faithfulness_Note": "N/A (no context provided to model)",
-                    "BERTScore_F1": 7.98
+                    "BERTScore_F1": 7.93
                 }
             }
         }
@@ -119,27 +119,27 @@
         "with_context": {
             "dev": {
                 "aggregate": {
-                    "n_samples": 1000,
-                    "Token_F1": 41.07,
-                    "ROUGE_L_F1": 34.87,
-                    "Context_Faithfulness_Pct": 74.92,
-                    "Avg_Response_Length_Words": 42.5,
-                    "Sentence_Completeness_Pct": 95.9,
-                    "BERTScore_F1": 37.9
+                    "n_samples": 1600,
+                    "Token_F1": 41.34,
+                    "ROUGE_L_F1": 35.16,
+                    "Context_Faithfulness_Pct": 75.24,
+                    "Avg_Response_Length_Words": 42.2,
+                    "Sentence_Completeness_Pct": 95.8,
+                    "BERTScore_F1": 38.01
                 }
             }
         },
         "without_context": {
             "dev": {
                 "aggregate": {
-                    "n_samples": 1000,
-                    "Token_F1": 23.88,
-                    "ROUGE_L_F1": 16.67,
-                    "Context_Faithfulness_Pct": 30.34,
-                    "Avg_Response_Length_Words": 95.5,
-                    "Sentence_Completeness_Pct": 99.0,
+                    "n_samples": 1600,
+                    "Token_F1": 23.52,
+                    "ROUGE_L_F1": 16.55,
+                    "Context_Faithfulness_Pct": 30.88,
+                    "Avg_Response_Length_Words": 93.1,
+                    "Sentence_Completeness_Pct": 99.1,
                     "Context_Faithfulness_Note": "N/A (no context provided to model)",
-                    "BERTScore_F1": 14.85
+                    "BERTScore_F1": 14.76
                 }
             }
         }
@@ -148,27 +148,27 @@
         "with_context": {
             "dev": {
                 "aggregate": {
-                    "n_samples": 1000,
-                    "Token_F1": 42.21,
-                    "ROUGE_L_F1": 36.25,
-                    "Context_Faithfulness_Pct": 81.13,
-                    "Avg_Response_Length_Words": 34.6,
-                    "Sentence_Completeness_Pct": 95.4,
-                    "BERTScore_F1": 38.92
+                    "n_samples": 1600,
+                    "Token_F1": 41.91,
+                    "ROUGE_L_F1": 36.19,
+                    "Context_Faithfulness_Pct": 81.74,
+                    "Avg_Response_Length_Words": 34.5,
+                    "Sentence_Completeness_Pct": 95.3,
+                    "BERTScore_F1": 38.91
                 }
             }
         },
         "without_context": {
             "dev": {
                 "aggregate": {
-                    "n_samples": 1000,
-                    "Token_F1": 21.3,
-                    "ROUGE_L_F1": 15.05,
-                    "Context_Faithfulness_Pct": 25.9,
-                    "Avg_Response_Length_Words": 199.8,
-                    "Sentence_Completeness_Pct": 93.4,
+                    "n_samples": 1600,
+                    "Token_F1": 21.42,
+                    "ROUGE_L_F1": 15.3,
+                    "Context_Faithfulness_Pct": 26.76,
+                    "Avg_Response_Length_Words": 194.9,
+                    "Sentence_Completeness_Pct": 93.9,
                     "Context_Faithfulness_Note": "N/A (no context provided to model)",
-                    "BERTScore_F1": 9.84
+                    "BERTScore_F1": 10.19
                 }
             }
         }
@@ -177,27 +177,27 @@
         "with_context": {
             "dev": {
                 "aggregate": {
-                    "n_samples": 1000,
-                    "Token_F1": 44.79,
-                    "ROUGE_L_F1": 36.77,
-                    "Context_Faithfulness_Pct": 77.31,
-                    "Avg_Response_Length_Words": 66.3,
-                    "Sentence_Completeness_Pct": 95.5,
-                    "BERTScore_F1": 39.27
+                    "n_samples": 1600,
+                    "Token_F1": 45.17,
+                    "ROUGE_L_F1": 37.18,
+                    "Context_Faithfulness_Pct": 77.66,
+                    "Avg_Response_Length_Words": 65.5,
+                    "Sentence_Completeness_Pct": 96.2,
+                    "BERTScore_F1": 39.59
                 }
             }
         },
         "without_context": {
             "dev": {
                 "aggregate": {
-                    "n_samples": 1000,
-                    "Token_F1": 23.58,
-                    "ROUGE_L_F1": 16.2,
-                    "Context_Faithfulness_Pct": 27.74,
-                    "Avg_Response_Length_Words": 151.5,
-                    "Sentence_Completeness_Pct": 99.6,
+                    "n_samples": 1600,
+                    "Token_F1": 23.51,
+                    "ROUGE_L_F1": 16.24,
+                    "Context_Faithfulness_Pct": 28.23,
+                    "Avg_Response_Length_Words": 148.3,
+                    "Sentence_Completeness_Pct": 99.5,
                     "Context_Faithfulness_Note": "N/A (no context provided to model)",
-                    "BERTScore_F1": 14.35
+                    "BERTScore_F1": 14.32
                 }
             }
         }

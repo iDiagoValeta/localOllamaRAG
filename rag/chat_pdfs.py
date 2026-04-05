@@ -163,7 +163,7 @@ MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:4b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma3:4b")
 MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma3:4b")
-MODELO_OCR = os.getenv("OLLAMA_OCR_MODEL", "glm-ocr")
+MODELO_OCR = os.getenv("OLLAMA_OCR_MODEL", "qwen3-vl:8b")
 
 
 def _inferir_descripcion_modelo(nombre_modelo: str) -> str:

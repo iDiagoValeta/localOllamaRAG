@@ -33,6 +33,10 @@ If you add datasets or splits, unknown dataset names are appended (sorted) befor
 
 PNG figures (requires matplotlib) are written under ``reports/figures/``:
 heatmap grid per mode/split, and horizontal bar charts using the aggregate column.
+Models are ordered **best → worst** per figure using the ``aggregate`` row for that
+metric (see ``SORT_METRIC_DESCENDING``; response length treats shorter as better).
+CSVs / Markdown keep alphabetical model order.
+
 Use ``--no-figures`` to skip plotting.
 """
 
@@ -68,6 +72,17 @@ METRICS_ORDER: List[str] = [
 ]
 
 MODES: Tuple[str, ...] = ("with_context", "without_context")
+
+# Figure ordering: sort by aggregate[metric]. True => higher score = better (top).
+# Avg_Response_Length_Words: False => fewer words = better (concise).
+SORT_METRIC_DESCENDING: Dict[str, bool] = {
+    "Token_F1": True,
+    "ROUGE_L_F1": True,
+    "BERTScore_F1": True,
+    "Context_Faithfulness_Pct": True,
+    "Sentence_Completeness_Pct": True,
+    "Avg_Response_Length_Words": False,
+}
 
 # ─────────────────────────────────────────────
 # SECTION 3: DATASET / MODEL ORDERING
@@ -229,6 +244,50 @@ def build_markdown(
 # ─────────────────────────────────────────────
 
 
+def _aggregate_value(
+    results: Mapping[str, Any],
+    mid: str,
+    mode: str,
+    split: str,
+    metric: str,
+) -> float:
+    """Aggregate metric for one model, or NaN if missing."""
+    agg = ((results.get(mid, {}).get(mode) or {}).get(split) or {}).get("aggregate")
+    if not isinstance(agg, dict):
+        return float("nan")
+    v = get_metric(agg, metric)
+    if v is None:
+        return float("nan")
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return float("nan")
+
+
+def sort_models_for_figure_metric(
+    results: Mapping[str, Any],
+    model_ids: Sequence[str],
+    mode: str,
+    split: str,
+    metric: str,
+) -> List[str]:
+    """Order model ids best-first for this metric (uses aggregate row). NaN last."""
+    import math
+
+    descending = SORT_METRIC_DESCENDING.get(metric, True)
+    scored = [(mid, _aggregate_value(results, mid, mode, split, metric)) for mid in model_ids]
+
+    def sort_key(item: Tuple[str, float]) -> Tuple[int, float, str]:
+        mid, s = item
+        if math.isnan(s):
+            return (1, 0.0, short_model_name(mid))
+        if descending:
+            return (0, -s, short_model_name(mid))
+        return (0, s, short_model_name(mid))
+
+    return [mid for mid, _ in sorted(scored, key=sort_key)]
+
+
 def _figure_basename(mode: str, split: str, stem: str, splits: List[str]) -> str:
     if len(splits) == 1:
         return f"{mode}__{stem}.png"
@@ -275,15 +334,16 @@ def write_figure_heatmap_grid(
 
     fig, axes = plt.subplots(2, 3, figsize=(14, 9))
     axes_flat = axes.flatten()
-    short_labels = [short_model_name(m) for m in model_ids]
 
     for ax, metric in zip(axes_flat, METRICS_ORDER):
-        data = _matrix_for_metric(results, model_ids, mode, split, metric, dataset_cols)
+        ordered = sort_models_for_figure_metric(results, model_ids, mode, split, metric)
+        short_labels = [short_model_name(m) for m in ordered]
+        data = _matrix_for_metric(results, ordered, mode, split, metric, dataset_cols)
         im = ax.imshow(data, aspect="auto", cmap="viridis", interpolation="nearest")
         ax.set_title(metric, fontsize=10)
         ax.set_xticks(range(len(dataset_cols)))
         ax.set_xticklabels(dataset_cols, rotation=38, ha="right", fontsize=7)
-        ax.set_yticks(range(len(model_ids)))
+        ax.set_yticks(range(len(ordered)))
         ax.set_yticklabels(short_labels, fontsize=7)
         plt.colorbar(im, ax=ax, fraction=0.035, pad=0.02)
 
@@ -321,12 +381,13 @@ def write_figure_aggregate_bars(
 
     fig, axes = plt.subplots(2, 3, figsize=(12, 9))
     axes_flat = axes.flatten()
-    short_labels = [short_model_name(m) for m in model_ids]
-    y = np.arange(len(model_ids))
 
     for ax, metric in zip(axes_flat, METRICS_ORDER):
+        ordered = sort_models_for_figure_metric(results, model_ids, mode, split, metric)
+        short_labels = [short_model_name(m) for m in ordered]
+        y = np.arange(len(ordered))
         vals: List[float] = []
-        for mid in model_ids:
+        for mid in ordered:
             agg = (
                 (results.get(mid, {}).get(mode) or {}).get(split) or {}
             ).get("aggregate")
@@ -362,15 +423,16 @@ def write_figure_single_metric_heatmap(
     import matplotlib.pyplot as plt
     import numpy as np
 
-    data = _matrix_for_metric(results, model_ids, mode, split, metric, dataset_cols)
-    short_labels = [short_model_name(m) for m in model_ids]
+    ordered = sort_models_for_figure_metric(results, model_ids, mode, split, metric)
+    data = _matrix_for_metric(results, ordered, mode, split, metric, dataset_cols)
+    short_labels = [short_model_name(m) for m in ordered]
 
-    fig, ax = plt.subplots(figsize=(max(8, 0.9 * len(dataset_cols)), max(5, 0.35 * len(model_ids))))
+    fig, ax = plt.subplots(figsize=(max(8, 0.9 * len(dataset_cols)), max(5, 0.35 * len(ordered))))
     im = ax.imshow(data, aspect="auto", cmap="viridis", interpolation="nearest")
     ax.set_title(f"{metric} — {mode} / {split}", fontsize=11)
     ax.set_xticks(range(len(dataset_cols)))
     ax.set_xticklabels(dataset_cols, rotation=38, ha="right", fontsize=8)
-    ax.set_yticks(range(len(model_ids)))
+    ax.set_yticks(range(len(ordered)))
     ax.set_yticklabels(short_labels, fontsize=8)
     plt.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
     fig.tight_layout()
@@ -402,14 +464,15 @@ def write_figure_grouped_bars_by_dataset(
         plt.close(fig)
         return
 
-    n_m = len(model_ids)
+    ordered = sort_models_for_figure_metric(results, model_ids, mode, split, metric)
+    n_m = len(ordered)
     n_d = len(ds_only)
     x = np.arange(n_d, dtype=float)
     bar_w = min(0.8 / max(n_m, 1), 0.12)
     colors = plt.cm.tab10(np.linspace(0, 1, min(n_m, 10)))
 
     fig, ax = plt.subplots(figsize=(max(9, 1.1 * n_d), 5))
-    for i, mid in enumerate(model_ids):
+    for i, mid in enumerate(ordered):
         vals: List[float] = []
         split_block = (results.get(mid, {}).get(mode) or {}).get(split) or {}
         for ds in ds_only:
