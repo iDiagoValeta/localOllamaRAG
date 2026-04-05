@@ -5,7 +5,7 @@
 *.bin
 *.pth
 
-# llama.cpp (clonar como submódulo o por separado)
+# llama.cpp (no versionado; conversión/cuantización GGUF)
 llama.cpp/
 
 # Binarios descargados
@@ -27,6 +27,13 @@ training-output/qwen-3/*
 # Artefactos de entrenamiento — Gemma 3
 training-output/gemma-3/*
 !training-output/gemma-3/training_stats.json
+
+# Artefactos de entrenamiento — Phi-4
+training-output/phi-4/*
+!training-output/phi-4/training_stats.json
+
+# Informes generados desde baseline (tablas, CSVs, figuras)
+training-output/baseline/reports/
 
 # GGUF output — Llama 3 (solo Modelfile)
 models/gguf-output/llama-3/*
@@ -82,13 +89,17 @@ rag/debug_rag/
 # Resultados de la evaluación con RAGAS
 ragas_scores.csv
 
+# Exportaciones de chunks (export_fragments.py)
+evaluation/chunks_*.txt
+
 # Evaluación — RAGBench (PDFs locales)
 rag/ragbench_pdfs/
+
+# ChromaDB RAGBench (misma ruta que usa chat_pdfs / run_eval_ragbench)
+rag/ragbench_vector_db/
 
 .pytest_cache/
 
 .claude/
 
 MODIFICACIONES_EVALUACION.md
-
-ragbench_vector_db/

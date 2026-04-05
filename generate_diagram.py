@@ -4,10 +4,10 @@ generate_diagram.py -- MonkeyGrab architecture diagram renderer.
 Sends the Mermaid diagram to the Kroki.io rendering API via POST and saves
 the result as a local image. No URL length limits; supports PNG, SVG and PDF.
 
-Usage:
-    python scripts/generate_diagram.py
-    python scripts/generate_diagram.py --output docs/architecture.png
-    python scripts/generate_diagram.py --format svg --output docs/architecture.svg
+Usage (desde la raíz del repositorio):
+    python generate_diagram.py
+    python generate_diagram.py --output docs/architecture.png
+    python generate_diagram.py --format svg --output docs/architecture.svg
 
 Dependencies:
     requests  (pip install requests)
