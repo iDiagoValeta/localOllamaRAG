@@ -25,9 +25,9 @@ according to ``metadata["format"]`` from ``chat_pdfs.indexar_documentos``.
 **Single-store modes:** ``--mi-only`` or ``--ragbench-only`` (``--ragbench`` alias).
 
 Usage (from repository root):
-    python scripts/evaluation/export_ragbench_fragments.py
-    python scripts/evaluation/export_ragbench_fragments.py --mi-only -o salida.txt
-    python scripts/evaluation/export_ragbench_fragments.py --format jsonl --out-dir evaluation
+    python rag/export_fragments.py
+    python rag/export_fragments.py --mi-only -o salida.txt
+    python rag/export_fragments.py --format jsonl --out-dir evaluation
 
 Dependencies:
     - chromadb (see rag/requirements.txt)
@@ -46,7 +46,8 @@ from typing import Any, Dict, List, Optional, Tuple
 # SECTION 1: IMPORTS
 # ─────────────────────────────────────────────
 
-_proj_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Two levels up: rag/export_fragments.py -> repo root (not three: that was for scripts/evaluation/).
+_proj_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _proj_root not in sys.path:
     sys.path.insert(0, _proj_root)
 

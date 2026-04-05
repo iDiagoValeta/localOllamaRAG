@@ -2149,9 +2149,14 @@ def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
 
 
 _PROMPT_ECHO_MARKERS = (
+    # Prompt template fragments — update if the prompt wording changes
     "Using this caption as context, describe the visual content",
     "describe the visual content of this image in detail",
     "Focus on what is depicted, not on any text overlaid",
+    "describe the arrows between blocks",
+    "name the inputs and outputs",
+    "lists every labeled block",
+    "The figure caption reads",     # model echoing the injected caption prefix
 )
 
 
@@ -2356,21 +2361,17 @@ def describir_imagen_con_llm(image_bytes: bytes, caption: str = "") -> str:
             messages=[{
                 "role": "user",
                 "content": (
-                    (f"The figure caption reads: '{caption}'. "
-                     "Using this caption as context, " if caption else "")
-                    + "Describe the visual content of this image in detail. "
-                    "Focus on what is depicted, not on any text overlaid on it. "
-                    "If it is a neural network architecture or block diagram, name each "
-                    "component (e.g. encoder, decoder, attention head, feed-forward layer), "
-                    "describe the data flow between them (arrows, residual connections), and "
-                    "identify the overall architecture family (Transformer, CNN, RNN, etc.). "
-                    "If it is a table, describe its structure: number of rows and columns, "
-                    "column headers, and the type of values in each column "
-                    "(e.g. model names, BLEU scores, parameter counts). "
-                    "If it is a chart, name the axes, the metric being plotted, "
-                    "and the key trend or comparison shown. "
-                    "End with one sentence stating the main contribution or finding "
-                    "this figure represents."
+                    (f"The figure caption reads: '{caption}'. " if caption else "")
+                    + "Describe the visual content of this image. "
+                    "If it is a flowchart or architecture diagram: list every labeled block "
+                    "(e.g. MatMul, SoftMax, Encoder, Linear), name the inputs and outputs "
+                    "(e.g. Q, K, V), describe the arrows between blocks, and state the "
+                    "architecture family (e.g. Transformer, CNN). "
+                    "If it is a table: state the number of rows and columns, list the column "
+                    "headers, and describe the type of data in each column. "
+                    "Only describe what you can actually see. Do not invent numbers, metrics, "
+                    "or data that are not visible in the image. "
+                    "End with one sentence summarizing what this figure illustrates."
                 ),
                 "images": [image_b64],
             }],
