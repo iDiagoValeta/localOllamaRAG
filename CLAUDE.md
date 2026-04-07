@@ -20,6 +20,7 @@ El proyecto tiene dos dimensiones:
 6. **No tocar `llama.cpp/`**: es un submódulo externo.
 7. Al proponer cambios en `chat_pdfs.py`: `web/app.py` importa directamente constantes y funciones de ese módulo (`PATH_DB`, `COLLECTION_NAME`, `indexar_documentos`, `evaluar_pregunta_rag`…). Un renombrado rompe el backend web.
 8. **No usar `training-output/bertscore/`** como referencia: esos datos son obsoletos (versión anterior del experimento con Aina como bloque único y caps de 200 muestras). Los resultados definitivos vienen de `train-qwen3.py` (v10) y `evaluate_baselines.py` con el esquema actual (Aina por idioma, 320 muestras dev).
+9. **Tras cualquier modificación, revisar si hay que actualizar `CLAUDE.md` o `README.md`**: cambios en estructura de archivos, flags de pipeline, modelos, scripts, rutas, estado del experimento o convenciones de código deben reflejarse en la documentación del proyecto para mantenerla sincronizada.
 
 ---
 

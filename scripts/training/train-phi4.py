@@ -34,10 +34,10 @@ Dependencies:
 #  |                                      samples each (balanced; Dolly margin ≥373)
 #  |        1.4 Token length limits
 #  |        1.5 BERTScore backend
-#  |        1.6 Phase-2 evaluation caps   dev (200/dataset) aligned with
-#  |                                      evaluate_baselines.py; test: full splits
+#  |        1.6 Phase-2 evaluation caps   dev (320/dataset); test: full splits
 #  |        1.7 System prompt             aligned with SYSTEM_PROMPT_RAG from chat_pdfs
 #  |        1.8 Dolly RAG category filter
+#  |        1.9 Baseline eval cache       BASELINE_EVAL_DIR + TF32 flags
 #  +-- 2. Base model loading          AutoModelForCausalLM + Phi-4 tokenizer
 #
 #  EVALUATION AND METRICS
@@ -68,6 +68,8 @@ Dependencies:
 #
 #  PIPELINE
 #  +-- 5. Base model evaluation     pre-training baseline
+#           5.1 Baseline import          import dev results from evaluate_baselines.py
+#                                        predictions_{slug}.json → skip redundant inference
 #  +-- 6. LoRA adapter              r=32, alpha=64 (exploration), 7 target modules
 #  +-- 7. Tokenization              ChatML + prompt loss masking
 #  +-- 8. Training configuration    hyperparameters, early stopping, checkpoints
@@ -187,18 +189,38 @@ SYSTEM_PROMPT = (
 
 DOLLY_RAG_CATEGORIES = {"closed_qa", "information_extraction", "summarization"}
 
+# --- 1.9 Baseline evaluation cache ---
+# Path to pre-computed baseline predictions (relative to CWD on cluster).
+# If found, base dev results are imported directly — skipping redundant inference
+# in Section 5 (base model was already evaluated in evaluate_baselines.py).
+BASELINE_EVAL_DIR   = os.path.join(os.getcwd(), "baseline-evaluation-output")
+MODEL_SLUG_BASELINE = "phi-4"   # matches predictions_{slug}.json in baseline output
+
+# Explicit TF32 settings — accelerates bfloat16 matmul on Ampere/Ada GPUs.
+# torch.backends flags must be set after import; env var tf32=True in TrainingArguments
+# applies only during training, not during inference in Sections 5/11.
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+
 
 # ─────────────────────────────────────────────
 # SECTION 2: BASE MODEL LOADING
 # ─────────────────────────────────────────────
 
 print(f"\n--> [2] Loading base model: {model_name}")
+try:
+    import importlib.util as _ilu
+    _attn_impl = "flash_attention_2" if _ilu.find_spec("flash_attn") else "sdpa"
+except Exception:
+    _attn_impl = "sdpa"
+print(f"    attn_implementation: {_attn_impl}")
+
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
     dtype=torch.bfloat16,
     device_map="auto",
     trust_remote_code=True,
-    attn_implementation="sdpa",
+    attn_implementation=_attn_impl,
 )
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 if tokenizer.pad_token is None:
@@ -362,7 +384,7 @@ def generate_response(
         add_generation_prompt=True,
     )
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-    with torch.no_grad():
+    with torch.inference_mode():
         outputs = model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
@@ -885,6 +907,45 @@ if os.path.exists(_base_pred_path):
         _base_ckpt   = {}
         base_metrics = {}
         base_results = {}
+
+# --- 5.1 Import base dev results from evaluate_baselines.py (skip redundant inference) ---
+# The baseline evaluation already ran the base model on the same dev sets.
+# Import those results so Section 5 only needs to run inference on the test split.
+_baseline_pred_path = os.path.join(BASELINE_EVAL_DIR, f"predictions_{MODEL_SLUG_BASELINE}.json")
+if os.path.exists(_baseline_pred_path):
+    print(f"--> [5.1] Importing base dev results from baseline: {_baseline_pred_path}")
+    try:
+        with open(_baseline_pred_path, encoding="utf-8") as _bf:
+            _baseline_data = json.load(_bf)
+        _wc_dev = _baseline_data.get("with_context", {}).get("dev", {})
+        _imported = 0
+        for ds_name in list(eval_datasets_dev.keys()):
+            key = f"{ds_name}|dev"
+            if key in base_results:
+                continue
+            entry = _wc_dev.get(ds_name)
+            if entry and len(entry.get("predictions", [])) > 0:
+                n = len(entry["predictions"])
+                base_results[key] = _ckpt_entry_to_samples(entry)
+                base_metrics[key] = {
+                    "n_samples":                 n,
+                    "Token_F1":                  round(sum(entry["token_f1"])    / n * 100, 2),
+                    "ROUGE_L_F1":                round(sum(entry["rouge_l"])     / n * 100, 2),
+                    "Context_Faithfulness_Pct":  round(sum(entry["faithfulness"])/ n * 100, 2),
+                    "Avg_Response_Length_Words": round(sum(entry["words"])       / n,       1),
+                    "Sentence_Completeness_Pct": 0.0,
+                }
+                _base_ckpt[key] = entry
+                print(f"    -- Imported: {ds_name} | dev ({n} samples)")
+                _imported += 1
+        if _imported:
+            print(f"--> [5.1] Imported {_imported} dev dataset(s) from baseline. "
+                  f"Base dev inference will be skipped for these.")
+    except Exception as _be:
+        print(f"    Warning: could not import baseline predictions ({_be}). Will re-evaluate.")
+else:
+    print(f"--> [5.1] Baseline predictions not found at {_baseline_pred_path}. "
+          f"Running full base dev evaluation.")
 
 _expected_base_keys = {
     f"{ds_name}|{split}"
