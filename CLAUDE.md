@@ -50,9 +50,9 @@ localOllamaRAG/
 │   ├── requirements.txt
 │   ├── debug_context_issues.md   # Análisis de issues en presentación del contexto
 │   ├── debug_rag/                # Dumps de debug de queries (runtime, gitignored)
-│   ├── pdfs/                     # PDFs a indexar (gitignored)
+│   ├── pdfs/                     # PDFs a indexar (solo .gitkeep versionado; contenido en .gitignore)
 │   ├── ragbench_pdfs/            # PDFs RAGBench — uso exclusivo de run_eval_ragbench.py (gitignored)
-│   ├── mi_vector_db/             # ChromaDB producción (gitignored)
+│   ├── mi_vector_db/             # ChromaDB producción (solo .gitkeep versionado; datos en .gitignore)
 │   ├── ragbench_vector_db/       # ChromaDB RAGBench (gitignored)
 │   ├── historial_chat.json       # Historial modo CHAT (gitignored)
 │   └── cli/
@@ -95,10 +95,13 @@ localOllamaRAG/
 │   └── requirements.txt          # ragas, langchain-google-genai, pandas…
 ├── training-output/
 │   ├── qwen-3/                   # Adaptador LoRA Qwen3 (artefactos pesados gitignored)
+│   │   ├── generate_reports.py   # Tablas + figuras train/eval → plots/ (misma lógica en cada modelo)
 │   │   └── plots/                # Curvas de training/eval (gitignored)
 │   ├── phi-4/                    # Adaptador LoRA Phi-4 (artefactos pesados gitignored)
-│   │   └── plots/                # Curvas de training/eval (gitignored)
+│   │   ├── generate_reports.py   # Tablas + figuras train/eval → plots/ (misma lógica en cada modelo)
+│   │   └── plots/                # Curvas y reportes de training/eval (gitignored)
 │   ├── gemma-3/                  # Adaptador LoRA Gemma-3 (artefactos pesados gitignored)
+│   │   ├── generate_reports.py   # Tablas + figuras train/eval → plots/ (misma lógica en cada modelo)
 │   │   └── plots/                # Curvas de training/eval (gitignored)
 │   └── baseline/                 # Resultados benchmark 7 modelos base (320 muestras)
 │       ├── baseline_evaluation.json          # 7 modelos × 5 datasets × con/sin contexto
@@ -249,6 +252,12 @@ python scripts/evaluation/evaluate_baselines.py
 # Regenerar tablas Markdown + CSVs desde baseline_evaluation.json
 python training-output/baseline/generate_reports.py
 # Salida: training-output/baseline/reports/
+
+# Por cada modelo LoRA (mismo script en cada carpeta; rutas por defecto = directorio del script)
+python training-output/qwen-3/generate_reports.py
+python training-output/phi-4/generate_reports.py
+python training-output/gemma-3/generate_reports.py
+# Salida: training-output/<modelo>/plots/{train,eval}/
 
 # Auditar splits por dataset
 python scripts/evaluation/inspect_splits.py
@@ -458,7 +467,7 @@ bert-score>=0.3.13
 | Predicciones baseline | `training-output/baseline/predictions_{modelo}.json` | 7 archivos; permite recomputar métricas |
 | Tablas de resultados | `training-output/baseline/reports/` | Markdown + CSVs + figuras; generado por `generate_reports.py` |
 | Baseline 200-sample (histórico) | `training-output/baseline/200/` | Versión anterior cap=200; solo referencia |
-| Artefactos LoRA Qwen3-14B | `training-output/qwen-3/` | Pendiente de training: `training_stats.json`, `evaluation_comparison.json`, `predictions_base.json`, `predictions_adapted.json` (gitignored) |
-| Artefactos LoRA Phi-4 | `training-output/phi-4/` | Pendiente de training: mismos artefactos que Qwen3 (gitignored) |
-| Artefactos LoRA Gemma-3-12B | `training-output/gemma-3/` | Pendiente de training: mismos artefactos que Qwen3 (gitignored) |
+| Artefactos LoRA Qwen3-14B | `training-output/qwen-3/` | Tras training: `training_stats.json`, `evaluation_comparison.json`, predicciones (gitignored). `generate_reports.py` → `plots/{train,eval}/` |
+| Artefactos LoRA Phi-4 | `training-output/phi-4/` | Misma convención que Qwen3; `generate_reports.py` idéntico en lógica |
+| Artefactos LoRA Gemma-3-12B | `training-output/gemma-3/` | Misma convención que Qwen3; `generate_reports.py` idéntico en lógica |
 | Diagrama arquitectura | `docs/monkeygrab_architecture.png` / `.svg` | Generado por `generate_diagram.py` |

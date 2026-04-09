@@ -161,6 +161,22 @@ python web/app.py
 
 Opens at `http://localhost:5000`. Supports document upload, streaming responses and access to all pipeline settings through the UI.
 
+### LoRA train/eval reports (per model)
+
+Each fine-tuned model folder under `training-output/` includes the same `generate_reports.py` (invoked from that folder so defaults point at the right artifacts). After training (e.g. `scripts/training/train-qwen3.py`, `train-phi4.py`, `train-gemma3.py`), regenerate tables and figures under `training-output/<model>/plots/`:
+
+```bash
+python training-output/qwen-3/generate_reports.py
+python training-output/phi-4/generate_reports.py
+python training-output/gemma-3/generate_reports.py
+```
+
+Optional flags: `--model-dir`, `--eval-input`, `--train-input`, `--plots-dir`, `--no-figures` (see the script docstring).
+
+Output layout is the same for every model:
+- `plots/train/` — training curves (`loss`, `learning_rate`, `grad_norm`) and CSV summaries from `log_history`
+- `plots/eval/` — per-metric CSV tables, markdown report tables, and comparison figures (`base` vs `adapted`)
+
 ---
 
 ## Repository structure
@@ -182,6 +198,9 @@ localOllamaRAG/
 ├── evaluation/
 │   └── run_eval.py               # RAGAS evaluation of the live pipeline
 ├── training-output/
+│   ├── qwen-3/                   # Qwen3 LoRA artifacts + generate_reports.py → plots/
+│   ├── phi-4/                    # Phi-4 LoRA artifacts + generate_reports.py → plots/
+│   ├── gemma-3/                  # Gemma-3 LoRA artifacts + generate_reports.py → plots/
 │   └── baseline/                 # Baseline benchmark results (JSON, reports)
 ├── docs/                         # Architecture diagrams
 └── CLAUDE.md                     # Internal development guide

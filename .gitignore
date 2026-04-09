@@ -1,48 +1,78 @@
-# Modelos y pesos (archivos grandes)
+# =============================================================================
+# MonkeyGrab — .gitignore
+# =============================================================================
+# Objetivo: no versionar pesos, índices locales ni artefactos regenerables;
+# sí mantener scripts, Modelfiles y JSON de métricas pequeños.
+# Documentación: ver comentarios por bloque y CLAUDE.md (estructura training-output).
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. Modelos y tensores (pesados)
+# -----------------------------------------------------------------------------
 *.gguf
 *.safetensors
 *.pt
 *.bin
 *.pth
 
-# llama.cpp (no versionado; conversión/cuantización GGUF)
+# -----------------------------------------------------------------------------
+# 2. Herramientas locales de cuantización (no submódulo versionado)
+# -----------------------------------------------------------------------------
 llama.cpp/
-
-# Binarios descargados
 llama-bin/
 
-# Artefactos de entrenamiento — Qwen 3
+# -----------------------------------------------------------------------------
+# 3. Fine-tuning LoRA — training-output/<modelo>/
+# -----------------------------------------------------------------------------
+# Se ignoran casi todos los hijos del directorio de cada run (checkpoints,
+# adaptadores, predicciones, plots…). Excepciones explícitas: script de informes
+# y JSON de resumen exportados por los train-*.py.
+#
+# Si en el futuro quieres versionar predicciones concretas, añade una línea
+# !training-output/<modelo>/nombre.json bajo el bloque correspondiente.
+
+# --- Qwen 3 ---
 training-output/qwen-3/*
+!training-output/qwen-3/generate_reports.py
 !training-output/qwen-3/training_stats.json
+!training-output/qwen-3/evaluation_comparison.json
 
-# Artefactos de entrenamiento — Gemma 3
+# --- Gemma 3 ---
 training-output/gemma-3/*
+!training-output/gemma-3/generate_reports.py
 !training-output/gemma-3/training_stats.json
+!training-output/gemma-3/evaluation_comparison.json
 
-# Artefactos de entrenamiento — Phi-4
+# --- Phi-4 ---
 training-output/phi-4/*
+!training-output/phi-4/generate_reports.py
 !training-output/phi-4/training_stats.json
+!training-output/phi-4/evaluation_comparison.json
 
-# Informes generados desde baseline (tablas, CSVs, figuras)
+# --- Baseline: informes regenerables (JSON maestro sí se versiona) ---
 training-output/baseline/reports/
 
-# GGUF output — Qwen 3 (solo Modelfile)
+# -----------------------------------------------------------------------------
+# 4. GGUF ensamblado en repo — solo Modelfile por modelo
+# -----------------------------------------------------------------------------
 models/gguf-output/qwen-3/*
 !models/gguf-output/qwen-3/Modelfile
 
-# GGUF output — Gemma 3 (solo Modelfile)
 models/gguf-output/gemma-3/*
 !models/gguf-output/gemma-3/Modelfile
 
-# GGUF output — Phi-4 (solo Modelfile)
 models/gguf-output/phi-4/*
 !models/gguf-output/phi-4/Modelfile
 
-# Logs
+# -----------------------------------------------------------------------------
+# 5. Logs y volcados genéricos
+# -----------------------------------------------------------------------------
 *.log
 salida_*
 
-# Python
+# -----------------------------------------------------------------------------
+# 6. Python
+# -----------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
@@ -51,46 +81,51 @@ venv/
 .venv/
 *.egg-info/
 .eggs/
+.pytest_cache/
 
-# RAG — archivos generados y materiales
-rag/mi_vector_db/
-rag/pdfs/
+# -----------------------------------------------------------------------------
+# 7. RAG — datos e índices locales
+# -----------------------------------------------------------------------------
+# El directorio existe en clone gracias a .gitkeep; el resto del contenido no se versiona.
+rag/mi_vector_db/**
+!rag/mi_vector_db/.gitkeep
 
-# Interfaz web — excluir solo lo generado/instalable
+rag/pdfs/**
+!rag/pdfs/.gitkeep
+rag/debug_rag/
+rag/ragbench_pdfs/
+rag/ragbench_vector_db/
+
+# -----------------------------------------------------------------------------
+# 8. Interfaz web (frontend empaquetado en web/zip)
+# -----------------------------------------------------------------------------
 web/zip/node_modules/
 web/zip/dist/
 
-# IDE
+# -----------------------------------------------------------------------------
+# 9. IDE y sistema operativo
+# -----------------------------------------------------------------------------
 .idea/
 .vscode/
 *.swp
 *.swo
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Historial del chat y debug
+# -----------------------------------------------------------------------------
+# 10. Historial de chat CLI y secretos
+# -----------------------------------------------------------------------------
 historial_chat.json
-rag/debug_rag/
-
-# Variables de entorno (API keys)
 .env
 
-# Resultados de la evaluación con RAGAS
+# -----------------------------------------------------------------------------
+# 11. Evaluación y exportaciones puntuales
+# -----------------------------------------------------------------------------
 ragas_scores.csv
-
-# Exportaciones de chunks (export_fragments.py)
 evaluation/chunks_*.txt
 
-# Evaluación — RAGBench (PDFs locales)
-rag/ragbench_pdfs/
-
-# ChromaDB RAGBench (misma ruta que usa chat_pdfs / run_eval_ragbench)
-rag/ragbench_vector_db/
-
-.pytest_cache/
-
+# -----------------------------------------------------------------------------
+# 12. Otros (notas locales / asistente)
+# -----------------------------------------------------------------------------
 .claude/
-
 MODIFICACIONES_EVALUACION.md
