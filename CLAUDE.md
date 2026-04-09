@@ -450,27 +450,7 @@ bert-score>=0.3.13
 
 ---
 
-## 10. Deuda técnica y limitaciones
-
-### Deuda activa
-
-- **Lógica concentrada en `chat_pdfs.py`**: supera las 1000 líneas. Refactorizar requeriría actualizar imports en `web/app.py` y `evaluation/run_eval.py`.
-
-### Limitaciones conocidas
-- **RECOMP synthesis**: implementado pero aumenta latencia; medir antes de activar en producción.
-- **Evaluación RAGAS**: requiere `GOOGLE_API_KEY` (Gemini como juez LLM). No es totalmente local.
-- **`enable_thinking=False` en Qwen3**: en producción se suprime el bloque `<think>` para reducir latencia. Ver `scripts/tests/test_nothink.py`.
-
-### Decisiones de diseño fijadas (no cambiar sin evaluación)
-
-- **RRF fusion 55/45**: ponderación semántica/léxica calibrada empíricamente.
-- **`UMBRAL_RELEVANCIA = 0.50`**: umbral mínimo de relevancia RAG.
-- **`TOP_K_FINAL = 6`**: fragmentos que llegan al LLM. Contexto máximo: `MAX_CONTEXTO_CHARS = 8192`.
-- **ChromaDB por `(carpeta_docs, embedding_model)`**: cambiar el modelo de embedding invalida la DB y requiere reindexar.
-
----
-
-## 11. Artefactos de evaluación
+## 10. Artefactos de evaluación
 
 | Artefacto | Ubicación | Descripción |
 |-----------|-----------|-------------|
