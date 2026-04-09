@@ -19,8 +19,7 @@ El proyecto tiene dos dimensiones:
 5. **No cambiar flags de pipeline** (`USAR_RECOMP_SYNTHESIS`, etc.) sin acordarlo con el usuario: tienen efecto directo en latencia y coste.
 6. **No tocar `llama.cpp/`**: es un submódulo externo.
 7. Al proponer cambios en `chat_pdfs.py`: `web/app.py` importa directamente constantes y funciones de ese módulo (`PATH_DB`, `COLLECTION_NAME`, `indexar_documentos`, `evaluar_pregunta_rag`…). Un renombrado rompe el backend web.
-8. **No usar `training-output/bertscore/`** como referencia: esos datos son obsoletos (versión anterior del experimento con Aina como bloque único y caps de 200 muestras). Los resultados definitivos vienen de `train-qwen3.py` (v10) y `evaluate_baselines.py` con el esquema actual (Aina por idioma, 320 muestras dev).
-9. **Tras cualquier modificación, revisar si hay que actualizar `CLAUDE.md` o `README.md`**: cambios en estructura de archivos, flags de pipeline, modelos, scripts, rutas, estado del experimento o convenciones de código deben reflejarse en la documentación del proyecto para mantenerla sincronizada.
+8. **Tras cualquier modificación, revisar si hay que actualizar `CLAUDE.md` o `README.md`**: cambios en estructura de archivos, flags de pipeline, modelos, scripts, rutas, estado del experimento o convenciones de código deben reflejarse en la documentación del proyecto para mantenerla sincronizada.
 
 ---
 
@@ -32,13 +31,11 @@ El proyecto tiene dos dimensiones:
 | Fine-tuning Qwen3-14B (v10) | 🔄 En ejecución en cluster |
 | Fine-tuning Phi-4 (v1) | 🔄 En ejecución en cluster |
 | Fine-tuning Gemma-3-12B (v2) | ⏳ Pendiente — script actualizado, listo para lanzar |
-| Fine-tuning Llama-3.1-8B | ❌ Descartado — modelo excluido del experimento |
 | Evaluación base/adaptado (test) | ⏳ Pendiente de resultados de training |
 
 **Modelos viables para producción**: Qwen3-14B, Phi-4 y Gemma-3-12B (scripts actualizados y compatibles con GGUF/Ollama).
 
-**Scripts actualizados** (alineados con v10): `train-qwen3.py`, `train-phi4.py`, `train-gemma3.py` (v2).
-**Scripts borrados**: `train-llama3.1.py` — Llama-3.1-8B descartado del experimento.
+**Scripts de training** (alineados con v10): `train-qwen3.py`, `train-phi4.py`, `train-gemma3.py`.
 
 ---
 
@@ -52,8 +49,8 @@ localOllamaRAG/
 │   ├── export_fragments.py       # Exporta chunks de ChromaDB a TXT/JSONL para debug
 │   ├── requirements.txt
 │   ├── debug_context_issues.md   # Análisis de issues en presentación del contexto
-│   ├── debug_rag/                # Dumps de debug de queries (runtime, no versionados)
-│   ├── pdfs/                     # PDFs a indexar (no versionados)
+│   ├── debug_rag/                # Dumps de debug de queries (runtime, gitignored)
+│   ├── pdfs/                     # PDFs a indexar (gitignored)
 │   ├── ragbench_pdfs/            # PDFs RAGBench — uso exclusivo de run_eval_ragbench.py (gitignored)
 │   ├── mi_vector_db/             # ChromaDB producción (gitignored)
 │   ├── ragbench_vector_db/       # ChromaDB RAGBench (gitignored)
@@ -66,7 +63,13 @@ localOllamaRAG/
 ├── web/
 │   ├── app.py                    # Backend Flask: REST + SSE, sirve React
 │   ├── requirements.txt
-│   └── zip/dist/                 # Build frontend React (gitignored)
+│   └── zip/                      # Fuente React + build compilado
+│       ├── src/                  # Código fuente TypeScript (App.tsx, main.tsx, index.css)
+│       ├── public/               # Assets estáticos (logos)
+│       ├── dist/                 # Build compilado (gitignored)
+│       ├── package.json          # Dependencias npm
+│       ├── tsconfig.json         # Configuración TypeScript
+│       └── vite.config.ts        # Configuración Vite
 ├── scripts/
 │   ├── requirements.txt          # torch, transformers, peft, datasets, bert-score…
 │   ├── training/
@@ -91,11 +94,12 @@ localOllamaRAG/
 │   ├── run_eval_ragbench.py      # Evaluación RAGAS sobre PDFs de RAGBench (Vectara)
 │   └── requirements.txt          # ragas, langchain-google-genai, pandas…
 ├── training-output/
-│   ├── qwen-3/                   # Adaptador LoRA + artefactos de eval (JSON, CSV, plots)
-│   │   └── explore-rank/         # Comparación r=32 vs r=64
+│   ├── qwen-3/                   # Adaptador LoRA Qwen3 (artefactos pesados gitignored)
+│   │   └── plots/                # Curvas de training/eval (gitignored)
 │   ├── phi-4/                    # Adaptador LoRA Phi-4 (artefactos pesados gitignored)
+│   │   └── plots/                # Curvas de training/eval (gitignored)
 │   ├── gemma-3/                  # Adaptador LoRA Gemma-3 (artefactos pesados gitignored)
-│   ├── bertscore/                # ⚠️ OBSOLETO — datos del experimento anterior
+│   │   └── plots/                # Curvas de training/eval (gitignored)
 │   └── baseline/                 # Resultados benchmark 7 modelos base (320 muestras)
 │       ├── baseline_evaluation.json          # 7 modelos × 5 datasets × con/sin contexto
 │       ├── baseline_evaluation_samples.json  # Predicciones cualitativas por muestra
@@ -105,17 +109,17 @@ localOllamaRAG/
 │       ├── reports/                          # Tablas + CSVs + figuras (gitignored)
 │       └── 200/                              # Versión anterior cap=200 (referencia histórica)
 ├── docs/
+│   ├── monkeygrab_architecture.png
 │   ├── monkeygrab_architecture.svg
 │   ├── investigacionMetricas.md
 │   ├── palabras.md
 │   └── splits.md                 # Análisis de splits de datasets
 ├── llama-bin/                    # Binarios llama.cpp compilados para Windows (gitignored)
 ├── models/
-│   ├── gguf-output/
-│   │   ├── qwen-3/               # GGUF + Modelfile Qwen3-14B (solo Modelfile versionado)
-│   │   ├── phi-4/                # GGUF + Modelfile Phi-4 (solo Modelfile versionado)
-│   │   └── gemma-3/              # GGUF + Modelfile Gemma-3-12B (solo Modelfile versionado)
-│   └── merged-model/             # Modelos merged antes de convertir (gitignored)
+│   └── gguf-output/
+│       ├── qwen-3/               # GGUF Qwen3-14B + Modelfile (solo Modelfile versionado)
+│       ├── phi-4/                # GGUF Phi-4 + Modelfile (solo Modelfile versionado)
+│       └── gemma-3/              # GGUF Gemma-3-12B + Modelfile (solo Modelfile versionado)
 ├── llama.cpp/                    # Submódulo externo — no modificar (gitignored)
 ├── README.md
 └── CLAUDE.md
@@ -228,8 +232,11 @@ python scripts/training/train-qwen3.py
 # Phi-4 (v1) — en ejecución en cluster
 python scripts/training/train-phi4.py
 
+# Gemma-3-12B (v2)
+python scripts/training/train-gemma3.py
+
 # Fusionar adaptador para exportar a GGUF
-python scripts/conversion/merge_lora.py --model qwen-3   # opciones: qwen-3, llama-3, gemma-3
+python scripts/conversion/merge_lora.py --model qwen-3   # opciones: qwen-3, gemma-3, phi-4
 ```
 
 ### Evaluación
@@ -363,7 +370,7 @@ Las tablas del TFG no incluyen desviación típica. Para cuantificar el efecto d
 - **Δ absoluto** (pp): `adaptado − base`. Ej: `+3.2 pp`.
 - **Δ relativo** (%): `(adaptado − base) / base × 100`. Ej: `+7.4 %`.
 
-Los artefactos JSON (`evaluation_comparison.json`) incluyen ambos campos (`delta_pp`, `delta_rel_pct`). El script `compute_std.py` existe por razones históricas; **no usarlo para tablas definitivas**.
+Los artefactos JSON (`evaluation_comparison.json`) incluyen ambos campos (`delta_pp`, `delta_rel_pct`).
 
 ### Docstring de módulo
 
@@ -447,7 +454,6 @@ bert-score>=0.3.13
 
 ### Deuda activa
 
-- **`training-output/bertscore/`**: datos obsoletos (experimento anterior). No citar. Serán reemplazados cuando finalicen los entrenamientos en cluster.
 - **Lógica concentrada en `chat_pdfs.py`**: supera las 1000 líneas. Refactorizar requeriría actualizar imports en `web/app.py` y `evaluation/run_eval.py`.
 
 ### Limitaciones conocidas
@@ -472,11 +478,7 @@ bert-score>=0.3.13
 | Predicciones baseline | `training-output/baseline/predictions_{modelo}.json` | 7 archivos; permite recomputar métricas |
 | Tablas de resultados | `training-output/baseline/reports/` | Markdown + CSVs + figuras; generado por `generate_reports.py` |
 | Baseline 200-sample (histórico) | `training-output/baseline/200/` | Versión anterior cap=200; solo referencia |
-| Adaptador LoRA Qwen3 | `training-output/qwen-3/` | `adapter_config.json`, `adapter_model.safetensors` |
-| Comparación base/adaptado Qwen3 | `training-output/qwen-3/evaluation_comparison.json` | Deltas per-dataset (dev/test) con `delta_pp` y `delta_rel_pct` |
-| Estadísticas de training Qwen3 | `training-output/qwen-3/training_stats.json` | Loss, pasos, tiempo (v10) |
-| Predicciones Qwen3 | `training-output/qwen-3/predictions_base.json` / `predictions_adapted.json` | Por muestra; permite recomputar BERTScore sin regenerar |
-| Exploración rango LoRA | `training-output/qwen-3/explore-rank/` | Comparación r=32 vs r=64 |
-| Adaptador LoRA Phi-4 | `training-output/phi-4/` | Artefactos pesados gitignored; se conserva `training_stats.json` |
-| Adaptador LoRA Gemma-3 | `training-output/gemma-3/` | Artefactos pesados gitignored; se conserva `training_stats.json` |
+| Artefactos LoRA Qwen3-14B | `training-output/qwen-3/` | Pendiente de training: `training_stats.json`, `evaluation_comparison.json`, `predictions_base.json`, `predictions_adapted.json` (gitignored) |
+| Artefactos LoRA Phi-4 | `training-output/phi-4/` | Pendiente de training: mismos artefactos que Qwen3 (gitignored) |
+| Artefactos LoRA Gemma-3-12B | `training-output/gemma-3/` | Pendiente de training: mismos artefactos que Qwen3 (gitignored) |
 | Diagrama arquitectura | `docs/monkeygrab_architecture.png` / `.svg` | Generado por `generate_diagram.py` |

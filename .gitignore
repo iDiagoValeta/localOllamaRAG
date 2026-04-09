@@ -11,11 +11,6 @@ llama.cpp/
 # Binarios descargados
 llama-bin/
 
-# Modelo fusionado (generado por merge_lora.py, muy pesado)
-# Solo se conserva el .gitkeep raíz para mostrar que el directorio existe.
-models/merged-model/*
-!models/merged-model/.gitkeep
-
 # Artefactos de entrenamiento — Qwen 3
 training-output/qwen-3/*
 !training-output/qwen-3/training_stats.json
