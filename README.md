@@ -110,6 +110,10 @@ ollama pull <your OLLAMA_CONTEXTUAL_MODEL>   # query decomposition and contextua
 ollama pull <your OLLAMA_OCR_MODEL>          # must be a vision-language model
 ```
 
+### Model weights (GGUF)
+
+Large **`.gguf`** files are **not** committed to this repository (size and clone cost). The repo keeps **`Modelfile`** files under `models/gguf-output/<model>/` plus conversion scripts in `scripts/conversion/`. Build or quantize locally, or download weights from **Hugging Face Hub** (or another object store) and point Ollama at the file path you use. Document any public model URL in your thesis or deployment notes for reproducibility.
+
 ---
 
 ## Configuration
@@ -134,7 +138,7 @@ All pipeline behaviour is controlled via environment variables. Set them in your
 
 ### Terminal CLI
 
-Place your PDF files in `rag/pdfs/`. The system indexes them automatically on first launch.
+Place your PDF files in `rag/pdfs/` (the folder exists after clone via `.gitkeep`). The system indexes them automatically on first launch. RAGBench evaluation uses `rag/ragbench_pdfs/` and `rag/ragbench_vector_db/` in the same way.
 
 ```bash
 cd rag
@@ -185,8 +189,10 @@ Output layout is the same for every model:
 localOllamaRAG/
 ├── rag/
 │   ├── chat_pdfs.py              # Main RAG engine (indexing, retrieval, generation)
-│   ├── pdfs/                     # Place your PDFs here (not versioned)
-│   ├── mi_vector_db/             # ChromaDB index (generated, not versioned)
+│   ├── pdfs/                     # Your PDFs (only .gitkeep in Git; content ignored)
+│   ├── mi_vector_db/             # ChromaDB production index (same .gitkeep pattern)
+│   ├── ragbench_pdfs/            # RAGBench PDFs (same pattern; see run_eval_ragbench.py)
+│   ├── ragbench_vector_db/       # ChromaDB for RAGBench eval (same pattern)
 │   └── cli/                      # Rich terminal interface
 ├── web/
 │   ├── app.py                    # Flask backend (REST + SSE)

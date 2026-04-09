@@ -3,7 +3,10 @@
 # =============================================================================
 # Objetivo: no versionar pesos, índices locales ni artefactos regenerables;
 # sí mantener scripts, Modelfiles y JSON de métricas pequeños.
-# Documentación: ver comentarios por bloque y CLAUDE.md (estructura training-output).
+#
+# Los bloques numerados 1–10 y 12–13 son índices locales a ESTE archivo.
+# Las convenciones de política (qué versionar, .gitkeep, GGUF) están en
+# CLAUDE.md § «Versionado Git» (apartado 11 del documento).
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -86,15 +89,20 @@ venv/
 # -----------------------------------------------------------------------------
 # 7. RAG — datos e índices locales
 # -----------------------------------------------------------------------------
-# El directorio existe en clone gracias a .gitkeep; el resto del contenido no se versiona.
+# Directorios presentes al clonar vía .gitkeep; el resto del contenido no se versiona.
 rag/mi_vector_db/**
 !rag/mi_vector_db/.gitkeep
 
 rag/pdfs/**
 !rag/pdfs/.gitkeep
+
+rag/ragbench_pdfs/**
+!rag/ragbench_pdfs/.gitkeep
+
+rag/ragbench_vector_db/**
+!rag/ragbench_vector_db/.gitkeep
+
 rag/debug_rag/
-rag/ragbench_pdfs/
-rag/ragbench_vector_db/
 
 # -----------------------------------------------------------------------------
 # 8. Interfaz web (frontend empaquetado en web/zip)
@@ -119,13 +127,13 @@ historial_chat.json
 .env
 
 # -----------------------------------------------------------------------------
-# 11. Evaluación y exportaciones puntuales
+# 12. Evaluación y exportaciones puntuales
 # -----------------------------------------------------------------------------
 ragas_scores.csv
 evaluation/chunks_*.txt
 
 # -----------------------------------------------------------------------------
-# 12. Otros (notas locales / asistente)
+# 13. Otros (notas locales / asistente)
 # -----------------------------------------------------------------------------
 .claude/
 MODIFICACIONES_EVALUACION.md

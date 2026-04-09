@@ -20,6 +20,7 @@ El proyecto tiene dos dimensiones:
 6. **No tocar `llama.cpp/`**: es un submódulo externo.
 7. Al proponer cambios en `chat_pdfs.py`: `web/app.py` importa directamente constantes y funciones de ese módulo (`PATH_DB`, `COLLECTION_NAME`, `indexar_documentos`, `evaluar_pregunta_rag`…). Un renombrado rompe el backend web.
 8. **Tras cualquier modificación, revisar si hay que actualizar `CLAUDE.md` o `README.md`**: cambios en estructura de archivos, flags de pipeline, modelos, scripts, rutas, estado del experimento o convenciones de código deben reflejarse en la documentación del proyecto para mantenerla sincronizada.
+9. **Cambios en `.gitignore` o `.gitkeep`**: seguir la **Sección 11** (patrones `training-output/`, carpetas con `.gitkeep`, GGUF fuera del repo). Tras editar reglas, validar con `git check-ignore -v <ruta>` y actualizar la Sección 11 si cambia la política.
 
 ---
 
@@ -51,9 +52,9 @@ localOllamaRAG/
 │   ├── debug_context_issues.md   # Análisis de issues en presentación del contexto
 │   ├── debug_rag/                # Dumps de debug de queries (runtime, gitignored)
 │   ├── pdfs/                     # PDFs a indexar (solo .gitkeep versionado; contenido en .gitignore)
-│   ├── ragbench_pdfs/            # PDFs RAGBench — uso exclusivo de run_eval_ragbench.py (gitignored)
+│   ├── ragbench_pdfs/            # PDFs RAGBench — run_eval_ragbench.py (solo .gitkeep versionado)
 │   ├── mi_vector_db/             # ChromaDB producción (solo .gitkeep versionado; datos en .gitignore)
-│   ├── ragbench_vector_db/       # ChromaDB RAGBench (gitignored)
+│   ├── ragbench_vector_db/       # ChromaDB RAGBench (solo .gitkeep versionado; datos en .gitignore)
 │   ├── historial_chat.json       # Historial modo CHAT (gitignored)
 │   └── cli/
 │       ├── app.py                # MonkeyGrabCLI: bucle interactivo y dispatch de comandos
@@ -471,3 +472,77 @@ bert-score>=0.3.13
 | Artefactos LoRA Phi-4 | `training-output/phi-4/` | Misma convención que Qwen3; `generate_reports.py` idéntico en lógica |
 | Artefactos LoRA Gemma-3-12B | `training-output/gemma-3/` | Misma convención que Qwen3; `generate_reports.py` idéntico en lógica |
 | Diagrama arquitectura | `docs/monkeygrab_architecture.png` / `.svg` | Generado por `generate_diagram.py` |
+
+---
+
+## 11. Versionado Git: `.gitignore`, `.gitkeep` y pesos (GGUF)
+
+Esta sección fija **cómo mantener el repo** para que cualquier cambio en exclusiones o carpetas vacías sea coherente con el TFG y con GitHub.
+
+### 11.1 Principios
+
+1. **Un solo `.gitignore` en la raíz** del monorepo y **`web/zip/.gitignore` como complemento** (`build/`, `coverage/`, `.env*` con `!.env.example`). `node_modules/` y `dist/` del frontend **solo** se listan en la raíz (`web/zip/…`); no duplicarlos en `web/zip/.gitignore`. No añadir más `.gitignore` dispersos sin motivo.
+2. **Bloques numerados y comentados** en la raíz: al tocar exclusiones, coloca la regla en el bloque que corresponda (modelos, `training-output`, RAG, web, etc.) y actualiza este apartado si cambia la política.
+3. **Versionar lo mínimo imprescindible para reproducir y defender el trabajo**: código, `Modelfile`, JSON de métricas pequeños, scripts; **no** pesos, índices vectoriales ni PDFs privados.
+4. **Numeración en el `.gitignore` raíz:** los últimos bloques del archivo están numerados **12** y **13** (evaluación / otros) a propósito, para **no solapar** el número con este **apartado 11** de `CLAUDE.md`. La cabecera del `.gitignore` remite aquí para la política.
+
+### 11.2 Patrón `training-output/<modelo>/`
+
+Cada carpeta de modelo usa el patrón:
+
+- `training-output/<slug>/*` → ignora **casi todo** lo que cuelga directamente de esa carpeta (checkpoints, adaptadores, `plots/`, predicciones voluminosas, etc.).
+- Inmediatamente después, líneas `!training-output/<slug>/…` → **excepciones** para archivos que **sí** deben ir a GitHub:
+  - `generate_reports.py`
+  - `training_stats.json`
+  - `evaluation_comparison.json`
+
+**Reglas de mantenimiento:**
+
+- Si añades un **nuevo modelo** bajo `training-output/`, copia el bloque de tres líneas `/*` + tres `!…` y sustituye el slug (mismo orden que el resto de modelos).
+- Si quieres versionar **otro** fichero pequeño en esa carpeta, añade **una** línea `!training-output/<slug>/nombre.ext` **debajo** de las excepciones existentes del mismo modelo.
+- **No** sustituyas el patrón `/*` por ignorar solo extensiones sin más: es fácil dejar fuera del repo scripts o JSON que sí interesan (ya ocurrió con `generate_reports.py` antes de las excepciones).
+
+Comprobar si un path está ignorado:
+
+```bash
+git check-ignore -v ruta/al/archivo
+```
+
+### 11.3 Patrón `.gitkeep` (carpetas que deben existir al clonar)
+
+Se usa cuando la aplicación **espera un directorio** pero su contenido **no** debe versionarse (PDFs propios, ChromaDB local).
+
+- En `.gitignore`: `rag/<carpeta>/**` + `!rag/<carpeta>/.gitkeep` (el `**` ignora también subcarpetas; la negación solo recupera el fichero vacío).
+- En disco: un archivo **vacío** `rag/<carpeta>/.gitkeep` commiteado.
+
+**Carpetas con este patrón en el repo:** `pdfs/`, `mi_vector_db/`, `ragbench_pdfs/`, `ragbench_vector_db/`.
+
+**Cuándo añadir otro `.gitkeep`:** solo si aparece una ruta nueva “obligatoria” en código (replicar el mismo par `/**` + `!.gitkeep` en la raíz `.gitignore` y documentar aquí).
+
+### 11.4 `models/gguf-output/<modelo>/`
+
+Solo se versiona el **`Modelfile`**; los `.gguf` quedan fuera por la regla global `*.gguf` y por el patrón `models/gguf-output/<modelo>/*` con excepción del Modelfile. Cualquier script o README que describa el despliegue debe enlazar **dónde** está el binario (ver §11.6).
+
+### 11.5 Cambios beneficiosos a vigilar (no obligatorios)
+
+| Idea | Estado / beneficio |
+|------|-------------------|
+| Patrón `/**` + `.gitkeep` en RAGBench (`ragbench_pdfs/`, `ragbench_vector_db/`) | **Aplicado** — mismo criterio que `pdfs/` y `mi_vector_db/` |
+| `web/zip/.gitignore` sin duplicar `node_modules` / `dist` | **Aplicado** — solo en la raíz |
+| Enlace en `README.md` al Hub u origen del GGUF | **Aplicado** — sección *Model weights* |
+| Reglas más finas si aparecen `.bin` pequeños legítimos | Pendiente si surge la necesidad; hoy `*.bin` es global |
+
+### 11.6 ¿Subir `.gguf` a GitHub?
+
+**No como solución habitual.** Motivos:
+
+- **Límites de GitHub:** advertencias por ficheros grandes; bloqueos por tamaño; el repo se vuelve pesado para clonar y para CI.
+- **Git LFS:** cuota limitada en planes gratuitos; varios GGUF cuantizados de 7–14B multiplican GB rápidamente.
+
+**Recomendación para el TFG y despliegue:**
+
+1. **Hugging Face Hub** (repositorio de modelo `public` o `private`): subir el `.gguf` (o el adaptador LoRA si compartes entrenamiento), con tarjeta del modelo que cite el commit del código y la receta de cuantización. Es el estándar de facto en la comunidad ML.
+2. **Almacenamiento objeto** (Azure Blob, S3, etc.) con enlace firmado o documentación en memoria si la política de la universidad lo exige.
+3. **Release de GitHub** solo si el artefacto es **pequeño** (p. ej. un adapter de unos MB), no para GGUF completos de decenas de GB.
+
+En el repo basta con **Modelfile + instrucciones** (o script existente tipo `build_ollama.bat`) y el **enlace** al binario en Hub u otra plataforma; así el código queda limpio y el modelo sigue siendo recuperable.

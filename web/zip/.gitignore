@@ -1,6 +1,7 @@
-node_modules/
+# Complemento al .gitignore del repositorio (rutas relativas a web/zip/).
+# node_modules/ y dist/ ya están excluidos desde la raíz.
+
 build/
-dist/
 coverage/
 .DS_Store
 *.log
