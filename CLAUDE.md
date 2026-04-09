@@ -31,14 +31,14 @@ El proyecto tiene dos dimensiones:
 | Evaluación base (7 modelos, 320 muestras/dataset) | ✅ Completada — `training-output/baseline/` |
 | Fine-tuning Qwen3-14B (v10) | 🔄 En ejecución en cluster |
 | Fine-tuning Phi-4 (v1) | 🔄 En ejecución en cluster |
-| Fine-tuning Llama-3.1-8B | ⚠️ Script desactualizado — no alineado con v10 |
-| Fine-tuning Gemma-3-12B | ⚠️ Script desactualizado + incompatibilidad GGUF/Ollama |
+| Fine-tuning Gemma-3-12B (v2) | ⏳ Pendiente — script actualizado, listo para lanzar |
+| Fine-tuning Llama-3.1-8B | ❌ Descartado — modelo excluido del experimento |
 | Evaluación base/adaptado (test) | ⏳ Pendiente de resultados de training |
 
-**Modelos viables para producción**: Qwen3-14B y Phi-4 (únicos con scripts actualizados y compatibles con GGUF/Ollama).
+**Modelos viables para producción**: Qwen3-14B, Phi-4 y Gemma-3-12B (scripts actualizados y compatibles con GGUF/Ollama).
 
-**Scripts actualizados** (alineados con v10): `train-qwen3.py`, `train-phi4.py`.
-**Scripts desactualizados**: `train-llama3.1.py`, `train-gemma3.py` — si se retoman, alinear con la lógica de Qwen3 v10 (Aina por idioma, ROUGE-L + BERTScore integrado, dev+test separados, 320 muestras dev).
+**Scripts actualizados** (alineados con v10): `train-qwen3.py`, `train-phi4.py`, `train-gemma3.py` (v2).
+**Scripts borrados**: `train-llama3.1.py` — Llama-3.1-8B descartado del experimento.
 
 ---
 
@@ -72,8 +72,7 @@ localOllamaRAG/
 │   ├── training/
 │   │   ├── train-qwen3.py        # LoRA Qwen3-14B (v10) ✅ actualizado
 │   │   ├── train-phi4.py         # LoRA Phi-4 (v1) ✅ actualizado
-│   │   ├── train-llama3.1.py     # LoRA Llama-3.1-8B ⚠️ desactualizado
-│   │   ├── train-gemma3.py       # LoRA Gemma-3-12B ⚠️ desactualizado + sin GGUF
+│   │   ├── train-gemma3.py       # LoRA Gemma-3-12B (v2) ✅ actualizado
 │   │   └── run-general.sh        # Plantilla SLURM genérica (cluster)
 │   ├── evaluation/
 │   │   ├── evaluate_baselines.py # Benchmark 7 modelos base (Token F1, ROUGE-L, BERTScore, CF-léxica)
@@ -95,8 +94,7 @@ localOllamaRAG/
 │   ├── qwen-3/                   # Adaptador LoRA + artefactos de eval (JSON, CSV, plots)
 │   │   └── explore-rank/         # Comparación r=32 vs r=64
 │   ├── phi-4/                    # Adaptador LoRA Phi-4 (artefactos pesados gitignored)
-│   ├── llama-3/                  # Adaptador LoRA Llama-3.1
-│   ├── gemma-3/                  # Adaptador LoRA Gemma-3 (sin uso en producción)
+│   ├── gemma-3/                  # Adaptador LoRA Gemma-3 (artefactos pesados gitignored)
 │   ├── bertscore/                # ⚠️ OBSOLETO — datos del experimento anterior
 │   └── baseline/                 # Resultados benchmark 7 modelos base (320 muestras)
 │       ├── baseline_evaluation.json          # 7 modelos × 5 datasets × con/sin contexto
@@ -113,7 +111,10 @@ localOllamaRAG/
 │   └── splits.md                 # Análisis de splits de datasets
 ├── llama-bin/                    # Binarios llama.cpp compilados para Windows (gitignored)
 ├── models/
-│   ├── gguf-output/              # Modelos GGUF cuantizados (gitignored)
+│   ├── gguf-output/
+│   │   ├── qwen-3/               # GGUF + Modelfile Qwen3-14B (solo Modelfile versionado)
+│   │   ├── phi-4/                # GGUF + Modelfile Phi-4 (solo Modelfile versionado)
+│   │   └── gemma-3/              # GGUF + Modelfile Gemma-3-12B (solo Modelfile versionado)
 │   └── merged-model/             # Modelos merged antes de convertir (gitignored)
 ├── llama.cpp/                    # Submódulo externo — no modificar (gitignored)
 ├── README.md
@@ -446,13 +447,10 @@ bert-score>=0.3.13
 
 ### Deuda activa
 
-- **Scripts desactualizados**: `train-llama3.1.py` y `train-gemma3.py` no están alineados con el esquema v10. Requieren actualización antes de poder reutilizarse.
 - **`training-output/bertscore/`**: datos obsoletos (experimento anterior). No citar. Serán reemplazados cuando finalicen los entrenamientos en cluster.
 - **Lógica concentrada en `chat_pdfs.py`**: supera las 1000 líneas. Refactorizar requeriría actualizar imports en `web/app.py` y `evaluation/run_eval.py`.
 
 ### Limitaciones conocidas
-
-- **Gemma-3-12B**: adaptador LoRA incompatible con GGUF/Ollama. Excluido de producción.
 - **RECOMP synthesis**: implementado pero aumenta latencia; medir antes de activar en producción.
 - **Evaluación RAGAS**: requiere `GOOGLE_API_KEY` (Gemini como juez LLM). No es totalmente local.
 - **`enable_thinking=False` en Qwen3**: en producción se suprime el bloque `<think>` para reducir latencia. Ver `scripts/tests/test_nothink.py`.
@@ -480,4 +478,5 @@ bert-score>=0.3.13
 | Predicciones Qwen3 | `training-output/qwen-3/predictions_base.json` / `predictions_adapted.json` | Por muestra; permite recomputar BERTScore sin regenerar |
 | Exploración rango LoRA | `training-output/qwen-3/explore-rank/` | Comparación r=32 vs r=64 |
 | Adaptador LoRA Phi-4 | `training-output/phi-4/` | Artefactos pesados gitignored; se conserva `training_stats.json` |
+| Adaptador LoRA Gemma-3 | `training-output/gemma-3/` | Artefactos pesados gitignored; se conserva `training_stats.json` |
 | Diagrama arquitectura | `docs/monkeygrab_architecture.png` / `.svg` | Generado por `generate_diagram.py` |

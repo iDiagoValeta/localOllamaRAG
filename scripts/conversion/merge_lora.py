@@ -48,7 +48,7 @@ HF_TOKEN = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN")
 # SECTION 2: PATHS AND ARTIFACT VALIDATION
 # ─────────────────────────────────────────────
 
-VALID_MODELS = ["qwen-3", "llama-3", "gemma-3"]
+VALID_MODELS = ["qwen-3", "gemma-3", "phi-4"]
 
 parser = argparse.ArgumentParser(description="Merge LoRA adapter with base model.")
 parser.add_argument(

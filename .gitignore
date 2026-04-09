@@ -16,10 +16,6 @@ llama-bin/
 models/merged-model/*
 !models/merged-model/.gitkeep
 
-# Artefactos de entrenamiento — Llama 3
-training-output/llama-3/*
-!training-output/llama-3/training_stats.json
-
 # Artefactos de entrenamiento — Qwen 3
 training-output/qwen-3/*
 !training-output/qwen-3/training_stats.json
@@ -35,10 +31,6 @@ training-output/phi-4/*
 # Informes generados desde baseline (tablas, CSVs, figuras)
 training-output/baseline/reports/
 
-# GGUF output — Llama 3 (solo Modelfile)
-models/gguf-output/llama-3/*
-!models/gguf-output/llama-3/Modelfile
-
 # GGUF output — Qwen 3 (solo Modelfile)
 models/gguf-output/qwen-3/*
 !models/gguf-output/qwen-3/Modelfile
@@ -46,6 +38,10 @@ models/gguf-output/qwen-3/*
 # GGUF output — Gemma 3 (solo Modelfile)
 models/gguf-output/gemma-3/*
 !models/gguf-output/gemma-3/Modelfile
+
+# GGUF output — Phi-4 (solo Modelfile)
+models/gguf-output/phi-4/*
+!models/gguf-output/phi-4/Modelfile
 
 # Logs
 *.log
