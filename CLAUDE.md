@@ -122,7 +122,7 @@ localOllamaRAG/
 ├── models/
 │   └── gguf-output/
 │       ├── qwen-3/               # GGUF Qwen3-14B + Modelfile (solo Modelfile versionado)
-│       ├── phi-4/                # GGUF Phi-4 + Modelfile (solo Modelfile versionado)
+│       ├── phi-4/                # GGUF Phi-4 + Modelfile + README.md + LICENSE (HF)
 │       └── gemma-3/              # GGUF Gemma-3-12B + Modelfile (solo Modelfile versionado)
 ├── llama.cpp/                    # Submódulo externo — no modificar (gitignored)
 ├── README.md
@@ -521,7 +521,7 @@ Se usa cuando la aplicación **espera un directorio** pero su contenido **no** d
 
 ### 11.4 `models/gguf-output/<modelo>/`
 
-Solo se versiona el **`Modelfile`**; los `.gguf` quedan fuera por la regla global `*.gguf` y por el patrón `models/gguf-output/<modelo>/*` con excepción del Modelfile. Cualquier script o README que describa el despliegue debe enlazar **dónde** está el binario (ver §11.6).
+Se versionan el **`Modelfile`**, **`README.md`** y **`LICENSE`** donde existan (hoy en `phi-4/` para la model card y licencia MIT del paquete en Hub). Los `.gguf` quedan fuera por la regla global `*.gguf` y por el patrón `models/gguf-output/<modelo>/*` con esas excepciones. Cualquier despliegue debe enlazar **dónde** está el binario (ver §11.6).
 
 ### 11.5 Cambios beneficiosos a vigilar (no obligatorios)
 

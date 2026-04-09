@@ -56,7 +56,7 @@ training-output/phi-4/*
 training-output/baseline/reports/
 
 # -----------------------------------------------------------------------------
-# 4. GGUF ensamblado en repo — solo Modelfile por modelo
+# 4. GGUF ensamblado en repo — Modelfile (+ README.md model card si aplica)
 # -----------------------------------------------------------------------------
 models/gguf-output/qwen-3/*
 !models/gguf-output/qwen-3/Modelfile
@@ -66,6 +66,8 @@ models/gguf-output/gemma-3/*
 
 models/gguf-output/phi-4/*
 !models/gguf-output/phi-4/Modelfile
+!models/gguf-output/phi-4/README.md
+!models/gguf-output/phi-4/LICENSE
 
 # -----------------------------------------------------------------------------
 # 5. Logs y volcados genéricos
