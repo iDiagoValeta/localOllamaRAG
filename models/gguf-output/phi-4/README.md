@@ -4,7 +4,8 @@ language:
   - es
   - ca
 license: mit
-base_model: microsoft/phi-4
+base_model:
+  - microsoft/phi-4
 tags:
   - rag
   - retrieval-augmented-generation
@@ -30,7 +31,7 @@ Quantized **GGUF** build of **Microsoft Phi-4** with a **LoRA** adapter merged i
 
 ## Base model and method
 
-- **Base:** [`microsoft/phi-4`](https://huggingface.co/microsoft/phi-4) (ChatML-style; end-of-turn `<|im_end|>`).
+- **Base:** [`microsoft/phi-4`](https://huggingface.co/microsoft/phi-4) (ChatML-style; end-of-turn `<|redacted_im_end|>`).
 - **Adaptation:** PEFT **LoRA** → merge into dense weights → **GGUF** export and **Q4_K_M** quantization via the project toolchain (`scripts/conversion/`, llama.cpp binaries).
 
 ### LoRA configuration
@@ -56,14 +57,53 @@ Quantized **GGUF** build of **Microsoft Phi-4** with a **LoRA** adapter merged i
 - **Batching:** `per_device_train_batch_size` 1, **gradient_accumulation_steps** 16 → **effective batch 16**; **bf16** + **TF32**; gradient checkpointing on.
 - **Epochs:** 3; checkpoints every **300** steps (keep 3); eval every **150** steps; **load_best_model_at_end** on `eval_loss`; **early stopping** patience **5**.
 
-### Evaluation (frozen splits)
+### Evaluation protocol
 
-- Same **dev/test** partitions for base vs adapted models.
-- **Dev:** up to **320** samples per dataset (Neural-Bridge, Dolly, Aina-EN / ES / CA) for alignment with the baseline benchmark.
-- **Test:** full held-out splits (no size cap beyond validity filters).
-- **Metrics:** Token F1, ROUGE-L F1, BERTScore F1 (`microsoft/deberta-xlarge-mnli`), plus auxiliary context faithfulness; BERTScore after unloading the generative model.
+- **Frozen dev/test** splits: identical for **base** (`microsoft/phi-4`) and **adapted** (LoRA merged) runs.
+- **Dev:** 320 samples per dataset × 5 sources = **1,600** examples (aligned with `scripts/evaluation/evaluate_baselines.py` / `training-output/baseline/` for cross-experiment comparability).
+- **Test:** **full** held-out splits (**8,490** examples total across sources).
+- **Metrics:** Token F1, ROUGE-L F1, BERTScore F1 (`microsoft/deberta-xlarge-mnli`); BERTScore computed after unloading the generative model.
+- **Artifacts:** `training-output/phi-4/evaluation_comparison.json` in the code repo.
 
-Training artifacts (`training_stats.json`, `evaluation_comparison.json`) live under `training-output/phi-4/` in the code repository, not on this Hub model repo.
+## Evaluation results
+
+Values are **percentage points** (0–100 scale). **Δ** = adapted − base; **Δ rel** = relative change vs base (%).
+
+### Weighted aggregate (all five sources)
+
+| Split | *N* | Metric | Base | Adapted | Δ (pp) | Δ rel (%) |
+|-------|-----|--------|------|---------|--------|-----------|
+| **Dev** | 1,600 | Token F1 | 45.17 | 60.24 | +15.07 | +33.36 |
+| **Dev** | 1,600 | ROUGE-L F1 | 37.18 | 50.49 | +13.31 | +35.79 |
+| **Dev** | 1,600 | BERTScore F1 | 39.59 | 53.48 | +13.89 | +35.07 |
+| **Test** | 8,490 | Token F1 | 45.42 | 63.20 | +17.78 | +39.14 |
+| **Test** | 8,490 | ROUGE-L F1 | 37.21 | 52.97 | +15.76 | +42.35 |
+| **Test** | 8,490 | BERTScore F1 | 39.90 | 56.42 | +16.52 | +41.41 |
+
+### Per-dataset **dev** (320 samples each)
+
+| Dataset | Token F1 (B → A) | ROUGE-L F1 (B → A) | BERTScore F1 (B → A) |
+|---------|------------------|---------------------|----------------------|
+| Neural-Bridge RAG | 50.46 → **81.17** | 45.46 → **77.46** | 46.79 → **79.34** |
+| Dolly QA | 44.46 → **50.95** | 38.21 → **45.51** | 38.88 → **46.24** |
+| Aina-EN | 44.67 → **56.15** | 35.32 → **43.16** | 41.61 → **50.42** |
+| Aina-ES | 40.47 → **57.11** | 31.44 → **43.37** | 33.35 → **45.66** |
+| Aina-CA | 45.80 → **55.82** | 35.48 → **42.95** | 37.32 → **45.72** |
+
+*B* = base Phi-4, *A* = adapted model (same harness). Full test breakdowns and qualitative pairs are in `evaluation_comparison.json`.
+
+### Relation to the baseline benchmark
+
+The **base** dev numbers plug into the same evaluation design as the multi-model benchmark under `training-output/baseline/` (`evaluate_baselines.py`, `predictions_phi-4.json`), so Phi-4 **before** LoRA is comparable to other models in that suite; **after** LoRA, use the **adapted** columns above.
+
+## Hardware compatibility (inference)
+
+| Setup | Guidance |
+|-------|----------|
+| **GPU (recommended)** | **~10 GB VRAM** is a practical minimum for this **Q4_K_M** ~14B-class GGUF in Ollama at moderate batching; **8 GB** may work with shorter context or slower offloading. |
+| **Context length** | The bundled `Modelfile` sets **`num_ctx` 16384** — raising context increases VRAM/RAM use roughly linearly; reduce `num_ctx` if you hit OOM. |
+| **CPU** | Supported by Ollama/llama.cpp-style runners, but **much slower** than a discrete GPU for this model size. |
+| **Training** | LoRA training used **bf16**, gradient checkpointing, and 8-bit optimiser on a **CUDA** GPU (see `train-phi4.py`); that is separate from these inference notes. |
 
 ## Ollama
 
