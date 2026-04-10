@@ -38,6 +38,26 @@ El proyecto tiene dos dimensiones:
 
 **Scripts de training** (alineados con v10): `train-qwen3.py`, `train-phi4.py`, `train-gemma3.py`.
 
+### Estado del pipeline RAG (actualizado 2026-04-10 ~18:00)
+
+Pipeline en estado de producción tras una sesión de mejoras completa. Reindexado con los nuevos parámetros.
+
+| Parámetro | Valor actual |
+|-----------|-------------|
+| `CHUNK_SIZE` | 2000 |
+| `CHUNK_OVERLAP` | 400 |
+| `MIN_CHUNK_LENGTH` | 150 |
+| `TOP_K_FINAL` | 8 |
+| `RRF_K` | 20 |
+| `UMBRAL_SCORE_RERANKER` | 0.55 |
+| `MAX_CONTEXTO_CHARS` | 12000 |
+| `num_ctx` (generación) | 16384 |
+| `USAR_RECOMP_SYNTHESIS` | `True` |
+| `USAR_CONTEXTUAL_RETRIEVAL` | `True` |
+| `USAR_RERANKER` | `True` |
+
+**Calidad validada**: 4/5 preguntas de prueba respondidas correctamente sobre `att.pdf`. El único caso parcial (Q3, pregunta multi-parte con 3 sub-tipos de atención) queda fuera del alcance de la evaluación del TFG, que se centra en preguntas de concepto único.
+
 ---
 
 ## 4. Estructura de archivos clave

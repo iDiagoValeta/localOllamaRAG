@@ -188,7 +188,7 @@ USAR_BUSQUEDA_EXHAUSTIVA = True
 USAR_RERANKER = RERANKER_AVAILABLE
 EXPANDIR_CONTEXTO = True
 USAR_OPTIMIZACION_CONTEXTO = True
-USAR_RECOMP_SYNTHESIS = False
+USAR_RECOMP_SYNTHESIS = True
 USAR_EMBEDDINGS_IMAGEN = True
 LOGGING_METRICAS = True
 GUARDAR_DEBUG_RAG = True
@@ -220,9 +220,9 @@ else:
     _EMBED_PREFIX_DESC = "no prefixes (native)"
 
 MAX_CHARS_EMBED = 4000
-CHUNK_SIZE = 1500
-CHUNK_OVERLAP = 350
-MIN_CHUNK_LENGTH = 80
+CHUNK_SIZE = 2000          # raised from 1500: keeps full subsections (e.g. 3.2.3) in one chunk
+CHUNK_OVERLAP = 400        # raised from 350: ~20% overlap, proportional to new chunk size
+MIN_CHUNK_LENGTH = 150     # raised from 80: discards very short artefact chunks (copyright, author lists)
 MAX_IMAGENES_POR_PAGINA = 5
 MIN_IMAGEN_SIZE_PX = 100
 CAPTION_MARGIN_PX = 80          # px below image bbox to search for figure caption text
@@ -232,7 +232,7 @@ N_RESULTADOS_SEMANTICOS = 80
 N_RESULTADOS_KEYWORD = 40
 TOP_K_RERANK_CANDIDATES = 200
 TOP_K_AFTER_RERANK = 15
-TOP_K_FINAL = 6
+TOP_K_FINAL = 8              # raised from 6: more fragments reach RECOMP, reducing split-list failures
 N_TOP_PARA_EXPANSION = 3
 
 RERANKER_MODEL_QUALITY = os.getenv("RERANKER_QUALITY", "quality")
@@ -687,7 +687,7 @@ def extraer_keywords(texto: str) -> List[str]:
 
     for palabra in palabras:
         clean = palabra.strip('¿?.,;:()[]{}"\'-')
-        if len(clean) > 4 and clean.lower() not in STOPWORDS:
+        if len(clean) > 3 and clean.lower() not in STOPWORDS:   # lowered from 4 to 3
             keywords.add(clean.lower())
 
     terminos_tecnicos = [
@@ -1564,7 +1564,7 @@ def _marcar_fragmento_incompleto(texto: str) -> str:
         return texto
     _CLOSING = frozenset('.?!:")]')
     if stripped[-1] not in _CLOSING and not stripped[-1].isdigit():
-        return texto + '\n[incomplete fragment]'
+        return texto + '\n[excerpt ends mid-sentence]'
     return texto
 
 
@@ -1694,6 +1694,7 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
     for f in fragmentos:
         cuerpo = _texto_fuente_fragmento(f.get("doc", "") or "")
         content = cuerpo.replace("\n", " ").strip()
+        content = re.sub(r'\s*\[\s*\d+(?:\s*,\s*\d+)*\s*\]', '', content)  # strip citation markers [38, 2, 9]
         if content:
             n = len(textos_preparados) + 1
             textos_preparados.append(f"Fragment {n}:\n{content}")
@@ -1714,8 +1715,15 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
         "answer model.\n"
         "GROUNDING:\n"
         "- Use ONLY information stated in the evidence excerpts. No outside knowledge.\n"
-        "- Preserve technical terms, notation, formulas, and numbers exactly.\n"
-        "STYLE (critical):\n"
+        "- Preserve technical terms, notation, formulas, and numbers exactly as written.\n"
+        "ENUMERATION (critical):\n"
+        "- If the question asks for a list or a count (e.g. 'three types', 'two ways'), "
+        "search ALL fragments and enumerate EVERY item you find, even if items are spread "
+        "across different fragments. Never say an item 'is not mentioned' if it appears "
+        "anywhere in the excerpts.\n"
+        "- When an excerpt ends with [excerpt ends mid-sentence], the list may continue in "
+        "another fragment — collect items from ALL fragments before writing your bullets.\n"
+        "STYLE:\n"
         "- Write ONLY facts that help answer the user question. Do NOT describe the documents, "
         "the paper, or the excerpts (forbidden openers: \"This paper\", \"The excerpt\", "
         "\"This section\", \"The document\", \"The text\", \"The fragment\").\n"
@@ -2137,6 +2145,7 @@ def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
         "When given a full document and an excerpt from it, produce exactly 2-3 sentences: "
         "first a brief summary of what the document is about, then how the excerpt fits within it. "
         "No introductions, no labels, no meta-commentary. "
+        "Do NOT include bibliographic citation markers such as [1], [38], or similar. "
         "Respond in the same language as the input document."
     )
 
@@ -2395,7 +2404,7 @@ def describir_imagen_con_llm(image_bytes: bytes, caption: str = "") -> str:
                 "images": [image_b64],
             }],
             think=False,
-            options={"temperature": 0.1, "num_predict": 1200},
+            options={"temperature": 0.1, "num_predict": 2000},
         )
         descripcion = response["message"]["content"].strip()
 
