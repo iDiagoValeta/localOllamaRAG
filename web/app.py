@@ -216,6 +216,7 @@ def _chat_stream(pregunta: str) -> Generator[str, None, None]:
         model=rag_engine.MODELO_CHAT,
         messages=messages,
         stream=True,
+        think=False,
         options={"temperature": 0.7, "top_p": 0.9, "num_ctx": 8192},
     )
 
@@ -241,6 +242,7 @@ def _rag_stream(mensaje_usuario: str) -> Generator[str, None, None]:
         model=rag_engine.MODELO_RAG,
         messages=[{"role": "user", "content": mensaje_usuario}],
         stream=True,
+        think=False,
         options={
             "temperature": 0.15,
             "top_p": 0.85,

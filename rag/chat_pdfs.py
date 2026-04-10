@@ -158,11 +158,11 @@ if hasattr(sys.stderr, "reconfigure"):
         pass
 
 
-MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "phi4:latest")
-MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma3:4b")
+MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "phi4-finetuned:latest")
+MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e4b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
-MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma3:4b")
-MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma3:4b")
+MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b")
+MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma4:e4b")
 MODELO_OCR = os.getenv("OLLAMA_OCR_MODEL", "qwen3-vl:8b")
 
 
@@ -237,10 +237,12 @@ N_TOP_PARA_EXPANSION = 3
 
 RERANKER_MODEL_QUALITY = os.getenv("RERANKER_QUALITY", "quality")
 UMBRAL_RELEVANCIA = 0.50
-UMBRAL_SCORE_RERANKER = 0.40
+UMBRAL_SCORE_RERANKER = 0.55  # raised from 0.40: debug showed fragments at 0.47-0.52 are noise
+
+RRF_K = 20                    # reciprocal rank fusion damping factor (was hardcoded 60)
 
 MIN_LONGITUD_PREGUNTA_RAG = 10
-MAX_CONTEXTO_CHARS = 8192
+MAX_CONTEXTO_CHARS = 12000    # raised from 8192 to accommodate expanded neighbor chunks
 
 
 LOG_LEVEL = logging.ERROR
@@ -1055,6 +1057,12 @@ def generar_queries_con_llm(pregunta: str) -> List[str]:
     Each sub-query targets a different semantic aspect of the original
     question and is written in the same language.
 
+    Ollama ``think=False`` disables the reasoning trace for thinking-capable
+    models (Gemma 4, Qwen3, etc.); see ``scripts/tests/test_gemma4_aux_nothink.py``.
+    With ``think=True``, ``num_predict`` can be consumed by the trace alone, leaving
+    an empty answer — production therefore keeps ``think=False`` and ``num_predict`` 400.
+    To print raw model output in the terminal, run ``scripts/tests/debug_aux_subqueries.py``.
+
     Args:
         pregunta: The original user question.
 
@@ -1077,11 +1085,12 @@ def generar_queries_con_llm(pregunta: str) -> List[str]:
         response = ollama.generate(
             model=MODELO_CHAT,
             prompt=prompt,
+            think=False,
             options={
                 "temperature": 0.5,
                 "num_predict": 400,
                 "stop": ["\n\n\n"],
-            }
+            },
         )
 
         queries = [
@@ -1271,7 +1280,7 @@ def realizar_busqueda_hibrida(
                     'query_matches': []
                 }
 
-            all_semantic_results[chunk_id]['score_semantic'] += 1.0 / (idx + 60)
+            all_semantic_results[chunk_id]['score_semantic'] += 1.0 / (idx + RRF_K)
             all_semantic_results[chunk_id]['query_matches'].append(q_idx + 1)
             if distancia < all_semantic_results[chunk_id]['distancia']:
                 all_semantic_results[chunk_id]['distancia'] = distancia
@@ -1301,7 +1310,7 @@ def realizar_busqueda_hibrida(
         chunk_id = result['id']
 
         if chunk_id in fragmentos_data:
-            fragmentos_data[chunk_id]['score_keyword'] += 1.0 / (idx + 60)
+            fragmentos_data[chunk_id]['score_keyword'] += 1.0 / (idx + RRF_K)
             if result['keyword_match'] not in fragmentos_data[chunk_id]['matches']:
                 fragmentos_data[chunk_id]['matches'].append(result['keyword_match'])
         else:
@@ -1311,7 +1320,7 @@ def realizar_busqueda_hibrida(
                 'distancia': result['distancia'],
                 'id': chunk_id,
                 'score_semantic': 0.0,
-                'score_keyword': 1.0 / (idx + 60),
+                'score_keyword': 1.0 / (idx + RRF_K),
                 'matches': [result['keyword_match']],
                 'query_matches': []
             }
@@ -1534,6 +1543,8 @@ def optimizar_texto_contexto(texto: str) -> str:
 
     texto = re.sub(r'^\s+$', '', texto, flags=re.MULTILINE)
 
+    texto = re.sub(r'(?m)^\s*\d{1,3}\s*$', '', texto)   # standalone PDF page numbers
+
     texto = re.sub(r'\n{3,}', '\n\n', texto)
 
     return texto.strip()
@@ -1551,7 +1562,8 @@ def _marcar_fragmento_incompleto(texto: str) -> str:
     stripped = texto.rstrip()
     if not stripped:
         return texto
-    if stripped[-1] not in '.?!:':
+    _CLOSING = frozenset('.?!:")]')
+    if stripped[-1] not in _CLOSING and not stripped[-1].isdigit():
         return texto + '\n[incomplete fragment]'
     return texto
 
@@ -1559,9 +1571,11 @@ def _marcar_fragmento_incompleto(texto: str) -> str:
 def _texto_fuente_fragmento(doc: str) -> str:
     """Return chunk body without the contextual-retrieval summary prefix.
 
-    Indexed chunks may store ``<summary>\\n\\n<body>`` using a literal
-    ``\\n\\n`` separator (see ``generar_contexto_situacional``). RECOMP
-    should ground on the body only so it does not parrot meta-summaries.
+    Indexed chunks store ``<summary>\\n\\n<body>`` using the *literal* 6-char
+    sequence ``\\n\\n`` (backslash-n-backslash-n) as separator, intentionally
+    distinct from real paragraph breaks (``\n\n``).  Do NOT replace with real
+    newlines: PDF body text naturally contains ``\n\n``, so a real-newline
+    separator would produce false splits on the first paragraph break.
 
     Args:
         doc: Raw ``fragment['doc']`` string.
@@ -1739,7 +1753,7 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
                 "num_predict": 10000,
                 "top_p": 0.9,
                 "repeat_penalty": 1.15,
-                "num_ctx": 8192,
+                "num_ctx": 16384,
             },
         }
         resp = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=60)
@@ -1934,6 +1948,9 @@ def _ollama_generate_stream(model: str, prompt: str, options: dict):
     into the model's Modelfile, so re-sending it via the API would be
     redundant and would override the Modelfile default unnecessarily.
 
+    ``think=False`` avoids spending ``num_predict`` on a reasoning trace when
+    ``MODELO_RAG`` (or any substitute) is a thinking model.
+
     Args:
         model: Ollama model name.
         prompt: User prompt.
@@ -1946,6 +1963,7 @@ def _ollama_generate_stream(model: str, prompt: str, options: dict):
         "model": model,
         "prompt": prompt,
         "stream": True,
+        "think": False,
         "options": options,
     }
     with requests.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload, stream=True) as resp:
@@ -1979,7 +1997,7 @@ def generar_respuesta(pregunta: str, fragmentos: List[Dict[str, Any]], metricas:
     for chunk in _ollama_generate_stream(
         model=MODELO_RAG,
         prompt=mensaje_usuario,
-        options={"temperature": 0.15, "top_p": 0.9, "repeat_penalty": 1.15, "num_ctx": 8192},
+        options={"temperature": 0.15, "top_p": 0.9, "repeat_penalty": 1.15, "num_ctx": 16384},
     ):
         content = chunk.get("response", "")
         if content:
@@ -2017,7 +2035,7 @@ def generar_respuesta_silenciosa(pregunta: str, fragmentos: List[Dict[str, Any]]
     for chunk in _ollama_generate_stream(
         model=MODELO_RAG,
         prompt=mensaje_usuario,
-        options={"temperature": 0.15, "top_p": 0.9, "repeat_penalty": 1.15, "num_ctx": 8192},
+        options={"temperature": 0.15, "top_p": 0.9, "repeat_penalty": 1.15, "num_ctx": 16384},
     ):
         content = chunk.get("response", "")
         if content:
@@ -2060,7 +2078,7 @@ def evaluar_pregunta_rag(
         fragmentos_finales = fragmentos_ranked[:TOP_K_FINAL]
         ids_usados = {f['id'] for f in fragmentos_finales}
         if EXPANDIR_CONTEXTO and fragmentos_finales and 'chunk' in fragmentos_finales[0]['metadata']:
-            for frag in fragmentos_finales[:N_TOP_PARA_EXPANSION]:
+            for frag in list(fragmentos_finales):  # snapshot: don't expand neighbors of neighbors
                 ids_vecinos = expandir_con_chunks_adyacentes(frag['id'], frag['metadata'], n_vecinos=1)
                 if ids_vecinos:
                     try:
@@ -2135,7 +2153,8 @@ def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
                 {"role": "system", "content": system_prompt},
                 {"role": "user",   "content": user_prompt}
             ],
-            options={"temperature": 0.1, "num_predict": 250}
+            think=False,
+            options={"temperature": 0.1, "num_predict": 250},
         )
         contexto = response['message']['content'].strip()
         if contexto:
@@ -2375,6 +2394,7 @@ def describir_imagen_con_llm(image_bytes: bytes, caption: str = "") -> str:
                 ),
                 "images": [image_b64],
             }],
+            think=False,
             options={"temperature": 0.1, "num_predict": 1200},
         )
         descripcion = response["message"]["content"].strip()

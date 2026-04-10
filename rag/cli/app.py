@@ -219,7 +219,8 @@ class MonkeyGrabCLI:
             model=self.rag.MODELO_CHAT,
             messages=messages,
             stream=True,
-            options={"temperature": 0.7, "top_p": 0.9, "num_ctx": 8192}
+            think=False,
+            options={"temperature": 0.7, "top_p": 0.9, "num_ctx": 8192},
         )
 
         respuesta = ""

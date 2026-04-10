@@ -89,6 +89,8 @@ localOllamaRAG/
 │   └── tests/
 │       ├── test_nothink.py       # Test supresión de <think> en Qwen3 vía Ollama
 │       ├── test_ollama_stream_nothink.py
+│       ├── test_gemma4_aux_nothink.py  # Gemma 4 (ej. e4b): think en /api/generate y /api/chat
+│       ├── debug_aux_subqueries.py     # Salida cruda del auxiliar (sub-queries) en terminal
 │       └── test_image_rag.py     # Tests de pipeline con imágenes en RAG
 ├── evaluation/
 │   ├── run_eval.py               # Evaluación RAGAS del pipeline RAG en vivo
@@ -138,12 +140,14 @@ Cada rol se configura vía variable de entorno; si no está definida, usa el seg
 | Rol | Variable | Descripción |
 |-----|----------|-------------|
 | Generador RAG | `OLLAMA_RAG_MODEL` | Genera la respuesta al usuario en modo `/rag`. Salida por streaming. |
-| Chat y sub-consultas | `OLLAMA_CHAT_MODEL` | Conversación en `/chat` y hasta 3 sub-queries para búsqueda híbrida. |
+| Chat y sub-consultas | `OLLAMA_CHAT_MODEL` | `/chat` (CLI/web) y sub-queries RAG: **`think=False`** en `ollama.chat` / `ollama.generate` para no activar trazas razonadoras (p. ej. Gemma 4). |
 | Embeddings | `OLLAMA_EMBED_MODEL` | Vectoriza chunks al indexar y la pregunta al recuperar. El path de ChromaDB incluye slug del modelo. |
 | Contextual retrieval | `OLLAMA_CONTEXTUAL_MODEL` | Enriquece el texto de cada chunk antes de embebedarlo. Solo en indexación con `USAR_CONTEXTUAL_RETRIEVAL`. |
 | RECOMP | `OLLAMA_RECOMP_MODEL` | Sintetiza/comprime fragmentos recuperados antes del generador. Solo con `USAR_RECOMP_SYNTHESIS`. |
 | Visión / OCR | `OLLAMA_OCR_MODEL` | Describe textualmente figuras raster en PDFs. Solo con `USAR_EMBEDDINGS_IMAGEN`. |
 | Reranker | `RERANKER_QUALITY` | CrossEncoder local (BGE o MiniLM). No es modelo Ollama. Solo con `USAR_RERANKER`. |
+
+**Thinking (Ollama):** en modelos con razonamiento explícito (p. ej. Gemma 4), `rag/chat_pdfs.py` y el stream RAG de `web/app.py` envían **`think=False`** en sub-consultas, contextual retrieval, RECOMP (`/api/chat`), OCR, `/api/generate` del generador y `ollama.chat` del RAG en web — para que el presupuesto de tokens vaya a la respuesta útil, no a la traza interna.
 
 Variables de entorno de referencia (ajustar según hardware y despliegue):
 
