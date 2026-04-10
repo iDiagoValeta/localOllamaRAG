@@ -8,7 +8,7 @@ Phases:
   1-2.  Load base microsoft/phi-4 and evaluate on frozen dev+test sets.
   3-4.  Load datasets: Neural-Bridge RAG, Dolly QA, Aina-EN/ES/CA.
         5-source proportional round-robin interleaving.
-  5-10. Apply LoRA (r=32), tokenize, train, export best checkpoint.
+  5-10. Apply LoRA (r=LORA_RANK, default 32), tokenize, train, export best checkpoint.
   11.   Re-evaluate adapted model on same frozen dev+test sets.
   12.   BERTScore computation (DeBERTa-xlarge-mnli) after unloading main model.
   13.   Comparative summary: Token F1, ROUGE-L F1, BERTScore F1 per dataset x split.
@@ -131,6 +131,19 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 output_dir = os.path.join(os.getcwd(), "training-output", "phi-4")
 os.makedirs(output_dir, exist_ok=True)
+
+# --- 1.x LoRA rank and run directory ---
+LORA_RANK  = 32          # change to 16 or 64 to explore alternate ranks
+LORA_ALPHA = LORA_RANK * 2  # standard 2× scaling
+
+# run_dir: rank-specific outputs (adapter, checkpoints, adapted predictions, stats).
+# rank==32 stays in the model's base folder (backward-compatible with existing runs).
+# Any other rank gets its own subfolder so rank-32 results are never overwritten.
+if LORA_RANK == 32:
+    run_dir = output_dir
+else:
+    run_dir = os.path.join(output_dir, str(LORA_RANK))
+    os.makedirs(run_dir, exist_ok=True)
 
 SEED = 42
 set_seed(SEED)
@@ -884,6 +897,13 @@ base_metrics    = {}
 base_results    = {}
 _base_ckpt      = {}
 
+if LORA_RANK != 32:
+    if os.path.exists(_base_pred_path):
+        print(f"--> [5] rank={LORA_RANK}: base inference skipped — results will be loaded from {_base_pred_path}")
+    else:
+        print(f"--> [5] rank={LORA_RANK}: base inference skipped — no predictions_base.json found; "
+              f"base section in evaluation_comparison.json will be empty")
+
 # Load existing checkpoint (partial results supported — per-dataset crash resume)
 if os.path.exists(_base_pred_path):
     print(f"--> [5] Loading base predictions checkpoint: {_base_pred_path}")
@@ -953,7 +973,7 @@ _expected_base_keys = {
     for ds_name in eval_datasets_dev
 }
 
-if _expected_base_keys - set(base_results.keys()):
+if LORA_RANK == 32 and (_expected_base_keys - set(base_results.keys())):
     for split_label, eval_ds in [("dev", eval_datasets_dev), ("test", eval_datasets_test)]:
         for ds_name, ds in eval_ds.items():
             key = f"{ds_name}|{split_label}"
@@ -1000,8 +1020,8 @@ print("\n--> [6] Applying LoRA adapter...")
 model.gradient_checkpointing_enable()
 
 peft_config = LoraConfig(
-    r=32,
-    lora_alpha=64,
+    r=LORA_RANK,
+    lora_alpha=LORA_ALPHA,
     lora_dropout=0.05,
     bias="none",
     task_type=TaskType.CAUSAL_LM,
@@ -1112,7 +1132,7 @@ data_collator = DataCollatorForSeq2Seq(
 )
 
 training_args = TrainingArguments(
-    output_dir=output_dir,
+    output_dir=run_dir,
     seed=SEED,
     num_train_epochs=3,
     learning_rate=5e-5,
@@ -1161,7 +1181,7 @@ trainer = Trainer(
 
 import glob as _glob
 
-_ckpt_dirs   = sorted(_glob.glob(os.path.join(output_dir, "checkpoint-*")))
+_ckpt_dirs   = sorted(_glob.glob(os.path.join(run_dir, "checkpoint-*")))
 _resume_from = _ckpt_dirs[-1] if _ckpt_dirs else None
 
 print("\n--> [9] Starting training...")
@@ -1180,9 +1200,9 @@ trainer.train(resume_from_checkpoint=_resume_from)
 # SECTION 10: MODEL EXPORT
 # ─────────────────────────────────────────────
 
-print(f"\n--> [10] Saving adapted model to {output_dir}")
-model.save_pretrained(output_dir)
-tokenizer.save_pretrained(output_dir)
+print(f"\n--> [10] Saving adapted model to {run_dir}")
+model.save_pretrained(run_dir)
+tokenizer.save_pretrained(run_dir)
 print("--> Adapter + tokenizer saved.")
 
 
@@ -1195,7 +1215,7 @@ print("--> [11] Evaluating ADAPTED model")
 print("    (Same frozen dev+test sets as Section 5)")
 print("=" * 70)
 
-_adapted_pred_path = os.path.join(output_dir, "predictions_adapted.json")
+_adapted_pred_path = os.path.join(run_dir, "predictions_adapted.json")
 adapted_metrics    = {}
 adapted_results    = {}
 _adapted_ckpt      = {}
@@ -1346,7 +1366,7 @@ torch.cuda.empty_cache()
 print("--> GPU memory freed.")
 
 # --- 12.1 Load existing BERTScore checkpoint ---
-_bs_ckpt_path     = os.path.join(output_dir, "bertscore_checkpoint.json")
+_bs_ckpt_path     = os.path.join(run_dir, "bertscore_checkpoint.json")
 base_bertscore    = {}
 adapted_bertscore = {}
 
@@ -1362,6 +1382,19 @@ if os.path.exists(_bs_ckpt_path):
         print(f"    Warning: could not load BERTScore checkpoint ({e}). Recomputing all.")
         base_bertscore    = {}
         adapted_bertscore = {}
+
+# If exploring a non-default rank, import pre-computed base BERTScores from rank-32 run.
+if LORA_RANK != 32 and not base_bertscore:
+    _bs_base_src = os.path.join(output_dir, "bertscore_checkpoint.json")
+    if os.path.exists(_bs_base_src):
+        try:
+            with open(_bs_base_src, encoding="utf-8") as _f:
+                _bs_base_loaded = json.load(_f)
+            base_bertscore = _bs_base_loaded.get("base", {})
+            if base_bertscore:
+                print(f"--> [12] Imported {len(base_bertscore)} base BERTScore entries from rank-32 run.")
+        except Exception as _e:
+            print(f"    Warning: could not import base BERTScores ({_e}). Recomputing.")
 
 # Merge already-cached BERTScore into metrics dicts so Section 13 can run even
 # if all entries are loaded from the checkpoint (no new computation needed).
@@ -1559,8 +1592,8 @@ training_summary = {
 }
 
 for path, obj in [
-    (os.path.join(output_dir, "training_stats.json"),       training_summary),
-    (os.path.join(output_dir, "evaluation_comparison.json"), comparison),
+    (os.path.join(run_dir, "training_stats.json"),       training_summary),
+    (os.path.join(run_dir, "evaluation_comparison.json"), comparison),
 ]:
     try:
         with open(path, "w", encoding="utf-8") as f:
@@ -1571,8 +1604,8 @@ for path, obj in [
 
 print("\n" + "=" * 70)
 print("--> PROCESS COMPLETED")
-print(f"    Adapted model:         {output_dir}")
-print(f"    Training stats:        {os.path.join(output_dir, 'training_stats.json')}")
-print(f"    Evaluation comparison: {os.path.join(output_dir, 'evaluation_comparison.json')}")
+print(f"    Adapted model:         {run_dir}")
+print(f"    Training stats:        {os.path.join(run_dir, 'training_stats.json')}")
+print(f"    Evaluation comparison: {os.path.join(run_dir, 'evaluation_comparison.json')}")
 print(f"    Base eval backup:      {base_eval_path}")
 print("=" * 70)
