@@ -2,7 +2,7 @@
 
 ## 1. Descripción del proyecto
 
-**MonkeyGrab** es un sistema RAG (Retrieval-Augmented Generation) completamente local desarrollado como TFG (Máster MUITSS, UPV). Indexa PDFs, recupera fragmentos relevantes mediante búsqueda híbrida y genera respuestas fundamentadas usando un LLM servido por Ollama. Ningún dato sale de la máquina del usuario en uso normal.
+**MonkeyGrab** es un sistema RAG (Retrieval-Augmented Generation) completamente local desarrollado como TFG del **Grado** MUITSS (UPV). Indexa PDFs, recupera fragmentos relevantes mediante búsqueda híbrida y genera respuestas fundamentadas usando un LLM servido por Ollama. Ningún dato sale de la máquina del usuario en uso normal.
 
 El proyecto tiene dos dimensiones:
 - **Capa experimental**: entrenamiento LoRA, evaluación con métricas múltiples, trazabilidad de experimentos.

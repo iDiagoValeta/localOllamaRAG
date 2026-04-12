@@ -19,7 +19,7 @@ pipeline_tag: text-generation
 
 # Phi-4 RAG (LoRA fine-tuned) — Q4_K_M GGUF
 
-Quantized **GGUF** build of **Microsoft Phi-4** with a **LoRA** adapter merged in, for **retrieval-augmented question answering**. The model answers **only from supplied document context** in **English, Spanish, or Catalan**, using the same RAG-oriented system prompt as **MonkeyGrab**, a local RAG stack developed for a **Master’s thesis (TFG) at the Universitat Politècnica de València (UPV)**.
+Quantized **GGUF** build of **Microsoft Phi-4** with a **LoRA** adapter merged in, for **retrieval-augmented question answering**. The model answers **only from supplied document context** in **English, Spanish, or Catalan**, using the same RAG-oriented system prompt as **MonkeyGrab**, a local RAG stack developed for a **Bachelor's thesis (TFG) at the Universitat Politècnica de València (UPV)**.
 
 ## Source code, thesis, and contact
 

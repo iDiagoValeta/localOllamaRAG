@@ -25,7 +25,7 @@ No data leaves your machine. All inference, indexing and retrieval happens local
 
 The system works with any instruction-tuned language model available in Ollama. You configure which models to use via environment variables, so it adapts to whatever hardware you have available.
 
-This project was developed as a Master's Thesis (TFG) at the Universitat Politècnica de València (UPV), combining a functional RAG production system with a research layer for LoRA fine-tuning and evaluation of open language models.
+This project was developed as a Bachelor's thesis (TFG) at the Universitat Politècnica de València (UPV), combining a functional RAG production system with a research layer for LoRA fine-tuning and evaluation of open language models.
 
 ---
 
@@ -114,7 +114,11 @@ ollama pull <your OLLAMA_OCR_MODEL>          # must be a vision-language model
 
 Large **`.gguf`** files are **not** committed to this repository (size and clone cost). The repo keeps **`Modelfile`** files under `models/gguf-output/<model>/` plus conversion scripts in `scripts/conversion/`. Build or quantize locally, or download weights from **Hugging Face Hub** (or another object store) and point Ollama at the file path you use. Document any public model URL in your thesis or deployment notes for reproducibility.
 
-Author-hosted **MonkeyGrab** fine-tunes (Q4_K_M GGUF + model cards): [nadiva1243/qwen3RAG](https://huggingface.co/nadiva1243/qwen3RAG), [nadiva1243/phi4RAG](https://huggingface.co/nadiva1243/phi4RAG). After building locally, you can remove `models/merged-model/<slug>/` and the intermediate `*-f16.gguf` to save disk; keep the `*-Q4_K_M.gguf` you use with Ollama.
+**Qwen3-14B RAG (LoRA, Q4_K_M GGUF):** [nadiva1243/qwen3RAG](https://huggingface.co/nadiva1243/qwen3RAG) — model card and weights on Hugging Face.
+
+**Phi-4 RAG (LoRA, Q4_K_M GGUF):** [nadiva1243/phi4RAG](https://huggingface.co/nadiva1243/phi4RAG) — model card and weights on Hugging Face.
+
+After building locally, you can remove `models/merged-model/<slug>/` and the intermediate `*-f16.gguf` to save disk; keep the `*-Q4_K_M.gguf` you use with Ollama.
 
 ---
 
@@ -226,4 +230,4 @@ localOllamaRAG/
 
 ---
 
-*Barchelor's Thesis — Universitat Politècnica de València (UPV)*
+*Bachelor's thesis — Universitat Politècnica de València (UPV)*

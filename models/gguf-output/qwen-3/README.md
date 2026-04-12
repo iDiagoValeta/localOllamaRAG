@@ -19,7 +19,7 @@ pipeline_tag: text-generation
 
 # Qwen3-14B RAG (LoRA fine-tuned) — Q4_K_M GGUF
 
-Quantized **GGUF** build of **[Qwen/Qwen3-14B](https://huggingface.co/Qwen/Qwen3-14B)** with a **LoRA** adapter merged in, for **retrieval-augmented question answering**. The model answers **only from supplied document context** in **English, Spanish, or Catalan**, using the same RAG-oriented system prompt as **MonkeyGrab**, a local RAG stack developed for a **Master’s thesis (TFG) at the Universitat Politècnica de València (UPV)**.
+Quantized **GGUF** build of **[Qwen/Qwen3-14B](https://huggingface.co/Qwen/Qwen3-14B)** with a **LoRA** adapter merged in, for **retrieval-augmented question answering**. The model answers **only from supplied document context** in **English, Spanish, or Catalan**, using the same RAG-oriented system prompt as **MonkeyGrab**, a local RAG stack developed for a **Bachelor's thesis (TFG) at the Universitat Politècnica de València (UPV)**.
 
 ## Source code, thesis, and contact
 
@@ -33,7 +33,7 @@ The **full MonkeyGrab application repository is not public yet** (defense / publ
 
 | File | Description |
 |------|-------------|
-| `Qwen3-14B-Q4_K_M.gguf` | Full weights after LoRA merge, **Q4_K_M** quantization (Ollama / llama.cpp). *Upload in progress if missing.* |
+| `Qwen3-14B-Q4_K_M.gguf` | Full weights after LoRA merge, **Q4_K_M** quantization (Ollama / llama.cpp). |
 | `Modelfile` | Ollama recipe: Qwen3 chat template (`enable_thinking` off in template), RAG system prompt, generation parameters. |
 | `README.md` | This model card (mirrored under `models/gguf-output/qwen-3/` when the codebase is public). |
 | `LICENSE` | MIT — applies to model card, `Modelfile`, and files added here by nadiva1243. |
@@ -59,7 +59,7 @@ The **full MonkeyGrab application repository is not public yet** (defense / publ
 
 ### Training (`train-qwen3.py`, v10)
 
-Same experimental design as the Phi-4 RAG LoRA run: balanced **5-way** interleaving (**3,200** train samples per source), frozen **dev** (**320** samples × 5 datasets) and **full test** splits, ChatML user messages with `<context>…</context>`, **loss only on the assistant completion**, **AdamW 8-bit**, cosine schedule with warmup, **bf16** + gradient checkpointing, early stopping on `eval_loss`. See **`reproduction/train-qwen3.py`** for exact hyperparameters and caps.
+Balanced **5-way** interleaving (**3,200** train samples per source), frozen **dev** (**320** samples × 5 datasets) and **full test** splits, ChatML user messages with `<context>…</context>`, **loss only on the assistant completion**, **AdamW 8-bit**, cosine schedule with warmup, **bf16** + gradient checkpointing, early stopping on `eval_loss`. See **`reproduction/train-qwen3.py`** for exact hyperparameters and caps.
 
 ### Evaluation protocol
 
