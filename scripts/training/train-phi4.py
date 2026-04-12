@@ -1171,7 +1171,7 @@ trainer = Trainer(
     eval_dataset=tokenized_eval,
     data_collator=data_collator,
     processing_class=tokenizer,
-    callbacks=[EarlyStoppingCallback(early_stopping_patience=5)],
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
 )
 
 
@@ -1187,7 +1187,7 @@ _resume_from = _ckpt_dirs[-1] if _ckpt_dirs else None
 print("\n--> [9] Starting training...")
 print(f"    Epochs:            {training_args.num_train_epochs}")
 print(f"    Effective batch:   {training_args.per_device_train_batch_size * training_args.gradient_accumulation_steps}")
-print(f"    LR:                {training_args.learning_rate}  (cosine, patience=5)")
+print(f"    LR:                {training_args.learning_rate}  (cosine, patience=3)")
 print(f"    Best checkpoint:   load_best_model_at_end=True")
 if _resume_from:
     print(f"    Resuming from:     {_resume_from}")

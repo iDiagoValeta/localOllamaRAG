@@ -87,6 +87,7 @@ def main() -> int:
     up("scripts/training/train-phi4.py", "nadiva1243/phi4RAG", "reproduction/train-phi4.py")
     up("scripts/conversion/merge_lora.py", "nadiva1243/phi4RAG", "reproduction/merge_lora.py")
     up("training-output/phi-4/evaluation_comparison.json", "nadiva1243/phi4RAG", "reproduction/evaluation_comparison.json")
+    up("training-output/phi-4/training_stats.json", "nadiva1243/phi4RAG", "reproduction/training_stats.json")
 
     print("Uploading nadiva1243/qwen3RAG …")
     up("models/gguf-output/qwen-3/README.md", "nadiva1243/qwen3RAG", "README.md")
@@ -96,6 +97,7 @@ def main() -> int:
     up("scripts/training/train-qwen3.py", "nadiva1243/qwen3RAG", "reproduction/train-qwen3.py")
     up("scripts/conversion/merge_lora.py", "nadiva1243/qwen3RAG", "reproduction/merge_lora.py")
     up("training-output/qwen-3/evaluation_comparison.json", "nadiva1243/qwen3RAG", "reproduction/evaluation_comparison.json")
+    up("training-output/qwen-3/training_stats.json", "nadiva1243/qwen3RAG", "reproduction/training_stats.json")
 
     print("Done.")
     return 0
