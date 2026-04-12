@@ -1,0 +1,1519 @@
+{
+    "model_name": "Qwen/Qwen3-14B",
+    "version": "v10",
+    "total_steps": 1500,
+    "dataset_size": 16281,
+    "effective_batch": 16,
+    "datasets": [
+        "Neural-Bridge RAG",
+        "Dolly QA",
+        "Aina-EN",
+        "Aina-ES",
+        "Aina-CA"
+    ],
+    "eval_loss": 0.5083330273628235,
+    "perplexity": 1.6625175125595935,
+    "comparison": {
+        "per_split": {
+            "dev": {
+                "Neural-Bridge RAG": {
+                    "base": {
+                        "n_samples": 320,
+                        "Token_F1": 60.38,
+                        "ROUGE_L_F1": 54.65,
+                        "Context_Faithfulness_Pct": 77.38,
+                        "Avg_Response_Length_Words": 82.2,
+                        "Sentence_Completeness_Pct": 0.0,
+                        "BERTScore_P": 44.36,
+                        "BERTScore_R": 70.69,
+                        "BERTScore_F1": 56.04
+                    },
+                    "adapted": {
+                        "n_samples": 320,
+                        "Token_F1": 79.55,
+                        "ROUGE_L_F1": 75.85,
+                        "Context_Faithfulness_Pct": 90.98,
+                        "Avg_Response_Length_Words": 35.4,
+                        "Sentence_Completeness_Pct": 99.1,
+                        "BERTScore_P": 79.59,
+                        "BERTScore_R": 76.29,
+                        "BERTScore_F1": 77.6
+                    },
+                    "deltas": {
+                        "Token_F1": 19.17,
+                        "ROUGE_L_F1": 21.2,
+                        "BERTScore_F1": 21.56,
+                        "Context_Faithfulness_Pct": 13.6,
+                        "Avg_Response_Length_Words": -46.8,
+                        "Sentence_Completeness_Pct": 99.1
+                    },
+                    "deltas_rel_pct": {
+                        "Token_F1": 31.75,
+                        "ROUGE_L_F1": 38.79,
+                        "BERTScore_F1": 38.47,
+                        "Context_Faithfulness_Pct": 17.58,
+                        "Avg_Response_Length_Words": -56.93,
+                        "Sentence_Completeness_Pct": null
+                    },
+                    "sample_pairs": [
+                        {
+                            "instruction": "Who is the current Archivist of the United States and when did he take his post?",
+                            "ground_truth": "The current Archivist of the United States is David Ferriro and he took his post in 2009.",
+                            "base_prediction": "The current Archivist of the United States is David Ferriro, and he took his post in 2009.",
+                            "adapted_prediction": "The current Archivist of the United States is David Ferriro and he took his post in 2009.",
+                            "base_f1": 1.0,
+                            "adapted_f1": 1.0,
+                            "base_faithfulness": 1.0,
+                            "adapted_faithfulness": 1.0
+                        },
+                        {
+                            "instruction": "What is unique about the West Portal of Saint-Gilles-du-Gard at the Carnegie Museum of Art?",
+                            "ground_truth": "The West Portal of Saint-Gilles-du-Gard at the Carnegie Museum of Art is unique because it is arguably the largest architectural cast ever made. It was paid for by Andrew Carnegie on the recommendation of art experts and is one of a kind. The molds were destroyed when removing the plaster replicas, making it truly unique.",
+                            "base_prediction": "The West Portal of Saint-Gilles-du-Gard at the Carnegie Museum of Art is unique because it is arguably the largest architectural cast ever made. It was commissioned by Andrew Carnegie based on the recommendation of art experts and is one of a kind. The cast is 38 feet high and 87 feet 3 inches wide, and it was transported from France to Pittsburgh in three shiploads and then by a series of flatcars to the Shadyside Station. Additionally, the molds used to create the cast were destroyed during the removal of the plaster replicas, making it a singular and irreplaceable piece.",
+                            "adapted_prediction": "The West Portal of Saint-Gilles-du-Gard is one of a kind, and is arguably the largest architectural cast ever made. It is 38-feet high, 87-feet 3-inches wide, and the molds were destroyed when removing the plaster replicas. The plaster has been tinted reddish brown, giving the facade a warm, antique appearance.",
+                            "base_f1": 0.6222,
+                            "adapted_f1": 0.5556,
+                            "base_faithfulness": 0.7619,
+                            "adapted_faithfulness": 1.0
+                        },
+                        {
+                            "instruction": "How many individuals attended the Focus Youth Centre from April 2012 to March 2013?",
+                            "ground_truth": "405 individuals attended the Focus Youth Centre from April 2012 to March 2013.",
+                            "base_prediction": "The total attendance at the Focus Youth Centre from April 2012 to March 2013 was 5266, which corresponds to 405 individuals.",
+                            "adapted_prediction": "The total attendance for the period April 2012 to March 2013 was 5266 (405 individuals).",
+                            "base_f1": 0.7097,
+                            "adapted_f1": 0.56,
+                            "base_faithfulness": 0.8333,
+                            "adapted_faithfulness": 1.0
+                        },
+                        {
+                            "instruction": "What is the number one reason for startup failure according to Noam Wasserman, a Harvard Business School professor?",
+                            "ground_truth": "The number one reason for startup failure is co-founder conflict.",
+                            "base_prediction": "According to Noam Wasserman, a Harvard Business School professor, the number one reason for startup failure is co-founder conflict. Specifically, 65% of startups fail due to co-founder strife.",
+                            "adapted_prediction": "The number one reason for startup failure is co-founder conflict.",
+                            "base_f1": 0.5143,
+                            "adapted_f1": 1.0,
+                            "base_faithfulness": 0.875,
+                            "adapted_faithfulness": 0.7778
+                        },
+                        {
+                            "instruction": "What are the enhancements in the 7.5 release of SAP BusinessObjects Planning and Consolidation, version for SAP NetWeaver?",
+                            "ground_truth": "The 7.5 release of SAP BusinessObjects Planning and Consolidation, version for SAP NetWeaver, includes enhancements such as the ability for users to drill-through to source systems to explore detailed information on transactions without having to replicate data in the application. It also provides a configuration wizard to assist with the creation of drill-through paths. Additionally, it integrates SAP BusinessObjects BI tools with SAP BusinessObjects Planning and Consolidation, allowing customers to improve agility, reduce cycle time, and increase user productivity.",
+                            "base_prediction": "The 7.5 release of SAP BusinessObjects Planning and Consolidation, version for SAP NetWeaver, includes several key enhancements, including:\n\n1. **Business Process Flows (BPFs):** This feature provides controllable, consistent, and collaborative planning and consolidation processes. It allows the finance organization to implement processes across the enterprise by designing the logical flow, reviews, and approvals needed to drive planning and forecasting exercises. Users have two different BPF views: the **Monitor view**, which provides a global view of process progress across the entire organization, and the **My Activities view**, which offers a personalized view of step completion status and activities assigned to a specific user.\n\n2. **Drill-Through Capability:** Users can now drill-through to source systems to explore detailed information on transactions without having to replicate data in the SAP BusinessObjects Planning and Consolidation application. This capability allows users to access data in various targets, and the solution includes a configuration wizard to assist with the creation of drill-through paths.\n\n3. **Integration with SAP BusinessObjects BI Solutions:** The integration with SAP BusinessObjects BI solutions, including Xcelsius, SAP BusinessObjects Web Intelligence, and SAP BusinessObjects Explorer, allows users to access information directly from SAP BusinessObjects Planning and Consolidation. This integration enables information to be shared with users beyond the finance group over the Web, and it supports single sign-on capabilities and multiple authentication types via the Central Management Server.\n\nThese enhancements improve agility, reduce cycle time, and increase user productivity, providing value for both business and IT professionals.",
+                            "adapted_prediction": "The 7.5 release of SAP BusinessObjects Planning and Consolidation, version for SAP NetWeaver, includes enhancements such as the ability to drill-through to source systems to explore detailed information on transactions without having to replicate data in the SAP BusinessObjects Planning and Consolidation application. It also includes a configuration wizard to assist with the creation of drill-through paths. Additionally, it integrates SAP BusinessObjects BI solutions to access information directly from SAP BusinessObjects Planning and Consolidation, allowing information to be shared with users beyond the realm of the finance group over the Web.",
+                            "base_f1": 0.4362,
+                            "adapted_f1": 0.7898,
+                            "base_faithfulness": 0.9333,
+                            "adapted_faithfulness": 0.9107
+                        }
+                    ]
+                },
+                "Dolly QA": {
+                    "base": {
+                        "n_samples": 320,
+                        "Token_F1": 48.3,
+                        "ROUGE_L_F1": 40.94,
+                        "Context_Faithfulness_Pct": 78.51,
+                        "Avg_Response_Length_Words": 60.6,
+                        "Sentence_Completeness_Pct": 0.0,
+                        "BERTScore_P": 35.76,
+                        "BERTScore_R": 52.16,
+                        "BERTScore_F1": 42.41
+                    },
+                    "adapted": {
+                        "n_samples": 320,
+                        "Token_F1": 49.88,
+                        "ROUGE_L_F1": 44.04,
+                        "Context_Faithfulness_Pct": 89.2,
+                        "Avg_Response_Length_Words": 53.3,
+                        "Sentence_Completeness_Pct": 83.8,
+                        "BERTScore_P": 44.41,
+                        "BERTScore_R": 49.97,
+                        "BERTScore_F1": 45.38
+                    },
+                    "deltas": {
+                        "Token_F1": 1.58,
+                        "ROUGE_L_F1": 3.1,
+                        "BERTScore_F1": 2.97,
+                        "Context_Faithfulness_Pct": 10.69,
+                        "Avg_Response_Length_Words": -7.3,
+                        "Sentence_Completeness_Pct": 83.8
+                    },
+                    "deltas_rel_pct": {
+                        "Token_F1": 3.27,
+                        "ROUGE_L_F1": 7.57,
+                        "BERTScore_F1": 7.0,
+                        "Context_Faithfulness_Pct": 13.62,
+                        "Avg_Response_Length_Words": -12.05,
+                        "Sentence_Completeness_Pct": null
+                    },
+                    "sample_pairs": [
+                        {
+                            "instruction": "When does tropical cyclone season occur in the Southern Hemisphere?",
+                            "ground_truth": "In the Southern Hemisphere, the tropical cyclone season runs from the start of November until the end of April with peaks in mid-February to early March.",
+                            "base_prediction": "In the Southern Hemisphere, the tropical cyclone season runs from the start of November until the end of April, with peaks in mid-February to early March.",
+                            "adapted_prediction": "Tropical cyclone season in the Southern Hemisphere occurs from the start of November until the end of April, with peaks in mid-February to early March.",
+                            "base_f1": 1.0,
+                            "adapted_f1": 0.9545,
+                            "base_faithfulness": 1.0,
+                            "adapted_faithfulness": 1.0
+                        },
+                        {
+                            "instruction": "Given this article, what is the largest size for a dead man zone?",
+                            "ground_truth": "The largest size for a dead man zone is 1 kilometre",
+                            "base_prediction": "The largest size for a dead man zone, as indicated in the context, can extend well over 1 kilometre (3,300 ft) from the firefront.",
+                            "adapted_prediction": "The dead man zone can extend well over 1 kilometre (3,300 ft) from the firefront.",
+                            "base_f1": 0.5517,
+                            "adapted_f1": 0.4545,
+                            "base_faithfulness": 0.65,
+                            "adapted_faithfulness": 0.9231
+                        },
+                        {
+                            "instruction": "Given this paragraph about the original church in Guston in 1892, what were the two ways that were used to announce the beginning of services?",
+                            "ground_truth": "The church used both a bell and a steam whistle to announce the start of services.",
+                            "base_prediction": "The two ways used to announce the beginning of services at the original church in Guston in 1892 were a bell and a steam whistle.",
+                            "adapted_prediction": "The original church in Guston in 1892 used a bell and a steam whistle to announce the beginning of services.",
+                            "base_f1": 0.625,
+                            "adapted_f1": 0.7143,
+                            "base_faithfulness": 0.6842,
+                            "adapted_faithfulness": 0.8
+                        },
+                        {
+                            "instruction": "What is Age of Empires?",
+                            "ground_truth": "Age of Empires is a classic PC game originally developed by Microsoft, released in 1997. It has 4 versions now and is still being played online by many players.",
+                            "base_prediction": "Age of Empires is a series of historical real-time strategy video games, originally developed by Ensemble Studios and published by Xbox Game Studios. The first game in the series, simply titled *Age of Empires*, was released in 1997. The series has since expanded to include nine games as of October 28, 2021, covering various historical periods and regions, including Europe, Africa, and Asia, from the Stone Age to the Iron Age, and beyond.",
+                            "adapted_prediction": "Age of Empires is a series of historical real-time strategy video games, originally developed by Ensemble Studios and published by Xbox Game Studios. The first game was Age of Empires, released in 1997. Nine total games within the series have been released so far as of October 28, 2021.",
+                            "base_f1": 0.2947,
+                            "adapted_f1": 0.3514,
+                            "base_faithfulness": 0.7708,
+                            "adapted_faithfulness": 1.0
+                        },
+                        {
+                            "instruction": "What is the significance of a diploma?",
+                            "ground_truth": "A diploma testifies the recipient has graduated by successfully completing their courses of studies.",
+                            "base_prediction": "A diploma is significant because it is a document awarded by an educational institution, such as a college or university, that testifies the recipient has graduated by successfully completing their courses of study. Historically, it has also referred to a charter or official document of diplomacy.",
+                            "adapted_prediction": "A diploma is a document awarded by an educational institution (such as a college or university) testifying the recipient has graduated by successfully completing their courses of studies. Historically, it has also referred to a charter or official document of diplomacy.",
+                            "base_f1": 0.4231,
+                            "adapted_f1": 0.4681,
+                            "base_faithfulness": 0.8485,
+                            "adapted_faithfulness": 1.0
+                        }
+                    ]
+                },
+                "Aina-EN": {
+                    "base": {
+                        "n_samples": 320,
+                        "Token_F1": 36.53,
+                        "ROUGE_L_F1": 30.15,
+                        "Context_Faithfulness_Pct": 78.39,
+                        "Avg_Response_Length_Words": 27.5,
+                        "Sentence_Completeness_Pct": 0.0,
+                        "BERTScore_P": 58.09,
+                        "BERTScore_R": 19.51,
+                        "BERTScore_F1": 35.62
+                    },
+                    "adapted": {
+                        "n_samples": 320,
+                        "Token_F1": 56.91,
+                        "ROUGE_L_F1": 43.48,
+                        "Context_Faithfulness_Pct": 69.17,
+                        "Avg_Response_Length_Words": 80.8,
+                        "Sentence_Completeness_Pct": 98.1,
+                        "BERTScore_P": 52.22,
+                        "BERTScore_R": 51.95,
+                        "BERTScore_F1": 51.86
+                    },
+                    "deltas": {
+                        "Token_F1": 20.38,
+                        "ROUGE_L_F1": 13.33,
+                        "BERTScore_F1": 16.24,
+                        "Context_Faithfulness_Pct": -9.22,
+                        "Avg_Response_Length_Words": 53.3,
+                        "Sentence_Completeness_Pct": 98.1
+                    },
+                    "deltas_rel_pct": {
+                        "Token_F1": 55.79,
+                        "ROUGE_L_F1": 44.21,
+                        "BERTScore_F1": 45.59,
+                        "Context_Faithfulness_Pct": -11.76,
+                        "Avg_Response_Length_Words": 193.82,
+                        "Sentence_Completeness_Pct": null
+                    },
+                    "sample_pairs": [
+                        {
+                            "instruction": "What large cat has a particular taste for dogs no matter how big the dog is?",
+                            "ground_truth": "Leopards are known to have a particular taste for dogs and will attack and consume them regardless of the dog's size or ferocity. This behavior has been observed in various regions, including Manchuria, Indochina, Indonesia, and Malaysia. The preference for dogs as prey by leopards is notable, as they will hunt and kill them with the same vigor as their other prey.",
+                            "base_prediction": "The large cat that has a particular taste for dogs, regardless of the dog's size, is the leopard.",
+                            "adapted_prediction": "Leopards are known to have a particular taste for dogs, regardless of the dog's size or ferocity. This predilection for dogs is well-documented, and leopards have been recorded to kill and consume them. This behavior is not unique to leopards, as tigers in various regions such as Manchuria, Indochina, Indonesia, and Malaysia are also known to kill dogs with the same vigor. Other predators of dogs include striped hyenas in Turkmenistan, India, and the Caucasus, as well as reptiles such as alligators and pythons.",
+                            "base_f1": 0.2778,
+                            "adapted_f1": 0.6232,
+                            "base_faithfulness": 0.4615,
+                            "adapted_faithfulness": 0.7736
+                        },
+                        {
+                            "instruction": "What major city is home to most regional UN offices in India?",
+                            "ground_truth": "New Delhi, the capital city of India, is home to a significant number of regional UN offices. These include UNESCAP, UNDP, UNODC, UNESCO, UNICEF, WFP, UNV, UNCTAD, FAO, UNFPA, WHO, World Bank, ILO, IMF, UNIFEM, IFC, and UNAIDS. In particular, the Asian and Pacific Centre for Transfer of Technology of the UNESCAP, which services the Asia-Pacific region, is headquartered in New Delhi. Therefore, it can be said that New Delhi is the major city in India that is home to the most regional UN offices.",
+                            "base_prediction": "The major city home to most regional UN offices in India is New Delhi.",
+                            "adapted_prediction": "New Delhi is the major city in India that houses the majority of regional United Nations (UN) offices. These offices include the United Nations Development Programme (UNDP), United Nations Office on Drugs and Crime (UNODC), United Nations Educational, Scientific and Cultural Organization (UNESCO), United Nations Children's Fund (UNICEF), World Food Programme (WFP), United Nations Volunteers (UNV), United Nations Conference on Trade and Development (UNCTAD), Food and Agriculture Organization (FAO), United Nations Population Fund (UNFPA), World Health Organization (WHO), World Bank, International Labour Organization (ILO), International Monetary Fund (IMF), United Nations Fund for Women (UNIFEM), International Finance Corporation (IFC), and United Nations AIDS (UNAIDS).",
+                            "base_f1": 0.2727,
+                            "adapted_f1": 0.3886,
+                            "base_faithfulness": 0.9167,
+                            "adapted_faithfulness": 0.4677
+                        },
+                        {
+                            "instruction": "What was used in first recordings of vinyl records?",
+                            "ground_truth": "The first recordings of vinyl records were made using a soft wax master disc. In the initial stages of disc record manufacturing, sound was recorded directly onto the master disc at the recording studio. The use of soft wax masters was prevalent until around 1950, when audio tape recordings became more common. This shift allowed for processing, editing, and refining of the audio before being dubbed onto the master disc. A record cutter would then engrave the grooves into the master disc, which was later replaced by a harder lacquer material. The soft wax master discs were particularly sensitive to changes in sound, requiring the operator to manually adjust the groove width during the mastering process.",
+                            "base_prediction": "In the first recordings of vinyl records, sound was recorded directly onto the \"master disc\" at the recording studio. Early versions of these master discs were made of soft wax. Later, a harder lacquer was used.",
+                            "adapted_prediction": "The first recordings of vinyl records were made using soft wax master discs. This was the standard practice for the first several decades of disc record manufacturing, where sound was recorded directly onto the master disc at the recording studio. The mastering process was a manual art, as the operator had to adjust the width of the groove space on each rotation to accommodate changes in sound. Later, a harder lacquer was used for master discs, and from around 1950, it became common to record performances on audio tape first, which could then be processed, edited, and dubbed onto the master disc.",
+                            "base_f1": 0.4242,
+                            "adapted_f1": 0.6316,
+                            "base_faithfulness": 0.8214,
+                            "adapted_faithfulness": 0.7536
+                        },
+                        {
+                            "instruction": "What are homogeneous states?",
+                            "ground_truth": "Homogeneous states can be defined as regions that have a relatively uniform population in terms of cultural, ethnic, or other social characteristics. The term \"homogeneous states\" is often used in contrast to heterogeneous states, which have diverse populations. Examples of homogeneous states include the United States, Germany, and Australia. These countries are typically characterized by a dominant culture or ethnicity, although they may still contain diverse communities. The federalist model, which allows for shared governance between a central authority and regional governments, is often considered to be most effective in homogeneous states. However, this is not always the case, as evidenced by the experiences of countries like Switzerland, Canada, and Iraq. In these countries, the federalist model has not always succeeded in quelling tensions between territories or preventing military conflict.",
+                            "base_prediction": "Homogeneous states are countries where the population shares common cultural, ethnic, or linguistic characteristics. According to the context, federalist models tend to work best in such states, as seen in examples like the United States, Germany, and Australia.",
+                            "adapted_prediction": "Homogeneous states are countries that are composed of a single cultural or ethnic group, and as such, they tend to have a more unified national identity. These states are often considered to be more suitable for the federalist model, which is a system of government in which power is divided between a central authority and constituent political units. Examples of homogeneous states that have successfully implemented the federalist model include the United States, Germany, and Australia. However, it is important to note that the success of the federalist model is not solely dependent on the homogeneity of the state, as there are also examples of successful federalist countries with diverse populations, such as Switzerland.",
+                            "base_f1": 0.2949,
+                            "adapted_f1": 0.4821,
+                            "base_faithfulness": 0.5806,
+                            "adapted_faithfulness": 0.3623
+                        },
+                        {
+                            "instruction": "What year was the last brown bear recorded to have been killed?",
+                            "ground_truth": "The last brown bear was recorded to have been killed in the year 1792 in the canton of Bern, Switzerland. This information is based on the account of the killing of the bear above Kleine Scheidegg by three hunters from Grindelwald.",
+                            "base_prediction": "The last brown bear was recorded to have been killed in the year 1792.",
+                            "adapted_prediction": "The last brown bear in Switzerland was recorded to have been killed in the year 1792. This information is based on historical records, and it's important to note that brown bears are still present in certain areas of the eastern Alps.",
+                            "base_f1": 0.5106,
+                            "adapted_f1": 0.5479,
+                            "base_faithfulness": 0.9167,
+                            "adapted_faithfulness": 0.6176
+                        }
+                    ]
+                },
+                "Aina-ES": {
+                    "base": {
+                        "n_samples": 320,
+                        "Token_F1": 33.66,
+                        "ROUGE_L_F1": 27.09,
+                        "Context_Faithfulness_Pct": 74.13,
+                        "Avg_Response_Length_Words": 36.3,
+                        "Sentence_Completeness_Pct": 0.0,
+                        "BERTScore_P": 46.62,
+                        "BERTScore_R": 16.03,
+                        "BERTScore_F1": 28.94
+                    },
+                    "adapted": {
+                        "n_samples": 320,
+                        "Token_F1": 55.57,
+                        "ROUGE_L_F1": 41.52,
+                        "Context_Faithfulness_Pct": 75.13,
+                        "Avg_Response_Length_Words": 107.0,
+                        "Sentence_Completeness_Pct": 97.8,
+                        "BERTScore_P": 43.05,
+                        "BERTScore_R": 45.96,
+                        "BERTScore_F1": 44.22
+                    },
+                    "deltas": {
+                        "Token_F1": 21.91,
+                        "ROUGE_L_F1": 14.43,
+                        "BERTScore_F1": 15.28,
+                        "Context_Faithfulness_Pct": 1.0,
+                        "Avg_Response_Length_Words": 70.7,
+                        "Sentence_Completeness_Pct": 97.8
+                    },
+                    "deltas_rel_pct": {
+                        "Token_F1": 65.09,
+                        "ROUGE_L_F1": 53.27,
+                        "BERTScore_F1": 52.8,
+                        "Context_Faithfulness_Pct": 1.35,
+                        "Avg_Response_Length_Words": 194.77,
+                        "Sentence_Completeness_Pct": null
+                    },
+                    "sample_pairs": [
+                        {
+                            "instruction": "¿Quién marcó el tanto de España contra Portugal?",
+                            "ground_truth": "El autor del gol de España frente a Portugal en el mundial de Sudáfrica 2",
+                            "base_prediction": "El tanto de España contra Portugal en el partido del 30 de junio de 2010 fue marcado por **David Villa** a los 63 minutos.",
+                            "adapted_prediction": "El gol de España contra Portugal en el partido de cuartos de final del Mundial de Sudáfrica 2010 fue anotado por David Villa a los 63 minutos. España, liderada por Villa y Fernando Torres, dominó el juego y finalmente rompió el empate gracias a un rebote de un tiro de esquina que Villa convirtió en un gol. A pesar de las oportunidades de Portugal, liderados por Cristiano Ronaldo, España se clasificó a cuartos de final y se enfrentó a Paraguay en la siguiente ronda.",
+                            "base_f1": 0.375,
+                            "adapted_f1": 0.2222,
+                            "base_faithfulness": 0.8333,
+                            "adapted_faithfulness": 0.6522
+                        },
+                        {
+                            "instruction": "¿Quién invalidó la votación el lunes?",
+                            "ground_truth": "El presidente interino de la Cámara de Diputados de Brasil en ese momento, Waldir Maranhão, anuló por la mañana del lunes 10 de mayo de 2016 la votación del proceso de juicio político contra la presidenta Dilma Rousseff, que había tenido lugar el 17 de abril. Sin embargo, bajo presión del Senado, Maranhão revocó esa decisión por la noche y el proceso continuó su curso normal. Se esperaba que el Senado votara el miércoles el pedido del proceso contra Rousseff, quien había sido acusada de ocultar desequilibrios en el presupuesto de Brasil antes de las elecciones del año pasado. Rousseff negó los cargos y argumentó que mover fondos de un lado a otro había sido una práctica común en gobiernos anteriores.",
+                            "base_prediction": "El presidente interino de la Cámara de Diputados de Brasil, Waldir Maranhão, invalidó la votación el lunes, pero posteriormente revocó su propia decisión ante la presión del Senado.",
+                            "adapted_prediction": "El presidente interino de la Cámara de Diputados de Brasil, Waldir Maranhão, revocó su decisión de anular la votación del proceso de juicio político contra la presidenta Dilma Rousseff el lunes 10 de mayo de 2016. Maranhão había anunciado de manera inesperada la anulación de la votación que tuvo lugar el 17 de abril, aduciendo que la presidenta había sido “prejuzgada”. Sin embargo, cedió ante la presión del Senado que resolvió seguir con la tramitación del proceso de impeachment pese a la medida de la Cámara. Como resultado, el proceso ha regresado a su curso anterior y se espera que el Senado vote el miércoles el pedido del proceso contra Rousseff, que podría resultar en la suspensión de la presidenta hasta por seis meses. Rousseff es acusada de ocultar desbalances en el presupuesto de Brasil previo a las elecciones del año pasado, con el objetivo de favorecer su reelección. La presidenta niega los cargos y argumenta que ese tipo de medidas, mover fondos de un lado para otro, ha sido práctica común en gobiernos anteriores.",
+                            "base_f1": 0.2835,
+                            "adapted_f1": 0.6853,
+                            "base_faithfulness": 0.9048,
+                            "adapted_faithfulness": 0.9796
+                        },
+                        {
+                            "instruction": "¿A qué distancia de Concepción está la Región de Bío Bío?",
+                            "ground_truth": "La Región de Bío Bío se encuentra a 90 kilómetros de distancia de Concepción, según el epicentro del terremoto de 8,8 grados en la escala sismológica de magnitud de momento que ocurrió el 27 de febrero de 2",
+                            "base_prediction": "La Región de Bío Bío está a 90 kilómetros al noreste de Concepción.",
+                            "adapted_prediction": "La Región de Bío Bío se encuentra a aproximadamente 90 kilómetros al noreste de Concepción. Este dato se desprende de la ubicación del epicentro de un sismo de 8,8 grados en la escala sismológica de magnitud de momento, que ocurrió en la costa de Maule en la Región de Bío Bío, a 325 kilómetros al suroeste de Santiago y a 90 kilómetros al noreste de Concepción. El terremoto, que se registró como uno de los más potentes en la historia de la humanidad, causó daños materiales considerables y 76 muertos en Chile.",
+                            "base_f1": 0.3636,
+                            "adapted_f1": 0.5,
+                            "base_faithfulness": 0.8889,
+                            "adapted_faithfulness": 0.8125
+                        },
+                        {
+                            "instruction": "¿Con quién prefiere pactar CiU?",
+                            "ground_truth": "Según el contexto proporcionado, CiU ha mostrado preferencia por pactar con ERC en el pasado, pero también ha tenido que recurrir a los votos del PP en ocasiones. Sin embargo, el presidente del PP catalán, Alberto Fernández Díaz, ha sugerido que el \"debate real\" en Cataluña está en si CiU se acercará a ERC y a planteamientos independentistas o si optará por los planteamientos moderados del PP. Por lo tanto, se puede inferir que CiU tiene la opción de pactar con diferentes partidos, pero el PP está instando a CiU a considerar los planteamientos moderados y a no deformar la capacidad de influencia del PP. En resumen, aunque CiU ha mostrado preferencia por pactar con ERC en el pasado, el PP está instando a CiU a considerar otras opciones y a no descartar la posibilidad de trabajar juntos en el futuro.",
+                            "base_prediction": "Según el contexto proporcionado, el presidente del PP catalán, Alberto Fernández Díaz, afirma que el PP cree que CiU no tendrá más opción que pactar con ellos, tal y como tuvo que hacer para su investidura. Aunque CiU ha expresado preferencias por llegar a acuerdos con ERC, Fernández Díaz sugiere que, al final, CiU podría tener que recurrir al PP, especialmente considerando el cambio en el escenario político español con la mayoría absoluta del PP. Por lo tanto, el PP prefiere que CiU pacte con ellos en lugar de con ERC.",
+                            "adapted_prediction": "El presidente del PP catalán, Alberto Fernández Díaz, ha sugerido que CiU debería considerar pactar con el PP en lugar de ERC para garantizar la gobernabilidad en Cataluña. Fernández ha recordado que en el pasado, CiU tuvo que recurrir al apoyo del PP para su investidura y ha cuestionado si esto podría repetirse en el futuro, especialmente en un contexto político español completamente diferente. Además, Fernández ha advertido a CiU de que sería contraproducente intentar minimizar la influencia del PP si finalmente tienen que reconocerla. Según Fernández, el \"debate real\" en Cataluña es si CiU se alinea con ERC y los planteamientos independentistas o bien con los planteamientos moderados del PP.",
+                            "base_f1": 0.408,
+                            "adapted_f1": 0.5505,
+                            "base_faithfulness": 0.7241,
+                            "adapted_faithfulness": 0.7077
+                        },
+                        {
+                            "instruction": "¿Cuándo empezó a disputarse la Primera División?",
+                            "ground_truth": "La Primera División de España, también conocida como La Liga, comenzó a disputarse en 1928. El Athletic Club, uno de los equipos fundadores, ha participado en todas las ediciones desde su creación. El club, con sede en Bilbao, País Vasco, España, fue fundado en 1898 y es conocido por su tradición de alinear solo jugadores nacidos o formados en Euskal Herria, una región que incluye el País Vasco y partes de Francia. Además, el Athletic Club es reconocido por su enfoque en la formación de jóvenes futbolistas y su estatus único como uno de los cuatro clubes profesionales de España que no es una sociedad anónima deportiva.",
+                            "base_prediction": "La Primera División de España empezó a disputarse en 1928.",
+                            "adapted_prediction": "La Primera División de España comenzó a disputarse en 1928. El Athletic Club, también conocido como Athletic de Bilbao, es uno de los tres únicos clubes que han participado en todas las ediciones de la liga desde su creación. Además de ser un club de fútbol profesional, el Athletic Club es conocido por su tradición de jugar únicamente con jugadores nacidos o formados en Euskal Herria, una práctica que comenzó en 1912 y se ha mantenido hasta el día de hoy. El club también es reconocido por su enfoque en la formación de jóvenes futbolistas, lo que ha llevado a ser una de las principales fuentes de abastecimiento de jugadores para el primer equipo.",
+                            "base_f1": 0.1373,
+                            "adapted_f1": 0.6354,
+                            "base_faithfulness": 0.75,
+                            "adapted_faithfulness": 0.7385
+                        }
+                    ]
+                },
+                "Aina-CA": {
+                    "base": {
+                        "n_samples": 320,
+                        "Token_F1": 37.77,
+                        "ROUGE_L_F1": 30.26,
+                        "Context_Faithfulness_Pct": 80.92,
+                        "Avg_Response_Length_Words": 37.3,
+                        "Sentence_Completeness_Pct": 0.0,
+                        "BERTScore_P": 47.64,
+                        "BERTScore_R": 19.53,
+                        "BERTScore_F1": 31.7
+                    },
+                    "adapted": {
+                        "n_samples": 320,
+                        "Token_F1": 57.86,
+                        "ROUGE_L_F1": 44.14,
+                        "Context_Faithfulness_Pct": 73.89,
+                        "Avg_Response_Length_Words": 96.8,
+                        "Sentence_Completeness_Pct": 100.0,
+                        "BERTScore_P": 44.76,
+                        "BERTScore_R": 47.8,
+                        "BERTScore_F1": 46.29
+                    },
+                    "deltas": {
+                        "Token_F1": 20.09,
+                        "ROUGE_L_F1": 13.88,
+                        "BERTScore_F1": 14.59,
+                        "Context_Faithfulness_Pct": -7.03,
+                        "Avg_Response_Length_Words": 59.5,
+                        "Sentence_Completeness_Pct": 100.0
+                    },
+                    "deltas_rel_pct": {
+                        "Token_F1": 53.19,
+                        "ROUGE_L_F1": 45.87,
+                        "BERTScore_F1": 46.03,
+                        "Context_Faithfulness_Pct": -8.69,
+                        "Avg_Response_Length_Words": 159.52,
+                        "Sentence_Completeness_Pct": null
+                    },
+                    "sample_pairs": [
+                        {
+                            "instruction": "Quants morts ha deixat el conflicte?",
+                            "ground_truth": "S'estima que el conflicte a l'est d'Ucraïna hagi provocat almenys 13.000 morts des del seu inici el 2014. Aquestes estimacions es basen en les dades recopilades pels organismes internacionals que tenen accés als detinguts en el marc de les negociacions per al bescanvi de presoners de guerra entre les forces del govern ucraïnès i les milícies pro-russes. Les negociacions, que han involucrat diverses potències internacionals, van culminar en un intercanvi de presoners recent, en què es van intercanviar 77 militars ucraïnesos per 123 combatents de les autoproclamades repúbliques de Donetsk i Lugansk.",
+                            "base_prediction": "El conflicte ha deixat un total de 13.000 morts, segons l'informació proporcionada al context.",
+                            "adapted_prediction": "El conflicte a Ucraïna, que va començar l'abril de 2014, ha provocat un total de 13.000 morts. Aquest nombre inclou tant ucraïnesos com milicians de les repúbliques autoproclamades de Donetsk i Lugansk. El conflicte ha estat objecte de negociacions entre el Quartet de Normandia (Alemanya, Rússia, Ucraïna i França) i el Grup de Contacte Trilateral (Rússia, Ucraïna i l'OSCE) per posar fi a les hostilitats.",
+                            "base_f1": 0.1075,
+                            "adapted_f1": 0.3212,
+                            "base_faithfulness": 0.75,
+                            "adapted_faithfulness": 0.8333
+                        },
+                        {
+                            "instruction": "Com estaven les partitures de les dues òperes?",
+                            "ground_truth": "La partitura de les dues òperes de Mercadante, \"Rappresaglia\" i \"Don Chisciotte\", es trobava lligada en un sol lligall a la Biblioteca del Conservatori de Nàpols. Aquest fet va portar a la confusió i a la catalogació errònia de la partitura de \"Don Chisciotte\" sota el títol de \"Rappresaglia\". Gràcies a les investigacions del professor Domenico Carboni, la partitura de \"Don Chisciotte\" va ser descoberta i editada críticament per Pedro Oltra i el mateix Carboni.",
+                            "base_prediction": "Les partitures de les dues òperes, *Rappresaglia* i *Don Chisciotte*, estaven lligades en un sol lligall. L'arxiver de la Biblioteca del Conservatori de Nàpols les va catalogar només amb el nom de *Rappresaglia*, per la qual cosa la partitura de *Don Chisciotte* va quedar perduda fins que es va descobrir aquest error durant les investigacions del professor Domenico Carboni.",
+                            "adapted_prediction": "Les partitures de les dues òperes, Rappresaglia i Don Chisciotte, estaven lligades en un sol lligall a la Biblioteca del Conservatori de Nàpols. Aquestes partitures van ser catalogades incorrectament sota el nom de Rappresaglia, una altra òpera de Mercadante estrenada a Cadis l'any anterior. El manuscrit autògraf, única font musical completa, ha estat utilitzat per fer una edició crítica i recuperar aquesta obra.",
+                            "base_f1": 0.5818,
+                            "adapted_f1": 0.4071,
+                            "base_faithfulness": 0.8,
+                            "adapted_faithfulness": 0.8511
+                        },
+                        {
+                            "instruction": "Què té un partit quan té una caixa B?",
+                            "ground_truth": "Un partit polític, com el PP en el cas Gürtel, que mantingui una 'caixa B' o una estructura financera i comptable paral·lela a l'oficial des de la seva fundació el 1989, està incorrent en una associació il·lícita segons l'article 515 del Codi Penal Espanyol. Aquest tipus d'associacions són il·lícites si tenen per objecte cometre un delicte o si, després de constituïdes, promouen la comissió de delictes. La il·legalització del partit pot ser sol·licitada pel congrés espanyol, segons l'article 11 de la Llei de Partits, si es compleixen certs supòsits tipificats com a associació il·lícita.",
+                            "base_prediction": "Un partit té una caixa B quan manté una estructura financera i comptable paral·lela a l'oficial, com és el cas del PP segons la sentència del cas Gürtel, que acredita que des del seu fonament, el 1989, ha mantingut aquest tipus d'estructura. Aquesta pràctica pot conduir a la seva il·legalització si es considera que l'organització com a tal ha promogut la comissió de delictes, segons la llei espanyola actual.",
+                            "adapted_prediction": "Un partit polític es considera il·legalitzat quan té una caixa B, que és una estructura financera i comptable paral·lela a la oficial. Això es desprèn de l'article 10.2 de la llei de partits espanyola, que preveu la il·legalització d'un partit quan haja incorregut en supòsits tipificats com a associació il·lícita en el codi penal. L'article 515 del codi penal espanyol tipifica les associacions il·lícites, incloent-hi aquelles que tinguen per objecte cometre algun delicte o, després de constituïdes, promoguen la comissió de delictes. La sentència del cas Gürtel demostra que el PP manté una caixa B des de la seva fundació el 1989, la qual cosa constitueix un delicte indiscutible. Per tant, si el congrés espanyol ho demana, el govern té l'obligació de sol·licitar la il·legalització d'un partit.",
+                            "base_f1": 0.4672,
+                            "adapted_f1": 0.5914,
+                            "base_faithfulness": 0.6735,
+                            "adapted_faithfulness": 0.8125
+                        },
+                        {
+                            "instruction": "Quantes denúncies havien arribat al DPTOP a l'abril del 2005?",
+                            "ground_truth": "Al mes d'abril del 2005, el Departament de Policia de Trànsit i Transport de Barcelona (DPTOP) havia rebut un total de 254 denúncies per part de veïns de Santa Coloma, Badalona i Barcelona, relacionades amb les afectacions de les obres. No obstant això, només 18 d'aquestes es van reconèixer com a vàlides i directament relacionades amb les obres en qüestió. Aquestes denúncies van ser analitzades i gestionades adequadament per les autoritats corresponents.",
+                            "base_prediction": "A l'abril del 2005, un total de 254 denúncies havien arribat al DPTOP per part de veïns de Santa Coloma, Badalona i Barcelona per les afectacions de les obres.",
+                            "adapted_prediction": "A l'abril del 2005, un total de 254 denúncies van arribar al Departament de Protecció de la Terra i Obrador de Protecció (DPTOP) per part de veïns de Santa Coloma, Badalona i Barcelona, relacionades amb les afectacions de les obres. Aquestes denúncies van ser analitzades i només 18 van ser considerades com a relacionades amb les obres. Aquest fet va portar al consell municipal del districte de Sarrià - Sant Gervasi a comprometre's a constituir una comissió de seguiment de les obres al districte per garantir la tranquil·litat dels veïns.",
+                            "base_f1": 0.4889,
+                            "adapted_f1": 0.5915,
+                            "base_faithfulness": 1.0,
+                            "adapted_faithfulness": 0.7255
+                        },
+                        {
+                            "instruction": "Com eren els textos comparats amb la seva música?",
+                            "ground_truth": "La música de Falla mereixia textos de major qualitat dels que va rebre, ja que els llibretistes li van proveir arguments inferiors. Això es va reflectir en la seva primera col·laboració amb Gregorio Martínez Sierra, Oración de las madres que tienen a sus hijos en brazos, on la música de Falla va ressaltar la pobresa del poema.",
+                            "base_prediction": "Els textos que es van comparar amb la música de Falla eren considerats, segons José Casanovas, molt inferiors a la qualitat de la seva música. Això es va manifestar, per exemple, en la seva primera col·laboració amb Gregorio Martínez Sierra, on va posar música a un poema anomenat *Oración de las madres que tienen a sus hijos en brazos*, el qual, tot i ser un text emotiu, no va aconseguir igualar la profunditat i la qualitat de la música de Falla. Aquesta mala sort amb els llibretistes va ser una constant en la carrera de Falla.",
+                            "adapted_prediction": "Els textos que Falla va utilitzar en les seves obres eren, segons el crític José Casanovas, de qualitat inferior a la seva música. Aquesta mala sort amb els llibretistes es va reflectir en la seva primera col·laboració amb el matrimoni Martínez Sierra - Lejárraga, quan va posar música a un poema de Gregorio Martínez Sierra, Oración de las madres que tienen a sus hijos en brazos, que va ser publicat el 1914. Malgrat això, aquesta col·laboració va ser l'inici d'una associació més llarga entre Falla i el matrimoni Martínez Sierra - Lejárraga, que va donar lloc a obres posteriors.",
+                            "base_f1": 0.5781,
+                            "adapted_f1": 0.5303,
+                            "base_faithfulness": 0.6,
+                            "adapted_faithfulness": 0.7143
+                        }
+                    ]
+                }
+            },
+            "test": {
+                "Neural-Bridge RAG": {
+                    "base": {
+                        "n_samples": 2399,
+                        "Token_F1": 59.09,
+                        "ROUGE_L_F1": 52.71,
+                        "Context_Faithfulness_Pct": 76.83,
+                        "Avg_Response_Length_Words": 84.1,
+                        "Sentence_Completeness_Pct": 95.5,
+                        "BERTScore_P": 43.16,
+                        "BERTScore_R": 69.82,
+                        "BERTScore_F1": 54.96
+                    },
+                    "adapted": {
+                        "n_samples": 2399,
+                        "Token_F1": 78.08,
+                        "ROUGE_L_F1": 74.45,
+                        "Context_Faithfulness_Pct": 91.13,
+                        "Avg_Response_Length_Words": 36.7,
+                        "Sentence_Completeness_Pct": 98.8,
+                        "BERTScore_P": 78.87,
+                        "BERTScore_R": 75.51,
+                        "BERTScore_F1": 76.77
+                    },
+                    "deltas": {
+                        "Token_F1": 18.99,
+                        "ROUGE_L_F1": 21.74,
+                        "BERTScore_F1": 21.81,
+                        "Context_Faithfulness_Pct": 14.3,
+                        "Avg_Response_Length_Words": -47.4,
+                        "Sentence_Completeness_Pct": 3.3
+                    },
+                    "deltas_rel_pct": {
+                        "Token_F1": 32.14,
+                        "ROUGE_L_F1": 41.24,
+                        "BERTScore_F1": 39.68,
+                        "Context_Faithfulness_Pct": 18.61,
+                        "Avg_Response_Length_Words": -56.36,
+                        "Sentence_Completeness_Pct": 3.46
+                    },
+                    "sample_pairs": [
+                        {
+                            "instruction": "What are some common modifications made to the interior of a car?",
+                            "ground_truth": "Common modifications made to the interior of a car include LED interior lighting, replacing standard gear lever knob and cups with sports versions, replacing the steering wheel with a smaller and handier one, and installing sport pedals. Other modifications can include changing belts, door handles, and chrome inserts.",
+                            "base_prediction": "Some common modifications made to the interior of a car include:\n\n1. **LED Interior Lighting**: This is a popular modification that allows for creative lighting solutions within the car's interior.\n\n2. **Replacing Standard Components with Sports Versions**: This includes replacing the gear lever knob, cups, and the steering wheel with sportier versions. The steering wheel is often replaced with a smaller and more convenient one.\n\n3. **Installing Sport Pedals**: These are available in various designs and are a popular choice for enhancing the driving experience.\n\n4. **Modifying Interior Parts**: This can involve replacing original parts such as belts, door handles, and chrome inserts with different-looking versions. These changes can be minor or complete, depending on the owner's preference.\n\n5. **Using Licensed Spare Parts**: It is emphasized that using licensed spare parts is important, especially for insurance purposes in the event of an accident.\n\nThese modifications allow car owners to personalize their vehicles while maintaining the integrity and safety of the original design.",
+                            "adapted_prediction": "Some common modifications include LED interior lighting, replacing standard gear lever knob and cups with sports version, replacing the steering wheel with a small and handy one, and installing sport pedals.",
+                            "base_f1": 0.4188,
+                            "adapted_f1": 0.6849,
+                            "base_faithfulness": 0.6311,
+                            "adapted_faithfulness": 0.8
+                        },
+                        {
+                            "instruction": "Who returns with the glory of victory?",
+                            "ground_truth": "Pan returns with the glory of victory.",
+                            "base_prediction": "Pan returns with the glory of victory.",
+                            "adapted_prediction": "Pan returns with the glory of victory.",
+                            "base_f1": 1.0,
+                            "adapted_f1": 1.0,
+                            "base_faithfulness": 1.0,
+                            "adapted_faithfulness": 1.0
+                        },
+                        {
+                            "instruction": "What is the significance of medical insurance in any medical setting?",
+                            "ground_truth": "Medical insurance is crucial in any kind of medical setting, because without health insurance it is nearly not possible to pay off any debts owed as a consequence of an ER visit or an easy surgery.",
+                            "base_prediction": "Medical insurance is significant in any medical setting because, without health insurance, it is nearly impossible to pay off any debts owed as a result of an ER visit or an easy surgery. It provides financial protection and ensures that individuals can access necessary medical care without facing overwhelming costs.",
+                            "adapted_prediction": "Medical insurance is crucial in any kind of medical setting, because without health insurance it is nearly not possible to pay off any debts owed as a consequence of an ER visit or an easy surgery.",
+                            "base_f1": 0.675,
+                            "adapted_f1": 1.0,
+                            "base_faithfulness": 0.675,
+                            "adapted_faithfulness": 1.0
+                        },
+                        {
+                            "instruction": "Where has Mao Sone taught music before?",
+                            "ground_truth": "Mao Sone has taught music at Fedu Jazz in the Dominican Republic, Danilo Perez Foundation in Panama, and at the Newport Jazz Camp 2016, organized by Berklee College Of Music, and the Newport Jazz Festival.",
+                            "base_prediction": "Mao Sone has taught music at Fedu Jazz in the Dominican Republic and the Danilo Perez Foundation in Panama as part of the Berklee Global Jazz Institute Ambassador program. Additionally, he taught an ensemble class and a brass instrument class at the Newport Jazz Camp 2016, organized by Berklee College of Music.",
+                            "adapted_prediction": "Mao Sone has taught preschool to early grades students at Fedu Jazz in the Dominican Republic, and Danilo Perez Foundation in Panama, as a part of the Berklee Global Jazz Institute Ambassador. He also taught an ensemble class and brass instrument class at the Newport Jazz Camp 2016, organized by Berklee College Of Music, and the Newport Jazz Festival.",
+                            "base_f1": 0.7692,
+                            "adapted_f1": 0.7294,
+                            "base_faithfulness": 0.9444,
+                            "adapted_faithfulness": 1.0
+                        },
+                        {
+                            "instruction": "What is an externality in the context of energy production and its impact on the environment?",
+                            "ground_truth": "In economics, an externality is conduct that re-allocates part of the cost of doing business upon other parties without their consent, such as pollution of public air and waters. In terms of energy production, the massive emissions of carbon dioxide (CO{-2}) from fossil-fuel energy production is an externality. This carbon-dioxide pollution emitted by coal and oil-fired power plants damages air quality and threatens our climate. This cost is not reflected in the market price of electricity, resulting in consumers not paying the full cost of power and energy markets becoming distorted.",
+                            "base_prediction": "In the context of energy production, an **externality** refers to the cost of an activity that is not reflected in the market price of the product or service. Specifically, when fossil fuel energy is produced, the environmental damage caused—such as air and water pollution, acid rain, mercury poisoning, and global warming—is not accounted for in the price of electricity. This means that consumers are not paying the full cost of the energy they use; instead, these costs are imposed on others, such as future generations or the general public, without their consent.\n\nFor example, the massive emissions of carbon dioxide (CO₂) from fossil-fuel energy production are considered an **externality par excellence** because they damage everyone's air quality and threaten the global climate, which is a public good. These environmental costs are not included in the market price of electricity, leading to distorted energy markets and inefficient resource use. As a result, fossil fuel producers gain an unfair competitive advantage over renewable energy developers, who must bear the full cost of producing clean energy. This creates a situation where the true cost of energy is not reflected in its price, leading to harmful environmental and economic consequences.",
+                            "adapted_prediction": "An externality in the context of energy production refers to conduct that re-allocates part of the cost of doing business upon other parties without their consent, such as pollution of public air and waters. In the case of fossil-fuel energy production, the massive emissions of carbon dioxide (CO2) is widely recognized as an externality par excellence. This pollution distributes evenly throughout the global atmosphere, damaging everyone’s air quality and threatening our climate. The market distortions this creates are leading to wrongheaded investments, locking in increased environmental degradation for many decades to come.",
+                            "base_f1": 0.4538,
+                            "adapted_f1": 0.6036,
+                            "base_faithfulness": 0.7248,
+                            "adapted_faithfulness": 0.9403
+                        }
+                    ]
+                },
+                "Dolly QA": {
+                    "base": {
+                        "n_samples": 448,
+                        "Token_F1": 48.75,
+                        "ROUGE_L_F1": 41.71,
+                        "Context_Faithfulness_Pct": 79.09,
+                        "Avg_Response_Length_Words": 60.8,
+                        "Sentence_Completeness_Pct": 88.8,
+                        "BERTScore_P": 36.84,
+                        "BERTScore_R": 52.46,
+                        "BERTScore_F1": 43.21
+                    },
+                    "adapted": {
+                        "n_samples": 448,
+                        "Token_F1": 49.02,
+                        "ROUGE_L_F1": 44.64,
+                        "Context_Faithfulness_Pct": 89.72,
+                        "Avg_Response_Length_Words": 65.3,
+                        "Sentence_Completeness_Pct": 81.5,
+                        "BERTScore_P": 42.92,
+                        "BERTScore_R": 50.44,
+                        "BERTScore_F1": 44.92
+                    },
+                    "deltas": {
+                        "Token_F1": 0.27,
+                        "ROUGE_L_F1": 2.93,
+                        "BERTScore_F1": 1.71,
+                        "Context_Faithfulness_Pct": 10.63,
+                        "Avg_Response_Length_Words": 4.5,
+                        "Sentence_Completeness_Pct": -7.3
+                    },
+                    "deltas_rel_pct": {
+                        "Token_F1": 0.55,
+                        "ROUGE_L_F1": 7.02,
+                        "BERTScore_F1": 3.96,
+                        "Context_Faithfulness_Pct": 13.44,
+                        "Avg_Response_Length_Words": 7.4,
+                        "Sentence_Completeness_Pct": -8.22
+                    },
+                    "sample_pairs": [
+                        {
+                            "instruction": "Please share some important points to remember for Oscar awards from the given text",
+                            "ground_truth": "1.\tThe Oscars, usually referred to as the Academy Awards, are prizes given to filmmakers for outstanding artistic and technical achievement.\n2.\tThe Academy of Motion Picture Arts and Sciences (AMPAS) bestows them annually in appreciation of outstanding contributions to cinema as judged by the Academy's voting membership.\n3.\tMany people consider the Academy Awards to be the most prestigious and important honours in the American and international entertainment industries.\n4.\tThe Oscar trophy has an Art Deco-styled rendering of a knight.",
+                            "base_prediction": "Here are some important points to remember about the Oscar awards based on the given text:\n\n1. The Academy Awards, also known as the Oscars, are awarded for artistic and technical merit in the film industry.\n2. They are presented annually by the Academy of Motion Picture Arts and Sciences (AMPAS).\n3. The awards recognize excellence in cinematic achievements, as assessed by the Academy's voting membership.\n4. The Oscars are considered the most prestigious and significant awards in the entertainment industry in the United States and worldwide.\n5. The Oscar statuette is designed as a knight in the Art Deco style.",
+                            "adapted_prediction": "1. The Academy Awards, also known as the Oscars, are awards for artistic and technical merit for the film industry.\n2. They are presented annually by the Academy of Motion Picture Arts and Sciences (AMPAS), in recognition of excellence in cinematic achievements as assessed by the Academy's voting membership.\n3. The Academy Awards are regarded by many as the most prestigious, significant awards in the entertainment industry in the United States and worldwide.\n4. The Oscar statuette depicts a knight rendered in the Art Deco style.",
+                            "base_f1": 0.519,
+                            "adapted_f1": 0.5479,
+                            "base_faithfulness": 0.6818,
+                            "adapted_faithfulness": 0.9259
+                        },
+                        {
+                            "instruction": "Which musical instrument does Peter Yanowitz play?",
+                            "ground_truth": "Drums",
+                            "base_prediction": "Peter Yanowitz plays the drums. He is noted as the original drummer of The Wallflowers and has played drums for various artists and bands, including Natalie Merchant, Money Mark, Hand of Doom, Nina Nastasia, Yoko Ono, Allen Ginsberg, and Wilco. Additionally, he currently serves as the drummer for Exclamation Pony and performed as 'Schlatko', the drummer of The Angry Inch in the Broadway musical *Hedwig and the Angry Inch*.",
+                            "adapted_prediction": "Peter Yanowitz plays drums.",
+                            "base_f1": 0.0323,
+                            "adapted_f1": 0.4,
+                            "base_faithfulness": 0.8478,
+                            "adapted_faithfulness": 0.75
+                        },
+                        {
+                            "instruction": "Is the glass ceiling real?",
+                            "ground_truth": "While it is not real as a physical object, it is considered real metaphorically, as it represents an invisible barrier that hinder women from rising beyond a certain organizational or societal hierarchy.",
+                            "base_prediction": "Yes, the glass ceiling is real. It is a metaphor used to describe an invisible but significant barrier that prevents certain demographics, particularly women and minority groups, from advancing beyond a certain level in a hierarchy, such as in corporate or professional settings. This concept highlights the systemic challenges and discrimination these groups face, even when they are qualified and high-achieving. The term was first used by feminists in reference to career barriers for women and has since been extended to include racial inequality and other forms of discrimination.",
+                            "adapted_prediction": "Yes, the glass ceiling is real. It is a metaphor used to describe an invisible barrier that prevents certain groups, particularly women, from advancing beyond a certain level in a hierarchy. This concept was first introduced by feminists in the 1970s to refer to the barriers faced by high-achieving women in their careers. The term has since been extended to include racial inequality in the United States and other countries. Minority women, who are at the intersection of two historically marginalized groups, often find it most difficult to break the glass ceiling. In East Asian and East Asian American communities, the term \"bamboo ceiling\" is used to describe the obstacles faced by East Asian Americans in advancing their careers. Similarly, the term \"canvas ceiling\" is used to describe the barriers faced by refugees and asylum seekers in their search for meaningful employment.",
+                            "base_f1": 0.2523,
+                            "adapted_f1": 0.1667,
+                            "base_faithfulness": 0.5735,
+                            "adapted_faithfulness": 0.7901
+                        },
+                        {
+                            "instruction": "What is Lean manufacturing",
+                            "ground_truth": "Lean is a production method.",
+                            "base_prediction": "Lean manufacturing is a production method primarily aimed at reducing times within the production system, as well as response times from suppliers and to customers. It is closely related to just-in-time (JIT) manufacturing, which focuses on matching production to demand by supplying only the goods that have been ordered. Lean manufacturing adopts the JIT approach and further emphasizes reducing cycle, flow, and throughput times by eliminating activities that do not add value for the customer. It also involves people working outside the manufacturing process, such as in marketing and customer service.",
+                            "adapted_prediction": "Lean manufacturing is a production method aimed primarily at reducing times within the production system as well as response times from suppliers and to customers. It is closely related to another concept called just-in-time manufacturing (JIT manufacturing in short). Just-in-time manufacturing tries to match production to demand by only supplying goods which have been ordered and focuses on efficiency, productivity (with a commitment to continuous improvement) and reduction of \"wastes\" for the producer and supplier of goods. Lean manufacturing adopts the just-in-time approach and additionally focuses on reducing cycle, flow and throughput times by further eliminating activities which do not add any value for the customer. Lean manufacturing also involves people who work outside of the manufacturing process, such as in marketing and customer service.",
+                            "base_f1": 0.0899,
+                            "adapted_f1": 0.0656,
+                            "base_faithfulness": 0.9365,
+                            "adapted_faithfulness": 1.0
+                        },
+                        {
+                            "instruction": "Given this paragraph about the tour de france, has the race ever not ran",
+                            "ground_truth": "The tour de france has ran since 1903, with the only noted cancellations happening for the two world wars",
+                            "base_prediction": "Yes, the Tour de France has not been held in certain years. Specifically, the race was stopped during the two World Wars. It was first organized in 1903 and has been held annually since then, except during those periods.",
+                            "adapted_prediction": "The race was first organized in 1903 to increase sales for the newspaper L'Auto and is currently run by the Amaury Sport Organisation. The race has been held annually since its first edition in 1903 except when it was stopped for the two World Wars.",
+                            "base_f1": 0.3462,
+                            "adapted_f1": 0.25,
+                            "base_faithfulness": 0.6333,
+                            "adapted_faithfulness": 1.0
+                        }
+                    ]
+                },
+                "Aina-EN": {
+                    "base": {
+                        "n_samples": 2000,
+                        "Token_F1": 35.81,
+                        "ROUGE_L_F1": 29.1,
+                        "Context_Faithfulness_Pct": 77.43,
+                        "Avg_Response_Length_Words": 26.9,
+                        "Sentence_Completeness_Pct": 96.7,
+                        "BERTScore_P": 56.89,
+                        "BERTScore_R": 19.33,
+                        "BERTScore_F1": 35.07
+                    },
+                    "adapted": {
+                        "n_samples": 2000,
+                        "Token_F1": 57.11,
+                        "ROUGE_L_F1": 42.95,
+                        "Context_Faithfulness_Pct": 68.23,
+                        "Avg_Response_Length_Words": 84.0,
+                        "Sentence_Completeness_Pct": 98.2,
+                        "BERTScore_P": 50.33,
+                        "BERTScore_R": 52.02,
+                        "BERTScore_F1": 50.96
+                    },
+                    "deltas": {
+                        "Token_F1": 21.3,
+                        "ROUGE_L_F1": 13.85,
+                        "BERTScore_F1": 15.89,
+                        "Context_Faithfulness_Pct": -9.2,
+                        "Avg_Response_Length_Words": 57.1,
+                        "Sentence_Completeness_Pct": 1.5
+                    },
+                    "deltas_rel_pct": {
+                        "Token_F1": 59.48,
+                        "ROUGE_L_F1": 47.59,
+                        "BERTScore_F1": 45.31,
+                        "Context_Faithfulness_Pct": -11.88,
+                        "Avg_Response_Length_Words": 212.27,
+                        "Sentence_Completeness_Pct": 1.55
+                    },
+                    "sample_pairs": [
+                        {
+                            "instruction": "What are the latest generation of lossless algorithms?",
+                            "ground_truth": "The latest generation of lossless algorithms includes genetics compression algorithms, which are specifically designed to compress genetic data, such as sequences of nucleotides. These algorithms use a combination of conventional compression algorithms and genetic algorithms adapted to the specific datatype. For example, HAPZIPPER, a genetic compression algorithm published by a team of scientists from Johns Hopkins University in 2012, achieves over 20-fold compression (95% reduction in file size) for HapMap data, providing 2- to 4-fold better compression and in much faster time than leading general-purpose compression utilities. Other genetics compression algorithms such as DNAZip and GenomeZip, have compression ratios of up to 1200-fold, allowing 6 billion basepair diploid human genomes to be stored in 2.5 megabytes. These algorithms use methods such as MAF based encoding (MAFE) to reduce the heterogeneity of the dataset by sorting SNPs by their minor allele frequency, thus homogenizing the dataset.",
+                            "base_prediction": "The latest generation of lossless algorithms mentioned in the context are **genetics compression algorithms**, which are specifically designed to compress data such as sequences of nucleotides. These algorithms combine conventional compression techniques with genetic algorithms tailored to the specific data type. Examples include **HAPZIPPER**, **MAF based encoding (MAFE)**, **DNAZip**, and **GenomeZip**. These algorithms achieve significant compression ratios, with some reaching up to 1200-fold compression, allowing for efficient storage of large genomic datasets.",
+                            "adapted_prediction": "The latest generation of lossless algorithms, known as genetics compression algorithms, compress data such as sequences of nucleotides using both conventional compression algorithms and genetic algorithms adapted to the specific data type. These algorithms have been developed to achieve high compression ratios, with some achieving up to 1200-fold compression. For example, the HAPZIPPER algorithm, published in 2012, achieves over 20-fold compression for HapMap data, providing 2- to 4-fold better compression and faster processing times than leading general-purpose compression utilities. Another example is the MAF based encoding (MAFE) algorithm, which reduces the heterogeneity of the dataset by sorting SNPs by their minor allele frequency, thus homogenizing the dataset. Other algorithms, such as DNAZip and GenomeZip, have also been developed to achieve high compression ratios, allowing for the storage of large genomic datasets in significantly reduced file sizes.",
+                            "base_f1": 0.4757,
+                            "adapted_f1": 0.7094,
+                            "base_faithfulness": 0.5556,
+                            "adapted_faithfulness": 0.6966
+                        },
+                        {
+                            "instruction": "Part of what study is the census of Antarctic marine life?",
+                            "ground_truth": "The Census of Marine Life (CoML) is a study that includes the census of Antarctic marine life. This research, conducted during the International Polar Year, involved around 500 researchers and was released in 2010. The study revealed that over 235 marine organisms are common to both polar regions, which is remarkable considering the 12,000 km distance between them. This distribution can be attributed to the relatively uniform temperatures in the deep ocean and the major current systems that transport eggs and larval stages.",
+                            "base_prediction": "The census of Antarctic marine life is part of the global **Census of Marine Life (CoML)**.",
+                            "adapted_prediction": "The census of Antarctic marine life is a part of the global Census of Marine Life (CoML), which was conducted during the International Polar Year and involved around 500 researchers. This census has revealed that over 235 marine organisms live in both polar regions, despite the 12,000 km (7,456 mi) gap between them. These organisms include large animals such as some cetaceans and birds, as well as small forms of life like mudworms, sea cucumbers, and free-swimming snails. The uniform temperatures of the deep ocean at the poles and the equator, which differ by no more than 5 °C, and the major current systems or marine conveyor belt that transport eggs and larval stages, may aid in their distribution.",
+                            "base_f1": 0.25,
+                            "adapted_f1": 0.5902,
+                            "base_faithfulness": 0.8889,
+                            "adapted_faithfulness": 0.8372
+                        },
+                        {
+                            "instruction": "What was the name of the first solar powered boat that crossed the Atlantic ocean?",
+                            "ground_truth": "The first solar powered boat to cross the Atlantic ocean was the sun21 catamaran. This significant achievement was completed in the winter of 2006-2007, marking a milestone in the use of solar energy for marine transportation.",
+                            "base_prediction": "The name of the first solar powered boat that crossed the Atlantic Ocean was the **sun21 catamaran**. This crossing took place in the winter of 2006–2007.",
+                            "adapted_prediction": "The first solar powered boat to cross the Atlantic Ocean was the sun21 catamaran, which accomplished this feat in the winter of 2006-2007. This achievement was made possible by the development of practical solar boats, which began in 1975 in England. By 1995, passenger boats with photovoltaic (PV) panels were already in use, and by 1996, Kenichi Horie had made the first solar powered crossing of the Pacific Ocean. The sun21 catamaran's successful Atlantic crossing marked a significant milestone in the history of solar-powered boats.",
+                            "base_f1": 0.5882,
+                            "adapted_f1": 0.4571,
+                            "base_faithfulness": 0.7,
+                            "adapted_faithfulness": 0.6154
+                        },
+                        {
+                            "instruction": "What venue drove a lot of the awareness of the music from the now pop post-punk bands?",
+                            "ground_truth": "MTV played a significant role in driving awareness of the music from post-punk bands that shifted towards a more commercial sound, which is often referred to as the new pop movement. In the US, these acts had a considerable influence on the Second British Invasion of \"New Music\" due to MTV and modern rock radio stations. As a result, some post-punk bands adopted a more accessible new wave sound, while others gained popularity on American college radio and pioneered the alternative rock genre. One of the most successful bands to emerge from this transition was U2, who incorporated religious imagery and political commentary into their anthemic music.",
+                            "base_prediction": "The venue that drove a lot of the awareness of the music from the now pop post-punk bands was **MTV and modern rock radio stations** in the United States. These platforms played a significant role in promoting post-punk acts and influencing the Second British Invasion of \"New Music\" in the U.S.",
+                            "adapted_prediction": "The venue that significantly contributed to the awareness of music from now-popular post-punk bands was MTV. MTV played a crucial role in promoting post-punk music in the United States, as it was a driving force behind the Second British Invasion of \"New Music\" there. This exposure helped many post-punk bands gain a following and transition into the new wave sound, with some becoming fixtures on American college radio and early examples of alternative rock. One of the most successful bands to emerge from the post-punk movement was U2, who combined religious imagery and political commentary into their anthemic music.",
+                            "base_f1": 0.4638,
+                            "adapted_f1": 0.6378,
+                            "base_faithfulness": 0.6286,
+                            "adapted_faithfulness": 0.6912
+                        },
+                        {
+                            "instruction": "Most iPods feature how many buttons?",
+                            "ground_truth": "Most iPod models, excluding the 3rd-generation iPod Shuffle, 6th and 7th generation iPod Nano, and iPod Touch, come equipped with five physical buttons. These buttons are responsible for performing basic functions such as menu, play, pause, next track, and previous track. The 3rd-generation iPod Shuffle has a single button on the earphone cable for play, pause, next track, and so on, while the iPod Touch uses a touch screen for its interface, along with a home button, sleep/wake button, and volume-up and -down buttons.",
+                            "base_prediction": "Most iPods feature five buttons. However, it is important to note that some models, such as the 3rd-generation iPod Shuffle and the iPod Touch, have different control mechanisms. The 3rd-generation iPod Shuffle uses a control on the earphone cable, while the iPod Touch uses a touch screen along with a home button and other physical buttons.",
+                            "adapted_prediction": "Most iPods, excluding the 3rd-generation iPod Shuffle, the 6th & 7th generation iPod Nano, and iPod Touch, feature five buttons. These buttons are typically integrated into the click wheel, providing a minimalist interface. The buttons perform basic functions such as menu, play, pause, next track, and previous track. Other operations, such as scrolling through menu items and controlling the volume, are performed by using the click wheel in a rotational manner.",
+                            "base_f1": 0.496,
+                            "adapted_f1": 0.4748,
+                            "base_faithfulness": 0.7027,
+                            "adapted_faithfulness": 0.8776
+                        }
+                    ]
+                },
+                "Aina-ES": {
+                    "base": {
+                        "n_samples": 1503,
+                        "Token_F1": 33.78,
+                        "ROUGE_L_F1": 26.61,
+                        "Context_Faithfulness_Pct": 74.01,
+                        "Avg_Response_Length_Words": 36.6,
+                        "Sentence_Completeness_Pct": 100.0,
+                        "BERTScore_P": 45.48,
+                        "BERTScore_R": 15.75,
+                        "BERTScore_F1": 28.4
+                    },
+                    "adapted": {
+                        "n_samples": 1503,
+                        "Token_F1": 55.3,
+                        "ROUGE_L_F1": 40.8,
+                        "Context_Faithfulness_Pct": 74.69,
+                        "Avg_Response_Length_Words": 109.1,
+                        "Sentence_Completeness_Pct": 97.8,
+                        "BERTScore_P": 42.8,
+                        "BERTScore_R": 45.7,
+                        "BERTScore_F1": 44.06
+                    },
+                    "deltas": {
+                        "Token_F1": 21.52,
+                        "ROUGE_L_F1": 14.19,
+                        "BERTScore_F1": 15.66,
+                        "Context_Faithfulness_Pct": 0.68,
+                        "Avg_Response_Length_Words": 72.5,
+                        "Sentence_Completeness_Pct": -2.2
+                    },
+                    "deltas_rel_pct": {
+                        "Token_F1": 63.71,
+                        "ROUGE_L_F1": 53.33,
+                        "BERTScore_F1": 55.14,
+                        "Context_Faithfulness_Pct": 0.92,
+                        "Avg_Response_Length_Words": 198.09,
+                        "Sentence_Completeness_Pct": -2.2
+                    },
+                    "sample_pairs": [
+                        {
+                            "instruction": "¿Qué parte de las eudicotiledóneas son del orden Fabales?",
+                            "ground_truth": "Las eudicotiledóneas incluyen el orden Fabales, el cual representa aproximadamente un 9,6% de su diversidad total. La familia más rica en especies dentro de Fabales es Fabaceae, la cual alberga la mayor parte de esta riqueza. El origen de Fabales se remonta a entre 94 y 89 millones de años atrás, y su diversificación comenzó hace aproximadamente 79 a 74 millones de años. Durante el terciario temprano, las leguminosas, que forman parte de Fabales, se diversificaron y se convirtieron en un componente omnipresente de las biotas terrestres modernas, al igual que muchas otras familias de Angiospermas.",
+                            "base_prediction": "El orden Fabales representa aproximadamente el 9,6% de la diversidad de especies de las eudicotiledóneas, y la mayor parte de esa diversidad se encuentra en la familia Fabaceae. Por lo tanto, la parte de las eudicotiledóneas que pertenece al orden Fabales es del 9,6%.",
+                            "adapted_prediction": "El orden Fabales representa aproximadamente el 9,6% de la diversidad de especies de eudicotiledóneas, y la mayor parte de esta riqueza se encuentra en la familia Fabaceae. Este clado, que también incluye las familias Polygalaceae, Surianaceae y Quillajaceae, se originó hace unos 94 a 89 millones de años y comenzó a diversificarse hace unos 79 a 74 millones de años. Las leguminosas, en particular, se han diversificado durante el terciario temprano y ahora son un componente ubicuo de las biotas terrestres modernas, al igual que muchas otras familias de angiospermas.",
+                            "base_f1": 0.4237,
+                            "adapted_f1": 0.7134,
+                            "base_faithfulness": 0.7308,
+                            "adapted_faithfulness": 0.7544
+                        },
+                        {
+                            "instruction": "¿Cómo se provoca al otro equipo a que cometa más faltas de ataque?",
+                            "ground_truth": "Una defensa agresiva puede aumentar las faltas de ataque cometidas por el equipo contrario, ya que los atacantes deben actuar con más velocidad y pueden tener dificultades para controlar sus acciones. Esto se debe a que una defensa activa y contundente puede desestabilizar a los jugadores ofensivos y hacer que cometan errores, resultando en faltas técnicas o personales. Sin embargo, es importante tener en cuenta que una defensa agresiva debe ser ejecutada con conocimiento y habilidad, ya que una defensa descontrolada o mal ejecutada puede resultar en más faltas para el equipo defensivo.",
+                            "base_prediction": "Para provocar al otro equipo a que cometa más faltas de ataque, se puede emplear una defensa agresiva. Esta estrategia obliga a los atacantes a actuar con mayor velocidad, lo que dificulta su control y, en consecuencia, aumenta la probabilidad de que cometan faltas.",
+                            "adapted_prediction": "La defensa agresiva es una estrategia efectiva para provocar más faltas de ataque en el equipo contrario. Al defenderse de manera activa, los defensores forzan a los atacantes a actuar con mayor velocidad y precisión, lo que dificulta el control de sus acciones y aumenta la probabilidad de cometer faltas. Además, una defensa agresiva puede hacer que los atacantes se sientan presionados y desesperados, lo que también puede llevar a cometer más faltas. Por lo tanto, una defensa agresiva es una herramienta valiosa para provocar más faltas de ataque en el equipo contrario.",
+                            "base_f1": 0.35,
+                            "adapted_f1": 0.475,
+                            "base_faithfulness": 0.4412,
+                            "adapted_faithfulness": 0.4286
+                        },
+                        {
+                            "instruction": "¿Quién es el responsable de la serie Los Simpson?",
+                            "ground_truth": "Matt Groening es el creador de la famosa serie de comedia animada Los Simpson, que se emitió en Fox Broadcasting Company y se hizo popular en varios países del mundo. La serie sigue la vida de la familia Simpson, formada por Homer, Marge, Bart, Lisa y Maggie, y ofrece una sátira de la sociedad estadounidense a través de su representación de la vida diaria de una familia de clase media en el pueblo ficticio de Springfield.",
+                            "base_prediction": "El responsable de la serie *Los Simpson* es **Matt Groening**, quien la creó para la Fox Broadcasting Company.",
+                            "adapted_prediction": "La serie de animación estadounidense \"Los Simpson\" fue creada por Matt Groening para Fox Broadcasting Company y se emite en varios países del mundo. La serie es una sátira de la sociedad estadounidense y sigue la vida de una familia de clase media en un pueblo ficticio llamado Springfield. Los personajes principales son Homer, Marge, Bart, Lisa y Maggie Simpson.",
+                            "base_f1": 0.2338,
+                            "adapted_f1": 0.713,
+                            "base_faithfulness": 0.7692,
+                            "adapted_faithfulness": 0.8571
+                        },
+                        {
+                            "instruction": "¿Dónde se vetó el disco Erotica?",
+                            "ground_truth": "El álbum Erotica de Madonna fue prohibido en algunos países asiáticos, incluyendo China y Singapur, debido a su contenido sexual explícito. Esto llevó a la creación de dos versiones del álbum: una edición «limpia» que omitió ciertas canciones y una versión explícita que incluía la etiqueta Parental Advisory. A pesar de la prohibición en ciertos países, el álbum fue publicado en CD, LP y casete en varias fechas y lugares, incluyendo Reino Unido, Estados Unidos, Japón, Europa, Australia y Nueva Zelanda. Posteriormente, se lanzó una edición limitada en vinilo blanco en Europa y Oceanía en 2018.",
+                            "base_prediction": "El disco *Erotica* fue vetado en algunos países asiáticos, específicamente en **China y Singapur**, debido al «evidente contenido sexual» en canciones como «Did You Do It?».",
+                            "adapted_prediction": "El álbum Erotica de Madonna fue prohibido en China y Singapur debido a su contenido sexual explícito, como se refleja en canciones como \"Did You Do It?\". A pesar de la prohibición en algunos países asiáticos, el álbum se publicó en CD, LP y casete por las compañías Maverick y Sire Records en 1992. La primera fecha de lanzamiento fue en Reino Unido el 15 de octubre de 1992, seguido de su disponibilidad en CD en el resto de los países europeos, Australia y Nueva Zelanda al día siguiente. El LP se lanzó en esos territorios y en todos los formatos en Estados Unidos el 20 de octubre de 1992, mientras que en Japón se editó cinco días después bajo la compañía Warner Music Japan. El álbum también se publicó en vinilo en Europa y Oceanía en 2012 y en EE. UU. en 2016, y finalmente se lanzó un vinilo blanco de Erotica en edición limitada en Europa y Oceanía en 2018.",
+                            "base_f1": 0.2727,
+                            "adapted_f1": 0.5195,
+                            "base_faithfulness": 0.913,
+                            "adapted_faithfulness": 0.875
+                        },
+                        {
+                            "instruction": "¿Qué porcentaje de estrellas acabarán convirtiéndose en enanas blancas?",
+                            "ground_truth": "El 97% de las estrellas, incluyendo nuestro Sol, se convertirán en enanas blancas al agotar su combustible nuclear y expulsar la mayor parte de su masa en nebulosas planetarias. Las enanas blancas son remanentes estelares que, junto con las enanas rojas, constituyen las estrellas más abundantes en el universo.",
+                            "base_prediction": "El 97% de las estrellas que conocemos acabarán convirtiéndose en enanas blancas.",
+                            "adapted_prediction": "El 97% de las estrellas en el universo, incluyendo al Sol, terminarán su vida como enanas blancas. Una enana blanca es un remanente estelar que se forma cuando una estrella de masa menor a 10 masas solares agota su combustible nuclear y expulsa una gran parte de su masa en una nebulosa planetaria. Las enanas blancas son las estrellas más abundantes del universo, junto con las enanas rojas.",
+                            "base_f1": 0.2692,
+                            "adapted_f1": 0.6327,
+                            "base_faithfulness": 0.8,
+                            "adapted_faithfulness": 0.7556
+                        }
+                    ]
+                },
+                "Aina-CA": {
+                    "base": {
+                        "n_samples": 2140,
+                        "Token_F1": 36.93,
+                        "ROUGE_L_F1": 29.65,
+                        "Context_Faithfulness_Pct": 80.75,
+                        "Avg_Response_Length_Words": 36.9,
+                        "Sentence_Completeness_Pct": 99.9,
+                        "BERTScore_P": 46.65,
+                        "BERTScore_R": 18.56,
+                        "BERTScore_F1": 30.67
+                    },
+                    "adapted": {
+                        "n_samples": 2140,
+                        "Token_F1": 57.81,
+                        "ROUGE_L_F1": 44.23,
+                        "Context_Faithfulness_Pct": 75.32,
+                        "Avg_Response_Length_Words": 98.8,
+                        "Sentence_Completeness_Pct": 100.0,
+                        "BERTScore_P": 44.92,
+                        "BERTScore_R": 48.28,
+                        "BERTScore_F1": 46.57
+                    },
+                    "deltas": {
+                        "Token_F1": 20.88,
+                        "ROUGE_L_F1": 14.58,
+                        "BERTScore_F1": 15.9,
+                        "Context_Faithfulness_Pct": -5.43,
+                        "Avg_Response_Length_Words": 61.9,
+                        "Sentence_Completeness_Pct": 0.1
+                    },
+                    "deltas_rel_pct": {
+                        "Token_F1": 56.54,
+                        "ROUGE_L_F1": 49.17,
+                        "BERTScore_F1": 51.84,
+                        "Context_Faithfulness_Pct": -6.72,
+                        "Avg_Response_Length_Words": 167.75,
+                        "Sentence_Completeness_Pct": 0.1
+                    },
+                    "sample_pairs": [
+                        {
+                            "instruction": "Quin sons es barrejaven en la caiguda de Sàuron?",
+                            "ground_truth": "En la caiguda de Sàuron, el departament de So va utilitzar una barreja de xiscles humans i d'un ase per crear el so adequat. Aquest so es va enregistrar en un estudi de so nou, on es van gravar tots els sons de la pel·lícula. Per evitar comparacions amb esdeveniments reals, es va utilitzar el soroll de vidre trencat per col·lapsar els sons. El treball de mescla va començar el 15 d'agost i es va completar el 15 de novembre després de tres mesos de treball ininterromput.",
+                            "base_prediction": "En la caiguda de Sàuron, es barrejaven xiscles humans i d'un ase.",
+                            "adapted_prediction": "Els sons que es barrejaven en la caiguda de Sàuron eren xiscles humans i d'un ase. Aquesta mescla de sons es va crear per al departament de So, que va passar la primera part de l'any buscant els sons correctes per a la pel·lícula. El xiscle d'Arranyera va ser inspirat pel xiscle d'un diable de Tasmània, mentre que el mûmakil va ser creat amb el començament i el final del rugit d'un lleó. Per evitar comparacions amb 9/11, es va utilitzar el so del vidre trencat per col·lapsar els sons. El treball de mescla va començar en un estudi nou el 15 d'agost i va acabar el 15 de novembre, després de tres mesos de treball ininterromput.",
+                            "base_f1": 0.2326,
+                            "adapted_f1": 0.6591,
+                            "base_faithfulness": 1.0,
+                            "adapted_faithfulness": 0.8438
+                        },
+                        {
+                            "instruction": "Què no tenen alguns lampròfirs ultramàfics?",
+                            "ground_truth": "Alguns lampròfirs ultramàfics no contenen melilita, segons la classificació original de Nicholas Rock. No obstant això, la Unió Internacional de Ciències Geològiques (IUGS) recomana actualment el terme \"lampròfirs melilitics\" per incloure roques com les polzenites, que poden no ser totes ultramàfiques. Així doncs, la melilita no és un component essencial dels lampròfirs ultramàfics, sinó que es troba en una subcategoria específica d'aquestes roques.",
+                            "base_prediction": "Alguns lampròfirs ultramàfics no tenen mel·lilita. Això es menciona en el context, on s'indica que Nicholas Rock argumenta que hi ha lampròfirs ultramàfics sense mel·lilita, i que la classificació de la IUGS ha modificat el terme per incloure les polzenites que no són totes ultramàfiques.",
+                            "adapted_prediction": "Els lampròfirs ultramàfics, segons la classificació de Nicholas Rock, no contenen mel·lilita. Aquesta classificació, que va ser modificada per la Unió Internacional de Ciències Geològiques (IUGS) el 2002, distingeix entre lampròfirs melilitics i lampròfirs ultramàfics, i classifica les polzenites i alnoïtes com a roques melilitiques en lloc de lampròfirs.",
+                            "base_f1": 0.4792,
+                            "adapted_f1": 0.5253,
+                            "base_faithfulness": 0.6562,
+                            "adapted_faithfulness": 0.7059
+                        },
+                        {
+                            "instruction": "Com van ser alliberats els segrestadors?",
+                            "ground_truth": "Els segrestadors van ser alliberats sense càrrecs després de sis setmanes d'interrogatoris i vagues de fam intermitents. Després del seu alliberament, Issawi va anar a la ciutat siriana d'Homs per visitar als seus pares, mentre que Khaled es va dirigir al Líban quan va saber que el seu germà Walid havia estat agredit per gendarmes libanesos després de saber-se la identitat de la segrestadora. Posteriorment, Khaled va tornar a Amman per continuar la seva feina al camp de refugiats d'Al-Wehdat.",
+                            "base_prediction": "Els segrestadors van ser alliberats sense càrrecs després de sis setmanes d'interrogatoris i vagues de fam intermitents.",
+                            "adapted_prediction": "Els segrestadors van ser alliberats sense càrrecs després de sis setmanes d'interrogatoris i vagues de fam intermitents. Aquestes circumstàncies van permetre la seva llibertat, la qual cosa va suposar un canvi en la vida de tots dos. Un d'ells, Issawi, va viatjar a Homs per visitar breument als seus pares, mentre que l'altre, Khaled, va anar al Líban quan va saber que el seu germà Walid havia patit una pallissa per part de gendarmes després de descobrir la identitat de la segrestadora. Després d'això, Khaled va tornar a Amman per continuar la seva feina al camp de refugiats d'Al-Wehdat.",
+                            "base_f1": 0.3636,
+                            "adapted_f1": 0.7468,
+                            "base_faithfulness": 0.8667,
+                            "adapted_faithfulness": 0.6418
+                        },
+                        {
+                            "instruction": "Amb què no s'adapta l'estil rococó?",
+                            "ground_truth": "L'estil rococó no s'adapta bé a l'ofici solemne de la funció religiosa, especialment quan es tracta d'elements com el tabernacle, l'altar o el púlpit. Aquest estil, que es caracteritza per la seva elegància i fantasia, pot ser utilitzat en objectes de grans dimensions, tot i que pot semblar-se al barroc. No obstant això, els elements fantasiosos de l'estil rococó no encaixen bé amb les grans parets de les esglésies. Els materials utilitzats en aquest estil inclouen la fusta tallada, el ferro i el bronze, que solen estar daurats per fer-los més acceptables en entorns no profans. Cal tenir en compte que la bellesa d'una peça rococó depèn de la situació local i les circumstàncies individuals.",
+                            "base_prediction": "L'estil rococó no s'adapta amb l'ofici solemne de la funció religiosa, amb el tabernacle, l'altar ni tampoc amb el púlpit. A més, els elements fantasiosos d'aquest estil no s'adiuen amb les grans parets de les esglésies.",
+                            "adapted_prediction": "L'estil rococó no s'adapta bé a l'ofici solemne de la funció religiosa, així com tampoc amb el tabernacle, l'altar o el púlpit. Aquest estil, que es caracteritza per elements fantasiosos i una decoració detallada, no és adequat per a l'espai sagrat d'una església, on la sobrietat i la serenitat són més apropiades. Tot i això, hi ha peces de rococó autènticament belles, especialment en grans objectes escultòrics, on l'estil es pot fusionar amb el barroc. Els materials utilitzats en l'estil rococó inclouen fusta tallada, ferro i bronze, i un element distintiu és el daurat que cobreix els materials metàl·lics més freds.",
+                            "base_f1": 0.3411,
+                            "adapted_f1": 0.5745,
+                            "base_faithfulness": 1.0,
+                            "adapted_faithfulness": 0.6522
+                        },
+                        {
+                            "instruction": "Amb ui somia el guardabosc?",
+                            "ground_truth": "El guardabosc somia amb la desitjada Terynka, una bella gitana, mentre descansa al bosc. Després de despertar sobtadament quan una granota salta al seu nas, recorda la mirada de Terynka i decideix capturar la guineu que atreu la seva atenció. Aquest somni i la captura de la guineu suggereixen que el guardabosc està obsessionat amb Terynka i està disposat a actuar per estar més a prop d'ella.",
+                            "base_prediction": "Amb ui somia el guardabosc? El guardabosc somia en la desitjada Terynka, una bella gitana.",
+                            "adapted_prediction": "El guardabosc somia amb Terynka, una gitana desitjada, mentre descansa al bosc. Aquest somni es produeix quan el guardabosc, fatigat, decideix dormir un poc. Durant el seu somni, un saltamartí i un grill es posen a cantar, i un mosquit vola prop del guardabosc, percaçat per una granota. Aquesta granota, a la qual es va acostar una guineu, fa un salt i cau sobre el nas del guardabosc, el qual es desperta proferint blasmes. La mirada de la guineu recorda al guardabosc la de Terynka, la qual l'atrapa i decideix endur-se-la a casa seva. Poc temps després, arriba la tardor.",
+                            "base_f1": 0.2424,
+                            "adapted_f1": 0.4962,
+                            "base_faithfulness": 0.7778,
+                            "adapted_faithfulness": 0.807
+                        }
+                    ]
+                }
+            }
+        },
+        "aggregate": {
+            "dev": {
+                "Total_Samples": 1600,
+                "Base_Token_F1": 43.33,
+                "Adapted_Token_F1": 59.95,
+                "Delta_Token_F1": 16.63,
+                "DeltaRel_Token_F1": 38.37,
+                "Base_ROUGE_L_F1": 36.62,
+                "Adapted_ROUGE_L_F1": 49.81,
+                "Delta_ROUGE_L_F1": 13.19,
+                "DeltaRel_ROUGE_L_F1": 36.02,
+                "Base_BERTScore_F1": 38.94,
+                "Adapted_BERTScore_F1": 53.07,
+                "Delta_BERTScore_F1": 14.13,
+                "DeltaRel_BERTScore_F1": 36.28
+            },
+            "test": {
+                "Total_Samples": 8490,
+                "Base_Token_F1": 42.99,
+                "Adapted_Token_F1": 62.46,
+                "Delta_Token_F1": 19.47,
+                "DeltaRel_Token_F1": 45.29,
+                "Base_ROUGE_L_F1": 36.13,
+                "Adapted_ROUGE_L_F1": 51.88,
+                "Delta_ROUGE_L_F1": 15.75,
+                "DeltaRel_ROUGE_L_F1": 43.58,
+                "Base_BERTScore_F1": 38.83,
+                "Adapted_BERTScore_F1": 55.61,
+                "Delta_BERTScore_F1": 16.78,
+                "DeltaRel_BERTScore_F1": 43.2
+            }
+        }
+    },
+    "log_history": [
+        {
+            "loss": 1.1582168340682983,
+            "grad_norm": 0.11495364457368851,
+            "learning_rate": 0.0,
+            "epoch": 0.0009827406178981636,
+            "step": 1
+        },
+        {
+            "loss": 1.2285846869150798,
+            "grad_norm": 0.14937317371368408,
+            "learning_rate": 7.84313725490196e-06,
+            "epoch": 0.024568515447454087,
+            "step": 25
+        },
+        {
+            "loss": 0.6652037811279297,
+            "grad_norm": 0.01771518774330616,
+            "learning_rate": 1.6013071895424836e-05,
+            "epoch": 0.049137030894908174,
+            "step": 50
+        },
+        {
+            "loss": 0.6340816497802735,
+            "grad_norm": 0.024198219180107117,
+            "learning_rate": 2.4183006535947712e-05,
+            "epoch": 0.07370554634236226,
+            "step": 75
+        },
+        {
+            "loss": 0.6035448455810547,
+            "grad_norm": 0.021532729268074036,
+            "learning_rate": 3.235294117647059e-05,
+            "epoch": 0.09827406178981635,
+            "step": 100
+        },
+        {
+            "loss": 0.5936581039428711,
+            "grad_norm": 0.023395178839564323,
+            "learning_rate": 4.052287581699347e-05,
+            "epoch": 0.12284257723727043,
+            "step": 125
+        },
+        {
+            "loss": 0.6011223220825195,
+            "grad_norm": 0.02785513922572136,
+            "learning_rate": 4.869281045751634e-05,
+            "epoch": 0.14741109268472452,
+            "step": 150
+        },
+        {
+            "eval_loss": 0.5763754844665527,
+            "eval_runtime": 1447.4344,
+            "eval_samples_per_second": 6.843,
+            "eval_steps_per_second": 6.843,
+            "epoch": 0.14741109268472452,
+            "step": 150
+        },
+        {
+            "loss": 0.5829325103759766,
+            "grad_norm": 0.026862140744924545,
+            "learning_rate": 4.999353551141729e-05,
+            "epoch": 0.1719796081321786,
+            "step": 175
+        },
+        {
+            "loss": 0.5902346420288086,
+            "grad_norm": 0.023131074383854866,
+            "learning_rate": 4.996898725896797e-05,
+            "epoch": 0.1965481235796327,
+            "step": 200
+        },
+        {
+            "loss": 0.5867809295654297,
+            "grad_norm": 0.028466058894991875,
+            "learning_rate": 4.992613868559706e-05,
+            "epoch": 0.22111663902708678,
+            "step": 225
+        },
+        {
+            "loss": 0.5390391921997071,
+            "grad_norm": 0.03323246166110039,
+            "learning_rate": 4.9865021195968094e-05,
+            "epoch": 0.24568515447454087,
+            "step": 250
+        },
+        {
+            "loss": 0.6061698150634766,
+            "grad_norm": 0.03243879973888397,
+            "learning_rate": 4.978567958443588e-05,
+            "epoch": 0.27025366992199495,
+            "step": 275
+        },
+        {
+            "loss": 0.5733095169067383,
+            "grad_norm": 0.028829479590058327,
+            "learning_rate": 4.968817200221567e-05,
+            "epoch": 0.29482218536944904,
+            "step": 300
+        },
+        {
+            "eval_loss": 0.5370377898216248,
+            "eval_runtime": 1442.6852,
+            "eval_samples_per_second": 6.866,
+            "eval_steps_per_second": 6.866,
+            "epoch": 0.29482218536944904,
+            "step": 300
+        },
+        {
+            "loss": 0.5628140640258789,
+            "grad_norm": 0.029805460944771767,
+            "learning_rate": 4.9572569914762964e-05,
+            "epoch": 0.31939070081690313,
+            "step": 325
+        },
+        {
+            "loss": 0.6018336868286133,
+            "grad_norm": 0.027758244425058365,
+            "learning_rate": 4.943895804939478e-05,
+            "epoch": 0.3439592162643572,
+            "step": 350
+        },
+        {
+            "loss": 0.5141872024536133,
+            "grad_norm": 0.02037544548511505,
+            "learning_rate": 4.928743433319121e-05,
+            "epoch": 0.3685277317118113,
+            "step": 375
+        },
+        {
+            "loss": 0.5450762176513672,
+            "grad_norm": 0.0259447880089283,
+            "learning_rate": 4.91181098212225e-05,
+            "epoch": 0.3930962471592654,
+            "step": 400
+        },
+        {
+            "loss": 0.537803955078125,
+            "grad_norm": 0.031689442694187164,
+            "learning_rate": 4.893110861515431e-05,
+            "epoch": 0.4176647626067195,
+            "step": 425
+        },
+        {
+            "loss": 0.5395223236083985,
+            "grad_norm": 0.024454927071928978,
+            "learning_rate": 4.87265677722909e-05,
+            "epoch": 0.44223327805417356,
+            "step": 450
+        },
+        {
+            "eval_loss": 0.5230578184127808,
+            "eval_runtime": 1437.5174,
+            "eval_samples_per_second": 6.89,
+            "eval_steps_per_second": 6.89,
+            "epoch": 0.44223327805417356,
+            "step": 450
+        },
+        {
+            "loss": 0.5162537765502929,
+            "grad_norm": 0.023098541423678398,
+            "learning_rate": 4.85046372051228e-05,
+            "epoch": 0.46680179350162765,
+            "step": 475
+        },
+        {
+            "loss": 0.5390442276000976,
+            "grad_norm": 0.024972721934318542,
+            "learning_rate": 4.8265479571452645e-05,
+            "epoch": 0.49137030894908174,
+            "step": 500
+        },
+        {
+            "loss": 0.545708999633789,
+            "grad_norm": 0.028115034103393555,
+            "learning_rate": 4.800927015517968e-05,
+            "epoch": 0.5159388243965358,
+            "step": 525
+        },
+        {
+            "loss": 0.5205156326293945,
+            "grad_norm": 0.022960307076573372,
+            "learning_rate": 4.7736196737830344e-05,
+            "epoch": 0.5405073398439899,
+            "step": 550
+        },
+        {
+            "loss": 0.5411368942260742,
+            "grad_norm": 0.021347517147660255,
+            "learning_rate": 4.744645946092901e-05,
+            "epoch": 0.565075855291444,
+            "step": 575
+        },
+        {
+            "loss": 0.5483025360107422,
+            "grad_norm": 0.021689442917704582,
+            "learning_rate": 4.7140270679309925e-05,
+            "epoch": 0.5896443707388981,
+            "step": 600
+        },
+        {
+            "eval_loss": 0.5153834223747253,
+            "eval_runtime": 1431.2699,
+            "eval_samples_per_second": 6.92,
+            "eval_steps_per_second": 6.92,
+            "epoch": 0.5896443707388981,
+            "step": 600
+        },
+        {
+            "loss": 0.5386624526977539,
+            "grad_norm": 0.01802617684006691,
+            "learning_rate": 4.681785480547762e-05,
+            "epoch": 0.6142128861863522,
+            "step": 625
+        },
+        {
+            "loss": 0.5193991851806641,
+            "grad_norm": 0.02257433347404003,
+            "learning_rate": 4.6479448145130034e-05,
+            "epoch": 0.6387814016338063,
+            "step": 650
+        },
+        {
+            "loss": 0.5568716812133789,
+            "grad_norm": 0.030425556004047394,
+            "learning_rate": 4.6125298723964886e-05,
+            "epoch": 0.6633499170812603,
+            "step": 675
+        },
+        {
+            "loss": 0.5398251342773438,
+            "grad_norm": 0.024941550567746162,
+            "learning_rate": 4.575566610589618e-05,
+            "epoch": 0.6879184325287144,
+            "step": 700
+        },
+        {
+            "loss": 0.520648078918457,
+            "grad_norm": 0.024377470836043358,
+            "learning_rate": 4.5370821202814084e-05,
+            "epoch": 0.7124869479761685,
+            "step": 725
+        },
+        {
+            "loss": 0.5532405853271485,
+            "grad_norm": 0.026660805568099022,
+            "learning_rate": 4.497104607602763e-05,
+            "epoch": 0.7370554634236226,
+            "step": 750
+        },
+        {
+            "eval_loss": 0.5133876800537109,
+            "eval_runtime": 1432.5244,
+            "eval_samples_per_second": 6.914,
+            "eval_steps_per_second": 6.914,
+            "epoch": 0.7370554634236226,
+            "step": 750
+        },
+        {
+            "loss": 0.5419559478759766,
+            "grad_norm": 0.021686822175979614,
+            "learning_rate": 4.455663372953576e-05,
+            "epoch": 0.7616239788710767,
+            "step": 775
+        },
+        {
+            "loss": 0.5386046981811523,
+            "grad_norm": 0.023267297074198723,
+            "learning_rate": 4.4127887895278256e-05,
+            "epoch": 0.7861924943185308,
+            "step": 800
+        },
+        {
+            "loss": 0.5299620056152343,
+            "grad_norm": 0.02422972209751606,
+            "learning_rate": 4.368512281052393e-05,
+            "epoch": 0.8107610097659849,
+            "step": 825
+        },
+        {
+            "loss": 0.5140533828735352,
+            "grad_norm": 0.02261168509721756,
+            "learning_rate": 4.322866298755913e-05,
+            "epoch": 0.835329525213439,
+            "step": 850
+        },
+        {
+            "loss": 0.5064333343505859,
+            "grad_norm": 0.024133305996656418,
+            "learning_rate": 4.275884297584563e-05,
+            "epoch": 0.859898040660893,
+            "step": 875
+        },
+        {
+            "loss": 0.5010063552856445,
+            "grad_norm": 0.023065917193889618,
+            "learning_rate": 4.227600711682189e-05,
+            "epoch": 0.8844665561083471,
+            "step": 900
+        },
+        {
+            "eval_loss": 0.5083330273628235,
+            "eval_runtime": 1427.9808,
+            "eval_samples_per_second": 6.936,
+            "eval_steps_per_second": 6.936,
+            "epoch": 0.8844665561083471,
+            "step": 900
+        },
+        {
+            "loss": 0.5251457214355468,
+            "grad_norm": 0.02785075083374977,
+            "learning_rate": 4.178050929152765e-05,
+            "epoch": 0.9090350715558012,
+            "step": 925
+        },
+        {
+            "loss": 0.5411847686767578,
+            "grad_norm": 0.024141423404216766,
+            "learning_rate": 4.127271266123673e-05,
+            "epoch": 0.9336035870032553,
+            "step": 950
+        },
+        {
+            "loss": 0.5208710861206055,
+            "grad_norm": 0.02199481800198555,
+            "learning_rate": 4.075298940128812e-05,
+            "epoch": 0.9581721024507094,
+            "step": 975
+        },
+        {
+            "loss": 0.5131022262573243,
+            "grad_norm": 0.023057764396071434,
+            "learning_rate": 4.022172042831046e-05,
+            "epoch": 0.9827406178981635,
+            "step": 1000
+        },
+        {
+            "loss": 0.4861625671386719,
+            "grad_norm": 0.02051195129752159,
+            "learning_rate": 3.9679295121039874e-05,
+            "epoch": 1.0068791843252871,
+            "step": 1025
+        },
+        {
+            "loss": 0.474234504699707,
+            "grad_norm": 0.029678210616111755,
+            "learning_rate": 3.9126111034935706e-05,
+            "epoch": 1.0314476997727413,
+            "step": 1050
+        },
+        {
+            "eval_loss": 0.5060052871704102,
+            "eval_runtime": 1427.2927,
+            "eval_samples_per_second": 6.94,
+            "eval_steps_per_second": 6.94,
+            "epoch": 1.0314476997727413,
+            "step": 1050
+        },
+        {
+            "loss": 0.46904052734375,
+            "grad_norm": 0.025452349334955215,
+            "learning_rate": 3.856257361080337e-05,
+            "epoch": 1.0560162152201953,
+            "step": 1075
+        },
+        {
+            "loss": 0.4663557052612305,
+            "grad_norm": 0.031449075788259506,
+            "learning_rate": 3.798909587763782e-05,
+            "epoch": 1.0805847306676495,
+            "step": 1100
+        },
+        {
+            "loss": 0.4739683532714844,
+            "grad_norm": 0.034969478845596313,
+            "learning_rate": 3.740609814990554e-05,
+            "epoch": 1.1051532461151035,
+            "step": 1125
+        },
+        {
+            "loss": 0.45864803314208985,
+            "grad_norm": 0.03177754953503609,
+            "learning_rate": 3.681400771948679e-05,
+            "epoch": 1.1297217615625577,
+            "step": 1150
+        },
+        {
+            "loss": 0.47899810791015623,
+            "grad_norm": 0.026579132303595543,
+            "learning_rate": 3.621325854250398e-05,
+            "epoch": 1.1542902770100116,
+            "step": 1175
+        },
+        {
+            "loss": 0.4389665985107422,
+            "grad_norm": 0.03664662316441536,
+            "learning_rate": 3.560429092126565e-05,
+            "epoch": 1.1788587924574658,
+            "step": 1200
+        },
+        {
+            "eval_loss": 0.5114856958389282,
+            "eval_runtime": 1425.9086,
+            "eval_samples_per_second": 6.946,
+            "eval_steps_per_second": 6.946,
+            "epoch": 1.1788587924574658,
+            "step": 1200
+        },
+        {
+            "loss": 0.4618475341796875,
+            "grad_norm": 0.029401762410998344,
+            "learning_rate": 3.498755118155923e-05,
+            "epoch": 1.2034273079049198,
+            "step": 1225
+        },
+        {
+            "loss": 0.4898323822021484,
+            "grad_norm": 0.02991996519267559,
+            "learning_rate": 3.436349134552901e-05,
+            "epoch": 1.227995823352374,
+            "step": 1250
+        },
+        {
+            "loss": 0.47718021392822263,
+            "grad_norm": 0.03180338069796562,
+            "learning_rate": 3.3732568800379174e-05,
+            "epoch": 1.252564338799828,
+            "step": 1275
+        },
+        {
+            "loss": 0.46798206329345704,
+            "grad_norm": 0.0325222872197628,
+            "learning_rate": 3.309524596314462e-05,
+            "epoch": 1.2771328542472822,
+            "step": 1300
+        },
+        {
+            "loss": 0.47284156799316407,
+            "grad_norm": 0.029988078400492668,
+            "learning_rate": 3.245198994177536e-05,
+            "epoch": 1.3017013696947362,
+            "step": 1325
+        },
+        {
+            "loss": 0.459912109375,
+            "grad_norm": 0.03832243010401726,
+            "learning_rate": 3.1803272192782765e-05,
+            "epoch": 1.3262698851421904,
+            "step": 1350
+        },
+        {
+            "eval_loss": 0.5089771151542664,
+            "eval_runtime": 1426.4363,
+            "eval_samples_per_second": 6.944,
+            "eval_steps_per_second": 6.944,
+            "epoch": 1.3262698851421904,
+            "step": 1350
+        },
+        {
+            "loss": 0.4840315628051758,
+            "grad_norm": 0.03455331176519394,
+            "learning_rate": 3.1149568175698746e-05,
+            "epoch": 1.3508384005896443,
+            "step": 1375
+        },
+        {
+            "loss": 0.4670616912841797,
+            "grad_norm": 0.04102376103401184,
+            "learning_rate": 3.0491357004600934e-05,
+            "epoch": 1.3754069160370985,
+            "step": 1400
+        },
+        {
+            "loss": 0.4673247528076172,
+            "grad_norm": 0.04101058468222618,
+            "learning_rate": 2.982912109695946e-05,
+            "epoch": 1.3999754314845525,
+            "step": 1425
+        },
+        {
+            "loss": 0.47433563232421877,
+            "grad_norm": 0.03634309396147728,
+            "learning_rate": 2.9163345820062567e-05,
+            "epoch": 1.4245439469320067,
+            "step": 1450
+        },
+        {
+            "loss": 0.4345086669921875,
+            "grad_norm": 0.033477433025836945,
+            "learning_rate": 2.8494519135280172e-05,
+            "epoch": 1.4491124623794607,
+            "step": 1475
+        },
+        {
+            "loss": 0.44519786834716796,
+            "grad_norm": 0.0352574847638607,
+            "learning_rate": 2.7823131240426304e-05,
+            "epoch": 1.4736809778269149,
+            "step": 1500
+        },
+        {
+            "eval_loss": 0.5075099468231201,
+            "eval_runtime": 1424.4068,
+            "eval_samples_per_second": 6.954,
+            "eval_steps_per_second": 6.954,
+            "epoch": 1.4736809778269149,
+            "step": 1500
+        },
+        {
+            "train_runtime": 27736.6225,
+            "train_samples_per_second": 1.761,
+            "train_steps_per_second": 0.11,
+            "total_flos": 1.3305902650702234e+18,
+            "train_loss": 0.5353907314141592,
+            "epoch": 1.4736809778269149,
+            "step": 1500
+        },
+        {
+            "eval_loss": 0.5083330273628235,
+            "eval_runtime": 1435.1587,
+            "eval_samples_per_second": 6.902,
+            "eval_steps_per_second": 6.902,
+            "epoch": 1.4736809778269149,
+            "step": 1500
+        }
+    ],
+    "generated_samples": [
+        {
+            "instruction": "Why is the scaling factor (1/√dk) applied in Scaled Dot-Product Attention?",
+            "context": "The two most commonly used attention functions are additive attention and dot-product (multiplicative) attention. Dot-product attention is identical to our algorithm, except for the scaling factor of 1/√dk. While the two are similar in theoretical complexity, dot-product attention is much faster and more space-efficient in practice, since it can be implemented using highly optimized matrix multiplication code. For large values of dk, the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients. To counteract this effect, we scale the dot products by 1/√dk.",
+            "response": "The scaling factor (1/√dk) is applied in Scaled Dot-Product Attention to prevent the dot products from growing too large in magnitude, which can cause the softmax function to produce extremely small gradients. This is particularly important for large values of dk, where the dot products can become very large. By scaling the dot products by 1/√dk, we can ensure that the softmax function remains in a region where it has more reasonable gradients, which can help improve the performance of the attention mechanism."
+        },
+        {
+            "instruction": "¿Cuáles fueron las consecuencias territoriales del Tratado de Utrecht para España?",
+            "context": "El Tratado de Utrecht, firmado en 1713, puso fin a la Guerra de Sucesión Española. España cedió Gibraltar y Menorca a Gran Bretaña, y los Países Bajos españoles y territorios italianos pasaron a Austria. Felipe V fue reconocido como rey de España, pero renunció a sus derechos al trono francés. El tratado también otorgó a Gran Bretaña el asiento, un contrato monopolístico para abastecer de esclavos africanos a las colonias españolas en América.",
+            "response": "El Tratado de Utrecht, firmado en 1713, tuvo importantes consecuencias territoriales para España. En este tratado, España cedió Gibraltar y Menorca a Gran Bretaña, y los Países Bajos españoles y territorios italianos pasaron a Austria. Además, Felipe V fue reconocido como rey de España, pero renunció a sus derechos al trono francés. El tratado también otorgó a Gran Bretaña el asiento, un contrato monopolístico para abastecer de esclavos africanos a las colonias españolas en América."
+        },
+        {
+            "instruction": "Quines eren les característiques principals del sistema de reg de l'Albufera?",
+            "context": "L'Albufera de València és un parc natural situat a uns 10 km al sud de la ciutat. El sistema de reg de la marjal es basa en una xarxa de canals i sèquies que distribueixen l'aigua provinent del riu Xúquer cap als arrossars. Les comportes de la Devesa regulen el nivell de l'aigua de la llacuna, essencial per al cultiu de l'arròs. Durant l'estiu, els arrossars s'inunden de manera controlada per afavorir la germinació, i a la tardor s'asseca el terreny per permetre la collita. Aquesta gestió hídrica és fonamental per mantenir tanto la producció agrícola com l'ecosistema natural.",
+            "response": "El sistema de reg de l'Albufera de València es basa en una xarxa de canals i sèquies que distribueixen l'aigua del riu Xúquer cap als arrossars. Aquest sistema està regulat per les comportes de la Devesa, que controlen el nivell d'aigua de la llacuna i són essencials per al cultiu de l'arròs. Durant l'estiu, els arrossars s'inunden de manera controlada per afavorir la germinació, i a la tardor s'asseca el terreny per permetre la collita. Aquesta gestió hídrica és fonamental per mantenir la producció agrícola i l'ecosistema natural de l'Albufera."
+        }
+    ]
+}

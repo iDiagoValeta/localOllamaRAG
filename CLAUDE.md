@@ -29,10 +29,10 @@ El proyecto tiene dos dimensiones:
 | Tarea | Estado |
 |-------|--------|
 | Evaluación base (7 modelos, 320 muestras/dataset) | ✅ Completada — `training-output/baseline/` |
-| Fine-tuning Qwen3-14B (v10) | 🔄 En ejecución en cluster |
-| Fine-tuning Phi-4 (v1) | 🔄 En ejecución en cluster |
+| Fine-tuning Qwen3-14B (v10) | ✅ Artefactos locales en `training-output/qwen-3/` (checkpoints y pesos gitignored; métricas versionables) |
+| Fine-tuning Phi-4 (v1) | ✅ Run principal r=32 en `training-output/phi-4/`; exploración r=64 en `phi-4/64/`; r=16 en curso → `phi-4/16/` |
 | Fine-tuning Gemma-3-12B (v2) | ⏳ Pendiente — script actualizado, listo para lanzar |
-| Evaluación base/adaptado (test) | ⏳ Pendiente de resultados de training |
+| Evaluación base/adaptado (test) | ✅ Donde el run exporta `evaluation_comparison.json` (Qwen3 en raíz; Phi r=32 en raíz; Phi r=64 en `phi-4/64/`); pendiente al cerrar r=16 (`phi-4/16/`) |
 
 **Modelos viables para producción**: Qwen3-14B, Phi-4 y Gemma-3-12B (scripts actualizados y compatibles con GGUF/Ollama).
 
@@ -120,8 +120,9 @@ localOllamaRAG/
 │   ├── qwen-3/                   # Adaptador LoRA Qwen3 (artefactos pesados gitignored)
 │   │   ├── generate_reports.py   # Tablas + figuras train/eval → plots/ (misma lógica en cada modelo)
 │   │   └── plots/                # Curvas de training/eval (gitignored)
-│   ├── phi-4/                    # Adaptador LoRA Phi-4 (artefactos pesados gitignored)
+│   ├── phi-4/                    # LoRA Phi-4: r=32 en raíz; r≠32 en subcarpeta `<rank>/` (p. ej. 16/, 64/)
 │   │   ├── generate_reports.py   # Tablas + figuras train/eval → plots/ (misma lógica en cada modelo)
+│   │   ├── <rank>/               # Solo métricas JSON versionables por rank; pesos/checkpoints gitignored
 │   │   └── plots/                # Curvas y reportes de training/eval (gitignored)
 │   ├── gemma-3/                  # Adaptador LoRA Gemma-3 (artefactos pesados gitignored)
 │   │   ├── generate_reports.py   # Tablas + figuras train/eval → plots/ (misma lógica en cada modelo)
@@ -493,7 +494,7 @@ bert-score>=0.3.13
 | Tablas de resultados | `training-output/baseline/reports/` | Markdown + CSVs + figuras; generado por `generate_reports.py` |
 | Baseline 200-sample (histórico) | `training-output/baseline/200/` | Versión anterior cap=200; solo referencia |
 | Artefactos LoRA Qwen3-14B | `training-output/qwen-3/` | Tras training: `training_stats.json`, `evaluation_comparison.json`, predicciones (gitignored). `generate_reports.py` → `plots/{train,eval}/` |
-| Artefactos LoRA Phi-4 | `training-output/phi-4/` | Misma convención que Qwen3; `generate_reports.py` idéntico en lógica |
+| Artefactos LoRA Phi-4 | `training-output/phi-4/` | Convención Qwen3 + **subcarpetas por rank** (`16/`, `64/`, …) cuando `LORA_RANK≠32` en `train-phi4.py`; en raíz, run histórico r=32 |
 | Artefactos LoRA Gemma-3-12B | `training-output/gemma-3/` | Misma convención que Qwen3; `generate_reports.py` idéntico en lógica |
 | Diagrama arquitectura | `docs/monkeygrab_architecture.png` / `.svg` | Generado por `generate_diagram.py` |
 
@@ -525,6 +526,8 @@ Cada carpeta de modelo usa el patrón:
 - Si añades un **nuevo modelo** bajo `training-output/`, copia el bloque de tres líneas `/*` + tres `!…` y sustituye el slug (mismo orden que el resto de modelos).
 - Si quieres versionar **otro** fichero pequeño en esa carpeta, añade **una** línea `!training-output/<slug>/nombre.ext` **debajo** de las excepciones existentes del mismo modelo.
 - **No** sustituyas el patrón `/*` por ignorar solo extensiones sin más: es fácil dejar fuera del repo scripts o JSON que sí interesan (ya ocurrió con `generate_reports.py` antes de las excepciones).
+
+**Phi-4 y varios ranks:** `train-phi4.py` usa `training-output/phi-4/` para r=32 y `training-output/phi-4/<rank>/` para otros. En `.gitignore`, por cada rank del que quieras subir métricas, replica el bloque de cinco líneas (`!<slug>/`, `<slug>/*`, dos `!…json`). Hoy están declarados **16** y **64**; para otro rank, copia el bloque y cambia el número.
 
 Comprobar si un path está ignorado:
 

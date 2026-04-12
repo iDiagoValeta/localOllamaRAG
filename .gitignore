@@ -47,10 +47,23 @@ training-output/gemma-3/*
 !training-output/gemma-3/evaluation_comparison.json
 
 # --- Phi-4 ---
+# Rank 32 escribe en la raíz de phi-4/ (train-phi4.py). Otros ranks usan
+# subcarpeta numérica (p. ej. 16/, 64/) sin pisar el run r=32.
 training-output/phi-4/*
 !training-output/phi-4/generate_reports.py
 !training-output/phi-4/training_stats.json
 !training-output/phi-4/evaluation_comparison.json
+
+# Subcarpetas por rank: solo JSON de resumen (el resto sigue excluido por *.safetensors, *.pt…).
+!training-output/phi-4/16/
+training-output/phi-4/16/*
+!training-output/phi-4/16/training_stats.json
+!training-output/phi-4/16/evaluation_comparison.json
+
+!training-output/phi-4/64/
+training-output/phi-4/64/*
+!training-output/phi-4/64/training_stats.json
+!training-output/phi-4/64/evaluation_comparison.json
 
 # --- Baseline: informes regenerables (JSON maestro sí se versiona) ---
 training-output/baseline/reports/
