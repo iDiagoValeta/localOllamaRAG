@@ -70,7 +70,8 @@ The **full MonkeyGrab application repository is not public yet** (defense / publ
 - **Sequence limits:** `max_length` 4,096 tokens; context truncated to **2,048** tokens; generation up to **2,048** new tokens.
 - **Optimizer / schedule:** AdamW 8-bit, **lr** 5e-5, **cosine** decay with **warmup_ratio** 0.05, **weight_decay** 0.01, **max_grad_norm** 1.0.
 - **Batching:** `per_device_train_batch_size` 1, **gradient_accumulation_steps** 16 → **effective batch 16**; **bf16** + **TF32**; gradient checkpointing enabled.
-- **Epochs:** 3; checkpoints saved every **300** steps (keep last 3); eval every **150** steps; **load_best_model_at_end** on `eval_loss`; **early stopping** patience **5** evaluations.
+- **Epochs:** 3; checkpoints saved every **300** steps (keep last 3); eval every **150** steps; **load_best_model_at_end** on `eval_loss`; **early stopping** with **patience 5** evaluations for **the training run that produced this checkpoint** (tables below).
+- **Follow-up:** After that run, further experiments suggested **tighter early stopping**; `reproduction/train-qwen3.py` now uses **patience 3** as the default for new runs. The metrics in this card are unchanged and still refer to the **patience-5** run.
 
 ### Evaluation protocol
 
