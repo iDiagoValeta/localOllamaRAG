@@ -19,7 +19,15 @@ pipeline_tag: text-generation
 
 # Phi-4 RAG (LoRA fine-tuned) — Q4_K_M GGUF
 
-Quantized **GGUF** build of **Microsoft Phi-4** with a **LoRA** adapter merged in, for **retrieval-augmented question answering**. The model answers **only from supplied document context** in **English, Spanish, or Catalan**, using the same RAG-oriented system prompt as the **MonkeyGrab** project (TFG, Universitat Politècnica de València).
+Quantized **GGUF** build of **Microsoft Phi-4** with a **LoRA** adapter merged in, for **retrieval-augmented question answering**. The model answers **only from supplied document context** in **English, Spanish, or Catalan**, using the same RAG-oriented system prompt as **MonkeyGrab**, a local RAG stack developed for a **Master’s thesis (TFG) at the Universitat Politècnica de València (UPV)**.
+
+## Source code, thesis, and contact
+
+The **full MonkeyGrab application repository is not public yet** (defense / publication timeline). This Hugging Face model repo therefore focuses on **inference weights** (`Phi4-Q4_K_M.gguf`), the **Ollama `Modelfile`**, and a **`reproduction/`** folder with frozen copies of the training script, merge utility, and the exported **`evaluation_comparison.json`** so methodology and metrics remain auditable without implying that the whole codebase is cloneable today.
+
+**Contact:** [nadiva1243@gmail.com](mailto:nadiva1243@gmail.com) for questions about training, evaluation, Ollama usage, or when the full repository will be released.
+
+**GGUF build (high level):** LoRA merge with the project’s `merge_lora.py` (see `reproduction/`) → export to GGUF (llama.cpp toolchain) → **Q4_K_M** quantize. Exact CLI flags match your local `llama.cpp` build; the merge script documents expected paths.
 
 ## Files in this repo
 
@@ -27,12 +35,17 @@ Quantized **GGUF** build of **Microsoft Phi-4** with a **LoRA** adapter merged i
 |------|-------------|
 | `Phi4-Q4_K_M.gguf` | Full weights after LoRA merge, **Q4_K_M** quantization (local inference, e.g. Ollama). |
 | `Modelfile` | Ollama recipe: ChatML template, system prompt, sampling parameters. |
-| `README.md` | This model card (mirrored in the source tree under `models/gguf-output/phi-4/`). |
+| `README.md` | This model card (mirrored in the author’s source tree under `models/gguf-output/phi-4/` when the repo is published). |
+| `LICENSE` | MIT — applies to model card, `Modelfile`, and files added here by nadiva1243 (not to Microsoft’s base terms). |
+| `reproduction/train-phi4.py` | Snapshot of `scripts/training/train-phi4.py` (v1) used for this adapter. |
+| `reproduction/merge_lora.py` | Snapshot of `scripts/conversion/merge_lora.py` (merge LoRA into dense weights before GGUF export). |
+| `reproduction/evaluation_comparison.json` | Frozen eval export (base vs adapted, dev/test, per dataset + aggregate). |
+| `reproduction/CONVERSION.md` | Short notes linking merge → GGUF → quantization → Ollama. |
 
 ## Base model and method
 
 - **Base:** [`microsoft/phi-4`](https://huggingface.co/microsoft/phi-4) (ChatML-style; end-of-turn `<|redacted_im_end|>`).
-- **Adaptation:** PEFT **LoRA** → merge into dense weights → **GGUF** export and **Q4_K_M** quantization via the project toolchain (`scripts/conversion/`, llama.cpp binaries).
+- **Adaptation:** PEFT **LoRA** → merge into dense weights → **GGUF** export and **Q4_K_M** quantization via **merge + llama.cpp** (script snapshots under **`reproduction/`** on this Hub mirror the project’s `scripts/conversion/` layout).
 
 ### LoRA configuration
 
@@ -63,7 +76,7 @@ Quantized **GGUF** build of **Microsoft Phi-4** with a **LoRA** adapter merged i
 - **Dev:** 320 samples per dataset × 5 sources = **1,600** examples (aligned with `scripts/evaluation/evaluate_baselines.py` / `training-output/baseline/` for cross-experiment comparability).
 - **Test:** **full** held-out splits (**8,490** examples total across sources).
 - **Metrics:** Token F1, ROUGE-L F1, BERTScore F1 (`microsoft/deberta-xlarge-mnli`); BERTScore computed after unloading the generative model.
-- **Artifacts:** `training-output/phi-4/evaluation_comparison.json` in the code repo.
+- **Artifacts:** metrics and sample pairs are in **`reproduction/evaluation_comparison.json`** on this Hub repo (and will live under `training-output/phi-4/` in the future public codebase).
 
 ## Evaluation results
 

@@ -143,8 +143,9 @@ localOllamaRAG/
 │   └── splits.md                 # Análisis de splits de datasets
 ├── llama-bin/                    # Binarios llama.cpp compilados para Windows (gitignored)
 ├── models/
+│   ├── merged-model/             # Modelo HF denso post-merge LoRA (gitignored; se puede borrar tras GGUF)
 │   └── gguf-output/
-│       ├── qwen-3/               # GGUF Qwen3-14B + Modelfile (solo Modelfile versionado)
+│       ├── qwen-3/               # GGUF Qwen3-14B + Modelfile, README, LICENSE, CONVERSION.md
 │       ├── phi-4/                # GGUF Phi-4 + Modelfile + README.md + LICENSE (HF)
 │       └── gemma-3/              # GGUF Gemma-3-12B + Modelfile (solo Modelfile versionado)
 ├── llama.cpp/                    # Submódulo externo — no modificar (gitignored)
@@ -266,6 +267,12 @@ python scripts/training/train-gemma3.py
 
 # Fusionar adaptador para exportar a GGUF
 python scripts/conversion/merge_lora.py --model qwen-3   # opciones: qwen-3, gemma-3, phi-4
+
+# Model cards + carpeta reproduction/ en Hugging Face (requiere HUGGINGFACE_HUB_TOKEN; no sube .gguf)
+python scripts/hf_upload_model_cards.py
+
+# Subir solo el GGUF Q4_K_M de Qwen al Hub (~9 GB; mismo token)
+python scripts/hf_upload_model_cards.py --upload-qwen-q4-gguf
 ```
 
 ### Evaluación
@@ -548,7 +555,11 @@ Se usa cuando la aplicación **espera un directorio** pero su contenido **no** d
 
 ### 11.4 `models/gguf-output/<modelo>/`
 
-Se versionan el **`Modelfile`**, **`README.md`** y **`LICENSE`** donde existan (hoy en `phi-4/` para la model card y licencia MIT del paquete en Hub). Los `.gguf` quedan fuera por la regla global `*.gguf` y por el patrón `models/gguf-output/<modelo>/*` con esas excepciones. Cualquier despliegue debe enlazar **dónde** está el binario (ver §11.6).
+Se versionan el **`Modelfile`**, **`README.md`**, **`LICENSE`** y **`CONVERSION.md`** (notas merge → GGUF → Ollama) donde existan — hoy en `phi-4/` y `qwen-3/` alineados con las model cards del Hub. Los `.gguf` quedan fuera por la regla global `*.gguf` y por el patrón `models/gguf-output/<modelo>/*` con esas excepciones. Cualquier despliegue debe enlazar **dónde** está el binario (ver §11.6).
+
+**`models/merged-model/`** (salida de `merge_lora.py`) está **gitignored** por completo: no versionar; tras generar el **Q4_K_M** puedes borrar la carpeta del modelo correspondiente para liberar ~decenas de GB (ver limpieza en §7 conversión / nota abajo).
+
+**Liberar disco tras conversión (conservar solo Q4):** opcionalmente borrar `models/merged-model/<slug>/`, el intermedio `models/gguf-output/<slug>/*-f16.gguf`, checkpoints y pesos bajo `training-output/<slug>/` que no necesites para reanudar entrenamiento; conservar **`…-Q4_K_M.gguf`**, `Modelfile` y los JSON pequeños versionables (`training_stats.json`, `evaluation_comparison.json`).
 
 ### 11.5 Cambios beneficiosos a vigilar (no obligatorios)
 
