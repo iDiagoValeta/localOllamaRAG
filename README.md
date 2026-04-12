@@ -205,6 +205,9 @@ localOllamaRAG/
 │   └── conversion/               # LoRA adapter merge and GGUF quantization
 ├── evaluation/
 │   └── run_eval.py               # RAGAS evaluation of the live pipeline
+├── models/
+│   ├── merged-model/             # Dense HF weights after LoRA merge (gitignored; safe to delete after Q4 GGUF)
+│   └── gguf-output/              # GGUF + Modelfile per model (only small files tracked in Git)
 ├── training-output/
 │   ├── qwen-3/                   # Qwen3 LoRA artifacts + generate_reports.py → plots/
 │   ├── phi-4/                    # Phi-4 LoRA artifacts + generate_reports.py → plots/
