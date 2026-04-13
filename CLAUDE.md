@@ -1,8 +1,12 @@
-# CLAUDE.md — MonkeyGrab (localOllamaRAG)
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+<!-- Internal title: MonkeyGrab (localOllamaRAG) -->
 
 ## 1. Descripción del proyecto
 
-**MonkeyGrab** es un sistema RAG (Retrieval-Augmented Generation) completamente local desarrollado como TFG del **Grado** MUITSS (UPV). Indexa PDFs, recupera fragmentos relevantes mediante búsqueda híbrida y genera respuestas fundamentadas usando un LLM servido por Ollama. Ningún dato sale de la máquina del usuario en uso normal.
+**MonkeyGrab** es un sistema RAG (Retrieval-Augmented Generation) completamente local desarrollado como TFG del **Grado en Ingeniería Informática** de la ETSINF, Universitat Politècnica de València. Autor: Ignacio Diago Valeta. Tutor: Adrià Giménez Pastor. Curso 2025-2026. Indexa PDFs, recupera fragmentos relevantes mediante búsqueda híbrida y genera respuestas fundamentadas usando un LLM servido por Ollama. Ningún dato sale de la máquina del usuario en uso normal.
 
 El proyecto tiene dos dimensiones:
 - **Capa experimental**: entrenamiento LoRA, evaluación con métricas múltiples, trazabilidad de experimentos.
@@ -18,7 +22,9 @@ El proyecto tiene dos dimensiones:
 4. **No modificar `requirements.txt`** sin confirmar con el usuario: las versiones están fijadas intencionalmente (especialmente el stack de training).
 5. **No cambiar flags de pipeline** (`USAR_RECOMP_SYNTHESIS`, etc.) sin acordarlo con el usuario: tienen efecto directo en latencia y coste.
 6. **No tocar `llama.cpp/`**: es un submódulo externo.
-7. Al proponer cambios en `chat_pdfs.py`: `web/app.py` importa directamente constantes y funciones de ese módulo (`PATH_DB`, `COLLECTION_NAME`, `indexar_documentos`, `evaluar_pregunta_rag`…). Un renombrado rompe el backend web.
+7. Al proponer cambios en `chat_pdfs.py`: `web/app.py` importa directamente constantes y funciones de ese módulo. Un renombrado rompe el backend web. **API pública completa usada por `web/app.py`**:
+   - Constantes: `PATH_DB`, `COLLECTION_NAME`, `CARPETA_DOCS`, `SYSTEM_PROMPT_CHAT`, `MAX_HISTORIAL_MENSAJES`, `MODELO_CHAT`, `MODELO_RAG`, `MIN_LONGITUD_PREGUNTA_RAG`, `UMBRAL_RELEVANCIA`, `UMBRAL_SCORE_RERANKER`, `TOP_K_FINAL`, `EXPANDIR_CONTEXTO`, `N_TOP_PARA_EXPANSION`, `MAX_CONTEXTO_CHARS`, `USAR_RERANKER`, `USAR_RECOMP_SYNTHESIS`, `RERANKER_AVAILABLE`, `STOPWORDS`
+   - Funciones: `indexar_documentos`, `realizar_busqueda_hibrida`, `expandir_con_chunks_adyacentes`, `sintetizar_contexto_recomp`, `construir_contexto_para_modelo`, `guardar_debug_rag`, `generar_respuesta_silenciosa`, `obtener_documentos_indexados`, `cargar_historial`, `guardar_historial`, `limpiar_historial`
 8. **Tras cualquier modificación, revisar si hay que actualizar `CLAUDE.md` o `README.md`**: cambios en estructura de archivos, flags de pipeline, modelos, scripts, rutas, estado del experimento o convenciones de código deben reflejarse en la documentación del proyecto para mantenerla sincronizada.
 9. **Cambios en `.gitignore` o `.gitkeep`**: seguir la **Sección 11** (patrones `training-output/`, carpetas con `.gitkeep`, GGUF fuera del repo). Tras editar reglas, validar con `git check-ignore -v <ruta>` y actualizar la Sección 11 si cambia la política.
 
@@ -30,9 +36,9 @@ El proyecto tiene dos dimensiones:
 |-------|--------|
 | Evaluación base (7 modelos, 320 muestras/dataset) | ✅ Completada — `training-output/baseline/` |
 | Fine-tuning Qwen3-14B (v10) | ✅ Artefactos locales en `training-output/qwen-3/` (checkpoints y pesos gitignored; métricas versionables) |
-| Fine-tuning Phi-4 (v1) | ✅ Run principal r=32 en `training-output/phi-4/`; exploración r=64 en `phi-4/64/`; r=16 en curso → `phi-4/16/` |
+| Fine-tuning Phi-4 (v1) | ✅ Run principal r=32 en `training-output/phi-4/`; exploración r=64 en `phi-4/64/`; r=16 en `phi-4/16/` (artefactos completos: `training_stats.json`, `evaluation_comparison.json`) |
 | Fine-tuning Gemma-3-12B (v2) | ⏳ Pendiente — script actualizado, listo para lanzar |
-| Evaluación base/adaptado (test) | ✅ Donde el run exporta `evaluation_comparison.json` (Qwen3 en raíz; Phi r=32 en raíz; Phi r=64 en `phi-4/64/`); pendiente al cerrar r=16 (`phi-4/16/`) |
+| Evaluación base/adaptado (test) | ✅ `evaluation_comparison.json` versionado en: Qwen3 (raíz), Phi r=32 (raíz), Phi r=64 (`phi-4/64/`), Phi r=16 (`phi-4/16/`). Pendiente: Gemma-3 (training no lanzado). |
 
 **Modelos viables para producción**: Qwen3-14B, Phi-4 y Gemma-3-12B (scripts actualizados y compatibles con GGUF/Ollama).
 
@@ -93,6 +99,7 @@ localOllamaRAG/
 │       └── vite.config.ts        # Configuración Vite
 ├── scripts/
 │   ├── requirements.txt          # torch, transformers, peft, datasets, bert-score…
+│   ├── hf_upload_model_cards.py  # Sube model cards al Hub; --upload-qwen-q4-gguf para el GGUF de Qwen
 │   ├── training/
 │   │   ├── train-qwen3.py        # LoRA Qwen3-14B (v10) ✅ actualizado
 │   │   ├── train-phi4.py         # LoRA Phi-4 (v1) ✅ actualizado
@@ -119,6 +126,7 @@ localOllamaRAG/
 ├── training-output/
 │   ├── qwen-3/                   # Adaptador LoRA Qwen3 (artefactos pesados gitignored)
 │   │   ├── generate_reports.py   # Tablas + figuras train/eval → plots/ (misma lógica en cada modelo)
+│   │   ├── train.py              # Copia del script de training usada en el cluster (gitignored)
 │   │   └── plots/                # Curvas de training/eval (gitignored)
 │   ├── phi-4/                    # LoRA Phi-4: r=32 en raíz; r≠32 en subcarpeta `<rank>/` (p. ej. 16/, 64/)
 │   │   ├── generate_reports.py   # Tablas + figuras train/eval → plots/ (misma lógica en cada modelo)
@@ -139,14 +147,13 @@ localOllamaRAG/
 │   ├── monkeygrab_architecture.png
 │   ├── monkeygrab_architecture.svg
 │   ├── investigacionMetricas.md
-│   ├── palabras.md
 │   └── splits.md                 # Análisis de splits de datasets
 ├── llama-bin/                    # Binarios llama.cpp compilados para Windows (gitignored)
 ├── models/
 │   ├── merged-model/             # Modelo HF denso post-merge LoRA (gitignored; se puede borrar tras GGUF)
 │   └── gguf-output/
 │       ├── qwen-3/               # GGUF Qwen3-14B + Modelfile, README, LICENSE, CONVERSION.md
-│       ├── phi-4/                # GGUF Phi-4 + Modelfile + README.md + LICENSE (HF)
+│       ├── phi-4/                # GGUF Phi-4 + Modelfile + README.md + LICENSE + CONVERSION.md
 │       └── gemma-3/              # GGUF Gemma-3-12B + Modelfile (solo Modelfile versionado)
 ├── llama.cpp/                    # Submódulo externo — no modificar (gitignored)
 ├── README.md
@@ -175,10 +182,11 @@ Variables de entorno de referencia (ajustar según hardware y despliegue):
 
 | Variable | Referencia | Descripción |
 |----------|------------|-------------|
-| `OLLAMA_RAG_MODEL` | `Qwen3-FineTuned` | Generador RAG |
-| `OLLAMA_CHAT_MODEL` | `gemma3:4b` | Modo chat |
+| `OLLAMA_RAG_MODEL` | `phi4-finetuned:latest` | Generador RAG |
+| `OLLAMA_CHAT_MODEL` | `gemma4:e4b` | Modo chat |
 | `OLLAMA_EMBED_MODEL` | `embeddinggemma:latest` | Embeddings |
-| `OLLAMA_CONTEXTUAL_MODEL` | `gemma3:4b` | Contextual retrieval |
+| `OLLAMA_CONTEXTUAL_MODEL` | `gemma4:e4b` | Contextual retrieval |
+| `OLLAMA_RECOMP_MODEL` | `gemma4:e4b` | Síntesis RECOMP |
 | `OLLAMA_OCR_MODEL` | `qwen3-vl:8b` | Descripción de imágenes |
 | `DOCS_FOLDER` | `rag/pdfs/` | Carpeta de PDFs a indexar |
 | `RERANKER_QUALITY` | `quality` | `quality` (BAAI/bge) o `speed` (MiniLM) |
@@ -201,6 +209,9 @@ PDFs (CARPETA_DOCS)
   -> Persistencia: ChromaDB en PATH_DB
 ```
 
+> **PATH_DB naming**: `rag/mi_vector_db/{folder}_{embed_slug}` donde `folder` es el basename de `CARPETA_DOCS` y `embed_slug` es la parte antes de `:` en `OLLAMA_EMBED_MODEL`. Cambiar el modelo de embedding genera una ruta diferente → la colección existente no se carga y hay que reindexar.
+
+
 ### Recuperación (por cada query en modo RAG)
 
 ```
@@ -212,9 +223,9 @@ Query usuario (MIN_LONGITUD_PREGUNTA_RAG)
   -> Fusión RRF: score_semantic + score_keyword -> score_final (pesos 55/45, no cambiar sin evaluación)
   -> [Opt] USAR_RERANKER: CrossEncoder, TOP_K_RERANK_CANDIDATES, TOP_K_AFTER_RERANK
   -> Filtrado: UMBRAL_RELEVANCIA (0.50); con reranker: UMBRAL_SCORE_RERANKER
-  -> Selección: TOP_K_FINAL (6 fragmentos)
+  -> Selección: TOP_K_FINAL (8 fragmentos)
   -> [Opt] EXPANDIR_CONTEXTO: N_TOP_PARA_EXPANSION + chunks adyacentes
-  -> [Opt] USAR_OPTIMIZACION_CONTEXTO: recorte con MAX_CONTEXTO_CHARS (8192)
+  -> [Opt] USAR_OPTIMIZACION_CONTEXTO: recorte con MAX_CONTEXTO_CHARS (12000)
 ```
 
 ### Generación
@@ -235,9 +246,26 @@ Pregunta + <context>
 # CLI
 cd rag && python chat_pdfs.py
 
-# Web
+# Web (backend Flask — sirve el build compilado de React)
 python web/app.py   # http://localhost:5000
 ```
+
+### Frontend React (desarrollo / build)
+
+```bash
+cd web/zip
+
+# Modo desarrollo con hot-reload (Vite en :3000, proxy a Flask en :5000)
+npm run dev
+
+# Build de producción → web/zip/dist/ (Flask sirve este directorio)
+npm run build
+
+# Type-check sin emitir (equivalente a lint)
+npm run lint
+```
+
+> El backend Flask (`web/app.py`) sirve `web/zip/dist/` directamente. Para desarrollo, arrancar Flask en :5000 **y** Vite en :3000 simultáneamente; CORS ya está configurado.
 
 ### Comandos CLI en tiempo de ejecución
 
@@ -256,13 +284,13 @@ python web/app.py   # http://localhost:5000
 ### Entrenamiento LoRA
 
 ```bash
-# Qwen3-14B (v10) — en ejecución en cluster
+# Qwen3-14B (v10) — training completado
 python scripts/training/train-qwen3.py
 
-# Phi-4 (v1) — en ejecución en cluster
+# Phi-4 (v1) — training completado (r=32, r=16, r=64)
 python scripts/training/train-phi4.py
 
-# Gemma-3-12B (v2)
+# Gemma-3-12B (v2) — pendiente de lanzar
 python scripts/training/train-gemma3.py
 
 # Fusionar adaptador para exportar a GGUF
@@ -356,9 +384,9 @@ Todo archivo Python no trivial abre con un MODULE MAP comentado que indexa sus s
 Orden: imports stdlib → third-party → local, luego constantes (modelos, rutas, flags, parámetros numéricos).
 
 ```python
-MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "Qwen3-FineTuned")
-CHUNK_SIZE = 1500
-CHUNK_OVERLAP = 350
+MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "phi4-finetuned:latest")
+CHUNK_SIZE = 2000
+CHUNK_OVERLAP = 400
 USAR_RERANKER = True
 ```
 
@@ -412,7 +440,7 @@ Las tablas del TFG no incluyen desviación típica. Para cuantificar el efecto d
 - **Δ absoluto** (pp): `adaptado − base`. Ej: `+3.2 pp`.
 - **Δ relativo** (%): `(adaptado − base) / base × 100`. Ej: `+7.4 %`.
 
-Los artefactos JSON (`evaluation_comparison.json`) incluyen ambos campos (`delta_pp`, `delta_rel_pct`).
+Los artefactos JSON (`evaluation_comparison.json`) incluyen ambos campos (`deltas` para el Δ absoluto en pp, `deltas_rel_pct` para el Δ relativo en %).
 
 ### Docstring de módulo
 
@@ -530,11 +558,11 @@ Cada carpeta de modelo usa el patrón:
 
 **Reglas de mantenimiento:**
 
-- Si añades un **nuevo modelo** bajo `training-output/`, copia el bloque de tres líneas `/*` + tres `!…` y sustituye el slug (mismo orden que el resto de modelos).
+- Si añades un **nuevo modelo** bajo `training-output/`, copia el bloque de cuatro líneas (una `/*` y tres `!…`) y sustituye el slug (mismo orden que el resto de modelos).
 - Si quieres versionar **otro** fichero pequeño en esa carpeta, añade **una** línea `!training-output/<slug>/nombre.ext` **debajo** de las excepciones existentes del mismo modelo.
 - **No** sustituyas el patrón `/*` por ignorar solo extensiones sin más: es fácil dejar fuera del repo scripts o JSON que sí interesan (ya ocurrió con `generate_reports.py` antes de las excepciones).
 
-**Phi-4 y varios ranks:** `train-phi4.py` usa `training-output/phi-4/` para r=32 y `training-output/phi-4/<rank>/` para otros. En `.gitignore`, por cada rank del que quieras subir métricas, replica el bloque de cinco líneas (`!<slug>/`, `<slug>/*`, dos `!…json`). Hoy están declarados **16** y **64**; para otro rank, copia el bloque y cambia el número.
+**Phi-4 y varios ranks:** `train-phi4.py` usa `training-output/phi-4/` para r=32 y `training-output/phi-4/<rank>/` para otros. En `.gitignore`, por cada rank del que quieras subir métricas, replica el bloque de cuatro líneas (`!phi-4/<rank>/`, `phi-4/<rank>/*`, `!…training_stats.json`, `!…evaluation_comparison.json`). Hoy están declarados **16** y **64**; para otro rank, copia el bloque y cambia el número.
 
 Comprobar si un path está ignorado:
 

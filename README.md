@@ -25,7 +25,7 @@ No data leaves your machine. All inference, indexing and retrieval happens local
 
 The system works with any instruction-tuned language model available in Ollama. You configure which models to use via environment variables, so it adapts to whatever hardware you have available.
 
-This project was developed as a Bachelor's thesis (TFG) at the Universitat Politècnica de València (UPV), combining a functional RAG production system with a research layer for LoRA fine-tuning and evaluation of open language models.
+This project was developed as a Bachelor's thesis (TFG) for the Grado en Ingeniería Informática at ETSINF, Universitat Politècnica de València (UPV), by Ignacio Diago Valeta, tutored by Adrià Giménez Pastor (2025–2026). It combines a functional RAG production system with a research layer for LoRA fine-tuning and evaluation of open language models.
 
 ---
 
@@ -64,7 +64,7 @@ PDF corpus  (rag/pdfs/)
       Exhaustive scan      [optional]  critical terms
       Score fusion                     RRF  55% semantic + 45% lexical
       Reranking            [optional]  cross-encoder  RERANKER_QUALITY
-      Context selection               top-6 fragments
+      Context selection               top-8 fragments
       Chunk expansion      [optional]  adjacent chunks
       |
       v
@@ -106,7 +106,9 @@ ollama pull <your OLLAMA_RAG_MODEL>
 ollama pull <your OLLAMA_EMBED_MODEL>
 
 # Optional pipeline stages
-ollama pull <your OLLAMA_CONTEXTUAL_MODEL>   # query decomposition and contextual retrieval
+ollama pull <your OLLAMA_CHAT_MODEL>         # chat mode and query decomposition (sub-queries)
+ollama pull <your OLLAMA_CONTEXTUAL_MODEL>   # contextual chunk enrichment during indexing
+ollama pull <your OLLAMA_RECOMP_MODEL>       # context synthesis before generation
 ollama pull <your OLLAMA_OCR_MODEL>          # must be a vision-language model
 ```
 
@@ -129,12 +131,13 @@ All pipeline behaviour is controlled via environment variables. Set them in your
 | Variable | Description |
 |----------|-------------|
 | `OLLAMA_RAG_MODEL` | Generator model for RAG mode (document Q&A) |
-| `OLLAMA_CHAT_MODEL` | Generator model for CHAT mode (general conversation) |
+| `OLLAMA_CHAT_MODEL` | Generator model for CHAT mode and query decomposition (sub-queries) |
 | `OLLAMA_EMBED_MODEL` | Embedding model used for indexing and retrieval |
-| `OLLAMA_CONTEXTUAL_MODEL` | Auxiliary model for query decomposition and contextual retrieval |
-| `OLLAMA_OCR_MODEL` | Vision model for describing images found in PDFs |
+| `OLLAMA_CONTEXTUAL_MODEL` | Auxiliary model for contextual chunk enrichment during indexing (`USAR_CONTEXTUAL_RETRIEVAL`) |
+| `OLLAMA_RECOMP_MODEL` | Model used to synthesise/compress retrieved fragments before generation (`USAR_RECOMP_SYNTHESIS`) |
+| `OLLAMA_OCR_MODEL` | Vision model for describing images found in PDFs (`USAR_EMBEDDINGS_IMAGEN`) |
 | `DOCS_FOLDER` | Path to the folder containing PDFs to index (default: `rag/pdfs/`) |
-| `RERANKER_QUALITY` | Cross-encoder reranker tier: `quality` (higher accuracy) or `speed` (lower latency) |
+| `RERANKER_QUALITY` | Cross-encoder reranker tier: `quality` (BAAI/bge) or `speed` (MiniLM) |
 
 > **Note on ChromaDB paths**: the vector database path includes a slug derived from `OLLAMA_EMBED_MODEL`. If you change the embedding model, the existing index is no longer valid and you will need to re-index your documents.
 
@@ -230,4 +233,4 @@ localOllamaRAG/
 
 ---
 
-*Bachelor's thesis — Universitat Politècnica de València (UPV)*
+*Bachelor's thesis (TFG) — Grado en Ingeniería Informática, ETSINF, Universitat Politècnica de València. Author: Ignacio Diago Valeta. Tutor: Adrià Giménez Pastor. 2025–2026.*
