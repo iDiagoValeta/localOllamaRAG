@@ -110,6 +110,9 @@ Dependencies:
 #                       Output dir: training-output/gemma-3/ (project convention).
 #                       Incremental checkpoint save/resume for crash recovery.
 #
+#  v2.1 (2026-04-13) -- Fix: Gemma3DataCollator wrapper injects token_type_ids=zeros
+#                       after padding (required by modeling_gemma3.py >=transformers 4.57).
+#
 # ─────────────────────────────────────────────
 
 import gc
@@ -1175,8 +1178,27 @@ print(f"--> Train: {len(tokenized_train)} | Val: {len(tokenized_eval)} tokenised
 # SECTION 8: TRAINING CONFIGURATION
 # ─────────────────────────────────────────────
 
-data_collator = DataCollatorForSeq2Seq(
-    tokenizer=tokenizer, padding=True, pad_to_multiple_of=8,
+
+class Gemma3DataCollator:
+    """Wraps DataCollatorForSeq2Seq and injects token_type_ids (all zeros) post-padding.
+
+    Gemma3 modeling_gemma3.py raises ValueError if token_type_ids is absent during
+    training (transformers>=4.57).  Generating zeros from the padded input_ids shape
+    is the correct single-segment value and avoids touching the tokenizer output.
+    """
+
+    def __init__(self, base_collator):
+        self.base = base_collator
+
+    def __call__(self, features):
+        batch = self.base(features)
+        if "token_type_ids" not in batch:
+            batch["token_type_ids"] = torch.zeros_like(batch["input_ids"])
+        return batch
+
+
+data_collator = Gemma3DataCollator(
+    DataCollatorForSeq2Seq(tokenizer=tokenizer, padding=True, pad_to_multiple_of=8)
 )
 
 training_args = TrainingArguments(
