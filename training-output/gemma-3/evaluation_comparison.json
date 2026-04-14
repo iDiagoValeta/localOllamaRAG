@@ -1,0 +1,960 @@
+{
+    "per_split": {
+        "dev": {
+            "Neural-Bridge RAG": {
+                "base": {
+                    "n_samples": 320,
+                    "Token_F1": 66.84,
+                    "ROUGE_L_F1": 61.24,
+                    "Context_Faithfulness_Pct": 83.54,
+                    "Avg_Response_Length_Words": 51.1,
+                    "Sentence_Completeness_Pct": 0.0,
+                    "BERTScore_P": 55.5,
+                    "BERTScore_R": 71.93,
+                    "BERTScore_F1": 62.82
+                },
+                "adapted": {
+                    "n_samples": 320,
+                    "Token_F1": 78.57,
+                    "ROUGE_L_F1": 75.01,
+                    "Context_Faithfulness_Pct": 89.98,
+                    "Avg_Response_Length_Words": 35.9,
+                    "Sentence_Completeness_Pct": 98.8,
+                    "BERTScore_P": 78.76,
+                    "BERTScore_R": 76.08,
+                    "BERTScore_F1": 77.07
+                },
+                "deltas": {
+                    "Token_F1": 11.73,
+                    "ROUGE_L_F1": 13.77,
+                    "BERTScore_F1": 14.25,
+                    "Context_Faithfulness_Pct": 6.44,
+                    "Avg_Response_Length_Words": -15.2,
+                    "Sentence_Completeness_Pct": 98.8
+                },
+                "deltas_rel_pct": {
+                    "Token_F1": 17.55,
+                    "ROUGE_L_F1": 22.49,
+                    "BERTScore_F1": 22.68,
+                    "Context_Faithfulness_Pct": 7.71,
+                    "Avg_Response_Length_Words": -29.75,
+                    "Sentence_Completeness_Pct": null
+                },
+                "sample_pairs": [
+                    {
+                        "instruction": "Who is the current Archivist of the United States and when did he take his post?",
+                        "ground_truth": "The current Archivist of the United States is David Ferriro and he took his post in 2009.",
+                        "base_prediction": "The current Archivist of the United States is David Ferriro. He took his post in 2009.",
+                        "adapted_prediction": "The current Archivist of the United States is David Ferriro and he took his post in 2009.",
+                        "base_f1": 0.9655,
+                        "adapted_f1": 1.0,
+                        "base_faithfulness": 1.0,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "What is unique about the West Portal of Saint-Gilles-du-Gard at the Carnegie Museum of Art?",
+                        "ground_truth": "The West Portal of Saint-Gilles-du-Gard at the Carnegie Museum of Art is unique because it is arguably the largest architectural cast ever made. It was paid for by Andrew Carnegie on the recommendation of art experts and is one of a kind. The molds were destroyed when removing the plaster replicas, making it truly unique.",
+                        "base_prediction": "The West Portal of Saint-Gilles-du-Gard at the Carnegie Museum of Art is unique because it is arguably the largest architectural cast ever made and is one of a kind. It was developed by the museum itself, rather than purchased from a vendor, at the behest of art experts and paid for by Andrew Carnegie.",
+                        "adapted_prediction": "The West Portal of Saint-Gilles-du-Gard at the Carnegie Museum of Art is unique as it is one of a kind, and is arguably the largest architectural cast ever made.",
+                        "base_f1": 0.7368,
+                        "adapted_f1": 0.6575,
+                        "base_faithfulness": 0.8,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "How many individuals attended the Focus Youth Centre from April 2012 to March 2013?",
+                        "ground_truth": "405 individuals attended the Focus Youth Centre from April 2012 to March 2013.",
+                        "base_prediction": "According to the provided text, the total attendance at the Focus Youth Centre from April 2012 to March 2013 was 5266, with 405 individuals attending.",
+                        "adapted_prediction": "The total attendance for the period April 2012 to March 2013 was 5266 (405 individuals).",
+                        "base_f1": 0.6471,
+                        "adapted_f1": 0.56,
+                        "base_faithfulness": 0.7619,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "What is the number one reason for startup failure according to Noam Wasserman, a Harvard Business School professor?",
+                        "ground_truth": "The number one reason for startup failure is co-founder conflict.",
+                        "base_prediction": "According to Noam Wasserman, a Harvard Business School professor, co-founder conflict is the number-one startup killer; 65% of startups fail due to co-founder strife.",
+                        "adapted_prediction": "The number one reason for startup failure is co-founder conflict.",
+                        "base_f1": 0.2581,
+                        "adapted_f1": 1.0,
+                        "base_faithfulness": 1.0,
+                        "adapted_faithfulness": 0.7778
+                    },
+                    {
+                        "instruction": "What are the enhancements in the 7.5 release of SAP BusinessObjects Planning and Consolidation, version for SAP NetWeaver?",
+                        "ground_truth": "The 7.5 release of SAP BusinessObjects Planning and Consolidation, version for SAP NetWeaver, includes enhancements such as the ability for users to drill-through to source systems to explore detailed information on transactions without having to replicate data in the application. It also provides a configuration wizard to assist with the creation of drill-through paths. Additionally, it integrates SAP BusinessObjects BI tools with SAP BusinessObjects Planning and Consolidation, allowing customers to improve agility, reduce cycle time, and increase user productivity.",
+                        "base_prediction": "According to the provided document, the enhancements in the 7.5 release of SAP BusinessObjects Planning and Consolidation, version for SAP NetWeaver, include:\n\n1.  **Business Process Flows (BPFs):** These provide controllable, consistent, and collaborative planning and consolidation processes, offering both a global \"Monitor\" view and a personalized \"My Activities\" view.\n2.  **Drill-through Capability:** Users can now drill-through to source systems to explore detailed information on transactions without replicating data. A configuration wizard assists with creating drill-through paths.\n3.  **Integration with SAP BusinessObjects BI tools:** Users can leverage tools like Xcelsius, Web Intelligence, and Explorer to access information directly from SAP BusinessObjects Planning and Consolidation, facilitating information sharing and a common reporting interface.",
+                        "adapted_prediction": "The 7.5 release of SAP BusinessObjects Planning and Consolidation, version for SAP NetWeaver, includes a number of enhancements and new features. One of the enhancements is the introduction of business process flows (BPFs) which provide controllable, consistent, and collaborative planning and consolidation processes. Another enhancement is the drill-through capability, which allows users to access data in various targets without having to replicate data in the SAP BusinessObjects Planning and Consolidation application. The solution also integrates with SAP BusinessObjects BI tools, allowing users to access information directly from SAP BusinessObjects Planning and Consolidation and share it with users beyond the finance group over the Web.",
+                        "base_f1": 0.5056,
+                        "adapted_f1": 0.5089,
+                        "base_faithfulness": 0.8442,
+                        "adapted_faithfulness": 0.8871
+                    }
+                ]
+            },
+            "Dolly QA": {
+                "base": {
+                    "n_samples": 320,
+                    "Token_F1": 48.97,
+                    "ROUGE_L_F1": 42.19,
+                    "Context_Faithfulness_Pct": 81.49,
+                    "Avg_Response_Length_Words": 44.9,
+                    "Sentence_Completeness_Pct": 0.0,
+                    "BERTScore_P": 40.75,
+                    "BERTScore_R": 51.82,
+                    "BERTScore_F1": 45.06
+                },
+                "adapted": {
+                    "n_samples": 320,
+                    "Token_F1": 50.05,
+                    "ROUGE_L_F1": 45.56,
+                    "Context_Faithfulness_Pct": 90.51,
+                    "Avg_Response_Length_Words": 27.9,
+                    "Sentence_Completeness_Pct": 67.8,
+                    "BERTScore_P": 53.82,
+                    "BERTScore_R": 40.43,
+                    "BERTScore_F1": 45.15
+                },
+                "deltas": {
+                    "Token_F1": 1.08,
+                    "ROUGE_L_F1": 3.37,
+                    "BERTScore_F1": 0.09,
+                    "Context_Faithfulness_Pct": 9.02,
+                    "Avg_Response_Length_Words": -17.0,
+                    "Sentence_Completeness_Pct": 67.8
+                },
+                "deltas_rel_pct": {
+                    "Token_F1": 2.21,
+                    "ROUGE_L_F1": 7.99,
+                    "BERTScore_F1": 0.2,
+                    "Context_Faithfulness_Pct": 11.07,
+                    "Avg_Response_Length_Words": -37.86,
+                    "Sentence_Completeness_Pct": null
+                },
+                "sample_pairs": [
+                    {
+                        "instruction": "When does tropical cyclone season occur in the Southern Hemisphere?",
+                        "ground_truth": "In the Southern Hemisphere, the tropical cyclone season runs from the start of November until the end of April with peaks in mid-February to early March.",
+                        "base_prediction": "In the Southern Hemisphere, the tropical cyclone season runs from the start of November until the end of April with peaks in mid-February to early March.",
+                        "adapted_prediction": "The tropical cyclone season in the Southern Hemisphere runs from the start of November until the end of April with peaks in mid-February to early March.",
+                        "base_f1": 1.0,
+                        "adapted_f1": 1.0,
+                        "base_faithfulness": 1.0,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "Given this article, what is the largest size for a dead man zone?",
+                        "ground_truth": "The largest size for a dead man zone is 1 kilometre",
+                        "base_prediction": "According to the provided text, the dead man zone can range from under 100 metres (330 ft) to well over 1 kilometre (3,300 ft). Therefore, the largest size for a dead man zone is well over 1 kilometre (3,300 ft).",
+                        "adapted_prediction": "The largest size for a dead man zone is well over 1 kilometre (3,300 ft).",
+                        "base_f1": 0.4,
+                        "adapted_f1": 0.8182,
+                        "base_faithfulness": 0.72,
+                        "adapted_faithfulness": 0.7692
+                    },
+                    {
+                        "instruction": "Given this paragraph about the original church in Guston in 1892, what were the two ways that were used to announce the beginning of services?",
+                        "ground_truth": "The church used both a bell and a steam whistle to announce the start of services.",
+                        "base_prediction": "According to the provided text, the two ways used to announce the beginning of services at the church in Guston were a bell and a steam whistle.",
+                        "adapted_prediction": "The church had a bell and a steam whistle to announce the beginning of services.",
+                        "base_f1": 0.6061,
+                        "adapted_f1": 0.7826,
+                        "base_faithfulness": 0.6,
+                        "adapted_faithfulness": 0.9091
+                    },
+                    {
+                        "instruction": "What is Age of Empires?",
+                        "ground_truth": "Age of Empires is a classic PC game originally developed by Microsoft, released in 1997. It has 4 versions now and is still being played online by many players.",
+                        "base_prediction": "Age of Empires is a series of historical real-time strategy video games originally developed by Ensemble Studios and published by Xbox Game Studios. The first game was released in 1997, and as of October 28, 2021, nine total games within the series have been released. The series focuses on events in Europe, Africa, and Asia, spanning from the Stone Age to the Iron Age, and has sold over 25 million copies.",
+                        "adapted_prediction": "Age of Empires is a series of historical real-time strategy video games, originally developed by Ensemble Studios and published by Xbox Game Studios. The first game was Age of Empires, released in 1997. Nine total games within the series have been released so far as of October 28, 2021.",
+                        "base_f1": 0.3011,
+                        "adapted_f1": 0.3514,
+                        "base_faithfulness": 0.96,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "What is the significance of a diploma?",
+                        "ground_truth": "A diploma testifies the recipient has graduated by successfully completing their courses of studies.",
+                        "base_prediction": "According to the provided text, a diploma is significant because it is a document awarded by an educational institution that confirms a recipient has successfully completed their courses of study and graduated. Historically, it has also referred to a charter or official document of diplomacy.",
+                        "adapted_prediction": "A diploma is a document awarded by an educational institution (such as a college or university) testifying the recipient has graduated by successfully completing their courses of studies.",
+                        "base_f1": 0.3529,
+                        "adapted_f1": 0.6286,
+                        "base_faithfulness": 0.697,
+                        "adapted_faithfulness": 1.0
+                    }
+                ]
+            },
+            "Aina-EN": {
+                "base": {
+                    "n_samples": 320,
+                    "Token_F1": 33.31,
+                    "ROUGE_L_F1": 27.36,
+                    "Context_Faithfulness_Pct": 79.99,
+                    "Avg_Response_Length_Words": 23.2,
+                    "Sentence_Completeness_Pct": 0.0,
+                    "BERTScore_P": 56.35,
+                    "BERTScore_R": 16.79,
+                    "BERTScore_F1": 33.55
+                },
+                "adapted": {
+                    "n_samples": 320,
+                    "Token_F1": 41.94,
+                    "ROUGE_L_F1": 32.94,
+                    "Context_Faithfulness_Pct": 76.15,
+                    "Avg_Response_Length_Words": 52.1,
+                    "Sentence_Completeness_Pct": 80.0,
+                    "BERTScore_P": 49.53,
+                    "BERTScore_R": 26.19,
+                    "BERTScore_F1": 35.31
+                },
+                "deltas": {
+                    "Token_F1": 8.63,
+                    "ROUGE_L_F1": 5.58,
+                    "BERTScore_F1": 1.76,
+                    "Context_Faithfulness_Pct": -3.84,
+                    "Avg_Response_Length_Words": 28.9,
+                    "Sentence_Completeness_Pct": 80.0
+                },
+                "deltas_rel_pct": {
+                    "Token_F1": 25.91,
+                    "ROUGE_L_F1": 20.39,
+                    "BERTScore_F1": 5.25,
+                    "Context_Faithfulness_Pct": -4.8,
+                    "Avg_Response_Length_Words": 124.57,
+                    "Sentence_Completeness_Pct": null
+                },
+                "sample_pairs": [
+                    {
+                        "instruction": "What large cat has a particular taste for dogs no matter how big the dog is?",
+                        "ground_truth": "Leopards are known to have a particular taste for dogs and will attack and consume them regardless of the dog's size or ferocity. This behavior has been observed in various regions, including Manchuria, Indochina, Indonesia, and Malaysia. The preference for dogs as prey by leopards is notable, as they will hunt and kill them with the same vigor as their other prey.",
+                        "base_prediction": "According to the provided text, leopards are known to have a predilection for dogs and have been recorded to kill and consume them regardless of the dog's size or ferocity. Tigers in Manchuria, Indochina, Indonesia, and Malaysia are also reputed to kill dogs with the same vigor as leopards.",
+                        "adapted_prediction": "Leopards are known to have a particular taste for dogs, regardless of their size or ferocity. This behavior has been observed in various regions, including Turkmenistan, India, the Caucasus, Manchuria, Indochina, Indonesia, and Malaysia. Leopards are opportunistic predators and will prey on dogs when the opportunity arises.",
+                        "base_f1": 0.6019,
+                        "adapted_f1": 0.6667,
+                        "base_faithfulness": 0.9118,
+                        "adapted_faithfulness": 0.6
+                    },
+                    {
+                        "instruction": "What major city is home to most regional UN offices in India?",
+                        "ground_truth": "New Delhi, the capital city of India, is home to a significant number of regional UN offices. These include UNESCAP, UNDP, UNODC, UNESCO, UNICEF, WFP, UNV, UNCTAD, FAO, UNFPA, WHO, World Bank, ILO, IMF, UNIFEM, IFC, and UNAIDS. In particular, the Asian and Pacific Centre for Transfer of Technology of the UNESCAP, which services the Asia-Pacific region, is headquartered in New Delhi. Therefore, it can be said that New Delhi is the major city in India that is home to the most regional UN offices.",
+                        "base_prediction": "According to the provided text, New Delhi is home to most UN regional offices in India. These offices include the UNDP, UNODC, UNESCO, UNICEF, WFP, UNV, UNCTAD, FAO, UNFPA, WHO, World Bank, ILO, UNIFEM, IFC, and UNAIDS.",
+                        "adapted_prediction": "New Delhi",
+                        "base_f1": 0.5636,
+                        "adapted_f1": 0.0513,
+                        "base_faithfulness": 0.8438,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "What was used in first recordings of vinyl records?",
+                        "ground_truth": "The first recordings of vinyl records were made using a soft wax master disc. In the initial stages of disc record manufacturing, sound was recorded directly onto the master disc at the recording studio. The use of soft wax masters was prevalent until around 1950, when audio tape recordings became more common. This shift allowed for processing, editing, and refining of the audio before being dubbed onto the master disc. A record cutter would then engrave the grooves into the master disc, which was later replaced by a harder lacquer material. The soft wax master discs were particularly sensitive to changes in sound, requiring the operator to manually adjust the groove width during the mastering process.",
+                        "base_prediction": "In the first recordings of vinyl records, sound was recorded directly onto a \"master disc\" at the recording studio. Early versions of these master discs were made of soft wax, and later a harder lacquer was used.",
+                        "adapted_prediction": "The first recordings of vinyl records were made directly onto a \"master disc\" at the recording studio. Initially, soft wax was used for these master discs, but later a harder lacquer was employed. The sound was recorded directly onto the master disc, and a record cutter would engrave the grooves into it. The mastering process was a manual one, requiring the operator to adjust the width of the groove based on the changes in sound on each rotation.",
+                        "base_f1": 0.4361,
+                        "adapted_f1": 0.5976,
+                        "base_faithfulness": 0.8276,
+                        "adapted_faithfulness": 0.7358
+                    },
+                    {
+                        "instruction": "What are homogeneous states?",
+                        "ground_truth": "Homogeneous states can be defined as regions that have a relatively uniform population in terms of cultural, ethnic, or other social characteristics. The term \"homogeneous states\" is often used in contrast to heterogeneous states, which have diverse populations. Examples of homogeneous states include the United States, Germany, and Australia. These countries are typically characterized by a dominant culture or ethnicity, although they may still contain diverse communities. The federalist model, which allows for shared governance between a central authority and regional governments, is often considered to be most effective in homogeneous states. However, this is not always the case, as evidenced by the experiences of countries like Switzerland, Canada, and Iraq. In these countries, the federalist model has not always succeeded in quelling tensions between territories or preventing military conflict.",
+                        "base_prediction": "According to the provided text, homogeneous states are those that are largely comprised of a single cultural or ethnic community. The text gives examples of such states including the United States, Germany, and Australia.",
+                        "adapted_prediction": "Homogeneous states are those that are characterized by a high degree of cultural or ethnic uniformity. This means that the majority of the population shares similar cultural values, beliefs, and practices, as well as a common ethnic background. Examples of such states include the United States, Germany, and Australia. In these countries, the federalist model of government, which involves the division of power between a central government and regional or state governments, has been found to be particularly effective. This is because the shared cultural and ethnic identity of the population can help to promote unity and cooperation among the different regions or states. However, it is important to note that even in homogeneous states, tensions between territories can still arise, as seen in countries such as Canada.",
+                        "base_f1": 0.2252,
+                        "adapted_f1": 0.5042,
+                        "base_faithfulness": 0.48,
+                        "adapted_faithfulness": 0.3544
+                    },
+                    {
+                        "instruction": "What year was the last brown bear recorded to have been killed?",
+                        "ground_truth": "The last brown bear was recorded to have been killed in the year 1792 in the canton of Bern, Switzerland. This information is based on the account of the killing of the bear above Kleine Scheidegg by three hunters from Grindelwald.",
+                        "base_prediction": "The last brown bear was recorded to have been killed in 1792 above Kleine Scheidegg by three hunters from Grindelwald.",
+                        "adapted_prediction": "The last brown bear in Switzerland was recorded to have been killed in the year 1792. This information is based on the historical record of the canton of Bern, which was named after the bears that once inhabited the region.",
+                        "base_f1": 0.7037,
+                        "adapted_f1": 0.6667,
+                        "base_faithfulness": 1.0,
+                        "adapted_faithfulness": 0.6129
+                    }
+                ]
+            },
+            "Aina-ES": {
+                "base": {
+                    "n_samples": 320,
+                    "Token_F1": 28.1,
+                    "ROUGE_L_F1": 23.27,
+                    "Context_Faithfulness_Pct": 79.06,
+                    "Avg_Response_Length_Words": 26.8,
+                    "Sentence_Completeness_Pct": 0.0,
+                    "BERTScore_P": 45.97,
+                    "BERTScore_R": 10.52,
+                    "BERTScore_F1": 25.48
+                },
+                "adapted": {
+                    "n_samples": 320,
+                    "Token_F1": 53.04,
+                    "ROUGE_L_F1": 40.85,
+                    "Context_Faithfulness_Pct": 70.98,
+                    "Avg_Response_Length_Words": 81.6,
+                    "Sentence_Completeness_Pct": 85.3,
+                    "BERTScore_P": 46.85,
+                    "BERTScore_R": 39.83,
+                    "BERTScore_F1": 42.74
+                },
+                "deltas": {
+                    "Token_F1": 24.94,
+                    "ROUGE_L_F1": 17.58,
+                    "BERTScore_F1": 17.26,
+                    "Context_Faithfulness_Pct": -8.08,
+                    "Avg_Response_Length_Words": 54.8,
+                    "Sentence_Completeness_Pct": 85.3
+                },
+                "deltas_rel_pct": {
+                    "Token_F1": 88.75,
+                    "ROUGE_L_F1": 75.55,
+                    "BERTScore_F1": 67.74,
+                    "Context_Faithfulness_Pct": -10.22,
+                    "Avg_Response_Length_Words": 204.48,
+                    "Sentence_Completeness_Pct": null
+                },
+                "sample_pairs": [
+                    {
+                        "instruction": "¿Quién marcó el tanto de España contra Portugal?",
+                        "ground_truth": "El autor del gol de España frente a Portugal en el mundial de Sudáfrica 2",
+                        "base_prediction": "David Villa marcó el tanto de España contra Portugal a los 63 minutos.",
+                        "adapted_prediction": "El gol de España contra Portugal en el partido del 30 de junio de 2",
+                        "base_f1": 0.2727,
+                        "adapted_f1": 0.64,
+                        "base_faithfulness": 0.8,
+                        "adapted_faithfulness": 0.7273
+                    },
+                    {
+                        "instruction": "¿Quién invalidó la votación el lunes?",
+                        "ground_truth": "El presidente interino de la Cámara de Diputados de Brasil en ese momento, Waldir Maranhão, anuló por la mañana del lunes 10 de mayo de 2016 la votación del proceso de juicio político contra la presidenta Dilma Rousseff, que había tenido lugar el 17 de abril. Sin embargo, bajo presión del Senado, Maranhão revocó esa decisión por la noche y el proceso continuó su curso normal. Se esperaba que el Senado votara el miércoles el pedido del proceso contra Rousseff, quien había sido acusada de ocultar desequilibrios en el presupuesto de Brasil antes de las elecciones del año pasado. Rousseff negó los cargos y argumentó que mover fondos de un lado a otro había sido una práctica común en gobiernos anteriores.",
+                        "base_prediction": "Waldir Maranhão, el presidente interino de la Cámara de Diputados de Brasil, invalidó la votación el lunes, pero luego revocó su propia decisión.",
+                        "adapted_prediction": "El presidente interino de la Cámara de Diputados de Brasil, Waldir Maranhão, invalidó la votación del proceso de juicio político contra la presidenta Dilma Rousseff el lunes por la noche. Anteriormente, Maranhão había anunciado la anulación de la votación del 17 de abril, alegando que Rousseff había sido \"prejuzgada\". Sin embargo, después de ceder a la presión del Senado, Maranhão revocó su decisión y el proceso de impeachment continuó su curso normal. Rousseff es acusada de ocultar desbalances en el presupuesto de Brasil previo a las elecciones del año pasado, con el objetivo de favorecer su reelección. La presidenta niega los cargos y argumenta que ese tipo de medidas ha sido práctica común en gobiernos anteriores.",
+                        "base_f1": 0.2439,
+                        "adapted_f1": 0.7094,
+                        "base_faithfulness": 0.8824,
+                        "adapted_faithfulness": 0.8714
+                    },
+                    {
+                        "instruction": "¿A qué distancia de Concepción está la Región de Bío Bío?",
+                        "ground_truth": "La Región de Bío Bío se encuentra a 90 kilómetros de distancia de Concepción, según el epicentro del terremoto de 8,8 grados en la escala sismológica de magnitud de momento que ocurrió el 27 de febrero de 2",
+                        "base_prediction": "La Región de Bío Bío está a 90 kilómetros al noreste de Concepción.",
+                        "adapted_prediction": "La Región de Bío Bío se encuentra a aproximadamente 90 kilómetros al noreste de Concepción. Esta región fue el epicentro de un terremoto de magnitud 8,8 en la escala sismológica de magnitud de momento, que ocurrió el 27 de febrero de 2010. El sismo causó daños materiales considerables y se registró como uno de los más potentes en la historia de la humanidad.",
+                        "base_f1": 0.3636,
+                        "adapted_f1": 0.6512,
+                        "base_faithfulness": 0.8889,
+                        "adapted_faithfulness": 0.8205
+                    },
+                    {
+                        "instruction": "¿Con quién prefiere pactar CiU?",
+                        "ground_truth": "Según el contexto proporcionado, CiU ha mostrado preferencia por pactar con ERC en el pasado, pero también ha tenido que recurrir a los votos del PP en ocasiones. Sin embargo, el presidente del PP catalán, Alberto Fernández Díaz, ha sugerido que el \"debate real\" en Cataluña está en si CiU se acercará a ERC y a planteamientos independentistas o si optará por los planteamientos moderados del PP. Por lo tanto, se puede inferir que CiU tiene la opción de pactar con diferentes partidos, pero el PP está instando a CiU a considerar los planteamientos moderados y a no deformar la capacidad de influencia del PP. En resumen, aunque CiU ha mostrado preferencia por pactar con ERC en el pasado, el PP está instando a CiU a considerar otras opciones y a no descartar la posibilidad de trabajar juntos en el futuro.",
+                        "base_prediction": "Según Alberto Fernández Díaz, CiU finalmente tendrá que pactar con el PP, como tuvo que hacer para su investidura anteriormente. Él cree que el escenario político español, con la mayoría absoluta del PP, obligará a CiU a reconocer la influencia del PP.",
+                        "adapted_prediction": "Alberto Fernández Díaz, presidente del PP catalán, ha sugerido que CiU debería considerar pactar con el PP en lugar de ERC para garantizar la gobernabilidad en Cataluña. Fernández ha señalado que, en el pasado, CiU había mostrado preferencia por ERC, pero finalmente tuvo que recurrir a los votos del PP para formar gobierno. Además, ha destacado que el escenario político español ha cambiado con la mayoría absoluta del PP, lo que afecta también a Cataluña. Fernández ha advertido a CiU de que sería contraproducente que intentaran minimizar la influencia del PP si finalmente tienen que reconocerla. En su opinión, el debate real en Cataluña se centra en si CiU abordará la legislatura con una aproximación a ERC y a planteamientos independentistas o con los planteamientos moderados del PP.",
+                        "base_f1": 0.2338,
+                        "adapted_f1": 0.5652,
+                        "base_faithfulness": 0.7931,
+                        "adapted_faithfulness": 0.7286
+                    },
+                    {
+                        "instruction": "¿Cuándo empezó a disputarse la Primera División?",
+                        "ground_truth": "La Primera División de España, también conocida como La Liga, comenzó a disputarse en 1928. El Athletic Club, uno de los equipos fundadores, ha participado en todas las ediciones desde su creación. El club, con sede en Bilbao, País Vasco, España, fue fundado en 1898 y es conocido por su tradición de alinear solo jugadores nacidos o formados en Euskal Herria, una región que incluye el País Vasco y partes de Francia. Además, el Athletic Club es reconocido por su enfoque en la formación de jóvenes futbolistas y su estatus único como uno de los cuatro clubes profesionales de España que no es una sociedad anónima deportiva.",
+                        "base_prediction": "La Primera División de España empezó a disputarse en 1928. El Athletic Club, junto al Real Madrid Club de Fútbol y al Fútbol Club Barcelona, es el único club que ha disputado todas las ediciones desde su creación en 1928.",
+                        "adapted_prediction": "La Primera División de España comenzó a disputarse en el año 1928, y el Athletic Club de Bilbao es uno de los equipos fundadores y participantes constantes desde su inicio. El club, también conocido como Athletic de Bilbao o simplemente Athletic, es originario de la villa de Bilbao, País Vasco, España, y fue fundado en 1898. A diferencia de la mayoría de los clubes profesionales de España, el Athletic no es una sociedad anónima deportiva, sino que está gobernado por sus socios. Además, el club es conocido por su tradición de utilizar únicamente jugadores nacidos o formados en Euskal Herria, una región que abarca el País Vasco y parte de Navarra. Esta tradición se remonta a 1912 y ha contribuido a la reputación del club como un importante centro de formación de jóvenes futbolistas.",
+                        "base_f1": 0.3566,
+                        "adapted_f1": 0.6699,
+                        "base_faithfulness": 0.9259,
+                        "adapted_faithfulness": 0.6667
+                    }
+                ]
+            },
+            "Aina-CA": {
+                "base": {
+                    "n_samples": 320,
+                    "Token_F1": 32.32,
+                    "ROUGE_L_F1": 26.88,
+                    "Context_Faithfulness_Pct": 84.61,
+                    "Avg_Response_Length_Words": 26.7,
+                    "Sentence_Completeness_Pct": 0.0,
+                    "BERTScore_P": 46.83,
+                    "BERTScore_R": 13.12,
+                    "BERTScore_F1": 27.64
+                },
+                "adapted": {
+                    "n_samples": 320,
+                    "Token_F1": 54.89,
+                    "ROUGE_L_F1": 41.69,
+                    "Context_Faithfulness_Pct": 70.19,
+                    "Avg_Response_Length_Words": 79.4,
+                    "Sentence_Completeness_Pct": 99.4,
+                    "BERTScore_P": 46.54,
+                    "BERTScore_R": 42.83,
+                    "BERTScore_F1": 44.58
+                },
+                "deltas": {
+                    "Token_F1": 22.57,
+                    "ROUGE_L_F1": 14.81,
+                    "BERTScore_F1": 16.94,
+                    "Context_Faithfulness_Pct": -14.42,
+                    "Avg_Response_Length_Words": 52.7,
+                    "Sentence_Completeness_Pct": 99.4
+                },
+                "deltas_rel_pct": {
+                    "Token_F1": 69.83,
+                    "ROUGE_L_F1": 55.1,
+                    "BERTScore_F1": 61.29,
+                    "Context_Faithfulness_Pct": -17.04,
+                    "Avg_Response_Length_Words": 197.38,
+                    "Sentence_Completeness_Pct": null
+                },
+                "sample_pairs": [
+                    {
+                        "instruction": "Quants morts ha deixat el conflicte?",
+                        "ground_truth": "S'estima que el conflicte a l'est d'Ucraïna hagi provocat almenys 13.000 morts des del seu inici el 2014. Aquestes estimacions es basen en les dades recopilades pels organismes internacionals que tenen accés als detinguts en el marc de les negociacions per al bescanvi de presoners de guerra entre les forces del govern ucraïnès i les milícies pro-russes. Les negociacions, que han involucrat diverses potències internacionals, van culminar en un intercanvi de presoners recent, en què es van intercanviar 77 militars ucraïnesos per 123 combatents de les autoproclamades repúbliques de Donetsk i Lugansk.",
+                        "base_prediction": "Segons el document, el conflicte ha deixat ja 13.000 morts.",
+                        "adapted_prediction": "El conflicte a l'est d'Ucraïna, que va començar l'abril del 2014, ha causat la mort de 13.000 persones. Aquest nombre inclou tant militars com civils, i reflecteix la tragèdia humana d'aquest conflicte.",
+                        "base_f1": 0.0674,
+                        "adapted_f1": 0.1835,
+                        "base_faithfulness": 0.875,
+                        "adapted_faithfulness": 0.5926
+                    },
+                    {
+                        "instruction": "Com estaven les partitures de les dues òperes?",
+                        "ground_truth": "La partitura de les dues òperes de Mercadante, \"Rappresaglia\" i \"Don Chisciotte\", es trobava lligada en un sol lligall a la Biblioteca del Conservatori de Nàpols. Aquest fet va portar a la confusió i a la catalogació errònia de la partitura de \"Don Chisciotte\" sota el títol de \"Rappresaglia\". Gràcies a les investigacions del professor Domenico Carboni, la partitura de \"Don Chisciotte\" va ser descoberta i editada críticament per Pedro Oltra i el mateix Carboni.",
+                        "base_prediction": "Segons el text, la partitura de l'òpera estava arxivada sota la fitxa de Rappresaglia, una altra òpera de Mercadante, i estava lligada amb la partitura de \"El Don Chisciotte\" en un sol lligall.",
+                        "adapted_prediction": "Les partitures de les dues òperes, Rappresaglia i Don Chisciotte, estaven lligades en un sol lligall a la Biblioteca del Conservatori de Nàpols. Aquest fet va portar a un error de catalogació, on només es va registrar el nom de Rappresaglia, deixant el Don Chisciotte sense ser identificat correctament. Afortunadament, el professor Domenico Carboni va descobrir la partitura de Don Chisciotte el 2006, després de les investigacions pertinents.",
+                        "base_f1": 0.3721,
+                        "adapted_f1": 0.6435,
+                        "base_faithfulness": 0.8571,
+                        "adapted_faithfulness": 0.6279
+                    },
+                    {
+                        "instruction": "Què té un partit quan té una caixa B?",
+                        "ground_truth": "Un partit polític, com el PP en el cas Gürtel, que mantingui una 'caixa B' o una estructura financera i comptable paral·lela a l'oficial des de la seva fundació el 1989, està incorrent en una associació il·lícita segons l'article 515 del Codi Penal Espanyol. Aquest tipus d'associacions són il·lícites si tenen per objecte cometre un delicte o si, després de constituïdes, promouen la comissió de delictes. La il·legalització del partit pot ser sol·licitada pel congrés espanyol, segons l'article 11 de la Llei de Partits, si es compleixen certs supòsits tipificats com a associació il·lícita.",
+                        "base_prediction": "Segons el text, un partit té una \"caixa B\" quan manté una estructura financera i comptable paral·lela a l'oficial. La sentència del cas Gürtel acredita que el PP ha mantingut una \"caixa B\" des del 1989.",
+                        "adapted_prediction": "Un partit polític pot ser il·legalitzat si té una \"caixa B\", que és una estructura financera i comptable paral·lela a la oficial, i si aquesta caixa B s'utilitza per cometre delictes. Això es dedueix de l'article 10.2 de la llei de partits espanyola, que preveu la il·legalització d'un partit quan ha incorregut en supòsits tipificats com a associació il·lícita en el codi penal. L'article 515 del codi penal espanyol tipifica quines associacions són il·lícites, incloent-hi les que tenen per objecte cometre algun delicte o, després de constituïdes, promoguen la comissió de delictes. La sentència del cas Gürtel va demostrar que el Partit Popular (PP) va mantenir una \"caixa B\" des de la seva fundació el 1989, la qual cosa constitueix un delicte. Si el Congrés espanyol ho demana, el govern té l'obligació de sol·licitar la il·legalització del partit.",
+                        "base_f1": 0.3333,
+                        "adapted_f1": 0.6193,
+                        "base_faithfulness": 0.8,
+                        "adapted_faithfulness": 0.75
+                    },
+                    {
+                        "instruction": "Quantes denúncies havien arribat al DPTOP a l'abril del 2005?",
+                        "ground_truth": "Al mes d'abril del 2005, el Departament de Policia de Trànsit i Transport de Barcelona (DPTOP) havia rebut un total de 254 denúncies per part de veïns de Santa Coloma, Badalona i Barcelona, relacionades amb les afectacions de les obres. No obstant això, només 18 d'aquestes es van reconèixer com a vàlides i directament relacionades amb les obres en qüestió. Aquestes denúncies van ser analitzades i gestionades adequadament per les autoritats corresponents.",
+                        "base_prediction": "A l'abril del 2005, un total de 254 denúncies havien arribat al DPTOP per part de veïns de Santa Coloma, Badalona i Barcelona.",
+                        "adapted_prediction": "A l'abril del 2005, el Departament de Policia de Trànsit de l'Àrea Metropolitana de Barcelona (DPTOP) va rebre un total de 254 denúncies relacionades amb les afectacions de les obres a Santa Coloma, Badalona i Barcelona. No obstant això, només 18 d'aquestes denúncies van ser reconegudes com a directament relacionades amb les obres.",
+                        "base_f1": 0.4186,
+                        "adapted_f1": 0.7091,
+                        "base_faithfulness": 1.0,
+                        "adapted_faithfulness": 0.6286
+                    },
+                    {
+                        "instruction": "Com eren els textos comparats amb la seva música?",
+                        "ground_truth": "La música de Falla mereixia textos de major qualitat dels que va rebre, ja que els llibretistes li van proveir arguments inferiors. Això es va reflectir en la seva primera col·laboració amb Gregorio Martínez Sierra, Oración de las madres que tienen a sus hijos en brazos, on la música de Falla va ressaltar la pobresa del poema.",
+                        "base_prediction": "Segons el text, José Casanovas ressalta que Falla tenia mala sort amb els llibretistes, ja que sempre li proveïen de textos i arguments molt inferiors a la qualitat que la seva música mereixia.",
+                        "adapted_prediction": "La música de Falla era superior als textos que li proporcionaven els llibretistes. Aquest fet es reflecteix en la seva col·laboració amb Gregorio Martínez Sierra, on Falla va posar música a un poema de Martínez Sierra, Oración de las madres que tienen a sus hijos en brazos. Malgrat això, José Casanovas assenyala que la música de Falla era de qualitat superior als textos que li eren assignats.",
+                        "base_f1": 0.4103,
+                        "adapted_f1": 0.6239,
+                        "base_faithfulness": 0.8077,
+                        "adapted_faithfulness": 0.65
+                    }
+                ]
+            }
+        },
+        "test": {
+            "Neural-Bridge RAG": {
+                "base": {
+                    "n_samples": 2399,
+                    "Token_F1": 67.25,
+                    "ROUGE_L_F1": 61.22,
+                    "Context_Faithfulness_Pct": 83.26,
+                    "Avg_Response_Length_Words": 52.9,
+                    "Sentence_Completeness_Pct": 0.0,
+                    "BERTScore_P": 55.81,
+                    "BERTScore_R": 72.43,
+                    "BERTScore_F1": 63.29
+                },
+                "adapted": {
+                    "n_samples": 2399,
+                    "Token_F1": 77.97,
+                    "ROUGE_L_F1": 74.06,
+                    "Context_Faithfulness_Pct": 90.38,
+                    "Avg_Response_Length_Words": 36.7,
+                    "Sentence_Completeness_Pct": 98.0,
+                    "BERTScore_P": 78.11,
+                    "BERTScore_R": 75.48,
+                    "BERTScore_F1": 76.4
+                },
+                "deltas": {
+                    "Token_F1": 10.72,
+                    "ROUGE_L_F1": 12.84,
+                    "BERTScore_F1": 13.11,
+                    "Context_Faithfulness_Pct": 7.12,
+                    "Avg_Response_Length_Words": -16.2,
+                    "Sentence_Completeness_Pct": 98.0
+                },
+                "deltas_rel_pct": {
+                    "Token_F1": 15.94,
+                    "ROUGE_L_F1": 20.97,
+                    "BERTScore_F1": 20.71,
+                    "Context_Faithfulness_Pct": 8.55,
+                    "Avg_Response_Length_Words": -30.62,
+                    "Sentence_Completeness_Pct": null
+                },
+                "sample_pairs": [
+                    {
+                        "instruction": "What are some common modifications made to the interior of a car?",
+                        "ground_truth": "Common modifications made to the interior of a car include LED interior lighting, replacing standard gear lever knob and cups with sports versions, replacing the steering wheel with a smaller and handier one, and installing sport pedals. Other modifications can include changing belts, door handles, and chrome inserts.",
+                        "base_prediction": "According to the provided text, some common modifications made to the interior of a car include:\n\n*   LED interior lighting\n*   Replacing standard gear lever knobs and cups with sports versions\n*   Replacing the steering wheel with a smaller one\n*   Installing sport pedals\n*   Changing belts, door handles, and chrome inserts\n*   Using different-looking spare parts for original components",
+                        "adapted_prediction": "Some common modifications made to the interior of a car include replacing the standard gear lever knob and cups with sports versions, replacing the steering wheel with a smaller and more convenient one, and installing sport pedals. Interior equipment also includes belts, door handles, and chrome inserts. It is also possible to replace the original parts with different looking ones.",
+                        "base_f1": 0.7742,
+                        "adapted_f1": 0.7347,
+                        "base_faithfulness": 0.6591,
+                        "adapted_faithfulness": 0.7111
+                    },
+                    {
+                        "instruction": "Who returns with the glory of victory?",
+                        "ground_truth": "Pan returns with the glory of victory.",
+                        "base_prediction": "Pan returns with the glory of victory.",
+                        "adapted_prediction": "Pan returns with the glory of victory.",
+                        "base_f1": 1.0,
+                        "adapted_f1": 1.0,
+                        "base_faithfulness": 1.0,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "What is the significance of medical insurance in any medical setting?",
+                        "ground_truth": "Medical insurance is crucial in any kind of medical setting, because without health insurance it is nearly not possible to pay off any debts owed as a consequence of an ER visit or an easy surgery.",
+                        "base_prediction": "According to the provided text, medical insurance is significant in any medical setting because without it, it is nearly not possible to pay off any debts owed as a consequence of an ER visit or an easy surgery.",
+                        "adapted_prediction": "Medical insurance is crucial in any kind of medical setting, because without health insurance it is nearly not possible to pay off any debts owed as a consequence of an ER visit or an easy surgery.",
+                        "base_f1": 0.8358,
+                        "adapted_f1": 1.0,
+                        "base_faithfulness": 0.8621,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "Where has Mao Sone taught music before?",
+                        "ground_truth": "Mao Sone has taught music at Fedu Jazz in the Dominican Republic, Danilo Perez Foundation in Panama, and at the Newport Jazz Camp 2016, organized by Berklee College Of Music, and the Newport Jazz Festival.",
+                        "base_prediction": "According to the provided text, Mao Sone has taught at Fedu Jazz in the Dominican Republic, the Danilo Perez Foundation in Panama, and the Newport Jazz Camp in the United States.",
+                        "adapted_prediction": "Mao Sone has taught preschool to early grades students at Fedu Jazz in the Dominican Republic, and Danilo Perez Foundation in Panama, as a part of the Berklee Global Jazz Institute Ambassador.",
+                        "base_f1": 0.6552,
+                        "adapted_f1": 0.623,
+                        "base_faithfulness": 0.7826,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "What is an externality in the context of energy production and its impact on the environment?",
+                        "ground_truth": "In economics, an externality is conduct that re-allocates part of the cost of doing business upon other parties without their consent, such as pollution of public air and waters. In terms of energy production, the massive emissions of carbon dioxide (CO{-2}) from fossil-fuel energy production is an externality. This carbon-dioxide pollution emitted by coal and oil-fired power plants damages air quality and threatens our climate. This cost is not reflected in the market price of electricity, resulting in consumers not paying the full cost of power and energy markets becoming distorted.",
+                        "base_prediction": "According to the provided text, in economics, an externality is defined as \"conduct that re-allocates part of the cost of doing business upon other parties without their consent (such as pollution of public air and waters).\" The text specifically highlights carbon-dioxide pollution from fossil-fuel energy production as an \"externality par excellence,\" where the costs of this pollution, such as climate change impacts like sea-level rise and extreme weather events, are not reflected in the market price of electricity.",
+                        "adapted_prediction": "In economics, an externality is conduct that re-allocates part of the cost of doing business upon other parties without their consent, such as pollution of public air and waters. In the context of energy production, the massive emissions of carbon dioxide (CO{-2}) from fossil-fuel energy production is widely recognized as an externality. This pollution distributes evenly throughout the global atmosphere, damaging everyone’s air quality and threatening our climate. The impacts of this pollution, such as sea-level rise and increasing extreme weather events, impose billions of dollars in damages in the short term and may devastate entire economies over time.",
+                        "base_f1": 0.5769,
+                        "adapted_f1": 0.6591,
+                        "base_faithfulness": 0.8596,
+                        "adapted_faithfulness": 0.9853
+                    }
+                ]
+            },
+            "Dolly QA": {
+                "base": {
+                    "n_samples": 448,
+                    "Token_F1": 47.94,
+                    "ROUGE_L_F1": 42.12,
+                    "Context_Faithfulness_Pct": 80.87,
+                    "Avg_Response_Length_Words": 46.1,
+                    "Sentence_Completeness_Pct": 0.0,
+                    "BERTScore_P": 39.07,
+                    "BERTScore_R": 50.8,
+                    "BERTScore_F1": 43.59
+                },
+                "adapted": {
+                    "n_samples": 448,
+                    "Token_F1": 51.28,
+                    "ROUGE_L_F1": 47.48,
+                    "Context_Faithfulness_Pct": 89.69,
+                    "Avg_Response_Length_Words": 28.9,
+                    "Sentence_Completeness_Pct": 66.5,
+                    "BERTScore_P": 56.29,
+                    "BERTScore_R": 42.04,
+                    "BERTScore_F1": 47.49
+                },
+                "deltas": {
+                    "Token_F1": 3.34,
+                    "ROUGE_L_F1": 5.36,
+                    "BERTScore_F1": 3.9,
+                    "Context_Faithfulness_Pct": 8.82,
+                    "Avg_Response_Length_Words": -17.2,
+                    "Sentence_Completeness_Pct": 66.5
+                },
+                "deltas_rel_pct": {
+                    "Token_F1": 6.97,
+                    "ROUGE_L_F1": 12.73,
+                    "BERTScore_F1": 8.95,
+                    "Context_Faithfulness_Pct": 10.91,
+                    "Avg_Response_Length_Words": -37.31,
+                    "Sentence_Completeness_Pct": null
+                },
+                "sample_pairs": [
+                    {
+                        "instruction": "Please share some important points to remember for Oscar awards from the given text",
+                        "ground_truth": "1.\tThe Oscars, usually referred to as the Academy Awards, are prizes given to filmmakers for outstanding artistic and technical achievement.\n2.\tThe Academy of Motion Picture Arts and Sciences (AMPAS) bestows them annually in appreciation of outstanding contributions to cinema as judged by the Academy's voting membership.\n3.\tMany people consider the Academy Awards to be the most prestigious and important honours in the American and international entertainment industries.\n4.\tThe Oscar trophy has an Art Deco-styled rendering of a knight.",
+                        "base_prediction": "Here are some important points to remember for the Oscars, based on the provided text:\n\n*   The Academy Awards, commonly known as the Oscars, recognize artistic and technical merit in the film industry.\n*   They are presented annually by the Academy of Motion Picture Arts and Sciences (AMPAS).\n*   The awards acknowledge excellence in cinematic achievements as determined by the Academy's voting membership.\n*   The Academy Awards are considered the most prestigious and significant awards in the entertainment industry, both in the United States and globally.\n*   The Oscar statuette is a depiction of a knight in the Art Deco style.",
+                        "adapted_prediction": "1. Oscars are awards for artistic and technical merit for the film industry.\n2. Oscars are presented annually by the Academy of Motion Picture Arts and Sciences (AMPAS).\n3. Oscars are regarded by many as the most prestigious, significant awards in the entertainment industry in the United States and worldwide.",
+                        "base_f1": 0.5,
+                        "adapted_f1": 0.4957,
+                        "base_faithfulness": 0.6885,
+                        "adapted_faithfulness": 0.9118
+                    },
+                    {
+                        "instruction": "Which musical instrument does Peter Yanowitz play?",
+                        "ground_truth": "Drums",
+                        "base_prediction": "Peter Yanowitz plays the drums. The context mentions he was the original drummer of The Wallflowers, played drums for Money Mark, Hand of Doom, Nina Nastasia, Yoko Ono, Allen Ginsberg, and Wilco, and is currently the drummer of Exclamation Pony. He also performed as 'Schlatko', the drummer of The Angry Inch in the Broadway musical Hedwig and the Angry Inch.",
+                        "adapted_prediction": "Peter Yanowitz is a drummer.",
+                        "base_f1": 0.0385,
+                        "adapted_f1": 0.0,
+                        "base_faithfulness": 0.925,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "Is the glass ceiling real?",
+                        "ground_truth": "While it is not real as a physical object, it is considered real metaphorically, as it represents an invisible barrier that hinder women from rising beyond a certain organizational or societal hierarchy.",
+                        "base_prediction": "According to the provided text, the glass ceiling is a metaphor representing an invisible barrier that prevents certain demographics from advancing beyond a specific level in a hierarchy. While invisible, it is described as a difficult obstacle to overcome. The term was first used by feminists in 1978, and it is sometimes extended to refer to racial inequality in the United States, particularly for minority women.",
+                        "adapted_prediction": "Yes, the glass ceiling is real.",
+                        "base_f1": 0.3256,
+                        "adapted_f1": 0.1176,
+                        "base_faithfulness": 0.8125,
+                        "adapted_faithfulness": 0.6
+                    },
+                    {
+                        "instruction": "What is Lean manufacturing",
+                        "ground_truth": "Lean is a production method.",
+                        "base_prediction": "Lean manufacturing is a production method primarily focused on reducing times within the production system and response times from suppliers and to customers. It is closely related to just-in-time manufacturing (JIT manufacturing), which aims to match production to demand and focuses on efficiency, productivity, and reducing wastes. Lean manufacturing builds upon the just-in-time approach by also reducing cycle, flow, and throughput times through the elimination of activities that do not add value for the customer, and it also involves people outside of the manufacturing process, such as those in marketing and customer service.",
+                        "adapted_prediction": "Lean manufacturing is a production method aimed primarily at reducing times within the production system as well as response times from suppliers and to customers.",
+                        "base_f1": 0.0879,
+                        "adapted_f1": 0.2963,
+                        "base_faithfulness": 0.8667,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "Given this paragraph about the tour de france, has the race ever not ran",
+                        "ground_truth": "The tour de france has ran since 1903, with the only noted cancellations happening for the two world wars",
+                        "base_prediction": "Yes, the race has not always been run annually. According to the provided text, the Tour de France was stopped for the two World Wars.",
+                        "adapted_prediction": "Yes, the race has been stopped for the two world wars",
+                        "base_f1": 0.4324,
+                        "adapted_f1": 0.4,
+                        "base_faithfulness": 0.619,
+                        "adapted_faithfulness": 0.8889
+                    }
+                ]
+            },
+            "Aina-EN": {
+                "base": {
+                    "n_samples": 2000,
+                    "Token_F1": 32.59,
+                    "ROUGE_L_F1": 26.59,
+                    "Context_Faithfulness_Pct": 80.65,
+                    "Avg_Response_Length_Words": 22.9,
+                    "Sentence_Completeness_Pct": 0.0,
+                    "BERTScore_P": 55.48,
+                    "BERTScore_R": 16.91,
+                    "BERTScore_F1": 33.21
+                },
+                "adapted": {
+                    "n_samples": 2000,
+                    "Token_F1": 43.92,
+                    "ROUGE_L_F1": 33.84,
+                    "Context_Faithfulness_Pct": 74.68,
+                    "Avg_Response_Length_Words": 56.0,
+                    "Sentence_Completeness_Pct": 83.9,
+                    "BERTScore_P": 49.51,
+                    "BERTScore_R": 30.01,
+                    "BERTScore_F1": 37.47
+                },
+                "deltas": {
+                    "Token_F1": 11.33,
+                    "ROUGE_L_F1": 7.25,
+                    "BERTScore_F1": 4.26,
+                    "Context_Faithfulness_Pct": -5.97,
+                    "Avg_Response_Length_Words": 33.1,
+                    "Sentence_Completeness_Pct": 83.9
+                },
+                "deltas_rel_pct": {
+                    "Token_F1": 34.77,
+                    "ROUGE_L_F1": 27.27,
+                    "BERTScore_F1": 12.83,
+                    "Context_Faithfulness_Pct": -7.4,
+                    "Avg_Response_Length_Words": 144.54,
+                    "Sentence_Completeness_Pct": null
+                },
+                "sample_pairs": [
+                    {
+                        "instruction": "What are the latest generation of lossless algorithms?",
+                        "ground_truth": "The latest generation of lossless algorithms includes genetics compression algorithms, which are specifically designed to compress genetic data, such as sequences of nucleotides. These algorithms use a combination of conventional compression algorithms and genetic algorithms adapted to the specific datatype. For example, HAPZIPPER, a genetic compression algorithm published by a team of scientists from Johns Hopkins University in 2012, achieves over 20-fold compression (95% reduction in file size) for HapMap data, providing 2- to 4-fold better compression and in much faster time than leading general-purpose compression utilities. Other genetics compression algorithms such as DNAZip and GenomeZip, have compression ratios of up to 1200-fold, allowing 6 billion basepair diploid human genomes to be stored in 2.5 megabytes. These algorithms use methods such as MAF based encoding (MAFE) to reduce the heterogeneity of the dataset by sorting SNPs by their minor allele frequency, thus homogenizing the dataset.",
+                        "base_prediction": "The latest generation of lossless algorithms are genetics compression algorithms. These algorithms compress data, typically sequences of nucleotides, using both conventional compression algorithms and genetic algorithms adapted to the specific datatype. Examples of these algorithms include HAPZIPPER, DNAZip, and GenomeZip.",
+                        "adapted_prediction": "Genetics compression algorithms are the latest generation of lossless algorithms that compress data (typically sequences of nucleotides) using both conventional compression algorithms and genetic algorithms adapted to the specific datatype.",
+                        "base_f1": 0.3771,
+                        "adapted_f1": 0.2909,
+                        "base_faithfulness": 0.8929,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "Part of what study is the census of Antarctic marine life?",
+                        "ground_truth": "The Census of Marine Life (CoML) is a study that includes the census of Antarctic marine life. This research, conducted during the International Polar Year, involved around 500 researchers and was released in 2010. The study revealed that over 235 marine organisms are common to both polar regions, which is remarkable considering the 12,000 km distance between them. This distribution can be attributed to the relatively uniform temperatures in the deep ocean and the major current systems that transport eggs and larval stages.",
+                        "base_prediction": "The census of Antarctic marine life is part of the global Census of Marine Life (CoML).",
+                        "adapted_prediction": "The census of Antarctic marine life is part of the global Census of Marine Life (CoML), a research initiative that aims to document all marine species and ecosystems. The CoML has revealed that more than 235 marine organisms live in both polar regions, including large animals such as some cetaceans and birds, as well as small forms of life such as mudworms, sea cucumbers, and free-swimming snails. These organisms are able to bridge the gap of 12,000 km (7,456 mi) between the polar regions due to factors such as the fairly uniform temperatures of the deep ocean at the poles and the equator, and the major current systems or marine conveyor belt that transport eggs and larval stages.",
+                        "base_f1": 0.25,
+                        "adapted_f1": 0.4862,
+                        "base_faithfulness": 0.8889,
+                        "adapted_faithfulness": 0.7763
+                    },
+                    {
+                        "instruction": "What was the name of the first solar powered boat that crossed the Atlantic ocean?",
+                        "ground_truth": "The first solar powered boat to cross the Atlantic ocean was the sun21 catamaran. This significant achievement was completed in the winter of 2006-2007, marking a milestone in the use of solar energy for marine transportation.",
+                        "base_prediction": "The sun21 catamaran made the first solar powered crossing of the Atlantic Ocean.",
+                        "adapted_prediction": "The first solar powered boat to cross the Atlantic ocean was the sun21 catamaran.",
+                        "base_f1": 0.4,
+                        "adapted_f1": 0.5366,
+                        "base_faithfulness": 1.0,
+                        "adapted_faithfulness": 0.9091
+                    },
+                    {
+                        "instruction": "What venue drove a lot of the awareness of the music from the now pop post-punk bands?",
+                        "ground_truth": "MTV played a significant role in driving awareness of the music from post-punk bands that shifted towards a more commercial sound, which is often referred to as the new pop movement. In the US, these acts had a considerable influence on the Second British Invasion of \"New Music\" due to MTV and modern rock radio stations. As a result, some post-punk bands adopted a more accessible new wave sound, while others gained popularity on American college radio and pioneered the alternative rock genre. One of the most successful bands to emerge from this transition was U2, who incorporated religious imagery and political commentary into their anthemic music.",
+                        "base_prediction": "MTV and modern rock radio stations drove a lot of the awareness of the music from the now pop post-punk bands in the United States.",
+                        "adapted_prediction": "MTV",
+                        "base_f1": 0.2586,
+                        "adapted_f1": 0.0206,
+                        "base_faithfulness": 0.7895,
+                        "adapted_faithfulness": 1.0
+                    },
+                    {
+                        "instruction": "Most iPods feature how many buttons?",
+                        "ground_truth": "Most iPod models, excluding the 3rd-generation iPod Shuffle, 6th and 7th generation iPod Nano, and iPod Touch, come equipped with five physical buttons. These buttons are responsible for performing basic functions such as menu, play, pause, next track, and previous track. The 3rd-generation iPod Shuffle has a single button on the earphone cable for play, pause, next track, and so on, while the iPod Touch uses a touch screen for its interface, along with a home button, sleep/wake button, and volume-up and -down buttons.",
+                        "base_prediction": "Most iPods feature five buttons, although the buttons are integrated into the click wheel in later generations. The 3rd-generation iPod Shuffle does not have any controls on the actual player, and the iPod Touch has a home button, sleep/wake button, and volume buttons.",
+                        "adapted_prediction": "Most iPods have five buttons, which are used for basic functions such as menu, play, pause, next track, and previous track. These buttons are integrated into the click wheel, which also allows for scrolling through menu items and controlling the volume. However, there are some exceptions to this rule. The 3rd-generation iPod Shuffle does not have any controls on the actual player, but instead has a small control on the earphone cable with volume-up and -down buttons and a single button for play and pause, next track, etc. The iPod Touch, on the other hand, has no click-wheel and instead uses a 3.5\" touch screen along with a home button, sleep/wake button and (on the second and third generations of the iPod Touch) volume-up and -down buttons. The user interface for the iPod Touch is identical to that of the iPhone, but it lacks a phone application. Both devices use iOS.",
+                        "base_f1": 0.3333,
+                        "adapted_f1": 0.5592,
+                        "base_faithfulness": 0.9062,
+                        "adapted_faithfulness": 0.8352
+                    }
+                ]
+            },
+            "Aina-ES": {
+                "base": {
+                    "n_samples": 1503,
+                    "Token_F1": 29.69,
+                    "ROUGE_L_F1": 24.31,
+                    "Context_Faithfulness_Pct": 80.07,
+                    "Avg_Response_Length_Words": 27.7,
+                    "Sentence_Completeness_Pct": 0.0,
+                    "BERTScore_P": 47.11,
+                    "BERTScore_R": 11.46,
+                    "BERTScore_F1": 26.54
+                },
+                "adapted": {
+                    "n_samples": 1503,
+                    "Token_F1": 52.24,
+                    "ROUGE_L_F1": 39.31,
+                    "Context_Faithfulness_Pct": 70.24,
+                    "Avg_Response_Length_Words": 84.0,
+                    "Sentence_Completeness_Pct": 87.0,
+                    "BERTScore_P": 45.53,
+                    "BERTScore_R": 39.11,
+                    "BERTScore_F1": 41.78
+                },
+                "deltas": {
+                    "Token_F1": 22.55,
+                    "ROUGE_L_F1": 15.0,
+                    "BERTScore_F1": 15.24,
+                    "Context_Faithfulness_Pct": -9.83,
+                    "Avg_Response_Length_Words": 56.3,
+                    "Sentence_Completeness_Pct": 87.0
+                },
+                "deltas_rel_pct": {
+                    "Token_F1": 75.95,
+                    "ROUGE_L_F1": 61.7,
+                    "BERTScore_F1": 57.42,
+                    "Context_Faithfulness_Pct": -12.28,
+                    "Avg_Response_Length_Words": 203.25,
+                    "Sentence_Completeness_Pct": null
+                },
+                "sample_pairs": [
+                    {
+                        "instruction": "¿Qué parte de las eudicotiledóneas son del orden Fabales?",
+                        "ground_truth": "Las eudicotiledóneas incluyen el orden Fabales, el cual representa aproximadamente un 9,6% de su diversidad total. La familia más rica en especies dentro de Fabales es Fabaceae, la cual alberga la mayor parte de esta riqueza. El origen de Fabales se remonta a entre 94 y 89 millones de años atrás, y su diversificación comenzó hace aproximadamente 79 a 74 millones de años. Durante el terciario temprano, las leguminosas, que forman parte de Fabales, se diversificaron y se convirtieron en un componente omnipresente de las biotas terrestres modernas, al igual que muchas otras familias de Angiospermas.",
+                        "base_prediction": "Según el documento proporcionado, el orden Fabales contiene cerca del 9,6% de la diversidad de especies de las eudicotiledóneas, y la mayor parte de esa riqueza se concentra en la familia Fabaceae. Además, el orden Fabales está compuesto por las familias Polygalaceae, Surianaceae y Quillajaceae.",
+                        "adapted_prediction": "El orden Fabales, que contiene aproximadamente el 9,6% de la diversidad de especies de las eudicotiledóneas, incluye cuatro familias: Fabaceae, Polygalaceae, Surianaceae y Quillajaceae. La familia Fabaceae, también conocida como la familia de las leguminosas, es la que más contribuye a la riqueza de especies de este orden. Se cree que el origen de este clado se remonta a hace 94 a 89 millones de años, y comenzó a diversificarse hace unos 79 a 74 millones de años. Las leguminosas, en particular, se han diversificado durante el terciario temprano y se han convertido en un componente ubicuo de las biotas terrestres modernas.",
+                        "base_f1": 0.3529,
+                        "adapted_f1": 0.6341,
+                        "base_faithfulness": 0.871,
+                        "adapted_faithfulness": 0.7091
+                    },
+                    {
+                        "instruction": "¿Cómo se provoca al otro equipo a que cometa más faltas de ataque?",
+                        "ground_truth": "Una defensa agresiva puede aumentar las faltas de ataque cometidas por el equipo contrario, ya que los atacantes deben actuar con más velocidad y pueden tener dificultades para controlar sus acciones. Esto se debe a que una defensa activa y contundente puede desestabilizar a los jugadores ofensivos y hacer que cometan errores, resultando en faltas técnicas o personales. Sin embargo, es importante tener en cuenta que una defensa agresiva debe ser ejecutada con conocimiento y habilidad, ya que una defensa descontrolada o mal ejecutada puede resultar en más faltas para el equipo defensivo.",
+                        "base_prediction": "Según el texto, se provoca al otro equipo a cometer más faltas de ataque mediante una defensa agresiva. Esto se debe a que los atacantes necesitan actuar con más velocidad y es más difícil controlar sus acciones en una defensa agresiva.",
+                        "adapted_prediction": "Para provocar al otro equipo a cometer más faltas de ataque, se puede implementar una defensa agresiva. Esta estrategia implica que los defensores se muevan con más velocidad y sean más agresivos en su juego, lo que a su vez obliga a los atacantes a actuar con mayor rapidez y control en sus acciones. Esto puede resultar en un aumento de faltas de ataque por parte del equipo contrario. Sin embargo, es importante tener en cuenta que esta táctica puede ser controvertida y puede ser vista como una forma de hacer trampa por algunos.",
+                        "base_f1": 0.4103,
+                        "adapted_f1": 0.515,
+                        "base_faithfulness": 0.6667,
+                        "adapted_faithfulness": 0.3934
+                    },
+                    {
+                        "instruction": "¿Quién es el responsable de la serie Los Simpson?",
+                        "ground_truth": "Matt Groening es el creador de la famosa serie de comedia animada Los Simpson, que se emitió en Fox Broadcasting Company y se hizo popular en varios países del mundo. La serie sigue la vida de la familia Simpson, formada por Homer, Marge, Bart, Lisa y Maggie, y ofrece una sátira de la sociedad estadounidense a través de su representación de la vida diaria de una familia de clase media en el pueblo ficticio de Springfield.",
+                        "base_prediction": "Según el documento proporcionado, la serie Los Simpson fue creada por Matt Groening.",
+                        "adapted_prediction": "Matt Groening es el creador de la serie de comedia animada estadounidense \"Los Simpson\". La serie, que se emite en varios países del mundo, es una sátira de la sociedad estadounidense y sigue la vida diaria de una familia de clase media que vive en un pueblo ficticio llamado Springfield. Los miembros de la familia Simpson son Homer, Marge, Bart, Lisa y Maggie.",
+                        "base_f1": 0.1351,
+                        "adapted_f1": 0.7586,
+                        "base_faithfulness": 0.6,
+                        "adapted_faithfulness": 0.8462
+                    },
+                    {
+                        "instruction": "¿Dónde se vetó el disco Erotica?",
+                        "ground_truth": "El álbum Erotica de Madonna fue prohibido en algunos países asiáticos, incluyendo China y Singapur, debido a su contenido sexual explícito. Esto llevó a la creación de dos versiones del álbum: una edición «limpia» que omitió ciertas canciones y una versión explícita que incluía la etiqueta Parental Advisory. A pesar de la prohibición en ciertos países, el álbum fue publicado en CD, LP y casete en varias fechas y lugares, incluyendo Reino Unido, Estados Unidos, Japón, Europa, Australia y Nueva Zelanda. Posteriormente, se lanzó una edición limitada en vinilo blanco en Europa y Oceanía en 2018.",
+                        "base_prediction": "El disco Erotica fue prohibido en algunos países asiáticos como China y Singapur debido al \"evidente contenido sexual\" en canciones como \"Did You Do It?\".",
+                        "adapted_prediction": "El álbum Erotica de Madonna fue prohibido en algunos países asiáticos, específicamente en China y Singapur, debido a su contenido sexual explícito en canciones como \"Did You Do It?\". Para cumplir con las regulaciones locales, se crearon dos versiones del álbum: una versión \"limpia\" que omitió la canción prohibida y una versión explícita con la etiqueta de advertencia para padres. El álbum se lanzó en CD, LP y casete en varios países, incluyendo el Reino Unido, Europa, Australia, Nueva Zelanda, Japón y Estados Unidos. Más tarde, se relanzó en vinilo en Europa y Oceanía en 2012 y en los Estados Unidos en 2016. En 2018, se lanzó una edición limitada en vinilo blanco en Europa y Oceanía.",
+                        "base_f1": 0.2752,
+                        "adapted_f1": 0.6806,
+                        "base_faithfulness": 1.0,
+                        "adapted_faithfulness": 0.7324
+                    },
+                    {
+                        "instruction": "¿Qué porcentaje de estrellas acabarán convirtiéndose en enanas blancas?",
+                        "ground_truth": "El 97% de las estrellas, incluyendo nuestro Sol, se convertirán en enanas blancas al agotar su combustible nuclear y expulsar la mayor parte de su masa en nebulosas planetarias. Las enanas blancas son remanentes estelares que, junto con las enanas rojas, constituyen las estrellas más abundantes en el universo.",
+                        "base_prediction": "Según el texto proporcionado, el 97% de las estrellas que conocemos acabarán convirtiéndose en enanas blancas.",
+                        "adapted_prediction": "El 97% de las estrellas que conocemos, incluyendo nuestro Sol, eventualmente se convertirán en enanas blancas. Una enana blanca es el remanente estelar que resulta cuando una estrella de masa menor a 10 masas solares agota su combustible nuclear y expulsa gran parte de su masa en forma de nebulosa planetaria. Las enanas blancas son, junto con las enanas rojas, las estrellas más abundantes del universo.",
+                        "base_f1": 0.2545,
+                        "adapted_f1": 0.6465,
+                        "base_faithfulness": 0.6154,
+                        "adapted_faithfulness": 0.7609
+                    }
+                ]
+            },
+            "Aina-CA": {
+                "base": {
+                    "n_samples": 2140,
+                    "Token_F1": 32.23,
+                    "ROUGE_L_F1": 27.04,
+                    "Context_Faithfulness_Pct": 84.61,
+                    "Avg_Response_Length_Words": 27.0,
+                    "Sentence_Completeness_Pct": 0.0,
+                    "BERTScore_P": 46.65,
+                    "BERTScore_R": 13.22,
+                    "BERTScore_F1": 27.62
+                },
+                "adapted": {
+                    "n_samples": 2140,
+                    "Token_F1": 56.32,
+                    "ROUGE_L_F1": 43.5,
+                    "Context_Faithfulness_Pct": 71.98,
+                    "Avg_Response_Length_Words": 81.6,
+                    "Sentence_Completeness_Pct": 99.1,
+                    "BERTScore_P": 47.33,
+                    "BERTScore_R": 43.97,
+                    "BERTScore_F1": 45.48
+                },
+                "deltas": {
+                    "Token_F1": 24.09,
+                    "ROUGE_L_F1": 16.46,
+                    "BERTScore_F1": 17.86,
+                    "Context_Faithfulness_Pct": -12.63,
+                    "Avg_Response_Length_Words": 54.6,
+                    "Sentence_Completeness_Pct": 99.1
+                },
+                "deltas_rel_pct": {
+                    "Token_F1": 74.74,
+                    "ROUGE_L_F1": 60.87,
+                    "BERTScore_F1": 64.66,
+                    "Context_Faithfulness_Pct": -14.93,
+                    "Avg_Response_Length_Words": 202.22,
+                    "Sentence_Completeness_Pct": null
+                },
+                "sample_pairs": [
+                    {
+                        "instruction": "Quin sons es barrejaven en la caiguda de Sàuron?",
+                        "ground_truth": "En la caiguda de Sàuron, el departament de So va utilitzar una barreja de xiscles humans i d'un ase per crear el so adequat. Aquest so es va enregistrar en un estudi de so nou, on es van gravar tots els sons de la pel·lícula. Per evitar comparacions amb esdeveniments reals, es va utilitzar el soroll de vidre trencat per col·lapsar els sons. El treball de mescla va començar el 15 d'agost i es va completar el 15 de novembre després de tres mesos de treball ininterromput.",
+                        "base_prediction": "Segons el text, en la caiguda de Sàuron es barrejaven xiscles humans i d'un ase.",
+                        "adapted_prediction": "Els sons de xiscles humans i d'un ase es van barrejar en la caiguda de Sàuron, com es va produir durant la creació de l'efecte de so per a la pel·lícula. Aquest efecte de so es va crear combinant diferents sons, com el xiscle d'un diable de Tasmània per al personatge de l'Arranyera i el rugit d'un lleó per al Mûmakil. Per evitar comparacions amb l'esdeveniment de l'11 de setembre, es va utilitzar el so de vidre trencat per representar el col·lapse de Sàuron.",
+                        "base_f1": 0.2273,
+                        "adapted_f1": 0.5867,
+                        "base_faithfulness": 0.8462,
+                        "adapted_faithfulness": 0.5745
+                    },
+                    {
+                        "instruction": "Què no tenen alguns lampròfirs ultramàfics?",
+                        "ground_truth": "Alguns lampròfirs ultramàfics no contenen melilita, segons la classificació original de Nicholas Rock. No obstant això, la Unió Internacional de Ciències Geològiques (IUGS) recomana actualment el terme \"lampròfirs melilitics\" per incloure roques com les polzenites, que poden no ser totes ultramàfiques. Així doncs, la melilita no és un component essencial dels lampròfirs ultramàfics, sinó que es troba en una subcategoria específica d'aquestes roques.",
+                        "base_prediction": "Segons Nicholas Rock, alguns lampròfirs ultramàfics no tenen mel·lilita.",
+                        "adapted_prediction": "No tots els lampròfirs ultramàfics contenen mel·lilita. Aquesta afirmació es basa en la classificació de Nicholas Rock, que difereix de la recomanada per la Unió Internacional de Ciències Geològiques (IUGS). La IUGS recomana utilitzar el terme \"lampròfirs melilitics\" en lloc de \"lampròfirs ultramàfics\" per incloure les polzenites, que no sempre són ultramàfiques. No obstant això, Nicholas Rock argumenta que existeixen lampròfirs ultramàfics sense mel·lilita.",
+                        "base_f1": 0.2154,
+                        "adapted_f1": 0.5664,
+                        "base_faithfulness": 0.7778,
+                        "adapted_faithfulness": 0.6154
+                    },
+                    {
+                        "instruction": "Com van ser alliberats els segrestadors?",
+                        "ground_truth": "Els segrestadors van ser alliberats sense càrrecs després de sis setmanes d'interrogatoris i vagues de fam intermitents. Després del seu alliberament, Issawi va anar a la ciutat siriana d'Homs per visitar als seus pares, mentre que Khaled es va dirigir al Líban quan va saber que el seu germà Walid havia estat agredit per gendarmes libanesos després de saber-se la identitat de la segrestadora. Posteriorment, Khaled va tornar a Amman per continuar la seva feina al camp de refugiats d'Al-Wehdat.",
+                        "base_prediction": "Segons el text, els segrestadors foren alliberats sense càrrecs després de sis setmanes d'interrogatoris i vagues de fam intermitents.",
+                        "adapted_prediction": "Els segrestadors van ser alliberats sense càrrecs després de sis setmanes de detenció, durant les quals van ser interrogats i van experimentar vagues de fam intermitents. Després de la seva alliberació, Issawi va viatjar a Homs, a Síria, per visitar breument als seus pares, mentre que Khaled es va desplaçar al Líban quan va saber que el seu germà Walid havia estat agredit per gendarmes libanesos. Posteriorment, Khaled va tornar a Amman per continuar el seu treball al camp de refugiats d'Al-Wehdat.",
+                        "base_f1": 0.3146,
+                        "adapted_f1": 0.8082,
+                        "base_faithfulness": 0.875,
+                        "adapted_faithfulness": 0.6491
+                    },
+                    {
+                        "instruction": "Amb què no s'adapta l'estil rococó?",
+                        "ground_truth": "L'estil rococó no s'adapta bé a l'ofici solemne de la funció religiosa, especialment quan es tracta d'elements com el tabernacle, l'altar o el púlpit. Aquest estil, que es caracteritza per la seva elegància i fantasia, pot ser utilitzat en objectes de grans dimensions, tot i que pot semblar-se al barroc. No obstant això, els elements fantasiosos de l'estil rococó no encaixen bé amb les grans parets de les esglésies. Els materials utilitzats en aquest estil inclouen la fusta tallada, el ferro i el bronze, que solen estar daurats per fer-los més acceptables en entorns no profans. Cal tenir en compte que la bellesa d'una peça rococó depèn de la situació local i les circumstàncies individuals.",
+                        "base_prediction": "Segons el text, l'estil rococó no s'adapta a l'església pròpiament dita, ni a l'ofici solemne de la funció religiosa, al tabernacle, l'altar ni al púlpit. A més, els elements fantasiosos d'aquest estil no s'adiuen amb les grans parets de les esglésies.",
+                        "adapted_prediction": "L'estil rococó no s'adapta bé a l'església, especialment a elements com el tabernacle, l'altar i el púlpit. Aquest estil es caracteritza per elements fantasiosos que no harmònics amb les grans parets de les esglésies. Malgrat això, l'escultura rococó pot ser bella, encara que comparteix semblances amb el barroc. Els materials utilitzats en l'estil rococó inclouen la fusta tallada, el ferro i el bronze, i un element distintiu és el daurat que cobreix els materials metàl·lics. No obstant això, l'estil rococó és més adequat per a ambients no profans, com la sagristia.",
+                        "base_f1": 0.3459,
+                        "adapted_f1": 0.5714,
+                        "base_faithfulness": 0.931,
+                        "adapted_faithfulness": 0.7321
+                    },
+                    {
+                        "instruction": "Amb ui somia el guardabosc?",
+                        "ground_truth": "El guardabosc somia amb la desitjada Terynka, una bella gitana, mentre descansa al bosc. Després de despertar sobtadament quan una granota salta al seu nas, recorda la mirada de Terynka i decideix capturar la guineu que atreu la seva atenció. Aquest somni i la captura de la guineu suggereixen que el guardabosc està obsessionat amb Terynka i està disposat a actuar per estar més a prop d'ella.",
+                        "base_prediction": "Segons el text, el guardabosc somia en la desitjada Terynka, una bella gitana.",
+                        "adapted_prediction": "El guardabosc somia amb Terynka, una bella gitana, mentre descansa al bosc. Aquest somni es reflecteix en la seva acció posterior, quan veu una guineu i la recorda a Terynka, fet que el porta a capturar-la.",
+                        "base_f1": 0.1875,
+                        "adapted_f1": 0.4819,
+                        "base_faithfulness": 0.7778,
+                        "adapted_faithfulness": 0.5556
+                    }
+                ]
+            }
+        }
+    },
+    "aggregate": {
+        "dev": {
+            "Total_Samples": 1600,
+            "Base_Token_F1": 41.91,
+            "Adapted_Token_F1": 55.7,
+            "Delta_Token_F1": 13.79,
+            "DeltaRel_Token_F1": 32.91,
+            "Base_ROUGE_L_F1": 36.19,
+            "Adapted_ROUGE_L_F1": 47.21,
+            "Delta_ROUGE_L_F1": 11.02,
+            "DeltaRel_ROUGE_L_F1": 30.46,
+            "Base_BERTScore_F1": 38.91,
+            "Adapted_BERTScore_F1": 48.97,
+            "Delta_BERTScore_F1": 10.06,
+            "DeltaRel_BERTScore_F1": 25.85
+        },
+        "test": {
+            "Total_Samples": 8490,
+            "Base_Token_F1": 42.59,
+            "Adapted_Token_F1": 58.53,
+            "Delta_Token_F1": 15.94,
+            "DeltaRel_Token_F1": 37.42,
+            "Base_ROUGE_L_F1": 36.9,
+            "Adapted_ROUGE_L_F1": 49.33,
+            "Delta_ROUGE_L_F1": 12.42,
+            "DeltaRel_ROUGE_L_F1": 33.66,
+            "Base_BERTScore_F1": 39.67,
+            "Adapted_BERTScore_F1": 51.78,
+            "Delta_BERTScore_F1": 12.11,
+            "DeltaRel_BERTScore_F1": 30.54
+        }
+    }
+}
