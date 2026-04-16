@@ -188,11 +188,11 @@ Variables de entorno de referencia (ajustar según hardware y despliegue):
 | Variable | Referencia | Descripción |
 |----------|------------|-------------|
 | `OLLAMA_RAG_MODEL` | `phi4-finetuned:latest` | Generador RAG |
-| `OLLAMA_CHAT_MODEL` | `gemma4:e4b` | Modo chat |
+| `OLLAMA_CHAT_MODEL` | `gemma4:e2b` | Modo chat |
 | `OLLAMA_EMBED_MODEL` | `embeddinggemma:latest` | Embeddings |
-| `OLLAMA_CONTEXTUAL_MODEL` | `gemma4:e4b` | Contextual retrieval |
-| `OLLAMA_RECOMP_MODEL` | `gemma4:e4b` | Síntesis RECOMP |
-| `OLLAMA_OCR_MODEL` | `qwen3-vl:8b` | Descripción de imágenes |
+| `OLLAMA_CONTEXTUAL_MODEL` | `gemma4:e2b` | Contextual retrieval |
+| `OLLAMA_RECOMP_MODEL` | `gemma4:e2b` | Síntesis RECOMP |
+| `OLLAMA_OCR_MODEL` | `gemma4:e4b` | Descripción de imágenes (multimodal, think=False) |
 | `DOCS_FOLDER` | `rag/pdfs/` | Carpeta de PDFs a indexar |
 | `RERANKER_QUALITY` | `quality` | `quality` (BAAI/bge) o `speed` (MiniLM) |
 | `HF_TOKEN` | — | Token HuggingFace (necesario para Gemma-3) |

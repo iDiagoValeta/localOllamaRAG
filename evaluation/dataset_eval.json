@@ -1,146 +1,218 @@
 [
-  {
-    "question": "According to the ragas.pdf document, what are the two main modules that compose a RAG system and what does each module do?",
-    "ground_truth": "RAG systems are composed of a retrieval module and an LLM-based generation module. The retrieval module identifies relevant and focused context passages from a reference textual database, while the LLM-based generation module exploits these passages in a faithful way to provide knowledge to the user, reducing the risk of hallucinations."
-  },
-  {
-    "question": "Based on the ragas.pdf paper, how many Wikipedia pages were selected to construct the WikiEval dataset, and what time period do they cover?",
-    "ground_truth": "To construct the WikiEval dataset, the authors selected 50 Wikipedia pages covering events that have happened since the start of 2022."
-  },
-  {
-    "question": "According to the Ragas paper, what are the two specific cases that the Answer Relevance metric penalizes?",
-    "ground_truth": "The Ragas framework focuses on settings where reference answers may not be available. The assessment of answer relevance penalises cases where the generated answer is incomplete or where it contains redundant information."
-  },
-  {
-    "question": "According to the ragas.pdf document, what are two fundamental limitations of using LLMs as knowledge bases, and what is the standard solution to these issues?",
-    "ground_truth": "The document states that LLMs are not able to answer questions about events that have happened after they were trained, and they struggle to memorise knowledge that is only rarely mentioned in the training corpus. The standard solution to these issues is to rely on Retrieval Augmented Generation (RAG). Answering a question then essentially involves retrieving relevant passages from a corpus and feeding these passages, along with the original question, to the LM."
-  },
-  {
-    "question": "Based on the ragas.pdf paper, what does the Faithfulness metric evaluate, and why is Context Relevance important?",
-    "ground_truth": "Faithfulness evaluates whether the claims made in the answer can be inferred from the given context, ensuring the answer is grounded, avoiding hallucinations, and ensuring that the retrieved context can act as a justification for the generated answer. Context Relevance ensures the retrieved context is focused and contains as little irrelevant information as possible, which is important given the cost associated with feeding long context passages to LLMs, as they are often less effective in exploiting that context, especially for information that is provided in the middle of the context passage."
-  },
-  {
-    "question": "According to the Ragas framework, what is the two-step process used to estimate faithfulness by prompting an LLM?",
-    "ground_truth": "To estimate faithfulness, the first step uses an LLM to decompose longer sentences in the generated answer into shorter and more focused assertions. The second step uses a verification function via prompting where the LLM determines if each extracted statement can be inferred from the given context."
-  },
-  {
-    "question": "According to the LoRA.pdf paper, how does Low-Rank Adaptation (LoRA) reduce the number of trainable parameters?",
-    "ground_truth": "LoRA freezes the pre-trained model weights and injects trainable rank decomposition matrices into each layer of the Transformer architecture, greatly reducing the number of trainable parameters for downstream tasks while maintaining or improving model performance."
-  },
-  {
-    "question": "According to the LoRA document, by how many times can LoRA reduce the number of trainable parameters compared to a fully fine-tuned GPT-3 175B?",
-    "ground_truth": "Compared to GPT-3 175B fine-tuned with Adam, LoRA can reduce the number of trainable parameters by 10,000 times."
-  },
-  {
-    "question": "Why do adapter layers introduce inference latency according to the LoRA paper?",
-    "ground_truth": "Adapter layers introduce inference latency because large neural networks rely on hardware parallelism to keep latency low, and adapter layers have to be processed sequentially. This is especially significant in online inference settings where the batch size is typically as small as one, and the extra compute in adapter layers cannot be bypassed directly. The additional depth also requires more synchronous GPU operations such as AllReduce and Broadcast, unless the adapter parameters are stored redundantly many times."
-  },
-  {
-    "question": "According to the LoRA.pdf paper, how are the matrices A and B initialized at the beginning of training, and what is the resulting value of the update matrix?",
-    "ground_truth": "The authors use a random Gaussian initialization for matrix A and zero for matrix B. As a result, the update matrix is zero at the beginning of training."
-  },
-  {
-    "question": "According to the LoRA paper, how does LoRA impact VRAM consumption during training on GPT-3 175B, and what causes this reduction?",
-    "ground_truth": "On GPT-3 175B, LoRA reduces the VRAM consumption during training from 1.2TB to 350GB. This reduction occurs because the system does not need to store the optimizer states for the frozen parameters. By freezing the MLP modules and adapting only Wq and Wv with low rank, the checkpoint size is further reduced from 350GB to 35MB."
-  },
-  {
-    "question": "According to the qwen3.pdf technical report, what are the two distinct operating modes integrated into its unified framework, and what does this integration eliminate?",
-    "ground_truth": "Qwen3 integrates a thinking mode for complex, multi-step reasoning and a non-thinking mode for rapid, context-driven responses into a unified framework. This eliminates the need to switch between different models, such as chat-optimized models and dedicated reasoning models, and enables dynamic mode switching based on user queries."
-  },
-  {
-    "question": "According to the qwen3.pdf document, how many parameters are activated per token in the Qwen3-235B-A22B model, and what is its total parameter count?",
-    "ground_truth": "The flagship model, Qwen3-235B-A22B, is an MoE model with 22 billion activated parameters per token out of a total of 235 billion parameters. This design ensures both high performance and efficient inference."
-  },
-  {
-    "question": "Based on the qwen3.pdf paper, how many tokens were used in the pre-training dataset and what was the purpose of this dataset?",
-    "ground_truth": "The pre-training process for Qwen3 utilizes a large-scale dataset consisting of approximately 36 trillion tokens, curated to ensure linguistic and domain diversity, enabling the model to understand and generate text in a wide range of languages and dialects."
-  },
-  {
-    "question": "According to the qwen3.pdf technical report, what is the purpose of the Strong-to-Weak Distillation pipeline, and what are its two primary phases?",
-    "ground_truth": "The Strong-to-Weak Distillation pipeline is designed to optimize lightweight models by reducing the computational costs and development efforts required for building smaller-scale models. Its two primary phases are Off-policy Distillation and On-policy Distillation. In the Off-policy phase, outputs from teacher models in both /think and /no think modes are combined for response distillation, helping student models develop basic reasoning skills and mode-switching capabilities. In the On-policy phase, the student model generates its own sequences and is fine-tuned by aligning its logits with those of a teacher model to minimize KL divergence."
-  },
-  {
-    "question": "Based on the qwen3.pdf document, what techniques are used during the Long Context Stage to extend the context length, and what is the maximum sequence length capacity?",
-    "ground_truth": "During the Long Context Stage, the authors collect high-quality long context corpora to extend the context length, increase the base frequency of RoPE using the ABF technique, and introduce YARN and Dual Chunk Attention (DCA) to extend the capacity. This allows all models to be pre-trained on hundreds of billions of tokens with a maximum sequence length of 32,768 tokens."
-  },
-  {
-    "question": "According to qwen3.pdf, what tools are used to efficiently expand the training data, and what is the total number of languages and dialects covered?",
-    "ground_truth": "To efficiently expand the training data, the authors use Qwen2.5-VL to extract text from PDF documents, and domain-specific models like Qwen2.5-Math and Qwen2.5-Coder to generate synthetic data. The pre-training follows a three-stage strategy: General Stage, Reasoning Stage for STEM and coding, and Long Context Stage. The total pre-training dataset covers 119 languages and dialects."
-  },
-  {
-    "question": "According to att.pdf, what two neural network mechanisms does the Transformer architecture dispense with entirely, and what does it rely on instead?",
-    "ground_truth": "The Transformer architecture dispenses with recurrence and convolutions entirely, relying solely on attention mechanisms to draw global dependencies between input and output. This allows for significantly more parallelization compared to recurrent or convolutional architectures."
-  },
-  {
-    "question": "According to the att.pdf paper, how many identical layers compose the encoder stack, and what two sub-layers does each layer contain?",
-    "ground_truth": "The encoder is composed of a stack of N = 6 identical layers. Each layer has two sub-layers: a multi-head self-attention mechanism and a simple, position-wise fully connected feed-forward network, with residual connections and layer normalization applied around each sub-layer."
-  },
-  {
-    "question": "How many parallel attention heads are employed in the multi-head attention mechanism according to att.pdf, and what is the dimension used per head?",
-    "ground_truth": "The authors employ h = 8 parallel attention layers, or heads. For each head, dk = dv = dmodel/h = 64. Due to the reduced dimension of each head, the total computational cost is similar to that of single-head attention with full dimensionality."
-  },
-  {
-    "question": "According to att.pdf, what are the two most commonly used attention functions, and why is dot-product attention preferred in practice?",
-    "ground_truth": "The two most commonly used attention functions are additive attention and dot-product (multiplicative) attention. While they are similar in theoretical complexity, dot-product attention is much faster and more space-efficient in practice because it can be implemented using highly optimized matrix multiplication code. For large values of dk, the dot products grow large in magnitude, pushing the softmax function into regions with extremely small gradients; to counteract this effect, the dot products are scaled by 1/sqrt(dk)."
-  },
-  {
-    "question": "According to the att.pdf paper, why are positional encodings added to the input embeddings, and what specific functions are used for them?",
-    "ground_truth": "Since the model contains no recurrence and no convolution, positional encodings are added to inject information about the relative or absolute position of the tokens in the sequence. The positional encodings have the same dimension dmodel as the embeddings, so that the two can be summed. There are many choices of positional encodings, learned and fixed. The authors use sine and cosine functions of different frequencies to form these encodings."
-  },
-  {
-    "question": "According to the Ragas paper, what language model was used to evaluate all prompts in the implementation and experiments?",
-    "ground_truth": "The gpt-3.5-turbo-16k model was used to evaluate all prompts in the Ragas implementation and experiments."
-  },
-  {
-    "question": "According to the Ragas paper, what is the exact formula used to compute the faithfulness score F?",
-    "ground_truth": "The faithfulness score F is computed as F = |V| / |S|, where |V| is the number of statements that were supported by the context according to the LLM and |S| is the total number of statements."
-  },
-  {
-    "question": "According to the LoRA paper, on which models does LoRA perform on-par or better than fine-tuning in model quality?",
-    "ground_truth": "LoRA performs on-par or better than fine-tuning in model quality on RoBERTa, DeBERTa, GPT-2, and GPT-3."
-  },
-  {
-    "question": "According to the LoRA paper, what do the authors hypothesize about the weight updates during model adaptation?",
-    "ground_truth": "The authors hypothesize that the change in weights during model adaptation also has a low intrinsic rank."
-  },
-  {
-    "question": "According to the LoRA paper, what training speedup is achieved when using LoRA on GPT-3 175B compared to full fine-tuning?",
-    "ground_truth": "A 25% speedup during training on GPT-3 175B is observed compared to full fine-tuning."
-  },
-  {
-    "question": "What are the specific names of the 6 dense models in the Qwen3 series?",
-    "ground_truth": "The six dense models in the Qwen3 series are Qwen3-0.6B, Qwen3-1.7B, Qwen3-4B, Qwen3-8B, Qwen3-14B, and Qwen3-32B."
-  },
-  {
-    "question": "What are the specific names of the 2 MoE models in the Qwen3 series?",
-    "ground_truth": "The two MoE models in the Qwen3 series are Qwen3-30B-A3B and Qwen3-235B-A22B."
-  },
-  {
-    "question": "According to the Qwen3 paper, what tokenizer does Qwen3 utilize and what is its vocabulary size?",
-    "ground_truth": "Qwen3 utilizes byte-level byte-pair encoding (BBPE) with a vocabulary size of 151,669."
-  },
-  {
-    "question": "According to the Qwen3 paper, what flags are introduced in the user query or system message to allow the model to select the appropriate thinking mode?",
-    "ground_truth": "The /think and /no think flags are introduced in the user query or system message to allow the model to select the appropriate thinking mode."
-  },
-  {
-    "question": "According to att.pdf, what optimizer was used to train the Transformer models, and what were the specific beta values and epsilon used?",
-    "ground_truth": "The Adam optimizer was used, with beta1 = 0.9, beta2 = 0.98, and epsilon = 10^-9."
-  },
-  {
-    "question": "According to att.pdf, what hardware was used to train the Transformer models?",
-    "ground_truth": "The models were trained on one machine with 8 NVIDIA P100 GPUs."
-  },
-  {
-    "question": "According to att.pdf, what is the computational complexity per layer for a self-attention layer?",
-    "ground_truth": "The computational complexity per layer for a self-attention layer is O(n^2 * d), where n is the sequence length and d is the representation dimension."
-  },
-  {
-    "question": "According to att.pdf, what is the maximum path length between any two positions for a self-attention layer compared to a recurrent layer?",
-    "ground_truth": "The maximum path length for a self-attention layer is O(1), while for a recurrent layer it is O(n). This means that self-attention layers can connect any two positions with a constant number of operations, regardless of sequence length."
-  },
-  {
-    "question": "According to att.pdf, how long did training take for the base models and for the big models?",
-    "ground_truth": "Training the base models took a total of 100,000 steps or 12 hours, while training the big models took 300,000 steps, which corresponds to 3.5 days."
-  }
+    {
+        "id":  "wiki_es_001",
+        "language":  "es",
+        "source_url":  "https://es.wikipedia.org/wiki/Inteligencia_artificial",
+        "context":  "En cuanto a su clasificación, tradicionalmente se divide a la inteligencia artificial en inteligencia artificial débil, la cual es la única que existe en la actualidad y que se ocupa de realizar tareas específicas, e inteligencia artificial general, que sería una IA que excediese las capacidades humanas. Algunos expertos creen que ésto podría lograrse mediante el desarrollo de la inteligencia artificial cuántica y que si alguna vez se alcanzara este nivel, se podría dar lugar a la aparición de una singularidad tecnológica, es decir, una entidad tecnológica superior que se mejoraría a sí misma constantemente, volviéndose incontrolable para los humanos, dando pie a teorías como el basilisco de Roko. Algunas de las inteligencias artificiales más conocidas y utilizadas en la actualidad alrededor del mundo incluyen inteligencia artificial en el campo de la salud, asistentes virtuales como Alexa, el asistente de Google, Copilot o Siri, traductores automáticos como el traductor de Google y DeepL...",
+        "question":  "¿Cómo se divide tradicionalmente a la inteligencia artificial en cuanto a su clasificación?",
+        "ground_truth":  "en inteligencia artificial débil, la cual es la única que existe en la actualidad y que se ocupa de realizar tareas específicas, e inteligencia artificial general, que sería una IA que excediese las capacidades humanas",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_ca_002",
+        "language":  "ca",
+        "source_url":  "https://ca.wikipedia.org/wiki/Intel%C2%B7lig%C3%A8ncia_artificial",
+        "context":  "El 2019, la Comissió Mundial d\u0027Ètica del Coneixement Científic i la Tecnologia (COMEST) de la UNESCO descrivia la IA com un camp que implica màquines capaces de simular determinades funcionalitats de la intel·ligència humana, incloses característiques com la percepció de patrons, per exemple d\u0027imatges i sons, l\u0027aprenentatge, el raonament, la resolució de problemes, el processament del llenguatge natural, la interacció lingüística i fins i tot la producció de treballs creatius. Existeixen diferents tipus de coneixement i mitjans de representació del coneixement, el qual pot ser carregat en l\u0027agent pel seu dissenyador o pot ser après pel mateix agent utilitzant tècniques d\u0027aprenentatge. També es distingeixen diversos tipus de processos vàlids per obtenir resultats racionals, que determinen el tipus d\u0027agent intel·ligent. De més simples a més complexos, els cinc principals tipus de processos són: Execució d\u0027una resposta per defecte per cada entrada (anàlogues a actes reflexos en éssers vius). Recerca de l\u0027estat requerit en el conjunt dels estats produïts per les accions possibles. Algorismes genètics (anàlegs al procés d\u0027evolució de les cadenes d\u0027ADN). Xarxes neuronals artificials (anàlogues al funcionament físic del cervell d\u0027animals i humans). Raonament mitjançant una lògica formal (anàleg al pensament abstracte humà).",
+        "question":  "Com va descriure la COMEST de la UNESCO la intel·ligència artificial l\u0027any 2019?",
+        "ground_truth":  "com un camp que implica màquines capaces de simular determinades funcionalitats de la intel·ligència humana",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_ca_003",
+        "language":  "ca",
+        "source_url":  "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
+        "context":  "Jaume el Conqueridor, anomenat també Jaume I d\u0027Aragó (Montpeller, Senyoria de Montpeller, 2 de febrer del 1208 - Alzira, Regne de València, 27 de juliol del 1276; en occità i català antic Jacme; en aragonès modern Chaime; en llatí Iacobus; en castellà Jaime o Jacobo i Santiago. Tots provenen del nom hebreu Iaakov, que significa \u0027que Déu protegeixi\u0027), fou sobirà de la Corona d\u0027Aragó amb els títols principals de rei d\u0027Aragó, rei de Mallorca, rei de València, comte de Barcelona, comte d\u0027Urgell, i senyor de Montpeller (1213-1276). Començà a regnar a l\u0027edat de 10 anys assistit pel Consell Reial, regnà 58 anys i morí a l\u0027edat de 68 anys. És enterrat al Reial Monestir de Santa Maria de Poblet. La història sobre l\u0027engendrament i el baptisme del rei en Jaume són recollits pel mateix rei en el Llibre dels fets i estan envoltats d\u0027una aura llegendària. Sobre l\u0027engendrament del rei Jaume, fill de Pere el Catòlic i de Maria de Montpeller, com que el rei Pere rebutjava la seva muller i hom estava preocupat per l\u0027absència d\u0027un hereu legítim, s\u0027ordí una trama per a enganyar-lo.",
+        "question":  "Quins eren els títols principals de Jaume I d\u0027Aragó com a sobirà de la Corona d\u0027Aragó?",
+        "ground_truth":  "rei d\u0027Aragó, rei de Mallorca, rei de València, comte de Barcelona, comte d\u0027Urgell, i senyor de Montpeller",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_ca_004",
+        "language":  "ca",
+        "source_url":  "https://ca.wikipedia.org/wiki/Mar_Mediterr%C3%A0nia",
+        "context":  "Si l\u0027estret de Gibraltar es tanqués, la Mediterrània s\u0027assecaria perquè aquest és una mar en la qual s\u0027evapora més aigua de la que entra pels rius, fet que provocaria una salinitat més elevada que a l\u0027Atlàntic, oceà del qual rep l\u0027aigua que perd a causa de l\u0027evaporació. Les temperatures als llocs propers a la Mediterrània són agradables, ja que a l\u0027estiu les costes són més fresques i a l\u0027hivern mantenen les temperatures una mica més elevades que a l\u0027interior del continent. Des d\u0027un punt de vista biogeogràfic, els territoris amb clima mediterrani ocupen no sols la conca del Mediterrani, la zona mediterrània pròpiament dita, sinó també les costes de Líbia i Egipte, que pertanyen a la regió saharoaràbiga. La diversitat faunística de l\u0027entorn mediterrani és enorme, comparable a la de les plantes. Analitzant la riquesa d\u0027espècies per alguns tàxons, obtenim que de les 62 espècies d\u0027amfibis que hi ha a la Mediterrània, 35 són endèmiques, igual que les 111 de les 179 espècies de rèptils; de les 184 espècies de mamífers registrades, el 25% són endèmiques i 52 espècies estan amenaçades (sense comptar els mamífers marins).",
+        "question":  "Per què s\u0027assecaria la Mediterrània si l\u0027estret de Gibraltar es tanqués?",
+        "ground_truth":  "perquè aquest és una mar en la qual s\u0027evapora més aigua de la que entra pels rius",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_es_005",
+        "language":  "es",
+        "source_url":  "https://es.wikipedia.org/wiki/Paella",
+        "context":  "La paella, o también arroz a la paella, (del valenciano paella, que significa \u0027sartén\u0027 y se refiere al recipiente con el que se hace la receta y que le da nombre, y este a su vez del latín patella) es una receta de cocina con base de arroz, con origen en la actual Comunidad Valenciana, hoy en día muy popular en toda España y servida en restaurantes de todo el mundo. En esta receta, el arroz se cocina junto a otros alimentos en una sartén, generalmente ancha y con asas. El nombre de paella hace referencia tanto a la receta o plato cocinado como al recipiente que se utiliza para su elaboración, aunque este último recibe también el nombre de paellera, término originalmente considerado incorrecto pero que con el uso se ha ido aceptando en español. Se trata de un plato de origen humilde, descrito por primera vez en España en el área de la Albufera de Valencia. La popularidad de este plato ha hecho que, en la actualidad, se haya expandido con gran cantidad de variantes adaptadas en los ingredientes a las diversas regiones de la cocina española.",
+        "question":  "¿A qué hace referencia el nombre de paella?",
+        "ground_truth":  "tanto a la receta o plato cocinado como al recipiente que se utiliza para su elaboración",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_es_006",
+        "language":  "es",
+        "source_url":  "https://es.wikipedia.org/wiki/Reconquista",
+        "context":  "Se denomina Reconquista al período de la historia de la península ibérica de aproximadamente 780 años entre la conquista omeya de Hispania en 711 y la caída del reino nazarí de Granada en 1492 ante los reinos cristianos en expansión: esta conquista de Granada marca el final del período. La historiografía tradicional utiliza el término «Reconquista» a partir del siglo XIX como concepto nacionalista español. Previamente se conocía como «restauración» de los reinos cristianos visigodos, entendida como la conquista de nuevos terrenos por unas nuevas monarquías cristianas que pretendían legitimar el orden político y religioso de dichas monarquías vinculandolas con el antiguo reino visigodo. El comienzo de la Reconquista se marca con la batalla de Covadonga (718 o 722), la primera victoria conocida de las fuerzas militares cristianas en la península ibérica desde la intervención militar de las fuerzas combinadas árabe-bereber de 711. En esa pequeña batalla, un grupo liderado por el noble Pelayo derrotó a una patrulla musulmana en las montañas de la cordillera cantábrica y estableció el reino cristiano independiente de Asturias.",
+        "question":  "¿Con qué evento histórico se marca el comienzo de la Reconquista?",
+        "ground_truth":  "con la batalla de Covadonga (718 o 722)",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_es_007",
+        "language":  "es",
+        "source_url":  "https://es.wikipedia.org/wiki/Inteligencia_artificial",
+        "context":  "Los sistemas de IA generativa notables incluyen ChatGPT (y su variante Microsoft Copilot), un bot conversacional creado por OpenAI usando sus modelos de lenguaje de gran escala de última generación, como GPT-5 y sus iteraciones de razonamiento avanzado (o1); Gemini (anteriormente llamado Bard), un bot conversacional creado por Google usando la familia de modelos multimodales nativos Gemini 2.0 y versiones superiores; y Claude, un bot conversacional creado por Anthropic usando los modelos Claude 3.5 y 4, destacados por su alta fidelidad en tareas de codificación y análisis de contexto extenso. Otros modelos generativos de IA incluyen sistemas de arte de inteligencia artificial como Stable Diffusion, Midjourney y DALL-E, que permiten crear imágenes. Actualmente la IA generativa puede crear texto, código, imágenes, vídeo, música, voces y efectos de sonido.",
+        "question":  "¿Qué permiten hacer los sistemas de arte de inteligencia artificial como Stable Diffusion, Midjourney y DALL-E?",
+        "ground_truth":  "crear imágenes",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_ca_008",
+        "language":  "ca",
+        "source_url":  "https://ca.wikipedia.org/wiki/Intel%C2%B7lig%C3%A8ncia_artificial",
+        "context":  "Els sistemes experts, o sistemes basats en el coneixement, tenen la finalitat de reproduir correctament el comportament d\u0027un expert humà en el seu domini de competència. El sistema d\u0027experts ha estat classificat com \"la intel·ligència artificial amb èxit\", cosa que és realment una exageració però que plasma la superació dels anys difícils que va patir la intel·ligència artificial, a l\u0027inici de la dècada del 60. Un sistema expert és un sistema elaborat amb tècniques d\u0027intel·ligència artificial que resol problemes complexos i difícils, així com l\u0027expert humà. El sistema expert utilitza processos que imiten el raonament humà, és a dir, deducció, inducció i estratègies de recerca de solucions, alhora de resoldre problemes. I ho aconsegueix utilitzant les informacions base, que li ha subministrat prèviament un expert humà, i als quals incorpora coneixements que el sistema expert informàtic va aprenent. A més, ha de ser capaç de justificar les decisions i els resultats obtinguts i atribuir a aquests un grau de credibilitat.",
+        "question":  "Quina és la finalitat dels sistemes experts o sistemes basats en el coneixement?",
+        "ground_truth":  "reproduir correctament el comportament d\u0027un expert humà en el seu domini de competència",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_ca_009",
+        "language":  "ca",
+        "source_url":  "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
+        "context":  "Durant els primers anys del seu regnat, el rei Jaume I va mantenir diverses lluites contra la noblesa. El 1219 fou nomenat un nou Consell Reial encapçalat per l\u0027arquebisbe de Tarragona i que es perllongà fins al 1221 quan el rei en Jaume es casà i es feren Corts d\u0027Aragó a Daroca. Amb pràcticament 12 anys, el 1220, hagué de fer front a la primera revolta nobiliària liderada per Rodrigo de Liçana. La revolta s\u0027inicià quan Rodrigo de Liçana es negà a acatar l\u0027ordre del rei que li manava d\u0027alliberar Lope d\u0027Albero, que Rodrigo de Liçana havia fet presoner per uns deutes. Jaume I (d\u002711 anys encara i a punt de fer els 12) i el Consell Reial, resolgueren posar fi a la revolta d\u0027una manera contundent atacant el noble rebel. Primerament s\u0027alliberà el castell d\u0027Albero que estava ocupat per les tropes de Rodrigo de Liçana. Seguidament s\u0027atacà el feu del noble revoltat, el castell de Liçana, on estava empresonat Lope d\u0027Albero.",
+        "question":  "Qui liderava la primera revolta nobiliària a la qual hagué de fer front el rei Jaume I l\u0027any 1220?",
+        "ground_truth":  "Rodrigo de Liçana",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_ca_010",
+        "language":  "ca",
+        "source_url":  "https://ca.wikipedia.org/wiki/Mar_Mediterr%C3%A0nia",
+        "context":  "La mar Mediterrània es formà a partir del primitiu mar de Tethys, de molta més extensió que el Mediterrani, i fou disminuint a mesura que la placa africana s\u0027apropava a l\u0027euroasiàtica. Fa uns 60 milions d\u0027anys, al començament del Terciari, el mar de Tethys, antecessor del Mediterrani, inundava gran part del nord d\u0027Àfrica i Europa, que llavors no era més que un arxipèlag d\u0027illes. Durant el Terciari, el mar de Tethys fou estrenyent-se per l\u0027est fins que es formà una gran conca marina, gairebé separada de l\u0027oceà obert. Aquesta conca abastava en una mateixa massa d\u0027aigua la Mediterrània, la mar Negra i la Càspia. Tanmateix, per occident, el Mare Nostrum continuava connectat a mar oberta per superfícies avui dia emergides del sud de la península Ibèrica i el nord del Marroc.",
+        "question":  "A partir de quin mar primitiu es formà la mar Mediterrània?",
+        "ground_truth":  "mar de Tethys",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_es_011",
+        "language":  "es",
+        "source_url":  "https://es.wikipedia.org/wiki/Paella",
+        "context":  "El arroz es el protagonista principal de la paella. En la paella los granos se cuecen hasta quedar sueltos. De las partes de un grano, el endosperma es la parte que se emplea, el endosperma se encuentra compuesto principalmente por almidón. No existe gran variación de sabor entre unas variedades u otras. El grano cocinado hasta que mantenga su estructura absorbe sabores y aromas del entorno (verduras, carnes, marisco, etc.). El arroz sobre-cocinado (denominado en valenciano empastrat) pierde esa capacidad de retener sabores y aromas. El arroz de la paella debe tener dos características a tener en cuenta: la primera es la capacidad de absorber agua y la segunda su resistencia a reventar (o de abrirse) durante el cocinado. Los arroces de tamaño mediano son los más empleados en las paellas (de cinco a seis milímetros). Los pequeños son poco apreciados (por debajo de cinco milímetros). Las estructuras de almidón del endosperma son las encargadas de «almacenar» los sabores. La calidad del arroz se debe a su composición química, por regla general cuanto más amilasa contenga mejor calidad, y cuanto más amilopectina mejor respuesta a la cocción.",
+        "question":  "¿Cuáles son las dos características a tener en cuenta que debe tener el arroz de la paella?",
+        "ground_truth":  "la primera es la capacidad de absorber agua y la segunda su resistencia a reventar (o de abrirse) durante el cocinado",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_es_012",
+        "language":  "es",
+        "source_url":  "https://es.wikipedia.org/wiki/Reconquista",
+        "context":  "La «Reconquista» constituyó para los distintos reinos y señoríos surgidos en el aislamiento del norte montañoso de la Península un proceso restaurador y liberador, no solo del territorio, sino de la numerosa población cristiana hispano-visigoda (mozárabes), que permaneció durante siglos en el territorio ocupado. Resultaban ser los verdaderos herederos del reino visigodo, y su apelación constante al auxilio de los reinos cristianos, suponía para las autoridades musulmanas un problema que surgía periódicamente y que era resuelto con persecuciones y deportaciones de distinto grado. Según esta misma visión tradicional la temprana reacción en la cornisa cantábrica en contra del islam (Don Pelayo rechazó a los sarracenos en Covadonga apenas siete años después de que atravesaran el estrecho de Gibraltar), y el rechazo del territorio actualmente francés después de la batalla de Poitiers del año 732, sustentan la idea de que la Reconquista sigue casi inmediatamente a la conquista árabe. Incluso, «gran parte de dicha cornisa cantábrica jamás llegó a ser conquistada», lo cual viene a justificar la idea de que la conquista árabe y la reconquista cristiana, de muy diferente duración (muy corta la primera y sumamente larga la segunda), se superponen.",
+        "question":  "¿Para quiénes constituyó la «Reconquista» un proceso restaurador y liberador?",
+        "ground_truth":  "para los distintos reinos y señoríos surgidos en el aislamiento del norte montañoso de la Península",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_ca_013",
+        "language":  "ca",
+        "source_url":  "https://ca.wikipedia.org/wiki/Intel%C2%B7lig%C3%A8ncia_artificial",
+        "context":  "En el seu històric article de 1950, Turing va proposar que la pregunta, «pot pensar una màquina?» era massa filosòfica per tenir valor i, per fer-lo més concret, va proposar un \"joc d\u0027imitació\". En la prova de Turing intervenen dues persones i un ordinador. Una persona, l\u0027interrogat, s\u0027asseu en una sala i tecleja preguntes a la terminal d\u0027una computadora. Quan apareixen les respostes a la terminal, l\u0027interrogat intenta determinar si van ser fetes per una altra persona o per un ordinador. Si actua de manera intel·ligent, segons Turing és intel·ligent. Turing, va assenyalar que una màquina podria fracassar i, malgrat tot, ser intel·ligent. Tanmateix, creia que les màquines podrien superar la prova a finals del segle XX.",
+        "question":  "En la prova de Turing, què intenta determinar la persona interrogada quan apareixen les respostes a la terminal?",
+        "ground_truth":  "si van ser fetes per una altra persona o per un ordinador",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_ca_014",
+        "language":  "ca",
+        "source_url":  "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
+        "context":  "La campanya militar fou cabdellada per l\u0027infant Pere d\u0027Aragó (fill de Jaume I i futur Pere el Gran) que derrotà el cabdill de la insurgència islàmica Muhammad ibn Hud Biha al-Dawla i n\u0027expulsà les tropes granadines. Amb l\u0027objectiu d\u0027assegurar el control del territori per part dels cristians, les mainades catalanes s\u0027assentaren en el territori conquerit a fi d\u0027assegurar el sotmetiment de la majoria de la població autòctona andalusí. Pacificat el regne i destruïda la rebel·lió, el regne de Múrcia fou retornat a la jurisdicció de la Corona de Castella, respectant així els límits estipulats anys abans al Tractat d\u0027Almizra.",
+        "question":  "A quina jurisdicció fou retornat el regne de Múrcia un cop pacificat el regne i destruïda la rebel·lió islàmica?",
+        "ground_truth":  "a la jurisdicció de la Corona de Castella",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_ca_015",
+        "language":  "ca",
+        "source_url":  "https://ca.wikipedia.org/wiki/Mar_Mediterr%C3%A0nia",
+        "context":  "L\u0027obertura del canal de Suez el 1869 creà el primer passadís d\u0027aigua salada entre la Mediterrània i el mar Roig. El mar Roig està a major alçada que el Mediterrani oriental i el canal aboca aigua del Roig dins del Mediterrani. Els llacs salats, uns llacs hipersalins que formen part del canal, han blocat la migració d\u0027espècies del mar Roig a la Mediterrània durant dècades, però quan la salinitat dels llacs s\u0027ha igualat gradualment a la del mar Roig, aquesta barrera a la migració ha desaparegut, i algunes plantes i animals d\u0027aquest mar han començat a colonitzar el Mediterrani oriental. Aquest fenomen rep el nom de migració lessepiana (per l\u0027enginyer francès Ferdinand de Lesseps) o invasió eritrea.",
+        "question":  "Quin nom rep el fenomen pel qual plantes i animals del mar Roig han començat a colonitzar el Mediterrani oriental a través del canal de Suez?",
+        "ground_truth":  "migració lessepiana (per l\u0027enginyer francès Ferdinand de Lesseps) o invasió eritrea",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_es_016",
+        "language":  "es",
+        "source_url":  "https://es.wikipedia.org/wiki/Paella",
+        "context":  "La Consejería de Agricultura del gobierno valenciano ha elaborado en conjunto con el Consejo Regulador de la Denominación de Origen Arroz de Valencia, un registro de ingredientes que tendrá que llevar toda paella que quiera comercializarse bajo el nombre de Paella Valenciana. Los diez ingredientes básicos que siempre se usan general y tradicionalmente son pollo, conejo, bajoqueta (judía verde), garrofó, tomate, arroz, aceite de oliva, agua, azafrán y sal. Además de lo anterior, según la región, se admiten ingredientes como ajo, alcachofa, pato, pimentón, caracoles, romero, pimiento rojo y variantes que «también serán aceptadas dentro de la denominación de auténtica \"paella valenciana\"».",
+        "question":  "¿Cuáles son los diez ingredientes básicos que siempre se usan general y tradicionalmente para elaborar la auténtica paella valenciana?",
+        "ground_truth":  "pollo, conejo, bajoqueta (judía verde), garrofó, tomate, arroz, aceite de oliva, agua, azafrán y sal",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_es_017",
+        "language":  "es",
+        "source_url":  "https://es.wikipedia.org/wiki/Reconquista",
+        "context":  "Entre la Cordillera Cantábrica y el Duero. En una verdadera «cultura de frontera», el rey atribuye durante los siglos VIII y XI tierras deshabitadas a hombres libres que debían defenderse a sí mismos en un entorno inseguro, y ocupar la tierra que ellos mismos iban a cultivar (presuras). Un proceso en cierta forma similar se denomina aprisio en los núcleos pirenaicos. A medida que la frontera se alejaba hacia el sur, la independencia inicial que caracterizó el espíritu del condado de Castilla (caballeros-villanos, behetrías) se fue sustituyendo por formas más equiparables al feudalismo europeo, con el establecimiento de señoríos monásticos y nobiliarios. De acuerdo con el historiador Ladero Quesada, el siglo X fue «clave en el proceso de colonización de las tierras así incorporadas, cuya población anterior debía ser muy escasa y carente de organización».",
+        "question":  "¿Cómo se denomina el proceso de repoblación por el cual el rey atribuye tierras deshabitadas a hombres libres para que las ocupen y cultiven entre la Cordillera Cantábrica y el Duero?",
+        "ground_truth":  "presuras",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_es_018",
+        "language":  "es",
+        "source_url":  "https://es.wikipedia.org/wiki/Inteligencia_artificial",
+        "context":  "Otro objetivo de la inteligencia artificial consiste en poder establecer metas y finalmente alcanzarlas. Para ello necesitan una forma de visualizar el futuro, una representación del estado del mundo y poder hacer predicciones sobre cómo sus acciones lo cambiarán, con tal de poder tomar decisiones que maximicen la utilidad (o el «valor») de las opciones disponibles. En los problemas clásicos de planificación, el agente puede asumir que es el único sistema que actúa en el mundo, lo que le permite estar seguro de las consecuencias de sus acciones. Sin embargo, si el agente no es el único actor, entonces se requiere que este pueda razonar bajo incertidumbre.",
+        "question":  "¿Qué se requiere si el agente de inteligencia artificial no es el único actor que actúa en el mundo en los problemas de planificación?",
+        "ground_truth":  "se requiere que este pueda razonar bajo incertidumbre",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_es_019",
+        "language":  "es",
+        "source_url":  "https://es.wikipedia.org/wiki/Inteligencia_artificial",
+        "context":  "La inteligencia artificial amigable es una IA fuerte e hipotética que puede tener un efecto positivo más que uno negativo sobre la humanidad. «Amigable» es usado en este contexto como terminología técnica y escoge agentes que son seguros y útiles, no necesariamente aquellos que son «amigables» en el sentido coloquial. El concepto es invocado principalmente en el contexto de discusiones de agentes artificiales de automejora recursiva que rápidamente explota en inteligencia, con el argumento de que esta tecnología hipotética pudiera tener una larga, rápida y difícil tarea de controlar el impacto en la sociedad humana.",
+        "question":  "¿Cómo se denomina a la IA fuerte e hipotética que puede tener un efecto positivo más que uno negativo sobre la humanidad?",
+        "ground_truth":  "La inteligencia artificial amigable",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_ca_020",
+        "language":  "ca",
+        "source_url":  "https://ca.wikipedia.org/wiki/Intel%C2%B7lig%C3%A8ncia_artificial",
+        "context":  "Lisp (LISt Processor, \"processador de llistes\") es considera el llenguatge propi de la intel·ligència artificial. Va ser creat el 1962 al MIT, arran d\u0027un treball publicat per John McCarthy el 1960, Recursive functions of symbolic expressions and their computation by machine. Més tard, al 1962, va publicar-se el primer manual del Lisp per a l\u0027equip IBM 7090 i els autors van ser McCarthy, Abrahams, Edwards, Hart i Levin. Lisp utilitza les funcions \"lambda\" de A. Church. El Lisp implementa el tractament mitjançant expressions simbòliques i recursivitat, i té una gran potència i simplicitat en la definició d\u0027estructures.",
+        "question":  "Quin llenguatge de programació es considera el llenguatge propi de la intel·ligència artificial?",
+        "ground_truth":  "Lisp (LISt Processor, \"processador de llistes\")",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_ca_021",
+        "language":  "ca",
+        "source_url":  "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
+        "context":  "El 1227 va afrontar un nou alçament de la noblesa, dirigit per l\u0027infant Ferran, oncle del rei, que es va acabar, gràcies a la intervenció papal a través de l\u0027arquebisbe de Tarragona, amb la signatura de la Concòrdia d\u0027Alcalá (març de 1227). Aquest tractat va marcar el triomf de la monarquia sobre els nobles i li donà l\u0027estabilitat necessària per a iniciar les campanyes contra els musulmans. Un grup de prohoms catalans presidits per Jaume I es reuneixen a casa de Pere Martell, a Tarragona, per tal de preparar la conquesta de Mallorca (1228).",
+        "question":  "Quin tractat de març de 1227 va marcar el triomf de la monarquia sobre els nobles i donà l\u0027estabilitat necessària al rei Jaume I per a iniciar les campanyes contra els musulmans?",
+        "ground_truth":  "la Concòrdia d\u0027Alcalá",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_ca_022",
+        "language":  "ca",
+        "source_url":  "https://ca.wikipedia.org/wiki/Mar_Mediterr%C3%A0nia",
+        "context":  "L\u0027Imperi romà es col·lapsà el 476 dC. La part oriental romangué unida en l\u0027Imperi Romà d\u0027Orient, mentre que la part occidental fou envaïda per successius pobles germànics, entre aquests els ostrogots, visigots, francs i longobards. Al segle VII, després d\u0027una ràpida successió de victòries, un nou poble, l\u0027àrab, s\u0027expandí per la major part del Mediterrani. Les diverses tribus islàmiques foren aturades en la seva expansió l\u0027any 718 a Constantinoble, a la Mediterrània oriental, i en la batalla de Tours l\u0027any 732, a l\u0027occidental, però la seva cultura i religió romangueren en grans parts de la mar, principalment a l\u0027africana i asiàtica.",
+        "question":  "En quina batalla van ser aturades les tribus islàmiques a la Mediterrània occidental l\u0027any 732?",
+        "ground_truth":  "en la batalla de Tours",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_es_023",
+        "language":  "es",
+        "source_url":  "https://es.wikipedia.org/wiki/Paella",
+        "context":  "La paella debe estar perfectamente nivelada antes de poder hacer la cocción. Debe en cualquier caso asegurarse que la horizontalidad se mantendrá durante todo el proceso de cocinado. Las recetas tradicionales mencionan, casi sin excepción, siempre la frase «fuego vivo» durante las primeras fases del cocinado. La sartén (paella) debe reposar unos cinco minutos, es regla popular en Valencia que el reposo final lo haga sobre lecho de arena, nunca de piedra o cemento. Quizás se deba a un tema de conductividad térmica y velocidad a la que la paella pierde temperatura, que debe ser lo más lento posible.",
+        "question":  "Según la regla popular en Valencia, ¿dónde debe hacer la sartén (paella) su reposo final?",
+        "ground_truth":  "sobre lecho de arena, nunca de piedra o cemento",
+        "source_type":  "wikipedia"
+    },
+    {
+        "id":  "wiki_es_024",
+        "language":  "es",
+        "source_url":  "https://es.wikipedia.org/wiki/Reconquista",
+        "context":  "En paralelo al avance militar, se produjo un proceso de repoblación con el asentamiento de población cristiana en territorios conquistados, que podía provenir de los núcleos septentrionales (de tierras montañosas, pobres y superpobladas), de las comunidades mozárabes del sur que emigraban al norte debido al incremento de la represión religiosa (al arte mozárabe se le denomina también arte de repoblación), e incluso provenientes de zonas de la Europa al norte de los Pirineos, a los que genéricamente se llamaba francos. La modalidad de asentamiento de esa población varió en sus características de acuerdo a la forma en que se produjo la conquista, el ritmo de la ocupación y el volumen de la población musulmana preexistente en el territorio.",
+        "question":  "¿Cómo se llamaba genéricamente a la población repobladora cristiana proveniente de zonas de la Europa al norte de los Pirineos?",
+        "ground_truth":  "francos",
+        "source_type":  "wikipedia"
+    }
 ]

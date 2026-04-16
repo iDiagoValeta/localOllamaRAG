@@ -159,11 +159,11 @@ if hasattr(sys.stderr, "reconfigure"):
 
 
 MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "phi4-finetuned:latest")
-MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e4b")
+MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e2b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
-MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b")
-MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma4:e4b")
-MODELO_OCR = os.getenv("OLLAMA_OCR_MODEL", "qwen3-vl:8b")
+MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e2b")
+MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma4:e2b")
+MODELO_OCR = os.getenv("OLLAMA_OCR_MODEL", "gemma4:e4b")
 
 
 def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
@@ -188,7 +188,7 @@ USAR_BUSQUEDA_EXHAUSTIVA = True
 USAR_RERANKER = RERANKER_AVAILABLE
 EXPANDIR_CONTEXTO = True
 USAR_OPTIMIZACION_CONTEXTO = True
-USAR_RECOMP_SYNTHESIS = True
+USAR_RECOMP_SYNTHESIS = False
 USAR_EMBEDDINGS_IMAGEN = True
 LOGGING_METRICAS = True
 GUARDAR_DEBUG_RAG = True
@@ -293,7 +293,7 @@ Use this reference to explain how the system works or which parts are mandatory 
 * **OPTIONAL (Flag: `USAR_CONTEXTUAL_RETRIEVAL`):**
     * **Contextual Retrieval:** Uses an LLM to generate a summary/context for each chunk before indexing to improve retrieval accuracy.
 * **OPTIONAL (Flag: `USAR_EMBEDDINGS_IMAGEN`):**
-    * **Image Indexing:** Extracts raster images from each PDF page with PyMuPDF (fitz), describes them with `MODELO_OCR` (default: `glm-ocr`, override with `OLLAMA_OCR_MODEL`) using a structured OCR prompt that transcribes tables cell by cell, chart axes and legends, diagram components, and equations, then stores the result as a regular text chunk in ChromaDB.
+    * **Image Indexing:** Extracts raster images from each PDF page with PyMuPDF (fitz), describes them with `MODELO_OCR` (default: `gemma4:e4b`, override with `OLLAMA_OCR_MODEL`) using a structured OCR prompt that transcribes tables cell by cell, chart axes and legends, diagram components, and equations, then stores the result as a regular text chunk in ChromaDB.
 
 #### 2. RETRIEVAL PHASE
 Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; optional components extend it.
@@ -2348,7 +2348,7 @@ def extraer_imagenes_pdf(
 def describir_imagen_con_llm(image_bytes: bytes, caption: str = "") -> str:
     """Generate a textual description of an academic image using ``MODELO_OCR``.
 
-    Sends the raw image bytes to ``glm-ocr`` (or the model set in
+    Sends the raw image bytes to ``gemma4:e4b`` (or the model set in
     ``OLLAMA_OCR_MODEL``) via Ollama and returns a description focused on
     the visual content: architecture components and data flow for diagrams,
     column structure for tables, axis labels and trends for charts.
