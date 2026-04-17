@@ -69,6 +69,7 @@ How to run (interactive CLI):
 #  |      +-- 10.5 Evaluation    silent pipeline for RAGAS
 #  +--11. Indexing and collection management
 #  |      +-- 11.1 Contextual retrieval  chunk enrichment with LLM
+#  |      |      +-- _detectar_idioma       heuristic language detector (Spanish/Catalan/English)
 #  |      +-- 11.2 Image extraction      fitz raster images + positional caption extraction
 #  |      |      +-- _es_descripcion_spam    degenerate OCR spam / repetition detector
 #  |      |      +-- _es_prompt_echo         prompt-echo detector
@@ -161,8 +162,8 @@ if hasattr(sys.stderr, "reconfigure"):
 MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "phi4-finetuned:latest")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e2b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
-MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e2b")
-MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma4:e2b")
+MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b")
+MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma4:e4b")
 MODELO_OCR = os.getenv("OLLAMA_OCR_MODEL", "gemma4:e4b")
 
 
@@ -2123,15 +2124,57 @@ def evaluar_pregunta_rag(
 
 # --- 11.1 Contextual retrieval ---
 
-def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
+
+def _detectar_idioma(texto: str) -> str:
+    """Heuristic language detector from a document text sample.
+
+    Counts distinctive function-word occurrences to distinguish Spanish,
+    Catalan, and English. Designed for documents where the first ~4000
+    characters are available; accuracy degrades on very short samples.
+
+    Args:
+        texto: Representative text sample from the document (ideally ≥500 chars).
+
+    Returns:
+        Full language name suitable for prompt injection: 'Spanish',
+        'Catalan', or 'English'.
+    """
+    t = texto.lower()
+    # Catalan-distinctive markers (absent or rare in Spanish)
+    ca = (t.count("però ") + t.count("també ") + t.count("molt ")
+          + t.count(" amb ") + t.count(" va ") + t.count("els ")
+          + t.count("l'") + t.count("d'") + t.count("s'")
+          + t.count("n'") + t.count("m'"))
+    # Spanish-distinctive markers (absent or rare in Catalan)
+    es = (t.count("también ") + t.count("además ") + t.count("pero ")
+          + t.count("muy ") + t.count(" con ") + t.count("los ")
+          + t.count("las ") + t.count("así ") + t.count("sin ")
+          + t.count("después"))
+    # English-distinctive markers
+    en = (t.count(" the ") + t.count(" is ") + t.count(" are ")
+          + t.count(" was ") + t.count(" were ") + t.count(" have ")
+          + t.count(" this ") + t.count(" that ") + t.count(" from ")
+          + t.count(" with "))
+    scores = {"Spanish": es, "Catalan": ca, "English": en}
+    return max(scores, key=scores.get)
+
+
+def generar_contexto_situacional(
+    chunk_text: str,
+    texto_base: str,
+    idioma_doc: str = "",
+) -> str:
     """Generate 2-3 sentences of situational context for a chunk using an LLM.
 
     Produces a brief document summary plus a note on how the chunk fits
-    within the larger document, to improve retrieval accuracy.
+    within the larger document, to improve retrieval accuracy. The output
+    is always written in the document's own language.
 
     Args:
         chunk_text: The text of the chunk to contextualize.
         texto_base: A representative excerpt of the full document.
+        idioma_doc: Document language ('Spanish', 'Catalan', 'English').
+            When empty, falls back to heuristic detection from ``texto_base``.
 
     Returns:
         Situational context string (with trailing ``\\n\\n``), or empty
@@ -2140,19 +2183,22 @@ def generar_contexto_situacional(chunk_text: str, texto_base: str) -> str:
     if not USAR_CONTEXTUAL_RETRIEVAL:
         return ""
 
+    idioma = idioma_doc or _detectar_idioma(texto_base)
+
     system_prompt = (
-        "You are an expert at analyzing academic documents. "
-        "When given a full document and an excerpt from it, produce exactly 2-3 sentences: "
-        "first a brief summary of what the document is about, then how the excerpt fits within it. "
-        "No introductions, no labels, no meta-commentary. "
-        "Do NOT include bibliographic citation markers such as [1], [38], or similar. "
-        "Respond in the same language as the input document."
+        f"You are an expert at analyzing academic documents. "
+        f"MANDATORY: Write your entire response in {idioma} — the same language as the document. "
+        f"Do NOT translate. Do NOT switch to any other language, including English. "
+        f"When given a full document and an excerpt from it, produce exactly 2-3 sentences: "
+        f"first a brief summary of what the document is about, then how the excerpt fits within it. "
+        f"No introductions, no labels, no meta-commentary. "
+        f"Do NOT include bibliographic citation markers such as [1], [38], or similar."
     )
 
     user_prompt = (
-        "Generate the situational context for the following excerpt:\\n\\n"
         f"<document>\\n{texto_base}\\n</document>\\n\\n"
-        f"<excerpt>\\n{chunk_text}\\n</excerpt>\\n"
+        f"<excerpt>\\n{chunk_text}\\n</excerpt>\\n\\n"
+        f"Write the 2-3 sentence situational context in {idioma}."
     )
 
     try:
@@ -2345,7 +2391,11 @@ def extraer_imagenes_pdf(
     return imagenes_por_pagina
 
 
-def describir_imagen_con_llm(image_bytes: bytes, caption: str = "") -> str:
+def describir_imagen_con_llm(
+    image_bytes: bytes,
+    caption: str = "",
+    idioma_doc: str = "English",
+) -> str:
     """Generate a textual description of an academic image using ``MODELO_OCR``.
 
     Sends the raw image bytes to ``gemma4:e4b`` (or the model set in
@@ -2373,6 +2423,9 @@ def describir_imagen_con_llm(image_bytes: bytes, caption: str = "") -> str:
             (PNG, JPEG, WebP, …).
         caption: Optional caption text extracted from the PDF near the image.
             Used as context to orient the description; not transcribed literally.
+        idioma_doc: Language of the surrounding document ('Spanish', 'Catalan',
+            'English'). The description will be written in this language so it
+            is semantically consistent with the document's text chunks.
 
     Returns:
         Non-empty description string on success, or ``""`` on failure,
@@ -2384,12 +2437,19 @@ def describir_imagen_con_llm(image_bytes: bytes, caption: str = "") -> str:
     try:
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
+        idioma_instruccion = (
+            f"Write your entire description in {idioma_doc}. "
+            if idioma_doc and idioma_doc != "English"
+            else ""
+        )
+
         response = ollama.chat(
             model=MODELO_OCR,
             messages=[{
                 "role": "user",
                 "content": (
-                    (f"The figure caption reads: '{caption}'. " if caption else "")
+                    idioma_instruccion
+                    + (f"The figure caption reads: '{caption}'. " if caption else "")
                     + "Describe the visual content of this image. "
                     "If it is a flowchart or architecture diagram: list every labeled block "
                     "(e.g. MatMul, SoftMax, Encoder, Linear), name the inputs and outputs "
@@ -2530,6 +2590,7 @@ def indexar_documentos(
 
                     _textos_paginas = [p['text'][:500] for p in page_chunks[:10]]
                     texto_base_doc = "\n\n".join(_textos_paginas)[:4000]
+                    idioma_doc = _detectar_idioma(texto_base_doc)
 
                     for page_info in page_chunks:
                         i = page_info['metadata']['page']
@@ -2556,7 +2617,7 @@ def indexar_documentos(
                             }
 
                             if USAR_CONTEXTUAL_RETRIEVAL:
-                                contexto_sit = generar_contexto_situacional(chunk_text, texto_base_doc)
+                                contexto_sit = generar_contexto_situacional(chunk_text, texto_base_doc, idioma_doc)
                                 chunk_text_con_contexto = (contexto_sit + chunk_text).strip()
                             else:
                                 chunk_text_con_contexto = chunk_text
@@ -2573,6 +2634,7 @@ def indexar_documentos(
 
                 _textos_paginas = [p.extract_text()[:500] for p in reader.pages[:10]]
                 texto_base_doc = "\n\n".join(_textos_paginas)[:4000]
+                idioma_doc = _detectar_idioma(texto_base_doc)
 
                 for i, page in enumerate(reader.pages):
                     texto = page.extract_text()
@@ -2598,7 +2660,7 @@ def indexar_documentos(
                         }
 
                         if USAR_CONTEXTUAL_RETRIEVAL:
-                            contexto_sit = generar_contexto_situacional(chunk_text, texto_base_doc)
+                            contexto_sit = generar_contexto_situacional(chunk_text, texto_base_doc, idioma_doc)
                             chunk_text_con_contexto = (contexto_sit + chunk_text).strip()
                         else:
                             chunk_text_con_contexto = chunk_text
@@ -2612,11 +2674,11 @@ def indexar_documentos(
                 for num_pag, pagina_imagenes in imagenes_pdf.items():
                     for img_idx, img_info in enumerate(pagina_imagenes):
                         caption = img_info.get("caption", "")
-                        descripcion = describir_imagen_con_llm(img_info["image_bytes"], caption=caption)
+                        descripcion = describir_imagen_con_llm(img_info["image_bytes"], caption=caption, idioma_doc=idioma_doc)
                         if not descripcion:
                             continue
 
-                        contexto_img = generar_contexto_situacional(descripcion, texto_base_doc)
+                        contexto_img = generar_contexto_situacional(descripcion, texto_base_doc, idioma_doc)
                         descripcion_enriquecida = (contexto_img + descripcion).strip()
 
                         img_chunk_idx = _IMAGEN_CHUNK_OFFSET + img_idx
