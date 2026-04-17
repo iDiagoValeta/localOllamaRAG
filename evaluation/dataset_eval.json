@@ -5,7 +5,7 @@
         "source_url":  "https://es.wikipedia.org/wiki/Inteligencia_artificial",
         "context":  "En cuanto a su clasificación, tradicionalmente se divide a la inteligencia artificial en inteligencia artificial débil, la cual es la única que existe en la actualidad y que se ocupa de realizar tareas específicas, e inteligencia artificial general, que sería una IA que excediese las capacidades humanas. Algunos expertos creen que ésto podría lograrse mediante el desarrollo de la inteligencia artificial cuántica y que si alguna vez se alcanzara este nivel, se podría dar lugar a la aparición de una singularidad tecnológica, es decir, una entidad tecnológica superior que se mejoraría a sí misma constantemente, volviéndose incontrolable para los humanos, dando pie a teorías como el basilisco de Roko. Algunas de las inteligencias artificiales más conocidas y utilizadas en la actualidad alrededor del mundo incluyen inteligencia artificial en el campo de la salud, asistentes virtuales como Alexa, el asistente de Google, Copilot o Siri, traductores automáticos como el traductor de Google y DeepL...",
         "question":  "¿Cómo se divide tradicionalmente a la inteligencia artificial en cuanto a su clasificación?",
-        "ground_truth":  "en inteligencia artificial débil, la cual es la única que existe en la actualidad y que se ocupa de realizar tareas específicas, e inteligencia artificial general, que sería una IA que excediese las capacidades humanas",
+        "ground_truth":  "en inteligencia artificial débil, la cual es la única que existe en la actualidad y que se ocupa de realizar tareas específicas, e inteligencia artificial general, que sería una IA que excediese las capacidades humanas. Algunos expertos creen que esto podría lograrse mediante la inteligencia artificial cuántica, dando lugar a una singularidad tecnológica, una entidad que se mejoraría a sí misma constantemente hasta volverse incontrolable para los humanos",
         "source_type":  "wikipedia"
     },
     {
@@ -14,7 +14,7 @@
         "source_url":  "https://ca.wikipedia.org/wiki/Intel%C2%B7lig%C3%A8ncia_artificial",
         "context":  "El 2019, la Comissió Mundial d\u0027Ètica del Coneixement Científic i la Tecnologia (COMEST) de la UNESCO descrivia la IA com un camp que implica màquines capaces de simular determinades funcionalitats de la intel·ligència humana, incloses característiques com la percepció de patrons, per exemple d\u0027imatges i sons, l\u0027aprenentatge, el raonament, la resolució de problemes, el processament del llenguatge natural, la interacció lingüística i fins i tot la producció de treballs creatius. Existeixen diferents tipus de coneixement i mitjans de representació del coneixement, el qual pot ser carregat en l\u0027agent pel seu dissenyador o pot ser après pel mateix agent utilitzant tècniques d\u0027aprenentatge. També es distingeixen diversos tipus de processos vàlids per obtenir resultats racionals, que determinen el tipus d\u0027agent intel·ligent. De més simples a més complexos, els cinc principals tipus de processos són: Execució d\u0027una resposta per defecte per cada entrada (anàlogues a actes reflexos en éssers vius). Recerca de l\u0027estat requerit en el conjunt dels estats produïts per les accions possibles. Algorismes genètics (anàlegs al procés d\u0027evolució de les cadenes d\u0027ADN). Xarxes neuronals artificials (anàlogues al funcionament físic del cervell d\u0027animals i humans). Raonament mitjançant una lògica formal (anàleg al pensament abstracte humà).",
         "question":  "Com va descriure la COMEST de la UNESCO la intel·ligència artificial l\u0027any 2019?",
-        "ground_truth":  "com un camp que implica màquines capaces de simular determinades funcionalitats de la intel·ligència humana",
+        "ground_truth":  "com un camp que implica màquines capaces de simular determinades funcionalitats de la intel·ligència humana, incloses característiques com la percepció de patrons (d'imatges i sons), l'aprenentatge, el raonament, la resolució de problemes, el processament del llenguatge natural, la interacció lingüística i fins i tot la producció de treballs creatius",
         "source_type":  "wikipedia"
     },
     {
@@ -23,7 +23,7 @@
         "source_url":  "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
         "context":  "Jaume el Conqueridor, anomenat també Jaume I d\u0027Aragó (Montpeller, Senyoria de Montpeller, 2 de febrer del 1208 - Alzira, Regne de València, 27 de juliol del 1276; en occità i català antic Jacme; en aragonès modern Chaime; en llatí Iacobus; en castellà Jaime o Jacobo i Santiago. Tots provenen del nom hebreu Iaakov, que significa \u0027que Déu protegeixi\u0027), fou sobirà de la Corona d\u0027Aragó amb els títols principals de rei d\u0027Aragó, rei de Mallorca, rei de València, comte de Barcelona, comte d\u0027Urgell, i senyor de Montpeller (1213-1276). Començà a regnar a l\u0027edat de 10 anys assistit pel Consell Reial, regnà 58 anys i morí a l\u0027edat de 68 anys. És enterrat al Reial Monestir de Santa Maria de Poblet. La història sobre l\u0027engendrament i el baptisme del rei en Jaume són recollits pel mateix rei en el Llibre dels fets i estan envoltats d\u0027una aura llegendària. Sobre l\u0027engendrament del rei Jaume, fill de Pere el Catòlic i de Maria de Montpeller, com que el rei Pere rebutjava la seva muller i hom estava preocupat per l\u0027absència d\u0027un hereu legítim, s\u0027ordí una trama per a enganyar-lo.",
         "question":  "Quins eren els títols principals de Jaume I d\u0027Aragó com a sobirà de la Corona d\u0027Aragó?",
-        "ground_truth":  "rei d\u0027Aragó, rei de Mallorca, rei de València, comte de Barcelona, comte d\u0027Urgell, i senyor de Montpeller",
+        "ground_truth":  "rei d\u0027Aragó, rei de Mallorca, rei de València, comte de Barcelona, comte d\u0027Urgell, i senyor de Montpeller (1213-1276)",
         "source_type":  "wikipedia"
     },
     {
@@ -32,7 +32,7 @@
         "source_url":  "https://ca.wikipedia.org/wiki/Mar_Mediterr%C3%A0nia",
         "context":  "Si l\u0027estret de Gibraltar es tanqués, la Mediterrània s\u0027assecaria perquè aquest és una mar en la qual s\u0027evapora més aigua de la que entra pels rius, fet que provocaria una salinitat més elevada que a l\u0027Atlàntic, oceà del qual rep l\u0027aigua que perd a causa de l\u0027evaporació. Les temperatures als llocs propers a la Mediterrània són agradables, ja que a l\u0027estiu les costes són més fresques i a l\u0027hivern mantenen les temperatures una mica més elevades que a l\u0027interior del continent. Des d\u0027un punt de vista biogeogràfic, els territoris amb clima mediterrani ocupen no sols la conca del Mediterrani, la zona mediterrània pròpiament dita, sinó també les costes de Líbia i Egipte, que pertanyen a la regió saharoaràbiga. La diversitat faunística de l\u0027entorn mediterrani és enorme, comparable a la de les plantes. Analitzant la riquesa d\u0027espècies per alguns tàxons, obtenim que de les 62 espècies d\u0027amfibis que hi ha a la Mediterrània, 35 són endèmiques, igual que les 111 de les 179 espècies de rèptils; de les 184 espècies de mamífers registrades, el 25% són endèmiques i 52 espècies estan amenaçades (sense comptar els mamífers marins).",
         "question":  "Per què s\u0027assecaria la Mediterrània si l\u0027estret de Gibraltar es tanqués?",
-        "ground_truth":  "perquè aquest és una mar en la qual s\u0027evapora més aigua de la que entra pels rius",
+        "ground_truth":  "perquè és una mar en la qual s\u0027evapora molta més aigua de la que hi entra a través de les precipitacions i dels rius. Sense l\u0027aportació de l\u0027Atlàntic a través de l\u0027estret de Gibraltar, que compensa la pèrdua per evaporació, la salinitat augmentaria i finalment la mar s\u0027assecaria",
         "source_type":  "wikipedia"
     },
     {
@@ -41,7 +41,7 @@
         "source_url":  "https://es.wikipedia.org/wiki/Paella",
         "context":  "La paella, o también arroz a la paella, (del valenciano paella, que significa \u0027sartén\u0027 y se refiere al recipiente con el que se hace la receta y que le da nombre, y este a su vez del latín patella) es una receta de cocina con base de arroz, con origen en la actual Comunidad Valenciana, hoy en día muy popular en toda España y servida en restaurantes de todo el mundo. En esta receta, el arroz se cocina junto a otros alimentos en una sartén, generalmente ancha y con asas. El nombre de paella hace referencia tanto a la receta o plato cocinado como al recipiente que se utiliza para su elaboración, aunque este último recibe también el nombre de paellera, término originalmente considerado incorrecto pero que con el uso se ha ido aceptando en español. Se trata de un plato de origen humilde, descrito por primera vez en España en el área de la Albufera de Valencia. La popularidad de este plato ha hecho que, en la actualidad, se haya expandido con gran cantidad de variantes adaptadas en los ingredientes a las diversas regiones de la cocina española.",
         "question":  "¿A qué hace referencia el nombre de paella?",
-        "ground_truth":  "tanto a la receta o plato cocinado como al recipiente que se utiliza para su elaboración",
+        "ground_truth":  "tanto a la receta o plato cocinado como al recipiente (la sartén) que se utiliza para su elaboración, aunque este último recibe también el nombre de paellera. La palabra española proviene del valenciano paella, que significa «sartén», y tiene su raíz en el latín patella",
         "source_type":  "wikipedia"
     },
     {
@@ -50,7 +50,7 @@
         "source_url":  "https://es.wikipedia.org/wiki/Reconquista",
         "context":  "Se denomina Reconquista al período de la historia de la península ibérica de aproximadamente 780 años entre la conquista omeya de Hispania en 711 y la caída del reino nazarí de Granada en 1492 ante los reinos cristianos en expansión: esta conquista de Granada marca el final del período. La historiografía tradicional utiliza el término «Reconquista» a partir del siglo XIX como concepto nacionalista español. Previamente se conocía como «restauración» de los reinos cristianos visigodos, entendida como la conquista de nuevos terrenos por unas nuevas monarquías cristianas que pretendían legitimar el orden político y religioso de dichas monarquías vinculandolas con el antiguo reino visigodo. El comienzo de la Reconquista se marca con la batalla de Covadonga (718 o 722), la primera victoria conocida de las fuerzas militares cristianas en la península ibérica desde la intervención militar de las fuerzas combinadas árabe-bereber de 711. En esa pequeña batalla, un grupo liderado por el noble Pelayo derrotó a una patrulla musulmana en las montañas de la cordillera cantábrica y estableció el reino cristiano independiente de Asturias.",
         "question":  "¿Con qué evento histórico se marca el comienzo de la Reconquista?",
-        "ground_truth":  "con la batalla de Covadonga (718 o 722)",
+        "ground_truth":  "con la batalla de Covadonga (718 o 722), la primera victoria conocida de las fuerzas militares cristianas en la península ibérica, donde un grupo liderado por el noble Pelayo derrotó a una patrulla musulmana en las montañas de la cordillera cantábrica y estableció el reino cristiano independiente de Asturias",
         "source_type":  "wikipedia"
     },
     {
@@ -59,7 +59,7 @@
         "source_url":  "https://es.wikipedia.org/wiki/Inteligencia_artificial",
         "context":  "Los sistemas de IA generativa notables incluyen ChatGPT (y su variante Microsoft Copilot), un bot conversacional creado por OpenAI usando sus modelos de lenguaje de gran escala de última generación, como GPT-5 y sus iteraciones de razonamiento avanzado (o1); Gemini (anteriormente llamado Bard), un bot conversacional creado por Google usando la familia de modelos multimodales nativos Gemini 2.0 y versiones superiores; y Claude, un bot conversacional creado por Anthropic usando los modelos Claude 3.5 y 4, destacados por su alta fidelidad en tareas de codificación y análisis de contexto extenso. Otros modelos generativos de IA incluyen sistemas de arte de inteligencia artificial como Stable Diffusion, Midjourney y DALL-E, que permiten crear imágenes. Actualmente la IA generativa puede crear texto, código, imágenes, vídeo, música, voces y efectos de sonido.",
         "question":  "¿Qué permiten hacer los sistemas de arte de inteligencia artificial como Stable Diffusion, Midjourney y DALL-E?",
-        "ground_truth":  "crear imágenes",
+        "ground_truth":  "crear imágenes a partir de comandos o instrucciones de texto (prompts). Estos modelos de IA generativa aprenden los patrones y la estructura de sus datos de entrenamiento y generan nuevos datos con características similares",
         "source_type":  "wikipedia"
     },
     {
@@ -68,7 +68,7 @@
         "source_url":  "https://ca.wikipedia.org/wiki/Intel%C2%B7lig%C3%A8ncia_artificial",
         "context":  "Els sistemes experts, o sistemes basats en el coneixement, tenen la finalitat de reproduir correctament el comportament d\u0027un expert humà en el seu domini de competència. El sistema d\u0027experts ha estat classificat com \"la intel·ligència artificial amb èxit\", cosa que és realment una exageració però que plasma la superació dels anys difícils que va patir la intel·ligència artificial, a l\u0027inici de la dècada del 60. Un sistema expert és un sistema elaborat amb tècniques d\u0027intel·ligència artificial que resol problemes complexos i difícils, així com l\u0027expert humà. El sistema expert utilitza processos que imiten el raonament humà, és a dir, deducció, inducció i estratègies de recerca de solucions, alhora de resoldre problemes. I ho aconsegueix utilitzant les informacions base, que li ha subministrat prèviament un expert humà, i als quals incorpora coneixements que el sistema expert informàtic va aprenent. A més, ha de ser capaç de justificar les decisions i els resultats obtinguts i atribuir a aquests un grau de credibilitat.",
         "question":  "Quina és la finalitat dels sistemes experts o sistemes basats en el coneixement?",
-        "ground_truth":  "reproduir correctament el comportament d\u0027un expert humà en el seu domini de competència",
+        "ground_truth":  "reproduir correctament el comportament d\u0027un expert humà en el seu domini de competència. Un sistema expert utilitza processos que imiten el raonament humà (deducció, inducció i estratègies de recerca) per resoldre problemes complexos, i ha de ser capaç de justificar les decisions i atribuir-los un grau de credibilitat",
         "source_type":  "wikipedia"
     },
     {
@@ -77,7 +77,7 @@
         "source_url":  "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
         "context":  "Durant els primers anys del seu regnat, el rei Jaume I va mantenir diverses lluites contra la noblesa. El 1219 fou nomenat un nou Consell Reial encapçalat per l\u0027arquebisbe de Tarragona i que es perllongà fins al 1221 quan el rei en Jaume es casà i es feren Corts d\u0027Aragó a Daroca. Amb pràcticament 12 anys, el 1220, hagué de fer front a la primera revolta nobiliària liderada per Rodrigo de Liçana. La revolta s\u0027inicià quan Rodrigo de Liçana es negà a acatar l\u0027ordre del rei que li manava d\u0027alliberar Lope d\u0027Albero, que Rodrigo de Liçana havia fet presoner per uns deutes. Jaume I (d\u002711 anys encara i a punt de fer els 12) i el Consell Reial, resolgueren posar fi a la revolta d\u0027una manera contundent atacant el noble rebel. Primerament s\u0027alliberà el castell d\u0027Albero que estava ocupat per les tropes de Rodrigo de Liçana. Seguidament s\u0027atacà el feu del noble revoltat, el castell de Liçana, on estava empresonat Lope d\u0027Albero.",
         "question":  "Qui liderava la primera revolta nobiliària a la qual hagué de fer front el rei Jaume I l\u0027any 1220?",
-        "ground_truth":  "Rodrigo de Liçana",
+        "ground_truth":  "Rodrigo de Liçana. La revolta s\u0027inicià quan Rodrigo de Liçana es negà a acatar l\u0027ordre del rei d\u0027alliberar Lope d\u0027Albero, que havia fet presoner per uns deutes. Jaume I i el Consell Reial van actuar contundentment atacant el noble rebel i alliberant el castell d\u0027Albero",
         "source_type":  "wikipedia"
     },
     {
@@ -86,7 +86,7 @@
         "source_url":  "https://ca.wikipedia.org/wiki/Mar_Mediterr%C3%A0nia",
         "context":  "La mar Mediterrània es formà a partir del primitiu mar de Tethys, de molta més extensió que el Mediterrani, i fou disminuint a mesura que la placa africana s\u0027apropava a l\u0027euroasiàtica. Fa uns 60 milions d\u0027anys, al començament del Terciari, el mar de Tethys, antecessor del Mediterrani, inundava gran part del nord d\u0027Àfrica i Europa, que llavors no era més que un arxipèlag d\u0027illes. Durant el Terciari, el mar de Tethys fou estrenyent-se per l\u0027est fins que es formà una gran conca marina, gairebé separada de l\u0027oceà obert. Aquesta conca abastava en una mateixa massa d\u0027aigua la Mediterrània, la mar Negra i la Càspia. Tanmateix, per occident, el Mare Nostrum continuava connectat a mar oberta per superfícies avui dia emergides del sud de la península Ibèrica i el nord del Marroc.",
         "question":  "A partir de quin mar primitiu es formà la mar Mediterrània?",
-        "ground_truth":  "mar de Tethys",
+        "ground_truth":  "mar de Tethys, de molta més extensió que el Mediterrani actual. Fa uns 60 milions d\u0027anys, al Terciari, el mar de Tethys inundava gran part del nord d\u0027Àfrica i Europa, i va anar disminuint a mesura que la placa africana s\u0027apropava a l\u0027euroasiàtica fins a formar la conca mediterrània",
         "source_type":  "wikipedia"
     },
     {
@@ -95,7 +95,7 @@
         "source_url":  "https://es.wikipedia.org/wiki/Paella",
         "context":  "El arroz es el protagonista principal de la paella. En la paella los granos se cuecen hasta quedar sueltos. De las partes de un grano, el endosperma es la parte que se emplea, el endosperma se encuentra compuesto principalmente por almidón. No existe gran variación de sabor entre unas variedades u otras. El grano cocinado hasta que mantenga su estructura absorbe sabores y aromas del entorno (verduras, carnes, marisco, etc.). El arroz sobre-cocinado (denominado en valenciano empastrat) pierde esa capacidad de retener sabores y aromas. El arroz de la paella debe tener dos características a tener en cuenta: la primera es la capacidad de absorber agua y la segunda su resistencia a reventar (o de abrirse) durante el cocinado. Los arroces de tamaño mediano son los más empleados en las paellas (de cinco a seis milímetros). Los pequeños son poco apreciados (por debajo de cinco milímetros). Las estructuras de almidón del endosperma son las encargadas de «almacenar» los sabores. La calidad del arroz se debe a su composición química, por regla general cuanto más amilasa contenga mejor calidad, y cuanto más amilopectina mejor respuesta a la cocción.",
         "question":  "¿Cuáles son las dos características a tener en cuenta que debe tener el arroz de la paella?",
-        "ground_truth":  "la primera es la capacidad de absorber agua y la segunda su resistencia a reventar (o de abrirse) durante el cocinado",
+        "ground_truth":  "la primera es la capacidad de absorber agua y la segunda su resistencia a reventar (o de abrirse) durante el cocinado. Los granos de tamaño mediano (5-6 mm) son los más empleados, ya que las estructuras de almidón del endosperma «almacenan» los sabores y aromas del entorno",
         "source_type":  "wikipedia"
     },
     {
@@ -104,7 +104,7 @@
         "source_url":  "https://es.wikipedia.org/wiki/Reconquista",
         "context":  "La «Reconquista» constituyó para los distintos reinos y señoríos surgidos en el aislamiento del norte montañoso de la Península un proceso restaurador y liberador, no solo del territorio, sino de la numerosa población cristiana hispano-visigoda (mozárabes), que permaneció durante siglos en el territorio ocupado. Resultaban ser los verdaderos herederos del reino visigodo, y su apelación constante al auxilio de los reinos cristianos, suponía para las autoridades musulmanas un problema que surgía periódicamente y que era resuelto con persecuciones y deportaciones de distinto grado. Según esta misma visión tradicional la temprana reacción en la cornisa cantábrica en contra del islam (Don Pelayo rechazó a los sarracenos en Covadonga apenas siete años después de que atravesaran el estrecho de Gibraltar), y el rechazo del territorio actualmente francés después de la batalla de Poitiers del año 732, sustentan la idea de que la Reconquista sigue casi inmediatamente a la conquista árabe. Incluso, «gran parte de dicha cornisa cantábrica jamás llegó a ser conquistada», lo cual viene a justificar la idea de que la conquista árabe y la reconquista cristiana, de muy diferente duración (muy corta la primera y sumamente larga la segunda), se superponen.",
         "question":  "¿Para quiénes constituyó la «Reconquista» un proceso restaurador y liberador?",
-        "ground_truth":  "para los distintos reinos y señoríos surgidos en el aislamiento del norte montañoso de la Península",
+        "ground_truth":  "para los distintos reinos y señoríos surgidos en el aislamiento del norte montañoso de la Península, así como para la numerosa población cristiana hispano-visigoda (mozárabes) que permaneció durante siglos en el territorio ocupado y que eran los verdaderos herederos del reino visigodo",
         "source_type":  "wikipedia"
     },
     {
@@ -113,7 +113,7 @@
         "source_url":  "https://ca.wikipedia.org/wiki/Intel%C2%B7lig%C3%A8ncia_artificial",
         "context":  "En el seu històric article de 1950, Turing va proposar que la pregunta, «pot pensar una màquina?» era massa filosòfica per tenir valor i, per fer-lo més concret, va proposar un \"joc d\u0027imitació\". En la prova de Turing intervenen dues persones i un ordinador. Una persona, l\u0027interrogat, s\u0027asseu en una sala i tecleja preguntes a la terminal d\u0027una computadora. Quan apareixen les respostes a la terminal, l\u0027interrogat intenta determinar si van ser fetes per una altra persona o per un ordinador. Si actua de manera intel·ligent, segons Turing és intel·ligent. Turing, va assenyalar que una màquina podria fracassar i, malgrat tot, ser intel·ligent. Tanmateix, creia que les màquines podrien superar la prova a finals del segle XX.",
         "question":  "En la prova de Turing, què intenta determinar la persona interrogada quan apareixen les respostes a la terminal?",
-        "ground_truth":  "si van ser fetes per una altra persona o per un ordinador",
+        "ground_truth":  "si van ser fetes per una altra persona o per un ordinador. En la prova dissenyada per Alan Turing el 1950, una persona (l\u0027interrogat) s\u0027asseu en una sala aïllada i tecleja preguntes a la terminal. Si el sistema informàtic actua de manera intel·ligent, llavors, segons Turing, és intel·ligent",
         "source_type":  "wikipedia"
     },
     {
@@ -122,7 +122,7 @@
         "source_url":  "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
         "context":  "La campanya militar fou cabdellada per l\u0027infant Pere d\u0027Aragó (fill de Jaume I i futur Pere el Gran) que derrotà el cabdill de la insurgència islàmica Muhammad ibn Hud Biha al-Dawla i n\u0027expulsà les tropes granadines. Amb l\u0027objectiu d\u0027assegurar el control del territori per part dels cristians, les mainades catalanes s\u0027assentaren en el territori conquerit a fi d\u0027assegurar el sotmetiment de la majoria de la població autòctona andalusí. Pacificat el regne i destruïda la rebel·lió, el regne de Múrcia fou retornat a la jurisdicció de la Corona de Castella, respectant així els límits estipulats anys abans al Tractat d\u0027Almizra.",
         "question":  "A quina jurisdicció fou retornat el regne de Múrcia un cop pacificat el regne i destruïda la rebel·lió islàmica?",
-        "ground_truth":  "a la jurisdicció de la Corona de Castella",
+        "ground_truth":  "a la jurisdicció de la Corona de Castella, respectant els límits estipulats al Tractat d\u0027Almizra. La campanya havia estat liderada per l\u0027infant Pere d\u0027Aragó, que va derrotar el cabdill de la insurgència islàmica i va expulsar les tropes granadines",
         "source_type":  "wikipedia"
     },
     {
@@ -131,7 +131,7 @@
         "source_url":  "https://ca.wikipedia.org/wiki/Mar_Mediterr%C3%A0nia",
         "context":  "L\u0027obertura del canal de Suez el 1869 creà el primer passadís d\u0027aigua salada entre la Mediterrània i el mar Roig. El mar Roig està a major alçada que el Mediterrani oriental i el canal aboca aigua del Roig dins del Mediterrani. Els llacs salats, uns llacs hipersalins que formen part del canal, han blocat la migració d\u0027espècies del mar Roig a la Mediterrània durant dècades, però quan la salinitat dels llacs s\u0027ha igualat gradualment a la del mar Roig, aquesta barrera a la migració ha desaparegut, i algunes plantes i animals d\u0027aquest mar han començat a colonitzar el Mediterrani oriental. Aquest fenomen rep el nom de migració lessepiana (per l\u0027enginyer francès Ferdinand de Lesseps) o invasió eritrea.",
         "question":  "Quin nom rep el fenomen pel qual plantes i animals del mar Roig han començat a colonitzar el Mediterrani oriental a través del canal de Suez?",
-        "ground_truth":  "migració lessepiana (per l\u0027enginyer francès Ferdinand de Lesseps) o invasió eritrea",
+        "ground_truth":  "migració lessepiana (per l\u0027enginyer francès Ferdinand de Lesseps) o invasió eritrea. Es produeix des de l\u0027obertura del canal de Suez el 1869, que va crear el primer passadís d\u0027aigua salada entre la Mediterrània i el mar Roig",
         "source_type":  "wikipedia"
     },
     {
@@ -140,7 +140,7 @@
         "source_url":  "https://es.wikipedia.org/wiki/Paella",
         "context":  "La Consejería de Agricultura del gobierno valenciano ha elaborado en conjunto con el Consejo Regulador de la Denominación de Origen Arroz de Valencia, un registro de ingredientes que tendrá que llevar toda paella que quiera comercializarse bajo el nombre de Paella Valenciana. Los diez ingredientes básicos que siempre se usan general y tradicionalmente son pollo, conejo, bajoqueta (judía verde), garrofó, tomate, arroz, aceite de oliva, agua, azafrán y sal. Además de lo anterior, según la región, se admiten ingredientes como ajo, alcachofa, pato, pimentón, caracoles, romero, pimiento rojo y variantes que «también serán aceptadas dentro de la denominación de auténtica \"paella valenciana\"».",
         "question":  "¿Cuáles son los diez ingredientes básicos que siempre se usan general y tradicionalmente para elaborar la auténtica paella valenciana?",
-        "ground_truth":  "pollo, conejo, bajoqueta (judía verde), garrofó, tomate, arroz, aceite de oliva, agua, azafrán y sal",
+        "ground_truth":  "pollo, conejo, bajoqueta (judía verde), garrofó, tomate, arroz, aceite de oliva, agua, azafrán y sal. Esta lista constituye un registro formal elaborado por la Consejería de Agricultura del gobierno valenciano junto al Consejo Regulador de la DO Arroz de Valencia",
         "source_type":  "wikipedia"
     },
     {
@@ -149,7 +149,7 @@
         "source_url":  "https://es.wikipedia.org/wiki/Reconquista",
         "context":  "Entre la Cordillera Cantábrica y el Duero. En una verdadera «cultura de frontera», el rey atribuye durante los siglos VIII y XI tierras deshabitadas a hombres libres que debían defenderse a sí mismos en un entorno inseguro, y ocupar la tierra que ellos mismos iban a cultivar (presuras). Un proceso en cierta forma similar se denomina aprisio en los núcleos pirenaicos. A medida que la frontera se alejaba hacia el sur, la independencia inicial que caracterizó el espíritu del condado de Castilla (caballeros-villanos, behetrías) se fue sustituyendo por formas más equiparables al feudalismo europeo, con el establecimiento de señoríos monásticos y nobiliarios. De acuerdo con el historiador Ladero Quesada, el siglo X fue «clave en el proceso de colonización de las tierras así incorporadas, cuya población anterior debía ser muy escasa y carente de organización».",
         "question":  "¿Cómo se denomina el proceso de repoblación por el cual el rey atribuye tierras deshabitadas a hombres libres para que las ocupen y cultiven entre la Cordillera Cantábrica y el Duero?",
-        "ground_truth":  "presuras",
+        "ground_truth":  "presura (o presuras). Este proceso se desarrolló principalmente durante los siglos VIII y XI en una verdadera «cultura de frontera», donde los hombres libres debían defenderse a sí mismos en un entorno inseguro mientras cultivaban las tierras asignadas. En los núcleos pirenaicos, un proceso similar se denominó aprisio",
         "source_type":  "wikipedia"
     },
     {
@@ -158,7 +158,7 @@
         "source_url":  "https://es.wikipedia.org/wiki/Inteligencia_artificial",
         "context":  "Otro objetivo de la inteligencia artificial consiste en poder establecer metas y finalmente alcanzarlas. Para ello necesitan una forma de visualizar el futuro, una representación del estado del mundo y poder hacer predicciones sobre cómo sus acciones lo cambiarán, con tal de poder tomar decisiones que maximicen la utilidad (o el «valor») de las opciones disponibles. En los problemas clásicos de planificación, el agente puede asumir que es el único sistema que actúa en el mundo, lo que le permite estar seguro de las consecuencias de sus acciones. Sin embargo, si el agente no es el único actor, entonces se requiere que este pueda razonar bajo incertidumbre.",
         "question":  "¿Qué se requiere si el agente de inteligencia artificial no es el único actor que actúa en el mundo en los problemas de planificación?",
-        "ground_truth":  "se requiere que este pueda razonar bajo incertidumbre",
+        "ground_truth":  "se requiere que este pueda razonar bajo incertidumbre. Esto implica capacidad de evaluar el entorno, hacer predicciones, evaluar sus propias predicciones y adaptarse dinámicamente. La planificación con múltiples agentes utiliza la cooperación y competencia entre sistemas para alcanzar objetivos, generando comportamiento emergente",
         "source_type":  "wikipedia"
     },
     {
@@ -167,7 +167,7 @@
         "source_url":  "https://es.wikipedia.org/wiki/Inteligencia_artificial",
         "context":  "La inteligencia artificial amigable es una IA fuerte e hipotética que puede tener un efecto positivo más que uno negativo sobre la humanidad. «Amigable» es usado en este contexto como terminología técnica y escoge agentes que son seguros y útiles, no necesariamente aquellos que son «amigables» en el sentido coloquial. El concepto es invocado principalmente en el contexto de discusiones de agentes artificiales de automejora recursiva que rápidamente explota en inteligencia, con el argumento de que esta tecnología hipotética pudiera tener una larga, rápida y difícil tarea de controlar el impacto en la sociedad humana.",
         "question":  "¿Cómo se denomina a la IA fuerte e hipotética que puede tener un efecto positivo más que uno negativo sobre la humanidad?",
-        "ground_truth":  "La inteligencia artificial amigable",
+        "ground_truth":  "La inteligencia artificial amigable. Se trata de una IA fuerte e hipotética que puede tener un efecto positivo más que uno negativo sobre la humanidad. «Amigable» es usado como terminología técnica para referirse a agentes seguros y útiles, principalmente en el contexto de agentes de automejora recursiva",
         "source_type":  "wikipedia"
     },
     {
@@ -176,7 +176,7 @@
         "source_url":  "https://ca.wikipedia.org/wiki/Intel%C2%B7lig%C3%A8ncia_artificial",
         "context":  "Lisp (LISt Processor, \"processador de llistes\") es considera el llenguatge propi de la intel·ligència artificial. Va ser creat el 1962 al MIT, arran d\u0027un treball publicat per John McCarthy el 1960, Recursive functions of symbolic expressions and their computation by machine. Més tard, al 1962, va publicar-se el primer manual del Lisp per a l\u0027equip IBM 7090 i els autors van ser McCarthy, Abrahams, Edwards, Hart i Levin. Lisp utilitza les funcions \"lambda\" de A. Church. El Lisp implementa el tractament mitjançant expressions simbòliques i recursivitat, i té una gran potència i simplicitat en la definició d\u0027estructures.",
         "question":  "Quin llenguatge de programació es considera el llenguatge propi de la intel·ligència artificial?",
-        "ground_truth":  "Lisp (LISt Processor, \"processador de llistes\")",
+        "ground_truth":  "el Lisp (LISt Processor, «processador de llistes»). Va ser creat el 1962 al MIT, arran d\u0027un treball de John McCarthy de 1960. Utilitza les funcions «lambda» d\u0027A. Church i implementa el tractament mitjançant expressions simbòliques i recursivitat. El seu principal problema és la manca d\u0027estandardització, que ha donat lloc a dialectes com Pure Lisp, Maclisp, PSL o Common Lisp",
         "source_type":  "wikipedia"
     },
     {
@@ -185,7 +185,7 @@
         "source_url":  "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
         "context":  "El 1227 va afrontar un nou alçament de la noblesa, dirigit per l\u0027infant Ferran, oncle del rei, que es va acabar, gràcies a la intervenció papal a través de l\u0027arquebisbe de Tarragona, amb la signatura de la Concòrdia d\u0027Alcalá (març de 1227). Aquest tractat va marcar el triomf de la monarquia sobre els nobles i li donà l\u0027estabilitat necessària per a iniciar les campanyes contra els musulmans. Un grup de prohoms catalans presidits per Jaume I es reuneixen a casa de Pere Martell, a Tarragona, per tal de preparar la conquesta de Mallorca (1228).",
         "question":  "Quin tractat de març de 1227 va marcar el triomf de la monarquia sobre els nobles i donà l\u0027estabilitat necessària al rei Jaume I per a iniciar les campanyes contra els musulmans?",
-        "ground_truth":  "la Concòrdia d\u0027Alcalá",
+        "ground_truth":  "la Concòrdia d\u0027Alcalà, signada el març de 1227. Aquest tractat es va assolir gràcies a la intervenció papal a través de l\u0027arquebisbe de Tarragona, va posar fi a la rebel·lió dirigida per l\u0027infant Ferran i va marcar el triomf definitiu de la monarquia sobre l\u0027aristocràcia, donant pas a les campanyes de conquesta de Mallorca i València",
         "source_type":  "wikipedia"
     },
     {
@@ -194,7 +194,7 @@
         "source_url":  "https://ca.wikipedia.org/wiki/Mar_Mediterr%C3%A0nia",
         "context":  "L\u0027Imperi romà es col·lapsà el 476 dC. La part oriental romangué unida en l\u0027Imperi Romà d\u0027Orient, mentre que la part occidental fou envaïda per successius pobles germànics, entre aquests els ostrogots, visigots, francs i longobards. Al segle VII, després d\u0027una ràpida successió de victòries, un nou poble, l\u0027àrab, s\u0027expandí per la major part del Mediterrani. Les diverses tribus islàmiques foren aturades en la seva expansió l\u0027any 718 a Constantinoble, a la Mediterrània oriental, i en la batalla de Tours l\u0027any 732, a l\u0027occidental, però la seva cultura i religió romangueren en grans parts de la mar, principalment a l\u0027africana i asiàtica.",
         "question":  "En quina batalla van ser aturades les tribus islàmiques a la Mediterrània occidental l\u0027any 732?",
-        "ground_truth":  "en la batalla de Tours",
+        "ground_truth":  "en la batalla de Tours, també esmentada com la batalla de Poitiers (732). Carles Martell va liderar la resistència carolíngia i va rebutjar la invasió musulmana d\u0027Aquitània. Prèviament, les tribus islàmiques ja havien estat aturades a la Mediterrània oriental l\u0027any 718 a Constantinoble",
         "source_type":  "wikipedia"
     },
     {
@@ -203,7 +203,7 @@
         "source_url":  "https://es.wikipedia.org/wiki/Paella",
         "context":  "La paella debe estar perfectamente nivelada antes de poder hacer la cocción. Debe en cualquier caso asegurarse que la horizontalidad se mantendrá durante todo el proceso de cocinado. Las recetas tradicionales mencionan, casi sin excepción, siempre la frase «fuego vivo» durante las primeras fases del cocinado. La sartén (paella) debe reposar unos cinco minutos, es regla popular en Valencia que el reposo final lo haga sobre lecho de arena, nunca de piedra o cemento. Quizás se deba a un tema de conductividad térmica y velocidad a la que la paella pierde temperatura, que debe ser lo más lento posible.",
         "question":  "Según la regla popular en Valencia, ¿dónde debe hacer la sartén (paella) su reposo final?",
-        "ground_truth":  "sobre lecho de arena, nunca de piedra o cemento",
+        "ground_truth":  "sobre lecho de arena, nunca de piedra o cemento. Este reposo debe durar unos cinco minutos. La razón de esta práctica popular valenciana podría estar relacionada con la conductividad térmica, buscando que la paella pierda temperatura de la manera más lenta posible",
         "source_type":  "wikipedia"
     },
     {
@@ -212,7 +212,7 @@
         "source_url":  "https://es.wikipedia.org/wiki/Reconquista",
         "context":  "En paralelo al avance militar, se produjo un proceso de repoblación con el asentamiento de población cristiana en territorios conquistados, que podía provenir de los núcleos septentrionales (de tierras montañosas, pobres y superpobladas), de las comunidades mozárabes del sur que emigraban al norte debido al incremento de la represión religiosa (al arte mozárabe se le denomina también arte de repoblación), e incluso provenientes de zonas de la Europa al norte de los Pirineos, a los que genéricamente se llamaba francos. La modalidad de asentamiento de esa población varió en sus características de acuerdo a la forma en que se produjo la conquista, el ritmo de la ocupación y el volumen de la población musulmana preexistente en el territorio.",
         "question":  "¿Cómo se llamaba genéricamente a la población repobladora cristiana proveniente de zonas de la Europa al norte de los Pirineos?",
-        "ground_truth":  "francos",
+        "ground_truth":  "francos. Su llegada formó parte del gran proceso de repoblación paralelo al avance militar cristiano. Este proceso también estuvo protagonizado por pobladores de los núcleos septentrionales peninsulares (tierras montañosas y superpobladas) y comunidades mozárabes del sur que emigraban al norte huyendo de la represión religiosa musulmana",
         "source_type":  "wikipedia"
     }
 ]
