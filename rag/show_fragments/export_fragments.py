@@ -25,9 +25,9 @@ according to ``metadata["format"]`` from ``chat_pdfs.indexar_documentos``.
 **Single-store modes:** ``--mi-only`` or ``--ragbench-only`` (``--ragbench`` alias).
 
 Usage (from repository root):
-    python rag/export_fragments.py
-    python rag/export_fragments.py --mi-only -o salida.txt
-    python rag/export_fragments.py --format jsonl --out-dir evaluation
+    python rag/show_fragments/export_fragments.py
+    python rag/show_fragments/export_fragments.py --mi-only -o salida.txt
+    python rag/show_fragments/export_fragments.py --format jsonl --out-dir ./mi_salida
 
 Dependencies:
     - chromadb (see rag/requirements.txt)
@@ -46,8 +46,8 @@ from typing import Any, Dict, List, Optional, Tuple
 # SECTION 1: IMPORTS
 # ─────────────────────────────────────────────
 
-# Two levels up: rag/export_fragments.py -> repo root (not three: that was for scripts/evaluation/).
-_proj_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Three levels up: rag/show_fragments/export_fragments.py -> repo root.
+_proj_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _proj_root not in sys.path:
     sys.path.insert(0, _proj_root)
 
@@ -61,7 +61,7 @@ RAG_DIR = os.path.join(_proj_root, "rag")
 RAGBENCH_DB_PATH = os.path.join(RAG_DIR, "ragbench_vector_db")
 RAGBENCH_COLLECTION = "ragbench_arxiv_eval"
 
-DEFAULT_OUT_DIR = os.path.join(_proj_root, "evaluation")
+DEFAULT_OUT_DIR = os.path.join(RAG_DIR, "show_fragments")
 DEFAULT_FILE_MI = "chunks_mi_vector_db.txt"
 DEFAULT_FILE_RAGBENCH = "chunks_ragbench_vector_db.txt"
 DEFAULT_OUTPUT_MONKEYGRAB = os.path.join(DEFAULT_OUT_DIR, "monkeygrab_chunks_export.txt")

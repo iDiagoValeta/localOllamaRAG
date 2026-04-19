@@ -40,9 +40,9 @@ Prerequisitos:
     - Ollama corriendo con los modelos de rag/chat_pdfs.py
     - pip install -r evaluation/requirements.txt
 
-Salidas (en evaluation/):
-    - ragas_ragbench_scores.csv
-    - ragas_ragbench_debug.json (salvo --no-debug)
+Salidas:
+    - evaluation/scores/ragas_ragbench_scores.csv
+    - evaluation/debug/ragas_ragbench_debug.json (salvo --no-debug)
 
 Dependencies:
     - huggingface_hub, requests
@@ -133,11 +133,13 @@ ARXIV_HEADERS = {
 
 EVAL_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJ_ROOT = os.path.dirname(EVAL_DIR)
+SCORES_DIR = os.path.join(EVAL_DIR, "scores")
+DEBUG_DIR = os.path.join(EVAL_DIR, "debug")
 RAGBENCH_PDFS_DIR = os.path.join(PROJ_ROOT, "rag", "ragbench_pdfs")
 RAGBENCH_DB_PATH = os.path.join(PROJ_ROOT, "rag", "ragbench_vector_db")
 RAGBENCH_COLLECTION = "ragbench_arxiv_eval"
-OUTPUT_CSV = os.path.join(EVAL_DIR, "ragas_ragbench_scores.csv")
-OUTPUT_DEBUG = os.path.join(EVAL_DIR, "ragas_ragbench_debug.json")
+OUTPUT_CSV = os.path.join(SCORES_DIR, "ragas_ragbench_scores.csv")
+OUTPUT_DEBUG = os.path.join(DEBUG_DIR, "ragas_ragbench_debug.json")
 
 METRIC_NAMES = [
     "answer_correctness",

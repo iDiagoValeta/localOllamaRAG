@@ -167,6 +167,28 @@ MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma4:e4b")
 MODELO_OCR = os.getenv("OLLAMA_OCR_MODEL", "gemma4:e4b")
 
 
+def _leer_env_bool(nombre_variable: str, default: bool) -> bool:
+    """Parse a boolean environment variable with tolerant string values.
+
+    Args:
+        nombre_variable: Environment variable name to inspect.
+        default: Fallback value when the variable is undefined or empty.
+
+    Returns:
+        Parsed boolean value.
+    """
+    valor = os.getenv(nombre_variable)
+    if valor is None:
+        return default
+
+    valor_normalizado = valor.strip().lower()
+    if valor_normalizado in {"1", "true", "yes", "y", "on", "si", "sí"}:
+        return True
+    if valor_normalizado in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
+
+
 def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
     """Extract the base model name by stripping the tag suffix.
 
@@ -189,10 +211,25 @@ USAR_BUSQUEDA_EXHAUSTIVA = True
 USAR_RERANKER = RERANKER_AVAILABLE
 EXPANDIR_CONTEXTO = True
 USAR_OPTIMIZACION_CONTEXTO = True
-USAR_RECOMP_SYNTHESIS = False
+USAR_RECOMP_SYNTHESIS = _leer_env_bool("USAR_RECOMP_SYNTHESIS", True)
 USAR_EMBEDDINGS_IMAGEN = True
 LOGGING_METRICAS = True
 GUARDAR_DEBUG_RAG = True
+
+
+def set_recomp_synthesis_enabled(enabled: bool) -> bool:
+    """Override RECOMP synthesis usage for the current Python process.
+
+    Args:
+        enabled: Whether RECOMP synthesis should be enabled.
+
+    Returns:
+        Previous RECOMP flag value.
+    """
+    global USAR_RECOMP_SYNTHESIS
+    anterior = USAR_RECOMP_SYNTHESIS
+    USAR_RECOMP_SYNTHESIS = bool(enabled)
+    return anterior
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

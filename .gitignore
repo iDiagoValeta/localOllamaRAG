@@ -153,6 +153,8 @@ historial_chat.json
 # 12. Evaluación y exportaciones puntuales
 # -----------------------------------------------------------------------------
 evaluation/chunks_*.txt
+rag/show_fragments/*.txt
+rag/show_fragments/*.jsonl
 
 # -----------------------------------------------------------------------------
 # 13. Otros (notas locales / asistente)

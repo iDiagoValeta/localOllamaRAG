@@ -138,6 +138,7 @@ All pipeline behaviour is controlled via environment variables. Set them in your
 | `OLLAMA_OCR_MODEL` | Vision model for describing images found in PDFs (`USAR_EMBEDDINGS_IMAGEN`) |
 | `DOCS_FOLDER` | Path to the folder containing PDFs to index (default: `rag/pdfs/`) |
 | `RERANKER_QUALITY` | Cross-encoder reranker tier: `quality` (BAAI/bge) or `speed` (MiniLM) |
+| `USAR_RECOMP_SYNTHESIS` | Enables/disables RECOMP context synthesis (`true`/`false`, default: `true`) |
 
 > **Note on ChromaDB paths**: the vector database path includes a slug derived from `OLLAMA_EMBED_MODEL`. If you change the embedding model, the existing index is no longer valid and you will need to re-index your documents.
 
@@ -190,6 +191,28 @@ Output layout is the same for every model:
 - `plots/train/` — training curves (`loss`, `learning_rate`, `grad_norm`) and CSV summaries from `log_history`
 - `plots/eval/` — per-metric CSV tables, markdown report tables, and comparison figures (`base` vs `adapted`)
 
+### Live RAGAS comparison with and without RECOMP
+
+If you want to reindex your current PDF corpus and compare the live RAG pipeline with RECOMP enabled vs disabled over the same dataset, use:
+
+```bash
+python evaluation/run_eval_recomp_comparison.py --dataset evaluation/datasets/dataset_eval_es.json --label mi_eval --verbose
+```
+
+Outputs are now organized as:
+- `evaluation/scores/` for final CSV files
+- `evaluation/debug/` for debug JSON files
+- `evaluation/debug/checkpoints/` for question-by-question resume checkpoints
+
+With the command above, the paired run stores:
+- `evaluation/scores/comparison_runs/mi_eval/recomp_on.csv`
+- `evaluation/scores/comparison_runs/mi_eval/recomp_off.csv`
+- `evaluation/debug/comparison_runs/mi_eval/recomp_on.json`
+- `evaluation/debug/comparison_runs/mi_eval/recomp_off.json`
+- `evaluation/debug/comparison_runs/mi_eval/comparison_summary.json`
+
+If the process stops mid-run, rerunning the same command with the same `--label` resumes from the last completed question. Use `--skip-reindex` to reuse an existing index.
+
 ---
 
 ## Repository structure
@@ -211,7 +234,12 @@ localOllamaRAG/
 │   ├── evaluation/               # Baseline benchmark and dataset inspection tools
 │   └── conversion/               # LoRA adapter merge and GGUF quantization
 ├── evaluation/
-│   └── run_eval.py               # RAGAS evaluation of the live pipeline
+│   ├── datasets/                 # JSON de preguntas (ES, CA, mix)
+│   ├── scores/                   # CSVs finales de evaluación
+│   ├── debug/                    # Debug JSON + checkpoints reanudables
+│   ├── run_eval.py               # RAGAS evaluation of the live pipeline
+│   ├── run_eval_recomp_comparison.py  # Comparativa RECOMP on/off con reanudación
+│   └── run_eval_ragbench.py      # Evaluación RAGBench
 ├── models/
 │   ├── merged-model/             # Dense HF weights after LoRA merge (gitignored; safe to delete after Q4 GGUF)
 │   └── gguf-output/              # GGUF + Modelfile per model (only small files tracked in Git)

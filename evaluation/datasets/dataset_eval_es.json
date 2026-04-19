@@ -1,0 +1,452 @@
+[
+    {
+      "id": "wiki_es_001",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Fallas_de_Valencia",
+      "context": "Habitualmente tienen carácter satírico sobre temas de actualidad. Las fallas suelen constar de una figura o composición central de varios metros de altura, las más grandes superan los 30 metros (la falla Na Jordana 2001, con 33 metros, fue la más alta y voluminosa de la historia) rodeadas de numerosas figuras de cartón, plastilina, piedra, poliuretano (material que en los últimos años está siendo sustituido por otros más modernos como el poliestireno expandido, más ligero y moldeable), sostenidas por una armazón de madera.",
+      "question": "¿Cuántos metros de altura alcanzó la falla Na Jordana en el año 2001?",
+      "ground_truth": "La falla Na Jordana del año 2001 alcanzó una altura de 33 metros. Con estas dimensiones excepcionales, logró destacarse como la falla más alta y voluminosa de toda la historia de las fiestas.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_002",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Fallas_de_Valencia",
+      "context": "Las Fallas de Valencia (Falles en valenciano) son unas fiestas que van del 1 al 19 de marzo con una tradición arraigada en la ciudad española de Valencia. Oficialmente empiezan el último domingo de febrero con el acto de la crida (en valenciano; 'pregón o llamada', en español). Actualmente, esta festividad se ha convertido en un atractivo turístico muy importante, ya que además de estar catalogadas como fiesta de Interés Turístico Internacional, en noviembre de 2016 la Unesco las inscribió en su Lista Representativa del Patrimonio Cultural Inmaterial de la Humanidad.",
+      "question": "¿Cómo se definen las Fallas de Valencia?",
+      "ground_truth": "Las Fallas de Valencia se definen como unas fiestas tradicionales fuertemente arraigadas en la ciudad española de Valencia, las cuales se celebran del 1 al 19 de marzo. Su inicio oficial tiene lugar el último domingo de febrero con el acto de la crida. Además de ser catalogadas como fiesta de Interés Turístico Internacional, en noviembre de 2016 la UNESCO las inscribió en su Lista Representativa del Patrimonio Cultural Inmaterial de la Humanidad.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_003",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Fallas_de_Valencia",
+      "context": "Las comisiones surgieron sin una normativa que las regulara. Pero según Almela i Vives, en toda Comisión fallera estaban incluidos: el dueño del cafetín situado más cerca del lugar donde se plantaba la falla (que se convertía en el lugar de reunión de los otros componentes de la comisión), el dueño de la carpintería de la zona (que actuaba como técnico), el zapatero de la comisión (quien aportaba sugerencias), y el dueño del ultramarinos y coloniales (que hacía las veces de tesorero).",
+      "question": "¿Cuáles son los cuatro integrantes que, según Almela i Vives, estaban incluidos en toda Comisión fallera?",
+      "ground_truth": "Según Almela i Vives, toda Comisión fallera incluía explícitamente cuatro integrantes: el dueño del cafetín más cercano que servía como punto de reunión, el dueño de la carpintería de la zona que actuaba como técnico, el zapatero de la comisión que aportaba sugerencias y el dueño del ultramarinos y coloniales que hacía las veces de tesorero.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_004",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Fallas_de_Valencia",
+      "context": "En 2024, a causa de un grave incendio sucedido el 22 de febrero en el barrio de Campanar (Valencia), se suspendieron los actos falleros previstos para los tres días siguientes, incluyendo la Crida, siguiendo los tres días de luto oficial declarados tanto por el Ayuntamiento de Valencia como por la Generalidad Valenciana que los actos suspendido se festejaron el domingo siguiente.",
+      "question": "¿Por qué se suspendieron los actos falleros previstos, incluyendo la Crida, a finales de febrero de 2024?",
+      "ground_truth": "Estos actos falleros se suspendieron a causa de un grave incendio ocurrido el 22 de febrero de 2024 en el barrio valenciano de Campanar. La decisión se tomó siguiendo los tres días de luto oficial que declararon el Ayuntamiento de Valencia y la Generalidad Valenciana.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_005",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Fallas_de_Valencia",
+      "context": "Como complemento a los letreros, algunas comisiones realizan el librito de la sátira, en el que se explica mediante versos satíricos el contenido de la falla. Este género se inició en el siglo XIX con el autor suecano Bernat i Baldoví, y experimentó su máximo auge en los años 50 y 60 del siglo XX, gracias a autores como Emilio Panach o José Bea Izquierdo.",
+      "question": "¿Qué autor suecano inició en el siglo XIX el género del librito de la sátira fallera?",
+      "ground_truth": "El género del librito de la sátira, el cual se utiliza para explicar el contenido de la falla mediante versos satíricos, fue iniciado en el siglo XIX por el autor suecano Bernat i Baldoví.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_006",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Fallas_de_Valencia",
+      "context": "La Crida, el pregón en castellano, se celebra el último domingo del mes de febrero y es el acto en el que la Fallera mayor de la ciudad, reúne en las puertas de la misma, las Torres de Serranos, a todas las comisiones falleras y realiza una llamada, a la iniciación de los festejos, a todos los valencianos y a todos los visitantes. En este acto el alcalde o alcaldesa de Valencia le entrega las llaves de la ciudad a la fallera mayor y dan por comenzadas las fallas.",
+      "question": "¿Qué entrega el alcalde o alcaldesa de Valencia a la Fallera mayor durante La Crida?",
+      "ground_truth": "Durante La Crida, el alcalde o alcaldesa de Valencia entrega las llaves de la ciudad a la Fallera mayor, marcando el inicio oficial de las Fallas. Este acto se celebra el último domingo de febrero en las Torres de Serranos, donde la Fallera mayor reúne a todas las comisiones falleras y realiza la llamada a la iniciación de los festejos.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_007",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Fallas_de_Valencia",
+      "context": "El más importante y espectacular de los castillos es el conocido como Noche del Fuego que se dispara la noche del 18 al 19 de marzo, y durante más de 20 minutos, miles de kilogramos de pólvora (2450 kg, año 2015) iluminan el cielo de Valencia, llegando a congregarse más de un millón de personas para presenciarlo.",
+      "question": "¿Cuántos kilogramos de pólvora se dispararon durante el castillo de fuegos artificiales de la Noche del Fuego en el año 2015?",
+      "ground_truth": "Durante el castillo de la Noche del Fuego del año 2015 se dispararon 2450 kilogramos de pólvora. Este espectacular evento iluminó el cielo de la ciudad durante más de 20 minutos y congregó a más de un millón de personas.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_008",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Fallas_de_Valencia",
+      "context": "Para observar la \"Ofrenda\" tal como ahora la conocemos, debemos remontarnos a mediados de siglo, se comenta que fue una Fallera Mayor de la Falla Periodista Azzati, la que decidió llevar un ramo a la virgen, el año siguiente la comisión decidió volver a hacerlo y en años posteriores unas pocas comisiones falleras, por voluntad propia, entraron a la Basílica para ofrecer flores a la imagen de la Patrona.",
+      "question": "¿Quién decidió llevar un ramo a la virgen a mediados de siglo, originando la actual Ofrenda?",
+      "ground_truth": "Se comenta que la decisión de llevar por primera vez un ramo a la virgen fue tomada por una Fallera Mayor de la Falla Periodista Azzati. Esta iniciativa sentó el precedente para que al año siguiente su comisión y, posteriormente, otras agrupaciones falleras repitieran la acción de forma voluntaria.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_009",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Fallas_de_Valencia",
+      "context": "Un día cualquiera de principio de los años 70, cuatro personas quedaron a comer en el casino Monte Picayo. Sus nombres: D. Eugenio Gares Cardona (oficial de administración de justicia) D. Vicente Muñoz Quiles (locutor radiofónico) D. José Carrilero Brunet (Departamento mercadería de G.T.E Sylvania) D. Francisco Castro Sancha (delegado zona levante de G.T.E Sylvania). Lo que empezó siendo un encuentro informal, terminó siendo el comienzo de los actualmente conocidos como \"premios a las fallas mejor iluminadas\".",
+      "question": "¿Cuáles son las cuatro personas que se reunieron a principios de los años 70 y originaron los premios a las fallas mejor iluminadas?",
+      "ground_truth": "Las cuatro personas que originaron los premios a las fallas mejor iluminadas fueron D. Eugenio Gares Cardona, D. Vicente Muñoz Quiles, D. José Carrilero Brunet y D. Francisco Castro Sancha. Lo que comenzó como un encuentro informal entre ellos en el casino Monte Picayo sentó las bases de estos reconocidos galardones.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_010",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Fallas_de_Valencia",
+      "context": "La primera vez que se tiene referencia de que los monumentos falleros no se plantaron fue en 1886, cuando los falleros (de forma individualizada) se negaron a pagar la tasa de 60 pesetas que se cobraba como canon desde 1851 por plantar los catafalcos en las calles. Al principio se abonaban 5 pesetas, pero a los gobernantes no les gustó nada que se metieran con ellos en unas fiestas muy populares.",
+      "question": "¿Por qué no se plantaron los monumentos falleros en el año 1886?",
+      "ground_truth": "Los monumentos falleros no se plantaron en 1886 porque los falleros se negaron a pagar la tasa de 60 pesetas que se exigía como canon. Este impuesto se cobraba desde 1851 por permitir plantar los catafalcos en las calles.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_011",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Rodrigo_D%C3%ADaz_de_Vivar",
+      "context": "Ese mismo año, Rodrigo envió a su único hijo varón, Diego Rodríguez, a luchar junto a Alfonso VI contra los almorávides; las tropas de Alfonso VI fueron derrotadas y Diego perdió la vida en la Batalla de Consuegra. A fines de 1097 tomó Almenara, cerrando así las rutas del norte de Valencia y en 1098 conquistó definitivamente la imponente ciudad fortificada de Sagunto, con lo que consolidaba su dominio sobre la que había sido anteriormente taifa de Balansiya.",
+      "question": "¿En qué año conquistó el Cid definitivamente la imponente ciudad fortificada de Sagunto?",
+      "ground_truth": "El Cid conquistó definitivamente la imponente ciudad fortificada de Sagunto en el año 1098. Con esta decisiva victoria militar, logró consolidar su dominio sobre lo que anteriormente había sido la taifa de Balansiya.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_012",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Rodrigo_D%C3%ADaz_de_Vivar",
+      "context": "Tras el verano de 1092, con el Cid aún en Zaragoza, el cadí Ibn Ŷaḥḥāf, llamado por los cristianos Abeniaf, con el apoyo de la facción almorávide, promovió el 28 de octubre de 1092 la ejecución de al-Qadir, tributario y bajo la protección de Rodrigo, y se hizo con el poder en Valencia.",
+      "question": "¿Quién promovió la ejecución de al-Qadir el 28 de octubre de 1092 y se hizo con el poder en la ciudad de Valencia?",
+      "ground_truth": "La ejecución de al-Qadir fue promovida por el cadí Ibn Ŷaḥḥāf, a quien los cristianos llamaban Abeniaf. Apoyado por la facción almorávide, fue él quien logró hacerse con el poder de la ciudad de Valencia en esa fecha.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_013",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Rodrigo_D%C3%ADaz_de_Vivar",
+      "context": "Rodrigo Díaz de Vivar (¿Vivar?, c. 1048 - Valencia, 1099), también conocido como el Cid Campeador, fue un líder militar que llegó a dominar al frente de su propia mesnada el Levante de la península ibérica a finales del siglo XI como señorío, de forma autónoma respecto de la autoridad de rey alguno. Consiguió conquistar Valencia y estableció en esta ciudad un señorío independiente desde el 18 de junio de 1094 hasta su muerte; su esposa, Jimena Díaz, lo heredó y mantuvo hasta 1102, cuando pasó de nuevo a dominio musulmán.",
+      "question": "¿Cómo se define a Rodrigo Díaz de Vivar, también conocido como el Cid Campeador?",
+      "ground_truth": "Rodrigo Díaz de Vivar se define como un líder militar que llegó a dominar de forma autónoma el Levante de la península ibérica a finales del siglo XI. Al frente de su propia mesnada, consiguió conquistar Valencia y establecer un señorío independiente hasta su muerte.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_014",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Rodrigo_D%C3%ADaz_de_Vivar",
+      "context": "La amenaza almorávide fue la causa que definitivamente llevó al Cid a dar un paso más en sus ambiciones en Levante y, superando la idea de crear un protectorado sobre las distintas fortalezas de la región, sostenido con el cobro de las parias de las taifas vecinas (Tortosa, Alpuente, Albarracín, y otras ciudades fortificadas levantinas) decidió conquistar la ciudad de Valencia para establecer un señorío hereditario, estatus extraordinario para un señor de la guerra independiente en cuanto que no estaba sometido a ningún rey cristiano.",
+      "question": "¿Por qué decidió el Cid conquistar la ciudad de Valencia para establecer un señorío hereditario?",
+      "ground_truth": "El Cid decidió conquistar la ciudad de Valencia debido a la amenaza almorávide. Esta constante presión militar fue la causa que le impulsó a ir más allá de su idea inicial de mantener un simple protectorado basado en el cobro de parias a las taifas vecinas.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_015",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Rodrigo_D%C3%ADaz_de_Vivar",
+      "context": "Entre otros aspectos legendarios que se desarrollaron a la muerte del Cid en torno al monasterio de San Pedro de Cardeña, algunos de los cuales se reflejan en el epitafio épico que ornaba su tumba, pudieron estar el utilizar a dos espadas con nombres propios: la llamada Colada y la Tizona, que según la leyenda perteneció a un rey de Marruecos y estaba hecha en Córdoba. Ya desde el Cantar de mio Cid (solo cien años desde su muerte) esta tradición ha propagado los nombres de sus espadas, de su caballo Babieca y de su lugar de nacimiento, Vivar",
+      "question": "¿Cómo se llama el caballo del Cid según la tradición propagada por el Cantar de mio Cid?",
+      "ground_truth": "Según la tradición propagada por el Cantar de mio Cid, el caballo del héroe se llama Babieca. Este dato forma parte de los numerosos aspectos legendarios que se popularizaron en torno a su figura tras su muerte.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_016",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Rodrigo_D%C3%ADaz_de_Vivar",
+      "context": "Las relaciones entre Alfonso y Rodrigo Díaz fueron en esta época excelentes; aunque con el nuevo rey no desempeñó cargos de relevancia, como pudiera ser el de conde de Nájera que ostentó García Ordóñez, lo nombró juez o procurador en varios pleitos y le proporcionó un honroso matrimonio con Jimena Díaz (entre julio de 1074 y el 12 de mayo de 1076), noble bisnieta de Alfonso V de León, con quien tuvo tres hijos: Diego, María (casada con el conde de Barcelona Ramón Berenguer III) y Cristina (quien contrajo matrimonio con el infante Ramiro Sánchez de Pamplona).",
+      "question": "¿Cuáles son los tres hijos que tuvo Rodrigo Díaz de Vivar fruto de su matrimonio con Jimena Díaz?",
+      "ground_truth": "Fruto de su honroso matrimonio con Jimena Díaz, noble bisnieta de Alfonso V de León, Rodrigo Díaz de Vivar tuvo tres hijos. Sus nombres fueron Diego, María y Cristina.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_017",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Rodrigo_D%C3%ADaz_de_Vivar",
+      "context": "El estrecho cerco se había prolongado por casi un año entero, tras el cual Valencia capituló el 17 de junio de 1094. El Cid tomó posesión de la ciudad titulándose «príncipe Rodrigo el Campeador» y quizá de este periodo date el tratamiento de que derivaría en «Cid».",
+      "question": "¿En qué fecha exacta capituló la ciudad de Valencia tras casi un año de estrecho cerco?",
+      "ground_truth": "La ciudad de Valencia capituló el 17 de junio de 1094. Tras esta victoria que puso fin a casi un año entero de asedio, el Cid tomó posesión de la urbe titulándose «príncipe Rodrigo el Campeador».",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_018",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Rodrigo_D%C3%ADaz_de_Vivar",
+      "context": "Rodrigo Díaz fue inhumado en la catedral de Valencia, por lo que no fue voluntad del Campeador ser enterrado en el monasterio de San Pedro de Cardeña, a donde fueron llevados sus restos tras el desalojo e incendio cristiano de la capital levantina en 1102. En 1808, durante la Guerra de la Independencia, los soldados franceses profanaron su tumba, pero al año siguiente el general Paul Thiébault ordenó depositar sus restos en un mausoleo en el paseo del Espolón, a orillas del río Arlanzón;",
+      "question": "¿Quién ordenó depositar los restos de Rodrigo Díaz en un mausoleo en el paseo del Espolón al año siguiente de la profanación de su tumba?",
+      "ground_truth": "El general Paul Thiébault fue quien ordenó depositar los restos del Cid en un mausoleo en el paseo del Espolón, a orillas del río Arlanzón. Esta decisión la tomó un año después de que los soldados franceses profanaran su tumba durante la Guerra de la Independencia en 1808.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_019",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Rodrigo_D%C3%ADaz_de_Vivar",
+      "context": "Los desencuentros con Alfonso fueron causados por un exceso (aunque no era raro en la época) de Rodrigo Díaz tras repeler una incursión de tropas andalusíes en Soria en 1080, que le llevó, en su persecución, a adentrarse en el reino de taifa toledano y saquear su zona oriental, que estaba bajo el amparo del rey Alfonso VI. Sin descartar del todo la posible influencia de cortesanos opuestos a Rodrigo Díaz en la decisión, la incursión del castellano contra el territorio de al-Qadir, el régulo títere de Toledo protegido de Alfonso, le causó el destierro y la ruptura de la relación de vasallaje.",
+      "question": "¿Por qué sufrió Rodrigo Díaz el destierro y la ruptura de su relación de vasallaje con el rey Alfonso VI?",
+      "ground_truth": "El destierro y la ruptura de la relación de vasallaje fueron causados por una incursión militar de Rodrigo Díaz contra el territorio de al-Qadir, el régulo de la taifa de Toledo. Al perseguir a unas tropas andalusíes, el Cid se adentró y saqueó la zona oriental de dicho reino, el cual se encontraba bajo la protección del rey Alfonso VI.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_020",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Rodrigo_D%C3%ADaz_de_Vivar",
+      "context": "También en 1098 consagró la nueva catedral de Santa María, reformando la que había sido mezquita aljama. Había situado a Jerónimo de Perigord al frente de la nueva sede episcopal en detrimento del antiguo metropolitano mozárabe o sayyid almaṭran, debido a la desafección que se había producido entre el Campeador y la comunidad mozárabe durante el sitio de Valencia de septiembre y octubre de 1094.",
+      "question": "¿Cómo se llama la persona a la que el Cid situó al frente de la nueva sede episcopal de la catedral de Santa María en 1098?",
+      "ground_truth": "La persona a la que el Cid situó al frente de la nueva sede episcopal de la catedral de Santa María fue Jerónimo de Perigord. Ocupó este cargo eclesiástico en detrimento del antiguo metropolitano mozárabe tras el asedio de la ciudad de Valencia.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_021",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Parque_natural_de_la_Albufera",
+      "context": "El 12 de mayo de 1865, el lago y la Dehesa pasaron a ser propiedad del Estado, terminando con más de seis siglos de propiedad real. En 1911, tanto el lago como su Dehesa, pasan a ser propiedad de la ciudad de Valencia, para que todos los valencianos fueran propietarios de este espacio natural de gran valor ecológico, ambiental y paisajístico, aunque la adquisición definitiva no se realizó hasta 1927, por un precio de 1 062 980'40 pesetas.",
+      "question": "¿En qué año pasaron el lago y la Dehesa a ser propiedad de la ciudad de Valencia?",
+      "ground_truth": "Tanto el lago como su Dehesa pasaron a ser propiedad de la ciudad de Valencia en el año 1911. Este traspaso se llevó a cabo para que todos los valencianos fueran dueños de este espacio natural, aunque la adquisición definitiva no se completó hasta 1927.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_022",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Parque_natural_de_la_Albufera",
+      "context": "El Parque Natural de la Albufera (en valenciano Parc Natural de l'Albufera) o simplemente La Albufera (del árabe البحيرة al-Buḥayra, «el lago») es un espacio natural protegido español situado en la provincia de Valencia, Comunidad Valenciana. Fue también conocido por los romanos como Nacarum Stagnum y en algunos poemas árabes se le denomina Espejo del sol.",
+      "question": "¿Cómo se define el Parque Natural de la Albufera?",
+      "ground_truth": "El Parque Natural de la Albufera se define como un espacio natural protegido español que se encuentra situado en la provincia de Valencia, dentro de la Comunidad Valenciana.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_023",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Parque_natural_de_la_Albufera",
+      "context": "En origen, la Albufera se comunicaba con el mar por una o varias amplias bocas (golas en valenciano) que unas veces desaguarían las aguas continentales del lago, y otras darían paso a las aguas salobres del mar. Actualmente, la Albufera está conectada con el mar a través de tres canales: la gola de Puchol, la gola del Perellonet y la gola del Perelló.",
+      "question": "¿Cuáles son los tres canales a través de los cuales la Albufera se encuentra conectada actualmente con el mar?",
+      "ground_truth": "Actualmente, la Albufera se encuentra conectada con el mar a través de tres canales específicos: la gola de Puchol, la gola del Perellonet y la gola del Perelló.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_024",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Parque_natural_de_la_Albufera",
+      "context": "La agricultura de la Albufera es fundamentalmente el arroz. La Albufera ha evolucionado juntamente a este cultivo ya desde tiempos incluso anteriores a Jaime I (ya que el arroz fue introducido por los árabes). En la Albufera, el cultivo del arroz ha sido prohibido y autorizado varias veces desde el siglo XV, ya que la necesidad de grandes áreas con aguas estancadas suponía un peligroso foco de infección para la población.",
+      "question": "¿Por qué ha sido prohibido y autorizado varias veces el cultivo del arroz en la Albufera desde el siglo XV?",
+      "ground_truth": "El cultivo del arroz ha sido prohibido y autorizado varias veces porque la necesidad de mantener grandes áreas con aguas estancadas suponía un peligroso foco de infección para la población.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_025",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Parque_natural_de_la_Albufera",
+      "context": "En 1902, el escritor valenciano Vicente Blasco Ibáñez escribió la novela Cañas y barro, ambientada en la Albufera de principios de siglo XX. La albufera de Valencia es una laguna costera somera (profundidad media de 1 m) situada en la costa mediterránea al sur de la ciudad de Valencia. Ocupa una superficie de 23,94 km² y está rodeada de 223 km² de arrozales.",
+      "question": "¿Cómo se llama la novela ambientada en la Albufera que escribió el autor valenciano Vicente Blasco Ibáñez en el año 1902?",
+      "ground_truth": "La novela escrita por Vicente Blasco Ibáñez en el año 1902 se llama Cañas y barro. Esta conocida obra del escritor valenciano se encuentra ambientada en el entorno de la Albufera de principios del siglo XX.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_026",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Parque_natural_de_la_Albufera",
+      "context": "Este paraje de 21 120 ha, que fue declarado parque natural por la Generalidad Valenciana el 8 de julio de 1986, se encuentra situado a unos 10 km al sur de la ciudad de Valencia. Comprende la albufera, su entorno húmedo y el cordón litoral o restinga adyacente a ambos.",
+      "question": "¿En qué fecha exacta fue declarada la Albufera como parque natural por la Generalidad Valenciana?",
+      "ground_truth": "La Albufera fue declarada parque natural por la Generalidad Valenciana el 8 de julio de 1986. Este paraje protegido cuenta con una extensión de 21 120 hectáreas y se encuentra situado a unos 10 km al sur de la ciudad de Valencia.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_027",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Parque_natural_de_la_Albufera",
+      "context": "Al llegar el siglo XIX, se encontró una prueba de las condiciones que mantenía la Albufera y la impresión que causó en los invasores franceses; José Bonaparte, a petición propia, le concedió al Mariscal Suchet el título de Duque de la Albufera. Suchet fue el señor del lago y su entorno hasta 1818, cuando el rey Fernando VII recuperó el trono.",
+      "question": "¿Quién concedió al Mariscal Suchet el título de Duque de la Albufera durante el siglo XIX?",
+      "ground_truth": "José Bonaparte fue quien concedió al Mariscal Suchet el título de Duque de la Albufera a petición propia. El mariscal se convirtió en el señor del lago y su entorno hasta el año 1818, cuando el rey Fernando VII recuperó el trono.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_028",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Parque_natural_de_la_Albufera",
+      "context": "El conjunto de municipios que comprenden el territorio del parque natural de la Albufera se divide en cuatro comarcas, la Ribera Alta, la Ribera Baja, la Huerta Sur y la Ciudad de Valencia, y a su vez, muchos de estos municipios cuentan con pedanías dentro del ámbito territorial del parque natural. Son 13 los términos municipales comprendidos en el parque.",
+      "question": "¿Cuáles son las cuatro comarcas en las que se divide el conjunto de municipios que comprenden el territorio del parque natural de la Albufera?",
+      "ground_truth": "El conjunto de municipios que conforman el territorio del parque natural de la Albufera se divide en cuatro comarcas concretas. Estas son la Ribera Alta, la Ribera Baja, la Huerta Sur y la Ciudad de Valencia.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_029",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Parque_natural_de_la_Albufera",
+      "context": "La separación definitiva entre la Albufera y el mar se dio durante la época romana. Entonces la superficie del lago era mucho mayor (en torno a 30.000 ha) pero con el paso de los años y debido al interés en obtener nuevas zonas de cultivo (especialmente de arroz) sumado al efecto de la colmatación (consistente en una acumulación progresiva de sedimentos) se ha ido disminuyendo de tamaño hasta las 2800 ha actuales.",
+      "question": "¿Por qué la superficie del lago de la Albufera ha ido disminuyendo de tamaño desde la época romana hasta la actualidad?",
+      "ground_truth": "La superficie del lago ha ido disminuyendo de tamaño debido al interés en obtener nuevas zonas de cultivo, especialmente de arroz. A esta acción se le ha sumado el efecto natural de la colmatación, que consiste en la acumulación progresiva de sedimentos en la laguna.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_030",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Parque_natural_de_la_Albufera",
+      "context": "Desde la época romana y musulmana, la zona cuenta con una importante red de acequias y canales para el riego. Una de las más importantes es la Acequia Real del Júcar, la cual es el canal de riego que proporciona el agua a la mayor parte de las huertas y los arrozales situados en el entorno de la Albufera; su caudal medio en los periodos de riego es de 15 m³/s.",
+      "question": "¿Cómo se llama el canal de riego que proporciona el agua a la mayor parte de las huertas y los arrozales situados en el entorno de la Albufera?",
+      "ground_truth": "El canal de riego que proporciona el agua a la mayor parte de las huertas y los arrozales del entorno de la Albufera se llama Acequia Real del Júcar. Esta destacada infraestructura forma parte de la importante red de acequias de la zona desde la época romana y musulmana.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_031",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Horchata_de_chufa",
+      "context": "La primera receta de horchata que se conoce con ese nombre era de almendras, pepitas de melón y piñones, y data de 1748. Aparece en el dietario de Ignacio Gilabert Soler, ciudadano de Valencia. La primera mención de horchata de chufa (más económica y popular que la almendra) data de 1762, en el tratado \"Flora española o Historia de las plantas que se crían en España\" de D. Joseph Quer.",
+      "question": "¿En qué año data la primera mención conocida de la horchata de chufa?",
+      "ground_truth": "La primera mención conocida de la horchata de chufa data del año 1762. Esta referencia histórica aparece registrada en el tratado titulado \"Flora española o Historia de las plantas que se crían en España\", obra de D. Joseph Quer.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_032",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Horchata_de_chufa",
+      "context": "La horchata de chufa (orxata de xufa en valenciano, del latín hordeāta, de cebada) es una bebida refrescante (consumida también como postre), originaria de Alboraya (Valencia, Comunidad Valenciana, España) preparada con agua, azúcar y chufas mojadas (o molidas), además de ingredientes que potencian su sabor, como la canela y la piel o cáscara de un limón.",
+      "question": "¿Cómo se define la horchata de chufa?",
+      "ground_truth": "La horchata de chufa se define como una bebida refrescante, consumida también como postre, que es originaria de la localidad de Alboraya. Se prepara mezclando agua, azúcar y chufas mojadas o molidas, junto con otros ingredientes que potencian su sabor como la canela y la cáscara de limón.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_033",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Horchata_de_chufa",
+      "context": "És rica en minerals, com el fòsfor, el calci, el magnesi i el ferro, i en vitamines, entre les quals destaquen les vitamines C i E. También aporta numerosas enzimas que facilitan la digestión. Su valor energético (100 kcal/100 g) la convierte en una buena bebida energética. Contiene poco sodio. No contiene lactosa, caseína ni gluten aunque algunas marcas comerciales le añaden proteína de leche.",
+      "question": "¿Cuáles son los cuatro minerales en los que es rica la horchata de chufa?",
+      "ground_truth": "La horchata de chufa es rica en cuatro minerales específicos. Estos minerales son el fósforo, el calcio, el magnesio y el hierro.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_034",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Horchata_de_chufa",
+      "context": "Según la RAE el vocablo habría llegado al español a través del mozárabe, lo que explicaría la transformación consonántica a ch y el mantenimiento de la t, en lugar de la evolución natural que habría devenido en orzad, semejante al italiano, orzata.",
+      "question": "¿Por qué la palabra horchata experimentó una transformación consonántica a «ch» y mantuvo la letra «t» en el idioma español?",
+      "ground_truth": "La palabra horchata experimentó esta transformación consonántica y el mantenimiento de la «t» porque el vocablo habría llegado al español a través del mozárabe. Esta influencia lingüística fue la causa de que no siguiera su evolución natural, la cual habría devenido en «orzad».",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_035",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Horchata_de_chufa",
+      "context": "La horchata mejora la hipertensión, las diarreas moderadas y resulta muy conveniente para dietas libres de colesterol y ácido úrico. Por otro lado, cabe la posibilidad de añadir calcio, denominándose leche de chufa, para así sustituir a la leche de vaca, siendo más adecuada para este fin que la leche de soja, al ser menos energética que ésta.",
+      "question": "¿Cómo se denomina a la horchata cuando se le añade calcio con el fin de sustituir a la leche de vaca?",
+      "ground_truth": "Cuando se le añade calcio para sustituir a la leche de vaca, la bebida se denomina leche de chufa. Esta variante resulta más adecuada para dicho propósito que la leche de soja al ser menos energética.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_036",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Horchata_de_chufa",
+      "context": "En Italia meridional y Malta, la orzata se aromatiza con esencia de almendra amarga. En Francia, a base de cebada (fr. orge) se la llama orgeat. También existen la horchata de arroz o de avena en México. En Cuba, Venezuela y Puerto Rico es elaborada a base de arroz. En El Salvador se elabora una bebida de sabor semejante al regaliz igualmente llamada horchata, que se obtiene del árbol del morro (Crescentia alata). En Ecuador, la horchata se refiere a una infusión de color rojizo que contiene hasta 71 especies de hierbas.",
+      "question": "¿Cuántas especies de hierbas puede llegar a contener la infusión de color rojizo a la que se refiere la horchata en Ecuador?",
+      "ground_truth": "En Ecuador, la infusión de color rojizo conocida como horchata puede llegar a contener hasta 71 especies de hierbas diferentes.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_037",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Horchata_de_chufa",
+      "context": "La horchata se elabora a partir de la chufa, tubérculo de la planta con el mismo nombre (Cyperus esculentus). Al parecer, esta ya era usada en el antiguo Egipto, habiéndose hallado vasos que contienen chufas como parte del ajuar funerario de los faraones. Asimismo, autores persas y árabes de la antigüedad mencionan los beneficios digestivos y desinfectantes de la chufa, usada entonces como bebida medicinal por considerársela energética y diurética.",
+      "question": "¿Qué autores de la antigüedad mencionan los beneficios digestivos y desinfectantes de la chufa?",
+      "ground_truth": "Los autores persas y árabes de la antigüedad son quienes mencionan los beneficios digestivos y desinfectantes de la chufa. En esa época, este tubérculo era utilizado como una bebida medicinal al considerársele un producto energético y diurético.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_038",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Horchata_de_chufa",
+      "context": "En la actualidad se comercializa una variante de horchata sin azúcar. La chufa está considerada como un superalimento, si no tiene azúcar, debido a sus propiedades nutricionales. Es rica en minerales, grasas insaturadas y proteínas.",
+      "question": "¿Cuáles son los tres componentes nutricionales en los que es rica la chufa y por los que se la considera un superalimento si no tiene azúcar?",
+      "ground_truth": "La chufa es considerada un superalimento cuando se consume sin azúcar debido a que es rica en tres componentes nutricionales específicos: minerales, grasas insaturadas y proteínas.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_039",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Horchata_de_chufa",
+      "context": "La horchata de chufa es rica en minerales y vitaminas, entre los que destacan el fósforo, el potasio y las vitaminas C y E. El cultivo de la chufa requiere tierra arenosa y temperaturas suaves, condiciones que se hallan de manera especial en la huerta de Valencia por su clima.",
+      "question": "¿Por qué las condiciones idóneas para el cultivo de la chufa se hallan de manera especial en la huerta de Valencia?",
+      "ground_truth": "Las condiciones para el cultivo de la chufa se hallan de manera especial en la huerta de Valencia debido a su clima. Este entorno geográfico proporciona específicamente la tierra arenosa y las temperaturas suaves que requiere dicho tubérculo.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_040",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Horchata_de_chufa",
+      "context": "La horchata de chufa es una bebida refrescante originaria de Alboraya preparada con agua, azúcar y chufas mojadas. Las chufas son unos pequeños tubérculos con forma de nudos que proceden de las raíces de la juncia avellanada (Cyperus esculentus), que se llama así por la forma de su fruto, parecido a la avellana.",
+      "question": "¿Cómo se llama la planta de cuyas raíces proceden los pequeños tubérculos conocidos como chufas?",
+      "ground_truth": "La planta de cuyas raíces proceden las chufas se llama juncia avellanada o Cyperus esculentus. Recibe esta denominación específica debido a que la forma de su fruto es muy parecida a la de una avellana.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_041",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Ciudad_de_las_Artes_y_las_Ciencias",
+      "context": "En abril de 1998 abrió sus puertas al público L'Hemisfèric. Once meses después, a las puertas de unas elecciones, el presidente Eduardo Zaplana inauguró el Museo de las Ciencias Príncipe Felipe, aunque las obras no estaban terminadas. El museo se abrió al público veinte meses después. El 14 de febrero de 2003, se abrió L'Oceanogràfic, el mayor acuario construido en Europa.",
+      "question": "¿En qué fecha exacta se abrió al público L'Oceanogràfic?",
+      "ground_truth": "L'Oceanogràfic abrió sus puertas al público el 14 de febrero de 2003. En el momento de su apertura, este recinto se consolidó como el mayor acuario construido en Europa.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_042",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Ciudad_de_las_Artes_y_las_Ciencias",
+      "context": "La Ciudad de las Artes y las Ciencias (en valenciano y oficialmente Ciutat de les Arts i les Ciències) es un complejo arquitectónico, cultural y de entretenimiento de la ciudad de Valencia, capital de la Comunidad Valenciana, España. El complejo, de estilo neofuturista, fue diseñado por Santiago Calatrava y Félix Candela.",
+      "question": "¿Cómo se define la Ciudad de las Artes y las Ciencias?",
+      "ground_truth": "La Ciudad de las Artes y las Ciencias se define como un complejo arquitectónico, cultural y de entretenimiento situado en la ciudad de Valencia. Este destacado complejo de estilo neofuturista fue diseñado por Santiago Calatrava y Félix Candela.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_043",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Ciudad_de_las_Artes_y_las_Ciencias",
+      "context": "Palacio de las Artes Reina Sofía. Con cuatro grandes salas: una sala principal, aula magistral, anfiteatro y teatro de cámara. Sala de exposiciones. Está dedicado a la música y a las artes escénicas. Está cubierto por una pluma metálica.",
+      "question": "¿Cuáles son las cuatro grandes salas con las que cuenta el Palacio de las Artes Reina Sofía?",
+      "ground_truth": "El Palacio de las Artes Reina Sofía cuenta con cuatro grandes salas destinadas a la música y artes escénicas. Estas son una sala principal, un aula magistral, un anfiteatro y un teatro de cámara.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_044",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Ciudad_de_las_Artes_y_las_Ciencias",
+      "context": "La Ciudad de las Artes y las Ciencias está situada al final del viejo cauce del río Turia (jardín del Turia), cauce que se convirtió en jardín en los años 1980, tras el desvío del río por la gran riada de Valencia en 1957. En 2007, fue uno de los ganadores del concurso 12 Tesoros de España.",
+      "question": "¿Por qué motivo se llevó a cabo el desvío del río Turia, cuyo viejo cauce acabaría convirtiéndose en un jardín en los años 1980?",
+      "ground_truth": "El desvío del río Turia se llevó a cabo a causa de la gran riada de Valencia ocurrida en el año 1957. Tras este suceso y el consiguiente desvío, el viejo cauce acabó convirtiéndose en un jardín durante la década de 1980.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_045",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Ciudad_de_las_Artes_y_las_Ciencias",
+      "context": "Ten Ros elaboró un primer anteproyecto, titulado \"Vilanova, Una Ciudad de las Ciencias para Valencia\", que fue presentado oficialmente a la Generalidad en mayo de 1989. Tras él, se le encargó formalmente, en 1990, la dirección de la redacción de un anteproyecto general, por importe de 92 650 000 pesetas (556 000 euros), a gestionar por la Universidad de Valencia.",
+      "question": "¿Cómo se tituló el primer anteproyecto elaborado por Ten Ros que fue presentado oficialmente a la Generalidad en mayo de 1989?",
+      "ground_truth": "El primer anteproyecto elaborado por Ten Ros se tituló «Vilanova, Una Ciudad de las Ciencias para Valencia». Este documento inicial fue presentado oficialmente a la Generalidad en mayo del año 1989.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_046",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Ciudad_de_las_Artes_y_las_Ciencias",
+      "context": "Se trataba de una torre de telecomunicaciones de 382 metros de altura cuya construcción fue adjudicada en febrero de 1995, con un presupuesto de 14 026 millones de pesetas (84,3 millones de euros). Considerada el principal elemento de la Ciudad de las Ciencias, su construcción fue cancelada en 1996.",
+      "question": "¿En qué año fue cancelada la construcción de la proyectada torre de telecomunicaciones de 382 metros de altura de la Ciudad de las Ciencias?",
+      "ground_truth": "La construcción de la torre de telecomunicaciones fue cancelada en el año 1996. Previamente, en febrero de 1995, la obra había sido adjudicada con un presupuesto de 14 026 millones de pesetas, pero el proyecto finalmente no se llevó a cabo.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_047",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Ciudad_de_las_Artes_y_las_Ciencias",
+      "context": "En 1989 el entonces presidente de la Generalidad Valenciana, Joan Lerma, tras una visita a la Cité des sciences et de l'industrie, de París, y a través del entonces director general de planificación y estudios de la Presidencia de la Generalidad Valenciana, José María Bernabé, encargó oficialmente al científico Antonio Ten Ros, la redacción de una primera propuesta de una Ciudad de la Ciencia y la Tecnología para Valencia.",
+      "question": "¿Quién encargó oficialmente al científico Antonio Ten Ros la redacción de una primera propuesta de una Ciudad de la Ciencia y la Tecnología para Valencia en 1989?",
+      "ground_truth": "El encargo oficial fue realizado en 1989 por Joan Lerma, el entonces presidente de la Generalidad Valenciana. Lo hizo a través de José María Bernabé, director general de planificación y estudios de la Presidencia, tras realizar una visita a la Cité des sciences et de l'industrie de París.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_048",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Ciudad_de_las_Artes_y_las_Ciencias",
+      "context": "Formaban parte de un proyecto que en un principio (año 2004) consistía en la construcción de cuatro rascacielos 280, 260, 240 y 220 metros de altura. Posteriormente, el proyecto se redujo a tres rascacielos de 308 m, 266 m y 220 m, denominados Valencia, Castellón y Alicante. El coste de construcción de los edificios se cifró en 450 millones, cantidad que frenó la iniciativa.",
+      "question": "¿Cuáles son los nombres con los que fueron denominados los tres rascacielos a los que se redujo posteriormente el proyecto?",
+      "ground_truth": "El proyecto se redujo posteriormente a la construcción de tres rascacielos. Estos tres edificios fueron denominados como Valencia, Castellón y Alicante.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_049",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Ciudad_de_las_Artes_y_las_Ciencias",
+      "context": "A finales de aquel año, dio luz verde a la constitución de VACICO S.A., empresa pública administradora del proyecto en su conjunto. Discrepancias en la concepción y funcionalidad de los espacios expositivos llevaron al Dr. Ten Ros a apartarse del proyecto en mayo de 1993. Las obras se iniciaron a finales de 1994.",
+      "question": "¿Por qué el Dr. Ten Ros decidió apartarse del proyecto de la Ciudad de las Ciencias en mayo de 1993?",
+      "ground_truth": "El Dr. Ten Ros se apartó del proyecto en mayo de 1993 debido a las discrepancias surgidas en la concepción y la funcionalidad de los espacios expositivos.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_es_050",
+      "language": "es",
+      "source_url": "https://es.wikipedia.org/wiki/Ciudad_de_las_Artes_y_las_Ciencias",
+      "context": "Tras cuatro meses de agria polémica el gobierno autonómico decidió retomar el proyecto de Santiago Calatrava, aunque no de la torre de comunicaciones, donde situaría un gran surtidor de agua bautizado como \"el chorrito\" por algunos medios de comunicación. Finalmente tras la polémica fue cancelado.",
+      "question": "¿Cómo fue bautizado por algunos medios de comunicación el gran surtidor de agua que el gobierno autonómico planeaba situar en lugar de la torre de comunicaciones?",
+      "ground_truth": "El gran surtidor de agua que se planeaba situar en lugar de la torre de comunicaciones fue bautizado por algunos medios de comunicación como \"el chorrito\". Finalmente, este proyecto no se llevó a cabo y fue cancelado tras la polémica.",
+      "source_type": "wikipedia"
+    }
+]

@@ -78,7 +78,8 @@ localOllamaRAG/
 ├── generate_diagram.py           # Diagrama de arquitectura vía Kroki.io
 ├── rag/
 │   ├── chat_pdfs.py              # Motor RAG principal: indexación, recuperación, generación
-│   ├── export_fragments.py       # Exporta chunks de ChromaDB a TXT/JSONL para debug
+│   ├── show_fragments/
+│   │   └── export_fragments.py   # Exporta chunks de ChromaDB a TXT/JSONL para debug
 │   ├── requirements.txt
 │   ├── debug_context_issues.md   # Análisis de issues en presentación del contexto
 │   ├── debug_rag/                # Dumps de debug de queries (runtime, gitignored)
@@ -125,7 +126,11 @@ localOllamaRAG/
 │       ├── debug_aux_subqueries.py     # Salida cruda del auxiliar (sub-queries) en terminal
 │       └── test_image_rag.py     # Tests de pipeline con imágenes en RAG
 ├── evaluation/
-│   ├── run_eval.py               # Evaluación RAGAS del pipeline RAG en vivo
+│   ├── datasets/                 # JSON de evaluación RAG (ES, CA, mix)
+│   ├── scores/                   # CSVs finales de evaluación
+│   ├── debug/                    # Debug JSON + checkpoints reanudables de evaluaciones
+│   ├── run_eval.py               # Evaluación RAGAS del pipeline RAG en vivo (reanuda pregunta a pregunta)
+│   ├── run_eval_recomp_comparison.py # Comparativa RECOMP on/off reutilizando run_eval.py
 │   ├── run_eval_ragbench.py      # Evaluación RAGAS sobre PDFs de RAGBench (Vectara)
 │   └── requirements.txt          # ragas, langchain-google-genai, pandas…
 ├── training-output/
@@ -328,12 +333,13 @@ python training-output/gemma-3/generate_reports.py
 # Auditar splits por dataset
 python scripts/evaluation/inspect_splits.py
 
-# Exportar chunks de ChromaDB
-python rag/export_fragments.py              # ambos stores
-python rag/export_fragments.py --mi-only    # solo PDFs propios
+# Exportar chunks de ChromaDB (salida por defecto: rag/show_fragments/)
+python rag/show_fragments/export_fragments.py              # ambos stores
+python rag/show_fragments/export_fragments.py --mi-only    # solo PDFs propios
 
 # RAGAS sobre el pipeline en vivo (requiere GOOGLE_API_KEY)
-python evaluation/run_eval.py
+python evaluation/run_eval.py --dataset evaluation/datasets/dataset_eval_es.json
+python evaluation/run_eval.py --dataset evaluation/datasets/dataset_eval_ca.json
 python evaluation/run_eval_ragbench.py
 ```
 
@@ -537,6 +543,7 @@ bert-score>=0.3.13
 | Artefactos LoRA Phi-4 | `training-output/phi-4/` | Convención Qwen3 + **subcarpetas por rank** (`16/`, `64/`, …) cuando `LORA_RANK≠32` en `train-phi4.py`; en raíz, run histórico r=32 |
 | Artefactos LoRA Gemma-3-12B | `training-output/gemma-3/` | Misma convención que Qwen3; `generate_reports.py` idéntico en lógica |
 | Diagrama arquitectura | `docs/monkeygrab_architecture.png` / `.svg` | Generado por `generate_diagram.py` |
+| Datasets RAGAS (preguntas) | `evaluation/datasets/*.json` | p. ej. `dataset_eval_es.json`, `dataset_eval_ca.json`, `dataset_eval_mix.json` |
 
 ---
 
@@ -602,6 +609,7 @@ Se versionan el **`Modelfile`**, **`README.md`**, **`LICENSE`** y **`CONVERSION.
 | `web/zip/.gitignore` sin duplicar `node_modules` / `dist` | **Aplicado** — solo en la raíz |
 | Enlace en `README.md` al Hub u origen del GGUF | **Aplicado** — sección *Model weights* |
 | Reglas más finas si aparecen `.bin` pequeños legítimos | Pendiente si surge la necesidad; hoy `*.bin` es global |
+| Salida de `rag/show_fragments/export_fragments.py` (`.txt` / `.jsonl`) | **Aplicado** — bloque `12` en `.gitignore`: `rag/show_fragments/*.txt`, `rag/show_fragments/*.jsonl`; se mantiene `evaluation/chunks_*.txt` por si quedan copias antiguas |
 
 ### 11.6 ¿Subir `.gguf` a GitHub?
 

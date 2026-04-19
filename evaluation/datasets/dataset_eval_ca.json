@@ -1,0 +1,452 @@
+[
+    {
+      "id": "wiki_ca_001",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Hist%C3%B2ria_de_Val%C3%A8ncia",
+      "context": "La Ciutat de València fou fundada pels romans el 138 aC amb el nom de Valentia Edetanorum sobre una de les illes que formava el riu Túria en la seua pantanosa desembocadura. Valentia era la primera ciutat dels voltants fundada sobre el pla.",
+      "question": "En quin any fou fundada la Ciutat de València pels romans?",
+      "ground_truth": "La Ciutat de València fou fundada pels romans en l'any 138 aC. En el moment de la seua fundació, va rebre el nom de Valentia Edetanorum i es va establir sobre una de les illes que formava el riu Túria.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_002",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Hist%C3%B2ria_de_Val%C3%A8ncia",
+      "context": "Al segle XV València va viure una etapa de gran desenvolupament econòmic i esplendor cultural i artístic. Es va crear la Taula de Canvis i Depòsits, una banca municipal en suport de les operacions comercials, la indústria local — que tenia els teixits al capdavant— va aconseguir un gran desenrotllament, i la ciutat es va convertir en un empori comercial al qual acudien mercaders de totes les parts d'Europa.",
+      "question": "Com es defineix la Taula de Canvis i Depòsits?",
+      "ground_truth": "La Taula de Canvis i Depòsits es defineix com una banca municipal creada en suport de les operacions comercials. Aquesta institució es va establir al segle XV, durant una etapa de gran auge econòmic per a la ciutat de València.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_003",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Hist%C3%B2ria_de_Val%C3%A8ncia",
+      "context": "Aquest auge econòmic té el seu reflex en el pla artístic i cultural. S'alcen ara alguns dels edificis més emblemàtics de la ciutat, com les Torres de Serrans (1392), la Llotja (1482), el Micalet o la capella dels Reis del convent de Sant Doménec. En pintura i escultura es deixen sentir les tendències flamenques i italianes en artistes com Lluís Dalmau, Gonçal Peris o Damià Forment.",
+      "question": "Quins són els tres artistes en els quals es deixen sentir les tendències flamenques i italianes en pintura i escultura?",
+      "ground_truth": "Els tres artistes en els quals es deixen sentir les tendències flamenques i italianes en la pintura i l'escultura són Lluís Dalmau, Gonçal Peris i Damià Forment.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_004",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Hist%C3%B2ria_de_Val%C3%A8ncia",
+      "context": "Al segle XVI València va perdre la posició hegemònica en l'economia espanyola a causa del descobriment d'Amèrica. L'entrada de València en l'època moderna va estar marcada per la revolta de les Germanies, una vertadera guerra civil que va enfrontar la societat valenciana. Finalment van ser derrotades i els seus líders passats per les armes, de manera que hi hagué una severa repressió.",
+      "question": "Per què València va perdre la posició hegemònica en l'economia espanyola al segle XVI?",
+      "ground_truth": "València va perdre la seua posició hegemònica en l'economia espanyola al segle XVI a causa del descobriment d'Amèrica.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_005",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Hist%C3%B2ria_de_Val%C3%A8ncia",
+      "context": "A la mort del general Franco el 1975 es va iniciar el procés de transició democràtica i el posterior de transferència de competències a la Comunitat Valenciana. Això no obstant, la nit del 23 de febrer de 1981 van estar a punt de truncar-se aquests dos per la temptativa colpista que, des de València, va liderar el capità general Milans del Bosch, afortunadament fracassada.",
+      "question": "Qui va liderar des de València la temptativa colpista la nit del 23 de febrer de 1981?",
+      "ground_truth": "El capità general Milans del Bosch va ser qui va liderar la temptativa colpista des de València la nit del 23 de febrer de 1981. Afortunadament, aquest intent de colp d'estat va fracassar.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_006",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Hist%C3%B2ria_de_Val%C3%A8ncia",
+      "context": "En literatura, sota la protecció de la cort d'Alfons el Magnànim florix la producció escrita, de la mà d'autors com ara Ausiàs March, Roïç de Corella o Isabel de Villena. Cap al 1460 Joanot Martorell escriu el Tirant lo Blanch, una innovadora novel·la de cavalleria que va influir en nombrosos autors posteriors, des de Cervantes a Shakespeare.",
+      "question": "Com s'anomena la innovadora novel·la de cavalleria que va escriure Joanot Martorell cap al 1460?",
+      "ground_truth": "La innovadora novel·la de cavalleria escrita per Joanot Martorell cap al 1460 s'anomena Tirant lo Blanch. Aquesta obra va arribar a influir profundament en nombrosos autors posteriors, des de Cervantes a Shakespeare.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_007",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Hist%C3%B2ria_de_Val%C3%A8ncia",
+      "context": "Després de la coronació de Felip V de Borbó el 1701, València es va mantindre lleial al nou monarca fins a l'arribada a la ciutat de tropes de l'arxiduc Carles d'Àustria el 1705. L'arxiduc va ser reconegut com a rei, però el seu regnat a penes va durar uns mesos. El 25 d'abril de 1707 les tropes borbòniques derrotaven les austracistes en la batalla d'Almansa.",
+      "question": "En quina data exacta van derrotar les tropes borbòniques a les austracistes en la batalla d'Almansa?",
+      "ground_truth": "Les tropes borbòniques van derrotar les austracistes en la batalla d'Almansa el 25 d'abril de 1707. Aquest esdeveniment es va produir després del breu regnat de l'arxiduc Carles d'Àustria a la ciutat de València.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_008",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Hist%C3%B2ria_de_Val%C3%A8ncia",
+      "context": "Durant els anys d'invasió napoleònica els valencians van enviar els seus representants a les Corts de Cadis, on es va redactar una constitució liberal. Però al maig de 1814, Ferran VII va tornar a la península a través de València i va derogar immediatament la constitució aprovada a Cadis instaurant un règim de caràcter absolutista.",
+      "question": "Qui va derogar immediatament la constitució liberal aprovada a Cadis en tornar a la península a través de València al maig de 1814?",
+      "ground_truth": "Ferran VII va ser qui va derogar immediatament la constitució aprovada a Cadis en tornar a la península a través de València al maig de 1814. Amb aquesta acció, el monarca va posar fi a les reformes liberals i va instaurar un règim de caràcter absolutista.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_009",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Hist%C3%B2ria_de_Val%C3%A8ncia",
+      "context": "La ciutat va passar per greus compromisos al segle XIV. D'una banda, la pesta negra de 1348; d'una altra, els conflictes entre les tres comunitats, cristiana, jueva i musulmana. També s'hi feia notar el creixent conflicte entre la pagesia i la noblesa amb la Revolta de la Unió.",
+      "question": "Quines són les tres comunitats que van protagonitzar conflictes entre elles a la ciutat de València durant el segle XIV?",
+      "ground_truth": "Les tres comunitats que van protagonitzar conflictes a València durant el segle XIV van ser la cristiana, la jueva i la musulmana. Aquests enfrontaments van suposar un dels greus compromisos pels quals va passar la ciutat en eixa època.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_010",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Hist%C3%B2ria_de_Val%C3%A8ncia",
+      "context": "Al començament dels seixanta es va iniciar la recuperació econòmica i València va viure un espectacular creixement demogràfic a causa de la immigració i l'execució d'importants obres urbanístiques i d'infraestructures. Es va posar en marxa el Pla Sud del riu Túria i la ciutat va créixer.",
+      "question": "Per què València va viure un espectacular creixement demogràfic al començament de la dècada dels seixanta?",
+      "ground_truth": "València va viure un espectacular creixement demogràfic al començament dels seixanta a causa de la immigració. A més, aquest increment poblacional també va estar motivat per l'execució d'importants obres urbanístiques i d'infraestructures a la ciutat.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_011",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Paella_d%27arr%C3%B2s",
+      "context": "Al País Valencià la paella es menja tradicionalment al migdia (mai al sopar, llevat que en siguen les restes), els diumenges o festius. A Sueca se celebra cada setembre des del 1961 el Concurs Internacional de Paella Valenciana, festa declarada d'interès turístic internacional.",
+      "question": "En quin any es va començar a celebrar el Concurs Internacional de Paella Valenciana a la localitat de Sueca?",
+      "ground_truth": "El Concurs Internacional de Paella Valenciana es va començar a celebrar a la localitat de Sueca en l'any 1961. Aquest esdeveniment, que té lloc cada mes de setembre, ha estat declarat festa d'interès turístic internacional.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_012",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Paella_d%27arr%C3%B2s",
+      "context": "La paella és un guisat d'arròs, carn i verdures preparat en una paella sobre un foc, siga paeller o fogó. És originària de la marjal de l'Albufera de València, a la comarca natural de la Ribera del Xúquer i a l'Horta Sud, al sud de València.",
+      "question": "Com es defineix la paella?",
+      "ground_truth": "La paella es defineix com un guisat d'arròs, carn i verdures preparat en una paella sobre un foc, ja siga paeller o fogó. Aquest plat tradicional és originari de la marjal de l'Albufera de València.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_013",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Paella_d%27arr%C3%B2s",
+      "context": "No hi ha documents històrics que assenyalen exactament l'origen de la paella marinera. És l'alternativa costanera a la paella de camp, feta amb brou de peix i diferents classes de marisc com sèpia, calamars, escamarlans, gambes, cloïsses o clòtxines.",
+      "question": "Quines són les sis classes de marisc que s'esmenten com a possibles ingredients de la paella marinera?",
+      "ground_truth": "Les sis classes de marisc que s'esmenten com a ingredients per a fer la paella marinera són la sèpia, els calamars, els escamarlans, les gambes, les cloïsses i les clòtxines.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_014",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Paella_d%27arr%C3%B2s",
+      "context": "Els valencians sempre han associat la paella a l'element festiu. A causa de la seua laboriosa preparació i com que els seus ingredients van ser un luxe per a la majoria de la població durant molt de temps, quan calia realitzar alguna celebració la paella era el plat elegit. Per això en molts casos encara és l'home l'encarregat de guisar la paella.",
+      "question": "Per què la paella era el plat elegit pels valencians quan calia realitzar alguna celebració?",
+      "ground_truth": "La paella era el plat elegit per a les celebracions a causa de la seua laboriosa preparació i perquè els seus ingredients van ser un luxe per a la majoria de la població durant molt de temps.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_015",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Paella_d%27arr%C3%B2s",
+      "context": "Encara que tradicionalment es devia conèixer com a arròs a la paella, paella d'arròs, arrossada o arròs en paella a la valenciana, el nom «paella», per metonímia s'utilitza tant per al plat d'arròs ja cuit, com per al recipient, el nom del qual deriva del llatí patella. La paella (recipient) s'anomena sovint paelló, sobretot a la Plana, on en alguns indrets es diu «arròs en paelló» de la paella (menjar). També s'anomena «caldero», la paella (estri) a la zona central del País Valencià.",
+      "question": "Com s'anomena la paella (referint-se a l'estri de cuina) a la zona central del País Valencià?",
+      "ground_truth": "A la zona central del País Valencià, l'estri de la paella s'anomena «caldero». En altres indrets, com a la Plana, aquest mateix recipient s'anomena sovint «paelló».",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_016",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Paella_d%27arr%C3%B2s",
+      "context": "Arran de la campanya de l'humorista Eugeni Alemany, que inicialment volia la inclusió d'aquest plat en l'aplicació de missatgeria WhatsApp, es va incorporar la paella com un emoji més en la versió 9 d'Unicode publicada el juny del 2016 (🥘, U+1F958).",
+      "question": "En quin mes i any es va publicar la versió 9 d'Unicode que va incorporar la paella com un emoji més?",
+      "ground_truth": "La versió 9 d'Unicode, que va incorporar la paella com un emoji més, es va publicar el juny del 2016. Aquesta inclusió va ser fruit de la campanya impulsada prèviament per l'humorista Eugeni Alemany.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_017",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Paella_d%27arr%C3%B2s",
+      "context": "Per a evitar la confusió generada per aquesta situació, un grup de cuiners valencians, liderats per Rafael Vidal i en la qual s'inclou l'Associació de Restaurants de la Província de València Menjar i Viure i la Asociación Valenciana de Empresarios de Restaurantes, han declarat la necessitat d'oficialitzar una sola recepta i, per tant, aplicar a la resta de les receptes un apel·latiu d'origen menor i mai no el de paella valenciana.",
+      "question": "Qui va liderar el grup de cuiners valencians que va declarar la necessitat d'oficialitzar una sola recepta per a la paella?",
+      "ground_truth": "Rafael Vidal va ser qui va liderar el grup de cuiners valencians que va declarar la necessitat d'oficialitzar una sola recepta per a la paella. Aquesta decisió es va prendre per a evitar la confusió generada per la internacionalització del plat.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_018",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Paella_d%27arr%C3%B2s",
+      "context": "Així doncs, es pot trobar paella a gran part del mediterrani occidental, arreu de la península Ibèrica i a gran part de Llatinoamèrica si bé les receptes i l'arròs varien prou. Fins i tot es pot trobar a Austràlia, Àsia (especialment a les Filipines), Llatinoamèrica (especialment Mèxic i Veneçuela), els Estats Units, i Europa Occidental (Portugal, Alemanya, Suècia, Noruega i Dinamarca).",
+      "question": "Quins són els cinc països d'Europa Occidental on el text indica explícitament que es pot trobar paella?",
+      "ground_truth": "Els cinc països d'Europa Occidental on s'indica explícitament que es pot trobar paella són Portugal, Alemanya, Suècia, Noruega i Dinamarca. En aquests i altres indrets internacionals, les receptes i el tipus d'arròs utilitzat solen variar prou respecte a l'original.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_019",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Paella_d%27arr%C3%B2s",
+      "context": "Per començar, fora d'Espanya l'arròs idoni per a paella (bomba, o almenys rodó, de l'Albufera, del Delta de l'Ebre o de Calasparra) és molt difícil de trobar; per això se sol utilitzar arròs llarg. Les proporcions de caldo i d'arròs no es respecten ni tampoc la cocció, que sol estendre's durant hores en parades on la paella o el wok es manté al foc durant tot el dia i tots els ingredients tret de l'arròs han estat bullits a part.",
+      "question": "Per què se sol utilitzar arròs llarg per a preparar la paella fora d'Espanya?",
+      "ground_truth": "Fora d'Espanya se sol utilitzar arròs llarg per a preparar la paella perquè l'arròs idoni i tradicional, com el bomba o el rodó, és molt difícil de trobar en aquests indrets. A causa d'aquesta dificultat logística, s'acostuma a recórrer a l'arròs llarg com a principal alternativa per a l'elaboració del plat.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_020",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Paella_d%27arr%C3%B2s",
+      "context": "Les Paelles al Carrer és una activitat festiva que es desenvolupa a molts pobles valencians i alguns de catalans durant les festes majors. Com el nom suggereix, es tracta d'una sopada comuna on l'ajuntament reparteix els ingredients a cada colla d'amics que s'hi inscriu, pels quals normalment paga una quantitat fixa, i les colles fan foc al carrer amb llenya sobre els quals cuinen desenes de paelles.",
+      "question": "Com s'anomena l'activitat festiva que es desenvolupa a molts pobles valencians i alguns de catalans durant les festes majors, on les colles d'amics cuinen desenes de paelles fent foc al carrer?",
+      "ground_truth": "Aquesta activitat festiva s'anomena Paelles al Carrer. Consisteix en una sopada comuna on l'ajuntament sol repartir els ingredients necessaris a cada colla d'amics inscrita perquè cuinen les paelles al carrer sobre el foc de llenya.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_021",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
+      "context": "En plena tercera revolta dels sarraïns valencians Jaume I va emmalaltir ràpidament. El 9 de juliol del 1276, trobant-se a la residència reial d'Alzira (Casa del Rei, Casa Reial o Casa de l'Olivera), el rei signà el decret que autoritzava l'infant Pere a ocupar els castells que cregués convenient en el Regne de València i a poder-hi nomenar els alcaids, traspassant així el comandament de la campanya militar al seu fill.",
+      "question": "En quina data exacta va signar Jaume I el decret que autoritzava l'infant Pere a ocupar els castells del Regne de València?",
+      "ground_truth": "Jaume I va signar aquest decret el 9 de juliol del 1276. Ho va fer mentre es trobava malalt a la residència reial d'Alzira, traspassant així el comandament de la campanya militar al seu fill.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_022",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
+      "context": "El pactisme és la fórmula de repartiment del poder que es va començar a establir entre els monarques de la Corona d'Aragó i els grups més privilegiats. La noblesa i l'església varen ser els primers a exercir el pactisme amb el rei, però des del segle XIII s'hi va afegir les classes emergents ciutadanes, sobretot de Barcelona (ciutadans honrats).",
+      "question": "Com es defineix el pactisme en el context històric de la Corona d'Aragó?",
+      "ground_truth": "El pactisme es defineix com una fórmula de repartiment del poder que es va establir entre els monarques de la Corona d'Aragó i els grups més privilegiats. Els primers a exercir aquest pactisme van ser la noblesa i l'església, i posteriorment s'hi van sumar les classes emergents ciutadanes des del segle XIII.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_023",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
+      "context": "Jaume I d'Aragó va morir el 27 de juliol de 1276 quan viatjava des del Regne de València cap al monestir de Poblet per tal d'ingressar-hi com a monjo. En el seu testament, va lliurar al monestir cinc mil morabatins, la seva cinta d'or, la seva vaixella de plata, pedres precioses i anells, un portapau en forma de creu ornamentat amb pedres precioses i la seva capella oratòria personal.",
+      "question": "Quins són els sis béns i objectes personals que Jaume I va lliurar al monestir en el seu testament?",
+      "ground_truth": "Els sis béns i objectes personals que Jaume I va lliurar al monestir en el seu testament van ser: cinc mil morabatins, la seua cinta d'or, la seua vaixella de plata, pedres precioses i anells, un portapau en forma de creu ornamentat amb pedres precioses i la seua capella oratòria personal.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_024",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
+      "context": "La Corona de Castella havia sotmès l'Emirat de Múrsiya a vassallatge el 1243, quan Muhàmmad Ibn Hud Hud Biha-ad-Dawla va signar les capitulacions d'Alcaraz. Però el 1264 els sarraïns murcians es van revoltar contra Castella amb el suport de regne de Granada i el Marroc. Com que Castella era incapaç de controlar la rebel·lió islàmica, la reina Violant d'Aragó i d'Hongria, filla de Jaume I i esposa d'Alfons X el Savi, demanà ajuda urgent al seu pare.",
+      "question": "Per què la reina Violant d'Aragó i d'Hongria va demanar ajuda urgent al seu pare, el rei Jaume I?",
+      "ground_truth": "La reina Violant va demanar ajuda urgent al seu pare perquè la Corona de Castella era incapaç de controlar la rebel·lió islàmica protagonitzada pels sarraïns murcians. Aquests s'havien revoltat l'any 1264 amb el suport militar del regne de Granada i el Marroc.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_025",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
+      "context": "Gregori IX va atorgar a l'expedició de Conquesta catalana d'Eivissa i Formentera el títol de croada en una butlla del 24 d'abril de 1235. i Guillem de Montgrí, arquebisbe de Tarragona, i son germà Bernat de Santa Eugènia conqueriren les Pitiüses (Eivissa i Formentera) el 1235. La festa de la Conquesta se celebra, seguint el model de la Festa de l'Estendard mallorquina, el dia 8 d'agost, Sant Ciríac.",
+      "question": "Qui va conquerir les illes Pitiüses (Eivissa i Formentera) l'any 1235?",
+      "ground_truth": "Les illes Pitiüses van ser conquerides l'any 1235 per Guillem de Montgrí, arquebisbe de Tarragona, i el seu germà Bernat de Santa Eugènia. Aquesta expedició de conquesta catalana havia rebut prèviament el títol de croada per part del papa Gregori IX.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_026",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
+      "context": "El 1227 va afrontar un nou alçament de la noblesa, dirigit per l'infant Ferran, oncle del rei, que es va acabar, gràcies a la intervenció papal a través de l'arquebisbe de Tarragona, amb la signatura de la Concòrdia d'Alcalá (març de 1227). Aquest tractat va marcar el triomf de la monarquia sobre els nobles i li donà l'estabilitat necessària per a iniciar les campanyes contra els musulmans.",
+      "question": "Com s'anomena el tractat signat el març de 1227 que va posar fi a l'alçament de la noblesa dirigit per l'infant Ferran?",
+      "ground_truth": "Aquest tractat signat el març de 1227 s'anomena Concòrdia d'Alcalá. L'acord es va aconseguir gràcies a la intervenció papal a través de l'arquebisbe de Tarragona i va marcar el triomf de la monarquia sobre els nobles.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_027",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
+      "context": "Un grup de prohoms catalans presidits per Jaume I es reuneixen a casa de Pere Martell, a Tarragona, per tal de preparar la conquesta de Mallorca (1228). L'any següent, el 5 de setembre de 1229 l'estol català surt de Salou, Cambrils i Tarragona, i conquereix Mallorca a Abu-l-Ulà Idrís al-Mamun: desembarca a Santa Ponça i venç els moros a la batalla de Portopí.",
+      "question": "En quina data exacta va sortir l'estol català de Salou, Cambrils i Tarragona per a la conquesta de Mallorca?",
+      "ground_truth": "L'estol català va sortir de Salou, Cambrils i Tarragona el 5 de setembre de 1229 per a iniciar la conquesta de Mallorca. Aquesta expedició naval va permetre desembarcar a Santa Ponça i vèncer els moros a la batalla de Portopí.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_028",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
+      "context": "És el mateix rei qui explica en la seva crònica el motiu de l'elecció d'un nom tan estrany a la tradició, Jaume, per a l'hereu de la Corona d'Aragó. Diu que sa mare, Maria de Montpeller, encengué dotze ciris amb els noms dels dotze apòstols; els possibles noms eren, doncs, Pere, Andreu, Jaume (el major), Jaume (el menor), Joan, Felip, Bartomeu, Mateu, Maties, Tomàs, Simó, Judes (Tadeu), Judes (Iscariot). El darrer ciri a consumir-se fou el que duia escrit el nom de Iacobus (en llati) o Jacme (en occita), i aquest fou el nom que la reina Maria de Montpeller escollí per al seu fill.",
+      "question": "Quins són els noms dels apòstols que s'esmenten com a possibles opcions en els dotze ciris que va encendre Maria de Montpeller per a triar el nom del seu fill?",
+      "ground_truth": "Els possibles noms dels apòstols enumerats són Pere, Andreu, Jaume (el major), Jaume (el menor), Joan, Felip, Bartomeu, Mateu, Maties, Tomàs, Simó, Judes (Tadeu) i Judes (Iscariot). El nom de Jaume va ser l'escollit finalment perquè fou el darrer ciri a consumir-se.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_029",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
+      "context": "Amb pràcticament 12 anys, el 1220, hagué de fer front a la primera revolta nobiliària liderada per Rodrigo de Liçana. La revolta s'inicià quan Rodrigo de Liçana es negà a acatar l'ordre del rei que li manava d'alliberar Lope d'Albero, que Rodrigo de Liçana havia fet presoner per uns deutes.",
+      "question": "Per què es va iniciar la primera revolta nobiliària liderada per Rodrigo de Liçana l'any 1220?",
+      "ground_truth": "La revolta es va iniciar perquè Rodrigo de Liçana es va negar a acatar l'ordre del rei Jaume I que li manava alliberar Lope d'Albero. Aquest darrer havia estat retingut com a presoner pel noble a causa d'uns deutes.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_030",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Jaume_el_Conqueridor",
+      "context": "El Llibre dels feits o Crònica de Jaume I és la primera de \"les quatre grans Cròniques\". Sembla que la conquesta de Mallorca (1229) n'impulsà la redacció. Jaume I mor el 1276, per tant, l'obra degué ésser quasi acabada poc abans. No obstant això, les còpies que en tenim són posteriors: el manuscrit més antic conservat és de 1343. La Crònica narra, de forma autobiogràfica, la vida i les gestes més importants del rei, sobretot les conquestes de Mallorca i València.",
+      "question": "Com s'anomena la primera de \"les quatre grans Cròniques\" que narra, de forma autobiogràfica, la vida i les gestes més importants del rei Jaume I?",
+      "ground_truth": "Aquesta obra literària s'anomena Llibre dels feits o Crònica de Jaume I. Constitueix la primera de \"les quatre grans Cròniques\" i narra de forma autobiogràfica la vida del monarca i les seves gestes principals, com ara les conquestes de Mallorca i València.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_031",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Pilota_valenciana",
+      "context": "Hi ha constància de la pràctica de la pilota als carrers de València ja al segle XIV, i al segle XVI hi hagué fins a 13 trinquets. El fet que en el moment de disputar-se una partida fóra impossible el trànsit per alguns carrers, i l'ús de paraules malsonants portarien a diverses prohibicions, la primera el 14 de juny de 1391.",
+      "question": "En quina data exacta es va produir la primera prohibició de la pràctica de la pilota als carrers de València?",
+      "ground_truth": "La primera prohibició de la pràctica de la pilota als carrers de València es va dictar el 14 de juny de 1391. Aquesta mesura restrictiva es va prendre per l'ús de paraules malsonants i perquè durant les partides es feia impossible el trànsit.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_032",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Pilota_valenciana",
+      "context": "La pilota valenciana és l'esport de pilota autòcton del País Valencià. Dos jugadors o equips front a front competeixen a llançar-se una pilota amb la mà sota determinades regles, depenent de la modalitat, tals com que la pilota passe per sobre d'una corda o avance unes ratlles en terra.",
+      "question": "Com es defineix la pilota valenciana?",
+      "ground_truth": "La pilota valenciana es defineix com l'esport de pilota autòcton del País Valencià on dos jugadors o equips competeixen llançant-se una pilota amb la mà front a front. Aquesta pràctica es desenvolupa sota determinades regles segons la modalitat jugada, com ara fer passar la pilota per sobre d'una corda o avançar unes ratlles en terra.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_033",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Pilota_valenciana",
+      "context": "Carrer: Tradicionalment s'han disputat partides en el carrer, comptant cada poble amb un carrer especialment adequat. Aquest carrer ha de ser llarg i ample, i que permeta jugar sense obstacles (i els que hi haja seran aprofitats). Amb l'augment del trànsit es va dificultar aquesta pràctica, motiu pel qual alguns pobles han construït carrers artificials que imiten els detalls dels autèntics, tals com finestres, balcons o portes. És molt prestigiat el Carrer de pilota de Meliana. Al carrer es juga a Galotxa, Llargues i Raspall.",
+      "question": "Quines són les tres modalitats de pilota valenciana que s'enumeren com a practicades al carrer?",
+      "ground_truth": "Les tres modalitats de pilota valenciana que es juguen al carrer són la Galotxa, les Llargues i el Raspall. Aquestes partides es disputen en carrers que tradicionalment han de ser llargs i amples per a permetre jugar sense obstacles.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_034",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Pilota_valenciana",
+      "context": "Fins no fa gaires anys en l'Escala i corda era costum vestir de blanc, çò és, pantalons llargs i samarreta blancs, amb una faixa del color corresponent. En el raspall, els pantalons són curts, ja que els llargs destorben en els freqüents moviments d'agenollar-se per raspar la pilota en terra.",
+      "question": "Per què els jugadors porten els pantalons curts en la modalitat de raspall?",
+      "ground_truth": "Els jugadors porten els pantalons curts en la modalitat de raspall perquè els pantalons llargs destorben en els freqüents moviments d'agenollar-se per a raspar la pilota en terra.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_035",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Pilota_valenciana",
+      "context": "Trinquet: És un recinte tancat de forma rectangular d'entre 40 i 65 m de llarg i entre 9 i 11 m d'ample. Les dues parets més llargues, denominades muralles, tenen una alçada pareguda a l'ample del recinte. Una de les dues muralles compta amb un element singular, l'escala, quatre esglaons on seu el públic.",
+      "question": "Com s'anomenen les dues parets més llargues d'un trinquet, les quals tenen una alçada semblant a l'amplària del recinte?",
+      "ground_truth": "Les dues parets més llargues d'un trinquet s'anomenen muralles. Una d'aquestes parets compta amb un element singular conegut com l'escala, que consisteix en quatre esglaons on s'asseu el públic.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_036",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Pilota_valenciana",
+      "context": "Pilota de vaqueta: Aquest és el tipus de pilota obligatori en l'Escala i corda, el Raspall i la Galotxa. Rep aquest nom per estar feta de pell de bou. Les actuals mesures reglamentàries per adults són 42 mm de diàmetre, 138 mm de circumferència, i entre 42 i 48 grams de pes.",
+      "question": "Quin és el pes reglamentari d'una pilota de vaqueta per a adults?",
+      "ground_truth": "El pes reglamentari d'una pilota de vaqueta per a adults se situa entre 42 i 48 grams. A més d'aquest pes, les mesures actuals estableixen un diàmetre de 42 mm i una circumferència de 138 mm per a aquesta pilota elaborada amb pell de bou.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_037",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Pilota_valenciana",
+      "context": "La corda al mig del carrer o trinquet és una invenció atribuïda al Nel de Murla als voltants del 1910. D'aquesta manera s'evitaven les discussions sobre la col·locació exacta de cada ratlla i s'afavoria un joc més vistós, en haver de passar la pilota per sobre la corda.",
+      "question": "A qui s'atribueix la invenció de col·locar una corda al mig del carrer o trinquet en la pilota valenciana cap a l'any 1910?",
+      "ground_truth": "La invenció de col·locar la corda al mig del carrer o trinquet s'atribueix al Nel de Murla, al voltant de l'any 1910. Aquesta innovació servia per a evitar les discussions sobre la col·locació de les ratlles i aconseguir un joc més vistós.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_038",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Pilota_valenciana",
+      "context": "Frontó: La canxa del frontó consisteix en 3 parets: Un frontó de 9 d'ample per 10 d'alçària, una muralla de la mateixa alçària que el frontó i entre 20 i 30 metres de llarg i amb una paret de rebot de 5 metres com a mínim. El costat de la dreta està obert per permetre situar al públic.",
+      "question": "Quines són les tres parets que conformen la canxa en la modalitat de frontó?",
+      "ground_truth": "Les tres parets que conformen la canxa de frontó són un frontó, una muralla i una paret de rebot. El frontó mesura 9 metres d'ample per 10 d'alçària, la muralla té la mateixa alçària que el frontó, i la paret de rebot fa un mínim de 5 metres.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_039",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Pilota_valenciana",
+      "context": "Fins no fa gaires anys en l'Escala i corda era costum vestir de blanc, çò és, pantalons llargs i samarreta blancs, amb una faixa del color corresponent. Avui en dia, amb la introducció de la televisió, són les samarretes de color roig o blau les que diferencien l'equip del jugador.",
+      "question": "Per què actualment s'utilitzen samarretes de color roig o blau per a diferenciar els equips en comptes de la tradicional samarreta blanca?",
+      "ground_truth": "Actualment s'utilitzen samarretes de color roig o blau per a diferenciar l'equip del jugador a causa de la introducció de la televisió en aquest esport. Aquest canvi televisiu va substituir el costum de vestir de blanc i distingir-se només per la faixa.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_040",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Pilota_valenciana",
+      "context": "El públic, tant als trinquets com al carrer, s'adreça al marxador, qui s'encarrega de casar les travesses, l'espectador li diu postura (la travessa), si el marxador creu que aquesta té trellat l'atén, li dona un rebut i replega els diners, per començar a cantar-la buscant un altre espectador que accepte posar-hi diners en contra.",
+      "question": "Com s'anomena la persona a qui s'adreça el públic tant als trinquets com al carrer i que s'encarrega de casar les travesses?",
+      "ground_truth": "Aquesta persona s'anomena marxador. És la figura encarregada d'atendre la postura de l'espectador, replegar els diners i cantar la travessa per a buscar algú que accepte apostar-hi en contra.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_041",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Llotja_de_la_Seda",
+      "context": "La Sala de Contractació, realitzada entre 1483 i 1498, es divideix en tres naus longitudinals (de 35,6 m de fons) i cinc naus transversals (de 21,4 m d'ample), amb volta de creueria (a una alçada de 17,4 m), sostinguda per huit columnes helicoidals i setze pilastres del mateix tipus que sustenten les voltes. De les columnes helicoidals, d'11 metres d'alçària, ixen feixos de nervis que s'estenen sobre trams quadrats a la mateixa alçada i són quasi voltes bufades (esfèriques).",
+      "question": "Quina és l'alçària exacta de les columnes helicoidals de la Sala de Contractació?",
+      "ground_truth": "Les columnes helicoidals de la Sala de Contractació tenen una alçària exacta d'11 metres. D'aquestes columnes ixen els feixos de nervis que formen i sustenten la volta de creueria de l'edifici.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_042",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Llotja_de_la_Seda",
+      "context": "La Llotja de la Seda, Llotja de València o Llotja de Mercaders és un edifici civil d'estil gòtic valencià tardà, situat a la plaça del Mercat, número 31, de València, davant l'església de Sant Joan del Mercat i del Mercat Central, al centre històric de la ciutat. L'edifici fou construït entre el 1482 i el 1548 i simbolitza, sens dubte, la puixança i riquesa del segle d'or valencià (segle XV).",
+      "question": "Com es defineix la Llotja de la Seda i on es troba situada?",
+      "ground_truth": "La Llotja de la Seda es defineix com un edifici civil d'estil gòtic valencià tardà. Aquest monument històric es troba situat a la plaça del Mercat, número 31, de València, en ple centre històric de la ciutat.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_043",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Llotja_de_la_Seda",
+      "context": "Vista des de la plaça del Mercat, la part dreta de l'edifici correspon a la llotja pròpiament dita, també coneguda com la Sala de Contractació o el Saló Columnari (1483-1498); a la seva esquerra s'alça la torre central (1483-1498), de tres cossos, emprats per a capella (el cos de baix) i presó (els dos de dalt). Encara més a l'esquerra, hi ha el cos de tres plantes del Consolat de Mar, que s'hi afegí posteriorment (1498-1548). El Pati dels Tarongers articula les tres zones de l'edifici, que ocupen més de dos mil metres quadrats en total.",
+      "question": "Quines són les tres zones de l'edifici que articula el Pati dels Tarongers?",
+      "ground_truth": "Les tres zones de l'edifici que articula el Pati dels Tarongers són la Sala de Contractació (o Saló Columnari), la torre central i el Consolat de Mar. Aquest conjunt arquitectònic ocupa un total de més de dos mil metres quadrats.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_044",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Llotja_de_la_Seda",
+      "context": "El nom que rep l'edifici de Llotja de la Seda deriva del fet que aquest teixit fou des del segle XIV al XVIII la indústria més potent de la ciutat. En el XIV, ja hi havia seders locals, majoritàriament jueus, i més tard conversos, agrupats el 1465 en la confraria de la Mare de Déu de la Misericòrdia, sota l'advocació de la qual hi ha la capella de la Llotja, construïda entre 1484 i 1486.",
+      "question": "Per què l'edifici rep actualment el nom de Llotja de la Seda?",
+      "ground_truth": "L'edifici rep el nom de Llotja de la Seda perquè aquest teixit va ser la indústria més potent de la ciutat de València des del segle XIV fins al segle XVIII.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_045",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Llotja_de_la_Seda",
+      "context": "A l'esquerra del pati dels Tarongers, es troba el Consolat de Mar, institució creada el 1283 en què els jutges o els cònsols de comerç celebraven sessions sobre assumptes marítims i mercantils. Começat per Pere Comte, reprès a la mort d'aquell el 1506 per Joan Corbera i finalitzat el 1548 pel guipuscoà Domingo Urtiaga, aquest consolat és de planta rectangular i d'estil renaixentista i fou literalment adossat al costat ponentí de la llotja original.",
+      "question": "Qui va finalitzar la construcció de l'edifici del Consolat de Mar l'any 1548?",
+      "ground_truth": "La construcció de l'edifici del Consolat de Mar va ser finalitzada l'any 1548 pel guipuscoà Domingo Urtiaga. Aquesta obra renaixentista havia estat iniciada prèviament per Pere Comte i represa posteriorment per Joan Corbera.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_046",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Llotja_de_la_Seda",
+      "context": "En tant que centre mercantil ciutadà, el Consell de la Ciutat decidí instal·lar al Saló Columnari la Taula de Canvis i Dipòsits, entitat bancària de prestigi per la seva solvència i pel volum de les operacions bancàries. Alguns han volgut veure en aquest edifici, concebut com a temple al comerç, un caràcter simbòlic, una representació del paradís...",
+      "question": "Com s'anomena l'entitat bancària que el Consell de la Ciutat va decidir instal·lar al Saló Columnari?",
+      "ground_truth": "L'entitat bancària instal·lada al Saló Columnari s'anomena Taula de Canvis i Dipòsits. El Consell de la Ciutat va prendre aquesta decisió perquè era una entitat de gran prestigi per la seua solvència i volum d'operacions.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_047",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Llotja_de_la_Seda",
+      "context": "La segona meitat del XVIII fou el moment de màxima esplendor: 25.000 persones es dedicaven a la indústria de la seda a la ciutat de València, que incloïa més de 3.000 telers. Tanmateix, a partir del 1790, començà l'ocàs de la indústria sedera de València, que mai més no tornà a reeixir. No obstant això, la llotja ha mantingut el seu nom tradicional fins als nostres dies, en homenatge a la que fou puixant indústria valentina durant tants segles.",
+      "question": "Quantes persones es dedicaven a la indústria de la seda a la ciutat de València durant el seu moment de màxima esplendor a la segona meitat del segle XVIII?",
+      "ground_truth": "Durant la segona meitat del segle XVIII, que va ser el seu moment de màxima esplendor, 25.000 persones es dedicaven a la indústria de la seda a la ciutat de València. Aquesta indústria comptava en aquell moment amb més de 3.000 telers.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_048",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Llotja_de_la_Seda",
+      "context": "A la primera planta, on es troba la Cambra Daurada, s'hi accedeix per una escala monumental de carreus des del pati dels Tarongers. Aquesta cambra està ornamentada per un sostre gòtic —fet pel mestre d'obra de vila Joan del Poyo (1418-1428)— rescatat de l'antiga Casa de la Ciutat, en ser aquesta enderrocada durant el segle XIX.",
+      "question": "Qui va fer el sostre gòtic que ornamenta la Cambra Daurada?",
+      "ground_truth": "El sostre gòtic que ornamenta la Cambra Daurada va ser fet pel mestre d'obra de vila Joan del Poyo entre els anys 1418 i 1428. Aquest sostre de fusta va ser rescatat de l'antiga Casa de la Ciutat quan aquesta fou enderrocada durant el segle XIX.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_049",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Llotja_de_la_Seda",
+      "context": "Segons Joan Francesc Mira, el pla o la plaça del Mercat de València, format per la Llotja de la Seda, el Mercat Central i Sant Joan del Mercat, «és un dels òrgans essencials del cos d'aquesta ciutat». El gironí Pere Comte construí la llotja gòtica a la darreria del segle XV; els llombards Jacobo Bertessi (de Cremona) i Antonio Aliprandi (de Milà) afegiren el recobriment barroc a Sant Joan del Mercat al final del XVIII; i els arquitectes barcelonins Alexandre Soler i March i Francesc Guàrdia i Vial bastiren el modernista Mercat Central al començament del XX.",
+      "question": "Quins són els tres edificis que formen la plaça del Mercat de València segons Joan Francesc Mira?",
+      "ground_truth": "Els tres edificis que formen la plaça del Mercat de València són la Llotja de la Seda, el Mercat Central i Sant Joan del Mercat. Segons Joan Francesc Mira, aquest conjunt arquitectònic de diferents èpoques constitueix un dels òrgans essencials del cos de la ciutat.",
+      "source_type": "wikipedia"
+    },
+    {
+      "id": "wiki_ca_050",
+      "language": "ca",
+      "source_url": "https://ca.wikipedia.org/wiki/Llotja_de_la_Seda",
+      "context": "La prosperitat mercantil assolida per la ciutat de València durant el segle XV motivà que, el 1469, els Jurats del Consell Municipal decidiren bastir una nova llotja: «Molt bella e magnífica e sumptuosa, que sia honor e ornament d'aquesta insigne Ciutat...» Per bastir la nova llotja, es compraren i enderrocaren vint-i-cinc cases pròximes al mercat.",
+      "question": "Per què els Jurats del Consell Municipal van decidir bastir una nova llotja l'any 1469?",
+      "ground_truth": "Els Jurats del Consell Municipal van decidir bastir una nova llotja l'any 1469 motivats per la prosperitat mercantil assolida per la ciutat de València durant el segle XV. A causa d'aquesta decisió, es van haver de comprar i enderrocar vint-i-cinc cases pròximes al mercat per a dur a terme la construcció.",
+      "source_type": "wikipedia"
+    }
+]

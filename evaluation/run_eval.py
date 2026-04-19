@@ -16,6 +16,8 @@ quality of the generated answers using RAGAS v0.2+ metrics.  Supported metrics
 Usage:
     python evaluation/run_eval.py [--dataset PATH] [--output PATH] [--verbose] [--no-debug]
 
+Default dataset path: ``evaluation/datasets/dataset_eval_es.json``.
+
 Dependencies:
     - ragas
     - langchain-google-genai
@@ -34,11 +36,12 @@ Dependencies:
 #  +-- 3. Evaluation LLM       configurar_llm_evaluacion (Gemini + embeddings)
 #
 #  PIPELINE
-#  +-- 4. Result formatting    imprimir_resultados
-#  +-- 5. Debug output         _extraer_justificaciones_traces, guardar_debug
+#  +-- 4. Paths and checkpoints resolver rutas, progreso por pregunta, reanudación
+#  +-- 5. Result formatting    imprimir_resultados
+#  +-- 6. Debug output         _extraer_justificaciones_traces, guardar_debug
 #
 #  ENTRY
-#  +-- 6. Main                 main()
+#  +-- 7. Main                 main()
 #
 # ─────────────────────────────────────────────
 
@@ -47,6 +50,8 @@ import sys
 import json
 import argparse
 import time
+from typing import Any
+from pathlib import Path
 
 # ─────────────────────────────────────────────
 # SECTION 1: ENVIRONMENT SETUP
@@ -66,12 +71,14 @@ if _proj_root not in sys.path:
 import pandas as pd
 import chromadb
 
+import rag.chat_pdfs as rag_runtime
 from rag.chat_pdfs import (
     evaluar_pregunta_rag,
     PATH_DB,
     COLLECTION_NAME,
     CARPETA_DOCS,
     indexar_documentos,
+    set_recomp_synthesis_enabled,
 )
 
 # ─────────────────────────────────────────────
@@ -176,7 +183,63 @@ def configurar_llm_evaluacion():
         raise SystemExit(1)
 
 # ─────────────────────────────────────────────
-# SECTION 4: RESULT FORMATTING
+# SECTION 4: PATHS AND CHECKPOINTS
+# ─────────────────────────────────────────────
+
+EVAL_DIR = os.path.dirname(os.path.abspath(__file__))
+SCORES_DIR = os.path.join(EVAL_DIR, "scores")
+DEBUG_DIR = os.path.join(EVAL_DIR, "debug")
+CHECKPOINTS_DIR = os.path.join(DEBUG_DIR, "checkpoints")
+
+
+def _slugify(value: str) -> str:
+    """Convert a free-form label into a filesystem-friendly slug."""
+    cleaned = "".join(ch.lower() if ch.isalnum() else "_" for ch in value.strip())
+    cleaned = "_".join(part for part in cleaned.split("_") if part)
+    return cleaned or "eval"
+
+
+def _build_output_stem(dataset_path: str) -> str:
+    """Create a stable stem for outputs derived from the dataset filename."""
+    return _slugify(Path(dataset_path).stem)
+
+
+def _default_output_path(dataset_path: str) -> str:
+    """Return the default CSV output path inside evaluation/scores."""
+    return os.path.join(SCORES_DIR, f"ragas_scores_{_build_output_stem(dataset_path)}.csv")
+
+
+def _default_debug_path(dataset_path: str) -> str:
+    """Return the default debug JSON path inside evaluation/debug."""
+    return os.path.join(DEBUG_DIR, f"ragas_debug_{_build_output_stem(dataset_path)}.json")
+
+
+def _default_checkpoint_path(dataset_path: str, recomp_enabled: bool | None) -> str:
+    """Return the checkpoint path used to resume generation question by question."""
+    recomp_tag = "recomp_on" if recomp_enabled else "recomp_off"
+    return os.path.join(
+        CHECKPOINTS_DIR,
+        f"ragas_progress_{_build_output_stem(dataset_path)}_{recomp_tag}.json",
+    )
+
+
+def _cargar_checkpoint(checkpoint_path: str) -> dict[str, Any] | None:
+    """Load a checkpoint file if it exists and is valid JSON."""
+    if not checkpoint_path or not os.path.exists(checkpoint_path):
+        return None
+    with open(checkpoint_path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _guardar_checkpoint(checkpoint_path: str, payload: dict[str, Any]) -> None:
+    """Persist the current question-by-question evaluation state."""
+    os.makedirs(os.path.dirname(os.path.abspath(checkpoint_path)), exist_ok=True)
+    with open(checkpoint_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+
+# ─────────────────────────────────────────────
+# SECTION 5: RESULT FORMATTING
 # ─────────────────────────────────────────────
 
 METRIC_NAMES = [
@@ -259,7 +322,7 @@ def imprimir_resultados(df_scores: pd.DataFrame, questions: list[str]):
 
 
 # ─────────────────────────────────────────────
-# SECTION 5: DEBUG OUTPUT
+# SECTION 6: DEBUG OUTPUT
 # ─────────────────────────────────────────────
 
 def _extraer_justificaciones_traces(traces: list, metric_cols: list) -> list[dict]:
@@ -309,7 +372,7 @@ def guardar_debug(
     answers: list,
     ground_truths: list,
     contexts_list: list,
-    eval_dir: str,
+    debug_path: str,
 ) -> str:
     """Save a debug JSON file containing model answers, retrieved contexts,
     per-question scores, and RAGAS justifications.
@@ -320,7 +383,7 @@ def guardar_debug(
         answers: List of model-generated answers.
         ground_truths: List of reference answers.
         contexts_list: List of lists of retrieved context strings.
-        eval_dir: Directory where the debug file will be written.
+        debug_path: Absolute path where the debug file will be written.
 
     Returns:
         Absolute path to the saved debug JSON file.
@@ -366,14 +429,275 @@ def guardar_debug(
         },
     }
 
-    debug_path = os.path.join(eval_dir, "ragas_debug.json")
     with open(debug_path, "w", encoding="utf-8") as f:
         json.dump(debug_data, f, ensure_ascii=False, indent=2)
     return debug_path
 
 
+def ejecutar_evaluacion(
+    dataset_path: str,
+    output_path: str | None = None,
+    debug_path: str | None = None,
+    checkpoint_path: str | None = None,
+    verbose: bool = False,
+    save_debug: bool = True,
+    force_reindex: bool = False,
+    recomp_enabled: bool | None = None,
+) -> dict[str, Any]:
+    """Run the full live RAGAS evaluation and persist its artifacts.
+
+    Args:
+        dataset_path: Path to the question dataset.
+        output_path: CSV output path. Defaults to ``evaluation/scores/``.
+        debug_path: Debug JSON output path. Defaults to ``evaluation/debug/``.
+        checkpoint_path: Progress JSON path used to resume question generation.
+        verbose: Whether to print per-question progress.
+        save_debug: Whether to persist the debug JSON.
+        force_reindex: Whether to rebuild the ChromaDB collection before evaluation.
+        recomp_enabled: Optional in-process override for ``USAR_RECOMP_SYNTHESIS``.
+
+    Returns:
+        Summary dictionary with output paths, timings, and mean metrics.
+    """
+    previous_recomp = None
+    if recomp_enabled is not None:
+        previous_recomp = set_recomp_synthesis_enabled(recomp_enabled)
+
+    try:
+        # ─────────────────────────────────────────────
+        # 1. IMPORT RAGAS METRICS
+        # ─────────────────────────────────────────────
+
+        try:
+            from ragas import evaluate
+            from ragas.metrics import (
+                faithfulness,
+                answer_relevancy,
+                context_precision,
+                context_recall,
+                answer_correctness,
+            )
+            from ragas.dataset_schema import SingleTurnSample, EvaluationDataset
+            from ragas.run_config import RunConfig
+        except ImportError as e:
+            print("Install RAGAS and dependencies:")
+            print("   pip install -r evaluation/requirements.txt")
+            raise SystemExit(1) from e
+
+        # ─────────────────────────────────────────────
+        # 2. CONFIGURE EVALUATION LLM
+        # ─────────────────────────────────────────────
+
+        eval_llm, eval_embeddings = configurar_llm_evaluacion()
+
+        # ─────────────────────────────────────────────
+        # 3. LOAD DATASET
+        # ─────────────────────────────────────────────
+
+        print(f"\nLoading dataset...")
+        dataset_path = os.path.abspath(dataset_path)
+        resolved_output_path = os.path.abspath(output_path or _default_output_path(dataset_path))
+        resolved_debug_path = os.path.abspath(debug_path or _default_debug_path(dataset_path))
+        resolved_checkpoint_path = os.path.abspath(
+            checkpoint_path or _default_checkpoint_path(dataset_path, rag_runtime.USAR_RECOMP_SYNTHESIS)
+        )
+
+        df = cargar_dataset(dataset_path)
+        df = normalizar_columnas(df)
+        questions = df["question"].tolist()
+        ground_truths = df["ground_truth"].tolist()
+
+        tiene_ground_truth = any(gt.strip() for gt in ground_truths)
+
+        print(f"   Questions to evaluate: {len(questions)}")
+        print(f"   Ground truth available: {'Yes' if tiene_ground_truth else 'No'}")
+        print(f"   RECOMP synthesis: {'Enabled' if rag_runtime.USAR_RECOMP_SYNTHESIS else 'Disabled'}")
+
+        # ─────────────────────────────────────────────
+        # 4. CONNECT TO CHROMADB
+        # ─────────────────────────────────────────────
+
+        print(f"\nConnecting to ChromaDB: {PATH_DB}")
+        client = chromadb.PersistentClient(path=PATH_DB)
+
+        if force_reindex:
+            print("   Force reindex requested. Rebuilding collection...")
+            try:
+                client.delete_collection(name=COLLECTION_NAME)
+            except Exception:
+                pass
+            collection = client.get_or_create_collection(name=COLLECTION_NAME)
+            total = indexar_documentos(CARPETA_DOCS, collection)
+            print(f"   Indexed {total} fragments.")
+        else:
+            collection = client.get_or_create_collection(name=COLLECTION_NAME)
+            if collection.count() == 0:
+                print("   Database empty. Indexing documents...")
+                total = indexar_documentos(CARPETA_DOCS, collection)
+                print(f"   Indexed {total} fragments.")
+            else:
+                print(f"   Fragments in collection: {collection.count()}")
+                total = collection.count()
+
+        # ─────────────────────────────────────────────
+        # 5. RUN RAG PIPELINE PER QUESTION
+        # ─────────────────────────────────────────────
+
+        print("\nRunning RAG pipeline for each question...")
+        answers: list[str] = []
+        contexts_list: list[list[str]] = []
+        checkpoint = _cargar_checkpoint(resolved_checkpoint_path)
+        if checkpoint:
+            if (
+                checkpoint.get("dataset_path") == dataset_path
+                and checkpoint.get("questions_count") == len(questions)
+                and checkpoint.get("recomp_enabled") == rag_runtime.USAR_RECOMP_SYNTHESIS
+            ):
+                answers = checkpoint.get("answers", [])
+                contexts_list = checkpoint.get("contexts_list", [])
+                print(
+                    f"   Resuming from checkpoint: {len(answers)}/{len(questions)} questions already completed."
+                )
+            else:
+                print("   Existing checkpoint does not match this run. Starting fresh progress.")
+
+        t_start = time.time()
+
+        try:
+            for i, q in enumerate(questions[len(answers):], start=len(answers)):
+                if verbose:
+                    print(f"   [{i+1}/{len(questions)}] {q[:60]}...")
+                answer, contexts = evaluar_pregunta_rag(q, collection)
+                answers.append(answer)
+                contexts_list.append(contexts)
+                _guardar_checkpoint(
+                    resolved_checkpoint_path,
+                    {
+                        "dataset_path": dataset_path,
+                        "questions_count": len(questions),
+                        "recomp_enabled": rag_runtime.USAR_RECOMP_SYNTHESIS,
+                        "output_path": resolved_output_path,
+                        "debug_path": resolved_debug_path,
+                        "completed_questions": len(answers),
+                        "answers": answers,
+                        "contexts_list": contexts_list,
+                        "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    },
+                )
+        except ConnectionError as e:
+            print(f"\nError: Could not connect to Ollama: {e}")
+            print("   Make sure Ollama is running before launching the evaluation.")
+            print("   Start Ollama with: ollama serve")
+            raise SystemExit(1)
+
+        t_rag = time.time() - t_start
+        print(f"   Pipeline completed in {t_rag:.1f}s ({t_rag/len(questions):.1f}s/question)")
+
+        # ─────────────────────────────────────────────
+        # 6. BUILD RAGAS EVALUATION DATASET
+        # ─────────────────────────────────────────────
+
+        print("\nBuilding EvaluationDataset for RAGAS...")
+        samples = []
+        for i in range(len(questions)):
+            sample = SingleTurnSample(
+                user_input=questions[i],
+                response=answers[i] if answers[i] else "",
+                retrieved_contexts=contexts_list[i] if contexts_list[i] else [],
+                reference=ground_truths[i] if ground_truths[i] else "",
+            )
+            samples.append(sample)
+
+        eval_dataset = EvaluationDataset(samples=samples)
+
+        # ─────────────────────────────────────────────
+        # 7. CONFIGURE METRICS
+        # ─────────────────────────────────────────────
+
+        metrics = [faithfulness, answer_relevancy, context_precision, context_recall]
+        if tiene_ground_truth:
+            metrics.insert(0, answer_correctness)
+
+        # ─────────────────────────────────────────────
+        # 8. RUN RAGAS EVALUATION
+        # ─────────────────────────────────────────────
+
+        print("\nRunning RAGAS evaluation (this may take a few minutes)...")
+        t_eval_start = time.time()
+
+        eval_run_config = RunConfig(timeout=600, max_retries=15)
+
+        result = evaluate(
+            dataset=eval_dataset,
+            metrics=metrics,
+            llm=eval_llm,
+            embeddings=eval_embeddings,
+            run_config=eval_run_config,
+        )
+
+        t_eval = time.time() - t_eval_start
+        print(f"   Evaluation completed in {t_eval:.1f}s")
+
+        # ─────────────────────────────────────────────
+        # 9. DISPLAY RESULTS
+        # ─────────────────────────────────────────────
+
+        df_scores = result.to_pandas()
+        imprimir_resultados(df_scores, questions)
+
+        # ─────────────────────────────────────────────
+        # 10. SAVE CSV
+        # ─────────────────────────────────────────────
+
+        output_dir = os.path.dirname(os.path.abspath(resolved_output_path))
+        os.makedirs(output_dir, exist_ok=True)
+        df_scores.to_csv(resolved_output_path, index=False, encoding="utf-8")
+        print(f"\nResults saved to: {resolved_output_path}")
+
+        # ─────────────────────────────────────────────
+        # 11. SAVE DEBUG OUTPUT
+        # ─────────────────────────────────────────────
+
+        if save_debug:
+            os.makedirs(os.path.dirname(os.path.abspath(resolved_debug_path)), exist_ok=True)
+            guardar_debug(
+                result=result,
+                questions=questions,
+                answers=answers,
+                ground_truths=ground_truths,
+                contexts_list=contexts_list,
+                debug_path=resolved_debug_path,
+            )
+            print(f"Debug saved to: {resolved_debug_path}")
+        else:
+            resolved_debug_path = None
+
+        metric_cols = [c for c in METRIC_NAMES if c in df_scores.columns]
+        mean_scores = {}
+        for metric_name in metric_cols:
+            metric_value = df_scores[metric_name].mean(numeric_only=True)
+            if not pd.isna(metric_value):
+                mean_scores[metric_name] = float(metric_value)
+
+        return {
+            "dataset_path": os.path.abspath(dataset_path),
+            "output_path": os.path.abspath(resolved_output_path),
+            "debug_path": os.path.abspath(resolved_debug_path) if resolved_debug_path else None,
+            "questions_count": len(questions),
+            "indexed_fragments": total,
+            "recomp_enabled": rag_runtime.USAR_RECOMP_SYNTHESIS,
+            "pipeline_seconds": t_rag,
+            "evaluation_seconds": t_eval,
+            "mean_scores": mean_scores,
+            "checkpoint_path": os.path.abspath(resolved_checkpoint_path),
+        }
+    finally:
+        if previous_recomp is not None:
+            set_recomp_synthesis_enabled(previous_recomp)
+
+
 # ─────────────────────────────────────────────
-# SECTION 6: MAIN
+# SECTION 7: MAIN
 # ─────────────────────────────────────────────
 
 def main():
@@ -384,13 +708,23 @@ def main():
     )
     parser.add_argument(
         "--dataset",
-        default=os.path.join(os.path.dirname(__file__), "dataset_eval.json"),
+        default=os.path.join(EVAL_DIR, "datasets", "dataset_eval_es.json"),
         help="Path to the dataset (JSON, CSV, or Excel)",
     )
     parser.add_argument(
         "--output",
         default=None,
         help="Output path for the results CSV",
+    )
+    parser.add_argument(
+        "--debug-output",
+        default=None,
+        help="Output path for ragas_debug.json",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        default=None,
+        help="Path to the checkpoint JSON used for question-by-question resume",
     )
     parser.add_argument(
         "--verbose",
@@ -402,169 +736,22 @@ def main():
         action="store_true",
         help="Skip saving the ragas_debug.json file",
     )
+    parser.add_argument(
+        "--force-reindex",
+        action="store_true",
+        help="Delete and rebuild the ChromaDB collection before evaluating",
+    )
     args = parser.parse_args()
 
-    # ─────────────────────────────────────────────
-    # 1. IMPORT RAGAS METRICS
-    # ─────────────────────────────────────────────
-
-    try:
-        from ragas import evaluate
-        from ragas.metrics import (
-            faithfulness,
-            answer_relevancy,
-            context_precision,
-            context_recall,
-            answer_correctness,
-        )
-        from ragas.dataset_schema import SingleTurnSample, EvaluationDataset
-        from ragas.run_config import RunConfig
-    except ImportError as e:
-        print("Install RAGAS and dependencies:")
-        print("   pip install -r evaluation/requirements.txt")
-        raise SystemExit(1) from e
-
-    # ─────────────────────────────────────────────
-    # 2. CONFIGURE EVALUATION LLM
-    # ─────────────────────────────────────────────
-
-    eval_llm, eval_embeddings = configurar_llm_evaluacion()
-
-    # ─────────────────────────────────────────────
-    # 3. LOAD DATASET
-    # ─────────────────────────────────────────────
-
-    print(f"\nLoading dataset...")
-    df = cargar_dataset(args.dataset)
-    df = normalizar_columnas(df)
-    questions = df["question"].tolist()
-    ground_truths = df["ground_truth"].tolist()
-
-    tiene_ground_truth = any(gt.strip() for gt in ground_truths)
-
-    print(f"   Questions to evaluate: {len(questions)}")
-    print(f"   Ground truth available: {'Yes' if tiene_ground_truth else 'No'}")
-
-    # ─────────────────────────────────────────────
-    # 4. CONNECT TO CHROMADB
-    # ─────────────────────────────────────────────
-
-    print(f"\nConnecting to ChromaDB: {PATH_DB}")
-    client = chromadb.PersistentClient(path=PATH_DB)
-    collection = client.get_or_create_collection(name=COLLECTION_NAME)
-
-    if collection.count() == 0:
-        print("   Database empty. Indexing documents...")
-        total = indexar_documentos(CARPETA_DOCS, collection)
-        print(f"   Indexed {total} fragments.")
-    else:
-        print(f"   Fragments in collection: {collection.count()}")
-
-    # ─────────────────────────────────────────────
-    # 5. RUN RAG PIPELINE PER QUESTION
-    # ─────────────────────────────────────────────
-
-    print("\nRunning RAG pipeline for each question...")
-    answers = []
-    contexts_list = []
-    t_start = time.time()
-
-    try:
-        for i, q in enumerate(questions):
-            if args.verbose:
-                print(f"   [{i+1}/{len(questions)}] {q[:60]}...")
-            answer, contexts = evaluar_pregunta_rag(q, collection)
-            answers.append(answer)
-            contexts_list.append(contexts)
-    except ConnectionError as e:
-        print(f"\nError: Could not connect to Ollama: {e}")
-        print("   Make sure Ollama is running before launching the evaluation.")
-        print("   Start Ollama with: ollama serve")
-        raise SystemExit(1)
-
-    t_rag = time.time() - t_start
-    print(f"   Pipeline completed in {t_rag:.1f}s ({t_rag/len(questions):.1f}s/question)")
-
-    # ─────────────────────────────────────────────
-    # 6. BUILD RAGAS EVALUATION DATASET
-    # ─────────────────────────────────────────────
-
-    print("\nBuilding EvaluationDataset for RAGAS...")
-    samples = []
-    for i in range(len(questions)):
-        sample = SingleTurnSample(
-            user_input=questions[i],
-            response=answers[i] if answers[i] else "",
-            retrieved_contexts=contexts_list[i] if contexts_list[i] else [],
-            reference=ground_truths[i] if ground_truths[i] else "",
-        )
-        samples.append(sample)
-
-    eval_dataset = EvaluationDataset(samples=samples)
-
-    # ─────────────────────────────────────────────
-    # 7. CONFIGURE METRICS
-    # ─────────────────────────────────────────────
-
-    metrics = [faithfulness, answer_relevancy, context_precision, context_recall]
-    if tiene_ground_truth:
-        metrics.insert(0, answer_correctness)
-
-    # ─────────────────────────────────────────────
-    # 8. RUN RAGAS EVALUATION
-    # ─────────────────────────────────────────────
-
-    print("\nRunning RAGAS evaluation (this may take a few minutes)...")
-    t_eval_start = time.time()
-
-    eval_run_config = RunConfig(timeout=600, max_retries=15)
-
-    result = evaluate(
-        dataset=eval_dataset,
-        metrics=metrics,
-        llm=eval_llm,
-        embeddings=eval_embeddings,
-        run_config=eval_run_config,
+    ejecutar_evaluacion(
+        dataset_path=args.dataset,
+        output_path=args.output,
+        debug_path=args.debug_output,
+        checkpoint_path=args.checkpoint,
+        verbose=args.verbose,
+        save_debug=not args.no_debug,
+        force_reindex=args.force_reindex,
     )
-
-    t_eval = time.time() - t_eval_start
-    print(f"   Evaluation completed in {t_eval:.1f}s")
-
-    # ─────────────────────────────────────────────
-    # 9. DISPLAY RESULTS
-    # ─────────────────────────────────────────────
-
-    df_scores = result.to_pandas()
-    imprimir_resultados(df_scores, questions)
-
-    # ─────────────────────────────────────────────
-    # 10. SAVE CSV
-    # ─────────────────────────────────────────────
-
-    out_path = args.output
-    if not out_path:
-        out_path = os.path.join(
-            os.path.dirname(__file__),
-            "ragas_scores.csv",
-        )
-    df_scores.to_csv(out_path, index=False, encoding="utf-8")
-    print(f"\nResults saved to: {out_path}")
-
-    # ─────────────────────────────────────────────
-    # 11. SAVE DEBUG OUTPUT
-    # ─────────────────────────────────────────────
-
-    if not args.no_debug:
-        eval_dir = os.path.dirname(__file__)
-        debug_path = guardar_debug(
-            result=result,
-            questions=questions,
-            answers=answers,
-            ground_truths=ground_truths,
-            contexts_list=contexts_list,
-            eval_dir=eval_dir,
-        )
-        print(f"Debug saved to: {debug_path}")
 
 
 if __name__ == "__main__":
