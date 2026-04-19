@@ -17,6 +17,8 @@
 
 ---
 
+> **Última actualización:** 2026-04-19
+
 ## What is MonkeyGrab?
 
 MonkeyGrab is a Retrieval-Augmented Generation (RAG) system that runs entirely on your own hardware. You point it at a folder of PDF documents, and it lets you ask questions about them in natural language — receiving answers that are grounded in the actual content of those files.
@@ -221,6 +223,8 @@ If the process stops mid-run, rerunning the same command with the same `--label`
 localOllamaRAG/
 ├── rag/
 │   ├── chat_pdfs.py              # Main RAG engine (indexing, retrieval, generation)
+│   ├── show_fragments/
+│   │   └── export_fragments.py   # Exports ChromaDB chunks to TXT/JSONL for debug
 │   ├── pdfs/                     # Your PDFs (only .gitkeep in Git; content ignored)
 │   ├── mi_vector_db/             # ChromaDB production index (gitignored; created at runtime)
 │   ├── ragbench_pdfs/            # RAGBench PDFs (.gitkeep versioned; content ignored)

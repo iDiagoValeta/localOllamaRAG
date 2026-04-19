@@ -8,6 +8,7 @@ alwaysApply: true
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 <!-- Internal title: MonkeyGrab (localOllamaRAG) -->
+<!-- Última actualización: 2026-04-19 -->
 
 ## 1. Descripción del proyecto
 
