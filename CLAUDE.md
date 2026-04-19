@@ -42,8 +42,8 @@ El proyecto tiene dos dimensiones:
 | Evaluación base (7 modelos, 320 muestras/dataset) | ✅ Completada — `training-output/baseline/` |
 | Fine-tuning Qwen3-14B (v10) | ✅ Artefactos locales en `training-output/qwen-3/` (checkpoints y pesos gitignored; métricas versionables) |
 | Fine-tuning Phi-4 (v1) | ✅ Run principal r=32 en `training-output/phi-4/`; exploración r=64 en `phi-4/64/`; r=16 en `phi-4/16/` (artefactos completos: `training_stats.json`, `evaluation_comparison.json`) |
-| Fine-tuning Gemma-3-12B (v2) | ⏳ Pendiente — script actualizado, listo para lanzar |
-| Evaluación base/adaptado (test) | ✅ `evaluation_comparison.json` versionado en: Qwen3 (raíz), Phi r=32 (raíz), Phi r=64 (`phi-4/64/`), Phi r=16 (`phi-4/16/`). Pendiente: Gemma-3 (training no lanzado). |
+| Fine-tuning Gemma-3-12B (v2) | ✅ Completado — artefactos en `training-output/gemma-3/` (`training_stats.json`, `evaluation_comparison.json` versionados). Conversión GGUF bloqueada por incompatibilidad de tokenizer SentencePiece en Ollama 0.21+ (ver `scripts/conversion/GEMMA3_CONVERSION_ISSUE.md`). |
+| Evaluación base/adaptado (test) | ✅ `evaluation_comparison.json` versionado en: Qwen3 (raíz), Phi r=32 (raíz), Phi r=64 (`phi-4/64/`), Phi r=16 (`phi-4/16/`), Gemma-3 (raíz). |
 
 **Modelos viables para producción**: Qwen3-14B, Phi-4 y Gemma-3-12B (scripts actualizados y compatibles con GGUF/Ollama).
 
@@ -81,12 +81,11 @@ localOllamaRAG/
 │   ├── show_fragments/
 │   │   └── export_fragments.py   # Exporta chunks de ChromaDB a TXT/JSONL para debug
 │   ├── requirements.txt
-│   ├── debug_context_issues.md   # Análisis de issues en presentación del contexto
 │   ├── debug_rag/                # Dumps de debug de queries (runtime, gitignored)
 │   ├── pdfs/                     # PDFs a indexar (solo .gitkeep versionado; contenido en .gitignore)
 │   ├── ragbench_pdfs/            # PDFs RAGBench — run_eval_ragbench.py (solo .gitkeep versionado)
-│   ├── mi_vector_db/             # ChromaDB producción (solo .gitkeep versionado; datos en .gitignore)
-│   ├── ragbench_vector_db/       # ChromaDB RAGBench (solo .gitkeep versionado; datos en .gitignore)
+│   ├── mi_vector_db/             # ChromaDB producción (datos en .gitignore; sin .gitkeep versionado)
+│   ├── ragbench_vector_db/       # ChromaDB RAGBench (datos en .gitignore; sin .gitkeep versionado)
 │   ├── historial_chat.json       # Historial modo CHAT (gitignored)
 │   └── cli/
 │       ├── app.py                # MonkeyGrabCLI: bucle interactivo y dispatch de comandos
@@ -118,7 +117,8 @@ localOllamaRAG/
 │   ├── conversion/
 │   │   ├── merge_lora.py         # Fusiona adaptador LoRA con base para exportar a GGUF
 │   │   ├── build_ollama.bat      # Automatiza creación del modelo en Ollama (Windows)
-│   │   └── quantize_to_q4km.ps1  # Cuantiza modelo merged a Q4_K_M con llama-bin
+│   │   ├── quantize_to_q4km.ps1  # Cuantiza modelo merged a Q4_K_M con llama-bin
+│   │   └── GEMMA3_CONVERSION_ISSUE.md  # Problema tokenizer SentencePiece en Gemma-3 → GGUF (Ollama 0.21+)
 │   └── tests/
 │       ├── test_nothink.py       # Test supresión de <think> en Qwen3 vía Ollama
 │       ├── test_ollama_stream_nothink.py
@@ -144,6 +144,8 @@ localOllamaRAG/
 │   │   └── plots/                # Curvas y reportes de training/eval (gitignored)
 │   ├── gemma-3/                  # Adaptador LoRA Gemma-3 (artefactos pesados gitignored)
 │   │   ├── generate_reports.py   # Tablas + figuras train/eval → plots/ (misma lógica en cada modelo)
+│   │   ├── training_stats.json   # Métricas de training (versionado)
+│   │   ├── evaluation_comparison.json  # Comparativa base/adaptado (versionado)
 │   │   └── plots/                # Curvas de training/eval (gitignored)
 │   └── baseline/                 # Resultados benchmark 7 modelos base (320 muestras)
 │       ├── baseline_evaluation.json          # 7 modelos × 5 datasets × con/sin contexto
@@ -195,8 +197,8 @@ Variables de entorno de referencia (ajustar según hardware y despliegue):
 | `OLLAMA_RAG_MODEL` | `phi4-finetuned:latest` | Generador RAG |
 | `OLLAMA_CHAT_MODEL` | `gemma4:e2b` | Modo chat |
 | `OLLAMA_EMBED_MODEL` | `embeddinggemma:latest` | Embeddings |
-| `OLLAMA_CONTEXTUAL_MODEL` | `gemma4:e2b` | Contextual retrieval |
-| `OLLAMA_RECOMP_MODEL` | `gemma4:e2b` | Síntesis RECOMP |
+| `OLLAMA_CONTEXTUAL_MODEL` | `gemma4:e4b` | Contextual retrieval |
+| `OLLAMA_RECOMP_MODEL` | `gemma4:e4b` | Síntesis RECOMP |
 | `OLLAMA_OCR_MODEL` | `gemma4:e4b` | Descripción de imágenes (multimodal, think=False) |
 | `DOCS_FOLDER` | `rag/pdfs/` | Carpeta de PDFs a indexar |
 | `RERANKER_QUALITY` | `quality` | `quality` (BAAI/bge) o `speed` (MiniLM) |
@@ -300,7 +302,7 @@ python scripts/training/train-qwen3.py
 # Phi-4 (v1) — training completado (r=32, r=16, r=64)
 python scripts/training/train-phi4.py
 
-# Gemma-3-12B (v2) — pendiente de lanzar
+# Gemma-3-12B (v2) — training completado
 python scripts/training/train-gemma3.py
 
 # Fusionar adaptador para exportar a GGUF
@@ -541,7 +543,7 @@ bert-score>=0.3.13
 | Baseline 200-sample (histórico) | `training-output/baseline/200/` | Versión anterior cap=200; solo referencia |
 | Artefactos LoRA Qwen3-14B | `training-output/qwen-3/` | Tras training: `training_stats.json`, `evaluation_comparison.json`, predicciones (gitignored). `generate_reports.py` → `plots/{train,eval}/` |
 | Artefactos LoRA Phi-4 | `training-output/phi-4/` | Convención Qwen3 + **subcarpetas por rank** (`16/`, `64/`, …) cuando `LORA_RANK≠32` en `train-phi4.py`; en raíz, run histórico r=32 |
-| Artefactos LoRA Gemma-3-12B | `training-output/gemma-3/` | Misma convención que Qwen3; `generate_reports.py` idéntico en lógica |
+| Artefactos LoRA Gemma-3-12B | `training-output/gemma-3/` | `training_stats.json`, `evaluation_comparison.json` versionados. `generate_reports.py` → `plots/{train,eval}/`. Conversión GGUF pendiente (incompatibilidad tokenizer; ver `GEMMA3_CONVERSION_ISSUE.md`) |
 | Diagrama arquitectura | `docs/monkeygrab_architecture.png` / `.svg` | Generado por `generate_diagram.py` |
 | Datasets RAGAS (preguntas) | `evaluation/datasets/*.json` | p. ej. `dataset_eval_es.json`, `dataset_eval_ca.json`, `dataset_eval_mix.json` |
 
@@ -589,7 +591,7 @@ Se usa cuando la aplicación **espera un directorio** pero su contenido **no** d
 - En `.gitignore`: `rag/<carpeta>/**` + `!rag/<carpeta>/.gitkeep` (el `**` ignora también subcarpetas; la negación solo recupera el fichero vacío).
 - En disco: un archivo **vacío** `rag/<carpeta>/.gitkeep` commiteado.
 
-**Carpetas con este patrón en el repo:** `pdfs/`, `mi_vector_db/`, `ragbench_pdfs/`, `ragbench_vector_db/`.
+**Carpetas con este patrón en el repo:** `rag/pdfs/`, `rag/ragbench_pdfs/`, `evaluation/debug/`, `evaluation/scores/`. Las carpetas `rag/mi_vector_db/` y `rag/ragbench_vector_db/` tienen reglas `/**` + `!.gitkeep` en `.gitignore` pero sus `.gitkeep` ya no están versionados (eliminados en commit `b1a0b5a`).
 
 **Cuándo añadir otro `.gitkeep`:** solo si aparece una ruta nueva “obligatoria” en código (replicar el mismo par `/**` + `!.gitkeep` en la raíz `.gitignore` y documentar aquí).
 

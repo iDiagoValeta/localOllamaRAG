@@ -148,7 +148,7 @@ All pipeline behaviour is controlled via environment variables. Set them in your
 
 ### Terminal CLI
 
-Place your PDF files in `rag/pdfs/` (the folder exists after clone via `.gitkeep`). The system indexes them automatically on first launch. RAGBench evaluation uses `rag/ragbench_pdfs/` and `rag/ragbench_vector_db/` in the same way.
+Place your PDF files in `rag/pdfs/` (the folder exists after clone via `.gitkeep`). The system indexes them automatically on first launch. RAGBench evaluation uses `rag/ragbench_pdfs/` (`.gitkeep` versioned); `rag/ragbench_vector_db/` and `rag/mi_vector_db/` are gitignored and created at runtime.
 
 ```bash
 cd rag
@@ -222,9 +222,9 @@ localOllamaRAG/
 ├── rag/
 │   ├── chat_pdfs.py              # Main RAG engine (indexing, retrieval, generation)
 │   ├── pdfs/                     # Your PDFs (only .gitkeep in Git; content ignored)
-│   ├── mi_vector_db/             # ChromaDB production index (same .gitkeep pattern)
-│   ├── ragbench_pdfs/            # RAGBench PDFs (same pattern; see run_eval_ragbench.py)
-│   ├── ragbench_vector_db/       # ChromaDB for RAGBench eval (same pattern)
+│   ├── mi_vector_db/             # ChromaDB production index (gitignored; created at runtime)
+│   ├── ragbench_pdfs/            # RAGBench PDFs (.gitkeep versioned; content ignored)
+│   ├── ragbench_vector_db/       # ChromaDB for RAGBench eval (gitignored; created at runtime)
 │   └── cli/                      # Rich terminal interface
 ├── web/
 │   ├── app.py                    # Flask backend (REST + SSE)
