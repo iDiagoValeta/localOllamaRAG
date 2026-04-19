@@ -114,7 +114,7 @@ En esta fase se puede asumir mas coste porque el espacio de busqueda ya esta red
 | | Fase 1 | Fase 2 |
 |--|--------|--------|
 | Train | No se usa | Completo o cap amplio |
-| Dev | Submuestra pequena (~250 por dataset) | Submuestra media (500–1.200) |
+| Dev | Submuestra pequeña (~250 por dataset) | Submuestra media (500–1.200) |
 | Test | Congelado | Congelado; se evalua solo al final |
 | Objetivo | Ranking de modelos base | Entrenamiento y evaluacion formal |
 | Coste | Bajo | Alto (justificado) |

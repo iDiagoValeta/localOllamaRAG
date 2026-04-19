@@ -17,6 +17,8 @@ Usage:
     python evaluation/run_eval.py [--dataset PATH] [--output PATH] [--verbose] [--no-debug]
 
 Default dataset path: ``evaluation/datasets/dataset_eval_es.json``.
+If you still pass the old path ``evaluation/dataset_eval_*.json``, it is
+resolved automatically to ``evaluation/datasets/``.
 
 Dependencies:
     - ragas
@@ -36,7 +38,7 @@ Dependencies:
 #  +-- 3. Evaluation LLM       configurar_llm_evaluacion (Gemini + embeddings)
 #
 #  PIPELINE
-#  +-- 4. Paths and checkpoints resolver rutas, progreso por pregunta, reanudación
+#  +-- 4. Paths and checkpoints resolver_ruta_dataset, rutas, progreso por pregunta, reanudación
 #  +-- 5. Result formatting    imprimir_resultados
 #  +-- 6. Debug output         _extraer_justificaciones_traces, guardar_debug
 #
@@ -190,6 +192,42 @@ EVAL_DIR = os.path.dirname(os.path.abspath(__file__))
 SCORES_DIR = os.path.join(EVAL_DIR, "scores")
 DEBUG_DIR = os.path.join(EVAL_DIR, "debug")
 CHECKPOINTS_DIR = os.path.join(DEBUG_DIR, "checkpoints")
+
+
+def resolver_ruta_dataset(ruta: str) -> str:
+    """Resolve a dataset path to an existing file.
+
+    Bundled RAGAS JSON files live under ``evaluation/datasets/``. If the user
+    passes a non-existent path but the basename matches ``dataset_eval_*.json``,
+    the same file under ``evaluation/datasets/`` is tried (covers the legacy
+    layout ``evaluation/dataset_eval_*.json`` and bare filenames from repo root).
+
+    Args:
+        ruta: Path as given by the user (relative or absolute).
+
+    Returns:
+        Absolute path to an existing file.
+
+    Raises:
+        FileNotFoundError: If no matching file exists.
+    """
+    expanded = os.path.abspath(os.path.expanduser(ruta))
+    if os.path.isfile(expanded):
+        return expanded
+    name = os.path.basename(expanded)
+    if name.startswith("dataset_eval_") and name.lower().endswith(".json"):
+        alt = os.path.join(EVAL_DIR, "datasets", name)
+        if os.path.isfile(alt):
+            print(
+                f"   Note: dataset path resolved to {alt} (input was {ruta!r}; "
+                "use evaluation/datasets/… to silence this message)"
+            )
+            return alt
+    raise FileNotFoundError(
+        f"Dataset file not found: {expanded}. "
+        f"Bundled datasets are under {os.path.join(EVAL_DIR, 'datasets')!r}, "
+        f"e.g. {os.path.join(EVAL_DIR, 'datasets', 'dataset_eval_es.json')}"
+    )
 
 
 def _slugify(value: str) -> str:
@@ -495,7 +533,7 @@ def ejecutar_evaluacion(
         # ─────────────────────────────────────────────
 
         print(f"\nLoading dataset...")
-        dataset_path = os.path.abspath(dataset_path)
+        dataset_path = resolver_ruta_dataset(dataset_path)
         resolved_output_path = os.path.abspath(output_path or _default_output_path(dataset_path))
         resolved_debug_path = os.path.abspath(debug_path or _default_debug_path(dataset_path))
         resolved_checkpoint_path = os.path.abspath(
