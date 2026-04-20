@@ -53,6 +53,7 @@ import sys
 import json
 import argparse
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FuturesTimeout
 from typing import Any, Literal
 from pathlib import Path
 
@@ -147,7 +148,18 @@ def normalizar_columnas(df: pd.DataFrame) -> pd.DataFrame:
 # SECTION 3: EVALUATION LLM AND EMBEDDINGS
 # ─────────────────────────────────────────────
 
-def configurar_llm_evaluacion():
+def _leer_env_int(nombre: str, default: int) -> int:
+    """Read an integer environment variable with a safe fallback."""
+    try:
+        return int(os.getenv(nombre, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def configurar_llm_evaluacion(
+    google_timeout: int | None = None,
+    google_retries: int | None = None,
+):
     """Configure the Gemini LLM and embedding model used by RAGAS as the
     evaluation judge.
 
@@ -162,20 +174,27 @@ def configurar_llm_evaluacion():
     if not gemini_key:
         print("GEMINI_API_KEY or GOOGLE_API_KEY not found in environment.")
         raise SystemExit(1)
+    google_timeout = google_timeout or _leer_env_int("EVAL_GOOGLE_TIMEOUT", 45)
+    google_retries = google_retries if google_retries is not None else _leer_env_int("EVAL_GOOGLE_RETRIES", 2)
+
     try:
         from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 
         eval_llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             google_api_key=gemini_key,
             temperature=0,
+            request_timeout=google_timeout,
+            retries=google_retries,
         )
         eval_embeddings = GoogleGenerativeAIEmbeddings(
             model="models/gemini-embedding-001",
             google_api_key=gemini_key,
+            request_options={"timeout": google_timeout},
         )
-        print("Evaluation LLM: Gemini 2.0 Flash (langchain-google-genai)")
+        print("Evaluation LLM: Gemini 2.5 Flash (langchain-google-genai)")
         print("Evaluation embeddings: Google gemini-embedding-001 (langchain-google-genai)")
+        print(f"Google timeout/retries: {google_timeout}s / {google_retries}")
         return eval_llm, eval_embeddings
     except ImportError as err:
         print(f"Error: {err}")
@@ -289,6 +308,105 @@ def _guardar_checkpoint(checkpoint_path: str, payload: dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(checkpoint_path)), exist_ok=True)
     with open(checkpoint_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+
+
+def _respuesta_vacia(respuesta: Any) -> bool:
+    """Return True when a generated answer is missing or blank."""
+    return not isinstance(respuesta, str) or not respuesta.strip()
+
+
+def _indices_respuestas_vacias(answers: list[str], total: int) -> list[int]:
+    """Find zero-based question indexes that still need a non-empty answer."""
+    return [
+        i
+        for i in range(total)
+        if i >= len(answers) or _respuesta_vacia(answers[i])
+    ]
+
+
+def _guardar_checkpoint_evaluacion(
+    checkpoint_path: str,
+    dataset_path: str,
+    questions_count: int,
+    recomp_enabled: bool,
+    eval_corpus: str,
+    output_path: str,
+    debug_path: str,
+    answers: list[str],
+    contexts_list: list[list[str]],
+) -> None:
+    """Save generation progress with a consistent payload."""
+    _guardar_checkpoint(
+        checkpoint_path,
+        {
+            "dataset_path": dataset_path,
+            "questions_count": questions_count,
+            "recomp_enabled": recomp_enabled,
+            "eval_corpus": eval_corpus,
+            "output_path": output_path,
+            "debug_path": debug_path,
+            "completed_questions": len([a for a in answers if not _respuesta_vacia(a)]),
+            "answers": answers,
+            "contexts_list": contexts_list,
+            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        },
+    )
+
+
+def _parse_ragas_metric_names(
+    metric_spec: str | None,
+    tiene_ground_truth: bool,
+) -> list[str]:
+    """Resolve CLI metric names into the canonical RAGAS metric names."""
+    default_names = [
+        "answer_correctness",
+        "faithfulness",
+        "answer_relevancy",
+        "context_precision",
+        "context_recall",
+    ] if tiene_ground_truth else [
+        "faithfulness",
+        "answer_relevancy",
+        "context_precision",
+        "context_recall",
+    ]
+
+    if not metric_spec or metric_spec.strip().lower() == "all":
+        return default_names
+
+    aliases = {
+        "answer_correctness": "answer_correctness",
+        "factual_correctness": "answer_correctness",
+        "faithfulness": "faithfulness",
+        "answer_relevancy": "answer_relevancy",
+        "response_relevancy": "answer_relevancy",
+        "context_precision": "context_precision",
+        "context_recall": "context_recall",
+    }
+
+    names: list[str] = []
+    for raw_name in metric_spec.split(","):
+        key = raw_name.strip().lower().replace("-", "_")
+        if not key:
+            continue
+        if key not in aliases:
+            valid = ", ".join(sorted(aliases))
+            raise ValueError(f"Unknown RAGAS metric {raw_name!r}. Valid metrics: {valid}")
+        name = aliases[key]
+        if name == "answer_correctness" and not tiene_ground_truth:
+            raise ValueError("answer_correctness requires ground truth in the dataset.")
+        if name not in names:
+            names.append(name)
+
+    if not names:
+        raise ValueError("No RAGAS metrics selected.")
+    return names
+
+
+def _es_google_resource_exhausted(exc: Exception) -> bool:
+    """Detect Google GenAI quota/rate-limit failures through wrapped exceptions."""
+    text = f"{type(exc).__name__}: {exc}"
+    return "RESOURCE_EXHAUSTED" in text or "429" in text
 
 
 # ─────────────────────────────────────────────
@@ -497,6 +615,15 @@ def ejecutar_evaluacion(
     force_reindex: bool = False,
     recomp_enabled: bool | None = None,
     eval_corpus: Literal["es", "ca"] = "es",
+    ragas_timeout: int = 90,
+    ragas_max_retries: int = 5,
+    ragas_max_wait: int = 60,
+    ragas_max_workers: int = 1,
+    ragas_batch_size: int | None = 5,
+    ragas_metrics: str | None = None,
+    google_timeout: int | None = None,
+    google_retries: int | None = None,
+    raise_exceptions: bool = False,
 ) -> dict[str, Any]:
     """Run the full live RAGAS evaluation and persist its artifacts.
 
@@ -511,6 +638,15 @@ def ejecutar_evaluacion(
         recomp_enabled: Optional in-process override for ``USAR_RECOMP_SYNTHESIS``.
         eval_corpus: ``es`` uses ``rag/pdfs`` (default Chroma); ``ca`` uses ``rag/pdfs_ca``
             and adds ``_ca`` to default score/debug/checkpoint filenames.
+        ragas_timeout: Per-call timeout used by RAGAS.
+        ragas_max_retries: Max retries for failed RAGAS jobs.
+        ragas_max_wait: Max backoff wait between RAGAS retries.
+        ragas_max_workers: Concurrent RAGAS workers.
+        ragas_batch_size: Optional RAGAS batch size.
+        ragas_metrics: Comma-separated list of RAGAS metrics, or ``all``.
+        google_timeout: Timeout passed to the Gemini LLM and embeddings clients.
+        google_retries: Retries passed to the Gemini LLM client.
+        raise_exceptions: Stop immediately on a RAGAS job failure.
 
     Returns:
         Summary dictionary with output paths, timings, and mean metrics.
@@ -549,7 +685,10 @@ def ejecutar_evaluacion(
         # 2. CONFIGURE EVALUATION LLM
         # ─────────────────────────────────────────────
 
-        eval_llm, eval_embeddings = configurar_llm_evaluacion()
+        eval_llm, eval_embeddings = configurar_llm_evaluacion(
+            google_timeout=google_timeout,
+            google_retries=google_retries,
+        )
 
         # ─────────────────────────────────────────────
         # 3. LOAD DATASET
@@ -622,35 +761,63 @@ def ejecutar_evaluacion(
             ):
                 answers = checkpoint.get("answers", [])
                 contexts_list = checkpoint.get("contexts_list", [])
+                non_empty_answers = len([a for a in answers if not _respuesta_vacia(a)])
                 print(
-                    f"   Resuming from checkpoint: {len(answers)}/{len(questions)} questions already completed."
+                    "   Resuming from checkpoint: "
+                    f"{non_empty_answers}/{len(questions)} questions with non-empty answers "
+                    f"({len(answers)}/{len(questions)} slots present)."
                 )
             else:
                 print("   Existing checkpoint does not match this run. Starting fresh progress.")
 
         t_start = time.time()
+        if len(answers) > len(questions):
+            answers = answers[:len(questions)]
+        if len(contexts_list) > len(questions):
+            contexts_list = contexts_list[:len(questions)]
 
+        while len(answers) < len(questions):
+            answers.append("")
+        while len(contexts_list) < len(questions):
+            contexts_list.append([])
+
+        pending_answer_indexes = _indices_respuestas_vacias(answers, len(questions))
+        if pending_answer_indexes and checkpoint:
+            first_missing = ", ".join(str(i + 1) for i in pending_answer_indexes[:10])
+            suffix = "..." if len(pending_answer_indexes) > 10 else ""
+            print(
+                "   Checkpoint contains empty answers. "
+                f"Regenerating {len(pending_answer_indexes)} question(s): {first_missing}{suffix}"
+            )
+
+        _ollama_timeout = int(os.getenv("EVAL_OLLAMA_TIMEOUT", "300"))
         try:
-            for i, q in enumerate(questions[len(answers):], start=len(answers)):
+            for i in pending_answer_indexes:
+                q = questions[i]
                 if verbose:
                     print(f"   [{i+1}/{len(questions)}] {q[:60]}...")
-                answer, contexts = evaluar_pregunta_rag(q, collection)
-                answers.append(answer)
-                contexts_list.append(contexts)
-                _guardar_checkpoint(
+                with ThreadPoolExecutor(max_workers=1) as _ex:
+                    _fut = _ex.submit(evaluar_pregunta_rag, q, collection)
+                    try:
+                        answer, contexts = _fut.result(timeout=_ollama_timeout)
+                    except _FuturesTimeout:
+                        answer, contexts = "", []
+                        print(
+                            f"   [TIMEOUT] Q{i+1} exceeded {_ollama_timeout}s "
+                            "— saved as empty, will retry on next run."
+                        )
+                answers[i] = answer
+                contexts_list[i] = contexts
+                _guardar_checkpoint_evaluacion(
                     resolved_checkpoint_path,
-                    {
-                        "dataset_path": dataset_path,
-                        "questions_count": len(questions),
-                        "recomp_enabled": rag_runtime.USAR_RECOMP_SYNTHESIS,
-                        "eval_corpus": eval_corpus,
-                        "output_path": resolved_output_path,
-                        "debug_path": resolved_debug_path,
-                        "completed_questions": len(answers),
-                        "answers": answers,
-                        "contexts_list": contexts_list,
-                        "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    },
+                    dataset_path=dataset_path,
+                    questions_count=len(questions),
+                    recomp_enabled=rag_runtime.USAR_RECOMP_SYNTHESIS,
+                    eval_corpus=eval_corpus,
+                    output_path=resolved_output_path,
+                    debug_path=resolved_debug_path,
+                    answers=answers,
+                    contexts_list=contexts_list,
                 )
         except ConnectionError as e:
             print(f"\nError: Could not connect to Ollama: {e}")
@@ -660,6 +827,19 @@ def ejecutar_evaluacion(
 
         t_rag = time.time() - t_start
         print(f"   Pipeline completed in {t_rag:.1f}s ({t_rag/len(questions):.1f}s/question)")
+
+        empty_answer_indexes = _indices_respuestas_vacias(answers, len(questions))
+        if empty_answer_indexes:
+            listed = ", ".join(str(i + 1) for i in empty_answer_indexes[:20])
+            suffix = "..." if len(empty_answer_indexes) > 20 else ""
+            print(
+                "\nError: RAGAS evaluation was not launched because "
+                f"{len(empty_answer_indexes)} answer(s) are empty."
+            )
+            print(f"   Empty question indexes: {listed}{suffix}")
+            print(f"   Checkpoint: {resolved_checkpoint_path}")
+            print("   Fix the RAG generation issue and rerun; only empty answers will be retried.")
+            raise SystemExit(1)
 
         # ─────────────────────────────────────────────
         # 6. BUILD RAGAS EVALUATION DATASET
@@ -682,26 +862,56 @@ def ejecutar_evaluacion(
         # 7. CONFIGURE METRICS
         # ─────────────────────────────────────────────
 
-        metrics = [faithfulness, answer_relevancy, context_precision, context_recall]
-        if tiene_ground_truth:
-            metrics.insert(0, answer_correctness)
+        metric_objects = {
+            "answer_correctness": answer_correctness,
+            "faithfulness": faithfulness,
+            "answer_relevancy": answer_relevancy,
+            "context_precision": context_precision,
+            "context_recall": context_recall,
+        }
+        selected_metric_names = _parse_ragas_metric_names(ragas_metrics, tiene_ground_truth)
+        metrics = [metric_objects[name] for name in selected_metric_names]
 
         # ─────────────────────────────────────────────
         # 8. RUN RAGAS EVALUATION
         # ─────────────────────────────────────────────
 
         print("\nRunning RAGAS evaluation (this may take a few minutes)...")
+        print(
+            "   RAGAS config: "
+            f"timeout={ragas_timeout}s, retries={ragas_max_retries}, "
+            f"max_wait={ragas_max_wait}s, workers={ragas_max_workers}, "
+            f"batch_size={ragas_batch_size or 'auto'}, "
+            f"metrics={','.join(selected_metric_names)}"
+        )
         t_eval_start = time.time()
 
-        eval_run_config = RunConfig(timeout=600, max_retries=15)
-
-        result = evaluate(
-            dataset=eval_dataset,
-            metrics=metrics,
-            llm=eval_llm,
-            embeddings=eval_embeddings,
-            run_config=eval_run_config,
+        eval_run_config = RunConfig(
+            timeout=ragas_timeout,
+            max_retries=ragas_max_retries,
+            max_wait=ragas_max_wait,
+            max_workers=ragas_max_workers,
         )
+
+        try:
+            result = evaluate(
+                dataset=eval_dataset,
+                metrics=metrics,
+                llm=eval_llm,
+                embeddings=eval_embeddings,
+                run_config=eval_run_config,
+                batch_size=ragas_batch_size,
+                raise_exceptions=raise_exceptions,
+            )
+        except Exception as e:
+            if _es_google_resource_exhausted(e):
+                print("\nError: Google returned 429 RESOURCE_EXHAUSTED during RAGAS.")
+                print("   The RAG checkpoint is valid; this failed in the evaluator, not in retrieval.")
+                print("   Rerun without --raise-exceptions and the defaults already limit to")
+                print("   workers=1 and batch_size=5, which should avoid the rate limit.")
+                print("   If it persists, try: --ragas-max-workers 1 --ragas-batch-size 1 --ragas-max-wait 120")
+                raise SystemExit(2) from e
+            raise
 
         t_eval = time.time() - t_eval_start
         print(f"   Evaluation completed in {t_eval:.1f}s")
@@ -819,10 +1029,73 @@ def main():
         action="store_true",
         help="Delete and rebuild the ChromaDB collection before evaluating",
     )
+    parser.add_argument(
+        "--no-recomp",
+        action="store_true",
+        help="Disable RECOMP synthesis for this run (overrides module default)",
+    )
+    parser.add_argument(
+        "--ragas-timeout",
+        type=int,
+        default=90,
+        help="Per-call RAGAS timeout in seconds. Default: 90",
+    )
+    parser.add_argument(
+        "--ragas-max-retries",
+        type=int,
+        default=5,
+        help="Maximum RAGAS retries per failed job. Default: 5",
+    )
+    parser.add_argument(
+        "--ragas-max-wait",
+        type=int,
+        default=60,
+        help="Maximum wait between RAGAS retries in seconds. Default: 60",
+    )
+    parser.add_argument(
+        "--ragas-max-workers",
+        type=int,
+        default=1,
+        help="Concurrent RAGAS workers. Lower this if Google rate limits. Default: 1",
+    )
+    parser.add_argument(
+        "--ragas-batch-size",
+        type=int,
+        default=5,
+        help="RAGAS batch size. Default: 5",
+    )
+    parser.add_argument(
+        "--ragas-metrics",
+        default=None,
+        help=(
+            "Comma-separated RAGAS metrics or 'all'. "
+            "Valid: answer_correctness, faithfulness, answer_relevancy, "
+            "context_precision, context_recall. Default: all available"
+        ),
+    )
+    parser.add_argument(
+        "--google-timeout",
+        type=int,
+        default=None,
+        help="Timeout in seconds for Gemini LLM/embeddings calls. Default: 45 or EVAL_GOOGLE_TIMEOUT",
+    )
+    parser.add_argument(
+        "--google-retries",
+        type=int,
+        default=None,
+        help="Gemini LLM retries. Default: 2 or EVAL_GOOGLE_RETRIES",
+    )
+    parser.add_argument(
+        "--raise-exceptions",
+        action="store_true",
+        help="Stop immediately when a RAGAS job fails instead of filling NaN scores",
+    )
     args = parser.parse_args()
 
     eval_corpus: Literal["es", "ca"] = "ca" if args.catalan else "es"
     dataset_arg = args.dataset if args.dataset is not None else _default_dataset_for_corpus(eval_corpus)
+
+    recomp_arg = False if args.no_recomp else None
 
     ejecutar_evaluacion(
         dataset_path=dataset_arg,
@@ -832,7 +1105,17 @@ def main():
         verbose=args.verbose,
         save_debug=not args.no_debug,
         force_reindex=args.force_reindex,
+        recomp_enabled=recomp_arg,
         eval_corpus=eval_corpus,
+        ragas_timeout=args.ragas_timeout,
+        ragas_max_retries=args.ragas_max_retries,
+        ragas_max_wait=args.ragas_max_wait,
+        ragas_max_workers=args.ragas_max_workers,
+        ragas_batch_size=args.ragas_batch_size,
+        ragas_metrics=args.ragas_metrics,
+        google_timeout=args.google_timeout,
+        google_retries=args.google_retries,
+        raise_exceptions=args.raise_exceptions,
     )
 
 

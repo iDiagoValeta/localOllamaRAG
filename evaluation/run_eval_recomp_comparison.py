@@ -102,8 +102,17 @@ def ejecutar_comparativa_recomp(
     verbose: bool = False,
     save_debug: bool = True,
     label: str | None = None,
-    skip_reindex: bool = False,
+    force_reindex: bool = False,
     eval_corpus: str = "es",
+    ragas_timeout: int = 90,
+    ragas_max_retries: int = 5,
+    ragas_max_wait: int = 60,
+    ragas_max_workers: int = 1,
+    ragas_batch_size: int | None = 5,
+    ragas_metrics: str | None = None,
+    google_timeout: int | None = None,
+    google_retries: int | None = None,
+    raise_exceptions: bool = False,
 ) -> dict:
     """Reindex once (or reuse current index) and execute paired evaluations.
 
@@ -114,8 +123,17 @@ def ejecutar_comparativa_recomp(
         verbose: Whether to print per-question progress during each run.
         save_debug: Whether to save debug JSON files for each run.
         label: Optional suffix for the batch folder name.
-        skip_reindex: Reuse the existing ChromaDB collection without rebuilding it.
+        force_reindex: Rebuild the ChromaDB collection before the first run (default: reuse existing).
         eval_corpus: ``es`` (``rag/pdfs``) or ``ca`` (``rag/pdfs_ca``); same as ``run_eval.py``.
+        ragas_timeout: Per-call RAGAS timeout in seconds.
+        ragas_max_retries: Max retries for failed RAGAS jobs.
+        ragas_max_wait: Max retry backoff wait in seconds.
+        ragas_max_workers: Concurrent RAGAS workers.
+        ragas_batch_size: Optional RAGAS batch size.
+        ragas_metrics: Comma-separated list of RAGAS metrics, or ``all``.
+        google_timeout: Timeout for Gemini LLM/embeddings calls.
+        google_retries: Gemini LLM retries.
+        raise_exceptions: Stop immediately on RAGAS failures.
 
     Returns:
         Manifest dictionary describing the two generated runs.
@@ -129,12 +147,12 @@ def ejecutar_comparativa_recomp(
     os.makedirs(checkpoints_dir, exist_ok=True)
 
     run_specs = [
-        ("recomp_on", True, not skip_reindex),
+        ("recomp_on", True, force_reindex),
         ("recomp_off", False, False),
     ]
 
     results = []
-    for folder_name, recomp_enabled, force_reindex in run_specs:
+    for folder_name, recomp_enabled, should_reindex in run_specs:
         print("\n" + "=" * 70)
         print(
             f"Launching evaluation: {folder_name} "
@@ -149,9 +167,18 @@ def ejecutar_comparativa_recomp(
             checkpoint_path=os.path.join(checkpoints_dir, f"{folder_name}.json"),
             verbose=verbose,
             save_debug=save_debug,
-            force_reindex=force_reindex,
+            force_reindex=should_reindex,
             recomp_enabled=recomp_enabled,
             eval_corpus=eval_corpus,
+            ragas_timeout=ragas_timeout,
+            ragas_max_retries=ragas_max_retries,
+            ragas_max_wait=ragas_max_wait,
+            ragas_max_workers=ragas_max_workers,
+            ragas_batch_size=ragas_batch_size,
+            ragas_metrics=ragas_metrics,
+            google_timeout=google_timeout,
+            google_retries=google_retries,
+            raise_exceptions=raise_exceptions,
         )
         result["variant"] = folder_name
         results.append(result)
@@ -222,9 +249,65 @@ def main() -> None:
         help="Skip saving ragas_debug.json for both runs",
     )
     parser.add_argument(
-        "--skip-reindex",
+        "--reindex",
         action="store_true",
-        help="Reuse the existing ChromaDB collection instead of rebuilding it first",
+        help="Rebuild the ChromaDB collection before the first run (default: reuse existing)",
+    )
+    parser.add_argument(
+        "--ragas-timeout",
+        type=int,
+        default=90,
+        help="Per-call RAGAS timeout in seconds. Default: 90",
+    )
+    parser.add_argument(
+        "--ragas-max-retries",
+        type=int,
+        default=5,
+        help="Maximum RAGAS retries per failed job. Default: 5",
+    )
+    parser.add_argument(
+        "--ragas-max-wait",
+        type=int,
+        default=60,
+        help="Maximum wait between RAGAS retries in seconds. Default: 60",
+    )
+    parser.add_argument(
+        "--ragas-max-workers",
+        type=int,
+        default=1,
+        help="Concurrent RAGAS workers. Lower this if Google rate limits. Default: 1",
+    )
+    parser.add_argument(
+        "--ragas-batch-size",
+        type=int,
+        default=5,
+        help="RAGAS batch size. Default: 5",
+    )
+    parser.add_argument(
+        "--ragas-metrics",
+        default=None,
+        help=(
+            "Comma-separated RAGAS metrics or 'all'. "
+            "Valid: answer_correctness, faithfulness, answer_relevancy, "
+            "context_precision, context_recall. Default: all available"
+        ),
+    )
+    parser.add_argument(
+        "--google-timeout",
+        type=int,
+        default=None,
+        help="Timeout in seconds for Gemini LLM/embeddings calls. Default: 45 or EVAL_GOOGLE_TIMEOUT",
+    )
+    parser.add_argument(
+        "--google-retries",
+        type=int,
+        default=None,
+        help="Gemini LLM retries. Default: 2 or EVAL_GOOGLE_RETRIES",
+    )
+    parser.add_argument(
+        "--raise-exceptions",
+        action="store_true",
+        help="Stop immediately when a RAGAS job fails instead of filling NaN scores",
     )
     args = parser.parse_args()
 
@@ -238,8 +321,17 @@ def main() -> None:
         verbose=args.verbose,
         save_debug=not args.no_debug,
         label=args.label,
-        skip_reindex=args.skip_reindex,
+        force_reindex=args.reindex,
         eval_corpus=eval_corpus,
+        ragas_timeout=args.ragas_timeout,
+        ragas_max_retries=args.ragas_max_retries,
+        ragas_max_wait=args.ragas_max_wait,
+        ragas_max_workers=args.ragas_max_workers,
+        ragas_batch_size=args.ragas_batch_size,
+        ragas_metrics=args.ragas_metrics,
+        google_timeout=args.google_timeout,
+        google_retries=args.google_retries,
+        raise_exceptions=args.raise_exceptions,
     )
 
     print("\nComparison finished.")
