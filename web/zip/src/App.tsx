@@ -41,11 +41,18 @@ interface PipelineSettings {
   recompSynthesis: boolean;
 }
 
+interface IndexingProgress {
+  file: string;
+  file_index: number;
+  total_files: number;
+}
+
 // =============================================================================
 // API Service — connects to Flask backend
 // =============================================================================
 
 const API_BASE = '/api';
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const api = {
   init: () =>
@@ -139,50 +146,178 @@ async function streamSSE(
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let finished = false;
+
+  const processBlock = (block: string) => {
+    if (!block.trim()) return;
+
+    let event = 'message';
+    const dataLines: string[] = [];
+
+    for (const rawLine of block.split(/\r?\n/)) {
+      const line = rawLine.trimEnd();
+      if (!line || line.startsWith(':')) continue;
+      if (line.startsWith('event:')) {
+        event = line.slice(6).trim() || 'message';
+      } else if (line.startsWith('data:')) {
+        dataLines.push(line.slice(5).trimStart());
+      }
+    }
+
+    if (!dataLines.length) return;
+
+    try {
+      const data = JSON.parse(dataLines.join('\n'));
+      if (event === 'error' || data.error) {
+        finished = true;
+        onError(data.message || data.error || 'Error en la respuesta del modelo');
+        return;
+      }
+      if (event === 'token' || data.token) onToken(data.token || '');
+      if (event === 'done' || data.done) {
+        finished = true;
+        onDone(data.sources || null);
+      }
+    } catch {
+      // Ignore malformed SSE blocks; the backend always sends JSON.
+    }
+  };
 
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n\n');
-    buffer = lines.pop() || '';
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() || '';
 
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        try {
-          const data = JSON.parse(line.slice(6));
-          if (data.token) onToken(data.token);
-          if (data.done) onDone(data.sources || null);
-        } catch {
-          // skip malformed SSE
-        }
-      }
-    }
+    for (const block of blocks) processBlock(block);
   }
+
+  buffer += decoder.decode();
+  if (buffer.trim()) processBlock(buffer);
+  if (!finished) onError('La conexión se cerró antes de completar la respuesta.');
 }
 
 // =============================================================================
-// Simple Markdown renderer
+// Small safe Markdown renderer
 // =============================================================================
 
-function renderMarkdown(text: string): string {
-  if (!text) return '';
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code class="lang-$1">$2</code></pre>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/^### (.+)$/gm, '<h4>$1</h4>')
-    .replace(/^## (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^# (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^\d+\.\s+(.+)$/gm, '<p class="ml-4">$1</p>')
-    .replace(/^[-*]\s+(.+)$/gm, '<p class="ml-4">• $1</p>')
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/\n/g, '<br>');
+function renderInlineMarkdown(text: string, keyPrefix: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    const token = match[0];
+    const key = `${keyPrefix}-${match.index}`;
+
+    if (token.startsWith('`')) {
+      parts.push(<code key={key}>{token.slice(1, -1)}</code>);
+    } else if (token.startsWith('**')) {
+      parts.push(<strong key={key}>{token.slice(2, -2)}</strong>);
+    } else {
+      parts.push(<em key={key}>{token.slice(1, -1)}</em>);
+    }
+
+    last = match.index + token.length;
+  }
+
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
+function MarkdownContent({ text, compact = false }: { text: string; compact?: boolean }) {
+  if (!text) return null;
+
+  const className = compact ? 'markdown-content compact' : 'markdown-content';
+
+  if (text.includes('```')) {
+    const nodes: React.ReactNode[] = [];
+    let inCode = false;
+    let codeLines: string[] = [];
+    let paragraph: string[] = [];
+
+    const flushParagraph = (key: string) => {
+      if (!paragraph.length) return;
+      nodes.push(<p key={key}>{paragraph.map((line, i) => <React.Fragment key={i}>{i > 0 && <br />}{renderInlineMarkdown(line, `${key}-${i}`)}</React.Fragment>)}</p>);
+      paragraph = [];
+    };
+
+    text.split('\n').forEach((line, i) => {
+      if (/^```/.test(line)) {
+        if (inCode) {
+          nodes.push(<pre key={`code-${i}`}><code>{codeLines.join('\n')}</code></pre>);
+          codeLines = [];
+          inCode = false;
+        } else {
+          flushParagraph(`p-${i}`);
+          inCode = true;
+        }
+        return;
+      }
+
+      if (inCode) {
+        codeLines.push(line);
+      } else if (line.trim()) {
+        paragraph.push(line);
+      } else {
+        flushParagraph(`p-${i}`);
+      }
+    });
+
+    if (inCode) nodes.push(<pre key="code-final"><code>{codeLines.join('\n')}</code></pre>);
+    flushParagraph('p-final');
+    return <div className={className}>{nodes}</div>;
+  }
+
+  return (
+    <div className={className}>
+      {text.split(/\n{2,}/).map((block, i) => {
+        const lines = block.split('\n').filter(Boolean);
+        if (!lines.length) return null;
+
+        const heading = lines[0].match(/^(#{1,3})\s+(.+)$/);
+        if (heading) {
+          const Tag = heading[1].length === 1 ? 'h2' : heading[1].length === 2 ? 'h3' : 'h4';
+          return <Tag key={i}>{renderInlineMarkdown(heading[2], `h-${i}`)}</Tag>;
+        }
+
+        if (lines.every(line => /^[-*]\s+/.test(line))) {
+          return (
+            <ul key={i}>
+              {lines.map((line, j) => (
+                <li key={j}>{renderInlineMarkdown(line.replace(/^[-*]\s+/, ''), `ul-${i}-${j}`)}</li>
+              ))}
+            </ul>
+          );
+        }
+
+        if (lines.every(line => /^\d+\.\s+/.test(line))) {
+          return (
+            <ol key={i}>
+              {lines.map((line, j) => (
+                <li key={j}>{renderInlineMarkdown(line.replace(/^\d+\.\s+/, ''), `ol-${i}-${j}`)}</li>
+              ))}
+            </ol>
+          );
+        }
+
+        return (
+          <p key={i}>
+            {lines.map((line, j) => (
+              <React.Fragment key={j}>
+                {j > 0 && <br />}
+                {renderInlineMarkdown(line, `p-${i}-${j}`)}
+              </React.Fragment>
+            ))}
+          </p>
+        );
+      })}
+    </div>
+  );
 }
 
 // =============================================================================
@@ -200,7 +335,7 @@ export default function App() {
   const [totalFragments, setTotalFragments] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
-  const [indexingProgress, setIndexingProgress] = useState<{file: string; file_index: number; total_files: number} | null>(null);
+  const [indexingProgress, setIndexingProgress] = useState<IndexingProgress | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isReindexing, setIsReindexing] = useState(false);
@@ -221,7 +356,7 @@ export default function App() {
     reranker: true,
     expandContext: true,
     optimizeContext: true,
-    recompSynthesis: false,
+    recompSynthesis: true,
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -231,6 +366,7 @@ export default function App() {
   const [retryTrigger, setRetryTrigger] = useState(0);
   const [indexingError, setIndexingError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   // ---- Scroll to bottom ----
   const scrollToBottom = useCallback(() => {
@@ -286,20 +422,41 @@ export default function App() {
 
   // ---- Mode switching ----
   const handleModeChange = useCallback(async (newMode: Mode) => {
+    const previousMode = mode;
     setMode(newMode);
-    await api.setMode(newMode).catch(() => {});
-  }, []);
+    const result = await api.setMode(newMode).catch(() => null);
+    if (!result?.ok) setMode(previousMode);
+  }, [mode]);
 
   // ---- Pipeline settings toggle ----
   const toggleSetting = useCallback(async (key: keyof PipelineSettings) => {
-    const newVal = !settings[key];
+    const previousVal = settings[key];
+    const newVal = !previousVal;
+    setSettingsError(null);
     setSettings(prev => ({ ...prev, [key]: newVal }));
     const result = await api.updateSettings({ [key]: newVal }).catch(() => null);
     if (result?.ok && key in result.settings) {
       // Server may override (e.g. reranker unavailable)
       setSettings(prev => ({ ...prev, [key]: result.settings[key] }));
+    } else {
+      setSettings(prev => ({ ...prev, [key]: previousVal }));
+      setSettingsError(result?.error || 'No se pudo guardar el ajuste.');
     }
   }, [settings]);
+
+  const waitForIndexingToFinish = useCallback(async () => {
+    for (;;) {
+      await sleep(1500);
+      const status = await api.init();
+      if (status.ok) return status;
+      if (status.indexing) {
+        setIndexingProgress(status.progress || null);
+        setIndexingError(status.error || null);
+        continue;
+      }
+      throw new Error(status.message || status.error || 'La indexación no pudo completarse.');
+    }
+  }, []);
 
   // ---- Add PDF (add-only, sin reindexar) ----
   const handleAddPdf = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -357,14 +514,29 @@ export default function App() {
 
     try {
       const result = await api.reindex(fileList.length ? fileList : undefined);
-      if (result.ok) {
-        setTotalFragments(result.total_fragments || 0);
-        setDocuments(result.documents || []);
+      if (result.ok && result.indexing) {
+        setIndexingError(null);
+        setIndexingProgress(result.progress || null);
+
+        const finalStatus = await waitForIndexingToFinish();
+        setMode(finalStatus.mode || mode);
+        setTotalFragments(finalStatus.total_fragments || 0);
+        setDocuments(finalStatus.documents || []);
+        setIndexingProgress(null);
 
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'system',
-          content: `✓ Re-indexación completada: ${result.total_fragments} fragmentos, ${(result.documents || []).length} documentos.`,
+          content: `✓ Re-indexación completada: ${finalStatus.total_fragments || 0} fragmentos, ${(finalStatus.documents || []).length} documentos.`,
+          mode,
+        }]);
+      } else if (result.ok) {
+        setTotalFragments(result.total_fragments || 0);
+        setDocuments(result.documents || []);
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          role: 'system',
+          content: `✓ Re-indexación completada: ${result.total_fragments || 0} fragmentos, ${(result.documents || []).length} documentos.`,
           mode,
         }]);
       } else {
@@ -388,7 +560,7 @@ export default function App() {
       setIsReindexing(false);
       if (reindexFileInputRef.current) reindexFileInputRef.current.value = '';
     }
-  }, [mode, isReindexing, pendingReindexFiles]);
+  }, [mode, isReindexing, pendingReindexFiles, waitForIndexingToFinish]);
 
   // ---- Delete document ----
   const handleDeleteDoc = useCallback(async (docName: string) => {
@@ -547,8 +719,18 @@ export default function App() {
     setInitError(null);
     setIsIndexing(true);
     try {
-      const result = await api.reindex();
+      const result = await api.init();
       if (result.ok) {
+        setMode(result.mode || 'rag');
+        setDocuments(result.documents || []);
+        setTotalFragments(result.total_fragments || 0);
+        setIndexingError(null);
+        setIndexingProgress(null);
+        setIsInitialized(true);
+        setIsIndexing(false);
+      } else if (result.indexing) {
+        setIndexingError(result.error || null);
+        setIndexingProgress(result.progress || null);
         setRetryTrigger(t => t + 1);
       } else {
         setInitError(result.error || 'Error al reintentar');
@@ -676,7 +858,7 @@ export default function App() {
 
       {/* Sidebar */}
       <motion.aside
-        className={`fixed md:relative z-50 h-[calc(100vh-16px)] md:h-full w-[320px] glass-panel rounded-[2rem] flex flex-col transition-transform duration-300 ease-in-out shadow-2xl ${isSidebarOpen ? 'translate-x-2 md:translate-x-0' : '-translate-x-[120%] md:translate-x-0 md:w-0 md:opacity-0 md:overflow-hidden md:ml-[-16px]'}`}
+        className={`fixed md:relative z-50 h-[calc(100vh-16px)] md:h-full w-[320px] glass-panel rounded-xl flex flex-col transition-transform duration-300 ease-in-out shadow-2xl ${isSidebarOpen ? 'translate-x-2 md:translate-x-0' : '-translate-x-[120%] md:translate-x-0 md:w-0 md:opacity-0 md:overflow-hidden md:ml-[-16px]'}`}
       >
         {/* Sidebar Header */}
         <div className="p-6 flex items-center justify-between">
@@ -777,6 +959,29 @@ export default function App() {
                 exit={{ opacity: 0, x: -10 }}
                 className="space-y-2 pb-6"
               >
+                {(settingsError || isReindexing) && (
+                  <div className={`rounded-lg border px-3 py-2 text-xs ${settingsError ? 'border-red-500/20 bg-red-500/10 text-red-300' : 'border-orange-500/25 bg-orange-500/10 text-orange-200'}`}>
+                    {settingsError ? (
+                      <span>{settingsError}</span>
+                    ) : indexingProgress ? (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="truncate">Indexando {indexingProgress.file}</span>
+                          <span className="font-mono text-[10px] text-orange-300">{indexingProgress.file_index}/{indexingProgress.total_files}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-black/30 overflow-hidden">
+                          <div
+                            className="h-full bg-orange-400 transition-all duration-500"
+                            style={{ width: `${Math.max(5, (indexingProgress.file_index / indexingProgress.total_files) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <span>Re-indexación en curso...</span>
+                    )}
+                  </div>
+                )}
+
                 {/* 1. Indexación */}
                 <div className="rounded-xl border border-white/5 overflow-hidden">
                   <button
@@ -890,7 +1095,7 @@ export default function App() {
         </div>
 
         {/* Sidebar Footer */}
-        <div className="p-5 border-t border-white/5 text-xs text-zinc-500 flex items-center justify-between bg-black/20 rounded-b-[2rem]">
+        <div className="p-5 border-t border-white/5 text-xs text-zinc-500 flex items-center justify-between bg-black/20 rounded-b-xl">
           <span className="font-mono text-[10px] tracking-wider">{totalFragments} fragmentos</span>
           <div className="flex items-center gap-2 bg-white/5 px-2.5 py-1 rounded-full border border-white/10">
             <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
@@ -900,7 +1105,7 @@ export default function App() {
       </motion.aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 relative glass-panel rounded-[2rem] overflow-hidden shadow-2xl">
+      <main className="flex-1 flex flex-col min-w-0 relative glass-panel rounded-xl overflow-hidden shadow-2xl">
         {/* Header */}
         <header className="h-20 border-b border-white/5 flex items-center justify-between px-6 bg-black/20 z-10">
           <div className="flex items-center gap-4">
@@ -940,9 +1145,6 @@ export default function App() {
 
         {/* Chat Area */}
         <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar scroll-smooth relative">
-          {/* Background decoration */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-orange-500/5 rounded-full blur-[120px] pointer-events-none" />
-
           <div className="max-w-3xl mx-auto space-y-10 pb-20 relative z-10">
             {messages.map((msg) => (
               <motion.div
@@ -953,12 +1155,12 @@ export default function App() {
               >
                 {/* System messages */}
                 {msg.role === 'system' ? (
-                  <div className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-medium ${msg.isError ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-white/5 text-zinc-400 border border-white/5'}`}>
+                  <div className={`flex max-w-[85%] items-start gap-2 px-4 py-2.5 rounded-lg text-xs font-medium ${msg.isError ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-white/5 text-zinc-400 border border-white/5'}`}>
                     {msg.isError
-                      ? <AlertCircle className="w-3.5 h-3.5" />
-                      : <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />
+                      ? <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      : <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 text-green-400" />
                     }
-                    <span dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
+                    <MarkdownContent text={msg.content} compact />
                   </div>
                 ) : (
                   <>
@@ -989,13 +1191,13 @@ export default function App() {
                       {/* Message bubble */}
                       <div className={`p-5 text-[15px] leading-relaxed shadow-lg backdrop-blur-md ${
                         msg.role === 'user'
-                          ? 'bg-white/10 text-zinc-200 border border-white/10 rounded-[2rem] rounded-tr-md font-medium'
+                          ? 'bg-white/10 text-zinc-200 border border-white/10 rounded-xl rounded-tr-md font-medium'
                           : msg.isError
-                            ? 'bg-red-500/10 text-red-300 border border-red-500/20 rounded-[2rem] rounded-tl-md'
-                            : 'bg-white/5 text-zinc-200 border border-white/10 rounded-[2rem] rounded-tl-md'
+                            ? 'bg-red-500/10 text-red-300 border border-red-500/20 rounded-xl rounded-tl-md'
+                            : 'bg-white/5 text-zinc-200 border border-white/10 rounded-xl rounded-tl-md'
                       }`}>
                         {msg.content ? (
-                          <span dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
+                          <MarkdownContent text={msg.content} />
                         ) : msg.isStreaming ? (
                           <span className="inline-block w-2 h-5 bg-orange-400 rounded-sm animate-pulse" />
                         ) : null}
@@ -1009,11 +1211,11 @@ export default function App() {
                         <div className="mt-3 w-full space-y-3 pl-2">
                           <div className="flex flex-wrap gap-2">
                             {msg.citations.map((cite, i) => (
-                              <div key={i} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/40 border border-white/5 text-xs text-zinc-300 hover:bg-white/10 hover:border-white/10 transition-all group">
+                              <div key={i} className="inline-flex max-w-full items-center gap-2 px-3 py-1.5 rounded-lg bg-black/40 border border-white/5 text-xs text-zinc-300 hover:bg-white/10 hover:border-white/10 transition-all group">
                                 <FileText className="w-3.5 h-3.5 text-orange-400/70 group-hover:text-orange-400" />
-                                <span className="font-medium">{cite.document}</span>
+                                <span className="font-medium truncate min-w-0">{cite.document}</span>
                                 <span className="text-zinc-600">|</span>
-                                <span className="text-zinc-400">p. {cite.pages.join(', ')}</span>
+                                <span className="text-zinc-400 shrink-0">p. {cite.pages.join(', ')}</span>
                               </div>
                             ))}
                           </div>
@@ -1038,7 +1240,7 @@ export default function App() {
         {/* Input Area */}
         <div className="p-6 bg-gradient-to-t from-[#050505] via-[#050505]/90 to-transparent absolute bottom-0 left-0 right-0 z-20">
           <div className="max-w-3xl mx-auto relative">
-            <div className="relative flex items-end gap-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-[2rem] p-2.5 shadow-2xl focus-within:border-orange-500/50 focus-within:ring-4 focus-within:ring-orange-500/10 transition-all">
+            <div className="relative flex items-end gap-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl p-2.5 shadow-2xl focus-within:border-orange-500/50 focus-within:ring-4 focus-within:ring-orange-500/10 transition-all">
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -1083,14 +1285,20 @@ export default function App() {
 
 function Toggle({ label, checked, onChange, desc }: { label: string; checked: boolean; onChange: () => void; desc: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 p-2 rounded-xl hover:bg-white/5 transition-colors cursor-pointer group" onClick={onChange}>
-      <div className="flex-1">
-        <div className="text-sm text-zinc-200 font-medium group-hover:text-white transition-colors">{label}</div>
-        <div className="text-[11px] text-zinc-500 leading-snug mt-1">{desc}</div>
-      </div>
-      <div className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-300 ease-in-out ${checked ? 'bg-orange-500 shadow-[0_0_10px_rgba(242,125,38,0.4)]' : 'bg-white/10'}`}>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      className="w-full flex items-center justify-between gap-4 p-2 rounded-lg hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-colors text-left group"
+      onClick={onChange}
+    >
+      <span className="flex-1">
+        <span className="block text-sm text-zinc-200 font-medium group-hover:text-white transition-colors">{label}</span>
+        <span className="block text-[11px] text-zinc-500 leading-snug mt-1">{desc}</span>
+      </span>
+      <span className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center justify-center rounded-full transition-colors duration-300 ease-in-out ${checked ? 'bg-orange-500 shadow-[0_0_10px_rgba(242,125,38,0.4)]' : 'bg-white/10'}`}>
         <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition duration-300 ease-in-out ${checked ? 'translate-x-2.5' : '-translate-x-2.5'}`} />
-      </div>
-    </div>
+      </span>
+    </button>
   );
 }

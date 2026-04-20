@@ -39,14 +39,11 @@ Dependencies:
 # ─────────────────────────────────────────────
 
 import gc
-import io
 import os
 import sys
-import shutil
 import json
 import time
 import threading
-import contextlib
 from collections import Counter
 from typing import Generator
 from werkzeug.utils import secure_filename
@@ -77,8 +74,12 @@ app = Flask(
 app.config["JSON_AS_ASCII"] = False
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
 
-# CORS for development (Vite on :3000 -> Flask on :5000)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+# CORS for local development (Vite on :3000 -> Flask on :5000).
+_cors_origins = os.getenv(
+    "MONKEYGRAB_CORS_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000",
+)
+CORS(app, resources={r"/api/*": {"origins": [o.strip() for o in _cors_origins.split(",") if o.strip()]}})
 
 _state = {
     "mode": "chat",
@@ -142,6 +143,8 @@ def _run_indexing_bg():
         _state["indexing_failed"] = False
         if total_chunks == 0:
             _state["indexing_done_empty"] = True
+        else:
+            _state["indexing_done_empty"] = False
     except Exception as e:
         _state["indexing_error"] = str(e)
         _state["indexing_failed"] = True
@@ -282,6 +285,48 @@ def _format_sources(fragments: list) -> list:
     ]
 
 
+def _sse_event(event: str, payload: dict) -> str:
+    """Serialize one Server-Sent Event with a named event type."""
+    return (
+        f"event: {event}\n"
+        f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+    )
+
+
+def _collection_document_details(coll) -> list:
+    """Return per-document metadata without changing the legacy documents list."""
+    try:
+        all_data = coll.get(include=["metadatas"])
+    except Exception:
+        return []
+
+    details = {}
+    for meta in all_data.get("metadatas") or []:
+        doc = meta.get("source")
+        if not doc:
+            continue
+        info = details.setdefault(
+            doc,
+            {"name": doc, "fragments": 0, "pages": set(), "formats": set()},
+        )
+        info["fragments"] += 1
+        if "page" in meta:
+            info["pages"].add(meta["page"])
+        if meta.get("format"):
+            info["formats"].add(meta["format"])
+
+    normalized = []
+    for doc in sorted(details):
+        info = details[doc]
+        normalized.append({
+            "name": info["name"],
+            "fragments": info["fragments"],
+            "pages": len(info["pages"]),
+            "formats": sorted(info["formats"]),
+        })
+    return normalized
+
+
 # ─────────────────────────────────────────────
 # SECTION 4: API ROUTES
 # ─────────────────────────────────────────────
@@ -356,6 +401,7 @@ def _api_init_logic():
                 "mode": _state["mode"],
                 "total_fragments": 0,
                 "documents": docs,
+                "document_details": [],
                 "history_count": len(_state["historial_chat"]),
             }, 200
         return {
@@ -372,6 +418,7 @@ def _api_init_logic():
         "mode": _state["mode"],
         "total_fragments": coll.count(),
         "documents": docs,
+        "document_details": _collection_document_details(coll),
         "history_count": len(_state["historial_chat"]),
     }, 200
 
@@ -409,13 +456,16 @@ def api_chat():
     if stream:
         def generate():
             full = ""
-            for token in _chat_stream(pregunta):
-                full += token
-                yield f"data: {json.dumps({'token': token})}\n\n"
-            _state["historial_chat"].append({"role": "user", "content": pregunta})
-            _state["historial_chat"].append({"role": "assistant", "content": full})
-            rag_engine.guardar_historial(_state["historial_chat"])
-            yield f"data: {json.dumps({'done': True})}\n\n"
+            try:
+                for token in _chat_stream(pregunta):
+                    full += token
+                    yield _sse_event("token", {"token": token})
+                _state["historial_chat"].append({"role": "user", "content": pregunta})
+                _state["historial_chat"].append({"role": "assistant", "content": full})
+                rag_engine.guardar_historial(_state["historial_chat"])
+                yield _sse_event("done", {"done": True})
+            except Exception as e:
+                yield _sse_event("error", {"error": str(e)})
 
         return Response(
             stream_with_context(generate()),
@@ -533,20 +583,34 @@ def api_rag():
     if stream:
         def generate():
             raw = ""
-            for token in _rag_stream(mensaje_usuario):
-                raw += token
-            rag_engine.guardar_debug_rag(
-                pregunta,
-                mensaje_usuario,
-                raw,
-                fragmentos_finales,
-                metricas=metricas,
-            )
-            words = raw.split(" ")
-            for i, word in enumerate(words):
-                token = word if i == 0 else " " + word
-                yield f"data: {json.dumps({'token': token})}\n\n"
-            yield f"data: {json.dumps({'done': True, 'sources': sources})}\n\n"
+            try:
+                for token in _rag_stream(mensaje_usuario):
+                    raw += token
+                    yield _sse_event("token", {"token": token})
+                try:
+                    rag_engine.guardar_debug_rag(
+                        pregunta,
+                        mensaje_usuario,
+                        raw,
+                        fragmentos_finales,
+                        metricas=metricas,
+                    )
+                except Exception:
+                    pass
+                yield _sse_event("done", {"done": True, "sources": sources})
+            except Exception as e:
+                if raw:
+                    try:
+                        rag_engine.guardar_debug_rag(
+                            pregunta,
+                            mensaje_usuario,
+                            raw,
+                            fragmentos_finales,
+                            metricas=metricas,
+                        )
+                    except Exception:
+                        pass
+                yield _sse_event("error", {"error": str(e)})
 
         return Response(
             stream_with_context(generate()),
@@ -597,6 +661,8 @@ def api_stats():
         "ok": True,
         "total_fragments": coll.count(),
         "documents": docs,
+        "document_details": _collection_document_details(coll),
+        "indexing": _state["indexing"],
     })
 
 
@@ -605,7 +671,13 @@ def api_docs():
     """List indexed documents."""
     coll = _get_collection()
     docs = rag_engine.obtener_documentos_indexados(coll)
-    return jsonify({"ok": True, "documents": docs})
+    return jsonify({
+        "ok": True,
+        "documents": docs,
+        "document_details": _collection_document_details(coll),
+        "total_fragments": coll.count(),
+        "indexing": _state["indexing"],
+    })
 
 
 @app.route("/api/docs/<path:filename>", methods=["DELETE"])
@@ -643,7 +715,6 @@ def api_topics():
             all_data = coll.get(
                 where={"source": doc_name},
                 include=["documents", "metadatas"],
-                limit=100,
             )
             if all_data["documents"]:
                 pages = {meta["page"] for meta in all_data["metadatas"]}
@@ -675,6 +746,14 @@ def api_reindex():
     Accepts optional PDF files to add before re-indexing.
     """
     try:
+        if _state["indexing"]:
+            return jsonify({
+                "ok": True,
+                "indexing": True,
+                "message": "Ya hay una indexación en curso.",
+                "progress": _state["indexing_progress"],
+            }), 202
+
         files = request.files.getlist("file") or []
         for f in files:
             if f and f.filename and f.filename.lower().endswith(".pdf"):
@@ -689,7 +768,14 @@ def api_reindex():
         _state["indexing_error"] = None
         _state["indexing_done_empty"] = False
         _ensure_indexed()
-        return jsonify({"ok": True, "total_fragments": 0, "indexing": True, "documents": []})
+        return jsonify({
+            "ok": True,
+            "indexing": True,
+            "message": "Re-indexación iniciada.",
+            "total_fragments": 0,
+            "documents": [],
+            "progress": _state["indexing_progress"],
+        }), 202
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -769,8 +855,15 @@ def api_upload():
             _state["indexing_error"] = None
             _state["indexing_done_empty"] = False
             _ensure_indexed()
-            coll = _get_collection()
-            total = coll.count()
+            return jsonify({
+                "ok": True,
+                "indexing": True,
+                "message": "PDF guardado. Re-indexación iniciada.",
+                "files": saved,
+                "total_fragments": 0,
+                "documents": [],
+                "progress": _state["indexing_progress"],
+            }), 202
         docs = rag_engine.obtener_documentos_indexados(coll)
         return jsonify({
             "ok": True,
@@ -778,6 +871,7 @@ def api_upload():
             "files": saved,
             "total_fragments": total,
             "documents": docs,
+            "document_details": _collection_document_details(coll),
         })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
