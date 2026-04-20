@@ -119,6 +119,9 @@ rag/mi_vector_db/**
 rag/pdfs/**
 !rag/pdfs/.gitkeep
 
+rag/pdfs_ca/**
+!rag/pdfs_ca/.gitkeep
+
 rag/ragbench_pdfs/**
 !rag/ragbench_pdfs/.gitkeep
 

@@ -595,7 +595,7 @@ Se usa cuando la aplicación **espera un directorio** pero su contenido **no** d
 - En `.gitignore`: `rag/<carpeta>/**` + `!rag/<carpeta>/.gitkeep` (el `**` ignora también subcarpetas; la negación solo recupera el fichero vacío).
 - En disco: un archivo **vacío** `rag/<carpeta>/.gitkeep` commiteado.
 
-**Carpetas con este patrón en el repo:** `rag/pdfs/`, `rag/ragbench_pdfs/`, `evaluation/debug/`, `evaluation/scores/`. Las carpetas `rag/mi_vector_db/` y `rag/ragbench_vector_db/` tienen reglas `/**` + `!.gitkeep` en `.gitignore` pero sus `.gitkeep` ya no están versionados (eliminados en commit `b1a0b5a`).
+**Carpetas con este patrón en el repo:** `rag/pdfs/`, `rag/pdfs_ca/`, `rag/ragbench_pdfs/`, `evaluation/debug/`, `evaluation/scores/`. Las carpetas `rag/mi_vector_db/` y `rag/ragbench_vector_db/` tienen reglas `/**` + `!.gitkeep` en `.gitignore` pero sus `.gitkeep` ya no están versionados (eliminados en commit `b1a0b5a`).
 
 **Cuándo añadir otro `.gitkeep`:** solo si aparece una ruta nueva “obligatoria” en código (replicar el mismo par `/**` + `!.gitkeep` en la raíz `.gitignore` y documentar aquí).
 
