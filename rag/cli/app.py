@@ -36,8 +36,7 @@ Dependencies:
 
 import os
 import shutil
-import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from collections import Counter
 
 import chromadb
@@ -114,9 +113,6 @@ class MonkeyGrabCLI:
             pass
 
         pdfs_count = len(archivos_pdf)
-        db_count = self.collection.count()
-
-        self._show_init_info(pdfs_count, db_count)
 
         if not archivos_pdf:
             ui.no_pdfs(self.rag.CARPETA_DOCS)
@@ -131,7 +127,8 @@ class MonkeyGrabCLI:
             else:
                 ui.success(f"{total_chunks} fragmentos indexados")
 
-        ui.welcome()
+        self._show_init_info(pdfs_count, self.collection.count())
+        ui.info("usa /ayuda para ver todos los comandos")
 
         self.historial_chat = self.rag.cargar_historial()
         if self.historial_chat:
@@ -148,10 +145,9 @@ class MonkeyGrabCLI:
         while True:
             model = (self.rag.MODELO_CHAT if self.mode == "chat"
                      else self.rag.MODELO_RAG)
-            prompt_str = ui.prompt(self.mode, model)
 
             try:
-                pregunta = input(prompt_str).strip()
+                pregunta = ui.read_input(self.mode, model).strip()
             except (EOFError, KeyboardInterrupt):
                 ui.farewell()
                 self.rag.guardar_historial(self.historial_chat)
@@ -188,7 +184,11 @@ class MonkeyGrabCLI:
         """
         ui.response_header("chat", self.rag.MODELO_CHAT)
 
-        respuesta = self._chat_stream(pregunta)
+        try:
+            respuesta = self._chat_stream(pregunta)
+        except Exception as e:
+            ui.exception("Error de chat", e)
+            return
 
         ui.response_footer()
 
@@ -254,77 +254,92 @@ class MonkeyGrabCLI:
             )
             return
 
-        status = ui.pipeline_start("Buscando conceptos en los documentos...")
-
-        fragmentos_ranked, mejor_score, metricas = \
-            self.rag.realizar_busqueda_hibrida(pregunta, self.collection)
-
-        if not fragmentos_ranked:
-            ui.pipeline_stop()
-            ui.no_results()
-            self.rag.guardar_debug_rag(
-                pregunta,
-                fragmentos=[],
-                motivo_interrupcion="No se encontraron fragmentos.",
-                metricas=metricas
+        try:
+            ui.pipeline_start("Buscando conceptos en los documentos...")
+            fragmentos_ranked, mejor_score, metricas = (
+                self.rag.realizar_busqueda_hibrida(pregunta, self.collection)
             )
-            return
 
-        if mejor_score < self.rag.UMBRAL_RELEVANCIA:
-            ui.pipeline_stop()
-            ui.out_of_scope(mejor_score, self.rag.UMBRAL_RELEVANCIA)
-            self.rag.guardar_debug_rag(
-                pregunta,
-                fragmentos=fragmentos_ranked,
-                motivo_interrupcion=f"Score insuficiente: {mejor_score:.4f}",
-                metricas={**metricas, "mejor_score": mejor_score}
-            )
-            return
-
-        ui.pipeline_update("Re-ordenando resultados...")
-
-        if self.rag.USAR_RERANKER:
-            fragmentos_filtrados = [
-                f for f in fragmentos_ranked
-                if f.get('score_reranker', f.get('score_final', 0))
-                   >= self.rag.UMBRAL_SCORE_RERANKER
-            ]
-            if not fragmentos_filtrados:
+            if not fragmentos_ranked:
                 ui.pipeline_stop()
                 ui.no_results()
                 self.rag.guardar_debug_rag(
                     pregunta,
-                    fragmentos=fragmentos_ranked,
-                    motivo_interrupcion="Reranker filtró todos los candidatos.",
-                    metricas={**metricas, "umbral_reranker": self.rag.UMBRAL_SCORE_RERANKER}
+                    fragmentos=[],
+                    motivo_interrupcion="No se encontraron fragmentos.",
+                    metricas=metricas
                 )
                 return
-            fragmentos_ranked = fragmentos_filtrados
 
-        fragmentos_finales = fragmentos_ranked[:self.rag.TOP_K_FINAL]
-        ids_usados = {f['id'] for f in fragmentos_finales}
+            if mejor_score < self.rag.UMBRAL_RELEVANCIA:
+                ui.pipeline_stop()
+                ui.out_of_scope(mejor_score, self.rag.UMBRAL_RELEVANCIA)
+                self.rag.guardar_debug_rag(
+                    pregunta,
+                    fragmentos=fragmentos_ranked,
+                    motivo_interrupcion=f"Score insuficiente: {mejor_score:.4f}",
+                    metricas={**metricas, "mejor_score": mejor_score}
+                )
+                return
 
-        if (self.rag.EXPANDIR_CONTEXTO and fragmentos_finales
-                and 'chunk' in fragmentos_finales[0]['metadata']):
-            self._expand_context(fragmentos_finales, ids_usados)
+            ui.pipeline_update("Re-ordenando resultados...")
 
-        # Truncate context if total character count exceeds the limit
-        contexto_total = sum(len(f['doc']) for f in fragmentos_finales)
-        if contexto_total > self.rag.MAX_CONTEXTO_CHARS:
-            fragmentos_truncados = []
-            chars_acum = 0
-            for f in fragmentos_finales:
-                if chars_acum + len(f['doc']) > self.rag.MAX_CONTEXTO_CHARS:
-                    break
-                fragmentos_truncados.append(f)
-                chars_acum += len(f['doc'])
-            fragmentos_finales = fragmentos_truncados
+            if self.rag.USAR_RERANKER:
+                fragmentos_filtrados = [
+                    f for f in fragmentos_ranked
+                    if f.get('score_reranker', f.get('score_final', 0))
+                       >= self.rag.UMBRAL_SCORE_RERANKER
+                ]
+                if not fragmentos_filtrados:
+                    ui.pipeline_stop()
+                    ui.no_results()
+                    self.rag.guardar_debug_rag(
+                        pregunta,
+                        fragmentos=fragmentos_ranked,
+                        motivo_interrupcion="Reranker filtró todos los candidatos.",
+                        metricas={**metricas, "umbral_reranker": self.rag.UMBRAL_SCORE_RERANKER}
+                    )
+                    return
+                fragmentos_ranked = fragmentos_filtrados
 
-        ui.pipeline_update("Generando respuesta...")
-        ui.pipeline_stop()
+            fragmentos_finales = fragmentos_ranked[:self.rag.TOP_K_FINAL]
+            ids_usados = {f['id'] for f in fragmentos_finales}
 
-        ui.response_header("rag", self.rag.MODELO_RAG)
-        self.rag.generar_respuesta(pregunta, fragmentos_finales, metricas=metricas)
+            if (self.rag.EXPANDIR_CONTEXTO and fragmentos_finales
+                    and 'chunk' in fragmentos_finales[0]['metadata']):
+                self._expand_context(fragmentos_finales, ids_usados)
+
+            contexto_total = sum(len(f['doc']) for f in fragmentos_finales)
+            if contexto_total > self.rag.MAX_CONTEXTO_CHARS:
+                fragmentos_truncados = []
+                chars_acum = 0
+                for f in fragmentos_finales:
+                    if chars_acum + len(f['doc']) > self.rag.MAX_CONTEXTO_CHARS:
+                        break
+                    fragmentos_truncados.append(f)
+                    chars_acum += len(f['doc'])
+                fragmentos_finales = fragmentos_truncados
+
+            ui.pipeline_update("Generando respuesta...")
+            ui.pipeline_stop()
+
+            ui.response_header("rag", self.rag.MODELO_RAG)
+            self.rag.generar_respuesta(pregunta, fragmentos_finales, metricas=metricas)
+        except Exception as e:
+            ui.pipeline_stop()
+            ui.exception("Error RAG", e)
+            try:
+                self.rag.guardar_debug_rag(
+                    pregunta,
+                    fragmentos=[],
+                    motivo_interrupcion=f"Excepción en CLI RAG: {e}",
+                    metricas={"error": e.__class__.__name__}
+                )
+            except Exception:
+                pass
+            return
+        finally:
+            ui.pipeline_stop()
 
         ui.sources_panel(fragmentos_finales)
         ui.response_footer()
@@ -396,7 +411,9 @@ class MonkeyGrabCLI:
     def _cmd_stats(self) -> bool:
         """Display database statistics."""
         docs = self.rag.obtener_documentos_indexados(self.collection)
-        ui.stats_table(self.collection.count(), docs)
+        ui.stats_table(self.collection.count(), docs, self._runtime_info(
+            len(self._list_pdf_files()), self.collection.count()
+        ))
         return False
 
     def _cmd_help(self) -> bool:
@@ -406,8 +423,7 @@ class MonkeyGrabCLI:
 
     def _cmd_docs(self) -> bool:
         """Display the list of indexed documents."""
-        docs = self.rag.obtener_documentos_indexados(self.collection)
-        ui.docs_table(docs)
+        ui.docs_table(self._get_document_summaries())
         return False
 
     def _cmd_topics(self) -> bool:
@@ -462,6 +478,10 @@ class MonkeyGrabCLI:
             total_documentos: Number of PDF files detected.
             total_fragmentos: Number of fragments in the database.
         """
+        ui.init_panel(self._runtime_info(total_documentos, total_fragmentos))
+
+    def _runtime_info(self, total_documentos: int = 0, total_fragmentos: int = 0) -> Dict[str, Any]:
+        """Build display-only runtime metadata for CLI panels."""
         rag = self.rag
 
         reranker_info = 'on' if rag.USAR_RERANKER else 'off'
@@ -475,15 +495,25 @@ class MonkeyGrabCLI:
             reranker_device = (reranker_device_val.upper()
                                + (' (FP16)' if reranker_device_val == 'cuda' else ''))
 
-        ui.init_panel({
+        return {
+            'mode': self.mode,
             'modelo_rag': rag.MODELO_RAG,
             'modelo_chat': rag.MODELO_CHAT,
             'modelo_embedding': rag.MODELO_EMBEDDING,
+            'modelo_contextual': rag.MODELO_CONTEXTUAL,
+            'modelo_recomp': rag.MODELO_RECOMP,
+            'modelo_ocr': rag.MODELO_OCR,
             'extractor': ('pymupdf4llm' if rag.PYMUPDF_AVAILABLE
                           else 'pypdf (fallback)'),
             'busqueda': ('híbrida (semántica + keywords)'
                          if rag.USAR_BUSQUEDA_HIBRIDA
                          else 'solo semántica'),
+            'hybrid': rag.USAR_BUSQUEDA_HIBRIDA,
+            'exhaustive': rag.USAR_BUSQUEDA_EXHAUSTIVA,
+            'contextual': rag.USAR_CONTEXTUAL_RETRIEVAL,
+            'recomp': rag.USAR_RECOMP_SYNTHESIS,
+            'images': rag.USAR_EMBEDDINGS_IMAGEN,
+            'expand': rag.EXPANDIR_CONTEXTO,
             'reranker': reranker_info,
             'reranker_model': reranker_model,
             'reranker_device': reranker_device,
@@ -491,32 +521,84 @@ class MonkeyGrabCLI:
             'chunk_overlap': rag.CHUNK_OVERLAP,
             'total_documentos': total_documentos,
             'total_fragmentos': total_fragmentos,
-        })
+            'docs_folder': rag.CARPETA_DOCS,
+            'path_db': rag.PATH_DB,
+            'collection_name': rag.COLLECTION_NAME,
+        }
+
+    def _list_pdf_files(self) -> List[str]:
+        """Return PDF filenames in the configured docs folder."""
+        try:
+            return [
+                f for f in os.listdir(self.rag.CARPETA_DOCS)
+                if f.lower().endswith('.pdf')
+            ]
+        except FileNotFoundError:
+            return []
+
+    def _get_document_summaries(self) -> List[Dict[str, Any]]:
+        """Aggregate document metadata from Chroma without truncating counts."""
+        summaries: Dict[str, Dict[str, Any]] = {}
+        try:
+            all_metadata = self.collection.get(include=['metadatas'])
+        except Exception as e:
+            ui.error(f"error leyendo metadatos de documentos: {e}")
+            return []
+
+        for meta in all_metadata.get('metadatas', []) or []:
+            if not meta:
+                continue
+            source = meta.get('source')
+            if not source:
+                continue
+            entry = summaries.setdefault(source, {
+                'name': source,
+                'pages_set': set(),
+                'fragments': 0,
+                'formats_set': set(),
+            })
+            entry['fragments'] += 1
+            if isinstance(meta.get('page'), int):
+                entry['pages_set'].add(meta['page'])
+            if meta.get('format'):
+                entry['formats_set'].add(meta['format'])
+
+        result = []
+        for source in sorted(summaries):
+            entry = summaries[source]
+            result.append({
+                'name': entry['name'],
+                'pages': len(entry['pages_set']) if entry['pages_set'] else '-',
+                'fragments': entry['fragments'],
+                'formats': ', '.join(sorted(entry['formats_set'])) or '-',
+            })
+        return result
 
     def _show_topics(self) -> None:
         """Gather topic information from indexed documents and display it."""
-        docs = self.rag.obtener_documentos_indexados(self.collection)
+        docs = self._get_document_summaries()
 
         if not docs:
             ui.topics_display([])
             return
 
         docs_data = []
-        for doc_name in docs:
-            doc_info = {'name': doc_name}
+        for doc_summary in docs:
+            doc_name = doc_summary['name']
+            doc_info = {
+                'name': doc_name,
+                'pages': doc_summary.get('pages'),
+                'fragments': doc_summary.get('fragments'),
+            }
             try:
                 all_data = self.collection.get(
                     where={"source": doc_name},
                     include=['documents', 'metadatas'],
                     limit=100
                 )
-                if all_data['documents']:
-                    pages = {meta['page'] for meta in all_data['metadatas']}
-                    doc_info['pages'] = len(pages)
-                    doc_info['fragments'] = len(all_data['documents'])
-
-                    # Extract significant terms by frequency from the first 20 fragments
-                    texto = " ".join(all_data['documents'][:20])
+                documents = all_data.get('documents') or []
+                if documents:
+                    texto = " ".join(documents[:20])
                     palabras = texto.split()
                     significativas = [
                         p.strip('.,;:()[]{}"\'-').lower()
@@ -528,8 +610,8 @@ class MonkeyGrabCLI:
                     frecuencias = Counter(significativas)
                     top = [w for w, _ in frecuencias.most_common(10)]
                     doc_info['terms'] = ', '.join(top) if top else None
-            except Exception:
-                pass
+            except Exception as e:
+                doc_info['terms'] = f"error: {e}"
 
             docs_data.append(doc_info)
 

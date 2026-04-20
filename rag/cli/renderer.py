@@ -1,5 +1,8 @@
 """
-MonkeyGrab CLI Renderer.
+MonkeyGrab CLI Renderer (legacy).
+
+This ANSI renderer is retained for reference only. The active CLI uses
+``rag.cli.display`` and Rich-based components.
 
 Rendering functions for the terminal interface: banners, separators,
 tables, spinners, streaming output, and information panels. This module

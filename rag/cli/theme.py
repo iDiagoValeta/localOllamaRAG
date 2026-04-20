@@ -1,5 +1,8 @@
 """
-MonkeyGrab CLI -- Theme and Visual Identity.
+MonkeyGrab CLI -- Theme and Visual Identity (legacy).
+
+This ANSI theme is retained for reference only. The active CLI uses
+``rag.cli.display.MONKEYGRAB_THEME``.
 
 Dark professional color palette, terminal typography, iconography,
 and ASCII logo carrying the MonkeyGrab brand identity.
