@@ -16,7 +16,7 @@ Each run stores its CSV/debug artifacts in organized subfolders under
 Usage:
     python evaluation/run_eval_recomp_comparison.py
     python evaluation/run_eval_recomp_comparison.py --dataset evaluation/datasets/dataset_eval_es.json --verbose
-    python evaluation/run_eval_recomp_comparison.py --dataset evaluation/datasets/dataset_eval_es.json --label mi_eval --skip-reindex
+    python evaluation/run_eval_recomp_comparison.py --catalan --label mi_eval --skip-reindex   # pdfs_ca + dataset_eval_ca
 
 Dependencies:
     - Same prerequisites as evaluation/run_eval.py
@@ -53,14 +53,20 @@ if PROJ_ROOT not in sys.path:
     sys.path.insert(0, PROJ_ROOT)
 
 
-from evaluation.run_eval import ejecutar_evaluacion, SCORES_DIR, DEBUG_DIR, CHECKPOINTS_DIR
+from evaluation.run_eval import (
+    CHECKPOINTS_DIR,
+    DEBUG_DIR,
+    SCORES_DIR,
+    _default_dataset_for_corpus,
+    ejecutar_evaluacion,
+)
 
 
 # ─────────────────────────────────────────────
 # SECTION 2: PATHS AND NAMING
 # ─────────────────────────────────────────────
 
-DEFAULT_DATASET = os.path.join(EVAL_DIR, "datasets", "dataset_eval_es.json")
+DEFAULT_DATASET = _default_dataset_for_corpus("es")
 DEFAULT_SCORES_ROOT = os.path.join(SCORES_DIR, "comparison_runs")
 DEFAULT_DEBUG_ROOT = os.path.join(DEBUG_DIR, "comparison_runs")
 
@@ -69,10 +75,12 @@ DEFAULT_DEBUG_ROOT = os.path.join(DEBUG_DIR, "comparison_runs")
 # SECTION 3: HELPERS
 # ─────────────────────────────────────────────
 
-def _build_run_slug(dataset_path: str, label: str | None) -> str:
+def _build_run_slug(dataset_path: str, label: str | None, eval_corpus: str) -> str:
     """Build a stable slug for a comparison batch."""
     dataset_stem = Path(dataset_path).stem
     suffix = label.strip().replace(" ", "_") if label else f"{dataset_stem}_{time.strftime('%Y%m%d_%H%M%S')}"
+    if eval_corpus == "ca":
+        suffix = f"{suffix}_ca"
     return suffix
 
 
@@ -95,6 +103,7 @@ def ejecutar_comparativa_recomp(
     save_debug: bool = True,
     label: str | None = None,
     skip_reindex: bool = False,
+    eval_corpus: str = "es",
 ) -> dict:
     """Reindex once (or reuse current index) and execute paired evaluations.
 
@@ -106,11 +115,12 @@ def ejecutar_comparativa_recomp(
         save_debug: Whether to save debug JSON files for each run.
         label: Optional suffix for the batch folder name.
         skip_reindex: Reuse the existing ChromaDB collection without rebuilding it.
+        eval_corpus: ``es`` (``rag/pdfs``) or ``ca`` (``rag/pdfs_ca``); same as ``run_eval.py``.
 
     Returns:
         Manifest dictionary describing the two generated runs.
     """
-    run_slug = _build_run_slug(dataset_path=dataset_path, label=label)
+    run_slug = _build_run_slug(dataset_path=dataset_path, label=label, eval_corpus=eval_corpus)
     scores_dir = os.path.join(scores_root, run_slug)
     debug_dir = os.path.join(debug_root, run_slug)
     checkpoints_dir = os.path.join(CHECKPOINTS_DIR, "comparison_runs", run_slug)
@@ -141,6 +151,7 @@ def ejecutar_comparativa_recomp(
             save_debug=save_debug,
             force_reindex=force_reindex,
             recomp_enabled=recomp_enabled,
+            eval_corpus=eval_corpus,
         )
         result["variant"] = folder_name
         results.append(result)
@@ -155,6 +166,7 @@ def ejecutar_comparativa_recomp(
 
     manifest = {
         "dataset_path": os.path.abspath(dataset_path),
+        "eval_corpus": eval_corpus,
         "scores_dir": os.path.abspath(scores_dir),
         "debug_dir": os.path.abspath(debug_dir),
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -176,8 +188,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--dataset",
-        default=DEFAULT_DATASET,
-        help="Path to the dataset (JSON, CSV, or Excel)",
+        default=None,
+        help="Path to the dataset (JSON, CSV, or Excel). Default: dataset_eval_es.json or dataset_eval_ca.json with --catalan",
+    )
+    parser.add_argument(
+        "--catalan",
+        action="store_true",
+        help="Index/evaluate against rag/pdfs_ca; default dataset Catalan; comparison folder slug ends with _ca",
     )
     parser.add_argument(
         "--scores-root",
@@ -211,14 +228,18 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    eval_corpus = "ca" if args.catalan else "es"
+    dataset_arg = args.dataset if args.dataset is not None else _default_dataset_for_corpus(eval_corpus)
+
     manifest = ejecutar_comparativa_recomp(
-        dataset_path=args.dataset,
+        dataset_path=dataset_arg,
         scores_root=args.scores_root,
         debug_root=args.debug_root,
         verbose=args.verbose,
         save_debug=not args.no_debug,
         label=args.label,
         skip_reindex=args.skip_reindex,
+        eval_corpus=eval_corpus,
     )
 
     print("\nComparison finished.")

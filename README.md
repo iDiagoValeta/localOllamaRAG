@@ -201,6 +201,8 @@ If you want to reindex your current PDF corpus and compare the live RAG pipeline
 python evaluation/run_eval_recomp_comparison.py --dataset evaluation/datasets/dataset_eval_es.json --label mi_eval --verbose
 ```
 
+For the Catalan PDF folder (`rag/pdfs_ca`) and `dataset_eval_ca.json`, add `--catalan` (default dataset switches to Catalan; run folder slug gets a `_ca` suffix). Same pattern for `python evaluation/run_eval.py --catalan`.
+
 Outputs are now organized as:
 - `evaluation/scores/` for final CSV files
 - `evaluation/debug/` for debug JSON files

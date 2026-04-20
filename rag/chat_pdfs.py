@@ -241,6 +241,39 @@ _embed_slug = MODELO_EMBEDDING.split(":")[0].replace("/", "_")
 PATH_DB = os.path.join(BASE_DIR, "mi_vector_db", f"{_carpeta_nombre}_{_embed_slug}")
 COLLECTION_NAME = f"docs_{_carpeta_nombre}"
 
+_DEFAULT_CARPETA_DOCS = CARPETA_DOCS
+_DEFAULT_PATH_DB = PATH_DB
+_DEFAULT_COLLECTION_NAME = COLLECTION_NAME
+
+
+def set_docs_folder_runtime(carpeta: str | None) -> tuple[str, str, str]:
+    """Switch ``CARPETA_DOCS`` and derived Chroma paths (for evaluation scripts/tests).
+
+    Restores module-level defaults when ``carpeta`` is ``None`` (values captured
+    at import from ``DOCS_FOLDER`` / ``rag/pdfs``).
+
+    Args:
+        carpeta: Absolute or relative path to a PDF directory, or ``None`` to restore defaults.
+
+    Returns:
+        Previous ``(CARPETA_DOCS, PATH_DB, COLLECTION_NAME)`` tuple before this call.
+    """
+    global CARPETA_DOCS, PATH_DB, COLLECTION_NAME
+    previous = (CARPETA_DOCS, PATH_DB, COLLECTION_NAME)
+    if carpeta is None:
+        CARPETA_DOCS = _DEFAULT_CARPETA_DOCS
+        PATH_DB = _DEFAULT_PATH_DB
+        COLLECTION_NAME = _DEFAULT_COLLECTION_NAME
+    else:
+        abs_carp = os.path.abspath(carpeta)
+        cn = os.path.basename(abs_carp)
+        slug = MODELO_EMBEDDING.split(":")[0].replace("/", "_")
+        CARPETA_DOCS = abs_carp
+        PATH_DB = os.path.join(BASE_DIR, "mi_vector_db", f"{cn}_{slug}")
+        COLLECTION_NAME = f"docs_{cn}"
+    return previous
+
+
 HISTORIAL_PATH = os.path.join(BASE_DIR, "historial_chat.json")
 MAX_HISTORIAL_MENSAJES = 40
 

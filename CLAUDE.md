@@ -84,6 +84,7 @@ localOllamaRAG/
 │   ├── requirements.txt
 │   ├── debug_rag/                # Dumps de debug de queries (runtime, gitignored)
 │   ├── pdfs/                     # PDFs a indexar (solo .gitkeep versionado; contenido en .gitignore)
+│   ├── pdfs_ca/                  # PDFs catalán — eval RAGAS con ``run_eval.py --catalan`` (datos locales, no versionados)
 │   ├── ragbench_pdfs/            # PDFs RAGBench — run_eval_ragbench.py (solo .gitkeep versionado)
 │   ├── mi_vector_db/             # ChromaDB producción (datos en .gitignore; sin .gitkeep versionado)
 │   ├── ragbench_vector_db/       # ChromaDB RAGBench (datos en .gitignore; sin .gitkeep versionado)
@@ -343,6 +344,8 @@ python rag/show_fragments/export_fragments.py --mi-only    # solo PDFs propios
 # RAGAS sobre el pipeline en vivo (requiere GOOGLE_API_KEY)
 python evaluation/run_eval.py --dataset evaluation/datasets/dataset_eval_es.json
 python evaluation/run_eval.py --dataset evaluation/datasets/dataset_eval_ca.json
+python evaluation/run_eval.py --catalan   # indexa ``rag/pdfs_ca``; salidas con sufijo ``_ca`` (dataset CA por defecto)
+python evaluation/run_eval_recomp_comparison.py --catalan --label mi_eval  # misma lógica en comparativa RECOMP
 python evaluation/run_eval_ragbench.py
 ```
 

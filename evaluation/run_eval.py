@@ -15,8 +15,9 @@ quality of the generated answers using RAGAS v0.2+ metrics.  Supported metrics
 
 Usage:
     python evaluation/run_eval.py [--dataset PATH] [--output PATH] [--verbose] [--no-debug]
+    python evaluation/run_eval.py --catalan   # rag/pdfs_ca + dataset_eval_ca.json + ``_ca`` outputs
 
-Default dataset path: ``evaluation/datasets/dataset_eval_es.json``.
+Default dataset path: ``evaluation/datasets/dataset_eval_es.json`` (``dataset_eval_ca.json`` with ``--catalan``).
 If you still pass the old path ``evaluation/dataset_eval_*.json``, it is
 resolved automatically to ``evaluation/datasets/``.
 
@@ -52,7 +53,7 @@ import sys
 import json
 import argparse
 import time
-from typing import Any
+from typing import Any, Literal
 from pathlib import Path
 
 # ─────────────────────────────────────────────
@@ -76,9 +77,6 @@ import chromadb
 import rag.chat_pdfs as rag_runtime
 from rag.chat_pdfs import (
     evaluar_pregunta_rag,
-    PATH_DB,
-    COLLECTION_NAME,
-    CARPETA_DOCS,
     indexar_documentos,
     set_recomp_synthesis_enabled,
 )
@@ -230,6 +228,17 @@ def resolver_ruta_dataset(ruta: str) -> str:
     )
 
 
+def _default_dataset_for_corpus(eval_corpus: Literal["es", "ca"]) -> str:
+    """Default bundled JSON path for Spanish vs Catalan evaluation."""
+    name = "dataset_eval_ca.json" if eval_corpus == "ca" else "dataset_eval_es.json"
+    return os.path.join(EVAL_DIR, "datasets", name)
+
+
+def _artifact_suffix(eval_corpus: Literal["es", "ca"]) -> str:
+    """Filename suffix for scores/debug/checkpoints (Catalan corpus)."""
+    return "_ca" if eval_corpus == "ca" else ""
+
+
 def _slugify(value: str) -> str:
     """Convert a free-form label into a filesystem-friendly slug."""
     cleaned = "".join(ch.lower() if ch.isalnum() else "_" for ch in value.strip())
@@ -242,22 +251,28 @@ def _build_output_stem(dataset_path: str) -> str:
     return _slugify(Path(dataset_path).stem)
 
 
-def _default_output_path(dataset_path: str) -> str:
+def _default_output_path(dataset_path: str, artifact_suffix: str = "") -> str:
     """Return the default CSV output path inside evaluation/scores."""
-    return os.path.join(SCORES_DIR, f"ragas_scores_{_build_output_stem(dataset_path)}.csv")
+    return os.path.join(
+        SCORES_DIR, f"ragas_scores_{_build_output_stem(dataset_path)}{artifact_suffix}.csv"
+    )
 
 
-def _default_debug_path(dataset_path: str) -> str:
+def _default_debug_path(dataset_path: str, artifact_suffix: str = "") -> str:
     """Return the default debug JSON path inside evaluation/debug."""
-    return os.path.join(DEBUG_DIR, f"ragas_debug_{_build_output_stem(dataset_path)}.json")
+    return os.path.join(
+        DEBUG_DIR, f"ragas_debug_{_build_output_stem(dataset_path)}{artifact_suffix}.json"
+    )
 
 
-def _default_checkpoint_path(dataset_path: str, recomp_enabled: bool | None) -> str:
+def _default_checkpoint_path(
+    dataset_path: str, recomp_enabled: bool | None, artifact_suffix: str = ""
+) -> str:
     """Return the checkpoint path used to resume generation question by question."""
     recomp_tag = "recomp_on" if recomp_enabled else "recomp_off"
     return os.path.join(
         CHECKPOINTS_DIR,
-        f"ragas_progress_{_build_output_stem(dataset_path)}_{recomp_tag}.json",
+        f"ragas_progress_{_build_output_stem(dataset_path)}{artifact_suffix}_{recomp_tag}.json",
     )
 
 
@@ -481,6 +496,7 @@ def ejecutar_evaluacion(
     save_debug: bool = True,
     force_reindex: bool = False,
     recomp_enabled: bool | None = None,
+    eval_corpus: Literal["es", "ca"] = "es",
 ) -> dict[str, Any]:
     """Run the full live RAGAS evaluation and persist its artifacts.
 
@@ -493,13 +509,20 @@ def ejecutar_evaluacion(
         save_debug: Whether to persist the debug JSON.
         force_reindex: Whether to rebuild the ChromaDB collection before evaluation.
         recomp_enabled: Optional in-process override for ``USAR_RECOMP_SYNTHESIS``.
+        eval_corpus: ``es`` uses ``rag/pdfs`` (default Chroma); ``ca`` uses ``rag/pdfs_ca``
+            and adds ``_ca`` to default score/debug/checkpoint filenames.
 
     Returns:
         Summary dictionary with output paths, timings, and mean metrics.
     """
     previous_recomp = None
+    docs_previous: tuple[str, str, str] | None = None
     if recomp_enabled is not None:
         previous_recomp = set_recomp_synthesis_enabled(recomp_enabled)
+
+    if eval_corpus == "ca":
+        pdfs_ca = os.path.join(_proj_root, "rag", "pdfs_ca")
+        docs_previous = rag_runtime.set_docs_folder_runtime(pdfs_ca)
 
     try:
         # ─────────────────────────────────────────────
@@ -534,10 +557,12 @@ def ejecutar_evaluacion(
 
         print(f"\nLoading dataset...")
         dataset_path = resolver_ruta_dataset(dataset_path)
-        resolved_output_path = os.path.abspath(output_path or _default_output_path(dataset_path))
-        resolved_debug_path = os.path.abspath(debug_path or _default_debug_path(dataset_path))
+        sfx = _artifact_suffix(eval_corpus)
+        resolved_output_path = os.path.abspath(output_path or _default_output_path(dataset_path, sfx))
+        resolved_debug_path = os.path.abspath(debug_path or _default_debug_path(dataset_path, sfx))
         resolved_checkpoint_path = os.path.abspath(
-            checkpoint_path or _default_checkpoint_path(dataset_path, rag_runtime.USAR_RECOMP_SYNTHESIS)
+            checkpoint_path
+            or _default_checkpoint_path(dataset_path, rag_runtime.USAR_RECOMP_SYNTHESIS, sfx)
         )
 
         df = cargar_dataset(dataset_path)
@@ -550,28 +575,31 @@ def ejecutar_evaluacion(
         print(f"   Questions to evaluate: {len(questions)}")
         print(f"   Ground truth available: {'Yes' if tiene_ground_truth else 'No'}")
         print(f"   RECOMP synthesis: {'Enabled' if rag_runtime.USAR_RECOMP_SYNTHESIS else 'Disabled'}")
+        print(
+            f"   Eval corpus: {eval_corpus.upper()} — PDFs: {rag_runtime.CARPETA_DOCS}"
+        )
 
         # ─────────────────────────────────────────────
         # 4. CONNECT TO CHROMADB
         # ─────────────────────────────────────────────
 
-        print(f"\nConnecting to ChromaDB: {PATH_DB}")
-        client = chromadb.PersistentClient(path=PATH_DB)
+        print(f"\nConnecting to ChromaDB: {rag_runtime.PATH_DB}")
+        client = chromadb.PersistentClient(path=rag_runtime.PATH_DB)
 
         if force_reindex:
             print("   Force reindex requested. Rebuilding collection...")
             try:
-                client.delete_collection(name=COLLECTION_NAME)
+                client.delete_collection(name=rag_runtime.COLLECTION_NAME)
             except Exception:
                 pass
-            collection = client.get_or_create_collection(name=COLLECTION_NAME)
-            total = indexar_documentos(CARPETA_DOCS, collection)
+            collection = client.get_or_create_collection(name=rag_runtime.COLLECTION_NAME)
+            total = indexar_documentos(rag_runtime.CARPETA_DOCS, collection)
             print(f"   Indexed {total} fragments.")
         else:
-            collection = client.get_or_create_collection(name=COLLECTION_NAME)
+            collection = client.get_or_create_collection(name=rag_runtime.COLLECTION_NAME)
             if collection.count() == 0:
                 print("   Database empty. Indexing documents...")
-                total = indexar_documentos(CARPETA_DOCS, collection)
+                total = indexar_documentos(rag_runtime.CARPETA_DOCS, collection)
                 print(f"   Indexed {total} fragments.")
             else:
                 print(f"   Fragments in collection: {collection.count()}")
@@ -590,6 +618,7 @@ def ejecutar_evaluacion(
                 checkpoint.get("dataset_path") == dataset_path
                 and checkpoint.get("questions_count") == len(questions)
                 and checkpoint.get("recomp_enabled") == rag_runtime.USAR_RECOMP_SYNTHESIS
+                and checkpoint.get("eval_corpus", "es") == eval_corpus
             ):
                 answers = checkpoint.get("answers", [])
                 contexts_list = checkpoint.get("contexts_list", [])
@@ -614,6 +643,7 @@ def ejecutar_evaluacion(
                         "dataset_path": dataset_path,
                         "questions_count": len(questions),
                         "recomp_enabled": rag_runtime.USAR_RECOMP_SYNTHESIS,
+                        "eval_corpus": eval_corpus,
                         "output_path": resolved_output_path,
                         "debug_path": resolved_debug_path,
                         "completed_questions": len(answers),
@@ -724,12 +754,17 @@ def ejecutar_evaluacion(
             "questions_count": len(questions),
             "indexed_fragments": total,
             "recomp_enabled": rag_runtime.USAR_RECOMP_SYNTHESIS,
+            "eval_corpus": eval_corpus,
             "pipeline_seconds": t_rag,
             "evaluation_seconds": t_eval,
             "mean_scores": mean_scores,
             "checkpoint_path": os.path.abspath(resolved_checkpoint_path),
         }
     finally:
+        if docs_previous is not None:
+            rag_runtime.CARPETA_DOCS, rag_runtime.PATH_DB, rag_runtime.COLLECTION_NAME = (
+                docs_previous
+            )
         if previous_recomp is not None:
             set_recomp_synthesis_enabled(previous_recomp)
 
@@ -746,8 +781,13 @@ def main():
     )
     parser.add_argument(
         "--dataset",
-        default=os.path.join(EVAL_DIR, "datasets", "dataset_eval_es.json"),
-        help="Path to the dataset (JSON, CSV, or Excel)",
+        default=None,
+        help="Path to the dataset (JSON, CSV, or Excel). Default: dataset_eval_es.json or dataset_eval_ca.json with --catalan",
+    )
+    parser.add_argument(
+        "--catalan",
+        action="store_true",
+        help="Use rag/pdfs_ca for indexing and add _ca to default output/checkpoint file names; default dataset Catalan",
     )
     parser.add_argument(
         "--output",
@@ -781,14 +821,18 @@ def main():
     )
     args = parser.parse_args()
 
+    eval_corpus: Literal["es", "ca"] = "ca" if args.catalan else "es"
+    dataset_arg = args.dataset if args.dataset is not None else _default_dataset_for_corpus(eval_corpus)
+
     ejecutar_evaluacion(
-        dataset_path=args.dataset,
+        dataset_path=dataset_arg,
         output_path=args.output,
         debug_path=args.debug_output,
         checkpoint_path=args.checkpoint,
         verbose=args.verbose,
         save_debug=not args.no_debug,
         force_reindex=args.force_reindex,
+        eval_corpus=eval_corpus,
     )
 
 
