@@ -1,0 +1,56 @@
+{
+  "dataset_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\datasets\\dataset_eval_ca.json",
+  "eval_corpus": "ca",
+  "scores_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\scores\\comparison_runs\\mi_eval_ca",
+  "debug_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\comparison_runs\\mi_eval_ca",
+  "generated_at": "2026-04-21 01:53:18",
+  "runs": [
+    {
+      "dataset_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\datasets\\dataset_eval_ca.json",
+      "output_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\scores\\comparison_runs\\mi_eval_ca\\recomp_on.csv",
+      "debug_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\comparison_runs\\mi_eval_ca\\recomp_on.json",
+      "questions_count": 50,
+      "indexed_fragments": 373,
+      "recomp_enabled": true,
+      "eval_corpus": "ca",
+      "pipeline_seconds": 3.0517578125e-05,
+      "evaluation_seconds": 1067.4313116073608,
+      "mean_scores": {
+        "answer_correctness": 0.6866127363530958,
+        "faithfulness": 0.794179070929071,
+        "answer_relevancy": 0.8107918411275266,
+        "context_precision": 0.9725333332600047,
+        "context_recall": 0.99
+      },
+      "checkpoint_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\checkpoints\\comparison_runs\\mi_eval_ca\\recomp_on.json",
+      "variant": "recomp_on"
+    },
+    {
+      "dataset_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\datasets\\dataset_eval_ca.json",
+      "output_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\scores\\comparison_runs\\mi_eval_ca\\recomp_off.csv",
+      "debug_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\comparison_runs\\mi_eval_ca\\recomp_off.json",
+      "questions_count": 50,
+      "indexed_fragments": 373,
+      "recomp_enabled": false,
+      "eval_corpus": "ca",
+      "pipeline_seconds": 3673.5934619903564,
+      "evaluation_seconds": 1049.726188659668,
+      "mean_scores": {
+        "answer_correctness": 0.6911955391191645,
+        "faithfulness": 0.9149814814814815,
+        "answer_relevancy": 0.7957111500995544,
+        "context_precision": 0.9702833332618052,
+        "context_recall": 0.99
+      },
+      "checkpoint_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\checkpoints\\comparison_runs\\mi_eval_ca\\recomp_off.json",
+      "variant": "recomp_off"
+    }
+  ],
+  "mean_score_deltas_recomp_minus_no_recomp": {
+    "answer_correctness": -0.004582802766068705,
+    "faithfulness": -0.12080241055241048,
+    "answer_relevancy": 0.01508069102797216,
+    "context_precision": 0.0022499999981995256,
+    "context_recall": 0.0
+  }
+}
