@@ -83,11 +83,14 @@ localOllamaRAG/
 │   │   └── export_fragments.py   # Exporta chunks de ChromaDB a TXT/JSONL para debug
 │   ├── requirements.txt
 │   ├── debug_rag/                # Dumps de debug de queries (runtime, gitignored)
-│   ├── pdfs/                     # PDFs a indexar (solo .gitkeep versionado; contenido en .gitignore)
-│   ├── pdfs_ca/                  # PDFs catalán — eval RAGAS con ``run_eval.py --catalan`` (datos locales, no versionados)
-│   ├── ragbench_pdfs/            # PDFs RAGBench — run_eval_ragbench.py (solo .gitkeep versionado)
-│   ├── mi_vector_db/             # ChromaDB producción (datos en .gitignore; sin .gitkeep versionado)
-│   ├── ragbench_vector_db/       # ChromaDB RAGBench (datos en .gitignore; sin .gitkeep versionado)
+│   ├── docs/                     # PDFs organizados por idioma (solo .gitkeep versionado por carpeta)
+│   │   ├── es/                   # PDFs castellano (corpus por defecto)
+│   │   ├── ca/                   # PDFs catalán
+│   │   └── en/                   # PDFs inglés (RAGBench y corpus en)
+│   ├── vector_db/                # ChromaDB unificada por idioma (gitignored; creada al indexar)
+│   │   ├── es_embeddinggemma/    # Índice castellano
+│   │   ├── ca_embeddinggemma/    # Índice catalán
+│   │   └── en_embeddinggemma/    # Índice inglés/RAGBench
 │   ├── historial_chat.json       # Historial modo CHAT (gitignored)
 │   └── cli/
 │       ├── app.py                # MonkeyGrabCLI: bucle interactivo y dispatch de comandos
@@ -131,9 +134,7 @@ localOllamaRAG/
 │   ├── datasets/                 # JSON de evaluación RAG (ES, CA, mix)
 │   ├── scores/                   # CSVs finales de evaluación
 │   ├── debug/                    # Debug JSON + checkpoints reanudables de evaluaciones
-│   ├── run_eval.py               # Evaluación RAGAS del pipeline RAG en vivo (reanuda pregunta a pregunta)
-│   ├── run_eval_recomp_comparison.py # Comparativa RECOMP on/off reutilizando run_eval.py
-│   ├── run_eval_ragbench.py      # Evaluación RAGAS sobre PDFs de RAGBench (Vectara)
+│   ├── run_eval.py               # Runner unificado RAGAS: single/compare/ragbench (es, ca, en)
 │   └── requirements.txt          # ragas, langchain-google-genai, pandas…
 ├── training-output/
 │   ├── qwen-3/                   # Adaptador LoRA Qwen3 (artefactos pesados gitignored)
@@ -202,7 +203,7 @@ Variables de entorno de referencia (ajustar según hardware y despliegue):
 | `OLLAMA_CONTEXTUAL_MODEL` | `gemma4:e4b` | Contextual retrieval |
 | `OLLAMA_RECOMP_MODEL` | `gemma4:e4b` | Síntesis RECOMP |
 | `OLLAMA_OCR_MODEL` | `gemma4:e4b` | Descripción de imágenes (multimodal, think=False) |
-| `DOCS_FOLDER` | `rag/pdfs/` | Carpeta de PDFs a indexar |
+| `DOCS_FOLDER` | `rag/docs/es/` | Carpeta de PDFs a indexar (es/ca/en según corpus) |
 | `RERANKER_QUALITY` | `quality` | `quality` (BAAI/bge) o `speed` (MiniLM) |
 | `HF_TOKEN` | — | Token HuggingFace (necesario para Gemma-3) |
 | `GOOGLE_API_KEY` | — | API key Gemini para evaluación RAGAS |
@@ -223,7 +224,7 @@ PDFs (CARPETA_DOCS)
   -> Persistencia: ChromaDB en PATH_DB
 ```
 
-> **PATH_DB naming**: `rag/mi_vector_db/{folder}_{embed_slug}` donde `folder` es el basename de `CARPETA_DOCS` y `embed_slug` es la parte antes de `:` en `OLLAMA_EMBED_MODEL`. Cambiar el modelo de embedding genera una ruta diferente → la colección existente no se carga y hay que reindexar.
+> **PATH_DB naming**: `rag/vector_db/{folder}_{embed_slug}` donde `folder` es el basename de `CARPETA_DOCS` (p.ej. `es`, `ca`, `en`) y `embed_slug` es la parte antes de `:` en `OLLAMA_EMBED_MODEL`. Cambiar el modelo de embedding o la carpeta genera una ruta diferente → la colección existente no se carga y hay que reindexar.
 
 
 ### Recuperación (por cada query en modo RAG)
@@ -342,11 +343,11 @@ python rag/show_fragments/export_fragments.py              # ambos stores
 python rag/show_fragments/export_fragments.py --mi-only    # solo PDFs propios
 
 # RAGAS sobre el pipeline en vivo (requiere GOOGLE_API_KEY)
-python evaluation/run_eval.py --dataset evaluation/datasets/dataset_eval_es.json
-python evaluation/run_eval.py --dataset evaluation/datasets/dataset_eval_ca.json
-python evaluation/run_eval.py --catalan   # indexa ``rag/pdfs_ca``; salidas con sufijo ``_ca`` (dataset CA por defecto)
-python evaluation/run_eval_recomp_comparison.py --catalan --label mi_eval  # misma lógica en comparativa RECOMP
-python evaluation/run_eval_ragbench.py
+python evaluation/run_eval.py single --corpus es
+python evaluation/run_eval.py single --corpus ca
+python evaluation/run_eval.py single --corpus en
+python evaluation/run_eval.py compare --corpus ca --label mi_eval  # ablación comparativa
+python evaluation/run_eval.py ragbench --n-papers 3 --max-q 5     # corpus RAGBench (rag/docs/en)
 ```
 
 ### Diagrama de arquitectura
@@ -595,7 +596,7 @@ Se usa cuando la aplicación **espera un directorio** pero su contenido **no** d
 - En `.gitignore`: `rag/<carpeta>/**` + `!rag/<carpeta>/.gitkeep` (el `**` ignora también subcarpetas; la negación solo recupera el fichero vacío).
 - En disco: un archivo **vacío** `rag/<carpeta>/.gitkeep` commiteado.
 
-**Carpetas con este patrón en el repo:** `rag/pdfs/`, `rag/pdfs_ca/`, `rag/ragbench_pdfs/`, `evaluation/debug/`, `evaluation/scores/`. Las carpetas `rag/mi_vector_db/` y `rag/ragbench_vector_db/` tienen reglas `/**` + `!.gitkeep` en `.gitignore` pero sus `.gitkeep` ya no están versionados (eliminados en commit `b1a0b5a`).
+**Carpetas con este patrón en el repo:** `rag/docs/es/`, `rag/docs/ca/`, `rag/docs/en/`, `evaluation/debug/`, `evaluation/scores/`. La carpeta `rag/vector_db/` está completamente ignorada (sin `.gitkeep`; se crea automáticamente al indexar).
 
 **Cuándo añadir otro `.gitkeep`:** solo si aparece una ruta nueva “obligatoria” en código (replicar el mismo par `/**` + `!.gitkeep` en la raíz `.gitignore` y documentar aquí).
 
@@ -611,7 +612,7 @@ Se versionan el **`Modelfile`**, **`README.md`**, **`LICENSE`** y **`CONVERSION.
 
 | Idea | Estado / beneficio |
 |------|-------------------|
-| Patrón `/**` + `.gitkeep` en RAGBench (`ragbench_pdfs/`, `ragbench_vector_db/`) | **Aplicado** — mismo criterio que `pdfs/` y `mi_vector_db/` |
+| PDFs y vector DB organizados por idioma bajo `rag/docs/{es,ca,en}/` y `rag/vector_db/` | **Aplicado** — migrado 2026-04-21 |
 | `web/zip/.gitignore` sin duplicar `node_modules` / `dist` | **Aplicado** — solo en la raíz |
 | Enlace en `README.md` al Hub u origen del GGUF | **Aplicado** — sección *Model weights* |
 | Reglas más finas si aparecen `.bin` pequeños legítimos | Pendiente si surge la necesidad; hoy `*.bin` es global |

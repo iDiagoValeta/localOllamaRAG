@@ -14,10 +14,11 @@ quality of the generated answers using RAGAS v0.2+ metrics.  Supported metrics
     the original question.
 
 Usage:
-    python evaluation/run_eval.py [--dataset PATH] [--output PATH] [--verbose] [--no-debug]
-    python evaluation/run_eval.py --catalan   # rag/pdfs_ca + dataset_eval_ca.json + ``_ca`` outputs
+    python evaluation/run_eval.py single --corpus es|ca|en
+    python evaluation/run_eval.py compare --corpus ca --label mi_ablacion
+    python evaluation/run_eval.py ragbench --n-papers 10 --max-q 5
 
-Default dataset path: ``evaluation/datasets/dataset_eval_es.json`` (``dataset_eval_ca.json`` with ``--catalan``).
+Default corpus: ``es`` (rag/docs/es + dataset_eval_es.json).
 If you still pass the old path ``evaluation/dataset_eval_*.json``, it is
 resolved automatically to ``evaluation/datasets/``.
 
@@ -42,9 +43,10 @@ Dependencies:
 #  +-- 4. Paths and checkpoints resolver_ruta_dataset, rutas, progreso por pregunta, reanudación
 #  +-- 5. Result formatting    imprimir_resultados
 #  +-- 6. Debug output         _extraer_justificaciones_traces, guardar_debug
+#  +-- 7. Ragbench preparation  descargar_metadatos, seleccionar_papers, _ejecutar_ragbench
 #
 #  ENTRY
-#  +-- 7. Main                 main()
+#  +-- 8. Main                 main()
 #
 # ─────────────────────────────────────────────
 
@@ -81,6 +83,18 @@ from rag.chat_pdfs import (
     indexar_documentos,
     set_recomp_synthesis_enabled,
 )
+
+try:
+    import requests as _requests
+    _REQUESTS_AVAILABLE = True
+except ImportError:
+    _REQUESTS_AVAILABLE = False
+
+try:
+    from huggingface_hub import hf_hub_download as _hf_hub_download
+    _HF_AVAILABLE = True
+except ImportError:
+    _HF_AVAILABLE = False
 
 # ─────────────────────────────────────────────
 # SECTION 2: DATASET LOADING
@@ -209,6 +223,63 @@ EVAL_DIR = os.path.dirname(os.path.abspath(__file__))
 SCORES_DIR = os.path.join(EVAL_DIR, "scores")
 DEBUG_DIR = os.path.join(EVAL_DIR, "debug")
 CHECKPOINTS_DIR = os.path.join(DEBUG_DIR, "checkpoints")
+COMPARISON_SCORES_DIR = os.path.join(SCORES_DIR, "comparison_runs")
+COMPARISON_DEBUG_DIR = os.path.join(DEBUG_DIR, "comparison_runs")
+
+BASELINE_PIPELINE_FLAGS = {
+    "USAR_LLM_QUERY_DECOMPOSITION": True,
+    "USAR_BUSQUEDA_HIBRIDA": True,
+    "USAR_BUSQUEDA_EXHAUSTIVA": True,
+    "USAR_RERANKER": True,
+    "EXPANDIR_CONTEXTO": True,
+    "USAR_OPTIMIZACION_CONTEXTO": True,
+    "USAR_RECOMP_SYNTHESIS": True,
+}
+
+ABLATION_VARIANTS = [
+    {
+        "name": "baseline_all_on",
+        "description": "All inference-time optional stages enabled.",
+        "flags": BASELINE_PIPELINE_FLAGS,
+    },
+    {
+        "name": "no_query_decomposition",
+        "description": "Disable LLM query decomposition.",
+        "flags": {**BASELINE_PIPELINE_FLAGS, "USAR_LLM_QUERY_DECOMPOSITION": False},
+    },
+    {
+        "name": "no_lexical_search",
+        "description": "Disable keyword/lexical Chroma search.",
+        "flags": {**BASELINE_PIPELINE_FLAGS, "USAR_BUSQUEDA_HIBRIDA": False},
+    },
+    {
+        "name": "no_exhaustive_search",
+        "description": "Disable exhaustive full-collection text scan.",
+        "flags": {**BASELINE_PIPELINE_FLAGS, "USAR_BUSQUEDA_EXHAUSTIVA": False},
+    },
+    {
+        "name": "no_reranker",
+        "description": "Disable Cross-Encoder reranking.",
+        "flags": {**BASELINE_PIPELINE_FLAGS, "USAR_RERANKER": False},
+    },
+    {
+        "name": "no_context_expansion",
+        "description": "Disable adjacent-chunk context expansion.",
+        "flags": {**BASELINE_PIPELINE_FLAGS, "EXPANDIR_CONTEXTO": False},
+    },
+    {
+        "name": "no_context_optimization",
+        "description": "Disable PDF artifact cleanup before generation.",
+        "flags": {**BASELINE_PIPELINE_FLAGS, "USAR_OPTIMIZACION_CONTEXTO": False},
+    },
+    {
+        "name": "no_recomp_synthesis",
+        "description": "Disable RECOMP/LLM context synthesis.",
+        "flags": {**BASELINE_PIPELINE_FLAGS, "USAR_RECOMP_SYNTHESIS": False},
+    },
+]
+
+VARIANT_SUITES = {"ablation": ABLATION_VARIANTS}
 
 
 def resolver_ruta_dataset(ruta: str) -> str:
@@ -247,15 +318,44 @@ def resolver_ruta_dataset(ruta: str) -> str:
     )
 
 
-def _default_dataset_for_corpus(eval_corpus: Literal["es", "ca"]) -> str:
-    """Default bundled JSON path for Spanish vs Catalan evaluation."""
-    name = "dataset_eval_ca.json" if eval_corpus == "ca" else "dataset_eval_es.json"
+SUPPORTED_CORPORA = ("es", "ca", "en", "mix")
+
+
+def _default_dataset_for_corpus(eval_corpus: str) -> str:
+    """Default bundled JSON path for a local evaluation corpus."""
+    if eval_corpus not in SUPPORTED_CORPORA:
+        valid = ", ".join(SUPPORTED_CORPORA)
+        raise ValueError(f"Unsupported corpus {eval_corpus!r}. Valid: {valid}")
+    name = f"dataset_eval_{eval_corpus}.json"
     return os.path.join(EVAL_DIR, "datasets", name)
 
 
-def _artifact_suffix(eval_corpus: Literal["es", "ca"]) -> str:
-    """Filename suffix for scores/debug/checkpoints (Catalan corpus)."""
-    return "_ca" if eval_corpus == "ca" else ""
+def _default_docs_dir_for_corpus(eval_corpus: str) -> str | None:
+    """Default PDF folder for a local evaluation corpus.
+
+    Returns the language-specific subfolder under ``rag/docs/``. ``es`` and
+    ``mix`` return ``None`` so the RAG module default (``rag/docs/es``) is used.
+    """
+    _corpus_to_folder: dict[str, str | None] = {
+        "es": None,
+        "ca": os.path.join(_proj_root, "rag", "docs", "ca"),
+        "en": os.path.join(_proj_root, "rag", "docs", "en"),
+        "mix": None,
+        "ragbench": os.path.join(_proj_root, "rag", "docs", "en"),
+    }
+    return _corpus_to_folder.get(eval_corpus)
+
+
+def _artifact_suffix(eval_corpus: str) -> str:
+    """Filename suffix for scores/debug/checkpoints (always includes language tag)."""
+    _suffix_map: dict[str, str] = {
+        "es": "_es",
+        "ca": "_ca",
+        "en": "_en",
+        "mix": "_mix",
+        "ragbench": "_en",
+    }
+    return _suffix_map.get(eval_corpus, f"_{eval_corpus}")
 
 
 def _slugify(value: str) -> str:
@@ -310,6 +410,76 @@ def _guardar_checkpoint(checkpoint_path: str, payload: dict[str, Any]) -> None:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
 
+def _guardar_json(path: str, payload: dict[str, Any]) -> None:
+    """Write a JSON payload ensuring the parent directory exists."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+
+def _build_run_slug(dataset_path: str, label: str | None, eval_corpus: str) -> str:
+    """Build a stable folder slug for a comparison batch."""
+    dataset_stem = Path(dataset_path).stem
+    suffix = label.strip().replace(" ", "_") if label else f"{dataset_stem}_{time.strftime('%Y%m%d_%H%M%S')}"
+    if eval_corpus == "ca":
+        suffix = f"{suffix}_ca"
+    return suffix
+
+
+def seleccionar_variantes(suite: str, variant_names: str | None = None) -> list[dict[str, Any]]:
+    """Resolve requested variant names into concrete pipeline-flag specs."""
+    available = {variant["name"]: variant for variant in VARIANT_SUITES[suite]}
+    if not variant_names:
+        return list(available.values())
+
+    selected = []
+    unknown = []
+    for raw_name in variant_names.split(","):
+        name = raw_name.strip()
+        if not name:
+            continue
+        if name not in available:
+            unknown.append(name)
+        else:
+            selected.append(available[name])
+
+    if unknown:
+        valid = ", ".join(available)
+        raise ValueError(f"Unknown variant(s): {', '.join(unknown)}. Valid variants: {valid}")
+    if not selected:
+        raise ValueError("No variants selected.")
+    return selected
+
+
+def listar_variantes(suite: str = "ablation") -> None:
+    """Print available variants for a suite."""
+    print(f"Available variants for suite '{suite}':")
+    for variant in VARIANT_SUITES[suite]:
+        print(f"  {variant['name']}: {variant['description']}")
+
+
+def _mean_score_deltas(results: list[dict[str, Any]], baseline_variant: str) -> dict[str, dict[str, float]]:
+    """Compute per-variant mean-score deltas against the selected baseline."""
+    by_variant = {entry["variant"]: entry for entry in results}
+    baseline = by_variant.get(baseline_variant)
+    if not baseline:
+        return {}
+
+    deltas: dict[str, dict[str, float]] = {}
+    baseline_scores = baseline.get("mean_scores", {})
+    for variant_name, entry in by_variant.items():
+        if variant_name == baseline_variant:
+            continue
+        variant_deltas = {}
+        for metric_name, variant_value in entry.get("mean_scores", {}).items():
+            baseline_value = baseline_scores.get(metric_name)
+            if baseline_value is None:
+                continue
+            variant_deltas[metric_name] = variant_value - baseline_value
+        deltas[variant_name] = variant_deltas
+    return deltas
+
+
 def _respuesta_vacia(respuesta: Any) -> bool:
     """Return True when a generated answer is missing or blank."""
     return not isinstance(respuesta, str) or not respuesta.strip()
@@ -324,6 +494,26 @@ def _indices_respuestas_vacias(answers: list[str], total: int) -> list[int]:
     ]
 
 
+def _normalizar_pipeline_flags(flags: dict[str, Any] | None) -> dict[str, bool]:
+    """Return a stable boolean pipeline-flags dict for checkpoints/manifests."""
+    if not flags:
+        return {}
+    return {str(k): bool(v) for k, v in sorted(flags.items())}
+
+
+def _checkpoint_pipeline_flags_match(
+    checkpoint: dict[str, Any],
+    current_flags: dict[str, bool],
+) -> bool:
+    """Validate checkpoint compatibility with current runtime pipeline flags."""
+    stored_flags = checkpoint.get("pipeline_flags")
+    if stored_flags is not None:
+        return _normalizar_pipeline_flags(stored_flags) == _normalizar_pipeline_flags(current_flags)
+
+    # Backward compatibility for old checkpoints created before full flag tracking.
+    return checkpoint.get("recomp_enabled") == current_flags.get("USAR_RECOMP_SYNTHESIS")
+
+
 def _guardar_checkpoint_evaluacion(
     checkpoint_path: str,
     dataset_path: str,
@@ -334,6 +524,8 @@ def _guardar_checkpoint_evaluacion(
     debug_path: str,
     answers: list[str],
     contexts_list: list[list[str]],
+    pipeline_flags: dict[str, bool] | None = None,
+    docs_dir: str | None = None,
 ) -> None:
     """Save generation progress with a consistent payload."""
     _guardar_checkpoint(
@@ -342,9 +534,11 @@ def _guardar_checkpoint_evaluacion(
             "dataset_path": dataset_path,
             "questions_count": questions_count,
             "recomp_enabled": recomp_enabled,
+            "pipeline_flags": _normalizar_pipeline_flags(pipeline_flags),
             "eval_corpus": eval_corpus,
             "output_path": output_path,
             "debug_path": debug_path,
+            "docs_dir": docs_dir,
             "completed_questions": len([a for a in answers if not _respuesta_vacia(a)]),
             "answers": answers,
             "contexts_list": contexts_list,
@@ -605,95 +799,98 @@ def guardar_debug(
     return debug_path
 
 
-def ejecutar_evaluacion(
+def _importar_ragas_componentes():
+    """Import RAGAS lazily so generation-only flows do not require evaluator setup."""
+    try:
+        from ragas import evaluate
+        from ragas.metrics import (
+            faithfulness,
+            answer_relevancy,
+            context_precision,
+            context_recall,
+            answer_correctness,
+        )
+        from ragas.dataset_schema import SingleTurnSample, EvaluationDataset
+        from ragas.run_config import RunConfig
+    except ImportError as e:
+        print("Install RAGAS and dependencies:")
+        print("   pip install -r evaluation/requirements.txt")
+        raise SystemExit(1) from e
+
+    return {
+        "evaluate": evaluate,
+        "SingleTurnSample": SingleTurnSample,
+        "EvaluationDataset": EvaluationDataset,
+        "RunConfig": RunConfig,
+        "metric_objects": {
+            "answer_correctness": answer_correctness,
+            "faithfulness": faithfulness,
+            "answer_relevancy": answer_relevancy,
+            "context_precision": context_precision,
+            "context_recall": context_recall,
+        },
+    }
+
+
+def _conectar_e_indexar(
+    force_reindex: bool = False,
+    solo_archivos: list[str] | None = None,
+) -> tuple[Any, int]:
+    """Connect to the active Chroma collection and index documents if needed."""
+    print(f"\nConnecting to ChromaDB: {rag_runtime.PATH_DB}")
+    client = chromadb.PersistentClient(path=rag_runtime.PATH_DB)
+
+    if force_reindex:
+        print("   Force reindex requested. Rebuilding collection...")
+        try:
+            client.delete_collection(name=rag_runtime.COLLECTION_NAME)
+        except Exception:
+            pass
+        collection = client.get_or_create_collection(name=rag_runtime.COLLECTION_NAME)
+        total = indexar_documentos(rag_runtime.CARPETA_DOCS, collection, solo_archivos=solo_archivos)
+        print(f"   Indexed {total} fragments.")
+        return collection, total
+
+    collection = client.get_or_create_collection(name=rag_runtime.COLLECTION_NAME)
+    if collection.count() == 0:
+        print("   Database empty. Indexing documents...")
+        total = indexar_documentos(rag_runtime.CARPETA_DOCS, collection, solo_archivos=solo_archivos)
+        print(f"   Indexed {total} fragments.")
+    else:
+        total = collection.count()
+        print(f"   Fragments in collection: {total}")
+        if solo_archivos:
+            print("   Note: file filter only applies while indexing an empty/rebuilt collection.")
+    return collection, total
+
+
+def generar_respuestas_rag(
     dataset_path: str,
     output_path: str | None = None,
     debug_path: str | None = None,
     checkpoint_path: str | None = None,
     verbose: bool = False,
-    save_debug: bool = True,
     force_reindex: bool = False,
     recomp_enabled: bool | None = None,
-    eval_corpus: Literal["es", "ca"] = "es",
-    ragas_timeout: int = 90,
-    ragas_max_retries: int = 5,
-    ragas_max_wait: int = 60,
-    ragas_max_workers: int = 1,
-    ragas_batch_size: int | None = 5,
-    ragas_metrics: str | None = None,
-    google_timeout: int | None = None,
-    google_retries: int | None = None,
-    raise_exceptions: bool = False,
+    pipeline_flags: dict[str, bool] | None = None,
+    eval_corpus: str = "es",
+    docs_dir: str | None = None,
+    solo_archivos: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Run the full live RAGAS evaluation and persist its artifacts.
-
-    Args:
-        dataset_path: Path to the question dataset.
-        output_path: CSV output path. Defaults to ``evaluation/scores/``.
-        debug_path: Debug JSON output path. Defaults to ``evaluation/debug/``.
-        checkpoint_path: Progress JSON path used to resume question generation.
-        verbose: Whether to print per-question progress.
-        save_debug: Whether to persist the debug JSON.
-        force_reindex: Whether to rebuild the ChromaDB collection before evaluation.
-        recomp_enabled: Optional in-process override for ``USAR_RECOMP_SYNTHESIS``.
-        eval_corpus: ``es`` uses ``rag/pdfs`` (default Chroma); ``ca`` uses ``rag/pdfs_ca``
-            and adds ``_ca`` to default score/debug/checkpoint filenames.
-        ragas_timeout: Per-call timeout used by RAGAS.
-        ragas_max_retries: Max retries for failed RAGAS jobs.
-        ragas_max_wait: Max backoff wait between RAGAS retries.
-        ragas_max_workers: Concurrent RAGAS workers.
-        ragas_batch_size: Optional RAGAS batch size.
-        ragas_metrics: Comma-separated list of RAGAS metrics, or ``all``.
-        google_timeout: Timeout passed to the Gemini LLM and embeddings clients.
-        google_retries: Retries passed to the Gemini LLM client.
-        raise_exceptions: Stop immediately on a RAGAS job failure.
-
-    Returns:
-        Summary dictionary with output paths, timings, and mean metrics.
-    """
-    previous_recomp = None
+    """Run only indexing/retrieval/generation and persist a reusable checkpoint."""
+    previous_pipeline_flags = None
     docs_previous: tuple[str, str, str] | None = None
+    flag_overrides = dict(pipeline_flags or {})
     if recomp_enabled is not None:
-        previous_recomp = set_recomp_synthesis_enabled(recomp_enabled)
+        flag_overrides["USAR_RECOMP_SYNTHESIS"] = bool(recomp_enabled)
+    if flag_overrides:
+        previous_pipeline_flags = rag_runtime.set_pipeline_flags(flag_overrides)
 
-    if eval_corpus == "ca":
-        pdfs_ca = os.path.join(_proj_root, "rag", "pdfs_ca")
-        docs_previous = rag_runtime.set_docs_folder_runtime(pdfs_ca)
+    resolved_docs_dir = docs_dir or _default_docs_dir_for_corpus(eval_corpus)
+    if resolved_docs_dir is not None:
+        docs_previous = rag_runtime.set_docs_folder_runtime(resolved_docs_dir)
 
     try:
-        # ─────────────────────────────────────────────
-        # 1. IMPORT RAGAS METRICS
-        # ─────────────────────────────────────────────
-
-        try:
-            from ragas import evaluate
-            from ragas.metrics import (
-                faithfulness,
-                answer_relevancy,
-                context_precision,
-                context_recall,
-                answer_correctness,
-            )
-            from ragas.dataset_schema import SingleTurnSample, EvaluationDataset
-            from ragas.run_config import RunConfig
-        except ImportError as e:
-            print("Install RAGAS and dependencies:")
-            print("   pip install -r evaluation/requirements.txt")
-            raise SystemExit(1) from e
-
-        # ─────────────────────────────────────────────
-        # 2. CONFIGURE EVALUATION LLM
-        # ─────────────────────────────────────────────
-
-        eval_llm, eval_embeddings = configurar_llm_evaluacion(
-            google_timeout=google_timeout,
-            google_retries=google_retries,
-        )
-
-        # ─────────────────────────────────────────────
-        # 3. LOAD DATASET
-        # ─────────────────────────────────────────────
-
         print(f"\nLoading dataset...")
         dataset_path = resolver_ruta_dataset(dataset_path)
         sfx = _artifact_suffix(eval_corpus)
@@ -704,49 +901,28 @@ def ejecutar_evaluacion(
             or _default_checkpoint_path(dataset_path, rag_runtime.USAR_RECOMP_SYNTHESIS, sfx)
         )
 
-        df = cargar_dataset(dataset_path)
-        df = normalizar_columnas(df)
+        df = normalizar_columnas(cargar_dataset(dataset_path))
         questions = df["question"].tolist()
         ground_truths = df["ground_truth"].tolist()
-
         tiene_ground_truth = any(gt.strip() for gt in ground_truths)
 
         print(f"   Questions to evaluate: {len(questions)}")
         print(f"   Ground truth available: {'Yes' if tiene_ground_truth else 'No'}")
         print(f"   RECOMP synthesis: {'Enabled' if rag_runtime.USAR_RECOMP_SYNTHESIS else 'Disabled'}")
+        current_pipeline_flags = rag_runtime.get_pipeline_flags()
         print(
-            f"   Eval corpus: {eval_corpus.upper()} — PDFs: {rag_runtime.CARPETA_DOCS}"
+            "   Pipeline flags: "
+            + ", ".join(
+                f"{name}={'on' if value else 'off'}"
+                for name, value in current_pipeline_flags.items()
+            )
         )
+        print(f"   Eval corpus: {eval_corpus.upper()} -- PDFs: {rag_runtime.CARPETA_DOCS}")
 
-        # ─────────────────────────────────────────────
-        # 4. CONNECT TO CHROMADB
-        # ─────────────────────────────────────────────
-
-        print(f"\nConnecting to ChromaDB: {rag_runtime.PATH_DB}")
-        client = chromadb.PersistentClient(path=rag_runtime.PATH_DB)
-
-        if force_reindex:
-            print("   Force reindex requested. Rebuilding collection...")
-            try:
-                client.delete_collection(name=rag_runtime.COLLECTION_NAME)
-            except Exception:
-                pass
-            collection = client.get_or_create_collection(name=rag_runtime.COLLECTION_NAME)
-            total = indexar_documentos(rag_runtime.CARPETA_DOCS, collection)
-            print(f"   Indexed {total} fragments.")
-        else:
-            collection = client.get_or_create_collection(name=rag_runtime.COLLECTION_NAME)
-            if collection.count() == 0:
-                print("   Database empty. Indexing documents...")
-                total = indexar_documentos(rag_runtime.CARPETA_DOCS, collection)
-                print(f"   Indexed {total} fragments.")
-            else:
-                print(f"   Fragments in collection: {collection.count()}")
-                total = collection.count()
-
-        # ─────────────────────────────────────────────
-        # 5. RUN RAG PIPELINE PER QUESTION
-        # ─────────────────────────────────────────────
+        collection, total = _conectar_e_indexar(
+            force_reindex=force_reindex,
+            solo_archivos=solo_archivos,
+        )
 
         print("\nRunning RAG pipeline for each question...")
         answers: list[str] = []
@@ -756,8 +932,9 @@ def ejecutar_evaluacion(
             if (
                 checkpoint.get("dataset_path") == dataset_path
                 and checkpoint.get("questions_count") == len(questions)
-                and checkpoint.get("recomp_enabled") == rag_runtime.USAR_RECOMP_SYNTHESIS
+                and _checkpoint_pipeline_flags_match(checkpoint, current_pipeline_flags)
                 and checkpoint.get("eval_corpus", "es") == eval_corpus
+                and checkpoint.get("docs_dir", rag_runtime.CARPETA_DOCS) == rag_runtime.CARPETA_DOCS
             ):
                 answers = checkpoint.get("answers", [])
                 contexts_list = checkpoint.get("contexts_list", [])
@@ -804,7 +981,7 @@ def ejecutar_evaluacion(
                         answer, contexts = "", []
                         print(
                             f"   [TIMEOUT] Q{i+1} exceeded {_ollama_timeout}s "
-                            "— saved as empty, will retry on next run."
+                            "-- saved as empty, will retry on next run."
                         )
                 answers[i] = answer
                 contexts_list[i] = contexts
@@ -818,6 +995,8 @@ def ejecutar_evaluacion(
                     debug_path=resolved_debug_path,
                     answers=answers,
                     contexts_list=contexts_list,
+                    pipeline_flags=current_pipeline_flags,
+                    docs_dir=rag_runtime.CARPETA_DOCS,
                 )
         except ConnectionError as e:
             print(f"\nError: Could not connect to Ollama: {e}")
@@ -841,261 +1020,728 @@ def ejecutar_evaluacion(
             print("   Fix the RAG generation issue and rerun; only empty answers will be retried.")
             raise SystemExit(1)
 
-        # ─────────────────────────────────────────────
-        # 6. BUILD RAGAS EVALUATION DATASET
-        # ─────────────────────────────────────────────
-
-        print("\nBuilding EvaluationDataset for RAGAS...")
-        samples = []
-        for i in range(len(questions)):
-            sample = SingleTurnSample(
-                user_input=questions[i],
-                response=answers[i] if answers[i] else "",
-                retrieved_contexts=contexts_list[i] if contexts_list[i] else [],
-                reference=ground_truths[i] if ground_truths[i] else "",
-            )
-            samples.append(sample)
-
-        eval_dataset = EvaluationDataset(samples=samples)
-
-        # ─────────────────────────────────────────────
-        # 7. CONFIGURE METRICS
-        # ─────────────────────────────────────────────
-
-        metric_objects = {
-            "answer_correctness": answer_correctness,
-            "faithfulness": faithfulness,
-            "answer_relevancy": answer_relevancy,
-            "context_precision": context_precision,
-            "context_recall": context_recall,
-        }
-        selected_metric_names = _parse_ragas_metric_names(ragas_metrics, tiene_ground_truth)
-        metrics = [metric_objects[name] for name in selected_metric_names]
-
-        # ─────────────────────────────────────────────
-        # 8. RUN RAGAS EVALUATION
-        # ─────────────────────────────────────────────
-
-        print("\nRunning RAGAS evaluation (this may take a few minutes)...")
-        print(
-            "   RAGAS config: "
-            f"timeout={ragas_timeout}s, retries={ragas_max_retries}, "
-            f"max_wait={ragas_max_wait}s, workers={ragas_max_workers}, "
-            f"batch_size={ragas_batch_size or 'auto'}, "
-            f"metrics={','.join(selected_metric_names)}"
-        )
-        t_eval_start = time.time()
-
-        eval_run_config = RunConfig(
-            timeout=ragas_timeout,
-            max_retries=ragas_max_retries,
-            max_wait=ragas_max_wait,
-            max_workers=ragas_max_workers,
-        )
-
-        try:
-            result = evaluate(
-                dataset=eval_dataset,
-                metrics=metrics,
-                llm=eval_llm,
-                embeddings=eval_embeddings,
-                run_config=eval_run_config,
-                batch_size=ragas_batch_size,
-                raise_exceptions=raise_exceptions,
-            )
-        except Exception as e:
-            if _es_google_resource_exhausted(e):
-                print("\nError: Google returned 429 RESOURCE_EXHAUSTED during RAGAS.")
-                print("   The RAG checkpoint is valid; this failed in the evaluator, not in retrieval.")
-                print("   Rerun without --raise-exceptions and the defaults already limit to")
-                print("   workers=1 and batch_size=5, which should avoid the rate limit.")
-                print("   If it persists, try: --ragas-max-workers 1 --ragas-batch-size 1 --ragas-max-wait 120")
-                raise SystemExit(2) from e
-            raise
-
-        t_eval = time.time() - t_eval_start
-        print(f"   Evaluation completed in {t_eval:.1f}s")
-
-        # ─────────────────────────────────────────────
-        # 9. DISPLAY RESULTS
-        # ─────────────────────────────────────────────
-
-        df_scores = result.to_pandas()
-        imprimir_resultados(df_scores, questions)
-
-        # ─────────────────────────────────────────────
-        # 10. SAVE CSV
-        # ─────────────────────────────────────────────
-
-        output_dir = os.path.dirname(os.path.abspath(resolved_output_path))
-        os.makedirs(output_dir, exist_ok=True)
-        df_scores.to_csv(resolved_output_path, index=False, encoding="utf-8")
-        print(f"\nResults saved to: {resolved_output_path}")
-
-        # ─────────────────────────────────────────────
-        # 11. SAVE DEBUG OUTPUT
-        # ─────────────────────────────────────────────
-
-        if save_debug:
-            os.makedirs(os.path.dirname(os.path.abspath(resolved_debug_path)), exist_ok=True)
-            guardar_debug(
-                result=result,
-                questions=questions,
-                answers=answers,
-                ground_truths=ground_truths,
-                contexts_list=contexts_list,
-                debug_path=resolved_debug_path,
-            )
-            print(f"Debug saved to: {resolved_debug_path}")
-        else:
-            resolved_debug_path = None
-
-        metric_cols = [c for c in METRIC_NAMES if c in df_scores.columns]
-        mean_scores = {}
-        for metric_name in metric_cols:
-            metric_value = df_scores[metric_name].mean(numeric_only=True)
-            if not pd.isna(metric_value):
-                mean_scores[metric_name] = float(metric_value)
-
         return {
             "dataset_path": os.path.abspath(dataset_path),
-            "output_path": os.path.abspath(resolved_output_path),
-            "debug_path": os.path.abspath(resolved_debug_path) if resolved_debug_path else None,
+            "output_path": resolved_output_path,
+            "debug_path": resolved_debug_path,
+            "checkpoint_path": resolved_checkpoint_path,
+            "questions": questions,
+            "ground_truths": ground_truths,
+            "answers": answers,
+            "contexts_list": contexts_list,
             "questions_count": len(questions),
             "indexed_fragments": total,
+            "indexed_files_filter": solo_archivos,
             "recomp_enabled": rag_runtime.USAR_RECOMP_SYNTHESIS,
+            "pipeline_flags": current_pipeline_flags,
             "eval_corpus": eval_corpus,
+            "docs_dir": rag_runtime.CARPETA_DOCS,
             "pipeline_seconds": t_rag,
-            "evaluation_seconds": t_eval,
-            "mean_scores": mean_scores,
-            "checkpoint_path": os.path.abspath(resolved_checkpoint_path),
+            "tiene_ground_truth": tiene_ground_truth,
         }
     finally:
         if docs_previous is not None:
             rag_runtime.CARPETA_DOCS, rag_runtime.PATH_DB, rag_runtime.COLLECTION_NAME = (
                 docs_previous
             )
-        if previous_recomp is not None:
-            set_recomp_synthesis_enabled(previous_recomp)
+        if previous_pipeline_flags is not None:
+            rag_runtime.set_pipeline_flags(previous_pipeline_flags)
+
+
+def evaluar_respuestas_con_ragas(
+    generation: dict[str, Any],
+    save_debug: bool = True,
+    ragas_timeout: int = 90,
+    ragas_max_retries: int = 5,
+    ragas_max_wait: int = 60,
+    ragas_max_workers: int = 1,
+    ragas_batch_size: int | None = 5,
+    ragas_metrics: str | None = None,
+    google_timeout: int | None = None,
+    google_retries: int | None = None,
+    raise_exceptions: bool = False,
+) -> dict[str, Any]:
+    """Evaluate previously generated RAG answers with RAGAS and save artifacts."""
+    ragas = _importar_ragas_componentes()
+    eval_llm, eval_embeddings = configurar_llm_evaluacion(
+        google_timeout=google_timeout,
+        google_retries=google_retries,
+    )
+
+    questions = generation["questions"]
+    ground_truths = generation["ground_truths"]
+    answers = generation["answers"]
+    contexts_list = generation["contexts_list"]
+
+    print("\nBuilding EvaluationDataset for RAGAS...")
+    samples = []
+    for i in range(len(questions)):
+        sample = ragas["SingleTurnSample"](
+            user_input=questions[i],
+            response=answers[i] if answers[i] else "",
+            retrieved_contexts=contexts_list[i] if contexts_list[i] else [],
+            reference=ground_truths[i] if ground_truths[i] else "",
+        )
+        samples.append(sample)
+    eval_dataset = ragas["EvaluationDataset"](samples=samples)
+
+    selected_metric_names = _parse_ragas_metric_names(
+        ragas_metrics,
+        bool(generation.get("tiene_ground_truth")),
+    )
+    metrics = [ragas["metric_objects"][name] for name in selected_metric_names]
+
+    print("\nRunning RAGAS evaluation (this may take a few minutes)...")
+    print(
+        "   RAGAS config: "
+        f"timeout={ragas_timeout}s, retries={ragas_max_retries}, "
+        f"max_wait={ragas_max_wait}s, workers={ragas_max_workers}, "
+        f"batch_size={ragas_batch_size or 'auto'}, "
+        f"metrics={','.join(selected_metric_names)}"
+    )
+    t_eval_start = time.time()
+
+    eval_run_config = ragas["RunConfig"](
+        timeout=ragas_timeout,
+        max_retries=ragas_max_retries,
+        max_wait=ragas_max_wait,
+        max_workers=ragas_max_workers,
+    )
+
+    try:
+        result = ragas["evaluate"](
+            dataset=eval_dataset,
+            metrics=metrics,
+            llm=eval_llm,
+            embeddings=eval_embeddings,
+            run_config=eval_run_config,
+            batch_size=ragas_batch_size,
+            raise_exceptions=raise_exceptions,
+        )
+    except Exception as e:
+        if _es_google_resource_exhausted(e):
+            print("\nError: Google returned 429 RESOURCE_EXHAUSTED during RAGAS.")
+            print("   The RAG checkpoint is valid; this failed in the evaluator, not in retrieval.")
+            print("   Rerun without --raise-exceptions and the defaults already limit to")
+            print("   workers=1 and batch_size=5, which should avoid the rate limit.")
+            print("   If it persists, try: --ragas-max-workers 1 --ragas-batch-size 1 --ragas-max-wait 120")
+            raise SystemExit(2) from e
+        raise
+
+    t_eval = time.time() - t_eval_start
+    print(f"   Evaluation completed in {t_eval:.1f}s")
+
+    df_scores = result.to_pandas()
+    imprimir_resultados(df_scores, questions)
+
+    output_path = generation["output_path"]
+    output_dir = os.path.dirname(os.path.abspath(output_path))
+    os.makedirs(output_dir, exist_ok=True)
+    df_scores.to_csv(output_path, index=False, encoding="utf-8")
+    print(f"\nResults saved to: {output_path}")
+
+    debug_path = generation.get("debug_path")
+    if save_debug and debug_path:
+        os.makedirs(os.path.dirname(os.path.abspath(debug_path)), exist_ok=True)
+        guardar_debug(
+            result=result,
+            questions=questions,
+            answers=answers,
+            ground_truths=ground_truths,
+            contexts_list=contexts_list,
+            debug_path=debug_path,
+        )
+        print(f"Debug saved to: {debug_path}")
+    else:
+        debug_path = None
+
+    metric_cols = [c for c in METRIC_NAMES if c in df_scores.columns]
+    mean_scores = {}
+    for metric_name in metric_cols:
+        metric_value = df_scores[metric_name].mean(numeric_only=True)
+        if not pd.isna(metric_value):
+            mean_scores[metric_name] = float(metric_value)
+
+    return {
+        "dataset_path": generation["dataset_path"],
+        "output_path": os.path.abspath(output_path),
+        "debug_path": os.path.abspath(debug_path) if debug_path else None,
+        "questions_count": len(questions),
+        "indexed_fragments": generation["indexed_fragments"],
+        "recomp_enabled": generation["recomp_enabled"],
+        "pipeline_flags": generation.get("pipeline_flags", {}),
+        "eval_corpus": generation["eval_corpus"],
+        "docs_dir": generation.get("docs_dir"),
+        "pipeline_seconds": generation["pipeline_seconds"],
+        "evaluation_seconds": t_eval,
+        "mean_scores": mean_scores,
+        "checkpoint_path": os.path.abspath(generation["checkpoint_path"]),
+    }
+
+
+def ejecutar_comparativa_pipeline(
+    dataset_path: str,
+    scores_root: str = COMPARISON_SCORES_DIR,
+    debug_root: str = COMPARISON_DEBUG_DIR,
+    verbose: bool = False,
+    save_debug: bool = True,
+    label: str | None = None,
+    force_reindex: bool = False,
+    eval_corpus: str = "es",
+    docs_dir: str | None = None,
+    ragas_timeout: int = 90,
+    ragas_max_retries: int = 5,
+    ragas_max_wait: int = 60,
+    ragas_max_workers: int = 1,
+    ragas_batch_size: int | None = 5,
+    ragas_metrics: str | None = None,
+    google_timeout: int | None = None,
+    google_retries: int | None = None,
+    raise_exceptions: bool = False,
+    suite: str = "ablation",
+    variant_names: str | None = None,
+) -> dict[str, Any]:
+    """Run all selected pipeline variants, then evaluate them with RAGAS."""
+    variants = seleccionar_variantes(suite, variant_names)
+    baseline_variant = (
+        "baseline_all_on"
+        if any(v["name"] == "baseline_all_on" for v in variants)
+        else variants[0]["name"]
+    )
+
+    dataset_path = resolver_ruta_dataset(dataset_path)
+    run_slug = _build_run_slug(dataset_path=dataset_path, label=label, eval_corpus=eval_corpus)
+    scores_dir = os.path.join(scores_root, run_slug)
+    debug_dir = os.path.join(debug_root, run_slug)
+    checkpoints_dir = os.path.join(CHECKPOINTS_DIR, "comparison_runs", run_slug)
+    os.makedirs(scores_dir, exist_ok=True)
+    os.makedirs(debug_dir, exist_ok=True)
+    os.makedirs(checkpoints_dir, exist_ok=True)
+
+    generations = []
+    for index, variant in enumerate(variants):
+        variant_name = variant["name"]
+        should_reindex = force_reindex and index == 0
+        print("\n" + "=" * 70)
+        print(f"Launching RAG inference: {variant_name}")
+        print(f"Variant: {variant['description']}")
+        print("=" * 70)
+
+        generation = generar_respuestas_rag(
+            dataset_path=dataset_path,
+            output_path=os.path.join(scores_dir, f"{variant_name}.csv"),
+            debug_path=os.path.join(debug_dir, f"{variant_name}.json"),
+            checkpoint_path=os.path.join(checkpoints_dir, f"{variant_name}.json"),
+            verbose=verbose,
+            force_reindex=should_reindex,
+            pipeline_flags=variant["flags"],
+            eval_corpus=eval_corpus,
+            docs_dir=docs_dir,
+        )
+        generation["variant"] = variant_name
+        generation["variant_description"] = variant["description"]
+        generation["requested_pipeline_flags"] = dict(variant["flags"])
+        generations.append(generation)
+
+    print("\n" + "=" * 70)
+    print("RAG inference finished for all variants. Starting RAGAS back-to-back.")
+    print("=" * 70)
+
+    results = []
+    for generation in generations:
+        variant_name = generation["variant"]
+        print("\n" + "=" * 70)
+        print(f"Launching RAGAS evaluation: {variant_name}")
+        print("=" * 70)
+
+        result = evaluar_respuestas_con_ragas(
+            generation=generation,
+            save_debug=save_debug,
+            ragas_timeout=ragas_timeout,
+            ragas_max_retries=ragas_max_retries,
+            ragas_max_wait=ragas_max_wait,
+            ragas_max_workers=ragas_max_workers,
+            ragas_batch_size=ragas_batch_size,
+            ragas_metrics=ragas_metrics,
+            google_timeout=google_timeout,
+            google_retries=google_retries,
+            raise_exceptions=raise_exceptions,
+        )
+        result["variant"] = variant_name
+        result["variant_description"] = generation["variant_description"]
+        result["requested_pipeline_flags"] = generation["requested_pipeline_flags"]
+        results.append(result)
+
+    manifest = {
+        "dataset_path": os.path.abspath(dataset_path),
+        "eval_corpus": eval_corpus,
+        "docs_dir": os.path.abspath(docs_dir) if docs_dir else _default_docs_dir_for_corpus(eval_corpus),
+        "suite": suite,
+        "baseline_variant": baseline_variant,
+        "selected_variants": [variant["name"] for variant in variants],
+        "scores_dir": os.path.abspath(scores_dir),
+        "debug_dir": os.path.abspath(debug_dir),
+        "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "runs": results,
+        "mean_score_deltas_vs_baseline": _mean_score_deltas(results, baseline_variant),
+    }
+    _guardar_json(os.path.join(debug_dir, "comparison_summary.json"), manifest)
+    return manifest
+
+
+def ejecutar_comparativa_recomp(*args, **kwargs) -> dict[str, Any]:
+    """Backward-compatible wrapper for the old RECOMP-only comparison."""
+    kwargs.setdefault("variant_names", "no_recomp_synthesis,baseline_all_on")
+    return ejecutar_comparativa_pipeline(*args, **kwargs)
+
+
+def ejecutar_evaluacion(
+    dataset_path: str,
+    output_path: str | None = None,
+    debug_path: str | None = None,
+    checkpoint_path: str | None = None,
+    verbose: bool = False,
+    save_debug: bool = True,
+    force_reindex: bool = False,
+    recomp_enabled: bool | None = None,
+    eval_corpus: str = "es",
+    docs_dir: str | None = None,
+    solo_archivos: list[str] | None = None,
+    ragas_timeout: int = 90,
+    ragas_max_retries: int = 5,
+    ragas_max_wait: int = 60,
+    ragas_max_workers: int = 1,
+    ragas_batch_size: int | None = 5,
+    ragas_metrics: str | None = None,
+    google_timeout: int | None = None,
+    google_retries: int | None = None,
+    raise_exceptions: bool = False,
+) -> dict[str, Any]:
+    """Run the full live RAGAS evaluation and persist its artifacts.
+
+    Args:
+        dataset_path: Path to the question dataset.
+        output_path: CSV output path. Defaults to ``evaluation/scores/``.
+        debug_path: Debug JSON output path. Defaults to ``evaluation/debug/``.
+        checkpoint_path: Progress JSON path used to resume question generation.
+        verbose: Whether to print per-question progress.
+        save_debug: Whether to persist the debug JSON.
+        force_reindex: Whether to rebuild the ChromaDB collection before evaluation.
+        recomp_enabled: Optional in-process override for ``USAR_RECOMP_SYNTHESIS``.
+        eval_corpus: Corpus preset (``es``, ``ca``, ``en``, ``mix``). Resolves the PDF
+            folder under ``rag/docs/<lang>/`` and adds ``_<lang>`` to output filenames.
+        ragas_timeout: Per-call timeout used by RAGAS.
+        ragas_max_retries: Max retries for failed RAGAS jobs.
+        ragas_max_wait: Max backoff wait between RAGAS retries.
+        ragas_max_workers: Concurrent RAGAS workers.
+        ragas_batch_size: Optional RAGAS batch size.
+        ragas_metrics: Comma-separated list of RAGAS metrics, or ``all``.
+        google_timeout: Timeout passed to the Gemini LLM and embeddings clients.
+        google_retries: Retries passed to the Gemini LLM client.
+        raise_exceptions: Stop immediately on a RAGAS job failure.
+
+    Returns:
+        Summary dictionary with output paths, timings, and mean metrics.
+    """
+    generation = generar_respuestas_rag(
+        dataset_path=dataset_path,
+        output_path=output_path,
+        debug_path=debug_path,
+        checkpoint_path=checkpoint_path,
+        verbose=verbose,
+        force_reindex=force_reindex,
+        recomp_enabled=recomp_enabled,
+        eval_corpus=eval_corpus,
+        docs_dir=docs_dir,
+        solo_archivos=solo_archivos,
+    )
+    return evaluar_respuestas_con_ragas(
+        generation=generation,
+        save_debug=save_debug,
+        ragas_timeout=ragas_timeout,
+        ragas_max_retries=ragas_max_retries,
+        ragas_max_wait=ragas_max_wait,
+        ragas_max_workers=ragas_max_workers,
+        ragas_batch_size=ragas_batch_size,
+        ragas_metrics=ragas_metrics,
+        google_timeout=google_timeout,
+        google_retries=google_retries,
+        raise_exceptions=raise_exceptions,
+    )
+
+# ─────────────────────────────────────────────
+# SECTION 7: RAGBENCH PREPARATION
+# ─────────────────────────────────────────────
+
+HF_REPO = "vectara/open_ragbench"
+HF_SUBDIR = "pdf/arxiv"
+HF_METADATA_FILES = ("queries.json", "qrels.json", "answers.json", "pdf_urls.json")
+
+ARXIV_DELAY_SECS = 5
+ARXIV_TIMEOUT_SECS = 60
+ARXIV_HEADERS = {
+    "User-Agent": "MonkeyGrab-TFG-Eval/1.0 (academic research; Universitat Politecnica de Valencia)"
+}
+
+RAGBENCH_PDFS_DIR = os.path.join(_proj_root, "rag", "docs", "en")
+_RAGBENCH_OUTPUT_CSV = os.path.join(SCORES_DIR, "ragas_scores_ragbench_en.csv")
+_RAGBENCH_OUTPUT_DEBUG = os.path.join(DEBUG_DIR, "ragas_debug_ragbench_en.json")
+_RAGBENCH_PREPARED_DIR = os.path.join(DEBUG_DIR, "ragbench_prepared")
+
+
+def descargar_metadatos() -> tuple[dict, dict, dict, dict]:
+    """Download RagBench metadata through Hugging Face cache."""
+    if not _HF_AVAILABLE:
+        print("ERROR: huggingface_hub no instalado. Ejecuta: pip install huggingface-hub")
+        raise SystemExit(1)
+
+    print("Descargando metadatos de vectara/open_ragbench (cache tras la primera vez)...")
+    loaded: dict = {}
+    for fname in HF_METADATA_FILES:
+        print(f"   {fname}...", end=" ", flush=True)
+        local_path = _hf_hub_download(
+            repo_id=HF_REPO,
+            filename=f"{HF_SUBDIR}/{fname}",
+            repo_type="dataset",
+        )
+        with open(local_path, encoding="utf-8") as f:
+            loaded[fname] = json.load(f)
+        print("OK")
+
+    return (
+        loaded["queries.json"],
+        loaded["qrels.json"],
+        loaded["answers.json"],
+        loaded["pdf_urls.json"],
+    )
+
+
+def seleccionar_papers(
+    queries: dict,
+    qrels: dict,
+    pdf_urls: dict,
+    n_papers: int,
+    source_filter: str | None,
+) -> list[str]:
+    """Select top-N papers by eligible question count."""
+    from collections import Counter
+    paper_counts: Counter = Counter()
+    for qid, qrel in qrels.items():
+        doc_id = qrel.get("doc_id")
+        if not doc_id or qid not in queries or doc_id not in pdf_urls:
+            continue
+        if source_filter and queries[qid].get("source") != source_filter:
+            continue
+        paper_counts[doc_id] += 1
+
+    selected = [pid for pid, _ in paper_counts.most_common(n_papers)]
+    src_label = f"source='{source_filter}'" if source_filter else "todos los tipos"
+    print(f"\nPapers seleccionados ({src_label}, top-{n_papers} por numero de preguntas):")
+    for pid in selected:
+        print(f"   {pid}  ({paper_counts[pid]} preguntas elegibles)")
+    return selected
+
+
+def seleccionar_papers_objetivo(
+    only_doc: str | None,
+    queries: dict,
+    qrels: dict,
+    pdf_urls: dict,
+    n_papers: int,
+    source_filter: str | None,
+) -> list[str]:
+    """Resolve either only_doc or the top-N paper selection."""
+    if not only_doc:
+        return seleccionar_papers(queries, qrels, pdf_urls, n_papers, source_filter)
+
+    doc_id = only_doc.strip()
+    if doc_id not in pdf_urls:
+        print(f"ERROR: doc_id '{doc_id}' no encontrado en pdf_urls del dataset.")
+        raise SystemExit(1)
+
+    n_eligible = sum(
+        1
+        for qid, qrel in qrels.items()
+        if qrel.get("doc_id") == doc_id
+        and qid in queries
+        and (not source_filter or queries[qid].get("source") == source_filter)
+    )
+    if n_eligible == 0:
+        print(
+            f"ERROR: no hay preguntas para '{doc_id}' con source='{source_filter}'. "
+            "Prueba con --source all."
+        )
+        raise SystemExit(1)
+
+    print(f"\n--only-doc: paper unico {doc_id} ({n_eligible} preguntas elegibles)")
+    return [doc_id]
+
+
+def construir_preguntas(
+    queries: dict,
+    qrels: dict,
+    answers: dict,
+    selected_papers: list[str],
+    source_filter: str | None,
+    max_per_paper: int,
+) -> tuple[list[str], list[str], list[str]]:
+    """Build aligned question, ground-truth and paper-id lists."""
+    from collections import Counter
+    selected_set = set(selected_papers)
+    per_paper: dict[str, list[str]] = {p: [] for p in selected_papers}
+
+    for qid, qrel in qrels.items():
+        doc_id = qrel.get("doc_id")
+        if doc_id not in selected_set or qid not in queries:
+            continue
+        if source_filter and queries[qid].get("source") != source_filter:
+            continue
+        per_paper[doc_id].append(qid)
+
+    questions: list[str] = []
+    ground_truths: list[str] = []
+    paper_ids: list[str] = []
+
+    for paper_id in selected_papers:
+        chosen = per_paper[paper_id][:max_per_paper]
+        if chosen:
+            by_src = Counter(queries[q].get("source", "?") for q in chosen)
+            print(f"   {paper_id}: {dict(by_src)}")
+        for qid in chosen:
+            questions.append(queries[qid]["query"])
+            ground_truths.append(answers.get(qid, ""))
+            paper_ids.append(paper_id)
+
+    print(
+        f"\nTotal preguntas: {len(questions)} de {len(selected_papers)} papers "
+        f"(max {max_per_paper}/paper)"
+    )
+    return questions, ground_truths, paper_ids
+
+
+def filtrar_por_pdfs_disponibles(
+    questions: list[str],
+    ground_truths: list[str],
+    paper_ids: list[str],
+    available_papers: list[str],
+) -> tuple[list[str], list[str], list[str]]:
+    """Keep only question rows whose PDF exists locally."""
+    available_set = set(available_papers)
+    filtered = [
+        (q, gt, pid)
+        for q, gt, pid in zip(questions, ground_truths, paper_ids)
+        if pid in available_set
+    ]
+    if not filtered:
+        return [], [], []
+    out_q, out_gt, out_pid = map(list, zip(*filtered))
+    return out_q, out_gt, out_pid
+
+
+def descargar_pdfs(
+    selected_papers: list[str],
+    pdf_urls: dict,
+    pdfs_dir: str,
+    skip_existing: bool = True,
+) -> list[str]:
+    """Download selected PDFs from RagBench/arXiv."""
+    if not _REQUESTS_AVAILABLE:
+        print("ERROR: requests no instalado. Ejecuta: pip install requests")
+        raise SystemExit(1)
+    os.makedirs(pdfs_dir, exist_ok=True)
+    successful: list[str] = []
+
+    print(f"\nDescargando {len(selected_papers)} PDFs en {pdfs_dir}/")
+    for i, paper_id in enumerate(selected_papers):
+        out_path = os.path.join(pdfs_dir, f"{paper_id}.pdf")
+
+        if skip_existing and os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+            print(f"   [{i + 1}/{len(selected_papers)}] {paper_id}  (en cache, omitido)")
+            successful.append(paper_id)
+            continue
+
+        url = pdf_urls[paper_id]
+        print(f"   [{i + 1}/{len(selected_papers)}] {paper_id} <- {url}")
+        try:
+            resp = _requests.get(url, headers=ARXIV_HEADERS, timeout=ARXIV_TIMEOUT_SECS)
+            resp.raise_for_status()
+        except Exception as e:
+            print(f"      ERROR al descargar: {e}")
+            continue
+
+        content_type = resp.headers.get("Content-Type", "")
+        if "application/pdf" not in content_type and not resp.content.startswith(b"%PDF"):
+            print(f"      AVISO: Content-Type inesperado '{content_type}', omitido")
+            continue
+
+        with open(out_path, "wb") as fh:
+            fh.write(resp.content)
+        print(f"      {len(resp.content) / 1024:.0f} KB guardados")
+        successful.append(paper_id)
+
+        if i < len(selected_papers) - 1:
+            time.sleep(ARXIV_DELAY_SECS)
+
+    return successful
+
+
+def obtener_pdfs_disponibles(selected_papers: list[str], pdfs_dir: str) -> list[str]:
+    """Return selected papers whose local PDF exists and is non-empty."""
+    return [
+        pid
+        for pid in selected_papers
+        if os.path.exists(os.path.join(pdfs_dir, f"{pid}.pdf"))
+        and os.path.getsize(os.path.join(pdfs_dir, f"{pid}.pdf")) > 0
+    ]
+
+
+def _safe_tag(value: str) -> str:
+    """Convert an arbitrary string to a safe filesystem tag."""
+    return "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in value)
+
+
+def escribir_dataset_preparado(
+    questions: list[str],
+    ground_truths: list[str],
+    paper_ids: list[str],
+    safe_tag: str,
+) -> str:
+    """Write a temporary JSON dataset consumable by ejecutar_evaluacion."""
+    os.makedirs(_RAGBENCH_PREPARED_DIR, exist_ok=True)
+    prepared_dataset = os.path.join(_RAGBENCH_PREPARED_DIR, f"dataset_ragbench_{safe_tag}.json")
+    with open(prepared_dataset, "w", encoding="utf-8") as f:
+        json.dump(
+            [
+                {"question": q, "ground_truth": gt, "paper_id": pid}
+                for q, gt, pid in zip(questions, ground_truths, paper_ids)
+            ],
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+    return prepared_dataset
+
+
+def _ejecutar_ragbench(
+    source: str = "text",
+    only_doc: str | None = None,
+    n_papers: int = 10,
+    max_q: int = 5,
+    skip_download: bool = False,
+    force_reindex: bool = False,
+    verbose: bool = False,
+    save_debug: bool = True,
+) -> None:
+    """Prepare a RagBench subset and evaluate it with the unified runner."""
+    if max_q < 1:
+        print("ERROR: max_q debe ser >= 1.")
+        raise SystemExit(1)
+    if not only_doc and n_papers < 1:
+        print("ERROR: n_papers debe ser >= 1.")
+        raise SystemExit(1)
+
+    source_filter = None if source == "all" else source
+    print(f"\nFiltro de fuente: {source}")
+
+    queries, qrels, answers_gt, pdf_urls = descargar_metadatos()
+    selected_papers = seleccionar_papers_objetivo(
+        only_doc=only_doc,
+        queries=queries,
+        qrels=qrels,
+        pdf_urls=pdf_urls,
+        n_papers=n_papers,
+        source_filter=source_filter,
+    )
+
+    print("\nSeleccionando preguntas:")
+    questions, ground_truths, paper_ids = construir_preguntas(
+        queries, qrels, answers_gt, selected_papers, source_filter, max_q
+    )
+    if not questions:
+        print("ERROR: No se seleccionaron preguntas con los filtros actuales.")
+        raise SystemExit(1)
+
+    if skip_download:
+        print(f"\n--skip-download: usando PDFs existentes en {RAGBENCH_PDFS_DIR}/")
+        successful_papers = obtener_pdfs_disponibles(selected_papers, RAGBENCH_PDFS_DIR)
+    else:
+        successful_papers = descargar_pdfs(selected_papers, pdf_urls, RAGBENCH_PDFS_DIR)
+
+    if len(successful_papers) < len(selected_papers):
+        missing = set(selected_papers) - set(successful_papers)
+        print(f"\nAVISO: {len(successful_papers)}/{len(selected_papers)} PDFs disponibles.")
+        print(f"   Faltantes: {missing}")
+
+    questions, ground_truths, paper_ids = filtrar_por_pdfs_disponibles(
+        questions, ground_truths, paper_ids, successful_papers
+    )
+    if not questions:
+        print("ERROR: No quedan preguntas tras filtrar por PDFs disponibles.")
+        print("   Ejecuta sin --skip-download para descargar los PDFs necesarios.")
+        raise SystemExit(1)
+
+    dataset_tag = only_doc.strip() if only_doc else f"{source}_{len(successful_papers)}p_{max_q}q"
+    safe_tag = _safe_tag(dataset_tag)
+    prepared_dataset = escribir_dataset_preparado(questions, ground_truths, paper_ids, safe_tag)
+    solo_pdf = [f"{only_doc.strip()}.pdf"] if only_doc else None
+    checkpoint_path = os.path.join(CHECKPOINTS_DIR, "ragbench", f"ragbench_{safe_tag}.json")
+
+    print("\nDelegando generacion, checkpoints y RAGAS al runner unificado...")
+    ejecutar_evaluacion(
+        dataset_path=prepared_dataset,
+        output_path=_RAGBENCH_OUTPUT_CSV,
+        debug_path=None if not save_debug else _RAGBENCH_OUTPUT_DEBUG,
+        checkpoint_path=checkpoint_path,
+        verbose=verbose,
+        save_debug=save_debug,
+        force_reindex=force_reindex,
+        eval_corpus="ragbench",
+        docs_dir=RAGBENCH_PDFS_DIR,
+        solo_archivos=solo_pdf,
+        ragas_timeout=600,
+        ragas_max_retries=15,
+        ragas_max_wait=120,
+        ragas_max_workers=1,
+        ragas_batch_size=5,
+    )
 
 
 # ─────────────────────────────────────────────
-# SECTION 7: MAIN
+# SECTION 8: MAIN
 # ─────────────────────────────────────────────
 
-def main():
-    """Entry point: parse arguments, run the RAG pipeline on each question,
-    evaluate with RAGAS, print results, and save outputs."""
-    parser = argparse.ArgumentParser(
-        description="Evaluate the Teacher RAG system with RAGAS v0.2+"
-    )
-    parser.add_argument(
-        "--dataset",
-        default=None,
-        help="Path to the dataset (JSON, CSV, or Excel). Default: dataset_eval_es.json or dataset_eval_ca.json with --catalan",
-    )
-    parser.add_argument(
-        "--catalan",
-        action="store_true",
-        help="Use rag/pdfs_ca for indexing and add _ca to default output/checkpoint file names; default dataset Catalan",
-    )
-    parser.add_argument(
-        "--output",
-        default=None,
-        help="Output path for the results CSV",
-    )
-    parser.add_argument(
-        "--debug-output",
-        default=None,
-        help="Output path for ragas_debug.json",
-    )
-    parser.add_argument(
-        "--checkpoint",
-        default=None,
-        help="Path to the checkpoint JSON used for question-by-question resume",
-    )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Show per-question progress",
-    )
-    parser.add_argument(
-        "--no-debug",
-        action="store_true",
-        help="Skip saving the ragas_debug.json file",
-    )
-    parser.add_argument(
-        "--force-reindex",
-        action="store_true",
-        help="Delete and rebuild the ChromaDB collection before evaluating",
-    )
-    parser.add_argument(
-        "--no-recomp",
-        action="store_true",
-        help="Disable RECOMP synthesis for this run (overrides module default)",
-    )
-    parser.add_argument(
-        "--ragas-timeout",
-        type=int,
-        default=90,
-        help="Per-call RAGAS timeout in seconds. Default: 90",
-    )
-    parser.add_argument(
-        "--ragas-max-retries",
-        type=int,
-        default=5,
-        help="Maximum RAGAS retries per failed job. Default: 5",
-    )
-    parser.add_argument(
-        "--ragas-max-wait",
-        type=int,
-        default=60,
-        help="Maximum wait between RAGAS retries in seconds. Default: 60",
-    )
-    parser.add_argument(
-        "--ragas-max-workers",
-        type=int,
-        default=1,
-        help="Concurrent RAGAS workers. Lower this if Google rate limits. Default: 1",
-    )
-    parser.add_argument(
-        "--ragas-batch-size",
-        type=int,
-        default=5,
-        help="RAGAS batch size. Default: 5",
-    )
+def _add_common_eval_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--dataset", default=None, help="Path to the dataset (JSON, CSV, or Excel).")
+    parser.add_argument("--corpus", choices=SUPPORTED_CORPORA, default="es", help="Local corpus/dataset preset")
+    parser.add_argument("--docs-dir", default=None, help="Override PDF folder for this run")
+    parser.add_argument("--catalan", action="store_true", help="Legacy alias for --corpus ca")
+    parser.add_argument("--verbose", action="store_true", help="Show per-question progress")
+    parser.add_argument("--no-debug", action="store_true", help="Skip saving debug JSON")
+    parser.add_argument("--ragas-timeout", type=int, default=90, help="Per-call RAGAS timeout in seconds")
+    parser.add_argument("--ragas-max-retries", type=int, default=5, help="Maximum RAGAS retries per failed job")
+    parser.add_argument("--ragas-max-wait", type=int, default=60, help="Maximum wait between RAGAS retries")
+    parser.add_argument("--ragas-max-workers", type=int, default=1, help="Concurrent RAGAS workers")
+    parser.add_argument("--ragas-batch-size", type=int, default=5, help="RAGAS batch size")
     parser.add_argument(
         "--ragas-metrics",
         default=None,
-        help=(
-            "Comma-separated RAGAS metrics or 'all'. "
-            "Valid: answer_correctness, faithfulness, answer_relevancy, "
-            "context_precision, context_recall. Default: all available"
-        ),
+        help="Comma-separated RAGAS metrics or 'all'",
     )
-    parser.add_argument(
-        "--google-timeout",
-        type=int,
-        default=None,
-        help="Timeout in seconds for Gemini LLM/embeddings calls. Default: 45 or EVAL_GOOGLE_TIMEOUT",
-    )
-    parser.add_argument(
-        "--google-retries",
-        type=int,
-        default=None,
-        help="Gemini LLM retries. Default: 2 or EVAL_GOOGLE_RETRIES",
-    )
-    parser.add_argument(
-        "--raise-exceptions",
-        action="store_true",
-        help="Stop immediately when a RAGAS job fails instead of filling NaN scores",
-    )
-    args = parser.parse_args()
+    parser.add_argument("--google-timeout", type=int, default=None, help="Gemini timeout in seconds")
+    parser.add_argument("--google-retries", type=int, default=None, help="Gemini retries")
+    parser.add_argument("--raise-exceptions", action="store_true", help="Stop immediately on RAGAS failures")
 
-    eval_corpus: Literal["es", "ca"] = "ca" if args.catalan else "es"
+
+def _resolve_corpus_arg(args: argparse.Namespace) -> str:
+    if getattr(args, "catalan", False):
+        return "ca"
+    return args.corpus
+
+
+def _run_single_from_args(args: argparse.Namespace) -> None:
+    eval_corpus = _resolve_corpus_arg(args)
     dataset_arg = args.dataset if args.dataset is not None else _default_dataset_for_corpus(eval_corpus)
-
-    recomp_arg = False if args.no_recomp else None
+    recomp_arg = False if getattr(args, "no_recomp", False) else None
 
     ejecutar_evaluacion(
         dataset_path=dataset_arg,
@@ -1107,6 +1753,7 @@ def main():
         force_reindex=args.force_reindex,
         recomp_enabled=recomp_arg,
         eval_corpus=eval_corpus,
+        docs_dir=args.docs_dir,
         ragas_timeout=args.ragas_timeout,
         ragas_max_retries=args.ragas_max_retries,
         ragas_max_wait=args.ragas_max_wait,
@@ -1117,6 +1764,107 @@ def main():
         google_retries=args.google_retries,
         raise_exceptions=args.raise_exceptions,
     )
+
+
+def _run_compare_from_args(args: argparse.Namespace) -> None:
+    eval_corpus = _resolve_corpus_arg(args)
+    dataset_arg = args.dataset if args.dataset is not None else _default_dataset_for_corpus(eval_corpus)
+
+    manifest = ejecutar_comparativa_pipeline(
+        dataset_path=dataset_arg,
+        scores_root=args.scores_root,
+        debug_root=args.debug_root,
+        verbose=args.verbose,
+        save_debug=not args.no_debug,
+        label=args.label,
+        force_reindex=args.reindex,
+        eval_corpus=eval_corpus,
+        docs_dir=args.docs_dir,
+        suite=args.suite,
+        variant_names=args.variants,
+        ragas_timeout=args.ragas_timeout,
+        ragas_max_retries=args.ragas_max_retries,
+        ragas_max_wait=args.ragas_max_wait,
+        ragas_max_workers=args.ragas_max_workers,
+        ragas_batch_size=args.ragas_batch_size,
+        ragas_metrics=args.ragas_metrics,
+        google_timeout=args.google_timeout,
+        google_retries=args.google_retries,
+        raise_exceptions=args.raise_exceptions,
+    )
+
+    print("\nComparison finished.")
+    print(f"Scores folder: {manifest['scores_dir']}")
+    print(f"Debug folder:  {manifest['debug_dir']}")
+    print("Summary file: " + os.path.join(manifest["debug_dir"], "comparison_summary.json"))
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Unified RAG/RAGAS evaluation runner")
+    subparsers = parser.add_subparsers(dest="command")
+
+    single = subparsers.add_parser("single", help="Run one RAGAS evaluation")
+    _add_common_eval_args(single)
+    single.add_argument("--output", default=None, help="Output path for the results CSV")
+    single.add_argument("--debug-output", default=None, help="Output path for ragas_debug.json")
+    single.add_argument("--checkpoint", default=None, help="Path to the checkpoint JSON")
+    single.add_argument("--force-reindex", action="store_true", help="Delete and rebuild the ChromaDB collection")
+    single.add_argument("--no-recomp", action="store_true", help="Disable RECOMP synthesis for this run")
+    single.set_defaults(func=_run_single_from_args)
+
+    compare = subparsers.add_parser("compare", help="Run a pipeline ablation comparison")
+    _add_common_eval_args(compare)
+    compare.add_argument("--scores-root", default=COMPARISON_SCORES_DIR, help="Base directory for comparison CSV files")
+    compare.add_argument("--debug-root", default=COMPARISON_DEBUG_DIR, help="Base directory for comparison debug files")
+    compare.add_argument("--label", default=None, help="Folder suffix for this comparison batch")
+    compare.add_argument("--suite", choices=sorted(VARIANT_SUITES), default="ablation", help="Variant suite to execute")
+    compare.add_argument("--variants", default=None, help="Comma-separated variant names")
+    compare.add_argument("--reindex", action="store_true", help="Rebuild the ChromaDB collection before the first variant")
+    compare.set_defaults(func=_run_compare_from_args)
+
+    list_variants = subparsers.add_parser("list-variants", help="List available comparison variants")
+    list_variants.add_argument("--suite", choices=sorted(VARIANT_SUITES), default="ablation")
+    list_variants.set_defaults(func=lambda args: listar_variantes(args.suite))
+
+    ragbench = subparsers.add_parser("ragbench", help="Prepare and evaluate a RagBench subset")
+    ragbench.add_argument("--source", default="text", choices=["text-image", "text-table", "text", "all"])
+    ragbench.add_argument("--only-doc", default=None, help="Evaluate a single RagBench doc_id")
+    ragbench.add_argument("--n-papers", type=int, default=10, help="Number of papers to select")
+    ragbench.add_argument("--max-q", type=int, default=5, help="Maximum questions per paper")
+    ragbench.add_argument("--skip-download", action="store_true", help="Use existing PDFs under rag/docs/en")
+    ragbench.add_argument("--force-reindex", action="store_true", help="Rebuild the RagBench PDF collection")
+    ragbench.add_argument("--verbose", action="store_true", help="Show per-question generation progress")
+    ragbench.add_argument("--no-debug", action="store_true", help="Skip debug JSON")
+    ragbench.set_defaults(func=_run_ragbench_from_args)
+    return parser
+
+
+def _run_ragbench_from_args(args: argparse.Namespace) -> None:
+    _ejecutar_ragbench(
+        source=args.source,
+        only_doc=args.only_doc,
+        n_papers=args.n_papers,
+        max_q=args.max_q,
+        skip_download=args.skip_download,
+        force_reindex=args.force_reindex,
+        verbose=args.verbose,
+        save_debug=not args.no_debug,
+    )
+
+
+def main() -> None:
+    """Unified entry point with backward-compatible single-run defaults."""
+    legacy_commands = {"single", "compare", "list-variants", "ragbench"}
+    help_args = {"-h", "--help"}
+    if len(sys.argv) == 1 or (
+        len(sys.argv) > 1 and sys.argv[1] not in legacy_commands and sys.argv[1] not in help_args
+    ):
+        # Backward compatibility: ``python evaluation/run_eval.py --catalan`` still means single.
+        sys.argv.insert(1, "single")
+
+    parser = _build_parser()
+    args = parser.parse_args()
+    args.func(args)
 
 
 if __name__ == "__main__":

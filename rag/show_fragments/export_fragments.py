@@ -17,8 +17,8 @@
 """
 export_ragbench_fragments.py -- Dump indexed ChromaDB chunks to text or JSONL files.
 
-**Default:** exports **two** files — production ``mi_vector_db`` (PDFs en ``DOCS_FOLDER``)
-and RAGBench (``ragbench_vector_db``, PDFs de ``rag/ragbench_pdfs``). Each chunk is
+**Default:** exports **two** files — production ``vector_db`` (PDFs en ``DOCS_FOLDER``)
+and RAGBench (``vector_db``, PDFs de ``rag/docs/en``). Each chunk is
 labeled as **imagen** (descripción de figura), **texto plano** o **texto Markdown**
 according to ``metadata["format"]`` from ``chat_pdfs.indexar_documentos``.
 
@@ -58,12 +58,12 @@ import chromadb  # noqa: E402
 # ─────────────────────────────────────────────
 
 RAG_DIR = os.path.join(_proj_root, "rag")
-RAGBENCH_DB_PATH = os.path.join(RAG_DIR, "ragbench_vector_db")
+RAGBENCH_DB_PATH = os.path.join(RAG_DIR, "vector_db", "en_embeddinggemma")
 RAGBENCH_COLLECTION = "ragbench_arxiv_eval"
 
 DEFAULT_OUT_DIR = os.path.join(RAG_DIR, "show_fragments")
-DEFAULT_FILE_MI = "chunks_mi_vector_db.txt"
-DEFAULT_FILE_RAGBENCH = "chunks_ragbench_vector_db.txt"
+DEFAULT_FILE_MI = "chunks_vector_db.txt"
+DEFAULT_FILE_RAGBENCH = "chunks_ragbench_en.txt"
 DEFAULT_OUTPUT_MONKEYGRAB = os.path.join(DEFAULT_OUT_DIR, "monkeygrab_chunks_export.txt")
 DEFAULT_OUTPUT_RAGBENCH = os.path.join(DEFAULT_OUT_DIR, "ragbench_chunks_export.txt")
 BATCH_SIZE = 500
@@ -71,11 +71,11 @@ BATCH_SIZE = 500
 
 def resolve_monkeygrab_chroma() -> Tuple[str, str]:
     """Resolve PATH_DB and COLLECTION_NAME the same way as ``rag/chat_pdfs.py``."""
-    carpeta_docs = os.getenv("DOCS_FOLDER", os.path.join(RAG_DIR, "pdfs"))
+    carpeta_docs = os.getenv("DOCS_FOLDER", os.path.join(RAG_DIR, "docs", "es"))
     modelo_embed = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
     carpeta_nombre = os.path.basename(os.path.abspath(carpeta_docs))
     embed_slug = modelo_embed.split(":")[0].replace("/", "_")
-    path_db = os.path.join(RAG_DIR, "mi_vector_db", f"{carpeta_nombre}_{embed_slug}")
+    path_db = os.path.join(RAG_DIR, "vector_db", f"{carpeta_nombre}_{embed_slug}")
     collection_name = f"docs_{carpeta_nombre}"
     return path_db, collection_name
 
@@ -268,13 +268,13 @@ def run_export(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Export ChromaDB fragments; por defecto mi_vector_db + ragbench en archivos separados.",
+        description="Export ChromaDB fragments; por defecto vector_db producción + ragbench/en en archivos separados.",
     )
     mode = p.add_mutually_exclusive_group()
     mode.add_argument(
         "--mi-only",
         action="store_true",
-        help="Solo base de producción (mi_vector_db según DOCS_FOLDER / OLLAMA_EMBED_MODEL)",
+        help="Solo base de producción (vector_db según DOCS_FOLDER / OLLAMA_EMBED_MODEL)",
     )
     mode.add_argument(
         "--ragbench-only",
@@ -338,7 +338,7 @@ def main() -> None:
             out_path = os.path.abspath(DEFAULT_OUTPUT_RAGBENCH)
         else:
             out_path = os.path.abspath(DEFAULT_OUTPUT_MONKEYGRAB)
-        hint = os.getenv("DOCS_FOLDER", os.path.join(RAG_DIR, "pdfs"))
+        hint = os.getenv("DOCS_FOLDER", os.path.join(RAG_DIR, "docs", "es"))
         n = run_export(
             db_path,
             args.collection,
@@ -349,7 +349,7 @@ def main() -> None:
         )
         raise SystemExit(0 if n >= 0 else 1)
 
-    # --- Dual default: mi_vector_db + ragbench ---
+    # --- Dual default: vector_db producción + ragbench/en ---
     if not args.mi_only and not ragbench_only:
         os.makedirs(out_dir, exist_ok=True)
         ext = ".jsonl" if out_fmt == "jsonl" else ".txt"
@@ -358,15 +358,15 @@ def main() -> None:
 
         db_mi, coll_mi = resolve_monkeygrab_chroma()
         db_mi = os.path.abspath(db_mi)
-        pdf_mi = os.getenv("DOCS_FOLDER", os.path.join(RAG_DIR, "pdfs"))
+        pdf_mi = os.getenv("DOCS_FOLDER", os.path.join(RAG_DIR, "docs", "es"))
 
-        print("Exportación dual (mi_vector_db + ragbench_vector_db)\n")
+        print("Exportación dual (vector_db producción + ragbench en)\n")
         run_export(
             db_mi,
             coll_mi,
             path_mi,
             out_fmt,
-            "mi_vector_db (producción)",
+            "vector_db (producción)",
             os.path.abspath(pdf_mi),
         )
         run_export(
@@ -374,8 +374,8 @@ def main() -> None:
             RAGBENCH_COLLECTION,
             path_rb,
             out_fmt,
-            "ragbench_vector_db (evaluación RAGBench)",
-            os.path.join(RAG_DIR, "ragbench_pdfs"),
+            "vector_db/en (evaluación RAGBench)",
+            os.path.join(RAG_DIR, "docs", "en"),
         )
         print("\nListo. Archivos:")
         print(f"   {path_mi}")
@@ -387,13 +387,13 @@ def main() -> None:
         db_path, collection_name = resolve_monkeygrab_chroma()
         db_path = os.path.abspath(db_path)
         out_path = os.path.abspath(args.output) if args.output else DEFAULT_OUTPUT_MONKEYGRAB
-        pdf_hint = os.getenv("DOCS_FOLDER", os.path.join(RAG_DIR, "pdfs"))
+        pdf_hint = os.getenv("DOCS_FOLDER", os.path.join(RAG_DIR, "docs", "es"))
         n = run_export(
             db_path,
             collection_name,
             out_path,
             out_fmt,
-            "mi_vector_db (producción)",
+            "vector_db (producción)",
             os.path.abspath(pdf_hint),
         )
         raise SystemExit(0 if n != -1 else 1)
@@ -405,8 +405,8 @@ def main() -> None:
         RAGBENCH_COLLECTION,
         out_path,
         out_fmt,
-        "ragbench_vector_db (evaluación RAGBench)",
-        os.path.join(RAG_DIR, "ragbench_pdfs"),
+        "vector_db/en (evaluación RAGBench)",
+        os.path.join(RAG_DIR, "docs", "en"),
     )
     raise SystemExit(0 if n != -1 else 1)
 

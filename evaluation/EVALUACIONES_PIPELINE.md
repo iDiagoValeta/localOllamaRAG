@@ -104,7 +104,7 @@ Ademas, `comparison_summary.json` resume:
 - medias RAGAS;
 - `mean_score_deltas_vs_baseline`, calculado contra `baseline_all_on` si esta presente.
 
-## Recomendacion para el TFG
+## TFG
 
 Para una tabla principal defendible por idioma, usar:
 

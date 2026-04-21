@@ -58,7 +58,7 @@ from rag.chat_pdfs import evaluar_pregunta_rag, MODELO_EMBEDDING
 # SECTION 2: CONSTANTES
 # ─────────────────────────────────────────────
 
-RAGBENCH_DB_PATH   = os.path.join(_proj_root, "rag", "ragbench_vector_db")
+RAGBENCH_DB_PATH   = os.path.join(_proj_root, "rag", "vector_db", "en_embeddinggemma")
 RAGBENCH_COLLECTION = "ragbench_arxiv_eval"
 
 # Preguntas de ejemplo orientadas a contenido visual del paper 2408.07618v3

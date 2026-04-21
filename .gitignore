@@ -110,23 +110,21 @@ venv/
 .pytest_cache/
 
 # -----------------------------------------------------------------------------
-# 7. RAG — datos e índices locales
+# 7. RAG — docs/ por idioma y base de datos vectorial unificada
 # -----------------------------------------------------------------------------
-# Directorios presentes al clonar vía .gitkeep; el resto del contenido no se versiona.
-rag/mi_vector_db/**
-!rag/mi_vector_db/.gitkeep
+# Carpetas de PDFs organizadas por idioma (es/ca/en); solo .gitkeep versionado.
+rag/docs/es/**
+!rag/docs/es/.gitkeep
 
-rag/pdfs/**
-!rag/pdfs/.gitkeep
+rag/docs/ca/**
+!rag/docs/ca/.gitkeep
 
-rag/pdfs_ca/**
-!rag/pdfs_ca/.gitkeep
+rag/docs/en/**
+!rag/docs/en/.gitkeep
 
-rag/ragbench_pdfs/**
-!rag/ragbench_pdfs/.gitkeep
+# Base de datos vectorial unificada (generada al indexar; nunca versionada).
+rag/vector_db/**
 
-rag/ragbench_vector_db/**
-!rag/ragbench_vector_db/.gitkeep
 
 rag/debug_rag/
 

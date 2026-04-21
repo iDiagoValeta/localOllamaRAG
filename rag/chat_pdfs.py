@@ -216,6 +216,16 @@ USAR_EMBEDDINGS_IMAGEN = True
 LOGGING_METRICAS = True
 GUARDAR_DEBUG_RAG = True
 
+PIPELINE_RUNTIME_FLAGS = (
+    "USAR_LLM_QUERY_DECOMPOSITION",
+    "USAR_BUSQUEDA_HIBRIDA",
+    "USAR_BUSQUEDA_EXHAUSTIVA",
+    "USAR_RERANKER",
+    "EXPANDIR_CONTEXTO",
+    "USAR_OPTIMIZACION_CONTEXTO",
+    "USAR_RECOMP_SYNTHESIS",
+)
+
 
 def set_recomp_synthesis_enabled(enabled: bool) -> bool:
     """Override RECOMP synthesis usage for the current Python process.
@@ -232,13 +242,35 @@ def set_recomp_synthesis_enabled(enabled: bool) -> bool:
     return anterior
 
 
+def get_pipeline_flags() -> Dict[str, bool]:
+    """Return the runtime-toggleable pipeline flags used during inference."""
+    return {name: bool(globals()[name]) for name in PIPELINE_RUNTIME_FLAGS}
+
+
+def set_pipeline_flags(overrides: Dict[str, bool]) -> Dict[str, bool]:
+    """Override inference-time pipeline flags for the current Python process.
+
+    Index-time flags are intentionally excluded because they require rebuilding
+    a Chroma collection to be compared fairly.
+    """
+    invalid = sorted(set(overrides) - set(PIPELINE_RUNTIME_FLAGS))
+    if invalid:
+        valid = ", ".join(PIPELINE_RUNTIME_FLAGS)
+        raise ValueError(f"Unsupported pipeline flag(s): {', '.join(invalid)}. Valid: {valid}")
+
+    previous = get_pipeline_flags()
+    for name, value in overrides.items():
+        globals()[name] = bool(value)
+    return previous
+
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "pdfs"))
+CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "es"))
 
 _carpeta_nombre = os.path.basename(os.path.abspath(CARPETA_DOCS))
 _embed_slug = MODELO_EMBEDDING.split(":")[0].replace("/", "_")
 
-PATH_DB = os.path.join(BASE_DIR, "mi_vector_db", f"{_carpeta_nombre}_{_embed_slug}")
+PATH_DB = os.path.join(BASE_DIR, "vector_db", f"{_carpeta_nombre}_{_embed_slug}")
 COLLECTION_NAME = f"docs_{_carpeta_nombre}"
 
 _DEFAULT_CARPETA_DOCS = CARPETA_DOCS
@@ -269,7 +301,7 @@ def set_docs_folder_runtime(carpeta: str | None) -> tuple[str, str, str]:
         cn = os.path.basename(abs_carp)
         slug = MODELO_EMBEDDING.split(":")[0].replace("/", "_")
         CARPETA_DOCS = abs_carp
-        PATH_DB = os.path.join(BASE_DIR, "mi_vector_db", f"{cn}_{slug}")
+        PATH_DB = os.path.join(BASE_DIR, "vector_db", f"{cn}_{slug}")
         COLLECTION_NAME = f"docs_{cn}"
     return previous
 
