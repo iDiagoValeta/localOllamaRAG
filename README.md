@@ -17,7 +17,7 @@
 
 ---
 
-> **Última actualización:** 2026-04-19
+> **Última actualización:** 2026-04-21
 
 ## What is MonkeyGrab?
 
@@ -47,7 +47,7 @@ This project was developed as a Bachelor's thesis (TFG) for the Grado en Ingenie
 ## How it works
 
 ```
-PDF corpus  (rag/pdfs/)
+PDF corpus  (rag/docs/es/ by default; set DOCS_FOLDER or use ca/en)
       |
       v
   INDEXING
@@ -56,7 +56,7 @@ PDF corpus  (rag/pdfs/)
       Enrichment         [optional]  OLLAMA_CONTEXTUAL_MODEL
       Image description  [optional]  OLLAMA_OCR_MODEL
       Embedding                       OLLAMA_EMBED_MODEL
-      Storage            ChromaDB  (rag/mi_vector_db/)
+      Storage            ChromaDB  (rag/vector_db/<folder>_<embed_slug>/)
       |
       v
   RETRIEVAL
@@ -96,6 +96,9 @@ pip install -r rag/requirements.txt
 
 # Web interface (optional)
 pip install -r web/requirements.txt
+
+# RAGAS evaluation (optional; requires GOOGLE_API_KEY)
+pip install -r evaluation/requirements.txt
 ```
 
 ### Pull your models
@@ -138,11 +141,11 @@ All pipeline behaviour is controlled via environment variables. Set them in your
 | `OLLAMA_CONTEXTUAL_MODEL` | Auxiliary model for contextual chunk enrichment during indexing (`USAR_CONTEXTUAL_RETRIEVAL`) |
 | `OLLAMA_RECOMP_MODEL` | Model used to synthesise/compress retrieved fragments before generation (`USAR_RECOMP_SYNTHESIS`) |
 | `OLLAMA_OCR_MODEL` | Vision model for describing images found in PDFs (`USAR_EMBEDDINGS_IMAGEN`) |
-| `DOCS_FOLDER` | Path to the folder containing PDFs to index (default: `rag/pdfs/`) |
+| `DOCS_FOLDER` | Path to the folder containing PDFs to index (default: `rag/docs/es/`) |
 | `RERANKER_QUALITY` | Cross-encoder reranker tier: `quality` (BAAI/bge) or `speed` (MiniLM) |
 | `USAR_RECOMP_SYNTHESIS` | Enables/disables RECOMP context synthesis (`true`/`false`, default: `true`) |
 
-> **Note on ChromaDB paths**: the vector database path includes a slug derived from `OLLAMA_EMBED_MODEL`. If you change the embedding model, the existing index is no longer valid and you will need to re-index your documents.
+> **Note on ChromaDB paths**: indexes live under `rag/vector_db/<folder>_<embed_slug>/`, where `<folder>` is the basename of `DOCS_FOLDER` (e.g. `es`, `ca`, `en`) and `<embed_slug>` comes from `OLLAMA_EMBED_MODEL`. Changing the embedding model or the docs folder selects a different path — re-index when you intentionally switch either.
 
 ---
 
@@ -150,7 +153,7 @@ All pipeline behaviour is controlled via environment variables. Set them in your
 
 ### Terminal CLI
 
-Place your PDF files in `rag/pdfs/` (the folder exists after clone via `.gitkeep`). The system indexes them automatically on first launch. RAGBench evaluation uses `rag/ragbench_pdfs/` (`.gitkeep` versioned); `rag/ragbench_vector_db/` and `rag/mi_vector_db/` are gitignored and created at runtime.
+Place your PDF files under **`rag/docs/es/`** by default (Spanish corpus). Catalan and English corpora use **`rag/docs/ca/`** and **`rag/docs/en/`** respectively; set `DOCS_FOLDER` or use the evaluation presets in `evaluation/run_eval.py` to point at the right folder. Each language folder is kept in Git with `.gitkeep` only; PDF content stays local. The ChromaDB directory **`rag/vector_db/`** is gitignored and created when you index.
 
 ```bash
 cd rag
@@ -193,29 +196,34 @@ Output layout is the same for every model:
 - `plots/train/` — training curves (`loss`, `learning_rate`, `grad_norm`) and CSV summaries from `log_history`
 - `plots/eval/` — per-metric CSV tables, markdown report tables, and comparison figures (`base` vs `adapted`)
 
-### Live RAGAS comparison with and without RECOMP
+### RAGAS evaluation (`evaluation/run_eval.py`)
 
-If you want to reindex your current PDF corpus and compare the live RAG pipeline with RECOMP enabled vs disabled over the same dataset, use:
+Requires `pip install -r evaluation/requirements.txt` and a **`GOOGLE_API_KEY`** in `.env` (Gemini as judge LLM).
+
+Single-corpus runs (loads bundled datasets under `evaluation/datasets/` and the matching `rag/docs/` folder):
 
 ```bash
-python evaluation/run_eval_recomp_comparison.py --dataset evaluation/datasets/dataset_eval_es.json --label mi_eval --verbose
+python evaluation/run_eval.py single --corpus es
+python evaluation/run_eval.py single --corpus ca
+python evaluation/run_eval.py single --corpus mix
 ```
 
-For the Catalan PDF folder (`rag/pdfs_ca`) and `dataset_eval_ca.json`, add `--catalan` (default dataset switches to Catalan; run folder slug gets a `_ca` suffix). Same pattern for `python evaluation/run_eval.py --catalan`.
+For English, supply your own dataset path if you do not have `evaluation/datasets/dataset_eval_en.json`, or use the **RAGBench** flow:
 
-Outputs are now organized as:
-- `evaluation/scores/` for final CSV files
-- `evaluation/debug/` for debug JSON files
-- `evaluation/debug/checkpoints/` for question-by-question resume checkpoints
+```bash
+python evaluation/run_eval.py ragbench --n-papers 10 --max-q 5   # PDFs under rag/docs/en
+```
 
-With the command above, the paired run stores:
-- `evaluation/scores/comparison_runs/mi_eval/recomp_on.csv`
-- `evaluation/scores/comparison_runs/mi_eval/recomp_off.csv`
-- `evaluation/debug/comparison_runs/mi_eval/recomp_on.json`
-- `evaluation/debug/comparison_runs/mi_eval/recomp_off.json`
-- `evaluation/debug/comparison_runs/mi_eval/comparison_summary.json`
+Ablation-style comparison (multiple pipeline variants, shared index; optional `--reindex` before the first variant):
 
-If the process stops mid-run, rerunning the same command with the same `--label` resumes from the last completed question. Use `--skip-reindex` to reuse an existing index.
+```bash
+python evaluation/run_eval.py compare --corpus ca --label mi_eval --reindex
+python evaluation/run_eval.py list-variants
+```
+
+Legacy alias for Catalan-only presets: `python evaluation/run_eval.py --catalan` (same as `single --corpus ca`).
+
+Artifacts go under **`evaluation/scores/`** (CSVs), **`evaluation/debug/`** (JSON traces), and **`evaluation/debug/checkpoints/`** (resume state). Comparison runs additionally use `evaluation/scores/comparison_runs/<label>/` and `evaluation/debug/comparison_runs/<label>/`. See `evaluation/EVALUACIONES_PIPELINE.md` for corpus presets and variant names.
 
 ---
 
@@ -223,39 +231,47 @@ If the process stops mid-run, rerunning the same command with the same `--label`
 
 ```
 localOllamaRAG/
+├── generate_diagram.py           # Architecture diagram (Kroki.io)
 ├── rag/
 │   ├── chat_pdfs.py              # Main RAG engine (indexing, retrieval, generation)
 │   ├── show_fragments/
-│   │   └── export_fragments.py   # Exports ChromaDB chunks to TXT/JSONL for debug
-│   ├── pdfs/                     # Your PDFs (only .gitkeep in Git; content ignored)
-│   ├── mi_vector_db/             # ChromaDB production index (gitignored; created at runtime)
-│   ├── ragbench_pdfs/            # RAGBench PDFs (.gitkeep versioned; content ignored)
-│   ├── ragbench_vector_db/       # ChromaDB for RAGBench eval (gitignored; created at runtime)
-│   └── cli/                      # Rich terminal interface
+│   │   └── export_fragments.py   # Export ChromaDB chunks to TXT/JSONL for debug
+│   ├── docs/
+│   │   ├── es/                   # Spanish PDF corpus (default DOCS_FOLDER; .gitkeep only in Git)
+│   │   ├── ca/                   # Catalan PDF corpus
+│   │   └── en/                   # English corpus / RAGBench PDFs
+│   ├── vector_db/                # ChromaDB per language + embedding slug (gitignored at runtime)
+│   ├── debug_rag/                # Optional per-query debug dumps (gitignored)
+│   ├── historial_chat.json       # CHAT mode history (gitignored)
+│   ├── cli/                      # Rich terminal UI (MonkeyGrabCLI)
+│   └── requirements.txt
 ├── web/
-│   ├── app.py                    # Flask backend (REST + SSE)
-│   └── zip/dist/                 # React frontend build
+│   ├── app.py                    # Flask backend (REST + SSE); serves React build
+│   └── zip/                      # React source (src/) + Vite config; production build → dist/
 ├── scripts/
-│   ├── training/                 # LoRA fine-tuning scripts
-│   ├── evaluation/               # Baseline benchmark and dataset inspection tools
-│   └── conversion/               # LoRA adapter merge and GGUF quantization
+│   ├── hf_upload_model_cards.py  # Hugging Face model cards / optional GGUF upload helper
+│   ├── training/                 # LoRA fine-tuning (Qwen3, Phi-4, Gemma-3)
+│   ├── evaluation/               # Baseline benchmark + split inspection + SLURM helpers
+│   ├── conversion/               # LoRA merge, GGUF build, quantization notes
+│   └── tests/                    # Ollama / pipeline smoke tests
 ├── evaluation/
-│   ├── datasets/                 # JSON de preguntas (ES, CA, mix)
-│   ├── scores/                   # CSVs finales de evaluación
-│   ├── debug/                    # Debug JSON + checkpoints reanudables
-│   ├── run_eval.py               # RAGAS evaluation of the live pipeline
-│   ├── run_eval_recomp_comparison.py  # Comparativa RECOMP on/off con reanudación
-│   └── run_eval_ragbench.py      # Evaluación RAGBench
+│   ├── datasets/                 # Question datasets (ES, CA, mix; add EN as needed)
+│   ├── scores/                   # RAGAS CSV outputs (keep large runs out of Git manually if needed)
+│   ├── debug/                    # Debug JSON + resumable checkpoints
+│   ├── run_eval.py               # RAGAS entrypoint: single | compare | ragbench
+│   ├── EVALUACIONES_PIPELINE.md  # Detailed eval presets and ablation variants
+│   └── requirements.txt
 ├── models/
-│   ├── merged-model/             # Dense HF weights after LoRA merge (gitignored; safe to delete after Q4 GGUF)
-│   └── gguf-output/              # GGUF + Modelfile per model (only small files tracked in Git)
+│   ├── merged-model/             # Dense HF weights after LoRA merge (gitignored)
+│   └── gguf-output/              # Modelfile + docs per model (GGUF binaries gitignored)
 ├── training-output/
-│   ├── qwen-3/                   # Qwen3 LoRA artifacts + generate_reports.py → plots/
-│   ├── phi-4/                    # Phi-4 LoRA artifacts + generate_reports.py → plots/
-│   ├── gemma-3/                  # Gemma-3 LoRA artifacts + generate_reports.py → plots/
-│   └── baseline/                 # Baseline benchmark results (JSON, reports)
-├── docs/                         # Architecture diagrams
-└── CLAUDE.md                     # Internal development guide
+│   ├── qwen-3/
+│   ├── phi-4/                    # Other LoRA ranks may live under phi-4/<rank>/
+│   ├── gemma-3/
+│   └── baseline/                 # Seven-model baseline benchmark artifacts
+├── docs/                         # Architecture assets, methodology notes (thesis)
+├── README.md
+└── CLAUDE.md                     # Contributor / internal conventions
 ```
 
 ---
