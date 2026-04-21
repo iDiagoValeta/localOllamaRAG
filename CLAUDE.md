@@ -8,7 +8,7 @@ alwaysApply: true
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 <!-- Internal title: MonkeyGrab (localOllamaRAG) -->
-<!-- Última actualización: 2026-04-19 -->
+<!-- Última actualización: 2026-04-21 -->
 
 ## 1. Descripción del proyecto
 
@@ -31,7 +31,7 @@ El proyecto tiene dos dimensiones:
 7. Al proponer cambios en `chat_pdfs.py`: `web/app.py` importa directamente constantes y funciones de ese módulo. Un renombrado rompe el backend web. **API pública completa usada por `web/app.py`**:
    - Constantes: `PATH_DB`, `COLLECTION_NAME`, `CARPETA_DOCS`, `SYSTEM_PROMPT_CHAT`, `MAX_HISTORIAL_MENSAJES`, `MODELO_CHAT`, `MODELO_RAG`, `MIN_LONGITUD_PREGUNTA_RAG`, `UMBRAL_RELEVANCIA`, `UMBRAL_SCORE_RERANKER`, `TOP_K_FINAL`, `EXPANDIR_CONTEXTO`, `N_TOP_PARA_EXPANSION`, `MAX_CONTEXTO_CHARS`, `USAR_RERANKER`, `USAR_RECOMP_SYNTHESIS`, `RERANKER_AVAILABLE`, `STOPWORDS`
    - Funciones: `indexar_documentos`, `realizar_busqueda_hibrida`, `expandir_con_chunks_adyacentes`, `sintetizar_contexto_recomp`, `construir_contexto_para_modelo`, `guardar_debug_rag`, `generar_respuesta_silenciosa`, `obtener_documentos_indexados`, `cargar_historial`, `guardar_historial`, `limpiar_historial`
-8. **Tras cualquier modificación, revisar si hay que actualizar `CLAUDE.md` o `README.md`**: cambios en estructura de archivos, flags de pipeline, modelos, scripts, rutas, estado del experimento o convenciones de código deben reflejarse en la documentación del proyecto para mantenerla sincronizada.
+8. **Tras cualquier modificación, revisar si hay que actualizar `CLAUDE.md` o `README.md`**: cambios en estructura de archivos, flags de pipeline, modelos, scripts, rutas, estado del experimento o convenciones de código deben reflejarse en la documentación del proyecto para mantenerla sincronizada. **`README.md` es la puerta de entrada pública**: si el árbol de carpetas, rutas por defecto (`rag/docs/`, `rag/vector_db/`, evaluación con `evaluation/run_eval.py`, etc.) o comandos cambian en el código o en commits recientes, actualizar la sección *Repository structure* y las rutas citadas en el README en el mismo cambio (o justo después), para que no quede desfasado respecto a este archivo y al repo.
 9. **Cambios en `.gitignore` o `.gitkeep`**: seguir la **Sección 11** (patrones `training-output/`, carpetas con `.gitkeep`, GGUF fuera del repo). Tras editar reglas, validar con `git check-ignore -v <ruta>` y actualizar la Sección 11 si cambia la política.
 
 ---
