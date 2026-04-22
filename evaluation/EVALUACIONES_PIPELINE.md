@@ -104,6 +104,43 @@ Ademas, `comparison_summary.json` resume:
 - medias RAGAS;
 - `mean_score_deltas_vs_baseline`, calculado contra `baseline_all_on` si esta presente.
 
+## Agregacion por conjunto (`aggregate_comparison_by_conjunto.py`)
+
+Tras una comparativa, los JSON por variante (`<variant>.json`) guardan una fila por pregunta con `index` alineado a la posicion del dataset (misma ordenacion que en el JSON del dataset). El script **no** vuelve a llamar a RAGAS: solo lee esos JSON y el dataset, agrupa las muestras por un criterio de conjunto y calcula **medias** por metrica dentro de cada grupo.
+
+**Entrada**
+
+- Carpeta de comparativa, p. ej. `evaluation/debug/comparison_runs/todas_ablacion/` (debe contener los `<variant>.json`; si existe `comparison_summary.json`, se usan sus `runs` para localizar variantes y, si hace falta, el `dataset_path`).
+- Dataset JSON alineado con la evaluacion (mismo orden de preguntas que en el run). Si el `dataset_path` del resumen apunta a otra maquina o no existe, pasar `--dataset` explicito.
+
+**Criterios de agrupacion (`--group-by`)**
+
+| Valor | Conjunto por |
+| --- | --- |
+| `source_type` | Campo `source_type` del dataset (por defecto) |
+| `language` | Campo `language` (util en `dataset_eval_mix.json`) |
+| `source_type_language` | `source_type` + `language` |
+| `id_prefix` | Prefijo del `id` antes del bloque numerico final (p. ej. `wiki_es` en `wiki_es_001`) |
+
+**Salida**
+
+- JSON por defecto en la misma carpeta: `by_conjunto_<criterio>.json` o, con `--etiquetas-es`, `by_conjunto_<criterio>_metricas_es.json` (claves de metricas en castellano para informes).
+- Opcional `--csv <ruta>`: tabla larga (variante, conjunto, n, columnas por metrica). Requiere `pandas`.
+
+Si el ultimo `compare` guardo un `comparison_summary.json` con **menos variantes** de las que ya tienes en disco (corrida parcial), usa **`--ignore-comparison-summary`** para agregar **todos** los `<variante>.json` de la carpeta (se ignoran `comparison_summary.json` y `by_conjunto_*.json`).
+
+**Ejemplos**
+
+```powershell
+python evaluation\aggregate_comparison_by_conjunto.py --dir evaluation\debug\comparison_runs\todas_ablacion --etiquetas-es
+
+python evaluation\aggregate_comparison_by_conjunto.py --dir evaluation\debug\comparison_runs\todas_ablacion --dataset evaluation\datasets\dataset_eval_es.json --group-by language --etiquetas-es --csv evaluation\scores\comparison_runs\todas_ablacion\resumen_por_conjunto.csv
+
+python evaluation\aggregate_comparison_by_conjunto.py --dir evaluation\debug\comparison_runs\todas_ablacion_ca_ca --dataset evaluation\datasets\dataset_eval_ca.json --ignore-comparison-summary --etiquetas-es --csv evaluation\scores\comparison_runs\todas_ablacion_ca_ca\resumen_por_conjunto.csv
+```
+
+**Nota para el TFG:** Si todo el dataset comparte un solo `source_type` (p. ej. solo Wikipedia en `dataset_eval_es.json`), la tabla tendra una fila por variante en ese conjunto; para contrastar subconjuntos, usar `mix` con `--group-by language` o `id_prefix`, o enriquecer el dataset con varios `source_type`.
+
 ## TFG
 
 Para una tabla principal defendible por idioma, usar:

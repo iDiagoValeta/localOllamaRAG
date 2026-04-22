@@ -502,7 +502,8 @@ def api_rag():
             "message": "No se encontró información relevante en los documentos.",
         }), 200
 
-    if mejor_score < rag_engine.UMBRAL_RELEVANCIA:
+    # UMBRAL_RELEVANCIA applies to reranker-scale scores, not RRF-only fusion.
+    if rag_engine.USAR_RERANKER and mejor_score < rag_engine.UMBRAL_RELEVANCIA:
         return jsonify({
             "ok": False,
             "error": "out_of_scope",

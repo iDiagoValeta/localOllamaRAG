@@ -271,7 +271,8 @@ class MonkeyGrabCLI:
                 )
                 return
 
-            if mejor_score < self.rag.UMBRAL_RELEVANCIA:
+            # UMBRAL_RELEVANCIA applies to reranker-scale scores, not RRF-only fusion.
+            if self.rag.USAR_RERANKER and mejor_score < self.rag.UMBRAL_RELEVANCIA:
                 ui.pipeline_stop()
                 ui.out_of_scope(mejor_score, self.rag.UMBRAL_RELEVANCIA)
                 self.rag.guardar_debug_rag(

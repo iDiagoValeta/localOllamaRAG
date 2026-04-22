@@ -1,0 +1,249 @@
+{
+  "dataset_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\datasets\\dataset_eval_ca.json",
+  "eval_corpus": "ca",
+  "docs_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\rag\\docs\\ca",
+  "suite": "ablation",
+  "baseline_variant": "no_exhaustive_search",
+  "selected_variants": [
+    "no_exhaustive_search",
+    "no_reranker",
+    "no_context_expansion",
+    "no_context_optimization",
+    "no_recomp_synthesis"
+  ],
+  "scores_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\scores\\comparison_runs\\todas_ablacion_ca_ca",
+  "debug_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\comparison_runs\\todas_ablacion_ca_ca",
+  "generated_at": "2026-04-22 13:02:20",
+  "runs": [
+    {
+      "dataset_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\datasets\\dataset_eval_ca.json",
+      "output_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\scores\\comparison_runs\\todas_ablacion_ca_ca\\no_exhaustive_search.csv",
+      "debug_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\comparison_runs\\todas_ablacion_ca_ca\\no_exhaustive_search.json",
+      "questions_count": 50,
+      "indexed_fragments": 373,
+      "recomp_enabled": true,
+      "pipeline_flags": {
+        "USAR_LLM_QUERY_DECOMPOSITION": true,
+        "USAR_BUSQUEDA_HIBRIDA": true,
+        "USAR_BUSQUEDA_EXHAUSTIVA": false,
+        "USAR_RERANKER": true,
+        "EXPANDIR_CONTEXTO": true,
+        "USAR_OPTIMIZACION_CONTEXTO": true,
+        "USAR_RECOMP_SYNTHESIS": true
+      },
+      "eval_corpus": "ca",
+      "docs_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\rag\\docs\\ca",
+      "pipeline_seconds": 6.198883056640625e-05,
+      "evaluation_seconds": 1141.056053161621,
+      "mean_scores": {
+        "answer_correctness": 0.7095206652876211,
+        "faithfulness": 0.7860694881314078,
+        "answer_relevancy": 0.8101905780462759,
+        "context_precision": 0.9700833332614647,
+        "context_recall": 0.99
+      },
+      "checkpoint_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\checkpoints\\comparison_runs\\todas_ablacion_ca_ca\\no_exhaustive_search.json",
+      "variant": "no_exhaustive_search",
+      "variant_description": "Disable exhaustive full-collection text scan.",
+      "requested_pipeline_flags": {
+        "USAR_LLM_QUERY_DECOMPOSITION": true,
+        "USAR_BUSQUEDA_HIBRIDA": true,
+        "USAR_BUSQUEDA_EXHAUSTIVA": false,
+        "USAR_RERANKER": true,
+        "EXPANDIR_CONTEXTO": true,
+        "USAR_OPTIMIZACION_CONTEXTO": true,
+        "USAR_RECOMP_SYNTHESIS": true
+      }
+    },
+    {
+      "dataset_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\datasets\\dataset_eval_ca.json",
+      "output_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\scores\\comparison_runs\\todas_ablacion_ca_ca\\no_reranker.csv",
+      "debug_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\comparison_runs\\todas_ablacion_ca_ca\\no_reranker.json",
+      "questions_count": 50,
+      "indexed_fragments": 373,
+      "recomp_enabled": true,
+      "pipeline_flags": {
+        "USAR_LLM_QUERY_DECOMPOSITION": true,
+        "USAR_BUSQUEDA_HIBRIDA": true,
+        "USAR_BUSQUEDA_EXHAUSTIVA": true,
+        "USAR_RERANKER": false,
+        "EXPANDIR_CONTEXTO": true,
+        "USAR_OPTIMIZACION_CONTEXTO": true,
+        "USAR_RECOMP_SYNTHESIS": true
+      },
+      "eval_corpus": "ca",
+      "docs_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\rag\\docs\\ca",
+      "pipeline_seconds": 4.38690185546875e-05,
+      "evaluation_seconds": 1066.5031492710114,
+      "mean_scores": {
+        "answer_correctness": 0.6758860880628791,
+        "faithfulness": 0.7792103297459334,
+        "answer_relevancy": 0.7885128771945584,
+        "context_precision": 0.8156825396188851,
+        "context_recall": 0.94
+      },
+      "checkpoint_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\checkpoints\\comparison_runs\\todas_ablacion_ca_ca\\no_reranker.json",
+      "variant": "no_reranker",
+      "variant_description": "Disable Cross-Encoder reranking.",
+      "requested_pipeline_flags": {
+        "USAR_LLM_QUERY_DECOMPOSITION": true,
+        "USAR_BUSQUEDA_HIBRIDA": true,
+        "USAR_BUSQUEDA_EXHAUSTIVA": true,
+        "USAR_RERANKER": false,
+        "EXPANDIR_CONTEXTO": true,
+        "USAR_OPTIMIZACION_CONTEXTO": true,
+        "USAR_RECOMP_SYNTHESIS": true
+      }
+    },
+    {
+      "dataset_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\datasets\\dataset_eval_ca.json",
+      "output_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\scores\\comparison_runs\\todas_ablacion_ca_ca\\no_context_expansion.csv",
+      "debug_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\comparison_runs\\todas_ablacion_ca_ca\\no_context_expansion.json",
+      "questions_count": 50,
+      "indexed_fragments": 373,
+      "recomp_enabled": true,
+      "pipeline_flags": {
+        "USAR_LLM_QUERY_DECOMPOSITION": true,
+        "USAR_BUSQUEDA_HIBRIDA": true,
+        "USAR_BUSQUEDA_EXHAUSTIVA": true,
+        "USAR_RERANKER": true,
+        "EXPANDIR_CONTEXTO": false,
+        "USAR_OPTIMIZACION_CONTEXTO": true,
+        "USAR_RECOMP_SYNTHESIS": true
+      },
+      "eval_corpus": "ca",
+      "docs_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\rag\\docs\\ca",
+      "pipeline_seconds": 4.935264587402344e-05,
+      "evaluation_seconds": 1033.1839072704315,
+      "mean_scores": {
+        "answer_correctness": 0.6961767461408637,
+        "faithfulness": 0.7820308025308026,
+        "answer_relevancy": 0.8072319218838032,
+        "context_precision": 0.980866666592207,
+        "context_recall": 0.99
+      },
+      "checkpoint_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\checkpoints\\comparison_runs\\todas_ablacion_ca_ca\\no_context_expansion.json",
+      "variant": "no_context_expansion",
+      "variant_description": "Disable adjacent-chunk context expansion.",
+      "requested_pipeline_flags": {
+        "USAR_LLM_QUERY_DECOMPOSITION": true,
+        "USAR_BUSQUEDA_HIBRIDA": true,
+        "USAR_BUSQUEDA_EXHAUSTIVA": true,
+        "USAR_RERANKER": true,
+        "EXPANDIR_CONTEXTO": false,
+        "USAR_OPTIMIZACION_CONTEXTO": true,
+        "USAR_RECOMP_SYNTHESIS": true
+      }
+    },
+    {
+      "dataset_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\datasets\\dataset_eval_ca.json",
+      "output_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\scores\\comparison_runs\\todas_ablacion_ca_ca\\no_context_optimization.csv",
+      "debug_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\comparison_runs\\todas_ablacion_ca_ca\\no_context_optimization.json",
+      "questions_count": 50,
+      "indexed_fragments": 373,
+      "recomp_enabled": true,
+      "pipeline_flags": {
+        "USAR_LLM_QUERY_DECOMPOSITION": true,
+        "USAR_BUSQUEDA_HIBRIDA": true,
+        "USAR_BUSQUEDA_EXHAUSTIVA": true,
+        "USAR_RERANKER": true,
+        "EXPANDIR_CONTEXTO": true,
+        "USAR_OPTIMIZACION_CONTEXTO": false,
+        "USAR_RECOMP_SYNTHESIS": true
+      },
+      "eval_corpus": "ca",
+      "docs_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\rag\\docs\\ca",
+      "pipeline_seconds": 5.269050598144531e-05,
+      "evaluation_seconds": 1081.65571641922,
+      "mean_scores": {
+        "answer_correctness": 0.6596861123028422,
+        "faithfulness": 0.8124351029087872,
+        "answer_relevancy": 0.8049275582619074,
+        "context_precision": 0.971749999927909,
+        "context_recall": 0.99
+      },
+      "checkpoint_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\checkpoints\\comparison_runs\\todas_ablacion_ca_ca\\no_context_optimization.json",
+      "variant": "no_context_optimization",
+      "variant_description": "Disable PDF artifact cleanup before generation.",
+      "requested_pipeline_flags": {
+        "USAR_LLM_QUERY_DECOMPOSITION": true,
+        "USAR_BUSQUEDA_HIBRIDA": true,
+        "USAR_BUSQUEDA_EXHAUSTIVA": true,
+        "USAR_RERANKER": true,
+        "EXPANDIR_CONTEXTO": true,
+        "USAR_OPTIMIZACION_CONTEXTO": false,
+        "USAR_RECOMP_SYNTHESIS": true
+      }
+    },
+    {
+      "dataset_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\datasets\\dataset_eval_ca.json",
+      "output_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\scores\\comparison_runs\\todas_ablacion_ca_ca\\no_recomp_synthesis.csv",
+      "debug_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\comparison_runs\\todas_ablacion_ca_ca\\no_recomp_synthesis.json",
+      "questions_count": 50,
+      "indexed_fragments": 373,
+      "recomp_enabled": false,
+      "pipeline_flags": {
+        "USAR_LLM_QUERY_DECOMPOSITION": true,
+        "USAR_BUSQUEDA_HIBRIDA": true,
+        "USAR_BUSQUEDA_EXHAUSTIVA": true,
+        "USAR_RERANKER": true,
+        "EXPANDIR_CONTEXTO": true,
+        "USAR_OPTIMIZACION_CONTEXTO": true,
+        "USAR_RECOMP_SYNTHESIS": false
+      },
+      "eval_corpus": "ca",
+      "docs_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\rag\\docs\\ca",
+      "pipeline_seconds": 5.269050598144531e-05,
+      "evaluation_seconds": 1093.7630124092102,
+      "mean_scores": {
+        "answer_correctness": 0.6610928420192316,
+        "faithfulness": 0.8827054991791834,
+        "answer_relevancy": 0.8014880427024959,
+        "context_precision": 0.9719499999284994,
+        "context_recall": 0.99
+      },
+      "checkpoint_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\debug\\checkpoints\\comparison_runs\\todas_ablacion_ca_ca\\no_recomp_synthesis.json",
+      "variant": "no_recomp_synthesis",
+      "variant_description": "Disable RECOMP/LLM context synthesis.",
+      "requested_pipeline_flags": {
+        "USAR_LLM_QUERY_DECOMPOSITION": true,
+        "USAR_BUSQUEDA_HIBRIDA": true,
+        "USAR_BUSQUEDA_EXHAUSTIVA": true,
+        "USAR_RERANKER": true,
+        "EXPANDIR_CONTEXTO": true,
+        "USAR_OPTIMIZACION_CONTEXTO": true,
+        "USAR_RECOMP_SYNTHESIS": false
+      }
+    }
+  ],
+  "mean_score_deltas_vs_baseline": {
+    "no_reranker": {
+      "answer_correctness": -0.03363457722474206,
+      "faithfulness": -0.006859158385474351,
+      "answer_relevancy": -0.021677700851717496,
+      "context_precision": -0.15440079364257953,
+      "context_recall": -0.050000000000000044
+    },
+    "no_context_expansion": {
+      "answer_correctness": -0.013343919146757477,
+      "faithfulness": -0.004038685600605163,
+      "answer_relevancy": -0.002958656162472706,
+      "context_precision": 0.010783333330742328,
+      "context_recall": 0.0
+    },
+    "no_context_optimization": {
+      "answer_correctness": -0.0498345529847789,
+      "faithfulness": 0.02636561477737942,
+      "answer_relevancy": -0.0052630197843684945,
+      "context_precision": 0.0016666666664443275,
+      "context_recall": 0.0
+    },
+    "no_recomp_synthesis": {
+      "answer_correctness": -0.04842782326838957,
+      "faithfulness": 0.09663601104777564,
+      "answer_relevancy": -0.008702535343780071,
+      "context_precision": 0.001866666667034722,
+      "context_recall": 0.0
+    }
+  }
+}

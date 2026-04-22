@@ -339,6 +339,10 @@ TOP_K_FINAL = 8              # raised from 6: more fragments reach RECOMP, reduc
 N_TOP_PARA_EXPANSION = 3
 
 RERANKER_MODEL_QUALITY = os.getenv("RERANKER_QUALITY", "quality")
+# Relevance gate on the *top* fused score. After Cross-Encoder reranking, ``score_final``
+# is replaced by the reranker score (same order as ``UMBRAL_SCORE_RERANKER``). With
+# ``USAR_RERANKER`` off, ``score_final`` stays RRF-based (much smaller scale); callers
+# must not compare that to this threshold — see CLI/web/eval paths.
 UMBRAL_RELEVANCIA = 0.50
 UMBRAL_SCORE_RERANKER = 0.55  # raised from 0.40: debug showed fragments at 0.47-0.52 are noise
 
@@ -2176,7 +2180,10 @@ def evaluar_pregunta_rag(
         return ("", [])
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
         fragmentos_ranked, mejor_score, _ = realizar_busqueda_hibrida(pregunta, collection)
-        if not fragmentos_ranked or mejor_score < UMBRAL_RELEVANCIA:
+        if not fragmentos_ranked:
+            return ("", [])
+        # UMBRAL_RELEVANCIA is calibrated for reranker-scale scores, not RRF fusion scores.
+        if USAR_RERANKER and mejor_score < UMBRAL_RELEVANCIA:
             return ("", [])
         if USAR_RERANKER:
             fragmentos_filtrados = [

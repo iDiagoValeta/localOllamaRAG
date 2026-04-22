@@ -225,6 +225,8 @@ Legacy alias for Catalan-only presets: `python evaluation/run_eval.py --catalan`
 
 Artifacts go under **`evaluation/scores/`** (CSVs), **`evaluation/debug/`** (JSON traces), and **`evaluation/debug/checkpoints/`** (resume state). Comparison runs additionally use `evaluation/scores/comparison_runs/<label>/` and `evaluation/debug/comparison_runs/<label>/`. See `evaluation/EVALUACIONES_PIPELINE.md` for corpus presets and variant names.
 
+After a comparison run, **`evaluation/aggregate_comparison_by_conjunto.py`** aggregates per-variant debug JSONs with the question dataset and writes subset means (e.g. by `source_type` or `language`) to JSON/CSV; use `--etiquetas-es` for Spanish metric labels in the report. Details: `evaluation/EVALUACIONES_PIPELINE.md` (section *Agregación por conjunto*).
+
 ---
 
 ## Repository structure
@@ -259,7 +261,8 @@ localOllamaRAG/
 │   ├── scores/                   # RAGAS CSV outputs (keep large runs out of Git manually if needed)
 │   ├── debug/                    # Debug JSON + resumable checkpoints
 │   ├── run_eval.py               # RAGAS entrypoint: single | compare | ragbench
-│   ├── EVALUACIONES_PIPELINE.md  # Detailed eval presets and ablation variants
+│   ├── aggregate_comparison_by_conjunto.py  # Post-compare: subset means from debug JSON + dataset
+│   ├── EVALUACIONES_PIPELINE.md  # Detailed eval presets, ablation variants, aggregation notes
 │   └── requirements.txt
 ├── models/
 │   ├── merged-model/             # Dense HF weights after LoRA merge (gitignored)

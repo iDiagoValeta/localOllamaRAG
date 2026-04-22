@@ -135,6 +135,7 @@ localOllamaRAG/
 │   ├── scores/                   # CSVs finales de evaluación
 │   ├── debug/                    # Debug JSON + checkpoints reanudables de evaluaciones
 │   ├── run_eval.py               # Runner unificado RAGAS: single/compare/ragbench (es, ca, en)
+│   ├── aggregate_comparison_by_conjunto.py  # Post-compare: medias por conjunto (subset) desde debug JSON + dataset
 │   └── requirements.txt          # ragas, langchain-google-genai, pandas…
 ├── training-output/
 │   ├── qwen-3/                   # Adaptador LoRA Qwen3 (artefactos pesados gitignored)
@@ -348,7 +349,12 @@ python evaluation/run_eval.py single --corpus ca
 python evaluation/run_eval.py single --corpus en
 python evaluation/run_eval.py compare --corpus ca --label mi_eval  # ablación comparativa
 python evaluation/run_eval.py ragbench --n-papers 3 --max-q 5     # corpus RAGBench (rag/docs/en)
+
+# Tras compare: medias RAGAS por subconjunto del dataset (JSON/CSV; --etiquetas-es para informes en castellano)
+python evaluation/aggregate_comparison_by_conjunto.py --dir evaluation/debug/comparison_runs/<label> --etiquetas-es
 ```
+
+Ver `evaluation/EVALUACIONES_PIPELINE.md` (sección *Agregación por conjunto*).
 
 ### Diagrama de arquitectura
 
@@ -551,6 +557,7 @@ bert-score>=0.3.13
 | Artefactos LoRA Gemma-3-12B | `training-output/gemma-3/` | `training_stats.json`, `evaluation_comparison.json` versionados. `generate_reports.py` → `plots/{train,eval}/`. Conversión GGUF pendiente (incompatibilidad tokenizer; ver `GEMMA3_CONVERSION_ISSUE.md`) |
 | Diagrama arquitectura | `docs/monkeygrab_architecture.png` / `.svg` | Generado por `generate_diagram.py` |
 | Datasets RAGAS (preguntas) | `evaluation/datasets/*.json` | p. ej. `dataset_eval_es.json`, `dataset_eval_ca.json`, `dataset_eval_mix.json` |
+| Resumen RAGAS por conjunto (post-`compare`) | `evaluation/debug/comparison_runs/<label>/by_conjunto_*.json` (CSV opcional bajo `evaluation/scores/comparison_runs/<label>/`) | Script `aggregate_comparison_by_conjunto.py`: cruza `<variant>.json` con el dataset por índice y calcula medias por `source_type`, `language`, etc.; `--etiquetas-es` para claves de métricas en castellano. Detalle en `evaluation/EVALUACIONES_PIPELINE.md`. |
 
 ---
 

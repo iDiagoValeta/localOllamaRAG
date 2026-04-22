@@ -968,21 +968,37 @@ def generar_respuestas_rag(
             )
 
         _ollama_timeout = int(os.getenv("EVAL_OLLAMA_TIMEOUT", "300"))
+        _max_attempts_per_question = max(1, int(os.getenv("EVAL_OLLAMA_ATTEMPTS", "2")))
         try:
             for i in pending_answer_indexes:
                 q = questions[i]
                 if verbose:
                     print(f"   [{i+1}/{len(questions)}] {q[:60]}...")
-                with ThreadPoolExecutor(max_workers=1) as _ex:
-                    _fut = _ex.submit(evaluar_pregunta_rag, q, collection)
-                    try:
-                        answer, contexts = _fut.result(timeout=_ollama_timeout)
-                    except _FuturesTimeout:
-                        answer, contexts = "", []
+                answer, contexts = "", []
+                for attempt in range(_max_attempts_per_question):
+                    if attempt > 0:
                         print(
-                            f"   [TIMEOUT] Q{i+1} exceeded {_ollama_timeout}s "
-                            "-- saved as empty, will retry on next run."
+                            f"   [RETRY] Q{i+1} attempt {attempt + 1}/{_max_attempts_per_question} "
+                            f"(previous: empty or timeout)."
                         )
+                    with ThreadPoolExecutor(max_workers=1) as _ex:
+                        _fut = _ex.submit(evaluar_pregunta_rag, q, collection)
+                        try:
+                            answer, contexts = _fut.result(timeout=_ollama_timeout)
+                        except _FuturesTimeout:
+                            answer, contexts = "", []
+                            print(
+                                f"   [TIMEOUT] Q{i+1} exceeded {_ollama_timeout}s "
+                                "(attempt "
+                                f"{attempt + 1}/{_max_attempts_per_question})."
+                            )
+                    if not _respuesta_vacia(answer):
+                        break
+                if _respuesta_vacia(answer) and _max_attempts_per_question > 1:
+                    print(
+                        f"   [WARN] Q{i+1} still empty after {_max_attempts_per_question} attempts; "
+                        "increase EVAL_OLLAMA_TIMEOUT or rerun to retry."
+                    )
                 answers[i] = answer
                 contexts_list[i] = contexts
                 _guardar_checkpoint_evaluacion(
