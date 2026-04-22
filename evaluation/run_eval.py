@@ -1647,6 +1647,9 @@ def _ejecutar_ragbench(
     force_reindex: bool = False,
     verbose: bool = False,
     save_debug: bool = True,
+    recomp_enabled: bool | None = None,
+    ragas_max_workers: int = 1,
+    ragas_batch_size: int | None = 5,
 ) -> None:
     """Prepare a RagBench subset and evaluate it with the unified runner."""
     if max_q < 1:
@@ -1700,25 +1703,30 @@ def _ejecutar_ragbench(
     safe_tag = _safe_tag(dataset_tag)
     prepared_dataset = escribir_dataset_preparado(questions, ground_truths, paper_ids, safe_tag)
     solo_pdf = [f"{only_doc.strip()}.pdf"] if only_doc else None
-    checkpoint_path = os.path.join(CHECKPOINTS_DIR, "ragbench", f"ragbench_{safe_tag}.json")
+    effective_recomp = rag_runtime.USAR_RECOMP_SYNTHESIS if recomp_enabled is None else bool(recomp_enabled)
+    recomp_tag = "recomp_on" if effective_recomp else "recomp_off"
+    output_csv = os.path.join(SCORES_DIR, f"ragas_scores_ragbench_en_{recomp_tag}.csv")
+    output_debug = os.path.join(DEBUG_DIR, f"ragas_debug_ragbench_en_{recomp_tag}.json")
+    checkpoint_path = os.path.join(CHECKPOINTS_DIR, "ragbench", f"ragbench_{safe_tag}_{recomp_tag}.json")
 
     print("\nDelegando generacion, checkpoints y RAGAS al runner unificado...")
     ejecutar_evaluacion(
         dataset_path=prepared_dataset,
-        output_path=_RAGBENCH_OUTPUT_CSV,
-        debug_path=None if not save_debug else _RAGBENCH_OUTPUT_DEBUG,
+        output_path=output_csv,
+        debug_path=None if not save_debug else output_debug,
         checkpoint_path=checkpoint_path,
         verbose=verbose,
         save_debug=save_debug,
         force_reindex=force_reindex,
+        recomp_enabled=recomp_enabled,
         eval_corpus="ragbench",
         docs_dir=RAGBENCH_PDFS_DIR,
         solo_archivos=solo_pdf,
         ragas_timeout=600,
         ragas_max_retries=15,
         ragas_max_wait=120,
-        ragas_max_workers=1,
-        ragas_batch_size=5,
+        ragas_max_workers=ragas_max_workers,
+        ragas_batch_size=ragas_batch_size,
     )
 
 
@@ -1851,11 +1859,43 @@ def _build_parser() -> argparse.ArgumentParser:
     ragbench.add_argument("--force-reindex", action="store_true", help="Rebuild the RagBench PDF collection")
     ragbench.add_argument("--verbose", action="store_true", help="Show per-question generation progress")
     ragbench.add_argument("--no-debug", action="store_true", help="Skip debug JSON")
+    ragbench.add_argument("--ragas-max-workers", type=int, default=1, help="Concurrent RAGAS workers")
+    ragbench.add_argument("--ragas-batch-size", type=int, default=5, help="RAGAS batch size")
+    recomp_group = ragbench.add_mutually_exclusive_group()
+    recomp_group.add_argument("--recomp", dest="recomp_enabled", action="store_true", help="Enable RECOMP synthesis")
+    recomp_group.add_argument("--no-recomp", dest="recomp_enabled", action="store_false", help="Disable RECOMP synthesis")
+    recomp_group.add_argument("--both-recomp", action="store_true", help="Run two passes: RECOMP enabled and disabled")
+    ragbench.set_defaults(recomp_enabled=None)
     ragbench.set_defaults(func=_run_ragbench_from_args)
     return parser
 
 
 def _run_ragbench_from_args(args: argparse.Namespace) -> None:
+    if args.both_recomp:
+        common_kwargs = {
+            "source": args.source,
+            "only_doc": args.only_doc,
+            "n_papers": args.n_papers,
+            "max_q": args.max_q,
+            "verbose": args.verbose,
+            "save_debug": not args.no_debug,
+            "ragas_max_workers": args.ragas_max_workers,
+            "ragas_batch_size": args.ragas_batch_size,
+        }
+        _ejecutar_ragbench(
+            **common_kwargs,
+            skip_download=args.skip_download,
+            force_reindex=args.force_reindex,
+            recomp_enabled=True,
+        )
+        _ejecutar_ragbench(
+            **common_kwargs,
+            skip_download=True,
+            force_reindex=False,
+            recomp_enabled=False,
+        )
+        return
+
     _ejecutar_ragbench(
         source=args.source,
         only_doc=args.only_doc,
@@ -1865,6 +1905,9 @@ def _run_ragbench_from_args(args: argparse.Namespace) -> None:
         force_reindex=args.force_reindex,
         verbose=args.verbose,
         save_debug=not args.no_debug,
+        recomp_enabled=args.recomp_enabled,
+        ragas_max_workers=args.ragas_max_workers,
+        ragas_batch_size=args.ragas_batch_size,
     )
 
 
