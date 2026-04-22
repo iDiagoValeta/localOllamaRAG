@@ -55,6 +55,14 @@ python evaluation\run_eval.py compare --corpus en --dataset evaluation\datasets\
 
 El formato esperado del dataset es el mismo para todos los idiomas: una tabla JSON/CSV/Excel con columna `question` o `pregunta`, y opcionalmente `ground_truth`, `reference`, `respuesta_esperada` o `respuesta_referencia`.
 
+## Nota RagBench: reranker como ordenador, no filtro duro
+
+En datasets RagBench (`ragbench` o datasets preparados en `evaluation/debug/ragbench_prepared/`) el runner activa un fallback especifico: si el reranker puntua todos los candidatos por debajo del umbral interactivo, la evaluacion conserva los mejores candidatos recuperados y genera respuesta igualmente.
+
+Esto no equivale a apagar el reranker: el reranker sigue reordenando los fragmentos. Solo se desactiva su uso como filtro duro cuando dejaria una pregunta RagBench sin contexto. El comportamiento normal se mantiene para el resto de datasets y para uso interactivo.
+
+Motivo: RagBench contiene preguntas factuales muy cortas donde el cross-encoder puede puntuar evidencia util por debajo del umbral calibrado para evitar ruido en chat interactivo. Sin este fallback, algunas preguntas quedan como respuesta vacia antes de llegar al modelo generador.
+
 ## Suite `ablation`
 
 La suite por defecto compara `baseline_all_on` contra variantes que desactivan una sola etapa opcional de inferencia:

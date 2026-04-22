@@ -213,6 +213,7 @@ EXPANDIR_CONTEXTO = True
 USAR_OPTIMIZACION_CONTEXTO = True
 USAR_RECOMP_SYNTHESIS = _leer_env_bool("USAR_RECOMP_SYNTHESIS", True)
 USAR_EMBEDDINGS_IMAGEN = True
+EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK = False
 LOGGING_METRICAS = True
 GUARDAR_DEBUG_RAG = True
 
@@ -240,6 +241,22 @@ def set_recomp_synthesis_enabled(enabled: bool) -> bool:
     anterior = USAR_RECOMP_SYNTHESIS
     USAR_RECOMP_SYNTHESIS = bool(enabled)
     return anterior
+
+
+def set_ragbench_reranker_low_score_fallback(enabled: bool) -> bool:
+    """Allow RagBench evals to generate from low-scored reranker candidates.
+
+    This is intentionally not a general pipeline flag: normal RAG inference and
+    non-RagBench evaluations keep the reranker threshold as a hard relevance
+    gate. RagBench includes short factual questions where the cross-encoder can
+    score useful retrieved evidence below the interactive threshold; for those
+    runs we still use the reranker order, but fall back to the best candidates
+    instead of returning an empty answer.
+    """
+    global EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK
+    previous = EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK
+    EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK = bool(enabled)
+    return previous
 
 
 def get_pipeline_flags() -> Dict[str, bool]:
@@ -2183,16 +2200,21 @@ def evaluar_pregunta_rag(
         if not fragmentos_ranked:
             return ("", [])
         # UMBRAL_RELEVANCIA is calibrated for reranker-scale scores, not RRF fusion scores.
-        if USAR_RERANKER and mejor_score < UMBRAL_RELEVANCIA:
+        if (
+            USAR_RERANKER
+            and mejor_score < UMBRAL_RELEVANCIA
+            and not EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK
+        ):
             return ("", [])
         if USAR_RERANKER:
             fragmentos_filtrados = [
                 f for f in fragmentos_ranked
                 if f.get('score_reranker', f.get('score_final', 0)) >= UMBRAL_SCORE_RERANKER
             ]
-            if not fragmentos_filtrados:
+            if fragmentos_filtrados:
+                fragmentos_ranked = fragmentos_filtrados
+            elif not EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK:
                 return ("", [])
-            fragmentos_ranked = fragmentos_filtrados
         fragmentos_finales = fragmentos_ranked[:TOP_K_FINAL]
         ids_usados = {f['id'] for f in fragmentos_finales}
         if EXPANDIR_CONTEXTO and fragmentos_finales and 'chunk' in fragmentos_finales[0]['metadata']:

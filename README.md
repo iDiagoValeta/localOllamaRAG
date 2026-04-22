@@ -214,6 +214,11 @@ For English, supply your own dataset path if you do not have `evaluation/dataset
 python evaluation/run_eval.py ragbench --n-papers 10 --max-q 5   # PDFs under rag/docs/en
 ```
 
+RAGBench prepared datasets enable a documented evaluation-only reranker fallback:
+the reranker still orders candidates, but if every candidate falls below the
+interactive relevance threshold, the best retrieved candidates are kept so the
+answer generator can run. Other datasets keep the normal hard reranker filter.
+
 Ablation-style comparison (multiple pipeline variants, shared index; optional `--reindex` before the first variant):
 
 ```bash

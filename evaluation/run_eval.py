@@ -494,6 +494,143 @@ def _indices_respuestas_vacias(answers: list[str], total: int) -> list[int]:
     ]
 
 
+def _estado_pregunta_base(index: int, answer: Any = "") -> dict[str, Any]:
+    """Build a checkpoint status entry for one evaluation question."""
+    status = "ok" if not _respuesta_vacia(answer) else "pending"
+    return {
+        "index": index,
+        "question_number": index + 1,
+        "status": status,
+        "attempts": 0,
+        "duration_seconds": 0.0,
+        "reason": None,
+        "error": None,
+        "updated_at": None,
+    }
+
+
+def _normalizar_estados_preguntas(
+    raw_statuses: Any,
+    answers: list[str],
+    total: int,
+) -> list[dict[str, Any]]:
+    """Normalize checkpoint question statuses, supporting old checkpoints."""
+    statuses: list[dict[str, Any]] = []
+    if isinstance(raw_statuses, list):
+        for i in range(total):
+            raw = raw_statuses[i] if i < len(raw_statuses) and isinstance(raw_statuses[i], dict) else {}
+            base = _estado_pregunta_base(i, answers[i] if i < len(answers) else "")
+            base.update({k: v for k, v in raw.items() if k in base})
+            base["index"] = i
+            base["question_number"] = i + 1
+            if not _respuesta_vacia(answers[i] if i < len(answers) else ""):
+                base["status"] = "ok"
+                base["reason"] = None
+                base["error"] = None
+            statuses.append(base)
+        return statuses
+
+    return [
+        _estado_pregunta_base(i, answers[i] if i < len(answers) else "")
+        for i in range(total)
+    ]
+
+
+def _indices_pendientes_generacion(
+    answers: list[str],
+    question_statuses: list[dict[str, Any]],
+    total: int,
+) -> list[int]:
+    """Return indexes that need generation or retry."""
+    pending = set(_indices_respuestas_vacias(answers, total))
+    for i, status in enumerate(question_statuses[:total]):
+        if status.get("status") not in ("ok", "skipped"):
+            pending.add(i)
+    return sorted(pending)
+
+
+def _resumen_estados_fallidos(
+    answers: list[str],
+    question_statuses: list[dict[str, Any]],
+    total: int,
+) -> dict[str, list[int]]:
+    """Group incomplete question numbers by diagnostic status/reason."""
+    grouped: dict[str, list[int]] = {}
+    for i in _indices_respuestas_vacias(answers, total):
+        status = question_statuses[i] if i < len(question_statuses) else {}
+        key = str(status.get("reason") or status.get("status") or "empty_answer")
+        grouped.setdefault(key, []).append(i + 1)
+    return grouped
+
+
+def _es_dataset_ragbench(dataset_path: str, eval_corpus: str) -> bool:
+    """Return True for RagBench runs, including prepared datasets run as corpus en."""
+    if eval_corpus == "ragbench":
+        return True
+    path = Path(dataset_path)
+    parts = {part.lower() for part in path.parts}
+    return "ragbench_prepared" in parts or "ragbench" in path.stem.lower()
+
+
+def _diagnosticar_fallo_generacion(
+    pregunta: str,
+    collection: Any,
+    answer: str,
+    contexts: list[str],
+    timed_out: bool,
+    error: Exception | None,
+) -> str:
+    """Classify why a question did not produce a usable answer."""
+    if error is not None:
+        return "excepcion"
+    if timed_out:
+        return "timeout"
+    if not contexts:
+        try:
+            fragmentos_ranked, mejor_score, _ = rag_runtime.realizar_busqueda_hibrida(pregunta, collection)
+            if not fragmentos_ranked:
+                return "sin_contexto"
+            fallback_ragbench = bool(
+                getattr(rag_runtime, "EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK", False)
+            )
+            if rag_runtime.USAR_RERANKER and mejor_score < rag_runtime.UMBRAL_RELEVANCIA and not fallback_ragbench:
+                return "filtrada_por_reranker"
+            if rag_runtime.USAR_RERANKER:
+                fragmentos_filtrados = [
+                    f for f in fragmentos_ranked
+                    if f.get("score_reranker", f.get("score_final", 0)) >= rag_runtime.UMBRAL_SCORE_RERANKER
+                ]
+                if not fragmentos_filtrados and not fallback_ragbench:
+                    return "filtrada_por_reranker"
+        except Exception:
+            return "sin_contexto"
+        return "sin_contexto"
+    if _respuesta_vacia(answer):
+        return "respuesta_vacia"
+    return "ok"
+
+
+def _ejecutar_pregunta_con_timeout(
+    pregunta: str,
+    collection: Any,
+    timeout_seconds: int,
+) -> tuple[str, list[str], bool, Exception | None]:
+    """Run one RAG question attempt with a best-effort wall-clock timeout."""
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(evaluar_pregunta_rag, pregunta, collection)
+    try:
+        answer, contexts = future.result(timeout=timeout_seconds)
+        executor.shutdown(wait=True)
+        return answer, contexts, False, None
+    except _FuturesTimeout:
+        future.cancel()
+        executor.shutdown(wait=False, cancel_futures=True)
+        return "", [], True, None
+    except Exception as exc:
+        executor.shutdown(wait=True)
+        return "", [], False, exc
+
+
 def _normalizar_pipeline_flags(flags: dict[str, Any] | None) -> dict[str, bool]:
     """Return a stable boolean pipeline-flags dict for checkpoints/manifests."""
     if not flags:
@@ -524,8 +661,10 @@ def _guardar_checkpoint_evaluacion(
     debug_path: str,
     answers: list[str],
     contexts_list: list[list[str]],
+    question_statuses: list[dict[str, Any]] | None = None,
     pipeline_flags: dict[str, bool] | None = None,
     docs_dir: str | None = None,
+    ragbench_reranker_low_score_fallback: bool = False,
 ) -> None:
     """Save generation progress with a consistent payload."""
     _guardar_checkpoint(
@@ -539,9 +678,13 @@ def _guardar_checkpoint_evaluacion(
             "output_path": output_path,
             "debug_path": debug_path,
             "docs_dir": docs_dir,
+            "ragbench_reranker_low_score_fallback": ragbench_reranker_low_score_fallback,
             "completed_questions": len([a for a in answers if not _respuesta_vacia(a)]),
             "answers": answers,
             "contexts_list": contexts_list,
+            "question_statuses": question_statuses or _normalizar_estados_preguntas(
+                None, answers, questions_count
+            ),
             "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         },
     )
@@ -880,6 +1023,7 @@ def generar_respuestas_rag(
     """Run only indexing/retrieval/generation and persist a reusable checkpoint."""
     previous_pipeline_flags = None
     docs_previous: tuple[str, str, str] | None = None
+    previous_ragbench_reranker_fallback: bool | None = None
     flag_overrides = dict(pipeline_flags or {})
     if recomp_enabled is not None:
         flag_overrides["USAR_RECOMP_SYNTHESIS"] = bool(recomp_enabled)
@@ -893,6 +1037,10 @@ def generar_respuestas_rag(
     try:
         print(f"\nLoading dataset...")
         dataset_path = resolver_ruta_dataset(dataset_path)
+        ragbench_reranker_fallback = _es_dataset_ragbench(dataset_path, eval_corpus)
+        previous_ragbench_reranker_fallback = (
+            rag_runtime.set_ragbench_reranker_low_score_fallback(ragbench_reranker_fallback)
+        )
         sfx = _artifact_suffix(eval_corpus)
         resolved_output_path = os.path.abspath(output_path or _default_output_path(dataset_path, sfx))
         resolved_debug_path = os.path.abspath(debug_path or _default_debug_path(dataset_path, sfx))
@@ -918,6 +1066,11 @@ def generar_respuestas_rag(
             )
         )
         print(f"   Eval corpus: {eval_corpus.upper()} -- PDFs: {rag_runtime.CARPETA_DOCS}")
+        if ragbench_reranker_fallback:
+            print(
+                "   RagBench reranker fallback: enabled "
+                "(low-scored reranker candidates are kept for generation)."
+            )
 
         collection, total = _conectar_e_indexar(
             force_reindex=force_reindex,
@@ -927,7 +1080,9 @@ def generar_respuestas_rag(
         print("\nRunning RAG pipeline for each question...")
         answers: list[str] = []
         contexts_list: list[list[str]] = []
+        question_statuses: list[dict[str, Any]] = []
         checkpoint = _cargar_checkpoint(resolved_checkpoint_path)
+        checkpoint_valid = False
         if checkpoint:
             if (
                 checkpoint.get("dataset_path") == dataset_path
@@ -936,8 +1091,14 @@ def generar_respuestas_rag(
                 and checkpoint.get("eval_corpus", "es") == eval_corpus
                 and checkpoint.get("docs_dir", rag_runtime.CARPETA_DOCS) == rag_runtime.CARPETA_DOCS
             ):
+                checkpoint_valid = True
                 answers = checkpoint.get("answers", [])
                 contexts_list = checkpoint.get("contexts_list", [])
+                question_statuses = _normalizar_estados_preguntas(
+                    checkpoint.get("question_statuses"),
+                    answers,
+                    len(questions),
+                )
                 non_empty_answers = len([a for a in answers if not _respuesta_vacia(a)])
                 print(
                     "   Resuming from checkpoint: "
@@ -957,9 +1118,18 @@ def generar_respuestas_rag(
             answers.append("")
         while len(contexts_list) < len(questions):
             contexts_list.append([])
+        question_statuses = _normalizar_estados_preguntas(
+            question_statuses,
+            answers,
+            len(questions),
+        )
 
-        pending_answer_indexes = _indices_respuestas_vacias(answers, len(questions))
-        if pending_answer_indexes and checkpoint:
+        pending_answer_indexes = _indices_pendientes_generacion(
+            answers,
+            question_statuses,
+            len(questions),
+        )
+        if pending_answer_indexes and checkpoint_valid:
             first_missing = ", ".join(str(i + 1) for i in pending_answer_indexes[:10])
             suffix = "..." if len(pending_answer_indexes) > 10 else ""
             print(
@@ -975,32 +1145,65 @@ def generar_respuestas_rag(
                 if verbose:
                     print(f"   [{i+1}/{len(questions)}] {q[:60]}...")
                 answer, contexts = "", []
+                timed_out = False
+                last_error: Exception | None = None
+                attempt_count = 0
+                question_start = time.time()
                 for attempt in range(_max_attempts_per_question):
+                    attempt_count = attempt + 1
                     if attempt > 0:
                         print(
                             f"   [RETRY] Q{i+1} attempt {attempt + 1}/{_max_attempts_per_question} "
                             f"(previous: empty or timeout)."
                         )
-                    with ThreadPoolExecutor(max_workers=1) as _ex:
-                        _fut = _ex.submit(evaluar_pregunta_rag, q, collection)
-                        try:
-                            answer, contexts = _fut.result(timeout=_ollama_timeout)
-                        except _FuturesTimeout:
-                            answer, contexts = "", []
-                            print(
-                                f"   [TIMEOUT] Q{i+1} exceeded {_ollama_timeout}s "
-                                "(attempt "
-                                f"{attempt + 1}/{_max_attempts_per_question})."
-                            )
+                    answer, contexts, timed_out, last_error = _ejecutar_pregunta_con_timeout(
+                        q,
+                        collection,
+                        _ollama_timeout,
+                    )
+                    if timed_out:
+                        print(
+                            f"   [TIMEOUT] Q{i+1} exceeded {_ollama_timeout}s "
+                            "(attempt "
+                            f"{attempt + 1}/{_max_attempts_per_question})."
+                        )
+                        break
+                    if last_error is not None:
+                        print(
+                            f"   [ERROR] Q{i+1} failed on attempt "
+                            f"{attempt + 1}/{_max_attempts_per_question}: {last_error}"
+                        )
                     if not _respuesta_vacia(answer):
                         break
-                if _respuesta_vacia(answer) and _max_attempts_per_question > 1:
+
+                reason = _diagnosticar_fallo_generacion(
+                    q,
+                    collection,
+                    answer,
+                    contexts,
+                    timed_out,
+                    last_error,
+                )
+                if _respuesta_vacia(answer) and _max_attempts_per_question > 1 and not timed_out:
                     print(
                         f"   [WARN] Q{i+1} still empty after {_max_attempts_per_question} attempts; "
-                        "increase EVAL_OLLAMA_TIMEOUT or rerun to retry."
+                        f"reason={reason}. Rerun to retry only incomplete answers."
                     )
                 answers[i] = answer
                 contexts_list[i] = contexts
+                question_statuses[i] = {
+                    "index": i,
+                    "question_number": i + 1,
+                    "status": "ok" if not _respuesta_vacia(answer) else "failed",
+                    "attempts": attempt_count,
+                    "duration_seconds": round(time.time() - question_start, 3),
+                    "reason": None if not _respuesta_vacia(answer) else reason,
+                    "error": (
+                        f"{type(last_error).__name__}: {last_error}"
+                        if last_error is not None else None
+                    ),
+                    "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                }
                 _guardar_checkpoint_evaluacion(
                     resolved_checkpoint_path,
                     dataset_path=dataset_path,
@@ -1011,8 +1214,10 @@ def generar_respuestas_rag(
                     debug_path=resolved_debug_path,
                     answers=answers,
                     contexts_list=contexts_list,
+                    question_statuses=question_statuses,
                     pipeline_flags=current_pipeline_flags,
                     docs_dir=rag_runtime.CARPETA_DOCS,
+                    ragbench_reranker_low_score_fallback=ragbench_reranker_fallback,
                 )
         except ConnectionError as e:
             print(f"\nError: Could not connect to Ollama: {e}")
@@ -1027,11 +1232,20 @@ def generar_respuestas_rag(
         if empty_answer_indexes:
             listed = ", ".join(str(i + 1) for i in empty_answer_indexes[:20])
             suffix = "..." if len(empty_answer_indexes) > 20 else ""
+            failed_summary = _resumen_estados_fallidos(
+                answers,
+                question_statuses,
+                len(questions),
+            )
             print(
                 "\nError: RAGAS evaluation was not launched because "
                 f"{len(empty_answer_indexes)} answer(s) are empty."
             )
             print(f"   Empty question indexes: {listed}{suffix}")
+            for reason, indexes in sorted(failed_summary.items()):
+                reason_listed = ", ".join(str(n) for n in indexes[:20])
+                reason_suffix = "..." if len(indexes) > 20 else ""
+                print(f"   {reason}: {reason_listed}{reason_suffix}")
             print(f"   Checkpoint: {resolved_checkpoint_path}")
             print("   Fix the RAG generation issue and rerun; only empty answers will be retried.")
             raise SystemExit(1)
@@ -1045,6 +1259,7 @@ def generar_respuestas_rag(
             "ground_truths": ground_truths,
             "answers": answers,
             "contexts_list": contexts_list,
+            "question_statuses": question_statuses,
             "questions_count": len(questions),
             "indexed_fragments": total,
             "indexed_files_filter": solo_archivos,
@@ -1052,10 +1267,13 @@ def generar_respuestas_rag(
             "pipeline_flags": current_pipeline_flags,
             "eval_corpus": eval_corpus,
             "docs_dir": rag_runtime.CARPETA_DOCS,
+            "ragbench_reranker_low_score_fallback": ragbench_reranker_fallback,
             "pipeline_seconds": t_rag,
             "tiene_ground_truth": tiene_ground_truth,
         }
     finally:
+        if previous_ragbench_reranker_fallback is not None:
+            rag_runtime.set_ragbench_reranker_low_score_fallback(previous_ragbench_reranker_fallback)
         if docs_previous is not None:
             rag_runtime.CARPETA_DOCS, rag_runtime.PATH_DB, rag_runtime.COLLECTION_NAME = (
                 docs_previous
@@ -1650,6 +1868,7 @@ def _ejecutar_ragbench(
     recomp_enabled: bool | None = None,
     ragas_max_workers: int = 1,
     ragas_batch_size: int | None = 5,
+    prepare_only: bool = False,
 ) -> None:
     """Prepare a RagBench subset and evaluate it with the unified runner."""
     if max_q < 1:
@@ -1708,6 +1927,11 @@ def _ejecutar_ragbench(
     output_csv = os.path.join(SCORES_DIR, f"ragas_scores_ragbench_en_{recomp_tag}.csv")
     output_debug = os.path.join(DEBUG_DIR, f"ragas_debug_ragbench_en_{recomp_tag}.json")
     checkpoint_path = os.path.join(CHECKPOINTS_DIR, "ragbench", f"ragbench_{safe_tag}_{recomp_tag}.json")
+
+    if prepare_only:
+        print(f"\nDataset preparado en: {prepared_dataset}")
+        print("--prepare-only: saltando generacion y RAGAS. Usa 'compare' con este dataset.")
+        return
 
     print("\nDelegando generacion, checkpoints y RAGAS al runner unificado...")
     ejecutar_evaluacion(
@@ -1866,6 +2090,7 @@ def _build_parser() -> argparse.ArgumentParser:
     recomp_group.add_argument("--no-recomp", dest="recomp_enabled", action="store_false", help="Disable RECOMP synthesis")
     recomp_group.add_argument("--both-recomp", action="store_true", help="Run two passes: RECOMP enabled and disabled")
     ragbench.set_defaults(recomp_enabled=None)
+    ragbench.add_argument("--prepare-only", action="store_true", help="Download PDFs and write dataset JSON; skip generation and RAGAS")
     ragbench.set_defaults(func=_run_ragbench_from_args)
     return parser
 
@@ -1908,6 +2133,7 @@ def _run_ragbench_from_args(args: argparse.Namespace) -> None:
         recomp_enabled=args.recomp_enabled,
         ragas_max_workers=args.ragas_max_workers,
         ragas_batch_size=args.ragas_batch_size,
+        prepare_only=args.prepare_only,
     )
 
 
