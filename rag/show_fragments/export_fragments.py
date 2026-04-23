@@ -15,18 +15,17 @@
 #
 # ─────────────────────────────────────────────
 """
-export_ragbench_fragments.py -- Dump indexed ChromaDB chunks to text or JSONL files.
+export_fragments.py -- Dump indexed ChromaDB chunks to text or JSONL files.
 
-**Default:** exports **two** files — production ``vector_db`` (PDFs en ``DOCS_FOLDER``)
-and RAGBench (``vector_db``, PDFs de ``rag/docs/en``). Each chunk is
-labeled as **imagen** (descripción de figura), **texto plano** o **texto Markdown**
-according to ``metadata["format"]`` from ``chat_pdfs.indexar_documentos``.
-
-**Single-store modes:** ``--mi-only`` or ``--ragbench-only`` (``--ragbench`` alias).
+**Default:** exports the three local language stores under ``rag/vector_db``:
+``ca_embeddinggemma``, ``en_embeddinggemma`` and ``es_embeddinggemma``. Each
+chunk is labeled as **imagen** (descripción de figura), **texto plano** or
+**texto Markdown** according to ``metadata["format"]`` from
+``chat_pdfs.indexar_documentos``.
 
 Usage (from repository root):
     python rag/show_fragments/export_fragments.py
-    python rag/show_fragments/export_fragments.py --mi-only -o salida.txt
+    python rag/show_fragments/export_fragments.py --language es -o salida.txt
     python rag/show_fragments/export_fragments.py --format jsonl --out-dir ./mi_salida
 
 Dependencies:
@@ -40,7 +39,7 @@ import json
 import os
 import sys
 from collections import Counter
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 # ─────────────────────────────────────────────
 # SECTION 1: IMPORTS
@@ -58,26 +57,40 @@ import chromadb  # noqa: E402
 # ─────────────────────────────────────────────
 
 RAG_DIR = os.path.join(_proj_root, "rag")
-RAGBENCH_DB_PATH = os.path.join(RAG_DIR, "vector_db", "en_embeddinggemma")
-RAGBENCH_COLLECTION = "ragbench_arxiv_eval"
+VECTOR_DB_DIR = os.path.join(RAG_DIR, "vector_db")
+DEFAULT_LANGUAGES = ("ca", "en", "es")
 
 DEFAULT_OUT_DIR = os.path.join(RAG_DIR, "show_fragments")
-DEFAULT_FILE_MI = "chunks_vector_db.txt"
-DEFAULT_FILE_RAGBENCH = "chunks_ragbench_en.txt"
+DEFAULT_FILE_TEMPLATE = "chunks_vector_db_{language}.txt"
 DEFAULT_OUTPUT_MONKEYGRAB = os.path.join(DEFAULT_OUT_DIR, "monkeygrab_chunks_export.txt")
-DEFAULT_OUTPUT_RAGBENCH = os.path.join(DEFAULT_OUT_DIR, "ragbench_chunks_export.txt")
 BATCH_SIZE = 500
 
 
-def resolve_monkeygrab_chroma() -> Tuple[str, str]:
-    """Resolve PATH_DB and COLLECTION_NAME the same way as ``rag/chat_pdfs.py``."""
-    carpeta_docs = os.getenv("DOCS_FOLDER", os.path.join(RAG_DIR, "docs", "es"))
+class StoreSpec(NamedTuple):
+    language: str
+    db_path: str
+    collection_name: str
+    store_label: str
+    pdf_folder_hint: str
+
+
+def build_store_spec(language: str) -> StoreSpec:
+    """Build the Chroma path and collection name for one language store."""
+    lang = language.strip().lower()
     modelo_embed = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
-    carpeta_nombre = os.path.basename(os.path.abspath(carpeta_docs))
     embed_slug = modelo_embed.split(":")[0].replace("/", "_")
-    path_db = os.path.join(RAG_DIR, "vector_db", f"{carpeta_nombre}_{embed_slug}")
-    collection_name = f"docs_{carpeta_nombre}"
-    return path_db, collection_name
+    return StoreSpec(
+        language=lang,
+        db_path=os.path.join(VECTOR_DB_DIR, f"{lang}_{embed_slug}"),
+        collection_name=f"docs_{lang}",
+        store_label=f"vector_db/{lang}_{embed_slug} ({lang})",
+        pdf_folder_hint=os.path.join(RAG_DIR, "docs", lang),
+    )
+
+
+def default_store_specs() -> List[StoreSpec]:
+    """Return the three local vector stores exported by default."""
+    return [build_store_spec(language) for language in DEFAULT_LANGUAGES]
 
 
 def classify_fragment(meta: Dict[str, Any]) -> Dict[str, str]:
@@ -268,23 +281,13 @@ def run_export(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Export ChromaDB fragments; por defecto vector_db producción + ragbench/en en archivos separados.",
-    )
-    mode = p.add_mutually_exclusive_group()
-    mode.add_argument(
-        "--mi-only",
-        action="store_true",
-        help="Solo base de producción (vector_db según DOCS_FOLDER / OLLAMA_EMBED_MODEL)",
-    )
-    mode.add_argument(
-        "--ragbench-only",
-        action="store_true",
-        help=f"Solo RAGBench ({RAGBENCH_DB_PATH})",
+        description="Export ChromaDB fragments; por defecto exporta ca, en y es desde rag/vector_db.",
     )
     p.add_argument(
-        "--ragbench",
-        action="store_true",
-        help="Alias de --ragbench-only",
+        "--language",
+        choices=DEFAULT_LANGUAGES,
+        default=None,
+        help="Exportar solo una base vectorial por idioma; por defecto exporta ca, en y es.",
     )
     p.add_argument(
         "--db-path",
@@ -300,7 +303,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "-o",
         "--output",
         default=None,
-        help="Archivo de salida (solo con un único destino: --mi-only, --ragbench-only o --db-path)",
+        help="Archivo de salida (solo con un único destino: --language o --db-path)",
     )
     p.add_argument(
         "--out-dir",
@@ -322,7 +325,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_arg_parser().parse_args()
-    ragbench_only = args.ragbench_only or args.ragbench
     out_fmt = args.format
     out_dir = os.path.abspath(args.out_dir)
 
@@ -334,8 +336,6 @@ def main() -> None:
         db_path = os.path.abspath(args.db_path)
         if args.output:
             out_path = os.path.abspath(args.output)
-        elif ragbench_only:
-            out_path = os.path.abspath(DEFAULT_OUTPUT_RAGBENCH)
         else:
             out_path = os.path.abspath(DEFAULT_OUTPUT_MONKEYGRAB)
         hint = os.getenv("DOCS_FOLDER", os.path.join(RAG_DIR, "docs", "es"))
@@ -349,66 +349,63 @@ def main() -> None:
         )
         raise SystemExit(0 if n >= 0 else 1)
 
-    # --- Dual default: vector_db producción + ragbench/en ---
-    if not args.mi_only and not ragbench_only:
-        os.makedirs(out_dir, exist_ok=True)
-        ext = ".jsonl" if out_fmt == "jsonl" else ".txt"
-        path_mi = os.path.join(out_dir, DEFAULT_FILE_MI.replace(".txt", ext))
-        path_rb = os.path.join(out_dir, DEFAULT_FILE_RAGBENCH.replace(".txt", ext))
-
-        db_mi, coll_mi = resolve_monkeygrab_chroma()
-        db_mi = os.path.abspath(db_mi)
-        pdf_mi = os.getenv("DOCS_FOLDER", os.path.join(RAG_DIR, "docs", "es"))
-
-        print("Exportación dual (vector_db producción + ragbench en)\n")
-        run_export(
-            db_mi,
-            coll_mi,
-            path_mi,
-            out_fmt,
-            "vector_db (producción)",
-            os.path.abspath(pdf_mi),
+    # --- Single language target ---
+    if args.language:
+        spec = build_store_spec(args.language)
+        out_path = (
+            os.path.abspath(args.output)
+            if args.output
+            else os.path.join(
+                out_dir,
+                DEFAULT_FILE_TEMPLATE.format(language=spec.language).replace(
+                    ".txt",
+                    ".jsonl" if out_fmt == "jsonl" else ".txt",
+                ),
+            )
         )
-        run_export(
-            os.path.abspath(RAGBENCH_DB_PATH),
-            RAGBENCH_COLLECTION,
-            path_rb,
-            out_fmt,
-            "vector_db/en (evaluación RAGBench)",
-            os.path.join(RAG_DIR, "docs", "en"),
-        )
-        print("\nListo. Archivos:")
-        print(f"   {path_mi}")
-        print(f"   {path_rb}")
-        return
-
-    # --- mi-only ---
-    if args.mi_only:
-        db_path, collection_name = resolve_monkeygrab_chroma()
-        db_path = os.path.abspath(db_path)
-        out_path = os.path.abspath(args.output) if args.output else DEFAULT_OUTPUT_MONKEYGRAB
-        pdf_hint = os.getenv("DOCS_FOLDER", os.path.join(RAG_DIR, "docs", "es"))
         n = run_export(
-            db_path,
-            collection_name,
+            os.path.abspath(spec.db_path),
+            spec.collection_name,
             out_path,
             out_fmt,
-            "vector_db (producción)",
-            os.path.abspath(pdf_hint),
+            spec.store_label,
+            os.path.abspath(spec.pdf_folder_hint),
         )
         raise SystemExit(0 if n != -1 else 1)
 
-    # --- ragbench-only ---
-    out_path = os.path.abspath(args.output) if args.output else DEFAULT_OUTPUT_RAGBENCH
-    n = run_export(
-        os.path.abspath(RAGBENCH_DB_PATH),
-        RAGBENCH_COLLECTION,
-        out_path,
-        out_fmt,
-        "vector_db/en (evaluación RAGBench)",
-        os.path.join(RAG_DIR, "docs", "en"),
-    )
-    raise SystemExit(0 if n != -1 else 1)
+    if args.output:
+        print("ERROR: --output solo se puede usar con --language o --db-path")
+        raise SystemExit(1)
+
+    # --- Default: all language stores under rag/vector_db ---
+    os.makedirs(out_dir, exist_ok=True)
+    ext = ".jsonl" if out_fmt == "jsonl" else ".txt"
+    exported_paths: List[str] = []
+    failures = 0
+
+    print("Exportación de las 3 bases vectoriales (ca, en, es)\n")
+    for spec in default_store_specs():
+        out_path = os.path.join(
+            out_dir,
+            DEFAULT_FILE_TEMPLATE.format(language=spec.language).replace(".txt", ext),
+        )
+        n = run_export(
+            os.path.abspath(spec.db_path),
+            spec.collection_name,
+            out_path,
+            out_fmt,
+            spec.store_label,
+            os.path.abspath(spec.pdf_folder_hint),
+        )
+        if n == -1:
+            failures += 1
+        else:
+            exported_paths.append(out_path)
+
+    print("\nListo. Archivos:")
+    for path in exported_paths:
+        print(f"   {path}")
+    raise SystemExit(0 if failures == 0 else 1)
 
 
 if __name__ == "__main__":

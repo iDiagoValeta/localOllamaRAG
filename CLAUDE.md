@@ -340,8 +340,8 @@ python training-output/gemma-3/generate_reports.py
 python scripts/evaluation/inspect_splits.py
 
 # Exportar chunks de ChromaDB (salida por defecto: rag/show_fragments/)
-python rag/show_fragments/export_fragments.py              # ambos stores
-python rag/show_fragments/export_fragments.py --mi-only    # solo PDFs propios
+python rag/show_fragments/export_fragments.py                    # ca, en y es
+python rag/show_fragments/export_fragments.py --language es      # solo una base
 
 # RAGAS sobre el pipeline en vivo (requiere GOOGLE_API_KEY)
 python evaluation/run_eval.py single --corpus es
