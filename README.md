@@ -2,8 +2,6 @@
   <img src="logo-circular.png" alt="MonkeyGrab Logo" width="180" />
 </p>
 
-<h1 align="center">MonkeyGrab</h1>
-
 <p align="center">
   <strong>A local, multilingual RAG system for querying PDF documents with open language models</strong>
 </p>
