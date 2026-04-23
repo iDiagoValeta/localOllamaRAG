@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/Ollama-Local%20LLM-000000?style=for-the-badge" alt="Ollama">
-  <img src="https://img.shields.io/badge/ChromaDB-Vector%20Store-FF6B35?style=for-the-badge" alt="ChromaDB">
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"></a>
+  <a href="https://ollama.com/"><img src="https://img.shields.io/badge/Ollama-Local%20LLM-000000?style=for-the-badge" alt="Ollama"></a>
+  <a href="https://www.trychroma.com/"><img src="https://img.shields.io/badge/ChromaDB-Vector%20Store-FF6B35?style=for-the-badge" alt="ChromaDB"></a>
   <img src="https://img.shields.io/badge/RAG-Hybrid-28A745?style=for-the-badge" alt="RAG">
 </p>
 
@@ -23,7 +23,7 @@
 
 MonkeyGrab is a Retrieval-Augmented Generation (RAG) system that runs entirely on your own hardware. You point it at a folder of PDF documents, and it lets you ask questions about them in natural language — receiving answers that are grounded in the actual content of those files.
 
-No data leaves your machine. All inference, indexing and retrieval happens locally through [Ollama](https://ollama.ai/). MonkeyGrab is designed for researchers and students who need to query academic documents in English, Spanish or Catalan without sending their data to external services.
+No data leaves your machine. All inference, indexing and retrieval happens locally through [Ollama](https://ollama.com/). MonkeyGrab is designed for researchers and students who need to query academic documents in English, Spanish or Catalan without sending their data to external services.
 
 The system works with any instruction-tuned language model available in Ollama. You configure which models to use via environment variables, so it adapts to whatever hardware you have available.
 
@@ -43,7 +43,7 @@ https://github.com/user-attachments/assets/cc36fc27-e4b9-49ac-a1f1-131f6e6afe4f
 - Multilingual support: English, Spanish, Catalan
 - Hybrid retrieval: semantic search + keyword search + optional cross-encoder reranking
 - Two interaction modes: document Q&A (RAG) and general conversation (CHAT)
-- Two interfaces: terminal CLI (Rich) and web interface (Flask + React)
+- Two interfaces: terminal CLI ([Rich](https://rich.readthedocs.io/)) and web interface ([Flask](https://flask.palletsprojects.com/) + [React](https://react.dev/))
 - Optional indexing of images and figures found in PDFs, described by a vision model
 - All model roles configurable via environment variables
 - Debug output included with every query: retrieved fragments, relevance scores, sub-queries generated
@@ -57,12 +57,12 @@ PDF corpus  (rag/docs/es/ by default; set DOCS_FOLDER or use ca/en)
       |
       v
   INDEXING
-      Text extraction    pymupdf4llm  /  pypdf (fallback)
+      Text extraction    [pymupdf4llm](https://pymupdf.readthedocs.io/en/latest/pymupdf4llm/)  /  [pypdf](https://pypdf.readthedocs.io/) (fallback)
       Chunking           configurable size and overlap
       Enrichment         [optional]  OLLAMA_CONTEXTUAL_MODEL
       Image description  [optional]  OLLAMA_OCR_MODEL
       Embedding                       OLLAMA_EMBED_MODEL
-      Storage            ChromaDB  (rag/vector_db/<folder>_<embed_slug>/)
+      Storage            [ChromaDB](https://www.trychroma.com/)  (rag/vector_db/<folder>_<embed_slug>/)
       |
       v
   RETRIEVAL
@@ -79,16 +79,16 @@ PDF corpus  (rag/docs/es/ by default; set DOCS_FOLDER or use ca/en)
       v
   GENERATION
       Prompt assembly   system prompt + compressed/raw context + question
-      Response          OLLAMA_RAG_MODEL  -  streaming via Ollama (default: `phi4-finetuned:latest`)
+      Response          OLLAMA_RAG_MODEL  -  streaming via [Ollama](https://ollama.com/) (default: `phi4-finetuned:latest`)
 ```
 
 ---
 
 ## Requirements
 
-- Python 3.10 or higher
-- [Ollama](https://ollama.ai/) installed and running locally
-- A GPU with CUDA is recommended for reranking; CPU works for inference but is slower
+- [Python](https://www.python.org/) 3.10 or higher
+- [Ollama](https://ollama.com/) installed and running locally
+- A GPU with [CUDA](https://developer.nvidia.com/cuda-toolkit) is recommended for reranking; CPU works for inference but is slower
 
 ---
 
@@ -126,13 +126,13 @@ ollama pull <your OLLAMA_OCR_MODEL>          # must be a vision-language model
 
 ### Model weights (GGUF)
 
-Large **`.gguf`** files are **not** committed to this repository (size and clone cost). The repo keeps **`Modelfile`** files under `models/gguf-output/<model>/` plus conversion scripts in `scripts/conversion/`. Build or quantize locally, or download weights from **Hugging Face Hub** (or another object store) and point Ollama at the file path you use. Document any public model URL in your thesis or deployment notes for reproducibility.
+Large **`.gguf`** files are **not** committed to this repository (size and clone cost). The repo keeps **`Modelfile`** files under `models/gguf-output/<model>/` plus conversion scripts in `scripts/conversion/`. Build or quantize locally, or download weights from **[Hugging Face](https://huggingface.co/) Hub** (or another object store) and point [Ollama](https://ollama.com/) at the file path you use. Document any public model URL in your thesis or deployment notes for reproducibility.
 
-**Qwen3-14B RAG (LoRA, Q4_K_M GGUF):** [nadiva1243/qwen3RAG](https://huggingface.co/nadiva1243/qwen3RAG) — model card and weights on Hugging Face.
+**Qwen3-14B RAG ([LoRA](https://huggingface.co/docs/peft/), Q4_K_M GGUF):** [nadiva1243/qwen3RAG](https://huggingface.co/nadiva1243/qwen3RAG) — model card and weights on Hugging Face.
 
-**Phi-4 RAG (LoRA, Q4_K_M GGUF):** [nadiva1243/phi4RAG](https://huggingface.co/nadiva1243/phi4RAG) — model card and weights on Hugging Face.
+**Phi-4 RAG ([LoRA](https://huggingface.co/docs/peft/), Q4_K_M GGUF):** [nadiva1243/phi4RAG](https://huggingface.co/nadiva1243/phi4RAG) — model card and weights on Hugging Face.
 
-After building locally, you can remove `models/merged-model/<slug>/` and the intermediate `*-f16.gguf` to save disk; keep the `*-Q4_K_M.gguf` you use with Ollama.
+After building locally, you can remove `models/merged-model/<slug>/` and the intermediate `*-f16.gguf` to save disk; keep the `*-Q4_K_M.gguf` you use with [Ollama](https://ollama.com/).
 
 ---
 
@@ -205,7 +205,7 @@ Output layout is the same for every model:
 
 ### RAGAS evaluation (`evaluation/run_eval.py`)
 
-Requires `pip install -r evaluation/requirements.txt` and a **`GOOGLE_API_KEY`** in `.env` (Gemini as judge LLM).
+Requires `pip install -r evaluation/requirements.txt` and a **`GOOGLE_API_KEY`** in `.env` ([Gemini](https://ai.google.dev/) as judge LLM). [RAGAS](https://docs.ragas.io/) is a framework for evaluating RAG applications.
 
 Single-corpus runs (loads bundled datasets under `evaluation/datasets/` and the matching `rag/docs/` folder):
 
@@ -276,19 +276,19 @@ localOllamaRAG/
 │   ├── cli/                      # Rich terminal UI (MonkeyGrabCLI)
 │   └── requirements.txt
 ├── web/
-│   ├── app.py                    # Flask backend (REST + SSE); serves React build
-│   └── zip/                      # React source (src/) + Vite config; production build → dist/
+│   ├── app.py                    # [Flask](https://flask.palletsprojects.com/) backend (REST + SSE); serves [React](https://react.dev/) build
+│   └── zip/                      # [React](https://react.dev/) source (src/) + [Vite](https://vitejs.dev/) config; production build → dist/
 ├── scripts/
-│   ├── hf_upload_model_cards.py  # Hugging Face model cards / optional GGUF upload helper
-│   ├── training/                 # LoRA fine-tuning (Qwen3, Phi-4, Gemma-3)
+│   ├── hf_upload_model_cards.py  # [Hugging Face](https://huggingface.co/) model cards / optional GGUF upload helper
+│   ├── training/                 # [LoRA](https://huggingface.co/docs/peft/) fine-tuning (Qwen3, Phi-4, Gemma-3)
 │   ├── evaluation/               # Baseline benchmark + split inspection + SLURM helpers
 │   ├── conversion/               # LoRA merge, GGUF build, quantization notes
 │   └── tests/                    # Ollama / pipeline smoke tests
 ├── evaluation/
 │   ├── datasets/                 # Question datasets (ES, CA, mix; add EN as needed)
-│   ├── scores/                   # RAGAS CSV outputs (keep large runs out of Git manually if needed)
+│   ├── scores/                   # [RAGAS](https://docs.ragas.io/) CSV outputs (keep large runs out of Git manually if needed)
 │   ├── debug/                    # Debug JSON + resumable checkpoints
-│   ├── run_eval.py               # RAGAS entrypoint: single | compare | ragbench
+│   ├── run_eval.py               # [RAGAS](https://docs.ragas.io/) entrypoint: single | compare | ragbench
 │   ├── aggregate_comparison_by_conjunto.py  # Post-compare: subset means from debug JSON + dataset
 │   ├── EVALUACIONES_PIPELINE.md  # Detailed eval presets, ablation variants, aggregation notes
 │   └── requirements.txt
@@ -310,7 +310,7 @@ localOllamaRAG/
 ## Known limitations
 
 - Vector graphics embedded in PDFs (SVG-based figures) are not extracted during indexing and will not be retrievable.
-- The RAGAS evaluation pipeline requires a `GOOGLE_API_KEY` and is therefore not fully local.
+- The [RAGAS](https://docs.ragas.io/) evaluation pipeline requires a `GOOGLE_API_KEY` ([Google Gemini](https://ai.google.dev/)) and is therefore not fully local.
 
 ---
 
