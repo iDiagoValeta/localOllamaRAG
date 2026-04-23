@@ -222,6 +222,12 @@ python evaluation/run_eval.py ragbench-prepare                   # builds the fi
 python evaluation/run_eval.py ragbench-eval                      # indexes + runs inference + RAGAS from the manifest
 ```
 
+## Sample video
+
+https://github.com/user-attachments/assets/f3e2bf0b-095a-416f-982e-9fdf4647c85e
+
+This video demonstrates the evaluation of a set of 25 documents from the vectara/ragbench dataset, where no vector representation exists beforehand and must be created prior to inference. On the left is a terminal running `ollama serve`, and on the right is another terminal running the evaluation command from the `run_eval.py` script.
+
 RAGBench prepared datasets enable a documented evaluation-only reranker fallback:
 the reranker still orders candidates, but if every candidate falls below the
 interactive relevance threshold, the best retrieved candidates are kept so the
