@@ -29,6 +29,12 @@ The system works with any instruction-tuned language model available in Ollama. 
 
 This project was developed as a Bachelor's thesis (TFG) for the Grado en Ingeniería Informática at ETSINF, Universitat Politècnica de València (UPV), by Ignacio Diago Valeta, tutored by Adrià Giménez Pastor (2025–2026). It combines a functional RAG production system with a research layer for LoRA fine-tuning and evaluation of open language models.
 
+## Video
+
+This video shows a sample query I ran on my own laptop against a database containing five Wikipedia articles, indexed using my preferred settings. Every user can fully customise their experience; my models and settings are unique, so I encourage you to discover your own favourites!
+
+https://github.com/user-attachments/assets/cc36fc27-e4b9-49ac-a1f1-131f6e6afe4f
+
 ---
 
 ## Features
