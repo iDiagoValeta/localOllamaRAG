@@ -74,11 +74,12 @@ PDF corpus  (rag/docs/es/ by default; set DOCS_FOLDER or use ca/en)
       Reranking            [optional]  cross-encoder  RERANKER_QUALITY
       Context selection               top-8 fragments
       Chunk expansion      [optional]  adjacent chunks
+      RECOMP synthesis     [optional]  OLLAMA_RECOMP_MODEL
       |
       v
   GENERATION
-      Prompt assembly   system prompt + context + question
-      Response          OLLAMA_RAG_MODEL  —  streaming via Ollama
+      Prompt assembly   system prompt + compressed/raw context + question
+      Response          OLLAMA_RAG_MODEL  -  streaming via Ollama (default: `phi4-finetuned:latest`)
 ```
 
 ---

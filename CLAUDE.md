@@ -242,14 +242,15 @@ Query usuario (MIN_LONGITUD_PREGUNTA_RAG)
   -> Selección: TOP_K_FINAL (8 fragmentos)
   -> [Opt] EXPANDIR_CONTEXTO: N_TOP_PARA_EXPANSION + chunks adyacentes
   -> [Opt] USAR_OPTIMIZACION_CONTEXTO: recorte con MAX_CONTEXTO_CHARS (12000)
+  -> [Opt] USAR_RECOMP_SYNTHESIS: sintetizar/comprimir contexto via OLLAMA_RECOMP_MODEL
 ```
 
 ### Generación
 
 ```
 Pregunta + <context>
-  -> [Opt] USAR_RECOMP_SYNTHESIS: sintetizar_contexto_recomp vía OLLAMA_RECOMP_MODEL
-  -> OLLAMA_RAG_MODEL: streaming vía Ollama (temperature, top_p, repeat_penalty, num_ctx)
+  -> Contexto final: fragmentos crudos o sintesis RECOMP
+  -> OLLAMA_RAG_MODEL: streaming via Ollama (default: phi4-finetuned:latest; temperature, top_p, repeat_penalty, num_ctx)
 ```
 
 ---
@@ -507,7 +508,7 @@ def realizar_busqueda_hibrida(pregunta: str, collection) -> tuple:
 USAR_CONTEXTUAL_RETRIEVAL = True   # enrich chunks with LLM context before indexing
 USAR_LLM_QUERY_DECOMPOSITION = True  # decompose query into 3 sub-queries
 USAR_RERANKER = RERANKER_AVAILABLE   # disabled automatically if sentence-transformers missing
-USAR_RECOMP_SYNTHESIS = False        # experimental; toggle in this file / env
+USAR_RECOMP_SYNTHESIS = True         # enabled by default; can be overridden via env
 ```
 
 ---
