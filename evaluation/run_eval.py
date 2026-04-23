@@ -978,6 +978,7 @@ def _importar_ragas_componentes():
 def _conectar_e_indexar(
     force_reindex: bool = False,
     solo_archivos: list[str] | None = None,
+    add_missing_from_filter: bool = False,
 ) -> tuple[Any, int]:
     """Connect to the active Chroma collection and index documents if needed."""
     print(f"\nConnecting to ChromaDB: {rag_runtime.PATH_DB}")
@@ -1002,7 +1003,25 @@ def _conectar_e_indexar(
     else:
         total = collection.count()
         print(f"   Fragments in collection: {total}")
-        if solo_archivos:
+        if solo_archivos and add_missing_from_filter:
+            indexed_docs = set(rag_runtime.obtener_documentos_indexados(collection))
+            missing_files = [f for f in solo_archivos if f not in indexed_docs]
+            if missing_files:
+                print(
+                    "   Adding missing files to existing collection: "
+                    + ", ".join(missing_files[:10])
+                    + ("..." if len(missing_files) > 10 else "")
+                )
+                added = indexar_documentos(
+                    rag_runtime.CARPETA_DOCS,
+                    collection,
+                    solo_archivos=missing_files,
+                )
+                total = collection.count()
+                print(f"   Indexed {added} new fragments. Collection now has {total}.")
+            else:
+                print("   Collection already contains every file from the requested manifest.")
+        elif solo_archivos:
             print("   Note: file filter only applies while indexing an empty/rebuilt collection.")
     return collection, total
 
@@ -1019,6 +1038,7 @@ def generar_respuestas_rag(
     eval_corpus: str = "es",
     docs_dir: str | None = None,
     solo_archivos: list[str] | None = None,
+    add_missing_from_filter: bool = False,
 ) -> dict[str, Any]:
     """Run only indexing/retrieval/generation and persist a reusable checkpoint."""
     previous_pipeline_flags = None
@@ -1075,6 +1095,7 @@ def generar_respuestas_rag(
         collection, total = _conectar_e_indexar(
             force_reindex=force_reindex,
             solo_archivos=solo_archivos,
+            add_missing_from_filter=add_missing_from_filter,
         )
 
         print("\nRunning RAG pipeline for each question...")
@@ -1538,9 +1559,11 @@ def ejecutar_evaluacion(
     save_debug: bool = True,
     force_reindex: bool = False,
     recomp_enabled: bool | None = None,
+    pipeline_flags: dict[str, bool] | None = None,
     eval_corpus: str = "es",
     docs_dir: str | None = None,
     solo_archivos: list[str] | None = None,
+    add_missing_from_filter: bool = False,
     ragas_timeout: int = 90,
     ragas_max_retries: int = 5,
     ragas_max_wait: int = 60,
@@ -1585,9 +1608,11 @@ def ejecutar_evaluacion(
         verbose=verbose,
         force_reindex=force_reindex,
         recomp_enabled=recomp_enabled,
+        pipeline_flags=pipeline_flags,
         eval_corpus=eval_corpus,
         docs_dir=docs_dir,
         solo_archivos=solo_archivos,
+        add_missing_from_filter=add_missing_from_filter,
     )
     return evaluar_respuestas_con_ragas(
         generation=generation,
@@ -1621,6 +1646,15 @@ RAGBENCH_PDFS_DIR = os.path.join(_proj_root, "rag", "docs", "en")
 _RAGBENCH_OUTPUT_CSV = os.path.join(SCORES_DIR, "ragas_scores_ragbench_en.csv")
 _RAGBENCH_OUTPUT_DEBUG = os.path.join(DEBUG_DIR, "ragas_debug_ragbench_en.json")
 _RAGBENCH_PREPARED_DIR = os.path.join(DEBUG_DIR, "ragbench_prepared")
+RAGBENCH_LEGACY_DEV_PDFS_DIR = RAGBENCH_PDFS_DIR
+RAGBENCH_EVAL_PDFS_DIR = os.path.join(_proj_root, "rag", "docs", "en_ragbench_eval")
+RAGBENCH_DEV_DOC_IDS_PATH = os.path.join(EVAL_DIR, "datasets", "ragbench_en_dev_doc_ids.json")
+RAGBENCH_EVAL_MANIFEST_PATH = os.path.join(_RAGBENCH_PREPARED_DIR, "ragbench_en_eval_manifest.json")
+
+RAGBENCH_FINAL_PIPELINE_FLAGS = {
+    **BASELINE_PIPELINE_FLAGS,
+    "USAR_LLM_QUERY_DECOMPOSITION": False,
+}
 
 
 def descargar_metadatos() -> tuple[dict, dict, dict, dict]:
@@ -1656,13 +1690,17 @@ def seleccionar_papers(
     pdf_urls: dict,
     n_papers: int,
     source_filter: str | None,
+    excluded_doc_ids: list[str] | None = None,
 ) -> list[str]:
     """Select top-N papers by eligible question count."""
     from collections import Counter
+    excluded = set(excluded_doc_ids or [])
     paper_counts: Counter = Counter()
     for qid, qrel in qrels.items():
         doc_id = qrel.get("doc_id")
         if not doc_id or qid not in queries or doc_id not in pdf_urls:
+            continue
+        if doc_id in excluded:
             continue
         if source_filter and queries[qid].get("source") != source_filter:
             continue
@@ -1683,14 +1721,25 @@ def seleccionar_papers_objetivo(
     pdf_urls: dict,
     n_papers: int,
     source_filter: str | None,
+    excluded_doc_ids: list[str] | None = None,
 ) -> list[str]:
     """Resolve either only_doc or the top-N paper selection."""
     if not only_doc:
-        return seleccionar_papers(queries, qrels, pdf_urls, n_papers, source_filter)
+        return seleccionar_papers(
+            queries,
+            qrels,
+            pdf_urls,
+            n_papers,
+            source_filter,
+            excluded_doc_ids=excluded_doc_ids,
+        )
 
     doc_id = only_doc.strip()
     if doc_id not in pdf_urls:
         print(f"ERROR: doc_id '{doc_id}' no encontrado en pdf_urls del dataset.")
+        raise SystemExit(1)
+    if excluded_doc_ids and doc_id in set(excluded_doc_ids):
+        print(f"ERROR: doc_id '{doc_id}' pertenece al dev split congelado y está excluido.")
         raise SystemExit(1)
 
     n_eligible = sum(
@@ -1834,15 +1883,67 @@ def _safe_tag(value: str) -> str:
     return "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in value)
 
 
+def cargar_doc_ids_dev_ragbench(path: str = RAGBENCH_DEV_DOC_IDS_PATH) -> list[str]:
+    """Load the frozen RagBench EN dev-split doc_ids."""
+    if not os.path.isfile(path):
+        print(f"ERROR: no existe el listado de doc_ids dev: {path}")
+        raise SystemExit(1)
+
+    with open(path, encoding="utf-8") as f:
+        payload = json.load(f)
+
+    if not isinstance(payload, list) or not all(isinstance(x, str) and x.strip() for x in payload):
+        print(f"ERROR: el fichero de doc_ids dev no tiene el formato esperado: {path}")
+        raise SystemExit(1)
+
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for raw in payload:
+        doc_id = raw.strip()
+        if doc_id not in seen:
+            seen.add(doc_id)
+            ordered.append(doc_id)
+    return ordered
+
+
+def escribir_manifest_ragbench_eval(path: str, payload: dict[str, Any]) -> str:
+    """Persist the prepared RagBench EN evaluation manifest."""
+    _guardar_json(path, payload)
+    return path
+
+
+def cargar_manifest_ragbench_eval(path: str = RAGBENCH_EVAL_MANIFEST_PATH) -> dict[str, Any]:
+    """Load the RagBench EN evaluation manifest."""
+    if not os.path.isfile(path):
+        print(f"ERROR: no existe el manifiesto RagBench EN: {path}")
+        raise SystemExit(1)
+    with open(path, encoding="utf-8") as f:
+        manifest = json.load(f)
+    if not isinstance(manifest, dict):
+        print(f"ERROR: manifiesto RagBench EN inválido: {path}")
+        raise SystemExit(1)
+    return manifest
+
+
+def _selected_pdf_filenames_from_manifest(manifest: dict[str, Any]) -> list[str]:
+    """Return stable PDF filenames from a RagBench EN manifest."""
+    selected_papers = manifest.get("selected_papers") or []
+    indexed_files = manifest.get("indexed_files") or []
+    if indexed_files:
+        return [str(name) for name in indexed_files]
+    return [f"{paper_id}.pdf" for paper_id in selected_papers]
+
+
 def escribir_dataset_preparado(
     questions: list[str],
     ground_truths: list[str],
     paper_ids: list[str],
     safe_tag: str,
+    filename_prefix: str = "dataset_ragbench",
 ) -> str:
     """Write a temporary JSON dataset consumable by ejecutar_evaluacion."""
     os.makedirs(_RAGBENCH_PREPARED_DIR, exist_ok=True)
-    prepared_dataset = os.path.join(_RAGBENCH_PREPARED_DIR, f"dataset_ragbench_{safe_tag}.json")
+    prepared_dataset = os.path.join(_RAGBENCH_PREPARED_DIR, f"{filename_prefix}_{safe_tag}.json")
     with open(prepared_dataset, "w", encoding="utf-8") as f:
         json.dump(
             [
@@ -1854,6 +1955,154 @@ def escribir_dataset_preparado(
             indent=2,
         )
     return prepared_dataset
+
+
+def preparar_ragbench_eval_en(
+    source: str = "text",
+    n_papers: int = 25,
+    max_q: int = 5,
+    skip_download: bool = False,
+    docs_dir: str = RAGBENCH_EVAL_PDFS_DIR,
+    manifest_path: str = RAGBENCH_EVAL_MANIFEST_PATH,
+    excluded_doc_ids_path: str = RAGBENCH_DEV_DOC_IDS_PATH,
+) -> dict[str, Any]:
+    """Prepare the fixed English RagBench evaluation corpus and dataset."""
+    if source == "all":
+        print("ERROR: el flujo RagBench EN final requiere una fuente fija; usa source='text'.")
+        raise SystemExit(1)
+    if max_q < 1 or n_papers < 1:
+        print("ERROR: n_papers y max_q deben ser >= 1.")
+        raise SystemExit(1)
+
+    source_filter = source
+    excluded_doc_ids = cargar_doc_ids_dev_ragbench(excluded_doc_ids_path)
+
+    print(f"\nPreparando RagBench EN final: source={source_filter}, n_papers={n_papers}, max_q={max_q}")
+    print(f"Excluyendo dev split congelado: {len(excluded_doc_ids)} doc_ids")
+
+    queries, qrels, answers_gt, pdf_urls = descargar_metadatos()
+    selected_papers = seleccionar_papers_objetivo(
+        only_doc=None,
+        queries=queries,
+        qrels=qrels,
+        pdf_urls=pdf_urls,
+        n_papers=n_papers,
+        source_filter=source_filter,
+        excluded_doc_ids=excluded_doc_ids,
+    )
+
+    print("\nSeleccionando preguntas:")
+    questions, ground_truths, paper_ids = construir_preguntas(
+        queries,
+        qrels,
+        answers_gt,
+        selected_papers,
+        source_filter,
+        max_q,
+    )
+    if not questions:
+        print("ERROR: No se seleccionaron preguntas con los filtros actuales.")
+        raise SystemExit(1)
+
+    if skip_download:
+        print(f"\n--skip-download: usando PDFs existentes en {docs_dir}/")
+        successful_papers = obtener_pdfs_disponibles(selected_papers, docs_dir)
+    else:
+        successful_papers = descargar_pdfs(selected_papers, pdf_urls, docs_dir)
+
+    if len(successful_papers) < len(selected_papers):
+        missing = sorted(set(selected_papers) - set(successful_papers))
+        print(f"\nAVISO: {len(successful_papers)}/{len(selected_papers)} PDFs disponibles.")
+        print(f"   Faltantes: {missing}")
+
+    questions, ground_truths, paper_ids = filtrar_por_pdfs_disponibles(
+        questions,
+        ground_truths,
+        paper_ids,
+        successful_papers,
+    )
+    if not questions:
+        print("ERROR: No quedan preguntas tras filtrar por PDFs disponibles.")
+        print("   Ejecuta sin --skip-download para descargar los PDFs necesarios.")
+        raise SystemExit(1)
+
+    dataset_tag = f"{source_filter}_{len(successful_papers)}p_{max_q}q_eval"
+    safe_tag = _safe_tag(dataset_tag)
+    prepared_dataset = escribir_dataset_preparado(
+        questions,
+        ground_truths,
+        paper_ids,
+        safe_tag,
+        filename_prefix="dataset_ragbench_en_eval",
+    )
+    indexed_files = [f"{paper_id}.pdf" for paper_id in successful_papers]
+    manifest = {
+        "manifest_version": 1,
+        "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "source": source_filter,
+        "n_papers": len(successful_papers),
+        "max_q": max_q,
+        "docs_dir": os.path.abspath(docs_dir),
+        "dataset_path": os.path.abspath(prepared_dataset),
+        "selected_papers": successful_papers,
+        "indexed_files": indexed_files,
+        "excluded_doc_ids": excluded_doc_ids,
+        "excluded_doc_ids_path": os.path.abspath(excluded_doc_ids_path),
+    }
+    escribir_manifest_ragbench_eval(manifest_path, manifest)
+    print(f"\nDataset preparado en: {prepared_dataset}")
+    print(f"Manifiesto escrito en: {manifest_path}")
+    return manifest
+
+
+def ejecutar_ragbench_eval_en(
+    manifest_path: str = RAGBENCH_EVAL_MANIFEST_PATH,
+    verbose: bool = False,
+    save_debug: bool = True,
+    force_reindex: bool = False,
+    ragas_max_workers: int = 5,
+    ragas_batch_size: int | None = 15,
+) -> dict[str, Any]:
+    """Run the fixed English RagBench evaluation from a prepared manifest."""
+    manifest = cargar_manifest_ragbench_eval(manifest_path)
+    dataset_path = os.path.abspath(manifest["dataset_path"])
+    docs_dir = os.path.abspath(manifest["docs_dir"])
+    indexed_files = _selected_pdf_filenames_from_manifest(manifest)
+    if not indexed_files:
+        print("ERROR: el manifiesto RagBench EN no contiene indexed_files.")
+        raise SystemExit(1)
+
+    safe_tag = _safe_tag(Path(dataset_path).stem)
+    output_csv = os.path.join(SCORES_DIR, f"ragas_scores_ragbench_en_final_{safe_tag}.csv")
+    output_debug = os.path.join(DEBUG_DIR, f"ragas_debug_ragbench_en_final_{safe_tag}.json")
+    checkpoint_path = os.path.join(CHECKPOINTS_DIR, "ragbench", f"ragbench_en_final_{safe_tag}.json")
+
+    print("\nEjecutando RagBench EN final con configuración fija:")
+    print("   source=text, query_decomposition=off, resto de flags=on")
+    print(f"   dataset: {dataset_path}")
+    print(f"   docs_dir: {docs_dir}")
+    print(f"   indexed files: {len(indexed_files)}")
+    print(f"   RAGAS workers/batch: {ragas_max_workers}/{ragas_batch_size}")
+
+    return ejecutar_evaluacion(
+        dataset_path=dataset_path,
+        output_path=output_csv,
+        debug_path=None if not save_debug else output_debug,
+        checkpoint_path=checkpoint_path,
+        verbose=verbose,
+        save_debug=save_debug,
+        force_reindex=force_reindex,
+        pipeline_flags=RAGBENCH_FINAL_PIPELINE_FLAGS,
+        eval_corpus="ragbench",
+        docs_dir=docs_dir,
+        solo_archivos=indexed_files,
+        add_missing_from_filter=True,
+        ragas_timeout=600,
+        ragas_max_retries=15,
+        ragas_max_wait=120,
+        ragas_max_workers=ragas_max_workers,
+        ragas_batch_size=ragas_batch_size,
+    )
 
 
 def _ejecutar_ragbench(
@@ -2047,6 +2296,37 @@ def _run_compare_from_args(args: argparse.Namespace) -> None:
     print("Summary file: " + os.path.join(manifest["debug_dir"], "comparison_summary.json"))
 
 
+def _run_ragbench_prepare_from_args(args: argparse.Namespace) -> None:
+    manifest = preparar_ragbench_eval_en(
+        source=args.source,
+        n_papers=args.n_papers,
+        max_q=args.max_q,
+        skip_download=args.skip_download,
+        docs_dir=args.docs_dir or RAGBENCH_EVAL_PDFS_DIR,
+        manifest_path=args.manifest,
+        excluded_doc_ids_path=args.excluded_doc_ids,
+    )
+    print("\nRagBench EN preparation finished.")
+    print(f"Dataset:   {manifest['dataset_path']}")
+    print(f"Docs dir:  {manifest['docs_dir']}")
+    print(f"Manifest:  {args.manifest}")
+
+
+def _run_ragbench_eval_from_args(args: argparse.Namespace) -> None:
+    result = ejecutar_ragbench_eval_en(
+        manifest_path=args.manifest,
+        verbose=args.verbose,
+        save_debug=not args.no_debug,
+        force_reindex=args.force_reindex,
+        ragas_max_workers=args.ragas_max_workers,
+        ragas_batch_size=args.ragas_batch_size,
+    )
+    print("\nRagBench EN evaluation finished.")
+    print(f"CSV:   {result['output_path']}")
+    if result.get("debug_path"):
+        print(f"Debug: {result['debug_path']}")
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Unified RAG/RAGAS evaluation runner")
     subparsers = parser.add_subparsers(dest="command")
@@ -2092,6 +2372,25 @@ def _build_parser() -> argparse.ArgumentParser:
     ragbench.set_defaults(recomp_enabled=None)
     ragbench.add_argument("--prepare-only", action="store_true", help="Download PDFs and write dataset JSON; skip generation and RAGAS")
     ragbench.set_defaults(func=_run_ragbench_from_args)
+
+    ragbench_prepare = subparsers.add_parser("ragbench-prepare", help="Prepare the fixed English RagBench evaluation corpus")
+    ragbench_prepare.add_argument("--source", default="text", choices=["text"], help="Fixed RagBench source type")
+    ragbench_prepare.add_argument("--n-papers", type=int, default=25, help="Number of evaluation papers to keep")
+    ragbench_prepare.add_argument("--max-q", type=int, default=5, help="Maximum questions per paper")
+    ragbench_prepare.add_argument("--skip-download", action="store_true", help="Use existing PDFs under the evaluation docs dir")
+    ragbench_prepare.add_argument("--docs-dir", default=RAGBENCH_EVAL_PDFS_DIR, help="Target PDF folder for the final RagBench EN corpus")
+    ragbench_prepare.add_argument("--manifest", default=RAGBENCH_EVAL_MANIFEST_PATH, help="Output path for the RagBench EN manifest")
+    ragbench_prepare.add_argument("--excluded-doc-ids", default=RAGBENCH_DEV_DOC_IDS_PATH, help="JSON file with dev-split doc_ids to exclude")
+    ragbench_prepare.set_defaults(func=_run_ragbench_prepare_from_args)
+
+    ragbench_eval = subparsers.add_parser("ragbench-eval", help="Run the fixed English RagBench evaluation from its manifest")
+    ragbench_eval.add_argument("--manifest", default=RAGBENCH_EVAL_MANIFEST_PATH, help="Input path for the RagBench EN manifest")
+    ragbench_eval.add_argument("--force-reindex", action="store_true", help="Rebuild the evaluation Chroma collection from the manifest")
+    ragbench_eval.add_argument("--verbose", action="store_true", help="Show per-question generation progress")
+    ragbench_eval.add_argument("--no-debug", action="store_true", help="Skip debug JSON")
+    ragbench_eval.add_argument("--ragas-max-workers", type=int, default=5, help="Concurrent RAGAS workers")
+    ragbench_eval.add_argument("--ragas-batch-size", type=int, default=15, help="RAGAS batch size")
+    ragbench_eval.set_defaults(func=_run_ragbench_eval_from_args)
     return parser
 
 
@@ -2139,7 +2438,7 @@ def _run_ragbench_from_args(args: argparse.Namespace) -> None:
 
 def main() -> None:
     """Unified entry point with backward-compatible single-run defaults."""
-    legacy_commands = {"single", "compare", "list-variants", "ragbench"}
+    legacy_commands = {"single", "compare", "list-variants", "ragbench", "ragbench-prepare", "ragbench-eval"}
     help_args = {"-h", "--help"}
     if len(sys.argv) == 1 or (
         len(sys.argv) > 1 and sys.argv[1] not in legacy_commands and sys.argv[1] not in help_args

@@ -160,7 +160,7 @@ All pipeline behaviour is controlled via environment variables. Set them in your
 
 ### Terminal CLI
 
-Place your PDF files under **`rag/docs/es/`** by default (Spanish corpus). Catalan and English corpora use **`rag/docs/ca/`** and **`rag/docs/en/`** respectively; set `DOCS_FOLDER` or use the evaluation presets in `evaluation/run_eval.py` to point at the right folder. Each language folder is kept in Git with `.gitkeep` only; PDF content stays local. The ChromaDB directory **`rag/vector_db/`** is gitignored and created when you index.
+Place your PDF files under **`rag/docs/es/`** by default (Spanish corpus). Catalan and English corpora use **`rag/docs/ca/`** and **`rag/docs/en/`** respectively; RagBench runs use the dedicated folders **`rag/docs/en_ragbench_dev/`** (frozen 10-paper dev split) and **`rag/docs/en_ragbench_eval/`** (final EN eval corpus). PDF corpora stay local via `.gitkeep` or folder-local `.gitignore`, and the ChromaDB directory **`rag/vector_db/`** is gitignored and created when you index.
 
 ```bash
 cd rag
@@ -218,13 +218,21 @@ python evaluation/run_eval.py single --corpus mix
 For English, supply your own dataset path if you do not have `evaluation/datasets/dataset_eval_en.json`, or use the **RAGBench** flow:
 
 ```bash
-python evaluation/run_eval.py ragbench --n-papers 10 --max-q 5   # PDFs under rag/docs/en
+python evaluation/run_eval.py ragbench-prepare                   # builds the fixed EN eval corpus (25 docs / 5 q each)
+python evaluation/run_eval.py ragbench-eval                      # indexes + runs inference + RAGAS from the manifest
 ```
 
 RAGBench prepared datasets enable a documented evaluation-only reranker fallback:
 the reranker still orders candidates, but if every candidate falls below the
 interactive relevance threshold, the best retrieved candidates are kept so the
 answer generator can run. Other datasets keep the normal hard reranker filter.
+
+The final English RagBench flow keeps the original 10-paper dev split frozen in
+`rag/docs/en_ragbench_dev/` and `rag/vector_db/en_ragbench_dev_embeddinggemma/`,
+builds the new corpus in `rag/docs/en_ragbench_eval/`, excludes the frozen
+documents via `evaluation/datasets/ragbench_en_dev_doc_ids.json`, writes a
+manifest under `evaluation/debug/ragbench_prepared/`, and evaluates with a fixed
+pipeline configuration chosen from the ablation summaries.
 
 Ablation-style comparison (multiple pipeline variants, shared index; optional `--reindex` before the first variant):
 
@@ -253,8 +261,10 @@ localOllamaRAG/
 │   ├── docs/
 │   │   ├── es/                   # Spanish PDF corpus (default DOCS_FOLDER; .gitkeep only in Git)
 │   │   ├── ca/                   # Catalan PDF corpus
-│   │   └── en/                   # English corpus / RAGBench PDFs
-│   ├── vector_db/                # ChromaDB per language + embedding slug (gitignored at runtime)
+│   │   ├── en/                   # Generic English corpus
+│   │   ├── en_ragbench_dev/      # Frozen RagBench EN dev PDFs (local .gitignore)
+│   │   └── en_ragbench_eval/     # RagBench EN final eval PDFs (local .gitignore)
+│   ├── vector_db/                # ChromaDB per corpus + embedding slug (gitignored at runtime)
 │   ├── debug_rag/                # Optional per-query debug dumps (gitignored)
 │   ├── historial_chat.json       # CHAT mode history (gitignored)
 │   ├── cli/                      # Rich terminal UI (MonkeyGrabCLI)

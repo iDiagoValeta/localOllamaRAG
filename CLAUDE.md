@@ -349,7 +349,9 @@ python evaluation/run_eval.py single --corpus es
 python evaluation/run_eval.py single --corpus ca
 python evaluation/run_eval.py single --corpus en
 python evaluation/run_eval.py compare --corpus ca --label mi_eval  # ablación comparativa
-python evaluation/run_eval.py ragbench --n-papers 3 --max-q 5     # corpus RAGBench (rag/docs/en)
+python evaluation/run_eval.py ragbench --n-papers 3 --max-q 5     # flujo legacy / exploratorio
+python evaluation/run_eval.py ragbench-prepare                    # corpus EN final (25 docs / 5 q, excluye dev split)
+python evaluation/run_eval.py ragbench-eval                       # indexa + infiere + RAGAS desde el manifiesto
 
 # Tras compare: medias RAGAS por subconjunto del dataset (JSON/CSV; --etiquetas-es para informes en castellano)
 python evaluation/aggregate_comparison_by_conjunto.py --dir evaluation/debug/comparison_runs/<label> --etiquetas-es
@@ -640,3 +642,24 @@ Se versionan el **`Modelfile`**, **`README.md`**, **`LICENSE`** y **`CONVERSION.
 3. **Release de GitHub** solo si el artefacto es **pequeño** (p. ej. un adapter de unos MB), no para GGUF completos de decenas de GB.
 
 En el repo basta con **Modelfile + instrucciones** (o script existente tipo `build_ollama.bat`) y el **enlace** al binario en Hub u otra plataforma; así el código queda limpio y el modelo sigue siendo recuperable.
+
+### 11.7 Excepción RagBench EN: corpus locales congelados/preparados
+
+Para la evaluación final de RagBench EN hay dos carpetas locales adicionales bajo `rag/docs/`:
+
+- `rag/docs/en_ragbench_dev/`: split dev congelado de 10 PDFs
+- `rag/docs/en_ragbench_eval/`: corpus final EN ampliable para evaluación
+
+Y sus índices asociados bajo `rag/vector_db/`:
+
+- `en_ragbench_dev_embeddinggemma/`
+- `en_ragbench_eval_embeddinggemma/`
+
+Estas carpetas no usan `.gitkeep`. En su lugar llevan un `.gitignore` local autocontenido:
+
+```gitignore
+*
+!.gitignore
+```
+
+Esta es una excepción documentada a la preferencia general de centralizar reglas en la raíz. Se acepta porque reduce el riesgo de commitear PDFs locales cuando el corpus ya existe en disco y puede regenerarse o ampliarse.

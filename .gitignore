@@ -122,6 +122,12 @@ rag/docs/ca/**
 rag/docs/en/**
 !rag/docs/en/.gitkeep
 
+rag/docs/en_ragbench_dev/**
+!rag/docs/en_ragbench_dev/.gitignore
+
+rag/docs/en_ragbench_eval/**
+!rag/docs/en_ragbench_eval/.gitignore
+
 # Base de datos vectorial unificada (generada al indexar; nunca versionada).
 rag/vector_db/**
 
