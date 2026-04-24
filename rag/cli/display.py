@@ -140,6 +140,14 @@ def _safe_pages(pages: Iterable[Any]) -> str:
     return shown
 
 
+def _safe_tty_enabled() -> bool:
+    """Return whether the CLI should prefer plain, stable terminal output."""
+    env = os.getenv("MONKEYGRAB_SAFE_TTY")
+    if env is not None:
+        return _coerce_bool(env)
+    return os.name == "nt"
+
+
 # ─────────────────────────────────────────────
 # SECTION 4: DISPLAY CLASS
 # ─────────────────────────────────────────────
@@ -154,9 +162,27 @@ class Display:
             safe_box=True,
         )
         self._status: Optional[Status] = None
+        self.safe_tty = _safe_tty_enabled()
         self._debug_mode = os.getenv("MONKEYGRAB_DEBUG", "").lower() in (
             "1", "true", "yes", "on"
         )
+
+    def _print_lines(self, lines: Iterable[str]) -> None:
+        for line in lines:
+            self._plain(line)
+
+    def _plain(self, text: str = "") -> None:
+        print(text, flush=True)
+
+    def _plain_rule(self, title: str = "", char: str = "-") -> None:
+        width = 78
+        if not title:
+            self._plain(char * width)
+            return
+        label = f" {title} "
+        side = max(2, (width - len(label)) // 2)
+        rule = f"{char * side}{label}{char * max(2, width - len(label) - side)}"
+        self._plain(rule[:width])
 
     # ─────────────────────────────────────────────
     # STARTUP
@@ -164,6 +190,9 @@ class Display:
 
     def logo(self) -> None:
         """Display a compact brand mark."""
+        if self.safe_tty:
+            self._plain_rule("MonkeyGrab local PDF RAG", "=")
+            return
         title = Text()
         title.append("Monkey", style="brand")
         title.append("Grab", style="brand.dim")
@@ -174,6 +203,31 @@ class Display:
         """Display the compact startup dashboard."""
         mode = info.get("mode", "chat")
         mode_style = "mode.rag" if mode == "rag" else "mode.chat"
+        if self.safe_tty:
+            self._plain(f"Modo inicial: {mode}  |  usa /ayuda para comandos")
+            self._plain_rule()
+            self._plain(f"  PDFs: {info.get('total_documentos', 0)}")
+            self._plain(f"  Fragmentos: {info.get('total_fragmentos', 0)}")
+            self._plain(f"  Carpeta: {info.get('docs_folder', '-')}")
+            self._plain(f"  Coleccion: {info.get('collection_name', '-')}")
+            self._plain(f"  Extractor: {info.get('extractor', '-')}")
+            self._plain(f"  Busqueda: {info.get('busqueda', '-')}")
+            rr = "off"
+            if info.get("reranker") == "on":
+                rr = f"{info.get('reranker_model', '-')}, {info.get('reranker_device', '-')}"
+            self._plain(f"  Reranker: {rr}")
+            self._plain(
+                f"  Flags: hybrid={_coerce_bool(info.get('hybrid'))} "
+                f"exhaustive={_coerce_bool(info.get('exhaustive'))} "
+                f"rerank={info.get('reranker') == 'on'} "
+                f"contextual={_coerce_bool(info.get('contextual'))} "
+                f"recomp={_coerce_bool(info.get('recomp'))} "
+                f"images={_coerce_bool(info.get('images'))} "
+                f"expand={_coerce_bool(info.get('expand'))}"
+            )
+            self._plain_rule()
+            self._plain()
+            return
 
         corpus = Table.grid(padding=(0, 2))
         corpus.add_column(style="dim", no_wrap=True)
@@ -277,7 +331,21 @@ class Display:
 
     def welcome(self) -> None:
         """Display the complete command help."""
+        if self.safe_tty:
+            self._plain()
+            self._plain_rule("Modos")
+            self._plain("  CHAT  Conversacion libre con historial.")
+            self._plain("  RAG   Consulta los PDFs indexados y muestra fuentes.")
+            self._plain()
+            self._plain_rule("Comandos")
+            for cmd, desc in COMMANDS:
+                self._plain(f"  {cmd:<12} {desc}")
+            self._plain_rule()
+            self._plain()
+            return
+
         self.console.print()
+
         modes = Table.grid(padding=(0, 2))
         modes.add_column(no_wrap=True)
         modes.add_column(style="muted")
@@ -305,24 +373,44 @@ class Display:
     # ─────────────────────────────────────────────
 
     def success(self, msg: str) -> None:
+        if self.safe_tty:
+            self._plain(f"  OK {msg}")
+            return
         self.console.print(f"  [success]✓[/] [muted]{msg}[/]")
 
     def warning(self, msg: str) -> None:
+        if self.safe_tty:
+            self._plain(f"  ! {msg}")
+            return
         self.console.print(f"  [warning]![/] [muted]{msg}[/]")
 
     def error(self, msg: str) -> None:
+        if self.safe_tty:
+            self._plain(f"  x {msg}")
+            return
         self.console.print(f"  [error]✗[/] [muted]{msg}[/]")
 
     def info(self, msg: str) -> None:
+        if self.safe_tty:
+            self._plain(f"  - {msg}")
+            return
         self.console.print(f"  [info]·[/] [dim]{msg}[/]")
 
     def debug(self, msg: str) -> None:
         if self._debug_mode:
+            if self.safe_tty:
+                self._plain(f"  debug {msg}")
+                return
             self.console.print(f"  [dim]⊡ {msg}[/]")
 
     def exception(self, title: str, exc: Exception) -> None:
         """Show a concise recoverable exception message."""
         detail = str(exc).strip() or exc.__class__.__name__
+        if self.safe_tty:
+            self._plain(f"  Error: {title}")
+            self._plain(f"  {detail}")
+            self._plain("  Comprueba que Ollama este activo y que el modelo exista localmente.")
+            return
         panel = Panel(
             f"[muted]{detail}[/]\n\n[dim]Comprueba que Ollama esté activo y que el modelo exista localmente.[/]",
             title=f"[error]{title}[/]",
@@ -338,6 +426,9 @@ class Display:
 
     def pipeline_start(self, message: str = "Buscando en documentos...") -> Status:
         self.pipeline_stop()
+        if self.safe_tty:
+            self.info(message)
+            return None  # type: ignore[return-value]
         self._status = self.console.status(
             f"[info]{message}[/]",
             spinner="dots",
@@ -347,6 +438,9 @@ class Display:
         return self._status
 
     def pipeline_update(self, message: str) -> None:
+        if self.safe_tty:
+            self.info(message)
+            return
         if self._status:
             self._status.update(f"[info]{message}[/]")
 
@@ -366,6 +460,14 @@ class Display:
 
     def read_input(self, mode: str, model: str = "") -> str:
         """Read user input with a one-line Rich prompt."""
+        # Stop any active status renderer before switching back to raw input.
+        # Mixing a manual ``print(..., end="")`` prompt with ``input()`` has
+        # proven fragile on Windows terminals after wider Rich layouts such as
+        # help tables/panels. Let Rich own the prompt write and final flush.
+        self.pipeline_stop()
+        if self.safe_tty:
+            return input(self.prompt(mode, model))
+        self.console.file.flush()
         mode_style = "mode.rag" if mode == "rag" else "mode.chat"
         model_short = _short_model(model, max_len=max(18, min(34, self.console.width - 28)))
         prompt = Text()
@@ -384,18 +486,35 @@ class Display:
     def response_header(self, mode: str, model: str = "") -> None:
         model_short = _short_model(model, max_len=36)
         label = "RAG" if mode == "rag" else "Chat"
-        style = "mode.rag" if mode == "rag" else "mode.chat"
+        if self.safe_tty:
+            self._plain()
+            self._plain_rule(f"{label} {model_short}")
+            self._plain()
+            return
         self.console.print()
+        style = "mode.rag" if mode == "rag" else "mode.chat"
         self.console.rule(f"[{style}]{label}[/] [dim]{model_short}[/]", style=style)
 
     def stream_token(self, token: str) -> None:
-        sys.stdout.write(token)
-        sys.stdout.flush()
+        if self.safe_tty:
+            print(token, end="", flush=True)
+            return
+        self.console.print(token, end="")
+        self.console.file.flush()
+
+    def render_response(self, text: str) -> None:
+        if self.safe_tty:
+            body = (text or "(sin respuesta)").strip()
+            for line in body.splitlines() or ["(sin respuesta)"]:
+                self._plain(f"  {line}".rstrip())
+            self._plain()
+        else:
+            self.console.print()
+            self.console.print(Markdown(text), width=min(self.console.width - 4, 100))
+            self.console.print()
 
     def render_markdown(self, text: str) -> None:
-        self.console.print()
-        self.console.print(Markdown(text), width=min(self.console.width - 4, 100))
-        self.console.print()
+        self.render_response(text)
 
     def sources_panel(self, fragments: List[Dict[str, Any]]) -> None:
         if not fragments:
@@ -408,6 +527,12 @@ class Display:
             page = meta.get("page", None)
             sources_map.setdefault(doc, set()).add(page)
 
+        if self.safe_tty:
+            self._plain_rule("Fuentes")
+            for doc, pages in sorted(sources_map.items()):
+                self._plain(f"  {_short_model(doc, max_len=56, keep_tag=True)} (paginas: {_safe_pages(pages)})")
+            return
+
         table = Table(box=None, show_header=False, pad_edge=False)
         table.add_column("Documento", style="muted", overflow="fold")
         table.add_column("Páginas", style="dim", no_wrap=True)
@@ -417,6 +542,10 @@ class Display:
         self.console.print(Panel(table, title="[dim]Fuentes[/]", border_style="dim", box=box.ROUNDED))
 
     def response_footer(self) -> None:
+        if self.safe_tty:
+            self._plain_rule()
+            self._plain()
+            return
         self.console.rule(style="dim")
         self.console.print()
 
@@ -431,6 +560,18 @@ class Display:
         info: Optional[Dict[str, Any]] = None,
     ) -> None:
         info = info or {}
+        if self.safe_tty:
+            self._plain()
+            self._plain_rule("Estado")
+            self._plain(f"  PDFs: {info.get('total_documentos', len(docs))}")
+            self._plain(f"  Documentos indexados: {len(docs)}")
+            self._plain(f"  Fragmentos: {total_fragments}")
+            self._plain(f"  Carpeta: {info.get('docs_folder', '-')}")
+            self._plain(f"  Base vectorial: {info.get('path_db', '-')}")
+            self._plain(f"  Coleccion: {info.get('collection_name', '-')}")
+            self._plain_rule()
+            self._plain()
+            return
         table = Table(title="[info]Estado[/]", box=box.ROUNDED, border_style="dim")
         table.add_column("Métrica", style="dim", no_wrap=True)
         table.add_column("Valor", style="text", overflow="fold")
@@ -449,6 +590,21 @@ class Display:
     def docs_table(self, docs: List[Any]) -> None:
         if not docs:
             self.warning("No hay documentos indexados.")
+            return
+
+        if self.safe_tty:
+            self._plain()
+            self._plain_rule("Documentos")
+            for idx, item in enumerate(docs, 1):
+                if isinstance(item, dict):
+                    self._plain(
+                        f"  {idx}. {item.get('name', '-')} "
+                        f"(pags: {item.get('pages', '-')}, frag: {item.get('fragments', '-')}, tipos: {item.get('formats', '-')})"
+                    )
+                else:
+                    self._plain(f"  {idx}. {item}")
+            self._plain_rule()
+            self._plain()
             return
 
         table = Table(
@@ -486,6 +642,20 @@ class Display:
             self.warning("No hay documentos indexados.")
             return
 
+        if self.safe_tty:
+            self._plain()
+            self._plain_rule("Contenidos")
+            for doc_info in docs_data:
+                self._plain(
+                    f"  {doc_info.get('name', '-')} "
+                    f"(pags: {doc_info.get('pages', '-')}, frag: {doc_info.get('fragments', '-')})"
+                )
+                self._plain(f"    {doc_info.get('terms') or '-'}")
+            self._plain("  Escribe una pregunta concreta o usa /docs para revisar el corpus.")
+            self._plain_rule()
+            self._plain()
+            return
+
         table = Table(
             title="[info]Contenidos[/]",
             box=box.ROUNDED,
@@ -517,6 +687,14 @@ class Display:
     # ─────────────────────────────────────────────
 
     def mode_change(self, mode: str, model: str = "") -> None:
+        if self.safe_tty:
+            purpose = "consulta documental" if mode == "rag" else "conversacion libre"
+            self._plain_rule()
+            self._plain(f"  modo: {mode}")
+            self._plain(f"  uso: {purpose}")
+            self._plain(f"  modelo: {_short_model(model, 36)}")
+            self._plain_rule()
+            return
         style = "mode.rag" if mode == "rag" else "mode.chat"
         purpose = "consulta documental" if mode == "rag" else "conversación libre"
         self.console.print(
@@ -533,6 +711,11 @@ class Display:
         self.warning(f"Comando no reconocido: {cmd} [dim](usa /ayuda)[/]")
 
     def reindex_start(self) -> None:
+        if self.safe_tty:
+            self._plain()
+            self._plain_rule("Reindex")
+            self.warning("Reindexando documentos: se reconstruira la base vectorial.")
+            return
         self.console.print()
         self.warning("Reindexando documentos: se reconstruirá la base vectorial.")
 
@@ -541,11 +724,28 @@ class Display:
         self.warning("Reinicia el programa para usar la nueva base de datos")
 
     def farewell(self) -> None:
+        if self.safe_tty:
+            self._plain()
+            self._plain_rule()
+            self._plain("  Sesion finalizada.")
+            self._plain()
+            return
         self.console.print()
         self.console.print("  [dim]Sesión finalizada.[/]")
         self.console.print()
 
     def no_results(self) -> None:
+        if self.safe_tty:
+            self._plain_rule("Sin Resultados")
+            self._plain("  ! No se encontro informacion relevante en los documentos.")
+            self._print_lines([
+                "  - La informacion puede no estar indexada",
+                "  - La pregunta puede necesitar mas detalle",
+                "  - El tema puede estar fuera del corpus",
+                "  Prueba con /temas o reformula la consulta.",
+            ])
+            self._plain_rule()
+            return
         panel = Panel(
             "[muted]No se encontró información relevante en los documentos.[/]\n\n"
             "[dim]- La información puede no estar indexada\n"
@@ -559,10 +759,19 @@ class Display:
         self.console.print(panel)
 
     def out_of_scope(self, score: float, threshold: float) -> None:
+        if self.safe_tty:
+            self._plain_rule("Fuera de Ambito")
+            self.warning(f"Pregunta fuera de ambito (score {score:.4f} < {threshold})")
+            self._plain("     Usa /temas para explorar el corpus.")
+            self._plain_rule()
+            return
         self.warning(f"Pregunta fuera de ámbito (score {score:.4f} < {threshold})")
         self.console.print("     [dim]Usa /temas para explorar el corpus.[/]")
 
     def question_too_short(self) -> None:
+        if self.safe_tty:
+            self._plain("  Pregunta demasiado corta. Formula una pregunta concreta o usa /chat.")
+            return
         self.console.print(
             "  [dim]Pregunta demasiado corta. Formula una pregunta concreta o usa /chat.[/]"
         )

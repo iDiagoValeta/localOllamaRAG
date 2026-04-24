@@ -159,7 +159,7 @@ if hasattr(sys.stderr, "reconfigure"):
         pass
 
 
-MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "phi4-finetuned:latest")
+MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "gemma4:e4b")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e2b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b")
@@ -2104,16 +2104,23 @@ def _ollama_generate_stream(model: str, prompt: str, options: dict):
                 yield json.loads(line)
 
 
-def generar_respuesta(pregunta: str, fragmentos: List[Dict[str, Any]], metricas: Optional[Dict[str, Any]] = None) -> str:
-    """Generate a RAG response with streaming output to the terminal.
+def generar_respuesta(
+    pregunta: str,
+    fragmentos: List[Dict[str, Any]],
+    metricas: Optional[Dict[str, Any]] = None,
+    on_token=None,
+) -> str:
+    """Generate a RAG response and optionally stream tokens through a callback.
 
     Builds context from fragments, streams the response via Ollama,
-    and saves a debug dump.
+    optionally emits visible tokens through ``on_token``, and saves a
+    debug dump.
 
     Args:
         pregunta: User question.
         fragmentos: Retrieved context fragments.
         metricas: Pipeline metrics for debug logging.
+        on_token: Optional callable receiving each streamed token.
 
     Returns:
         Complete response text.
@@ -2134,10 +2141,8 @@ def generar_respuesta(pregunta: str, fragmentos: List[Dict[str, Any]], metricas:
         content = chunk.get("response", "")
         if content:
             respuesta_completa += content
-
-    print()
-    ui.stream_token(respuesta_completa)
-    print()
+            if on_token is not None:
+                on_token(content)
 
     guardar_debug_rag(pregunta, mensaje_usuario, respuesta_completa, fragmentos, metricas=metricas)
     return respuesta_completa

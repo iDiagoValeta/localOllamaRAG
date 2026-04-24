@@ -190,6 +190,9 @@ class MonkeyGrabCLI:
             ui.exception("Error de chat", e)
             return
 
+        if ui.safe_tty:
+            ui.render_response(respuesta)
+
         ui.response_footer()
 
         self.historial_chat.append({"role": "user", "content": pregunta})
@@ -224,14 +227,17 @@ class MonkeyGrabCLI:
         )
 
         respuesta = ""
-        print()
+        if not ui.safe_tty:
+            ui.console.print()
         for chunk in stream:
             content = (chunk.get("message", {}).get("content", "")
                        or chunk.get("content", ""))
             if content:
-                ui.stream_token(content)
                 respuesta += content
-        print()
+                if not ui.safe_tty:
+                    ui.stream_token(content)
+        if not ui.safe_tty:
+            ui.console.print()
 
         return respuesta
 
@@ -325,7 +331,12 @@ class MonkeyGrabCLI:
             ui.pipeline_stop()
 
             ui.response_header("rag", self.rag.MODELO_RAG)
-            self.rag.generar_respuesta(pregunta, fragmentos_finales, metricas=metricas)
+            respuesta = self.rag.generar_respuesta(
+                pregunta,
+                fragmentos_finales,
+                metricas=metricas,
+                on_token=None if ui.safe_tty else ui.stream_token,
+            )
         except Exception as e:
             ui.pipeline_stop()
             ui.exception("Error RAG", e)
@@ -342,6 +353,8 @@ class MonkeyGrabCLI:
         finally:
             ui.pipeline_stop()
 
+        if ui.safe_tty:
+            ui.render_response(respuesta)
         ui.sources_panel(fragmentos_finales)
         ui.response_footer()
 
