@@ -228,21 +228,6 @@ PIPELINE_RUNTIME_FLAGS = (
 )
 
 
-def set_recomp_synthesis_enabled(enabled: bool) -> bool:
-    """Override RECOMP synthesis usage for the current Python process.
-
-    Args:
-        enabled: Whether RECOMP synthesis should be enabled.
-
-    Returns:
-        Previous RECOMP flag value.
-    """
-    global USAR_RECOMP_SYNTHESIS
-    anterior = USAR_RECOMP_SYNTHESIS
-    USAR_RECOMP_SYNTHESIS = bool(enabled)
-    return anterior
-
-
 def set_ragbench_reranker_low_score_fallback(enabled: bool) -> bool:
     """Allow RagBench evals to generate from low-scored reranker candidates.
 
@@ -2104,6 +2089,31 @@ def _ollama_generate_stream(model: str, prompt: str, options: dict):
                 yield json.loads(line)
 
 
+def _preparar_mensaje_usuario_rag(pregunta: str, fragmentos: List[Dict[str, Any]]) -> str:
+    """Build the user message sent to the generator: question + <context>."""
+    if USAR_RECOMP_SYNTHESIS:
+        contexto_str = sintetizar_contexto_recomp(fragmentos, query_usuario=pregunta)
+    else:
+        contexto_str = construir_contexto_para_modelo(fragmentos)
+    return f"{pregunta}\n\n<context>{contexto_str}</context>"
+
+
+def _generar_respuesta_stream(mensaje_usuario: str, on_token=None) -> str:
+    """Stream the generator response, optionally forwarding tokens to a callback."""
+    respuesta_completa = ""
+    for chunk in _ollama_generate_stream(
+        model=MODELO_RAG,
+        prompt=mensaje_usuario,
+        options={"temperature": 0.15, "top_p": 0.9, "repeat_penalty": 1.15, "num_ctx": 16384},
+    ):
+        content = chunk.get("response", "")
+        if content:
+            respuesta_completa += content
+            if on_token is not None:
+                on_token(content)
+    return respuesta_completa
+
+
 def generar_respuesta(
     pregunta: str,
     fragmentos: List[Dict[str, Any]],
@@ -2125,25 +2135,8 @@ def generar_respuesta(
     Returns:
         Complete response text.
     """
-    if USAR_RECOMP_SYNTHESIS:
-        contexto_str = sintetizar_contexto_recomp(fragmentos, query_usuario=pregunta)
-    else:
-        contexto_str = construir_contexto_para_modelo(fragmentos)
-
-    mensaje_usuario = f"{pregunta}\n\n<context>{contexto_str}</context>"
-
-    respuesta_completa = ""
-    for chunk in _ollama_generate_stream(
-        model=MODELO_RAG,
-        prompt=mensaje_usuario,
-        options={"temperature": 0.15, "top_p": 0.9, "repeat_penalty": 1.15, "num_ctx": 16384},
-    ):
-        content = chunk.get("response", "")
-        if content:
-            respuesta_completa += content
-            if on_token is not None:
-                on_token(content)
-
+    mensaje_usuario = _preparar_mensaje_usuario_rag(pregunta, fragmentos)
+    respuesta_completa = _generar_respuesta_stream(mensaje_usuario, on_token=on_token)
     guardar_debug_rag(pregunta, mensaje_usuario, respuesta_completa, fragmentos, metricas=metricas)
     return respuesta_completa
 
@@ -2161,23 +2154,8 @@ def generar_respuesta_silenciosa(pregunta: str, fragmentos: List[Dict[str, Any]]
     Returns:
         Complete response text.
     """
-    if USAR_RECOMP_SYNTHESIS:
-        contexto_str = sintetizar_contexto_recomp(fragmentos, query_usuario=pregunta)
-    else:
-        contexto_str = construir_contexto_para_modelo(fragmentos)
-
-    mensaje_usuario = f"{pregunta}\n\n<context>{contexto_str}</context>"
-
-    respuesta_completa = ""
-    for chunk in _ollama_generate_stream(
-        model=MODELO_RAG,
-        prompt=mensaje_usuario,
-        options={"temperature": 0.15, "top_p": 0.9, "repeat_penalty": 1.15, "num_ctx": 16384},
-    ):
-        content = chunk.get("response", "")
-        if content:
-            respuesta_completa += content
-    return respuesta_completa
+    mensaje_usuario = _preparar_mensaje_usuario_rag(pregunta, fragmentos)
+    return _generar_respuesta_stream(mensaje_usuario)
 
 
 def evaluar_pregunta_rag(

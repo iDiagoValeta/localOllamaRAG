@@ -28,9 +28,10 @@ El proyecto tiene dos dimensiones:
 4. **No modificar `requirements.txt`** sin confirmar con el usuario: las versiones están fijadas intencionalmente (especialmente el stack de training).
 5. **No cambiar flags de pipeline** (`USAR_RECOMP_SYNTHESIS`, etc.) sin acordarlo con el usuario: tienen efecto directo en latencia y coste.
 6. **No tocar `llama.cpp/`**: es un submódulo externo.
-7. Al proponer cambios en `chat_pdfs.py`: `web/app.py` importa directamente constantes y funciones de ese módulo. Un renombrado rompe el backend web. **API pública completa usada por `web/app.py`**:
+7. Al proponer cambios en `chat_pdfs.py`: `web/app.py` importa el módulo como `rag_engine` y accede a constantes/funciones vía `rag_engine.*`; `evaluation/run_eval.py` y `scripts/tests/` también consumen símbolos directos. Un renombrado rompe el backend web, el runner de evaluación y los tests. **API pública completa usada por consumidores externos**:
    - Constantes: `PATH_DB`, `COLLECTION_NAME`, `CARPETA_DOCS`, `SYSTEM_PROMPT_CHAT`, `MAX_HISTORIAL_MENSAJES`, `MODELO_CHAT`, `MODELO_RAG`, `MIN_LONGITUD_PREGUNTA_RAG`, `UMBRAL_RELEVANCIA`, `UMBRAL_SCORE_RERANKER`, `TOP_K_FINAL`, `EXPANDIR_CONTEXTO`, `N_TOP_PARA_EXPANSION`, `MAX_CONTEXTO_CHARS`, `USAR_RERANKER`, `USAR_RECOMP_SYNTHESIS`, `RERANKER_AVAILABLE`, `STOPWORDS`
-   - Funciones: `indexar_documentos`, `realizar_busqueda_hibrida`, `expandir_con_chunks_adyacentes`, `sintetizar_contexto_recomp`, `construir_contexto_para_modelo`, `guardar_debug_rag`, `generar_respuesta_silenciosa`, `obtener_documentos_indexados`, `cargar_historial`, `guardar_historial`, `limpiar_historial`
+   - Funciones (CLI/web): `indexar_documentos`, `realizar_busqueda_hibrida`, `expandir_con_chunks_adyacentes`, `sintetizar_contexto_recomp`, `construir_contexto_para_modelo`, `guardar_debug_rag`, `generar_respuesta_silenciosa`, `obtener_documentos_indexados`, `cargar_historial`, `guardar_historial`, `limpiar_historial`
+   - Funciones (runner de evaluación y tests): `get_pipeline_flags`, `set_pipeline_flags`, `set_docs_folder_runtime`, `set_ragbench_reranker_low_score_fallback`, `evaluar_pregunta_rag`
 8. **Tras cualquier modificación, revisar si hay que actualizar `CLAUDE.md` o `README.md`**: cambios en estructura de archivos, flags de pipeline, modelos, scripts, rutas, estado del experimento o convenciones de código deben reflejarse en la documentación del proyecto para mantenerla sincronizada. **`README.md` es la puerta de entrada pública**: si el árbol de carpetas, rutas por defecto (`rag/docs/`, `rag/vector_db/`, evaluación con `evaluation/run_eval.py`, etc.) o comandos cambian en el código o en commits recientes, actualizar la sección *Repository structure* y las rutas citadas en el README en el mismo cambio (o justo después), para que no quede desfasado respecto a este archivo y al repo.
 9. **Cambios en `.gitignore` o `.gitkeep`**: seguir la **Sección 11** (patrones `training-output/`, carpetas con `.gitkeep`, GGUF fuera del repo). Tras editar reglas, validar con `git check-ignore -v <ruta>` y actualizar la Sección 11 si cambia la política.
 
@@ -83,14 +84,17 @@ localOllamaRAG/
 │   │   └── export_fragments.py   # Exporta chunks de ChromaDB a TXT/JSONL para debug
 │   ├── requirements.txt
 │   ├── debug_rag/                # Dumps de debug de queries (runtime, gitignored)
-│   ├── docs/                     # PDFs organizados por idioma (solo .gitkeep versionado por carpeta)
+│   ├── docs/                     # PDFs por corpus (gitignored en contenido; .gitkeep en es/ca/en, .gitignore local en los ragbench — ver §11.7)
 │   │   ├── es/                   # PDFs castellano (corpus por defecto)
 │   │   ├── ca/                   # PDFs catalán
-│   │   └── en/                   # PDFs inglés (RAGBench y corpus en)
-│   ├── vector_db/                # ChromaDB unificada por idioma (gitignored; creada al indexar)
+│   │   ├── en/                   # PDFs inglés genérico
+│   │   ├── en_ragbench_dev/      # Split dev congelado de RagBench EN
+│   │   └── en_ragbench_eval/     # Corpus final ampliable de RagBench EN
+│   ├── vector_db/                # ChromaDB por corpus (gitignored; creada al indexar; PATH_DB = `{basename(docs)}_{embed_slug}`)
 │   │   ├── es_embeddinggemma/    # Índice castellano
 │   │   ├── ca_embeddinggemma/    # Índice catalán
-│   │   └── en_embeddinggemma/    # Índice inglés/RAGBench
+│   │   ├── en_ragbench_dev_embeddinggemma/   # Índice dev RagBench EN
+│   │   └── en_ragbench_eval_embeddinggemma/  # Índice eval RagBench EN
 │   ├── historial_chat.json       # Historial modo CHAT (gitignored)
 │   └── cli/
 │       ├── app.py                # MonkeyGrabCLI: bucle interactivo y dispatch de comandos
@@ -125,17 +129,20 @@ localOllamaRAG/
 │   │   ├── quantize_to_q4km.ps1  # Cuantiza modelo merged a Q4_K_M con llama-bin
 │   │   └── GEMMA3_CONVERSION_ISSUE.md  # Problema tokenizer SentencePiece en Gemma-3 → GGUF (Ollama 0.21+)
 │   └── tests/
-│       ├── test_nothink.py       # Test supresión de <think> en Qwen3 vía Ollama
+│       ├── test_nothink.py                 # Test supresión de <think> en Qwen3 vía Ollama
 │       ├── test_ollama_stream_nothink.py
-│       ├── test_gemma4_aux_nothink.py  # Gemma 4 (ej. e4b): think en /api/generate y /api/chat
-│       ├── debug_aux_subqueries.py     # Salida cruda del auxiliar (sub-queries) en terminal
-│       └── test_image_rag.py     # Tests de pipeline con imágenes en RAG
+│       ├── test_gemma4_aux_nothink.py      # Gemma 4 (ej. e4b): think en /api/generate y /api/chat
+│       ├── debug_aux_subqueries.py         # Salida cruda del auxiliar (sub-queries) en terminal
+│       ├── test_image_rag.py               # Tests de pipeline con imágenes en RAG
+│       ├── test_cli_display_safe_tty.py    # Tests del singleton `ui` y sus modos seguros de TTY
+│       └── test_run_eval_checkpoint.py     # Tests de reanudación por checkpoint en evaluation/run_eval.py
 ├── evaluation/
-│   ├── datasets/                 # JSON de evaluación RAG (ES, CA, mix)
-│   ├── scores/                   # CSVs finales de evaluación
-│   ├── debug/                    # Debug JSON + checkpoints reanudables de evaluaciones
-│   ├── run_eval.py               # Runner unificado RAGAS: single/compare/ragbench (es, ca, en)
+│   ├── datasets/                 # JSON de evaluación RAG (ES, CA, mix) + `ragbench_en_dev_doc_ids.json`
+│   ├── scores/                   # CSVs finales de evaluación (incluye `comparison_runs/` tras `compare`)
+│   ├── debug/                    # Debug JSON + checkpoints reanudables (`checkpoints/`, `comparison_runs/`, `ragbench_prepared/`)
+│   ├── run_eval.py               # Runner RAGAS: subcomandos `single`, `compare`, `list-variants`, `ragbench`, `ragbench-prepare`, `ragbench-eval`
 │   ├── aggregate_comparison_by_conjunto.py  # Post-compare: medias por conjunto (subset) desde debug JSON + dataset
+│   ├── EVALUACIONES_PIPELINE.md  # Presets, variantes de ablación y notas de agregación
 │   └── requirements.txt          # ragas, langchain-google-genai, pandas…
 ├── training-output/
 │   ├── qwen-3/                   # Adaptador LoRA Qwen3 (artefactos pesados gitignored)
@@ -162,8 +169,10 @@ localOllamaRAG/
 ├── docs/
 │   ├── monkeygrab_architecture.png
 │   ├── monkeygrab_architecture.svg
-│   ├── investigacionMetricas.md
-│   └── splits.md                 # Análisis de splits de datasets
+│   ├── investigacionMetricas.md  # Notas de métricas para el TFG
+│   ├── splits.md                 # Análisis de splits de datasets
+│   ├── palabras.md               # Borrador de vocabulario/terminología del TFG
+│   └── tensor.pdf                # Material académico de apoyo (referencia)
 ├── llama-bin/                    # Binarios llama.cpp compilados para Windows (gitignored)
 ├── models/
 │   ├── merged-model/             # Modelo HF denso post-merge LoRA (gitignored; se puede borrar tras GGUF)
@@ -341,8 +350,10 @@ python training-output/gemma-3/generate_reports.py
 python scripts/evaluation/inspect_splits.py
 
 # Exportar chunks de ChromaDB (salida por defecto: rag/show_fragments/)
-python rag/show_fragments/export_fragments.py                    # ca, en y es
-python rag/show_fragments/export_fragments.py --language es      # solo una base
+python rag/show_fragments/export_fragments.py                    # ca, en, es + en_ragbench_dev/eval (omite los que no existan)
+python rag/show_fragments/export_fragments.py --language es      # solo una base de idioma
+python rag/show_fragments/export_fragments.py --ragbench dev     # solo el corpus RagBench EN dev
+python rag/show_fragments/export_fragments.py --ragbench eval    # solo el corpus RagBench EN eval
 
 # RAGAS sobre el pipeline en vivo (requiere GOOGLE_API_KEY)
 python evaluation/run_eval.py single --corpus es
@@ -606,7 +617,7 @@ Se usa cuando la aplicación **espera un directorio** pero su contenido **no** d
 - En `.gitignore`: `rag/<carpeta>/**` + `!rag/<carpeta>/.gitkeep` (el `**` ignora también subcarpetas; la negación solo recupera el fichero vacío).
 - En disco: un archivo **vacío** `rag/<carpeta>/.gitkeep` commiteado.
 
-**Carpetas con este patrón en el repo:** `rag/docs/es/`, `rag/docs/ca/`, `rag/docs/en/`, `evaluation/debug/`, `evaluation/scores/`. La carpeta `rag/vector_db/` está completamente ignorada (sin `.gitkeep`; se crea automáticamente al indexar).
+**Carpetas con este patrón en el repo:** `rag/docs/es/`, `rag/docs/ca/`, `rag/docs/en/`, `evaluation/debug/`, `evaluation/scores/`. La carpeta `rag/vector_db/` está completamente ignorada (sin `.gitkeep`; se crea automáticamente al indexar). `rag/docs/en_ragbench_dev/` y `rag/docs/en_ragbench_eval/` **no** siguen este patrón: usan el `.gitignore` local autocontenido descrito en §11.7.
 
 **Cuándo añadir otro `.gitkeep`:** solo si aparece una ruta nueva “obligatoria” en código (replicar el mismo par `/**` + `!.gitkeep` en la raíz `.gitignore` y documentar aquí).
 

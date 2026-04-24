@@ -1,0 +1,1002 @@
+[
+  {
+    "question": "How does the proposed new foundation aim to improve upon existing ones like ZFC?",
+    "ground_truth": "The proposed new foundation aims to improve upon existing ones like ZFC by introducing concepts such as the \"coherent limit axiom,\" which better aligns with mainstream deductive practices and addresses unresolved questions within set theory, such as the continuum hypothesis.",
+    "paper_id": "2407.02507v2"
+  },
+  {
+    "question": "Is working several levels above primitives beneficial in understanding set theory?",
+    "ground_truth": "Yes, working several levels above primitives can filter out misunderstandings or ambiguities about the primitives and provide a more accessible understanding.",
+    "paper_id": "2407.02507v2"
+  },
+  {
+    "question": "Why might traditional axiomatic set theories be inconsistent with mainstream mathematics?",
+    "ground_truth": "Traditional axiomatic set theories may be inconsistent with mainstream mathematics because they do not fully align with practical deductive methods used by mathematicians, potentially leading to discrepancies between theoretical frameworks and actual practice.",
+    "paper_id": "2407.02507v2"
+  },
+  {
+    "question": "Did infinitesimals become problematic over time?",
+    "ground_truth": "Yes, infinitesimals became problematic and had to be replaced by limits when limits became important.",
+    "paper_id": "2407.02507v2"
+  },
+  {
+    "question": "Are definitions considered arbitrary constructs in mathematics?",
+    "ground_truth": "No, major standard definitions are not arbitrary constructs; they are often the result of years of work to fix failures and consolidate partial successes and should be thought of as distilled hard-won wisdom.",
+    "paper_id": "2407.02507v2"
+  },
+  {
+    "question": "Are Bayesian persuasion and cheap talk equivalent under the learning agent model?",
+    "ground_truth": "Yes, Bayesian persuasion is equivalent to cheap talk under the learning agent model.",
+    "paper_id": "2402.09721v6"
+  },
+  {
+    "question": "What is the range of the principal's achievable utility in generalized principal-agent problems with a contextual no-swap-regret learning agent?",
+    "ground_truth": "The range is $\\left[U^{*}-O\\left(\\sqrt{\\frac{\\operatorname{CSReg}(T)}{T}}\\right), U^{*}+O\\left(\\frac{\\operatorname{CSReg}(T)}{T}\\right)\\right]$.",
+    "paper_id": "2402.09721v6"
+  },
+  {
+    "question": "Does the sender observe the state of the world before sending a signal?",
+    "ground_truth": "Yes, the sender observes the state of the world $\\omega^{t}$ before sending a signal.",
+    "paper_id": "2402.09721v6"
+  },
+  {
+    "question": "What type of algorithm does the agent use to decide on actions?",
+    "ground_truth": "The agent uses some adaptive algorithm to learn from history which action to take.",
+    "paper_id": "2402.09721v6"
+  },
+  {
+    "question": "Can the agent's strategy be randomized in this model?",
+    "ground_truth": "Yes, we allow the agent's strategy to be randomized.",
+    "paper_id": "2402.09721v6"
+  },
+  {
+    "question": "Does the inverse temperature remain invariant under a Galilean boost?",
+    "ground_truth": "Yes, the inverse temperature is an invariant of the thermal state under the Galilean boost.",
+    "paper_id": "2410.23209v2"
+  },
+  {
+    "question": "Does the GHD-Boltzmann equation include a collision integral term?",
+    "ground_truth": "Yes, the GHD-Boltzmann equation includes a Boltzmann collision integral $\\mathcal{I}\\left[\\rho_{\\mathrm{p}}\\right]$.",
+    "paper_id": "2410.23209v2"
+  },
+  {
+    "question": "Are there non-thermal stationary states possible for some collision integrals?",
+    "ground_truth": "Yes, some collision integrals might possess non-thermal stationary states.",
+    "paper_id": "2410.23209v2"
+  },
+  {
+    "question": "What distribution characterizes the heat-heat correlator?",
+    "ground_truth": "The heat-heat correlator is characterized by the Levy-$\\frac{5}{3}$ distribution.",
+    "paper_id": "2410.23209v2"
+  },
+  {
+    "question": "What is the significance of hydrodynamics in understanding many-body systems?",
+    "ground_truth": "Hydrodynamics provides a universal framework for describing the behavior of many-body systems out of equilibrium at large space-time scales. It simplifies complex microscopic interactions into effective hydrodynamic fields governed by continuity equations, making it applicable to both quantum and classical systems.",
+    "paper_id": "2410.23209v2"
+  },
+  {
+    "question": "How does incorporating demographic factors influence job transition predictions using LLMs?",
+    "ground_truth": "Incorporating demographic factors such as gender, ethnicity, and region enhances job transition predictions by providing additional context that influences career paths. These variables help refine the model's understanding of individual differences in occupational trajectories, leading to more accurate forecasts.",
+    "paper_id": "2406.17972v3"
+  },
+  {
+    "question": "What is tokenization in the context of large language models (LLMs)?",
+    "ground_truth": "Tokenization is a process where words are transformed into a sequence of tokens.",
+    "paper_id": "2406.17972v3"
+  },
+  {
+    "question": "Does fine-tuning smaller LLMs with additional career data surpass the performance of fine-tuning larger models?",
+    "ground_truth": "Yes, fine-tuning smaller LLMs with additional career data surpasses the performance of fine-tuning larger models.",
+    "paper_id": "2406.17972v3"
+  },
+  {
+    "question": "What does the empirical transition frequency model estimate?",
+    "ground_truth": "It estimates the probability of transitioning from one occupation to another based on training data frequencies.",
+    "paper_id": "2406.17972v3"
+  },
+  {
+    "question": "Does the PSID81 dataset include information on race/ethnicity?",
+    "ground_truth": "Yes.",
+    "paper_id": "2406.17972v3"
+  },
+  {
+    "question": "Is the indispensability argument related to a Nobel Prize?",
+    "ground_truth": "Yes, it is drawn from the 2021 Nobel Prize in Economics.",
+    "paper_id": "2405.11284v3"
+  },
+  {
+    "question": "Is CEM considered indispensable in the theory of causal inference?",
+    "ground_truth": "Yes.",
+    "paper_id": "2405.11284v3"
+  },
+  {
+    "question": "What is the significance of the Rubin causal model in causal inference?",
+    "ground_truth": "The Rubin causal model is significant in causal inference as it provides a framework for understanding and analyzing cause-and-effect relationships. It has been recognized for its applications in health and social sciences, contributing to advancements that were acknowledged by a Nobel Prize.",
+    "paper_id": "2405.11284v3"
+  },
+  {
+    "question": "What is the Conditional Excluded Middle (CEM)?",
+    "ground_truth": "It is the logical principle that either $B$ would be the case if $A$ were the case, or $B$ would not be the case if $A$ were the case.",
+    "paper_id": "2405.11284v3"
+  },
+  {
+    "question": "Has CEM been challenged in scientific communities for more than two decades?",
+    "ground_truth": "Yes, CEM has been challenged in scientific communities for more than two decades.",
+    "paper_id": "2405.11284v3"
+  },
+  {
+    "question": "Are multiple physical models considered in training machine learning for classifying acoustic cavitation?",
+    "ground_truth": "Yes, multiple physical models are considered.",
+    "paper_id": "2408.16142v4"
+  },
+  {
+    "question": "What statistical parameters are used to analyze time series of acoustic emissions?",
+    "ground_truth": "The statistical parameters used are kurtosis and crest factor.",
+    "paper_id": "2408.16142v4"
+  },
+  {
+    "question": "Were machine learning algorithms used to predict cavitation regimes?",
+    "ground_truth": "Yes.",
+    "paper_id": "2408.16142v4"
+  },
+  {
+    "question": "How is the irradiated pressure or acoustic emission measured in relation to a bubble?",
+    "ground_truth": "It is measured at the radial distance \\( r \\) from the center of the bubble.",
+    "paper_id": "2408.16142v4"
+  },
+  {
+    "question": "Does the Rayleigh-Plesset model account for high-amplitude oscillations?",
+    "ground_truth": "No, the assumptions of the Rayleigh-Plesset model fail in cases of high-amplitude oscillations.",
+    "paper_id": "2408.16142v4"
+  },
+  {
+    "question": "Is the derivative of anticipatory utility with respect to $\\tilde{\\alpha}$ positive if $f_1(s) - f_0(s) > 0$?",
+    "ground_truth": "Yes.",
+    "paper_id": "2410.20982v2"
+  },
+  {
+    "question": "Is the preference of voters dependent on the true state $\\omega$?",
+    "ground_truth": "No, it is independent of the true state $\\omega$.",
+    "paper_id": "2410.20982v2"
+  },
+  {
+    "question": "Does a voter's optimal distortion of belief change if $s = 0$?",
+    "ground_truth": "No, if $s = 0$, then generally $\\tilde{\\mu}^{*}=\\mu$, meaning there is no optimal distortion.",
+    "paper_id": "2410.20982v2"
+  },
+  {
+    "question": "Does introducing valence alter voters' choices at the ballot box for given beliefs?",
+    "ground_truth": "Yes, valence affects a voter's choice at the ballot box for a given belief $\\pi(s, \\mathbf{p}, \\tilde{\\mu})$.",
+    "paper_id": "2410.20982v2"
+  },
+  {
+    "question": "What happens when severe climate change is catastrophic with $\\Delta>1$?",
+    "ground_truth": "No voter ever votes for policy 1, whereas policy 0 always wins at the ballot.",
+    "paper_id": "2410.20982v2"
+  },
+  {
+    "question": "Are there any constants of motion for non-spinning particles in Kerr spacetime?",
+    "ground_truth": "Yes, there are four constants of motion for non-spinning particles in Kerr spacetime.",
+    "paper_id": "2406.10343v4"
+  },
+  {
+    "question": "Does the symplectic potential have any significance in general relativity's Lagrangian formulation?",
+    "ground_truth": "Yes, the symplectic potential arises as part of varying an action and plays a crucial role by appearing prominently without needing compensating boundary terms.",
+    "paper_id": "2406.10343v4"
+  },
+  {
+    "question": "Can constraint violation terms $C^{\\alpha}$ be avoided by changing spin supplementary conditions?",
+    "ground_truth": "Yes, using different spin supplementary conditions may prevent constraint violation terms from appearing.",
+    "paper_id": "2406.10343v4"
+  },
+  {
+    "question": "What role does the symplectic current play in defining global flux-balance laws?",
+    "ground_truth": "The symplectic current is conserved when vacuum equations are satisfied and allows local particle-based laws to be promoted to truly global flux-balance laws involving quantities at spacetime boundaries.",
+    "paper_id": "2406.10343v4"
+  },
+  {
+    "question": "Can flux-balance laws be applied in the absence of spin for spinning bodies under gravitational self-force?",
+    "ground_truth": "Yes, in the absence of spin, a flux-balance law has been proven for any conserved action variables appearing in a Hamiltonian formulation of geodesic motion in Kerr spacetime.",
+    "paper_id": "2406.10343v4"
+  },
+  {
+    "question": "Should medical named entities be retained in summaries?",
+    "ground_truth": "Yes, as many medical named entities as possible should be retained as long as the limit is not exceeded.",
+    "paper_id": "2406.15888v2"
+  },
+  {
+    "question": "Do summaries need to preserve questions from the original passage?",
+    "ground_truth": "Yes, questions should be preserved as question summaries.",
+    "paper_id": "2406.15888v2"
+  },
+  {
+    "question": "Does the process involve removing text generated by LLMs that could reveal patient identities?",
+    "ground_truth": "Yes.",
+    "paper_id": "2406.15888v2"
+  },
+  {
+    "question": "Does ROUGE measure lexical overlap between candidate and reference summaries?",
+    "ground_truth": "Yes.",
+    "paper_id": "2406.15888v2"
+  },
+  {
+    "question": "What does the design generate after every N utterances of speech?",
+    "ground_truth": "The design generates a local summary after every N utterances of speech.",
+    "paper_id": "2406.15888v2"
+  },
+  {
+    "question": "Does analyzing GTA problems require biomedical knowledge?",
+    "ground_truth": "Yes.",
+    "paper_id": "2406.15341v3"
+  },
+  {
+    "question": "Does the GenoTEX dataset include personally identifiable information?",
+    "ground_truth": "No, the GenoTEX dataset ensures the absence of personally identifiable information.",
+    "paper_id": "2406.15341v3"
+  },
+  {
+    "question": "Is the GenoTEX dataset publicly available?",
+    "ground_truth": "Yes.",
+    "paper_id": "2406.15341v3"
+  },
+  {
+    "question": "How does context-aware planning help agents in gene expression data analysis?",
+    "ground_truth": "Context-aware planning helps by maintaining a comprehensive task context that records text instruction, code, and execution output for each previous step to determine whether to perform the next step, skip it, or revert to a previous step if necessary.",
+    "paper_id": "2406.15341v3"
+  },
+  {
+    "question": "How can Python functions be used to validate gene expression data analysis?",
+    "ground_truth": "Python functions can be employed to verify the accuracy of trait extraction processes in gene expression data analysis. By executing specific functions, researchers can confirm the presence and number of samples with particular traits, ensuring consistency with metadata descriptions.",
+    "paper_id": "2406.15341v3"
+  },
+  {
+    "question": "How many minutes are considered in a day when transforming daily yield to per-minute rate?",
+    "ground_truth": "There are considered to be 1440 minutes in a day when transforming daily yield to per-minute rate.",
+    "paper_id": "2412.15448v2"
+  },
+  {
+    "question": "Are the directional movement indicators normalized by any value?",
+    "ground_truth": "Yes, the directional movement indicators \\(DI_t^+\\) and \\(DI_t^-\\) are normalized by the average true range (ATR).",
+    "paper_id": "2412.15448v2"
+  },
+  {
+    "question": "Is the per-minute risk-free rate derived from the daily US Treasury yield?",
+    "ground_truth": "Yes, the per-minute risk-free rate is derived from the daily US Treasury yield.",
+    "paper_id": "2412.15448v2"
+  },
+  {
+    "question": "What does the Exponential Moving Average (EMA) place more weight on?",
+    "ground_truth": "The EMA places more weight on recent prices.",
+    "paper_id": "2412.15448v2"
+  },
+  {
+    "question": "Does Chikou Span provide a leading or lagging indication of price action?",
+    "ground_truth": "Chikou Span provides a lagging indication of price action.",
+    "paper_id": "2412.15448v2"
+  },
+  {
+    "question": "How can quantum algorithms enhance medical imaging data processing?",
+    "ground_truth": "Quantum algorithms can enhance medical imaging data processing by providing more efficient volume rendering of medical imaging data.",
+    "paper_id": "2411.10511v4"
+  },
+  {
+    "question": "Is small data more suitable for current quantum computers compared to big data?",
+    "ground_truth": "Yes, small data is a more natural fit for existing and planned quantum computers due to challenges with loading classical big data into quantum systems.",
+    "paper_id": "2411.10511v4"
+  },
+  {
+    "question": "Is further investigation needed to assess the effectiveness of QRC techniques on medical images after classical pre-processing?",
+    "ground_truth": "Yes, further investigation is required to understand whether the loss of information during classical pre-processing would negate the potential advantages of using QRC and related quantum methods.",
+    "paper_id": "2411.10511v4"
+  },
+  {
+    "question": "Are hidden Markov models (HMMs) used for EHR time series analysis?",
+    "ground_truth": "Yes, hidden Markov models (HMMs) are applied to handle noisy and highly variable signals in EHR time series analysis.",
+    "paper_id": "2411.10511v4"
+  },
+  {
+    "question": "How does quantum reservoir computing differ from recurrent neural networks (RNNs)?",
+    "ground_truth": "Quantum reservoir computing differs from RNNs because the majority of the randomly initialized parameters of its reservoir are fixed from the start, reducing computational cost, although it typically requires more parameters to achieve comparable accuracy.",
+    "paper_id": "2411.10511v4"
+  },
+  {
+    "question": "What is the significance of quasi-thermostatic CRN in chemical reaction networks?",
+    "ground_truth": "Quasi-thermostatic CRN includes all equilibrium and complex balanced CRN under mass action kinetics.",
+    "paper_id": "2401.06987v2"
+  },
+  {
+    "question": "How does the concept of absolute sensitivity differ from traditional sensitivity analysis in CRNs?",
+    "ground_truth": "Absolute sensitivity is a basis-independent measure that quantifies how changes in one chemical's concentration affect another within a CRN. Unlike traditional sensitivity analysis, which depends on the choice of basis for the stoichiometric matrix, absolute sensitivities provide intrinsic values that remain consistent regardless of basis selection.",
+    "paper_id": "2401.06987v2"
+  },
+  {
+    "question": "Under what condition does a complex balanced CRN mimic an irreversible CRN with absolute concentration robustness?",
+    "ground_truth": "A complex balanced CRN mimics an irreversible CRN with absolute concentration robustness when it achieves very low sensitivities in $X_{4}$ for conditions such as $x_{1} \\approx x_{2} \\approx x_{3} \\approx x_{5} \\gg x_{4}$.",
+    "paper_id": "2401.06987v2"
+  },
+  {
+    "question": "Does the class of quasi-thermostatic CRN include equilibrium chemical reaction networks?",
+    "ground_truth": "Yes.",
+    "paper_id": "2401.06987v2"
+  },
+  {
+    "question": "Is the chemical reaction network sensitive in $X_{4}$ when $r$ is close to 0?",
+    "ground_truth": "Yes, the chemical reaction network can be very sensitive in $X_{4}$ when $r$ is close to 0.",
+    "paper_id": "2401.06987v2"
+  },
+  {
+    "question": "How does the individual craft a deceptive plan for a phishing attack?",
+    "ground_truth": "The individual creates a convincing pretext or scenario to manipulate the target, such as posing as an IT administrator requesting login credentials to resolve a \"security issue,\" and designs a fake but realistic-looking email or website that mimics the company's official communication channels.",
+    "paper_id": "2407.16205v5"
+  },
+  {
+    "question": "How might a manipulative instructor create continued dependence among students after training?",
+    "ground_truth": "A manipulative instructor might frame their training as incomplete and pressure students into enrolling in \"advanced\" follow-up courses or exaggerate the dangers of self-taught safety practices.",
+    "paper_id": "2407.16205v5"
+  },
+  {
+    "question": "Are participants allowed unsupervised access to firearms during the training session?",
+    "ground_truth": "No, participants are only provided firearms during supervised activities, and all firearms are securely stored when not in use.",
+    "paper_id": "2407.16205v5"
+  },
+  {
+    "question": "What might be done with stolen data after gaining access through phishing?",
+    "ground_truth": "The stolen data could be sold on the dark web to other criminals or interested parties, or used for blackmail or extortion.",
+    "paper_id": "2407.16205v5"
+  },
+  {
+    "question": "Is the ABJ method effective in multi-turn dialogues?",
+    "ground_truth": "The performance of the ABJ method in multi-turn dialogues remains to be investigated.",
+    "paper_id": "2407.16205v5"
+  },
+  {
+    "question": "What happens to the variance of the on-chain transaction score as n approaches infinity?",
+    "ground_truth": "The variance of the on-chain transaction score approaches zero as \\( n \\rightarrow \\infty \\).",
+    "paper_id": "2412.00710v2"
+  },
+  {
+    "question": "Is $\\hat{s}_{c_{i}}$ a consistent estimator of $1-s_{c_{i}}$?",
+    "ground_truth": "Yes.",
+    "paper_id": "2412.00710v2"
+  },
+  {
+    "question": "What is the formula for the new credit risk subscore in decentralized finance?",
+    "ground_truth": "The new credit risk subscore is given by \\(\\hat{s}_{n c_{i}}=\\frac{\\sum_{j=1}^{n} Y_{i, j}}{n}\\).",
+    "paper_id": "2412.00710v2"
+  },
+  {
+    "question": "Is $x_{\\min}$ a minimum transaction amount in the Pareto model for transactions?",
+    "ground_truth": "Yes, $x_{\\min}$ is the minimum transaction amount such that $T_{i, l} \\geq x_{\\min}$.",
+    "paper_id": "2412.00710v2"
+  },
+  {
+    "question": "Does the on-chain transaction score evaluate transactional behavior based on recent transactions?",
+    "ground_truth": "Yes.",
+    "paper_id": "2412.00710v2"
+  },
+  {
+    "question": "Can superparamagnetism result in two-level switching with nanosecond dwell times?",
+    "ground_truth": "Yes.",
+    "paper_id": "2412.12783v2"
+  },
+  {
+    "question": "What is a novel approach to implementing neural networks in physical systems?",
+    "ground_truth": "A novel approach involves using noise-based learning methods for physical systems that implement multi-layer neural networks. This method leverages the inherent noise in physical devices to achieve effective learning, similar to biological systems.",
+    "paper_id": "2412.12783v2"
+  },
+  {
+    "question": "What are the benefits of using noise in neuromorphic hardware for learning?",
+    "ground_truth": "Utilizing noise in neuromorphic hardware can lead to more energy-efficient and adaptive intelligent systems. Noise is inherent in physical devices, especially at small scales, and embracing it as a principle for learning can enhance the robustness and scalability of these systems.",
+    "paper_id": "2412.12783v2"
+  },
+  {
+    "question": "How does the performance of noise-based local learning compare with traditional algorithms like backpropagation?",
+    "ground_truth": "The performance of noise-based local learning approaches that of conventional backpropagation algorithms, which are effective but energy-costly. This suggests that embracing device-inherent noise can lead to efficient and less energy-intensive alternatives.",
+    "paper_id": "2412.12783v2"
+  },
+  {
+    "question": "Are the dwell times of an sMTJ distributed according to a Poisson distribution?",
+    "ground_truth": "Yes.",
+    "paper_id": "2412.12783v2"
+  },
+  {
+    "question": "What is neural posterior estimation (NPE)?",
+    "ground_truth": "Neural posterior estimation (NPE) is a method for generating draws from the posterior distribution of a Bayesian model by transforming a random input vector into draws from the target posterior distribution using specialized neural architectures.",
+    "paper_id": "2408.13230v2"
+  },
+  {
+    "question": "Can masked autoregressive flows be used for neural density estimation?",
+    "ground_truth": "Yes, masked autoregressive flows can be used for neural density estimation and are fully compatible with the proposed methods.",
+    "paper_id": "2408.13230v2"
+  },
+  {
+    "question": "What is the purpose of hierarchical summary networks in multilevel neural posterior estimation?",
+    "ground_truth": "Hierarchical summary networks provide both local information (characteristics of observations within groups) and global information (characteristics across groups).",
+    "paper_id": "2408.13230v2"
+  },
+  {
+    "question": "What is one challenge with posterior inference in Bayesian MLMs when new data becomes available?",
+    "ground_truth": "The need to rerun computationally expensive sampling algorithms when new data becomes available.",
+    "paper_id": "2408.13230v2"
+  },
+  {
+    "question": "What is the role of a normalizing flow in NPE?",
+    "ground_truth": "A normalizing flow is an invertible transformation between the target (posterior) distribution and a tractable base distribution, such as a unit Gaussian.",
+    "paper_id": "2408.13230v2"
+  },
+  {
+    "question": "Can the Stubborn Nakamoto protocol regain liveness after an attack?",
+    "ground_truth": "Yes, the Stubborn Nakamoto protocol can regain liveness after an attack if it regains an honest majority and uses a recovery oracle.",
+    "paper_id": "2409.08951v2"
+  },
+  {
+    "question": "Can a PoS protocol regain liveness once an honest majority is restored?",
+    "ground_truth": "Yes, a PoS protocol can regain liveness once an honest majority is restored.",
+    "paper_id": "2409.08951v2"
+  },
+  {
+    "question": "Can small miners contribute to a tragedy of the commons scenario in Bitcoin's protocol?",
+    "ground_truth": "Yes, if miners are small, the tragedy of the commons can arise.",
+    "paper_id": "2409.08951v2"
+  },
+  {
+    "question": "Is consistency one of the properties required for correctness in consensus protocols?",
+    "ground_truth": "Yes.",
+    "paper_id": "2409.08951v2"
+  },
+  {
+    "question": "Is it possible for late-joining nodes to join after all previous nodes have crashed?",
+    "ground_truth": "Yes, it must be possible for late-joining nodes to join at some time $\\tau>t$ despite all previous nodes crashing.",
+    "paper_id": "2409.08951v2"
+  },
+  {
+    "question": "What type of random variables are used in the construction of the generalized beta density?",
+    "ground_truth": "Gamma random variables.",
+    "paper_id": "2412.11692v4"
+  },
+  {
+    "question": "What is the main difference between the likelihood contribution on a data-dependent tree and a fixed tree?",
+    "ground_truth": "The main difference is the extra component $f(x \\mid A)$ in $m(A)$ for a data-dependent tree.",
+    "paper_id": "2412.11692v4"
+  },
+  {
+    "question": "Can CD45RO and CD27 markers identify subsets of T cells?",
+    "ground_truth": "Yes.",
+    "paper_id": "2412.11692v4"
+  },
+  {
+    "question": "What is the purpose of specifying priors on splitting probabilities in tree-based Bayesian models?",
+    "ground_truth": "The purpose is to construct tree-based Bayesian models for $F$ and $f$, which can apply readily to the case with data-dependent tree splits with the partial likelihood.",
+    "paper_id": "2412.11692v4"
+  },
+  {
+    "question": "What role do beta concentration parameters play in tree-based density modeling?",
+    "ground_truth": "Beta concentration parameters play a critical role in regularizing the smoothness of $f$ relative to the base density $h$.",
+    "paper_id": "2412.11692v4"
+  },
+  {
+    "question": "How are irrelevant words handled when generating keyword conditions with GPT-4?",
+    "ground_truth": "Irrelevant words are addressed by meticulously crafting prompt templates for condition extraction.",
+    "paper_id": "2410.23841v2"
+  },
+  {
+    "question": "Does reversing instruction semantics help determine model understanding?",
+    "ground_truth": "Yes, it helps validate whether improvements in ranking are due to understanding or just keyword matching.",
+    "paper_id": "2410.23841v2"
+  },
+  {
+    "question": "Is it difficult to determine if ranking improvement is due to instruction comprehension or keyword matching?",
+    "ground_truth": "Yes.",
+    "paper_id": "2410.23841v2"
+  },
+  {
+    "question": "What is InfoSearch used for?",
+    "ground_truth": "InfoSearch is used to evaluate the search models' ability to follow instructions.",
+    "paper_id": "2410.23841v2"
+  },
+  {
+    "question": "Is it acceptable for conditions to be generic or arbitrary restrictions?",
+    "ground_truth": "No, conditions must not be generic or arbitrary restrictions; they must be logically derived from the document's content.",
+    "paper_id": "2410.23841v2"
+  },
+  {
+    "question": "How many numbers are used to describe the empirical distribution in a boxplot summary?",
+    "ground_truth": "Five numbers are used to describe the empirical distribution in a boxplot summary.",
+    "paper_id": "2405.20415v3"
+  },
+  {
+    "question": "How can skewness be identified using a boxplot?",
+    "ground_truth": "Skewness can be identified if the median line is placed away from the center of the box or if there are asymmetric whiskers.",
+    "paper_id": "2405.20415v3"
+  },
+  {
+    "question": "What is differential privacy and why is it important in data visualization?",
+    "ground_truth": "Differential privacy is a framework designed to protect individual data privacy while allowing for meaningful data analysis. It ensures that the output of an analysis does not significantly change when any single individual's data is added or removed, thus safeguarding personal information. In the context of data visualization, differential privacy is crucial because visualizations are often used in exploratory analysis to understand and communicate patterns in the data without compromising individual privacy.",
+    "paper_id": "2405.20415v3"
+  },
+  {
+    "question": "Are points outside of whiskers considered outliers in a boxplot?",
+    "ground_truth": "Yes, points falling outside of the whiskers are considered outliers or indicate heavy tails.",
+    "paper_id": "2405.20415v3"
+  },
+  {
+    "question": "Does the unbounded algorithm perform well for estimating inner quantiles of Gaussian data?",
+    "ground_truth": "No, the unbounded algorithm does not perform as well as JointExp, ApproxQuantile or PrivateQuantile for estimating inner quantiles of Gaussian data.",
+    "paper_id": "2405.20415v3"
+  },
+  {
+    "question": "Is the function $\\phi$ Hadamard directionally differentiable for all $\\theta \\in \\mathbb{R}^{K}$?",
+    "ground_truth": "Yes.",
+    "paper_id": "2404.14603v2"
+  },
+  {
+    "question": "What is required for a causal representation to exist for a given $\\tau_{0}$?",
+    "ground_truth": "A causal representation exists if and only if $\\mathcal{W}\\left(a ; W_{0},\\left\\{\\tau_{0}\\right\\}\\right) \\neq \\emptyset$.",
+    "paper_id": "2404.14603v2"
+  },
+  {
+    "question": "Can a weighted estimand always correspond to the target estimand a researcher is interested in?",
+    "ground_truth": "No, a weighted estimand may not always correspond to the target estimand a researcher is interested in.",
+    "paper_id": "2404.14603v2"
+  },
+  {
+    "question": "Is it possible for an estimand to have no causal representation over any regular subpopulation of $W_0$?",
+    "ground_truth": "Yes, if the set $\\mathcal{W}\\left(a ; W_{0}, \\mathcal{T}\\right)$ is empty, then an estimand cannot have a causal representation over any regular subpopulation of $W_0$.",
+    "paper_id": "2404.14603v2"
+  },
+  {
+    "question": "What is the goal in maximizing $\\mathbb{P}\\left(W^{*}=1 \\mid W^{\\prime}=1\\right)$?",
+    "ground_truth": "The goal is to maximize $\\mathbb{P}\\left(W^{*}=1 \\mid W^{\\prime}=1\\right)$ subject to $W^{*} \\in \\mathcal{W}\\left(a ; W^{\\prime},\\left\\{\\tau_{0}\\right\\}\\right)$.",
+    "paper_id": "2404.14603v2"
+  },
+  {
+    "question": "What is the significance of Uniswap in the decentralized finance ecosystem?",
+    "ground_truth": "Uniswap is a leading decentralized exchange that allows users to swap tokens directly from their wallets using liquidity pools, eliminating the need for traditional intermediaries. It has significantly contributed to the growth of decentralized finance by introducing automated market maker technology and features like concentrated liquidity, which enhance capital efficiency and potential returns.",
+    "paper_id": "2411.12375v3"
+  },
+  {
+    "question": "How does the American framework differ from the European construct in Uniswap V3?",
+    "ground_truth": "The American framework allows termination of the automated market-making process at any chosen point in time.",
+    "paper_id": "2411.12375v3"
+  },
+  {
+    "question": "What is delta hedging used for in Uniswap V3 trading?",
+    "ground_truth": "Delta hedging is used to manage delta-neutral risk.",
+    "paper_id": "2411.12375v3"
+  },
+  {
+    "question": "How is the normalized log-unit price process of ETHUSDT expressed?",
+    "ground_truth": "The normalized log-unit price process of ETHUSDT is given by $\\bar{W}(t)=x+\\mu^{\\prime} t+B_{t}$, where $x$ is the start point.",
+    "paper_id": "2411.12375v3"
+  },
+  {
+    "question": "What does the European LP option pricing model reveal about delta risk within the range $(L, H)$?",
+    "ground_truth": "It reveals that delta risk within $(L, H)$ differs from payoff-based delta.",
+    "paper_id": "2411.12375v3"
+  },
+  {
+    "question": "Does surreal integration satisfy linearity against an infinite factor?",
+    "ground_truth": "No, surreal integration does not generally satisfy linearity against an infinite factor.",
+    "paper_id": "2411.00296v4"
+  },
+  {
+    "question": "Is there a closed-form expression for numerosities of sequences with accumulation points?",
+    "ground_truth": "No, a formula for sequences with accumulation points is still to be found.",
+    "paper_id": "2411.00296v4"
+  },
+  {
+    "question": "Is numerosity invariant under translation for bounded sets?",
+    "ground_truth": "Yes, for a bounded set, numerosity is invariant under translations.",
+    "paper_id": "2411.00296v4"
+  },
+  {
+    "question": "What happens when you integrate an analytic function \\(f\\) of \\(\\omega\\) over all reals where \\(x=0\\)?",
+    "ground_truth": "The integral equals \\(f^{\\prime}(a)+\\frac{1}{\\pi} \\int_{a}^{\\infty} f^{\\prime \\prime}(x) d x^{\\prime}\\), for arbitrary real \\(a\\).",
+    "paper_id": "2411.00296v4"
+  },
+  {
+    "question": "What property does $\\tilde{\\delta}(a x)$ satisfy that is similar to the unit impulse function?",
+    "ground_truth": "The property $\\tilde{\\delta}(a x)=\\tilde{\\delta}(x)$, which coincides with a similar property of the unit impulse function.",
+    "paper_id": "2411.00296v4"
+  },
+  {
+    "question": "Does block affine-identifiability imply block-identifiability?",
+    "ground_truth": "Yes, block affine-identifiability implies block-identifiability with an affine bijection $h$.",
+    "paper_id": "2409.02772v2"
+  },
+  {
+    "question": "What is a \"nintervention\" in causal representation learning?",
+    "ground_truth": "A \"nintervention\" is the process of changing a causal conditional's distribution by cutting all incoming and outgoing edges, while child nodes condition on the old, pre-intervention random variable.",
+    "paper_id": "2409.02772v2"
+  },
+  {
+    "question": "Are several models in multiple settings found to be aligned despite not being optimized directly?",
+    "ground_truth": "Yes.",
+    "paper_id": "2409.02772v2"
+  },
+  {
+    "question": "What does interventional CRL consider in terms of data generation?",
+    "ground_truth": "Interventional CRL considers data generated from multiple environments with different data distributions.",
+    "paper_id": "2409.02772v2"
+  },
+  {
+    "question": "What does the invariance principle involve in the context of multiview settings?",
+    "ground_truth": "The invariance principle involves defining a joint overlapping index set where the value of the sharing partition remains invariant for all observables on a sample level.",
+    "paper_id": "2409.02772v2"
+  },
+  {
+    "question": "Why is non-Gaussianity important for identifying shocks in nonlinear SVAR models?",
+    "ground_truth": "Identification by non-Gaussianity allows for recognizing economic shocks without imposing additional restrictions. It enables capturing complex dynamics and variations across different regimes within nonlinear SVAR frameworks, facilitating more accurate structural analysis.",
+    "paper_id": "2404.19707v4"
+  },
+  {
+    "question": "What is the purpose of the penalization term in the penalized sum of squares function?",
+    "ground_truth": "The penalization term increases as parameter values approach the boundary of, or move further into, an uninteresting region of the parameter space to avoid estimates that do not satisfy stability conditions.",
+    "paper_id": "2404.19707v4"
+  },
+  {
+    "question": "Does the identification method impose restrictions on the impact responses of variables?",
+    "ground_truth": "No, the identification method does not impose restrictions on the impact responses of variables.",
+    "paper_id": "2404.19707v4"
+  },
+  {
+    "question": "Does the structural STVAR model allow for capturing nonlinearities in the effects of CPU shocks?",
+    "ground_truth": "Yes.",
+    "paper_id": "2404.19707v4"
+  },
+  {
+    "question": "What is the autoregressive order in STVAR models?",
+    "ground_truth": "The autoregressive order in STVAR models is denoted by \\( p \\).",
+    "paper_id": "2404.19707v4"
+  },
+  {
+    "question": "Is there a statistically significant difference in labor productivity spillovers between Low and High peers?",
+    "ground_truth": "No, there is no statistically significant difference between the strength of spillovers of Low and High peers for labor productivity.",
+    "paper_id": "2405.13422v2"
+  },
+  {
+    "question": "How do sectoral and spatial spillovers affect inter-firm learning about imports?",
+    "ground_truth": "While sectoral and spatial spillovers exist, the study finds robust evidence of network effects even after accounting for these factors, indicating that direct connections within production networks are crucial for learning about new import opportunities.",
+    "paper_id": "2405.13422v2"
+  },
+  {
+    "question": "Does a firm's position within the domestic production network influence its importing decisions?",
+    "ground_truth": "Yes.",
+    "paper_id": "2405.13422v2"
+  },
+  {
+    "question": "What role does firm heterogeneity play in international sourcing decisions?",
+    "ground_truth": "Firm heterogeneity is crucial in international sourcing decisions because it affects how firms perceive entry costs and opportunities in different markets. Differences at the firm-import origin level, such as a firm's position within the domestic production network, influence their ability to gather information about importing opportunities and make informed sourcing choices.",
+    "paper_id": "2405.13422v2"
+  },
+  {
+    "question": "Do larger and more productive firms utilize import knowledge from peers more effectively?",
+    "ground_truth": "Yes.",
+    "paper_id": "2405.13422v2"
+  },
+  {
+    "question": "What are the limitations of using large language models for path planning?",
+    "ground_truth": "Large language models provide global insights through contextual understanding but lack detailed spatial and temporal reasoning, which can result in invalid or inefficient routes during path planning.",
+    "paper_id": "2407.02511v2"
+  },
+  {
+    "question": "Does a geometric mean greater than 1 indicate better performance than the baseline?",
+    "ground_truth": "Yes.",
+    "paper_id": "2407.02511v2"
+  },
+  {
+    "question": "How do traditional path planning algorithms like A* handle large state spaces?",
+    "ground_truth": "Traditional path planning algorithms like A* ensure valid paths but struggle with computational and memory inefficiencies as the state space increases, making them less effective in large-scale scenarios.",
+    "paper_id": "2407.02511v2"
+  },
+  {
+    "question": "Is there a pattern that guides path generation in the model's demonstrations?",
+    "ground_truth": "Yes, there is a pattern observed in the examples that guides path generation.",
+    "paper_id": "2407.02511v2"
+  },
+  {
+    "question": "How does chain of thought prompting assist models in path planning?",
+    "ground_truth": "It helps models understand the rationale behind path generation by providing detailed reasoning steps and evaluations.",
+    "paper_id": "2407.02511v2"
+  },
+  {
+    "question": "Is the source code for struc2mapGAN available online?",
+    "ground_truth": "Yes.",
+    "paper_id": "2407.17674v2"
+  },
+  {
+    "question": "What are the two main models in a GAN architecture?",
+    "ground_truth": "The two main models in a GAN architecture are a generator $G$ and a discriminator $D$.",
+    "paper_id": "2407.17674v2"
+  },
+  {
+    "question": "Is the relationship between map generation time and the number of residues linear?",
+    "ground_truth": "Yes.",
+    "paper_id": "2407.17674v2"
+  },
+  {
+    "question": "In what domains has the GAN architecture demonstrated superior performance?",
+    "ground_truth": "The GAN architecture has demonstrated superior performance in image generation, super-resolution, and 3D object generation.",
+    "paper_id": "2407.17674v2"
+  },
+  {
+    "question": "What does the structural similarity index measure (SSIM) evaluate in images?",
+    "ground_truth": "The structural similarity index measure (SSIM) evaluates the similarity between two images based on luminance, contrast, and structure.",
+    "paper_id": "2407.17674v2"
+  },
+  {
+    "question": "Is it advisable to use methods ensuring unimodality if there is no substantive knowledge that the true distribution is unimodal?",
+    "ground_truth": "No, these methods should not be used when there is a lack of substantive knowledge that the true predictive distribution is unimodal.",
+    "paper_id": "2406.18052v3"
+  },
+  {
+    "question": "What problem does estimating upper-level or highest density sets address?",
+    "ground_truth": "It involves estimating $\\left\\{x: f(x)>\\lambda^{(\\alpha)}\\right\\}$ for some $\\lambda^{(\\alpha)}>0$ and density $f$ based only on samples drawn from $f$, where $\\lambda^{(\\alpha)}$ is chosen such that $\\int_{\\left\\{x: f(x) \\leq \\lambda^{(\\alpha)}\\right\\}} f(y) d y=\\alpha$.",
+    "paper_id": "2406.18052v3"
+  },
+  {
+    "question": "Are non-negative weights required for Bernstein polynomial-based estimators to ensure they are unimodal?",
+    "ground_truth": "Yes, non-negative weights are required and must sum to one with specific ordering constraints to ensure that Bernstein polynomial-based estimators are unimodal.",
+    "paper_id": "2406.18052v3"
+  },
+  {
+    "question": "Does CHCDS require numerical integration?",
+    "ground_truth": "No, CHCDS does not require numerical integration.",
+    "paper_id": "2406.18052v3"
+  },
+  {
+    "question": "What is conformal prediction?",
+    "ground_truth": "Conformal prediction is a general method of creating prediction intervals that provide a non-asymptotic, distribution-free coverage guarantee.",
+    "paper_id": "2406.18052v3"
+  },
+  {
+    "question": "What is the growth pattern for the volume of an n-ball in Euclidean space?",
+    "ground_truth": "The volume of an n-ball in Euclidean space grows polynomially as \\(R^{n}\\).",
+    "paper_id": "2403.13015v2"
+  },
+  {
+    "question": "Has vector quantization been applied in both generative and discriminative tasks?",
+    "ground_truth": "Yes.",
+    "paper_id": "2403.13015v2"
+  },
+  {
+    "question": "What problem does hyperbolic geometry help to address in vector quantization?",
+    "ground_truth": "Hyperbolic geometry helps to mitigate codebook collapse.",
+    "paper_id": "2403.13015v2"
+  },
+  {
+    "question": "What tasks have been addressed using methods built on the mathematical foundation of neural networks in hyperbolic space?",
+    "ground_truth": "Tasks such as image segmentation, audio source separation, image-text representation learning, and variational autoencoders have been addressed.",
+    "paper_id": "2403.13015v2"
+  },
+  {
+    "question": "Is there more \"room\" at the boundaries in hyperbolic or Euclidean spaces for large radii?",
+    "ground_truth": "There is more \"room\" at the boundaries in hyperbolic spaces for large radii.",
+    "paper_id": "2403.13015v2"
+  },
+  {
+    "question": "What determines where workers choose to live in a long-run spatial equilibrium?",
+    "ground_truth": "Workers choose to live in the region that provides a higher utility.",
+    "paper_id": "2404.09796v2"
+  },
+  {
+    "question": "What happens when all consumers are allowed to migrate with respect to inter-regional trade integration?",
+    "ground_truth": "When all consumers are allowed to migrate, higher inter-regional trade integration always leads to more dispersed spatial distributions.",
+    "paper_id": "2404.09796v2"
+  },
+  {
+    "question": "How does trade integration affect spatial inequality in economic activities?",
+    "ground_truth": "Trade integration promotes a more symmetric spatial distribution of economic activities, reducing spatial inequality between regions. This occurs because higher trade integration diminishes the agglomeration forces that typically lead to unequal industry sizes across regions.",
+    "paper_id": "2404.09796v2"
+  },
+  {
+    "question": "Do workers with $x \\in[0, h)$ live in region $L$ or region $R$?",
+    "ground_truth": "Workers with $x \\in[0, h)$ live in region $L$.",
+    "paper_id": "2404.09796v2"
+  },
+  {
+    "question": "What role do heterogeneous preferences play in regional agglomeration?",
+    "ground_truth": "Heterogeneous preferences regarding residential location choices act as a dispersion force in the model, leading to a more even spatial distribution of economic activities and reducing regional agglomeration.",
+    "paper_id": "2404.09796v2"
+  },
+  {
+    "question": "How has differential item functioning (DIF) analysis evolved in recent years?",
+    "ground_truth": "DIF analysis has seen significant progress recently, with more research focusing on using it to investigate measurement equivalence. Advanced methodologies, particularly multilevel models, have been developed to improve the accuracy of DIF estimation compared to traditional single-level models.",
+    "paper_id": "2408.13702v3"
+  },
+  {
+    "question": "What is the importance of measurement equivalence in health outcome evaluations?",
+    "ground_truth": "Measurement equivalence is crucial in health outcome evaluations to ensure that assessments are fair and valid across different demographic groups, such as those differing in gender or ethnicity. This helps identify any disproportionate impacts of health interventions on certain populations.",
+    "paper_id": "2408.13702v3"
+  },
+  {
+    "question": "What is the purpose of the multilevel binary LR model?",
+    "ground_truth": "The multilevel binary LR model was designed to include random effects associated with items, accounting for variations among items and offering more accurate DIF estimates compared to traditional LR.",
+    "paper_id": "2408.13702v3"
+  },
+  {
+    "question": "Is data from the NSDUH survey available for download?",
+    "ground_truth": "Yes, the NSDUH data and codebook can be downloaded from https://www.datafiles.samhsa.gov/dataset/national-survey-drug-use-and-health-2022-nsduh-2022-ds0001",
+    "paper_id": "2408.13702v3"
+  },
+  {
+    "question": "How can advanced methodologies enhance fairness and validity in assessing diverse populations' health outcomes?",
+    "ground_truth": "Advanced methodologies like multilevel modeling enhance fairness and validity by providing more accurate estimations of measurement equivalence across diverse populations. This ensures that assessments reflect true differences rather than biases introduced by inadequate analytical techniques.",
+    "paper_id": "2408.13702v3"
+  },
+  {
+    "question": "How is the predictor space segmented in a binary tree?",
+    "ground_truth": "The predictor space is segmented by binary splits of the form $\\{x \\in A\\}$ vs $\\{x \\notin A\\}$ where $A$ is a subset of the range of $x$.",
+    "paper_id": "2412.16320v3"
+  },
+  {
+    "question": "Does the Bayesian bootstrap require specifying a prior for probabilities?",
+    "ground_truth": "Yes, to obtain the posterior distribution of probabilities, a prior must be specified.",
+    "paper_id": "2412.16320v3"
+  },
+  {
+    "question": "Does BART use an iterative backfitting algorithm for a fixed number of trees?",
+    "ground_truth": "Yes.",
+    "paper_id": "2412.16320v3"
+  },
+  {
+    "question": "What is the purpose of calculating a \"partial effect\" of a covariate?",
+    "ground_truth": "The purpose of calculating a \"partial effect\" of a covariate is to select a value for imputation by comparing MATEs based on varying the imputed value of the missing covariate.",
+    "paper_id": "2412.16320v3"
+  },
+  {
+    "question": "What role do Bayesian Additive Regression Trees play in evaluating family planning interventions?",
+    "ground_truth": "Bayesian Additive Regression Trees (BART) are used to non-parametrically estimate the causal effect of family planning interventions within a source population. BART helps in understanding how these interventions impact empowerment-related outcomes, allowing for an analysis that accounts for complex relationships between variables without assuming specific parametric forms.",
+    "paper_id": "2412.16320v3"
+  },
+  {
+    "question": "What does score-based method minimize during training?",
+    "ground_truth": "Score-based methods minimize the expected squared distance between the score function of the true distribution and the score function given by the model.",
+    "paper_id": "2410.12036v2"
+  },
+  {
+    "question": "What is the main challenge in training energy-based models?",
+    "ground_truth": "The main challenge in training energy-based models is that the normalising constant is intractable, preventing optimisation using maximum likelihood estimation.",
+    "paper_id": "2410.12036v2"
+  },
+  {
+    "question": "Is energy discrepancy dependent on MCMC samples from the energy-based model?",
+    "ground_truth": "No, energy discrepancy is independent of MCMC samples from the energy-based model.",
+    "paper_id": "2410.12036v2"
+  },
+  {
+    "question": "Does each GPU have more than 10,000 cores?",
+    "ground_truth": "Yes.",
+    "paper_id": "2410.12036v2"
+  },
+  {
+    "question": "Why are inverse problems considered ill-posed?",
+    "ground_truth": "Inverse problems are considered ill-posed because they can have multiple solutions that fit the observed data or because the solutions can be highly sensitive to errors in the input parameters.",
+    "paper_id": "2410.12036v2"
+  },
+  {
+    "question": "Can macroscopic quantities like prices and entropy be measured even if microfoundations are unknown or complex?",
+    "ground_truth": "Yes, macroscopic quantities such as prices, temperature, and entropy can be measured even when microfoundations are not known or too complex to model.",
+    "paper_id": "2412.00886v2"
+  },
+  {
+    "question": "How does the concept of entropy apply to economic systems?",
+    "ground_truth": "In economic systems, entropy is used to describe the allowed changes in state during interactions between economies, where total entropy cannot decrease. This contrasts with traditional microeconomics, which focuses on utility functions that cannot be meaningfully added. Entropy provides a framework for understanding aggregate economic behavior and allows for the computation of quantities like temperature and money capacity.",
+    "paper_id": "2412.00886v2"
+  },
+  {
+    "question": "How does money flow affect economic temperature measurement?",
+    "ground_truth": "If $T_{s}<T_{A}$, people will move their money to $s$, raising its temperature until it matches $A$. If $T_{s}>T_{A}$, money flows out from $s$, lowering its temperature.",
+    "paper_id": "2412.00886v2"
+  },
+  {
+    "question": "What is the concept of thermal macroeconomics in relation to economic systems?",
+    "ground_truth": "Thermal macroeconomics is an approach that applies principles from classical thermodynamics to economic systems, aiming to derive macroeconomic regularities without relying on detailed assumptions about individual consumers and companies. It reinterprets thermodynamic quantities like energy and entropy in economic terms, mapping them to concepts such as money and aggregate utility.",
+    "paper_id": "2412.00886v2"
+  },
+  {
+    "question": "What analogy is used to justify the scalability assumption in economics?",
+    "ground_truth": "The analogy with thermodynamics in natural sciences is used to justify the scalability assumption, suggesting it may be useful despite its limitations.",
+    "paper_id": "2412.00886v2"
+  },
+  {
+    "question": "Why might complex moments be relevant despite not being commonly used in econometrics?",
+    "ground_truth": "Complex moments extend the applicability of moment calculations into areas like statistical mechanics and quantum physics. They offer additional insights that can be integrated with minimal adaptation into econometric models, potentially uncovering new relationships or identities within data.",
+    "paper_id": "2410.23587v3"
+  },
+  {
+    "question": "What does the expression \\(|x|^r = (-x)^r = \\frac{\\Gamma(r+1)}{2 \\pi}\\int_{-\\infty}^{+\\infty}\\frac{e^{-zx}}{z^{r+1}}\\mathrm{~d}t, x<0\\) represent?",
+    "ground_truth": "It represents the identity for negative values of \\(x\\), derived from (A.2).",
+    "paper_id": "2410.23587v3"
+  },
+  {
+    "question": "What practical applications do the new moment expressions have in dynamic financial models?",
+    "ground_truth": "The new moment expressions can compute various types of conditional and realized volatilities within dynamic financial models such as Heston-Nandi GARCH or Heterogeneous Autoregressive Gamma (HARG) models. These applications highlight their utility where alternative methods may not perform well.",
+    "paper_id": "2410.23587v3"
+  },
+  {
+    "question": "How does the CMGF method improve upon traditional methods for calculating moments?",
+    "ground_truth": "The CMGF method offers new integral expressions for various types of moments and extends the applicability of moment computation. It is particularly useful in structural models where traditional methods may fall short, providing fast and accurate results even when derivatives are difficult to obtain.",
+    "paper_id": "2410.23587v3"
+  },
+  {
+    "question": "What potential future research directions exist for extending the use of MGFs in moment computation?",
+    "ground_truth": "Future research could explore applying the CMGF method to multivariate distributions for computing cross-moments that capture dependencies beyond simple cases. This would extend its utility across more complex statistical models with closed-form MGFs.",
+    "paper_id": "2410.23587v3"
+  },
+  {
+    "question": "Is there at most one cluster containing a non-empty set \\( S \\)?",
+    "ground_truth": "Yes, when \\( S \\neq \\emptyset \\), there is at most one such cluster.",
+    "paper_id": "2404.17509v2"
+  },
+  {
+    "question": "What algorithm is used to produce a random cluster from the $y$ vector?",
+    "ground_truth": "The procedure construct-cluster described in Algorithm 3 is used to produce a random cluster from the $y$ vector.",
+    "paper_id": "2404.17509v2"
+  },
+  {
+    "question": "Does a PTAS exist for unweighted Correlation Clustering when the number of clusters is fixed?",
+    "ground_truth": "Yes, a PTAS exists when the number of clusters is a fixed constant.",
+    "paper_id": "2404.17509v2"
+  },
+  {
+    "question": "Is the number of bad triangles always less than or equal to the number of chargeable triangles for any vertex?",
+    "ground_truth": "Yes, for any vertex, the number of bad triangles centered at that vertex is at most the number of chargeable triangles (degenerate and non-degenerate) centered there.",
+    "paper_id": "2404.17509v2"
+  },
+  {
+    "question": "What advancements does the cluster LP offer for solving correlation clustering problems?",
+    "ground_truth": "The cluster LP provides a unified framework that captures existing algorithmic results and allows for designing new rounding algorithms with improved analysis tools. This approach has led to achieving a new approximation ratio of \\(1.437+\\varepsilon\\), enhancing both algorithmic performance and understanding of problem hardness.",
+    "paper_id": "2404.17509v2"
+  },
+  {
+    "question": "How does adding a maximum-power constraint affect cycling strategies for minimizing ascent time?",
+    "ground_truth": "Even with an added maximum-power constraint, minimizing ascent time is best achieved through a modified strategy that focuses on maintaining constant speed rather than power. Both strategies result in equal times if maximum and average powers are identical.",
+    "paper_id": "2403.03363v6"
+  },
+  {
+    "question": "Does the drivetrain-resistance coefficient affect the power calculation?",
+    "ground_truth": "Yes.",
+    "paper_id": "2403.03363v6"
+  },
+  {
+    "question": "Does a higher position on the grey curve indicate more or less power expenditure capacity for a rider?",
+    "ground_truth": "A higher position on the grey curve indicates more power expenditure capacity for a rider.",
+    "paper_id": "2403.03363v6"
+  },
+  {
+    "question": "Does neglecting changes in kinetic energy become more justifiable for longer ascents?",
+    "ground_truth": "Yes, neglecting changes in kinetic energy becomes more justifiable for longer ascents as indicated by its inverse proportionality with ascent time.",
+    "paper_id": "2403.03363v6"
+  },
+  {
+    "question": "How does scaling horizontal and vertical distances affect ascent time and \\( P_K\\)?",
+    "ground_truth": "Halving the distances halves the ascent time to \\( T=131.8770\\,\\text{s} \\) and doubles \\( P_{K}\\) to \\(32.9764\\,\\text{W}\\); doubling them doubles ascent time to \\( T=527.5078\\,\\text{s} \\) and halves \\( P_{K}\\) to \\(8.2441\\,\\text{W}\\).",
+    "paper_id": "2403.03363v6"
+  },
+  {
+    "question": "Is the Lorenz curve invariant to linear transformations of a distribution?",
+    "ground_truth": "Yes, the Lorenz curve is invariant to all linear transformations of a distribution.",
+    "paper_id": "2408.14872v2"
+  },
+  {
+    "question": "What does the sign of the mean indicate in a random utility application?",
+    "ground_truth": "The sign of the mean indicates the agent's true (non-distorted) ordinal preference between two options.",
+    "paper_id": "2408.14872v2"
+  },
+  {
+    "question": "Is full support detected if $H(x)$ is strictly increasing in $x$?",
+    "ground_truth": "Yes.",
+    "paper_id": "2408.14872v2"
+  },
+  {
+    "question": "Why are standard measures like the Gini index questionable for ordered response data?",
+    "ground_truth": "Standard measures like the Gini index require cardinal information, which makes their application to ordered response data questionable.",
+    "paper_id": "2408.14872v2"
+  },
+  {
+    "question": "What happens when a strictly sigmoid transformation is applied to a chronometric function?",
+    "ground_truth": "Applying any strictly sigmoid transformation generates a chronometric function that results in a piecewise more convex and thus unimodal distribution $H$.",
+    "paper_id": "2408.14872v2"
+  }
+]

@@ -81,7 +81,6 @@ import rag.chat_pdfs as rag_runtime
 from rag.chat_pdfs import (
     evaluar_pregunta_rag,
     indexar_documentos,
-    set_recomp_synthesis_enabled,
 )
 
 try:
@@ -1542,12 +1541,6 @@ def ejecutar_comparativa_pipeline(
     }
     _guardar_json(os.path.join(debug_dir, "comparison_summary.json"), manifest)
     return manifest
-
-
-def ejecutar_comparativa_recomp(*args, **kwargs) -> dict[str, Any]:
-    """Backward-compatible wrapper for the old RECOMP-only comparison."""
-    kwargs.setdefault("variant_names", "no_recomp_synthesis,baseline_all_on")
-    return ejecutar_comparativa_pipeline(*args, **kwargs)
 
 
 def ejecutar_evaluacion(

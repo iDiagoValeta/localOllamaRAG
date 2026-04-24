@@ -17,15 +17,19 @@
 """
 export_fragments.py -- Dump indexed ChromaDB chunks to text or JSONL files.
 
-**Default:** exports the three local language stores under ``rag/vector_db``:
-``ca_embeddinggemma``, ``en_embeddinggemma`` and ``es_embeddinggemma``. Each
-chunk is labeled as **imagen** (descripción de figura), **texto plano** or
-**texto Markdown** according to ``metadata["format"]`` from
-``chat_pdfs.indexar_documentos``.
+**Default:** exports every local vector store used by the project under
+``rag/vector_db``: the language corpora ``ca_embeddinggemma``,
+``en_embeddinggemma``, ``es_embeddinggemma`` and the two RagBench EN corpora
+``en_ragbench_dev_embeddinggemma`` and ``en_ragbench_eval_embeddinggemma``.
+Stores that are absent from disk are silently skipped. Each chunk is labeled as
+**imagen** (descripción de figura), **texto plano** or **texto Markdown**
+according to ``metadata["format"]`` from ``chat_pdfs.indexar_documentos``.
 
 Usage (from repository root):
-    python rag/show_fragments/export_fragments.py
-    python rag/show_fragments/export_fragments.py --language es -o salida.txt
+    python rag/show_fragments/export_fragments.py                # all stores
+    python rag/show_fragments/export_fragments.py --language es  # one language
+    python rag/show_fragments/export_fragments.py --ragbench dev # RagBench dev
+    python rag/show_fragments/export_fragments.py --ragbench eval
     python rag/show_fragments/export_fragments.py --format jsonl --out-dir ./mi_salida
 
 Dependencies:
@@ -59,38 +63,50 @@ import chromadb  # noqa: E402
 RAG_DIR = os.path.join(_proj_root, "rag")
 VECTOR_DB_DIR = os.path.join(RAG_DIR, "vector_db")
 DEFAULT_LANGUAGES = ("ca", "en", "es")
+RAGBENCH_SPLITS = ("dev", "eval")
+DEFAULT_STORE_SLUGS = DEFAULT_LANGUAGES + tuple(f"en_ragbench_{s}" for s in RAGBENCH_SPLITS)
 
 DEFAULT_OUT_DIR = os.path.join(RAG_DIR, "show_fragments")
-DEFAULT_FILE_TEMPLATE = "chunks_vector_db_{language}.txt"
+DEFAULT_FILE_TEMPLATE = "chunks_vector_db_{slug}.txt"
 DEFAULT_OUTPUT_MONKEYGRAB = os.path.join(DEFAULT_OUT_DIR, "monkeygrab_chunks_export.txt")
 BATCH_SIZE = 500
 
 
 class StoreSpec(NamedTuple):
-    language: str
+    slug: str
     db_path: str
     collection_name: str
     store_label: str
     pdf_folder_hint: str
 
 
-def build_store_spec(language: str) -> StoreSpec:
-    """Build the Chroma path and collection name for one language store."""
-    lang = language.strip().lower()
+def _embed_slug() -> str:
     modelo_embed = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
-    embed_slug = modelo_embed.split(":")[0].replace("/", "_")
+    return modelo_embed.split(":")[0].replace("/", "_")
+
+
+def build_store_spec(slug: str) -> StoreSpec:
+    """Build the Chroma path and collection name for one store slug.
+
+    ``slug`` is the basename of the PDF folder under ``rag/docs/`` (e.g.
+    ``es``, ``ca``, ``en``, ``en_ragbench_dev``, ``en_ragbench_eval``). It is
+    matched verbatim against the Chroma path and collection names produced by
+    ``chat_pdfs.py`` (see ``PATH_DB`` / ``COLLECTION_NAME`` there).
+    """
+    s = slug.strip().lower()
+    embed_slug = _embed_slug()
     return StoreSpec(
-        language=lang,
-        db_path=os.path.join(VECTOR_DB_DIR, f"{lang}_{embed_slug}"),
-        collection_name=f"docs_{lang}",
-        store_label=f"vector_db/{lang}_{embed_slug} ({lang})",
-        pdf_folder_hint=os.path.join(RAG_DIR, "docs", lang),
+        slug=s,
+        db_path=os.path.join(VECTOR_DB_DIR, f"{s}_{embed_slug}"),
+        collection_name=f"docs_{s}",
+        store_label=f"vector_db/{s}_{embed_slug} ({s})",
+        pdf_folder_hint=os.path.join(RAG_DIR, "docs", s),
     )
 
 
 def default_store_specs() -> List[StoreSpec]:
-    """Return the three local vector stores exported by default."""
-    return [build_store_spec(language) for language in DEFAULT_LANGUAGES]
+    """Return the local vector stores exported by default (languages + RagBench)."""
+    return [build_store_spec(slug) for slug in DEFAULT_STORE_SLUGS]
 
 
 def classify_fragment(meta: Dict[str, Any]) -> Dict[str, str]:
@@ -242,13 +258,35 @@ def open_collection_safe(
     db_path: str,
     collection_name: str,
 ) -> Tuple[Optional[chromadb.Collection], Optional[str]]:
-    """Return (collection, error_message)."""
+    """Return (collection, error_message).
+
+    If the expected ``collection_name`` is missing but the persistent store
+    contains exactly one collection, fall back to it and print a notice. This
+    tolerates legacy indexes created before the ``COLLECTION_NAME`` convention
+    stabilized (e.g. a folder renamed from ``en`` to ``en_ragbench_dev`` after
+    indexing).
+    """
     if not os.path.isdir(db_path):
         return None, f"path no existe: {db_path}"
     try:
         client = chromadb.PersistentClient(path=db_path)
-        col = client.get_collection(name=collection_name)
-        return col, None
+        try:
+            return client.get_collection(name=collection_name), None
+        except Exception:
+            available = [c.name for c in client.list_collections()]
+            if len(available) == 1:
+                fallback = available[0]
+                print(
+                    f"  [aviso] colección esperada '{collection_name}' no existe; "
+                    f"usando '{fallback}' (único contenido del store)"
+                )
+                return client.get_collection(name=fallback), None
+            if not available:
+                return None, f"store sin colecciones ({db_path})"
+            return None, (
+                f"colección '{collection_name}' no existe; "
+                f"disponibles: {', '.join(available)}"
+            )
     except Exception as e:
         return None, str(e)
 
@@ -281,13 +319,23 @@ def run_export(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Export ChromaDB fragments; por defecto exporta ca, en y es desde rag/vector_db.",
+        description=(
+            "Export ChromaDB fragments; por defecto exporta los almacenes locales "
+            "bajo rag/vector_db (idiomas ca/en/es + RagBench dev/eval)."
+        ),
     )
-    p.add_argument(
+    target = p.add_mutually_exclusive_group()
+    target.add_argument(
         "--language",
         choices=DEFAULT_LANGUAGES,
         default=None,
-        help="Exportar solo una base vectorial por idioma; por defecto exporta ca, en y es.",
+        help="Exportar una única base vectorial por idioma (ca, en, es).",
+    )
+    target.add_argument(
+        "--ragbench",
+        choices=RAGBENCH_SPLITS,
+        default=None,
+        help="Exportar un corpus RagBench EN ('dev' o 'eval').",
     )
     p.add_argument(
         "--db-path",
@@ -303,7 +351,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "-o",
         "--output",
         default=None,
-        help="Archivo de salida (solo con un único destino: --language o --db-path)",
+        help="Archivo de salida (solo con un único destino: --language, --ragbench o --db-path)",
     )
     p.add_argument(
         "--out-dir",
@@ -349,15 +397,16 @@ def main() -> None:
         )
         raise SystemExit(0 if n >= 0 else 1)
 
-    # --- Single language target ---
-    if args.language:
-        spec = build_store_spec(args.language)
+    # --- Single store target (--language or --ragbench) ---
+    single_slug = args.language or (f"en_ragbench_{args.ragbench}" if args.ragbench else None)
+    if single_slug:
+        spec = build_store_spec(single_slug)
         out_path = (
             os.path.abspath(args.output)
             if args.output
             else os.path.join(
                 out_dir,
-                DEFAULT_FILE_TEMPLATE.format(language=spec.language).replace(
+                DEFAULT_FILE_TEMPLATE.format(slug=spec.slug).replace(
                     ".txt",
                     ".jsonl" if out_fmt == "jsonl" else ".txt",
                 ),
@@ -374,20 +423,21 @@ def main() -> None:
         raise SystemExit(0 if n != -1 else 1)
 
     if args.output:
-        print("ERROR: --output solo se puede usar con --language o --db-path")
+        print("ERROR: --output solo se puede usar con --language, --ragbench o --db-path")
         raise SystemExit(1)
 
-    # --- Default: all language stores under rag/vector_db ---
+    # --- Default: all local stores under rag/vector_db ---
     os.makedirs(out_dir, exist_ok=True)
     ext = ".jsonl" if out_fmt == "jsonl" else ".txt"
     exported_paths: List[str] = []
     failures = 0
 
-    print("Exportación de las 3 bases vectoriales (ca, en, es)\n")
+    slugs_humanos = ", ".join(DEFAULT_STORE_SLUGS)
+    print(f"Exportación de las bases vectoriales locales ({slugs_humanos})\n")
     for spec in default_store_specs():
         out_path = os.path.join(
             out_dir,
-            DEFAULT_FILE_TEMPLATE.format(language=spec.language).replace(".txt", ext),
+            DEFAULT_FILE_TEMPLATE.format(slug=spec.slug).replace(".txt", ext),
         )
         n = run_export(
             os.path.abspath(spec.db_path),
