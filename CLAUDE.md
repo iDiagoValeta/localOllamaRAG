@@ -97,10 +97,9 @@ localOllamaRAG/
 │   │   └── en_ragbench_eval_embeddinggemma/  # Índice eval RagBench EN
 │   ├── historial_chat.json       # Historial modo CHAT (gitignored)
 │   └── cli/
-│       ├── app.py                # MonkeyGrabCLI: bucle interactivo y dispatch de comandos
-│       ├── display.py            # Singleton `ui`: salida visual Rich
-│       ├── renderer.py           # Renderizado ANSI de bajo nivel (legacy)
-│       └── theme.py              # Paleta de colores
+│       ├── app.py                # MonkeyGrabCLI: bucle interactivo, dispatch, health check Ollama, stats de sesión
+│       ├── display.py            # Singleton `ui`: Rich/ANSI/plain + QueryTimer + SessionStats + Palette unificada
+│       └── commands.py           # Fuente única de slash-commands (listado + alias) para dispatch/ayuda/autocompletado
 ├── web/
 │   ├── app.py                    # Backend Flask: REST + SSE, sirve React
 │   ├── requirements.txt

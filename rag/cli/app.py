@@ -12,7 +12,8 @@ Usage:
 
 Dependencies:
     - chromadb
-    - rag.cli.display (ui singleton)
+    - rag.cli.display (ui singleton, QueryTimer, SessionStats)
+    - rag.cli.commands (single source of truth for slash-commands)
     - A RAG engine module providing search, indexing, and generation functions
 """
 
@@ -25,23 +26,29 @@ Dependencies:
 #  +-- 1. Imports
 #
 #  MonkeyGrabCLI CLASS
-#  +-- 2. INITIALIZATION       __init__, ChromaDB + engine wiring
-#  +-- 3. STARTUP              print_startup_info, banner
-#  +-- 4. MAIN LOOP            run() — prompt dispatch
-#  +-- 5. CHAT / RAG PROCESSING  handle_chat, handle_rag
-#  +-- 6. COMMAND HANDLERS     /docs, /stats, /reindex, /temas, /help, /salir
-#  +-- 7. HELPERS              context truncation, term extraction
+#  +-- 2. INITIALIZATION        __init__, ChromaDB + engine wiring
+#  +-- 3. STARTUP               run() — logo, indexing, ollama health check
+#  +-- 4. MAIN LOOP             _loop() — prompt dispatch
+#  +-- 5. CHAT / RAG PROCESSING _process_chat, _chat_stream, _process_rag
+#  +-- 6. COMMAND HANDLERS      /docs, /stats, /reindex, /temas, /help, /salir
+#  +-- 7. HELPERS               runtime info, documents summary, topics
+#  +-- 8. OLLAMA HEALTH CHECK   _ollama_health()
 #
+# ─────────────────────────────────────────────
+
+# ─────────────────────────────────────────────
+# SECTION 1: IMPORTS
 # ─────────────────────────────────────────────
 
 import os
 import shutil
-from typing import List, Dict, Any
 from collections import Counter
+from typing import Any, Dict, List, Optional, Tuple
 
 import chromadb
 
-from rag.cli.display import ui
+from rag.cli.commands import ALIASES, COMMANDS
+from rag.cli.display import QueryTimer, SessionStats, ui
 
 
 # ─────────────────────────────────────────────
@@ -49,12 +56,11 @@ from rag.cli.display import ui
 # ─────────────────────────────────────────────
 
 class MonkeyGrabCLI:
-    """
-    Main CLI application for MonkeyGrab.
+    """Main CLI application for MonkeyGrab.
 
     Encapsulates the interaction loop, state management (mode, history),
-    and slash command dispatch. Delegates RAG logic to the provided
-    rag_engine module.
+    session statistics, and slash command dispatch. Delegates RAG logic to the
+    provided rag_engine module.
     """
 
     # ─────────────────────────────────────────────
@@ -62,8 +68,7 @@ class MonkeyGrabCLI:
     # ─────────────────────────────────────────────
 
     def __init__(self, rag_engine):
-        """
-        Initialize the CLI application.
+        """Initialize the CLI application.
 
         Args:
             rag_engine: Module or namespace providing RAG functions
@@ -72,46 +77,62 @@ class MonkeyGrabCLI:
         """
         self.rag = rag_engine
         self.mode = "chat"
-        self.collection = None
+        self.collection: Optional[chromadb.Collection] = None
         self.historial_chat: List[Dict[str, str]] = []
+        self.session = SessionStats()
 
-        self._commands = {
+        handlers = {
             "/rag":     self._cmd_rag,
             "/chat":    self._cmd_chat,
             "/limpiar": self._cmd_clear,
-            "/clear":   self._cmd_clear,
             "/stats":   self._cmd_stats,
             "/ayuda":   self._cmd_help,
-            "/help":    self._cmd_help,
             "/docs":    self._cmd_docs,
             "/temas":   self._cmd_topics,
             "/reindex": self._cmd_reindex,
             "/salir":   self._cmd_exit,
-            "/exit":    self._cmd_exit,
         }
+        self._commands: Dict[str, Any] = dict(handlers)
+        for alias, target in ALIASES:
+            if target in handlers:
+                self._commands[alias] = handlers[target]
+        self._validate_commands_registry()
+
+    def _validate_commands_registry(self) -> None:
+        """Fail loudly if commands.COMMANDS and _commands drift apart.
+
+        Keeps the /ayuda screen, autocompleter and dispatcher in sync with a
+        single source of truth; cheaper to fix at startup than to debug later.
+        """
+        listed = {cmd for cmd, _ in COMMANDS}
+        registered = set(self._commands.keys()) - {alias for alias, _ in ALIASES}
+        missing = listed - registered
+        orphaned = registered - listed
+        if missing or orphaned:
+            details = []
+            if missing:
+                details.append(f"listed but not handled: {sorted(missing)}")
+            if orphaned:
+                details.append(f"handled but not listed: {sorted(orphaned)}")
+            raise RuntimeError("CLI command registry out of sync — " + "; ".join(details))
 
     # ─────────────────────────────────────────────
-    # STARTUP
+    # SECTION 3: STARTUP
     # ─────────────────────────────────────────────
 
     def run(self) -> None:
         """Entry point. Initialize the system and start the main loop."""
         ui.logo()
 
+        ok, detail = self._ollama_health()
+        ui.ollama_status(ok, detail)
+
         client = chromadb.PersistentClient(path=self.rag.PATH_DB)
         self.collection = client.get_or_create_collection(
             name=self.rag.COLLECTION_NAME
         )
 
-        archivos_pdf = []
-        try:
-            archivos_pdf = [
-                f for f in os.listdir(self.rag.CARPETA_DOCS)
-                if f.lower().endswith('.pdf')
-            ]
-        except FileNotFoundError:
-            pass
-
+        archivos_pdf = self._list_pdf_files()
         pdfs_count = len(archivos_pdf)
 
         if not archivos_pdf:
@@ -124,8 +145,7 @@ class MonkeyGrabCLI:
             if total_chunks == 0:
                 ui.warning("No se indexaron documentos.")
                 return
-            else:
-                ui.success(f"{total_chunks} fragmentos indexados")
+            ui.success(f"{total_chunks} fragmentos indexados")
 
         self._show_init_info(pdfs_count, self.collection.count())
         ui.info("usa /ayuda para ver todos los comandos")
@@ -137,7 +157,7 @@ class MonkeyGrabCLI:
         self._loop()
 
     # ─────────────────────────────────────────────
-    # MAIN LOOP
+    # SECTION 4: MAIN LOOP
     # ─────────────────────────────────────────────
 
     def _loop(self) -> None:
@@ -149,8 +169,8 @@ class MonkeyGrabCLI:
             try:
                 pregunta = ui.read_input(self.mode, model).strip()
             except (EOFError, KeyboardInterrupt):
-                ui.farewell()
                 self.rag.guardar_historial(self.historial_chat)
+                ui.farewell(self.session)
                 break
 
             if not pregunta:
@@ -173,7 +193,7 @@ class MonkeyGrabCLI:
                 self._process_chat(pregunta)
 
     # ─────────────────────────────────────────────
-    # CHAT / RAG PROCESSING
+    # SECTION 5: CHAT / RAG PROCESSING
     # ─────────────────────────────────────────────
 
     def _process_chat(self, pregunta: str) -> None:
@@ -182,6 +202,7 @@ class MonkeyGrabCLI:
         Args:
             pregunta: The user's input question.
         """
+        timer = QueryTimer()
         ui.response_header("chat", self.rag.MODELO_CHAT)
 
         try:
@@ -193,7 +214,9 @@ class MonkeyGrabCLI:
         if not ui.can_stream_responses():
             ui.render_response(respuesta)
 
+        timer.mark("respuesta")
         ui.response_footer()
+        self.session.tick_chat(timer.total, self.rag.MODELO_CHAT)
 
         self.historial_chat.append({"role": "user", "content": pregunta})
         self.historial_chat.append({"role": "assistant", "content": respuesta})
@@ -242,11 +265,13 @@ class MonkeyGrabCLI:
         return respuesta
 
     def _process_rag(self, pregunta: str) -> None:
-        """Process a question in RAG mode.
+        """Process a question in RAG mode with per-phase visual feedback.
 
-        Validates the question length, runs hybrid search, applies
-        reranker filtering if enabled, expands context with adjacent
-        chunks, and generates a response with source citations.
+        Emits labelled pipeline phases (search / rerank / expand / generate)
+        and a compact metrics summary at the end. Validates the question
+        length, runs hybrid search, applies reranker filtering if enabled,
+        expands context with adjacent chunks, and generates a response with
+        source citations.
 
         Args:
             pregunta: The user's input question.
@@ -256,15 +281,26 @@ class MonkeyGrabCLI:
             self.rag.guardar_debug_rag(
                 pregunta,
                 motivo_interrupcion="Pregunta demasiado corta.",
-                metricas={"longitud": len(pregunta.strip()), "min_requerido": self.rag.MIN_LONGITUD_PREGUNTA_RAG}
+                metricas={
+                    "longitud": len(pregunta.strip()),
+                    "min_requerido": self.rag.MIN_LONGITUD_PREGUNTA_RAG,
+                },
             )
             return
 
+        timer = QueryTimer()
+        fragmentos_finales: List[Dict[str, Any]] = []
+        best_score: Optional[float] = None
+
         try:
-            ui.pipeline_start("Buscando conceptos en los documentos...")
+            ui.pipeline_start("Iniciando búsqueda...")
+            ui.pipeline_phase("búsqueda", "semántica + léxica (RRF)")
+
             fragmentos_ranked, mejor_score, metricas = (
                 self.rag.realizar_busqueda_hibrida(pregunta, self.collection)
             )
+            timer.mark("búsqueda")
+            best_score = mejor_score
 
             if not fragmentos_ranked:
                 ui.pipeline_stop()
@@ -273,7 +309,7 @@ class MonkeyGrabCLI:
                     pregunta,
                     fragmentos=[],
                     motivo_interrupcion="No se encontraron fragmentos.",
-                    metricas=metricas
+                    metricas=metricas,
                 )
                 return
 
@@ -285,18 +321,21 @@ class MonkeyGrabCLI:
                     pregunta,
                     fragmentos=fragmentos_ranked,
                     motivo_interrupcion=f"Score insuficiente: {mejor_score:.4f}",
-                    metricas={**metricas, "mejor_score": mejor_score}
+                    metricas={**metricas, "mejor_score": mejor_score},
                 )
                 return
 
-            ui.pipeline_update("Re-ordenando resultados...")
-
             if self.rag.USAR_RERANKER:
+                ui.pipeline_phase(
+                    "rerank",
+                    f"cross-encoder · {len(fragmentos_ranked)} candidatos",
+                )
                 fragmentos_filtrados = [
                     f for f in fragmentos_ranked
                     if f.get('score_reranker', f.get('score_final', 0))
                        >= self.rag.UMBRAL_SCORE_RERANKER
                 ]
+                timer.mark("rerank")
                 if not fragmentos_filtrados:
                     ui.pipeline_stop()
                     ui.no_results()
@@ -304,7 +343,7 @@ class MonkeyGrabCLI:
                         pregunta,
                         fragmentos=fragmentos_ranked,
                         motivo_interrupcion="Reranker filtró todos los candidatos.",
-                        metricas={**metricas, "umbral_reranker": self.rag.UMBRAL_SCORE_RERANKER}
+                        metricas={**metricas, "umbral_reranker": self.rag.UMBRAL_SCORE_RERANKER},
                     )
                     return
                 fragmentos_ranked = fragmentos_filtrados
@@ -314,7 +353,12 @@ class MonkeyGrabCLI:
 
             if (self.rag.EXPANDIR_CONTEXTO and fragmentos_finales
                     and 'chunk' in fragmentos_finales[0]['metadata']):
+                ui.pipeline_phase(
+                    "expansión",
+                    f"chunks adyacentes a los top-{self.rag.N_TOP_PARA_EXPANSION}",
+                )
                 self._expand_context(fragmentos_finales, ids_usados)
+                timer.mark("expansión")
 
             contexto_total = sum(len(f['doc']) for f in fragmentos_finales)
             if contexto_total > self.rag.MAX_CONTEXTO_CHARS:
@@ -327,7 +371,13 @@ class MonkeyGrabCLI:
                     chars_acum += len(f['doc'])
                 fragmentos_finales = fragmentos_truncados
 
-            ui.pipeline_update("Generando respuesta...")
+            if self.rag.USAR_RECOMP_SYNTHESIS:
+                ui.pipeline_phase(
+                    "síntesis",
+                    f"RECOMP · {self.rag.MODELO_RECOMP}",
+                )
+
+            ui.pipeline_phase("generación", f"streaming · {self.rag.MODELO_RAG}")
             ui.pipeline_stop()
 
             ui.response_header("rag", self.rag.MODELO_RAG)
@@ -339,6 +389,7 @@ class MonkeyGrabCLI:
                 metricas=metricas,
                 on_token=ui.stream_token if ui.can_stream_responses() else None,
             )
+            timer.mark("generación")
         except Exception as e:
             ui.pipeline_stop()
             ui.exception("Error RAG", e)
@@ -347,7 +398,7 @@ class MonkeyGrabCLI:
                     pregunta,
                     fragmentos=[],
                     motivo_interrupcion=f"Excepción en CLI RAG: {e}",
-                    metricas={"error": e.__class__.__name__}
+                    metricas={"error": e.__class__.__name__},
                 )
             except Exception:
                 pass
@@ -358,13 +409,17 @@ class MonkeyGrabCLI:
         if not ui.can_stream_responses():
             ui.render_response(respuesta)
         ui.sources_panel(fragmentos_finales)
-        ui.response_footer()
+
+        sources_count = len({f['metadata'].get('source') for f in fragmentos_finales if f.get('metadata')})
+        ui.query_summary(timer, n_fragmentos=len(fragmentos_finales), best_score=best_score)
+        ui.response_footer(sources=sources_count)
+        self.session.tick_rag(timer.total, self.rag.MODELO_RAG)
 
     def _expand_context(self, fragmentos: list, ids_usados: set) -> None:
         """Expand context by retrieving adjacent chunks from the collection.
 
-        For each top fragment, fetches neighboring chunks and appends
-        them to the fragment list if they haven't been included yet.
+        For each top fragment, fetches neighboring chunks and appends them to
+        the fragment list if they haven't been included yet.
 
         Args:
             fragmentos: List of selected fragments (modified in place).
@@ -393,7 +448,7 @@ class MonkeyGrabCLI:
                                 'metadata': v_meta,
                                 'distancia': float('inf'),
                                 'score_final': 0.0,
-                                'id': v_id
+                                'id': v_id,
                             })
                             ids_usados.add(v_id)
                 except Exception:
@@ -403,47 +458,40 @@ class MonkeyGrabCLI:
             fragmentos.extend(chunks_adicionales)
 
     # ─────────────────────────────────────────────
-    # COMMAND HANDLERS
+    # SECTION 6: COMMAND HANDLERS
     # ─────────────────────────────────────────────
 
     def _cmd_rag(self) -> bool:
-        """Switch to RAG mode."""
         self.mode = "rag"
         ui.mode_change("rag", self.rag.MODELO_RAG)
         return False
 
     def _cmd_chat(self) -> bool:
-        """Switch to chat mode."""
         self.mode = "chat"
         ui.mode_change("chat", self.rag.MODELO_CHAT)
         return False
 
     def _cmd_clear(self) -> bool:
-        """Clear the chat history."""
         self.rag.limpiar_historial(self.historial_chat)
         ui.history_cleared()
         return False
 
     def _cmd_stats(self) -> bool:
-        """Display database statistics."""
         docs = self.rag.obtener_documentos_indexados(self.collection)
-        ui.stats_table(self.collection.count(), docs, self._runtime_info(
-            len(self._list_pdf_files()), self.collection.count()
-        ))
+        info = self._runtime_info(len(self._list_pdf_files()), self.collection.count())
+        ui.stats_table(self.collection.count(), docs, info)
+        ui.init_panel(info)
         return False
 
     def _cmd_help(self) -> bool:
-        """Display the help/welcome screen."""
         ui.welcome()
         return False
 
     def _cmd_docs(self) -> bool:
-        """Display the list of indexed documents."""
         ui.docs_table(self._get_document_summaries())
         return False
 
     def _cmd_topics(self) -> bool:
-        """Display the topics summary."""
         self._show_topics()
         return False
 
@@ -474,26 +522,16 @@ class MonkeyGrabCLI:
             return False
 
     def _cmd_exit(self) -> bool:
-        """Save history and exit the application.
-
-        Returns:
-            True to signal the main loop to exit.
-        """
+        """Save history and exit the application."""
         self.rag.guardar_historial(self.historial_chat)
-        ui.farewell()
+        ui.farewell(self.session)
         return True
 
     # ─────────────────────────────────────────────
-    # HELPERS
+    # SECTION 7: HELPERS
     # ─────────────────────────────────────────────
 
     def _show_init_info(self, total_documentos: int = 0, total_fragmentos: int = 0) -> None:
-        """Gather and display initialization information.
-
-        Args:
-            total_documentos: Number of PDF files detected.
-            total_fragmentos: Number of fragments in the database.
-        """
         ui.init_panel(self._runtime_info(total_documentos, total_fragmentos))
 
     def _runtime_info(self, total_documentos: int = 0, total_fragmentos: int = 0) -> Dict[str, Any]:
@@ -610,7 +648,7 @@ class MonkeyGrabCLI:
                 all_data = self.collection.get(
                     where={"source": doc_name},
                     include=['documents', 'metadatas'],
-                    limit=100
+                    limit=100,
                 )
                 documents = all_data.get('documents') or []
                 if documents:
@@ -632,3 +670,28 @@ class MonkeyGrabCLI:
             docs_data.append(doc_info)
 
         ui.topics_display(docs_data)
+
+    # ─────────────────────────────────────────────
+    # SECTION 8: OLLAMA HEALTH CHECK
+    # ─────────────────────────────────────────────
+
+    def _ollama_health(self, timeout: float = 2.0) -> Tuple[bool, str]:
+        """Ping Ollama's ``/api/tags`` endpoint and summarize the result.
+
+        The check is intentionally cheap and short-lived: a failed server is
+        reported once at startup without blocking the rest of initialization,
+        so the user understands why later calls will fail.
+        """
+        base = (
+            os.getenv("OLLAMA_BASE_URL")
+            or getattr(self.rag, "OLLAMA_BASE_URL", None)
+            or "http://localhost:11434"
+        )
+        try:
+            import requests
+            r = requests.get(f"{base}/api/tags", timeout=timeout)
+            r.raise_for_status()
+            models = r.json().get("models", []) or []
+            return True, f"Ollama activo en {base} · {len(models)} modelos locales"
+        except Exception as e:
+            return False, f"Ollama no responde en {base}: {e.__class__.__name__}"
