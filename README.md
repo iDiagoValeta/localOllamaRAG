@@ -354,4 +354,46 @@ localOllamaRAG/
 
 ---
 
+## Links
+
+**RAG pipeline**
+
+| Technology | Role |
+|------------|------|
+| [Ollama](https://ollama.com/) | Local LLM and embedding server |
+| [ChromaDB](https://www.trychroma.com/) | Vector store |
+| [pymupdf4llm](https://pymupdf.readthedocs.io/en/latest/pymupdf4llm/) | PDF text extraction (primary) |
+| [pypdf](https://pypdf.readthedocs.io/) | PDF text extraction (fallback) |
+| [sentence-transformers](https://www.sbert.net/) | Cross-encoder reranker (BAAI/bge, MiniLM) |
+
+**Interfaces**
+
+| Technology | Role |
+|------------|------|
+| [Rich](https://rich.readthedocs.io/) | Terminal UI |
+| [Flask](https://flask.palletsprojects.com/) | Web backend |
+| [React](https://react.dev/) | Web frontend |
+| [Vite](https://vitejs.dev/) | Frontend build tool |
+
+**Training**
+
+| Technology | Role |
+|------------|------|
+| [PyTorch](https://pytorch.org/) | Deep learning framework |
+| [Transformers](https://huggingface.co/docs/transformers/) | Model loading and training |
+| [PEFT](https://huggingface.co/docs/peft/) | LoRA fine-tuning |
+| [bitsandbytes](https://github.com/bitsandbytes-foundation/bitsandbytes) | Quantization and QLoRA |
+| [llama.cpp](https://github.com/ggml-org/llama.cpp) | GGUF conversion and quantization |
+| [Hugging Face Hub](https://huggingface.co/) | Model hosting |
+
+**Evaluation**
+
+| Technology | Role |
+|------------|------|
+| [RAGAS](https://docs.ragas.io/) | RAG evaluation framework |
+| [BERTScore](https://github.com/Tiiiger/bert_score) | Semantic similarity metric |
+| [Google Gemini](https://ai.google.dev/) | Judge LLM for RAGAS (requires API key) |
+
+---
+
 *Bachelor's thesis (TFG) — Grado en Ingeniería Informática, ETSINF, Universitat Politècnica de València. Author: Ignacio Diago Valeta. Tutor: Adrià Giménez Pastor. 2025–2026.*
