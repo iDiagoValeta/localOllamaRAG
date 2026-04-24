@@ -650,6 +650,47 @@ def _checkpoint_pipeline_flags_match(
     return checkpoint.get("recomp_enabled") == current_flags.get("USAR_RECOMP_SYNTHESIS")
 
 
+_TRACKED_MODEL_FIELDS = ("modelo_rag", "modelo_chat", "modelo_embedding", "modelo_recomp")
+
+
+def _current_models_signature() -> dict[str, str]:
+    """Snapshot of model names that influence answers and must invalidate checkpoints."""
+    return {
+        "modelo_rag": str(getattr(rag_runtime, "MODELO_RAG", "") or ""),
+        "modelo_chat": str(getattr(rag_runtime, "MODELO_CHAT", "") or ""),
+        "modelo_embedding": str(getattr(rag_runtime, "MODELO_EMBEDDING", "") or ""),
+        "modelo_recomp": str(getattr(rag_runtime, "MODELO_RECOMP", "") or ""),
+    }
+
+
+def _checkpoint_models_match(
+    checkpoint: dict[str, Any],
+    current_models: dict[str, str],
+) -> tuple[bool, str | None]:
+    """Validate checkpoint compatibility with the current generator / embedder.
+
+    Returns ``(matches, warning_or_diff)``. Checkpoints written before model
+    tracking is deployed have none of the ``_TRACKED_MODEL_FIELDS``; those are
+    accepted for backward compatibility with a soft warning, so the user knows
+    silent model drift is possible until the checkpoint is regenerated.
+    """
+    has_any = any(checkpoint.get(k) is not None for k in _TRACKED_MODEL_FIELDS)
+    if not has_any:
+        return True, (
+            "checkpoint sin información de modelos (anterior a la validación por modelo); "
+            "si cambiaste de modelo generador desde la última corrida, bórralo y relanza."
+        )
+    differences: list[str] = []
+    for key in _TRACKED_MODEL_FIELDS:
+        stored = checkpoint.get(key)
+        current = current_models.get(key, "")
+        if stored is not None and str(stored) != current:
+            differences.append(f"{key}: {stored!r} -> {current!r}")
+    if differences:
+        return False, "modelo(s) cambiado(s): " + "; ".join(differences)
+    return True, None
+
+
 def _guardar_checkpoint_evaluacion(
     checkpoint_path: str,
     dataset_path: str,
@@ -666,27 +707,26 @@ def _guardar_checkpoint_evaluacion(
     ragbench_reranker_low_score_fallback: bool = False,
 ) -> None:
     """Save generation progress with a consistent payload."""
-    _guardar_checkpoint(
-        checkpoint_path,
-        {
-            "dataset_path": dataset_path,
-            "questions_count": questions_count,
-            "recomp_enabled": recomp_enabled,
-            "pipeline_flags": _normalizar_pipeline_flags(pipeline_flags),
-            "eval_corpus": eval_corpus,
-            "output_path": output_path,
-            "debug_path": debug_path,
-            "docs_dir": docs_dir,
-            "ragbench_reranker_low_score_fallback": ragbench_reranker_low_score_fallback,
-            "completed_questions": len([a for a in answers if not _respuesta_vacia(a)]),
-            "answers": answers,
-            "contexts_list": contexts_list,
-            "question_statuses": question_statuses or _normalizar_estados_preguntas(
-                None, answers, questions_count
-            ),
-            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        },
-    )
+    payload = {
+        "dataset_path": dataset_path,
+        "questions_count": questions_count,
+        "recomp_enabled": recomp_enabled,
+        "pipeline_flags": _normalizar_pipeline_flags(pipeline_flags),
+        "eval_corpus": eval_corpus,
+        "output_path": output_path,
+        "debug_path": debug_path,
+        "docs_dir": docs_dir,
+        "ragbench_reranker_low_score_fallback": ragbench_reranker_low_score_fallback,
+        "completed_questions": len([a for a in answers if not _respuesta_vacia(a)]),
+        "answers": answers,
+        "contexts_list": contexts_list,
+        "question_statuses": question_statuses or _normalizar_estados_preguntas(
+            None, answers, questions_count
+        ),
+        "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    payload.update(_current_models_signature())
+    _guardar_checkpoint(checkpoint_path, payload)
 
 
 def _parse_ragas_metric_names(
@@ -1104,13 +1144,17 @@ def generar_respuestas_rag(
         checkpoint = _cargar_checkpoint(resolved_checkpoint_path)
         checkpoint_valid = False
         if checkpoint:
-            if (
+            models_match, models_note = _checkpoint_models_match(
+                checkpoint, _current_models_signature()
+            )
+            structural_match = (
                 checkpoint.get("dataset_path") == dataset_path
                 and checkpoint.get("questions_count") == len(questions)
                 and _checkpoint_pipeline_flags_match(checkpoint, current_pipeline_flags)
                 and checkpoint.get("eval_corpus", "es") == eval_corpus
                 and checkpoint.get("docs_dir", rag_runtime.CARPETA_DOCS) == rag_runtime.CARPETA_DOCS
-            ):
+            )
+            if structural_match and models_match:
                 checkpoint_valid = True
                 answers = checkpoint.get("answers", [])
                 contexts_list = checkpoint.get("contexts_list", [])
@@ -1125,8 +1169,16 @@ def generar_respuestas_rag(
                     f"{non_empty_answers}/{len(questions)} questions with non-empty answers "
                     f"({len(answers)}/{len(questions)} slots present)."
                 )
+                if models_note:
+                    print(f"   [aviso] {models_note}")
             else:
-                print("   Existing checkpoint does not match this run. Starting fresh progress.")
+                if structural_match and not models_match:
+                    print(
+                        f"   Existing checkpoint does not match this run ({models_note}). "
+                        "Starting fresh progress."
+                    )
+                else:
+                    print("   Existing checkpoint does not match this run. Starting fresh progress.")
 
         t_start = time.time()
         if len(answers) > len(questions):
