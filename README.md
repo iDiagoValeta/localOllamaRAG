@@ -81,6 +81,10 @@ https://github.com/user-attachments/assets/f3e2bf0b-095a-416f-982e-9fdf4647c85e
 
 Left terminal: `ollama serve`. Right terminal: the full RAGBench pipeline — indexing, inference and RAGAS scoring in one run.
 
+**An example of document indexing for evaluating questions about specific images**
+
+<img width="1919" height="1033" alt="text-image-querys" src="https://github.com/user-attachments/assets/fdcdb934-625a-4b9e-9f56-ca6bbaebc948" />
+
 ---
 
 ## 03. How it works
