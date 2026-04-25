@@ -160,7 +160,9 @@ historial_chat.json
 # 12. Evaluación y exportaciones puntuales
 # -----------------------------------------------------------------------------
 evaluation/chunks_*.txt
+# Exportaciones locales (omitir .txt / .jsonl ad hoc); excepción: dumps versionables del prefijo fijo
 rag/show_fragments/*.txt
+!rag/show_fragments/chunks_vector_db_*.txt
 rag/show_fragments/*.jsonl
 
 # -----------------------------------------------------------------------------

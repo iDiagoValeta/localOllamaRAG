@@ -636,7 +636,7 @@ Se versionan el **`Modelfile`**, **`README.md`**, **`LICENSE`** y **`CONVERSION.
 | `web/zip/.gitignore` sin duplicar `node_modules` / `dist` | **Aplicado** — solo en la raíz |
 | Enlace en `README.md` al Hub u origen del GGUF | **Aplicado** — sección *Model weights* |
 | Reglas más finas si aparecen `.bin` pequeños legítimos | Pendiente si surge la necesidad; hoy `*.bin` es global |
-| Salida de `rag/show_fragments/export_fragments.py` (`.txt` / `.jsonl`) | **Aplicado** — bloque `12` en `.gitignore`: `rag/show_fragments/*.txt`, `rag/show_fragments/*.jsonl`; se mantiene `evaluation/chunks_*.txt` por si quedan copias antiguas |
+| Salida de `rag/show_fragments/export_fragments.py` (`.txt` / `.jsonl`) | **Aplicado** — bloque `12`: se ignoran `rag/show_fragments/*.txt` y `*.jsonl` salvo `!rag/show_fragments/chunks_vector_db_*.txt` (exports con nombre fijo, versionables); se mantiene `evaluation/chunks_*.txt` |
 
 ### 11.6 ¿Subir `.gguf` a GitHub?
 
