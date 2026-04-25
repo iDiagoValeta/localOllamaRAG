@@ -88,6 +88,8 @@ Si se quieren reportar en el TFG, conviene ejecutarlas como experimentos separad
 
 ## Salidas
 
+Las salidas generadas ya no se escriben en la raiz de `evaluation/`. La raiz queda para codigo, datasets y documentacion; los artefactos van bajo `evaluation/runs/`.
+
 La comparativa guarda artefactos bajo:
 
 ```text
@@ -170,17 +172,58 @@ Para reducir variabilidad del juez LLM, el runner primero genera/checkpointea to
 
 ## RagBench
 
-La logica de RagBench esta integrada directamente en `run_eval.py` (Section 7). Descarga metadatos de HuggingFace, selecciona papers, descarga PDFs en `rag/docs/en/` y delega la generacion, checkpoints, RAGAS, CSV y debug al runner unificado. PDFs descargados se reutilizan en ejecuciones posteriores.
+La logica de RagBench esta integrada directamente en `run_eval.py` (Section 7). Hay dos flujos RAGBench con propositos distintos:
+
+- `ragbench`: flujo legacy/exploratorio. Descarga PDFs en `rag/docs/en/` y escribe salidas RAGAS genericas.
+- `ragbench-prepare` + `ragbench-eval`: flujo final EN. Excluye el split dev congelado, descarga PDFs en `rag/docs/en_ragbench_eval/`, prepara dataset/manifiesto bajo `evaluation/runs/ragas/ragbench_prepared/` y evalua desde ese manifiesto.
 
 ```powershell
+# Legacy / exploratorio
 python evaluation\run_eval.py ragbench --n-papers 3 --max-q 5
 python evaluation\run_eval.py ragbench --only-doc 2401.07294v4 --skip-download
 python evaluation\run_eval.py ragbench --source text --n-papers 10 --force-reindex
+
+# Final EN
+python evaluation\run_eval.py ragbench-prepare
+python evaluation\run_eval.py ragbench-eval
 ```
 
-Salidas de RagBench:
+Dataset y manifiesto del flujo final EN:
+
+- Manifiesto por defecto: `evaluation/runs/ragas/ragbench_prepared/ragbench_en_eval_manifest.json`
+- Dataset por defecto: `evaluation/runs/ragas/ragbench_prepared/dataset_ragbench_en_eval_text_25p_5q_eval.json`
+- Variante local existente de 40 papers: `evaluation/runs/ragas/ragbench_prepared/dataset_ragbench_en_eval_text_40p_5q_eval.json`
+- PDFs: `rag/docs/en_ragbench_eval/`
+- ChromaDB: `rag/vector_db/en_ragbench_eval_<embed_slug>/`
+
+Salidas RAGAS:
+
 - `evaluation/runs/ragas/scores/ragas_scores_ragbench_en.csv`
 - `evaluation/runs/ragas/debug/ragas_debug_ragbench_en.json`
 - `evaluation/runs/ragas/checkpoints/ragbench/ragbench_<tag>.json`
+
+Para el flujo final `ragbench-eval`, los nombres incluyen `ragbench_en_final_<dataset>`:
+
+- `evaluation/runs/ragas/scores/ragas_scores_ragbench_en_final_<dataset>.csv`
+- `evaluation/runs/ragas/debug/ragas_debug_ragbench_en_final_<dataset>.json`
+- `evaluation/runs/ragas/checkpoints/ragbench/ragbench_en_final_<dataset>.json`
+
+## RagBench tablas e imagenes sin RAGAS
+
+Para inferir solo sobre preguntas `text-image` y `text-table` sin ejecutar RAGAS, usar:
+
+```powershell
+python evaluation\run_ragbench_visual_inference.py --n-papers 25 --max-q 5
+```
+
+Este script:
+
+- excluye el split dev congelado por defecto;
+- prepara preguntas `text-image` y `text-table`;
+- descarga PDFs en `rag/docs/en_ragbench_visual/`;
+- usa una base vectorial separada: `rag/vector_db/en_ragbench_visual_<embed_slug>/`;
+- guarda dataset, manifiesto y checkpoints en `evaluation/runs/inference/ragbench_visual/debug/`;
+- guarda resultados sin metricas en `evaluation/runs/inference/ragbench_visual/results/`;
+- no llama a RAGAS.
 
 Para las evaluaciones del TFG sobre los datasets locales, usar `single` o `compare`.
