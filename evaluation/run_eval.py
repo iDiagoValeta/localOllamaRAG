@@ -219,9 +219,11 @@ def configurar_llm_evaluacion(
 # ─────────────────────────────────────────────
 
 EVAL_DIR = os.path.dirname(os.path.abspath(__file__))
-SCORES_DIR = os.path.join(EVAL_DIR, "scores")
-DEBUG_DIR = os.path.join(EVAL_DIR, "debug")
-CHECKPOINTS_DIR = os.path.join(DEBUG_DIR, "checkpoints")
+RUNS_DIR = os.path.join(EVAL_DIR, "runs")
+RAGAS_RUNS_DIR = os.path.join(RUNS_DIR, "ragas")
+SCORES_DIR = os.path.join(RAGAS_RUNS_DIR, "scores")
+DEBUG_DIR = os.path.join(RAGAS_RUNS_DIR, "debug")
+CHECKPOINTS_DIR = os.path.join(RAGAS_RUNS_DIR, "checkpoints")
 COMPARISON_SCORES_DIR = os.path.join(SCORES_DIR, "comparison_runs")
 COMPARISON_DEBUG_DIR = os.path.join(DEBUG_DIR, "comparison_runs")
 
@@ -370,14 +372,14 @@ def _build_output_stem(dataset_path: str) -> str:
 
 
 def _default_output_path(dataset_path: str, artifact_suffix: str = "") -> str:
-    """Return the default CSV output path inside evaluation/scores."""
+    """Return the default CSV output path inside evaluation/runs/ragas/scores."""
     return os.path.join(
         SCORES_DIR, f"ragas_scores_{_build_output_stem(dataset_path)}{artifact_suffix}.csv"
     )
 
 
 def _default_debug_path(dataset_path: str, artifact_suffix: str = "") -> str:
-    """Return the default debug JSON path inside evaluation/debug."""
+    """Return the default debug JSON path inside evaluation/runs/ragas/debug."""
     return os.path.join(
         DEBUG_DIR, f"ragas_debug_{_build_output_stem(dataset_path)}{artifact_suffix}.json"
     )
@@ -1623,8 +1625,8 @@ def ejecutar_evaluacion(
 
     Args:
         dataset_path: Path to the question dataset.
-        output_path: CSV output path. Defaults to ``evaluation/scores/``.
-        debug_path: Debug JSON output path. Defaults to ``evaluation/debug/``.
+        output_path: CSV output path. Defaults to ``evaluation/runs/ragas/scores/``.
+        debug_path: Debug JSON output path. Defaults to ``evaluation/runs/ragas/debug/``.
         checkpoint_path: Progress JSON path used to resume question generation.
         verbose: Whether to print per-question progress.
         save_debug: Whether to persist the debug JSON.
@@ -1690,7 +1692,7 @@ ARXIV_HEADERS = {
 RAGBENCH_PDFS_DIR = os.path.join(_proj_root, "rag", "docs", "en")
 _RAGBENCH_OUTPUT_CSV = os.path.join(SCORES_DIR, "ragas_scores_ragbench_en.csv")
 _RAGBENCH_OUTPUT_DEBUG = os.path.join(DEBUG_DIR, "ragas_debug_ragbench_en.json")
-_RAGBENCH_PREPARED_DIR = os.path.join(DEBUG_DIR, "ragbench_prepared")
+_RAGBENCH_PREPARED_DIR = os.path.join(RAGAS_RUNS_DIR, "ragbench_prepared")
 RAGBENCH_LEGACY_DEV_PDFS_DIR = RAGBENCH_PDFS_DIR
 RAGBENCH_EVAL_PDFS_DIR = os.path.join(_proj_root, "rag", "docs", "en_ragbench_eval")
 RAGBENCH_DEV_DOC_IDS_PATH = os.path.join(EVAL_DIR, "datasets", "ragbench_en_dev_doc_ids.json")

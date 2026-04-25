@@ -38,7 +38,7 @@ def test_failed_empty_status_is_pending_but_valid_answer_wins():
 
 
 def test_generation_failure_writes_diagnostic_checkpoint(monkeypatch):
-    work_dir = ROOT / "evaluation" / "debug" / "test_run_eval_checkpoint_tmp"
+    work_dir = ROOT / "evaluation" / "runs" / "ragas" / "test_run_eval_checkpoint_tmp"
     if work_dir.exists():
         shutil.rmtree(work_dir)
     work_dir.mkdir(parents=True)
@@ -138,14 +138,14 @@ def test_ragbench_eval_generation_keeps_low_scoring_reranker_candidates(monkeypa
 
 def test_prepared_ragbench_dataset_detection():
     assert run_eval._es_dataset_ragbench(
-        "evaluation/debug/ragbench_prepared/dataset_ragbench_text_10p_5q.json",
+        "evaluation/runs/ragas/ragbench_prepared/dataset_ragbench_text_10p_5q.json",
         "en",
     )
     assert not run_eval._es_dataset_ragbench("evaluation/datasets/dataset_eval_en.json", "en")
 
 
 def test_prepare_ragbench_eval_excludes_frozen_dev_docs(monkeypatch):
-    work_dir = ROOT / "evaluation" / "debug" / "test_ragbench_prepare_tmp"
+    work_dir = ROOT / "evaluation" / "runs" / "ragas" / "test_ragbench_prepare_tmp"
     if work_dir.exists():
         shutil.rmtree(work_dir)
     work_dir.mkdir(parents=True)

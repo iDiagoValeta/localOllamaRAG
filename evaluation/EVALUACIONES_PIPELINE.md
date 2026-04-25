@@ -57,7 +57,7 @@ El formato esperado del dataset es el mismo para todos los idiomas: una tabla JS
 
 ## Nota RagBench: reranker como ordenador, no filtro duro
 
-En datasets RagBench (`ragbench` o datasets preparados en `evaluation/debug/ragbench_prepared/`) el runner activa un fallback especifico: si el reranker puntua todos los candidatos por debajo del umbral interactivo, la evaluacion conserva los mejores candidatos recuperados y genera respuesta igualmente.
+En datasets RagBench (`ragbench` o datasets preparados en `evaluation/runs/ragas/ragbench_prepared/`) el runner activa un fallback especifico: si el reranker puntua todos los candidatos por debajo del umbral interactivo, la evaluacion conserva los mejores candidatos recuperados y genera respuesta igualmente.
 
 Esto no equivale a apagar el reranker: el reranker sigue reordenando los fragmentos. Solo se desactiva su uso como filtro duro cuando dejaria una pregunta RagBench sin contexto. El comportamiento normal se mantiene para el resto de datasets y para uso interactivo.
 
@@ -91,9 +91,9 @@ Si se quieren reportar en el TFG, conviene ejecutarlas como experimentos separad
 La comparativa guarda artefactos bajo:
 
 ```text
-evaluation/scores/comparison_runs/<label>/
-evaluation/debug/comparison_runs/<label>/
-evaluation/debug/checkpoints/comparison_runs/<label>/
+evaluation/runs/ragas/scores/comparison_runs/<label>/
+evaluation/runs/ragas/debug/comparison_runs/<label>/
+evaluation/runs/ragas/checkpoints/comparison_runs/<label>/
 ```
 
 Por cada variante se genera:
@@ -118,7 +118,7 @@ Tras una comparativa, los JSON por variante (`<variant>.json`) guardan una fila 
 
 **Entrada**
 
-- Carpeta de comparativa, p. ej. `evaluation/debug/comparison_runs/todas_ablacion/` (debe contener los `<variant>.json`; si existe `comparison_summary.json`, se usan sus `runs` para localizar variantes y, si hace falta, el `dataset_path`).
+- Carpeta de comparativa, p. ej. `evaluation/runs/ragas/debug/comparison_runs/todas_ablacion/` (debe contener los `<variant>.json`; si existe `comparison_summary.json`, se usan sus `runs` para localizar variantes y, si hace falta, el `dataset_path`).
 - Dataset JSON alineado con la evaluacion (mismo orden de preguntas que en el run). Si el `dataset_path` del resumen apunta a otra maquina o no existe, pasar `--dataset` explicito.
 
 **Criterios de agrupacion (`--group-by`)**
@@ -140,11 +140,11 @@ Si el ultimo `compare` guardo un `comparison_summary.json` con **menos variantes
 **Ejemplos**
 
 ```powershell
-python evaluation\aggregate_comparison_by_conjunto.py --dir evaluation\debug\comparison_runs\todas_ablacion --etiquetas-es
+python evaluation\aggregate_comparison_by_conjunto.py --dir evaluation\runs\ragas\debug\comparison_runs\todas_ablacion --etiquetas-es
 
-python evaluation\aggregate_comparison_by_conjunto.py --dir evaluation\debug\comparison_runs\todas_ablacion --dataset evaluation\datasets\dataset_eval_es.json --group-by language --etiquetas-es --csv evaluation\scores\comparison_runs\todas_ablacion\resumen_por_conjunto.csv
+python evaluation\aggregate_comparison_by_conjunto.py --dir evaluation\runs\ragas\debug\comparison_runs\todas_ablacion --dataset evaluation\datasets\dataset_eval_es.json --group-by language --etiquetas-es --csv evaluation\runs\ragas\scores\comparison_runs\todas_ablacion\resumen_por_conjunto.csv
 
-python evaluation\aggregate_comparison_by_conjunto.py --dir evaluation\debug\comparison_runs\todas_ablacion_ca_ca --dataset evaluation\datasets\dataset_eval_ca.json --ignore-comparison-summary --etiquetas-es --csv evaluation\scores\comparison_runs\todas_ablacion_ca_ca\resumen_por_conjunto.csv
+python evaluation\aggregate_comparison_by_conjunto.py --dir evaluation\runs\ragas\debug\comparison_runs\todas_ablacion_ca_ca --dataset evaluation\datasets\dataset_eval_ca.json --ignore-comparison-summary --etiquetas-es --csv evaluation\runs\ragas\scores\comparison_runs\todas_ablacion_ca_ca\resumen_por_conjunto.csv
 ```
 
 **Nota para el TFG:** Si todo el dataset comparte un solo `source_type` (p. ej. solo Wikipedia en `dataset_eval_es.json`), la tabla tendra una fila por variante en ese conjunto; para contrastar subconjuntos, usar `mix` con `--group-by language` o `id_prefix`, o enriquecer el dataset con varios `source_type`.
@@ -179,8 +179,8 @@ python evaluation\run_eval.py ragbench --source text --n-papers 10 --force-reind
 ```
 
 Salidas de RagBench:
-- `evaluation/scores/ragas_scores_ragbench_en.csv`
-- `evaluation/debug/ragas_debug_ragbench_en.json`
-- `evaluation/debug/checkpoints/ragbench/ragbench_<tag>.json`
+- `evaluation/runs/ragas/scores/ragas_scores_ragbench_en.csv`
+- `evaluation/runs/ragas/debug/ragas_debug_ragbench_en.json`
+- `evaluation/runs/ragas/checkpoints/ragbench/ragbench_<tag>.json`
 
 Para las evaluaciones del TFG sobre los datasets locales, usar `single` o `compare`.

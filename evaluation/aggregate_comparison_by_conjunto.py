@@ -19,17 +19,17 @@
 aggregate_comparison_by_conjunto -- Agrupa métricas RAGAS por subconjunto del dataset.
 
 Lee los JSON de debug de un directorio de comparación (p. ej.
-``evaluation/debug/comparison_runs/todas_ablacion``), alinea cada muestra con
+``evaluation/runs/ragas/debug/comparison_runs/todas_ablacion``), alinea cada muestra con
 la fila del dataset por ``index`` y calcula medias por ``source_type``,
 ``language``, etc.
 
 Usage:
     python evaluation/aggregate_comparison_by_conjunto.py \\
-        --dir evaluation/debug/comparison_runs/todas_ablacion
+        --dir evaluation/runs/ragas/debug/comparison_runs/todas_ablacion
 
     python evaluation/aggregate_comparison_by_conjunto.py \\
-        --dir evaluation/debug/comparison_runs/todas_ablacion \\
-        --group-by language --output evaluation/debug/comparison_runs/todas_ablacion/por_idioma.json
+        --dir evaluation/runs/ragas/debug/comparison_runs/todas_ablacion \\
+        --group-by language --output evaluation/runs/ragas/debug/comparison_runs/todas_ablacion/por_idioma.json
 
 Dependencies:
     - stdlib + optional pandas for CSV (--csv)
@@ -49,6 +49,7 @@ from typing import Any
 
 
 EVAL_DIR = Path(__file__).resolve().parent
+RAGAS_RUNS_DIR = EVAL_DIR / "runs" / "ragas"
 SUMMARY_NAME = "comparison_summary.json"
 
 # RAGAS display names (debug JSON) -> etiquetas en castellano para informes
@@ -269,7 +270,7 @@ def main() -> None:
     parser.add_argument(
         "--dir",
         type=str,
-        default=str(EVAL_DIR / "debug" / "comparison_runs" / "todas_ablacion"),
+        default=str(RAGAS_RUNS_DIR / "debug" / "comparison_runs" / "todas_ablacion"),
         help="Carpeta con baseline_*.json / no_*.json y opcionalmente comparison_summary.json",
     )
     parser.add_argument(

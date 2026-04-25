@@ -1,0 +1,138 @@
+﻿{
+  "debug_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\ragbench_ablation_en",
+  "dataset_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\ragbench_prepared\\dataset_ragbench_text_10p_5q.json",
+  "group_by": "source_type",
+  "comparison_summary": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\ragbench_ablation_en\\comparison_summary.json",
+  "variant_discovery": "comparison_summary_runs",
+  "variants": [
+    {
+      "variant": "baseline_all_on",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\ragbench_ablation_en\\baseline_all_on.json",
+      "by_conjunto": {
+        "unknown": {
+          "n": 50,
+          "mean_scores": {
+            "Precisión del contexto": 0.8931349205934606,
+            "Cobertura del contexto": 0.96,
+            "Corrección factual": 0.5825719424386009,
+            "Fidelidad": 0.9026341991341991,
+            "Relevancia de la respuesta": 0.8314504349255317
+          }
+        }
+      }
+    },
+    {
+      "variant": "no_query_decomposition",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\ragbench_ablation_en\\no_query_decomposition.json",
+      "by_conjunto": {
+        "unknown": {
+          "n": 50,
+          "mean_scores": {
+            "Precisión del contexto": 0.8998015872593328,
+            "Cobertura del contexto": 0.96,
+            "Corrección factual": 0.5992903332787616,
+            "Fidelidad": 0.9141111111111111,
+            "Relevancia de la respuesta": 0.8217974113451885
+          }
+        }
+      }
+    },
+    {
+      "variant": "no_lexical_search",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\ragbench_ablation_en\\no_lexical_search.json",
+      "by_conjunto": {
+        "unknown": {
+          "n": 50,
+          "mean_scores": {
+            "Precisión del contexto": 0.9005911888138789,
+            "Cobertura del contexto": 0.96,
+            "Corrección factual": 0.5845328760735824,
+            "Fidelidad": 0.8863807858807858,
+            "Relevancia de la respuesta": 0.8146538759706391
+          }
+        }
+      }
+    },
+    {
+      "variant": "no_exhaustive_search",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\ragbench_ablation_en\\no_exhaustive_search.json",
+      "by_conjunto": {
+        "unknown": {
+          "n": 50,
+          "mean_scores": {
+            "Precisión del contexto": 0.8964682539268328,
+            "Cobertura del contexto": 0.96,
+            "Corrección factual": 0.5769445534654967,
+            "Fidelidad": 0.8648531746031746,
+            "Relevancia de la respuesta": 0.8460748358160538
+          }
+        }
+      }
+    },
+    {
+      "variant": "no_reranker",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\ragbench_ablation_en\\no_reranker.json",
+      "by_conjunto": {
+        "unknown": {
+          "n": 50,
+          "mean_scores": {
+            "Precisión del contexto": 0.8591388888525363,
+            "Cobertura del contexto": 0.94,
+            "Corrección factual": 0.5888150972467602,
+            "Fidelidad": 0.9087922077922077,
+            "Relevancia de la respuesta": 0.8310809545747472
+          }
+        }
+      }
+    },
+    {
+      "variant": "no_context_expansion",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\ragbench_ablation_en\\no_context_expansion.json",
+      "by_conjunto": {
+        "unknown": {
+          "n": 50,
+          "mean_scores": {
+            "Precisión del contexto": 0.8939722221756433,
+            "Cobertura del contexto": 0.94,
+            "Corrección factual": 0.5727639170586456,
+            "Fidelidad": 0.9000262515262516,
+            "Relevancia de la respuesta": 0.8387743446646989
+          }
+        }
+      }
+    },
+    {
+      "variant": "no_context_optimization",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\ragbench_ablation_en\\no_context_optimization.json",
+      "by_conjunto": {
+        "unknown": {
+          "n": 50,
+          "mean_scores": {
+            "Precisión del contexto": 0.89435536115102,
+            "Cobertura del contexto": 0.96,
+            "Corrección factual": 0.5568838547614324,
+            "Fidelidad": 0.9052994987468672,
+            "Relevancia de la respuesta": 0.8098408079370455
+          }
+        }
+      }
+    },
+    {
+      "variant": "no_recomp_synthesis",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\ragbench_ablation_en\\no_recomp_synthesis.json",
+      "by_conjunto": {
+        "unknown": {
+          "n": 50,
+          "mean_scores": {
+            "Precisión del contexto": 0.8955793650371596,
+            "Cobertura del contexto": 0.96,
+            "Corrección factual": 0.5902961889804155,
+            "Fidelidad": 0.9112380952380953,
+            "Relevancia de la respuesta": 0.8190039433180035
+          }
+        }
+      }
+    }
+  ],
+  "metric_labels": "es"
+}

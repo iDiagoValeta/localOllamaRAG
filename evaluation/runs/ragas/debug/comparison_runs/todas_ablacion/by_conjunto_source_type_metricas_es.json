@@ -1,0 +1,105 @@
+﻿{
+  "debug_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\todas_ablacion",
+  "dataset_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\datasets\\dataset_eval_es.json",
+  "group_by": "source_type",
+  "comparison_summary": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\todas_ablacion\\comparison_summary.json",
+  "variants": [
+    {
+      "variant": "baseline_all_on",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\todas_ablacion\\baseline_all_on.json",
+      "by_conjunto": {
+        "wikipedia": {
+          "n": 50,
+          "mean_scores": {
+            "Precisión del contexto": 0.9529999999257055,
+            "Cobertura del contexto": 0.99,
+            "Corrección factual": 0.6867418446856156,
+            "Fidelidad": 0.8029562015919601,
+            "Relevancia de la respuesta": 0.7791468864533476
+          }
+        }
+      }
+    },
+    {
+      "variant": "no_query_decomposition",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\todas_ablacion\\no_query_decomposition.json",
+      "by_conjunto": {
+        "wikipedia": {
+          "n": 50,
+          "mean_scores": {
+            "Precisión del contexto": 0.9529999999257055,
+            "Cobertura del contexto": 0.99,
+            "Corrección factual": 0.7044353980561209,
+            "Fidelidad": 0.7674573725594134,
+            "Relevancia de la respuesta": 0.8031407212322381
+          }
+        }
+      }
+    },
+    {
+      "variant": "no_lexical_search",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\todas_ablacion\\no_lexical_search.json",
+      "by_conjunto": {
+        "wikipedia": {
+          "n": 50,
+          "mean_scores": {
+            "Precisión del contexto": 0.9583333332578612,
+            "Cobertura del contexto": 0.99,
+            "Corrección factual": 0.6681164167244508,
+            "Fidelidad": 0.7947451886536573,
+            "Relevancia de la respuesta": 0.8029165765123488
+          }
+        }
+      }
+    },
+    {
+      "variant": "no_exhaustive_search",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\todas_ablacion\\no_exhaustive_search.json",
+      "by_conjunto": {
+        "wikipedia": {
+          "n": 50,
+          "mean_scores": {
+            "Precisión del contexto": 0.9703333332567945,
+            "Cobertura del contexto": 0.99,
+            "Corrección factual": 0.6688897037678357,
+            "Fidelidad": 0.7668513007054675,
+            "Relevancia de la respuesta": 0.7736249828721331
+          }
+        }
+      }
+    },
+    {
+      "variant": "no_reranker",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\todas_ablacion\\no_reranker.json",
+      "by_conjunto": {
+        "wikipedia": {
+          "n": 50,
+          "mean_scores": {
+            "Precisión del contexto": 0.7963015872402481,
+            "Cobertura del contexto": 0.9,
+            "Corrección factual": 0.6590672872531168,
+            "Fidelidad": 0.7585666185666186,
+            "Relevancia de la respuesta": 0.7634278669259656
+          }
+        }
+      }
+    },
+    {
+      "variant": "no_context_expansion",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\debug\\comparison_runs\\todas_ablacion\\no_context_expansion.json",
+      "by_conjunto": {
+        "wikipedia": {
+          "n": 50,
+          "mean_scores": {
+            "Precisión del contexto": 0.96966666659125,
+            "Cobertura del contexto": 0.97,
+            "Corrección factual": 0.61511126464384,
+            "Fidelidad": 0.8149444659648741,
+            "Relevancia de la respuesta": 0.7665343015517818
+          }
+        }
+      }
+    }
+  ],
+  "metric_labels": "es"
+}

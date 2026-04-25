@@ -128,6 +128,9 @@ rag/docs/en_ragbench_dev/**
 rag/docs/en_ragbench_eval/**
 !rag/docs/en_ragbench_eval/.gitignore
 
+rag/docs/en_ragbench_visual/**
+!rag/docs/en_ragbench_visual/.gitignore
+
 # Base de datos vectorial unificada (generada al indexar; nunca versionada).
 rag/vector_db/**
 
@@ -160,6 +163,12 @@ historial_chat.json
 # 12. Evaluación y exportaciones puntuales
 # -----------------------------------------------------------------------------
 evaluation/chunks_*.txt
+evaluation/runs/inference/ragbench_visual/results/**
+!evaluation/runs/inference/ragbench_visual/results/
+!evaluation/runs/inference/ragbench_visual/results/.gitignore
+evaluation/runs/inference/ragbench_visual/debug/**
+evaluation/runs/ragas/test_*/
+evaluation/runs/ragas/pytest_*/
 # Exportaciones locales (omitir .txt / .jsonl ad hoc); excepción: dumps versionables del prefijo fijo
 rag/show_fragments/*.txt
 !rag/show_fragments/chunks_vector_db_*.txt

@@ -253,6 +253,7 @@ python evaluation/run_eval.py single --corpus ca    # Catalan corpus
 
 python evaluation/run_eval.py ragbench-prepare      # build fixed EN eval corpus (25 docs / 5 q each)
 python evaluation/run_eval.py ragbench-eval         # index + infer + RAGAS from manifest
+python evaluation/run_ragbench_visual_inference.py --n-papers 25 --max-q 5  # table/image RagBench inference only
 ```
 
 <details>
@@ -269,11 +270,11 @@ Aggregate per-variant results by dataset subset:
 
 ```bash
 python evaluation/aggregate_comparison_by_conjunto.py \
-  --dir evaluation/debug/comparison_runs/mi_eval \
+  --dir evaluation/runs/ragas/debug/comparison_runs/mi_eval \
   --etiquetas-es
 ```
 
-Artifacts: `evaluation/scores/` (CSVs), `evaluation/debug/` (JSON traces), `evaluation/debug/checkpoints/` (resume state). See `evaluation/EVALUACIONES_PIPELINE.md` for corpus presets and variant definitions.
+Artifacts: `evaluation/runs/ragas/scores/` (CSVs), `evaluation/runs/ragas/debug/` (JSON traces), `evaluation/runs/ragas/checkpoints/` (resume state), and `evaluation/runs/inference/` for non-RAGAS inference runs. See `evaluation/EVALUACIONES_PIPELINE.md` for corpus presets and variant definitions.
 
 </details>
 
@@ -313,7 +314,8 @@ localOllamaRAG/
 │   │   ├── ca/                   # Catalan PDF corpus
 │   │   ├── en/                   # Generic English corpus
 │   │   ├── en_ragbench_dev/      # Frozen RagBench EN dev PDFs (local .gitignore)
-│   │   └── en_ragbench_eval/     # RagBench EN final eval PDFs (local .gitignore)
+│   │   ├── en_ragbench_eval/     # RagBench EN final eval PDFs (local .gitignore)
+│   │   └── en_ragbench_visual/   # RagBench table/image inference PDFs (local .gitignore)
 │   ├── vector_db/                # ChromaDB indexes — gitignored, created at runtime
 │   ├── debug_rag/                # Per-query debug dumps — gitignored
 │   ├── cli/                      # Rich terminal UI (MonkeyGrabCLI)
@@ -329,6 +331,8 @@ localOllamaRAG/
 ├── evaluation/
 │   ├── datasets/                 # Question datasets (ES, CA, mix)
 │   ├── run_eval.py               # RAGAS entrypoint: single | compare | ragbench
+│   ├── run_ragbench_visual_inference.py  # RagBench table/image inference without RAGAS
+│   ├── runs/                     # Evaluation artifacts: ragas/ and inference/
 │   ├── aggregate_comparison_by_conjunto.py
 │   ├── EVALUACIONES_PIPELINE.md  # Eval presets, ablation variants, aggregation notes
 │   └── requirements.txt
