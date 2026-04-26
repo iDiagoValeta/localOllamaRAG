@@ -42,10 +42,10 @@ Los presets de corpus resuelven dataset y carpeta de PDFs por convencion:
 
 | Corpus | Dataset por defecto | PDFs por defecto |
 | --- | --- | --- |
-| `es` | `evaluation/datasets/dataset_eval_es.json` | `rag/docs/es` |
-| `ca` | `evaluation/datasets/dataset_eval_ca.json` | `rag/docs/ca` |
-| `en` | `evaluation/datasets/dataset_eval_en.json` | `rag/docs/en` |
-| `mix` | `evaluation/datasets/dataset_eval_mix.json` | `rag/docs/es` (default) |
+| `es` | `evaluation/datasets/local/dataset_eval_es.json` | `rag/docs/es` |
+| `ca` | `evaluation/datasets/local/dataset_eval_ca.json` | `rag/docs/ca` |
+| `en` | `evaluation/datasets/local/dataset_eval_en.json` | `rag/docs/en` |
+| `mix` | `evaluation/datasets/local/dataset_eval_mix.json` | `rag/docs/es` (default) |
 
 Si un dataset o carpeta no existe todavia, crealo manualmente o pasa rutas explicitas:
 
@@ -57,7 +57,7 @@ El formato esperado del dataset es el mismo para todos los idiomas: una tabla JS
 
 ## Nota RagBench: reranker como ordenador, no filtro duro
 
-En datasets RagBench (`ragbench` o datasets preparados en `evaluation/runs/ragas/ragbench_prepared/`) el runner activa un fallback especifico: si el reranker puntua todos los candidatos por debajo del umbral interactivo, la evaluacion conserva los mejores candidatos recuperados y genera respuesta igualmente.
+En datasets RagBench (`ragbench` o datasets preparados en `evaluation/datasets/ragbench/prepared/`) el runner activa un fallback especifico: si el reranker puntua todos los candidatos por debajo del umbral interactivo, la evaluacion conserva los mejores candidatos recuperados y genera respuesta igualmente.
 
 Esto no equivale a apagar el reranker: el reranker sigue reordenando los fragmentos. Solo se desactiva su uso como filtro duro cuando dejaria una pregunta RagBench sin contexto. El comportamiento normal se mantiene para el resto de datasets y para uso interactivo.
 
@@ -93,9 +93,11 @@ Las salidas generadas ya no se escriben en la raiz de `evaluation/`. La raiz que
 La comparativa guarda artefactos bajo:
 
 ```text
-evaluation/runs/ragas/scores/comparison_runs/<label>/
-evaluation/runs/ragas/debug/comparison_runs/<label>/
-evaluation/runs/ragas/checkpoints/comparison_runs/<label>/
+evaluation/runs/ragas/comparisons/<label>/
+evaluation/runs/ragas/comparisons/<label>/scores/
+evaluation/runs/ragas/comparisons/<label>/debug/
+evaluation/runs/ragas/comparisons/<label>/checkpoints/
+evaluation/runs/ragas/comparisons/<label>/aggregates/
 ```
 
 Por cada variante se genera:
@@ -120,7 +122,7 @@ Tras una comparativa, los JSON por variante (`<variant>.json`) guardan una fila 
 
 **Entrada**
 
-- Carpeta de comparativa, p. ej. `evaluation/runs/ragas/debug/comparison_runs/todas_ablacion/` (debe contener los `<variant>.json`; si existe `comparison_summary.json`, se usan sus `runs` para localizar variantes y, si hace falta, el `dataset_path`).
+- Carpeta de comparativa, p. ej. `evaluation/runs/ragas/comparisons/todas_ablacion/` (debe contener `debug/<variant>.json`; si existe `comparison_summary.json`, se usan sus `runs` para localizar variantes y, si hace falta, el `dataset_path`).
 - Dataset JSON alineado con la evaluacion (mismo orden de preguntas que en el run). Si el `dataset_path` del resumen apunta a otra maquina o no existe, pasar `--dataset` explicito.
 
 **Criterios de agrupacion (`--group-by`)**
@@ -134,7 +136,7 @@ Tras una comparativa, los JSON por variante (`<variant>.json`) guardan una fila 
 
 **Salida**
 
-- JSON por defecto en la misma carpeta: `by_conjunto_<criterio>.json` o, con `--etiquetas-es`, `by_conjunto_<criterio>_metricas_es.json` (claves de metricas en castellano para informes).
+- JSON por defecto en `aggregates/`: `by_conjunto_<criterio>.json` o, con `--etiquetas-es`, `by_conjunto_<criterio>_metricas_es.json` (claves de metricas en castellano para informes).
 - Opcional `--csv <ruta>`: tabla larga (variante, conjunto, n, columnas por metrica). Requiere `pandas`.
 
 Si el ultimo `compare` guardo un `comparison_summary.json` con **menos variantes** de las que ya tienes en disco (corrida parcial), usa **`--ignore-comparison-summary`** para agregar **todos** los `<variante>.json` de la carpeta (se ignoran `comparison_summary.json` y `by_conjunto_*.json`).
@@ -142,11 +144,11 @@ Si el ultimo `compare` guardo un `comparison_summary.json` con **menos variantes
 **Ejemplos**
 
 ```powershell
-python evaluation\aggregate_comparison_by_conjunto.py --dir evaluation\runs\ragas\debug\comparison_runs\todas_ablacion --etiquetas-es
+python evaluation\aggregate_comparison_by_conjunto.py --dir evaluation\runs\ragas\comparisons\todas_ablacion --etiquetas-es
 
-python evaluation\aggregate_comparison_by_conjunto.py --dir evaluation\runs\ragas\debug\comparison_runs\todas_ablacion --dataset evaluation\datasets\dataset_eval_es.json --group-by language --etiquetas-es --csv evaluation\runs\ragas\scores\comparison_runs\todas_ablacion\resumen_por_conjunto.csv
+python evaluation\aggregate_comparison_by_conjunto.py --dir evaluation\runs\ragas\comparisons\todas_ablacion --dataset evaluation\datasets\local\dataset_eval_es.json --group-by language --etiquetas-es --csv evaluation\runs\ragas\comparisons\todas_ablacion\scores\resumen_por_conjunto.csv
 
-python evaluation\aggregate_comparison_by_conjunto.py --dir evaluation\runs\ragas\debug\comparison_runs\todas_ablacion_ca_ca --dataset evaluation\datasets\dataset_eval_ca.json --ignore-comparison-summary --etiquetas-es --csv evaluation\runs\ragas\scores\comparison_runs\todas_ablacion_ca_ca\resumen_por_conjunto.csv
+python evaluation\aggregate_comparison_by_conjunto.py --dir evaluation\runs\ragas\comparisons\todas_ablacion_ca_ca --dataset evaluation\datasets\local\dataset_eval_ca.json --ignore-comparison-summary --etiquetas-es --csv evaluation\runs\ragas\comparisons\todas_ablacion_ca_ca\scores\resumen_por_conjunto.csv
 ```
 
 **Nota para el TFG:** Si todo el dataset comparte un solo `source_type` (p. ej. solo Wikipedia en `dataset_eval_es.json`), la tabla tendra una fila por variante en ese conjunto; para contrastar subconjuntos, usar `mix` con `--group-by language` o `id_prefix`, o enriquecer el dataset con varios `source_type`.
@@ -170,12 +172,40 @@ Interpretacion recomendada:
 
 Para reducir variabilidad del juez LLM, el runner primero genera/checkpointea todas las respuestas y despues ejecuta RAGAS de forma consecutiva para las variantes seleccionadas.
 
+## BERTScore complementario
+
+Para calcular similitud semantica respuesta-referencia sobre salidas RAGAS ya generadas, usar:
+
+```powershell
+python evaluation\evaluate_ragas_bertscore.py --input-csv evaluation\runs\ragas\single\dataset_eval_es_es\scores.csv
+
+python evaluation\evaluate_ragas_bertscore.py --comparison-dir evaluation\runs\ragas\comparisons\mi_eval_es_ablation
+
+python evaluation\evaluate_ragas_bertscore.py --all-completed
+```
+
+Este postproceso no ejecuta inferencia ni RAGAS. Lee columnas `response` y `reference` de los CSV RAGAS y escribe artefactos separados en `evaluation/runs/bertscore/<label>/`:
+
+- `<variante>_bertscore.csv`, con `bertscore_precision`, `bertscore_recall` y `bertscore_f1` por muestra;
+- `bertscore_summary.json`;
+- `bertscore_summary.csv`.
+
+Con `--all-completed`, el script recorre los experimentos RAGAS completados bajo `evaluation/runs/ragas/`: runs `single`, `comparisons`, `ragbench` y `ragbench_visual`. Ignora tablas auxiliares que no tengan columnas `response` y `reference`, como `resumen_por_conjunto.csv`, y genera tambien `evaluation/runs/bertscore/all_completed_bertscore_summary.json` y `.csv`.
+
+Configuracion fija para todos los idiomas:
+
+- modelo: `microsoft/deberta-xlarge-mnli`;
+- `lang="en"`, coherente con ese modelo;
+- `rescale_with_baseline=True`.
+
+Interpretacion para el TFG: BERTScore mide similitud semantica entre respuesta generada y referencia, no factualidad ni fidelidad al contexto. El valor no tiene interpretacion universal directa ni umbral absoluto de correccion; se usa para comparar cambios relativos entre variantes evaluadas con el mismo dataset, modelo y protocolo.
+
 ## RagBench
 
 La logica de RagBench esta integrada directamente en `run_eval.py` (Section 7). Hay dos flujos RAGBench con propositos distintos:
 
 - `ragbench`: flujo legacy/exploratorio. Descarga PDFs en `rag/docs/en/` y escribe salidas RAGAS genericas.
-- `ragbench-prepare` + `ragbench-eval`: flujo final EN. Excluye el split dev congelado, descarga PDFs en `rag/docs/en_ragbench_eval/`, prepara dataset/manifiesto bajo `evaluation/runs/ragas/ragbench_prepared/` y evalua desde ese manifiesto.
+- `ragbench-prepare` + `ragbench-eval`: flujo final EN. Excluye el split dev congelado, descarga PDFs en `rag/docs/en_ragbench_eval/`, prepara dataset/manifiesto bajo `evaluation/datasets/ragbench/prepared/en_eval/` y evalua desde ese manifiesto.
 
 ```powershell
 # Legacy / exploratorio
@@ -190,23 +220,23 @@ python evaluation\run_eval.py ragbench-eval
 
 Dataset y manifiesto del flujo final EN:
 
-- Manifiesto por defecto: `evaluation/runs/ragas/ragbench_prepared/ragbench_en_eval_manifest.json`
-- Dataset por defecto: `evaluation/runs/ragas/ragbench_prepared/dataset_ragbench_en_eval_text_25p_5q_eval.json`
-- Variante local existente de 40 papers: `evaluation/runs/ragas/ragbench_prepared/dataset_ragbench_en_eval_text_40p_5q_eval.json`
+- Manifiesto por defecto: `evaluation/datasets/ragbench/prepared/en_eval/ragbench_en_eval_manifest.json`
+- Dataset por defecto: `evaluation/datasets/ragbench/prepared/en_eval/dataset_ragbench_en_eval_text_25p_5q_eval.json`
+- Variante local existente de 40 papers: `evaluation/datasets/ragbench/prepared/en_eval/dataset_ragbench_en_eval_text_40p_5q_eval.json`
 - PDFs: `rag/docs/en_ragbench_eval/`
 - ChromaDB: `rag/vector_db/en_ragbench_eval_<embed_slug>/`
 
 Salidas RAGAS:
 
-- `evaluation/runs/ragas/scores/ragas_scores_ragbench_en.csv`
-- `evaluation/runs/ragas/debug/ragas_debug_ragbench_en.json`
-- `evaluation/runs/ragas/checkpoints/ragbench/ragbench_<tag>.json`
+- `evaluation/runs/ragas/ragbench/legacy/<tag>/scores.csv`
+- `evaluation/runs/ragas/ragbench/legacy/<tag>/debug.json`
+- `evaluation/runs/ragas/ragbench/legacy/<tag>/checkpoint.json`
 
 Para el flujo final `ragbench-eval`, los nombres incluyen `ragbench_en_final_<dataset>`:
 
-- `evaluation/runs/ragas/scores/ragas_scores_ragbench_en_final_<dataset>.csv`
-- `evaluation/runs/ragas/debug/ragas_debug_ragbench_en_final_<dataset>.json`
-- `evaluation/runs/ragas/checkpoints/ragbench/ragbench_en_final_<dataset>.json`
+- `evaluation/runs/ragas/ragbench/en_eval/<dataset>/scores.csv`
+- `evaluation/runs/ragas/ragbench/en_eval/<dataset>/debug.json`
+- `evaluation/runs/ragas/ragbench/en_eval/<dataset>/checkpoint.json`
 
 ## RagBench tablas e imagenes sin RAGAS
 
@@ -223,8 +253,19 @@ Este script:
 - desactiva `USAR_RERANKER` por defecto para evitar bloqueos del cross-encoder durante inferencia larga;
 - descarga PDFs en `rag/docs/en_ragbench_visual/`;
 - usa una base vectorial separada: `rag/vector_db/en_ragbench_visual_<embed_slug>/`;
-- guarda dataset, manifiesto y checkpoints en `evaluation/runs/inference/ragbench_visual/debug/`;
-- guarda resultados sin metricas en `evaluation/runs/inference/ragbench_visual/results/`;
+- guarda dataset y manifiesto en `evaluation/datasets/ragbench/prepared/visual/`;
+- guarda resultados y checkpoint en `evaluation/runs/inference/ragbench_visual/<tag>/`;
 - no llama a RAGAS.
+
+Cuando la inferencia visual ya ha terminado y se quiere evaluar con RAGAS sin regenerar respuestas:
+
+```powershell
+python evaluation\run_ragbench_visual_inference.py --ragas-only --n-papers 25 --max-q 5 --ragas-batch-size 1 --ragas-max-workers 1 --ragas-max-wait 120
+```
+
+Este modo lee `evaluation/runs/inference/ragbench_visual/image_table_25p_5q/results.json`, reconstruye preguntas, respuestas, referencias y contextos, y escribe:
+
+- `evaluation/runs/ragas/ragbench_visual/image_table_25p_5q/scores.csv`;
+- `evaluation/runs/ragas/ragbench_visual/image_table_25p_5q/debug.json`.
 
 Para las evaluaciones del TFG sobre los datasets locales, usar `single` o `compare`.

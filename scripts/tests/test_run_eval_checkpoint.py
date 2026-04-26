@@ -138,10 +138,10 @@ def test_ragbench_eval_generation_keeps_low_scoring_reranker_candidates(monkeypa
 
 def test_prepared_ragbench_dataset_detection():
     assert run_eval._es_dataset_ragbench(
-        "evaluation/runs/ragas/ragbench_prepared/dataset_ragbench_text_10p_5q.json",
+        "evaluation/datasets/ragbench/prepared/dev_frozen/dataset_ragbench_text_10p_5q.json",
         "en",
     )
-    assert not run_eval._es_dataset_ragbench("evaluation/datasets/dataset_eval_en.json", "en")
+    assert not run_eval._es_dataset_ragbench("evaluation/datasets/local/dataset_eval_en.json", "en")
 
 
 def test_prepare_ragbench_eval_excludes_frozen_dev_docs(monkeypatch):

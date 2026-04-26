@@ -1,0 +1,752 @@
+[
+  {
+    "question": "What are the computational time differences between GAM models and other machine learning benchmarks for electricity load forecasting in France and Germany?",
+    "ground_truth": "The Generalized Additive Models (GAM) have computation times ranging from 2.6 to 4.8 seconds, which are longer than simpler linear benchmarks but shorter than more complex models like deep neural networks that can take up to an hour. In France, the FNN benchmark takes about 6.73 seconds, while in Germany it takes about 9.08 seconds.",
+    "paper_id": "2405.17070v2",
+    "source_type": "text-table"
+  },
+  {
+    "question": "What external inputs are incorporated into the final load forecast?",
+    "ground_truth": "The final load forecast incorporates smoothed temperatures, seasonal data, holiday information, and ETS unit root states.",
+    "paper_id": "2405.17070v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How long does autoregressive postprocessing add to computation times?",
+    "ground_truth": "About one second",
+    "paper_id": "2405.17070v2",
+    "source_type": "text-table"
+  },
+  {
+    "question": "How do ETS models assign weights to past observations?",
+    "ground_truth": "ETS models apply exponential smoothing to assign exponentially diminishing weights to past observations.",
+    "paper_id": "2405.17070v2",
+    "source_type": "text-table"
+  },
+  {
+    "question": "How do Generalized Additive Models (GAM) contribute to mid-term electricity load forecasting?",
+    "ground_truth": "GAMs contribute by modeling non-linear relationships between inputs like temperature, seasonality, and holidays with the electricity load, allowing for more accurate predictions over a mid-term horizon.",
+    "paper_id": "2405.17070v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Which molecule has a higher reward score, aripiprazole or celecoxib?",
+    "ground_truth": "Aripiprazole",
+    "paper_id": "2405.01155v3",
+    "source_type": "text-table"
+  },
+  {
+    "question": "What role do synthesis constraints play in molecule design?",
+    "ground_truth": "Synthesis constraints ensure that the designed molecules can be practically synthesized in a laboratory setting. They guide the selection of reactions and materials to create viable synthetic routes.",
+    "paper_id": "2405.01155v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Why is an extensive collection of building blocks necessary for synthetic accessibility?",
+    "ground_truth": "An extensive collection is crucial because it ensures that a wide range of potential molecules can be synthesized across a large chemical space, facilitating diverse molecular design.",
+    "paper_id": "2405.01155v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Does any synthesis pathway have a QED value greater than 0.4?",
+    "ground_truth": "Yes, one of the synthesis pathways has a QED value of 0.48.",
+    "paper_id": "2405.01155v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does SynFlowNet improve molecule synthesizability compared to traditional methods?",
+    "ground_truth": "SynFlowNet enhances molecule synthesizability by generating molecules within a synthetically accessible chemical space using documented chemical reactions and purchasable starting materials. This approach offers greater sample diversity than fragment-based models and is more efficient than traditional Reinforcement Learning methods.",
+    "paper_id": "2405.01155v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does immune system activation affect tissue damage during viral infections?",
+    "ground_truth": "Immune system activation affects tissue damage by determining how quickly an infection is cleared after reaching a threshold of infected cells. Delays in activation can lead to increased cumulative tissue damage, especially if detection thresholds are high.",
+    "paper_id": "2408.07618v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Is there a difference in infection dynamics between zero diffusion and infinite diffusion conditions?",
+    "ground_truth": "Yes, infections progress slower with zero diffusion compared to infinite diffusion.",
+    "paper_id": "2408.07618v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How do narrow and wide tube configurations differ in terms of viral lineage competition?",
+    "ground_truth": "In narrow tube configurations, one or few viral lineages tend to dominate due to slower spread along the tube's length. In contrast, wide tubes allow multiple lineages to coexist more evenly.",
+    "paper_id": "2408.07618v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What factors influence the proportion of cell-to-cell viral infections in tube-shaped tissues?",
+    "ground_truth": "The proportion of cell-to-cell viral infections in tube-shaped tissues is influenced by aspect ratios and viral diffusion coefficients.",
+    "paper_id": "2408.07618v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is an agent-based model in the context of viral infections?",
+    "ground_truth": "An agent-based model in viral infections simulates interactions between individual cells and viruses, allowing researchers to study infection dynamics by representing each cell as an agent with specific states like susceptible, infected, or dead.",
+    "paper_id": "2408.07618v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What happens to coma lobes as beams move further from the feed array center?",
+    "ground_truth": "Coma lobes become more pronounced.",
+    "paper_id": "2412.02582v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Why are histograms and violin plots used in analyzing beam pattern residuals?",
+    "ground_truth": "Histograms and violin plots are used to statistically analyze the distribution of residuals between measured and modeled beam patterns. They help compare main beams and side lobes, highlighting differences between models like Gaussian and ZP.",
+    "paper_id": "2412.02582v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Why is it important to categorize feed positions into different circles in an array?",
+    "ground_truth": "Categorizing feed positions into center, inner-circle, middle-circle, and outer-circle beams helps optimize data collection by aligning feeds with specific observational needs and improving overall coverage.",
+    "paper_id": "2412.02582v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Do the beam patterns exhibit circular symmetry within their $50\\%$ contour?",
+    "ground_truth": "Yes",
+    "paper_id": "2412.02582v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What role does rotation angle play in aligning a feed array during observations?",
+    "ground_truth": "The rotation angle ensures that the feed array aligns with celestial coordinates like right ascension, maximizing data accuracy by maintaining consistent orientation relative to observed objects.",
+    "paper_id": "2412.02582v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "In which scenario does reducing bandwidth mainly shrink the envelope with minimal efficiency gains?",
+    "ground_truth": "Reducing bandwidth mainly shrinks the envelope with minimal efficiency gains when not at the radiative limit or when \\( E_g \\) is larger than a few \\( k_B T_h \\).",
+    "paper_id": "2402.07527v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does quantum efficiency affect power output in dual radiative engines compared to thermophotovoltaic devices?",
+    "ground_truth": "In dual radiative engines, high quantum efficiencies lead to enhanced power output compared to thermophotovoltaic devices, especially when QE exceeds values of 0.5 and reaches up to 0.9 or higher.",
+    "paper_id": "2402.07527v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What factors influence the efficiency of dual radiative heat engines?",
+    "ground_truth": "The efficiency of dual radiative heat engines is influenced by the bandgap and the temperature of the heat source. Efficiency varies with these parameters, transitioning between different operational quadrants like TRPV and TPX.",
+    "paper_id": "2402.07527v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Does a larger bandgap energy ($E_g \\gg k_B T_h$) result in higher efficiency at maximum power?",
+    "ground_truth": "Yes, a larger bandgap energy ($E_g \\gg k_B T_h$) results in higher efficiency at maximum power.",
+    "paper_id": "2402.07527v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Why is it important to consider broadband radiation in these engines?",
+    "ground_truth": "Considering broadband radiation is important because it affects how efficiently an engine can convert thermal energy into work. It helps determine optimal operating conditions for maximizing power output and efficiency.",
+    "paper_id": "2402.07527v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is the difference between worker-side and vacancy-side matching probabilities on Japanese job platforms?",
+    "ground_truth": "There is a disparity between worker-side and vacancy-side matching probabilities on the private platform compared to Hello Work, despite user growth and job postings.",
+    "paper_id": "2410.17011v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What factors might contribute to declining job-worker finding rates in Japanese employment markets?",
+    "ground_truth": "Declining job-worker finding rates may be attributed to inefficiencies or competition from more engaging private scouting platforms.",
+    "paper_id": "2410.17011v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does elasticity with respect to vacancies change for employment platforms from 2014 to 2024?",
+    "ground_truth": "For both platforms, elasticity with respect to vacancies increases significantly. By 2022 for Hello Work and reaching similar levels by 2024 for the private platform.",
+    "paper_id": "2410.17011v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What trends are observed in the elasticity of online job search platforms in Japan from 2014 to 2024?",
+    "ground_truth": "There is an increasing trend towards greater elasticity as these platforms adapt to changing labor market dynamics and user needs.",
+    "paper_id": "2410.17011v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is the trend in labor market tightness (V/U) for Hello Work from 2014 to 2024?",
+    "ground_truth": "The labor market tightness (V/U) for Hello Work remains below one and shows slight fluctuations over time.",
+    "paper_id": "2410.17011v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How do feasibility plots differ between haploid and diploid human chromosomes in terms of minimum normalized coverage?",
+    "ground_truth": "Feasibility plots show that minimum normalized coverage requirements differ significantly between haploid and diploid chromosomes due to the increased complexity of heterozygous variations in diploids.",
+    "paper_id": "2405.05734v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Why might certain reads remain unmerged during genome assembly?",
+    "ground_truth": "Certain reads may remain unmerged due to configurations where double repeats either overlap or belong to different haplotypes. This can cause gaps in the sequence that are overlooked by greedy algorithms used for merging.",
+    "paper_id": "2405.05734v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What are the challenges in reconstructing diploid genomes with heterozygous loci?",
+    "ground_truth": "Reconstructing diploid genomes with heterozygous loci is challenging due to the presence of multiple possible sequence arrangements and double repeats, which can lead to incorrect reconstructions.",
+    "paper_id": "2405.05734v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "In what scenarios does a greedy algorithm produce only one string during haplotype reconstruction?",
+    "ground_truth": "A single string is produced when there are no switch errors or when overlapping sections can be removed without affecting the representation of both haplotypes.",
+    "paper_id": "2405.05734v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is a de Bruijn graph and how is it used in genome assembly?",
+    "ground_truth": "A de Bruijn graph is a data structure used to represent overlaps between sequences, typically $k$-mers from genomic reads. In genome assembly, it helps reconstruct haplotypes by finding paths that correspond to the original sequence.",
+    "paper_id": "2405.05734v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Why is it important to design specific resonators for studying FQH states?",
+    "ground_truth": "Carefully designed resonators are crucial for probing and controlling correlations within the lowest Landau level (LLL) of FQH states. They enable precise manipulation of electromagnetic modes, which is essential for observing new phenomena like anisotropic geometries or phase transitions.",
+    "paper_id": "2405.12292v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is the significance of coupling fractional quantum Hall states with quantum light in a cavity?",
+    "ground_truth": "Coupling fractional quantum Hall (FQH) states with quantum light in a cavity allows researchers to explore new dynamics and interactions, such as the emergence of graviton-polaritons and changes in entanglement structures. This interaction can lead to novel phenomena like vacuum-induced Stark shifts and potential phase transitions.",
+    "paper_id": "2405.12292v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What experimental advancements could enhance our understanding of graviton-polaritons?",
+    "ground_truth": "Advancements in high-Q cavities could enable strong-coupling regimes that allow for better resolution of graviton-polaritons. Additionally, exploring more complex electromagnetic environments may influence vacuum Stark shifts within FQH liquids.",
+    "paper_id": "2405.12292v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How do different gradient profiles affect resonance conditions in solid-state systems?",
+    "ground_truth": "Uniform linear and parabolic gradient profiles show differences in Rabi splitting due to effective coupling constants, impacting resonance conditions between electronic interactions and cavity frequencies.",
+    "paper_id": "2405.12292v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is the fractional quantum Hall effect and how does it relate to quantized resistivity?",
+    "ground_truth": "The fractional quantum Hall effect is a quantum phenomenon where the transverse resistivity of a two-dimensional electron system becomes quantized at certain fractional values. This occurs due to strong electron interactions in a magnetic field, leading to unique states like the Laughlin state with filling factor $\\nu=1/3$.",
+    "paper_id": "2405.12292v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does the density of states vary in spintronic transistors?",
+    "ground_truth": "The device density of states (DDOS) varies between majority and minority spin electrons under flat-band conditions, highlighting differences in electronic state distribution.",
+    "paper_id": "2411.07216v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does channel length affect the performance of spintronic transistors?",
+    "ground_truth": "Channel length variations from 6 to 16 nm impact subthreshold swing and leakage currents while maintaining consistent on-current density, with longer channels achieving higher on/off ratios.",
+    "paper_id": "2411.07216v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Does Type-II SGS require antiparallel magnetization for operation?",
+    "ground_truth": "Yes, Type-II SGS requires antiparallel magnetization for operation.",
+    "paper_id": "2411.07216v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What are the key components and materials used in the design of a vertical heterojunction field-effect transistor (FET)?",
+    "ground_truth": "The key components include $\\mathrm{VS}_{2}$ as source/drain electrodes and $\\mathrm{Ga}_{2} \\mathrm{O}_{2}$ as the channel material, with gate metal and gate oxide layers.",
+    "paper_id": "2411.07216v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What role does the type of spin channel behavior play in determining the characteristics of some SGMs?",
+    "ground_truth": "The type of spin channel behavior significantly impacts the characteristics of some SGMs by influencing their p-type or n-type behavior depending on the specific spin channel. This variation affects device characteristics such as negative differential resistance (NDR), which is crucial for optimizing performance in multifunctional FETs.",
+    "paper_id": "2411.07216v2",
+    "source_type": "text-table"
+  },
+  {
+    "question": "In what way does the habit reference point affect financial decision-making under uncertainty?",
+    "ground_truth": "The habit reference point affects financial decision-making by expanding the perceived loss region as it increases, making agents more loss-averse and altering their austerity thresholds compared to other parameters.",
+    "paper_id": "2406.20063v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does optimal risky investment behavior change as wealth increases beyond a certain point?",
+    "ground_truth": "As wealth increases beyond a specific point (x0), optimal risky investment initially decreases but then rises again. This pattern helps maintain the desired wealth-to-habit ratio while managing risk exposure.",
+    "paper_id": "2406.20063v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "In what way does impatience impact long-term investment levels?",
+    "ground_truth": "Impatience impacts long-term investment levels by causing more immediate investments during austerity periods but results in similar long-term levels compared to patient agents.",
+    "paper_id": "2406.20063v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Does a smaller habit formation persistence ($\\rho$) result in stricter austerity measures?",
+    "ground_truth": "Yes, a smaller $\\rho$ results in stricter austerity measures.",
+    "paper_id": "2406.20063v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Does a higher loss aversion parameter \\( \\kappa \\) decrease stock investments?",
+    "ground_truth": "Yes, higher values of \\( \\kappa \\) lead to more drastic reductions in stock investments due to increased loss aversion.",
+    "paper_id": "2406.20063v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is the significance of tacking in sailboat trajectory optimization?",
+    "ground_truth": "Tacking is crucial in sailboat trajectory optimization as it involves changing direction to make progress against the wind. The decision on when to tack affects the time taken to reach a destination, especially when considering wind fluctuations and potential penalties for tacking.",
+    "paper_id": "2404.03773v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Does the image show any specific conditions for controlling a yacht's movement towards a target buoy?",
+    "ground_truth": "No, specific conditions for controlling movement towards a target buoy are not shown in this particular image.",
+    "paper_id": "2404.03773v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is a Verification theorem in the context of sailboat control problems?",
+    "ground_truth": "A Verification theorem provides conditions under which a proposed solution to a control problem is optimal or valid, particularly when certain parameters like $c=0$.",
+    "paper_id": "2404.03773v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What does \"close hauled\" mean in sailing terms?",
+    "ground_truth": "\"Close hauled\" refers to a point of sail where the boat is sailing as directly into the wind as possible without entering the no-go zone.",
+    "paper_id": "2404.03773v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What role does wind direction play in sailboat maneuvering strategies?",
+    "ground_truth": "Wind direction affects yacht velocity and dictates maneuvers like tacking and jibing, which are used to switch between starboard and port tack efficiently.",
+    "paper_id": "2404.03773v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does straightline speculation (SLS) impact program execution in CPUs?",
+    "ground_truth": "Straightline speculation allows CPUs to bypass certain instructions, such as return instructions, during speculative execution. This can lead to potential security risks if not properly managed within the CPU's architecture.",
+    "paper_id": "2405.10089v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What does \"J-AM-NoSpec-epsilon\" refer to in terms of program counter (pc) conditions?",
+    "ground_truth": "It refers to when p(Ωₜ(pc)) ≠ jmp e, spbarr, Z.",
+    "paper_id": "2405.10089v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What issue does using natural number arithmetic cause when resolving jump targets during code compilation?",
+    "ground_truth": "Using natural number arithmetic causes mismatches between source and target languages due to added barrier instructions during compilation.",
+    "paper_id": "2405.10089v2",
+    "source_type": "text-table"
+  },
+  {
+    "question": "Are register files related when registers map to similar values?",
+    "ground_truth": "Yes, register files are related when registers map to similar values.",
+    "paper_id": "2405.10089v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does the introduction of new assignment instructions affect leakage models in programming languages?",
+    "ground_truth": "Introducing new assignment instructions can modify leakage models by altering how data flows through a program, potentially exposing new forms of information leakage that need addressing within secure compilation and analysis frameworks.",
+    "paper_id": "2405.10089v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does noise intensity affect the firing frequency of neurons in a network?",
+    "ground_truth": "Noise intensity affects the inter-spike interval (ISI) by decreasing it as noise increases. However, ISI remains largely unaffected by changes in coupling strength or rewiring probability.",
+    "paper_id": "2407.18922v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How do excitatory and inhibitory connections influence neuron network behavior?",
+    "ground_truth": "Excitatory connections lead to high synchronization within the neuron network, while the introduction of inhibitory connections diminishes this effect, leading to less uniform inter-spike intervals and increased desynchronization.",
+    "paper_id": "2407.18922v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is the effect of network heterogeneity on neuronal synchronization?",
+    "ground_truth": "Network heterogeneity, particularly through parameter mismatches among neurons, can decrease global synchronization. The study shows that while some inhibitory connections can improve synchronization with higher rewiring probabilities, excessive inhibition and increased mismatches reduce stability.",
+    "paper_id": "2407.18922v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does the Chialvo neuron model incorporate randomness into its framework?",
+    "ground_truth": "The Chialvo neuron model incorporates randomness by introducing stochastic elements like Gaussian noise into a deterministic framework. This affects ion current parameters and allows for simulation of various dynamic behaviors in neurons.",
+    "paper_id": "2407.18922v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does rewiring probability impact global synchronization in neuron networks?",
+    "ground_truth": "Rewiring probability positively impacts global synchronization; as it increases, so does the level of synchronization across the network. This effect is optimized at certain critical values of noise intensity.",
+    "paper_id": "2407.18922v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Is the success rate for third attempts higher in multi-ply than single-ply equipment?",
+    "ground_truth": "No, the success rate for third attempts is not higher in multi-ply (35%) than single-ply (40%).",
+    "paper_id": "2409.13333v2",
+    "source_type": "text-table"
+  },
+  {
+    "question": "How can understanding personal responses to competitive stress improve athletic strategy?",
+    "ground_truth": "Understanding personal responses allows athletes to tailor their strategies by maintaining focus during critical moments or adjusting plans when less pressure is present, optimizing overall performance.",
+    "paper_id": "2409.13333v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is the impact of competitive pressure on weightlifting performance?",
+    "ground_truth": "Competitive pressure affects weightlifting attempts by influencing the choice of weights. In the second attempt, lifters tend to choose lighter weights compared to a benchmark scenario, resulting in a left-skewed distribution. The third attempt shows more symmetry and less variation around zero.",
+    "paper_id": "2409.13333v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is the utility outcome if a lower rival's attempt is turned around by $i$ and there is no pressure from a higher rival?",
+    "ground_truth": "The utility outcome is $(-\\lambda,(0,0))$.",
+    "paper_id": "2409.13333v2",
+    "source_type": "text-table"
+  },
+  {
+    "question": "How do male weightlifters' strategies differ between their second and third attempts in competitions?",
+    "ground_truth": "Male weightlifters tend to be more conservative during their second attempts, choosing weights that are closer to their current best. However, they take more risks in their third attempts by selecting significantly heavier weights.",
+    "paper_id": "2409.13333v2",
+    "source_type": "text-table"
+  },
+  {
+    "question": "What is the role of the Maxwell term in Chern-Simons theory?",
+    "ground_truth": "The Maxwell term is included to ensure proper regularization of the partition function, preventing divergence and accounting for gapless chiral edge modes.",
+    "paper_id": "2410.11034v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is the significance of Villainization in lattice gauge theory?",
+    "ground_truth": "Villainization allows for the explicit definition of topological configurations on a lattice by extending holonomy into plaquettes and introducing a real number representing lattice gauge flux. It helps control monopole occurrences and aligns with continuum $\\mathrm{U}(1)$ bundles' classification.",
+    "paper_id": "2410.11034v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is the role of torsion in homology and cohomology?",
+    "ground_truth": "Torsion in homology and cohomology helps capture information about the structure of topological spaces, particularly when using integer coefficients. It reveals additional group structures that are not visible with real coefficients.",
+    "paper_id": "2410.11034v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does gauge flux attachment work within a lattice framework?",
+    "ground_truth": "Gauge flux is attached to Wilson loops within a lattice framework to ensure gauge invariance and well-defined observables, using mathematical formulations involving Gaussian integrals and classical equations of motion.",
+    "paper_id": "2410.11034v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is the significance of linking numbers in lattice gauge theories?",
+    "ground_truth": "Linking numbers in lattice gauge theories are crucial for understanding how changes in loop shapes or local displacements affect anyon exchange and rotation processes, impacting the phase change associated with these interactions.",
+    "paper_id": "2410.11034v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Can nodes in the ibaf-graph be represented as decimal numbers?",
+    "ground_truth": "Yes, nodes in the ibaf-graph can be represented as decimal numbers.",
+    "paper_id": "2406.10704v4",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What role does perturbation play in studying system dynamics through jump-graphs?",
+    "ground_truth": "Perturbation involves making small changes to a system's state, allowing researchers to observe how these changes affect transitions between basins. This helps assess stability and adaptability within the system.",
+    "paper_id": "2406.10704v4",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How can ibaf-graphs be customized for different visual representations?",
+    "ground_truth": "Ibaf-graphs can be customized by adjusting their layout to various geometric configurations like circles or spirals. Users can also manipulate basins' positions and labels, and choose which basins to display or hide.",
+    "paper_id": "2406.10704v4",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What are discrete dynamical systems and how are they visualized?",
+    "ground_truth": "Discrete dynamical systems, such as Cellular Automata and Random Boolean Networks, evolve over discrete time steps with states represented by strings of elements. They are visualized through space-time patterns and basins of attraction fields that depict state transitions into repetitive sequences called attractors.",
+    "paper_id": "2406.10704v4",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How can nodes be manipulated within a DDLab network-graph environment?",
+    "ground_truth": "In DDLab, nodes can be represented as discs or numbers and can be dragged or rotated to explore various configurations. This manipulation does not alter the underlying wiring scheme but helps visualize different structural possibilities.",
+    "paper_id": "2406.10704v4",
+    "source_type": "text-image"
+  },
+  {
+    "question": "In what areas do syllabic embeddings show potential for improvement based on current research findings?",
+    "ground_truth": "Syllabic embeddings could be improved in areas such as speaker identity detection, slot filling, and automatic speech verification due to their current limitations with handling longer sequences effectively.",
+    "paper_id": "2410.07168v2",
+    "source_type": "text-table"
+  },
+  {
+    "question": "How does the Sylber model perform in terms of syllable detection compared to other models?",
+    "ground_truth": "The Sylber model outperforms previous methods in most metrics, particularly in mapping ground truth syllables with cleaner output features than HuBERT or SDHuBERT. However, it falls short on recall and cluster purity, suggesting potential oversegmentation by SDHuBERT.",
+    "paper_id": "2410.07168v2",
+    "source_type": "text-table"
+  },
+  {
+    "question": "Are syllabic structures visible without a denoising objective?",
+    "ground_truth": "Yes, syllabic structures are visible even without a denoising objective due to self-segmentation distillation.",
+    "paper_id": "2410.07168v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What are the key differences in performance between the Sylber models and the HuBERT base model across various speech processing tasks?",
+    "ground_truth": "The Sylber models generally outperform the HuBERT base model in keyword spotting (KS) and intent classification (IC), but they show reduced effectiveness in speaker identity detection (SID), slot filling (SF), and automatic speech verification (ASV). This is attributed to challenges with handling lengthy inputs at regular sampling rates. In phoneme recognition, measured by PER, HuBERT performs better than all versions of Sylber.",
+    "paper_id": "2410.07168v2",
+    "source_type": "text-table"
+  },
+  {
+    "question": "Is there an improvement in coding-rate when using duration-informed tokens compared to previous methods?",
+    "ground_truth": "Yes, there is an improvement in coding-rate when using duration-informed tokens compared to previous methods.",
+    "paper_id": "2410.07168v2",
+    "source_type": "text-table"
+  },
+  {
+    "question": "Which application class is considered most critical for safety and protection in industrial networks?",
+    "ground_truth": "The Safety and Protection application class is considered highly critical, with a PCP value of 6, indicating its importance in maintaining secure operations within industrial networks.",
+    "paper_id": "2412.10243v3",
+    "source_type": "text-table"
+  },
+  {
+    "question": "How are emerging technologies transforming manufacturing processes in Industry 4.0?",
+    "ground_truth": "Emerging technologies like IIoT, AI, ML, Big Data analytics, and Edge computing are transforming manufacturing processes by integrating advanced digital processes that enhance efficiency, reduce costs, and improve decision-making capabilities.",
+    "paper_id": "2412.10243v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How do condition sensors contribute to industrial automation?",
+    "ground_truth": "Condition sensors monitor machinery conditions and send data to local controllers for analysis. This helps in identifying defects or maintenance needs promptly to ensure smooth operation.",
+    "paper_id": "2412.10243v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does upgrading network cables impact industrial network performance?",
+    "ground_truth": "Upgrading from 100 Mbps to 1 Gbps ethernet cables improves bandwidth, which enhances overall network performance by supporting more data-intensive applications.",
+    "paper_id": "2412.10243v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What role does the update unit play in maintaining a smart factory's operations?",
+    "ground_truth": "The update unit distributes software updates across applications in the network. This ensures that all components are running on the latest versions of their respective software for optimal performance and security.",
+    "paper_id": "2412.10243v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Are spurious measurements introduced in high gradient locations?",
+    "ground_truth": "Yes.",
+    "paper_id": "2410.22824v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What challenges arise from high gradients and colored noise in surface simulations?",
+    "ground_truth": "High gradients and colored noise introduce spurious data that complicate the accurate reconstruction of surfaces, leading to deviations from true profiles and requiring advanced filtering techniques to manage these artifacts.",
+    "paper_id": "2410.22824v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Does the simulated chirp-structured profile have more valid data points than spurious ones?",
+    "ground_truth": "No",
+    "paper_id": "2410.22824v2",
+    "source_type": "text-table"
+  },
+  {
+    "question": "How does watershed segmentation contribute to the analysis of turned profiles?",
+    "ground_truth": "Watershed segmentation helps identify features with the smallest local widths in a turned profile, increasing the complexity of data imputation by focusing on these specific areas.",
+    "paper_id": "2410.22824v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How do threshold parameters affect the accuracy of surface measurements?",
+    "ground_truth": "Threshold parameters determine which pixels are considered valid during measurement, affecting the number of spurious points detected. This influences the accuracy and reliability of surface measurements by filtering out noise and inaccuracies.",
+    "paper_id": "2410.22824v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is the purpose of using ridge functions in approximating anisotropic Hölder class functions?",
+    "ground_truth": "Ridge functions are used to approximate anisotropic Hölder class functions by providing a structured way to achieve an error bound dependent on dimensions and smoothness, facilitating efficient approximation within subdomains.",
+    "paper_id": "2411.07984v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What are the challenges in creating smooth NBA shot charts using player tracking data?",
+    "ground_truth": "The challenges include dealing with sharp discontinuities when dividing the court into regions, as players like Stephen Curry and Ben Simmons have varying shooting abilities across different areas. Traditional methods may not accurately capture these variations.",
+    "paper_id": "2411.07984v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does the piecewise polynomial approximation contribute to function smoothing?",
+    "ground_truth": "Piecewise polynomial approximation contributes by matching target functions at specific points, allowing for smooth transitions across subdomains when combined with a partition of unity, ensuring continuity and uniform error bounds.",
+    "paper_id": "2411.07984v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What models are used to estimate NBA players' field goal percentages at different court locations?",
+    "ground_truth": "The study uses ridgeBART models with various activation functions, comparing them to generalized additive models (GAM) and BART.",
+    "paper_id": "2411.07984v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Is Giannis Antetokounmpo slightly better near the basket compared to LeBron James?",
+    "ground_truth": "Yes, he is slightly better near the basket.",
+    "paper_id": "2411.07984v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does scaling law relate to protein language modeling experiments?",
+    "ground_truth": "Scaling law examines how changes in parameters like size affect performance. In protein language modeling, it helps determine optimal configurations for handling complex biological sequences efficiently.",
+    "paper_id": "2411.08909v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "In what ways does the training approach of LMFold differ from traditional methods that use multiple sequence alignments (MSA)?",
+    "ground_truth": "Unlike traditional methods that rely heavily on MSA for predicting protein structures, LMFold uses residue-level embeddings directly. This approach allows it to predict all-atom coordinates more efficiently while incorporating advanced loss functions like FAPE and distogram losses.",
+    "paper_id": "2411.08909v3",
+    "source_type": "text-table"
+  },
+  {
+    "question": "What are the typical trends observed in training and evaluation loss curves for large language models?",
+    "ground_truth": "Training and evaluation loss curves typically show a decrease in loss as the number of training iterations increases, indicating improved model performance over time.",
+    "paper_id": "2411.08909v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What are the key hyperparameters used in training models for protein function prediction and PPI link prediction?",
+    "ground_truth": "The key hyperparameters include the number of epochs, number of heads, learning rate, number of layers, number of hidden units, dropout rate, and k value for SortPooling. These vary across different models and experiments.",
+    "paper_id": "2411.08909v3",
+    "source_type": "text-table"
+  },
+  {
+    "question": "Which model is most suitable for tasks requiring both sequence data processing and graph contextual information?",
+    "ground_truth": "LC-PLM-G is most suitable for tasks that require both sequence data processing and incorporation of graph contextual information. It uniquely combines token-level protein representations within a graph context from sequences.",
+    "paper_id": "2411.08909v3",
+    "source_type": "text-table"
+  },
+  {
+    "question": "What is the trend in coal generation under high coal prices from 2030 to 2050?",
+    "ground_truth": "Coal generation decreases under high coal prices from 2030 to 2050.",
+    "paper_id": "2411.13783v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does the use of carbon capture and storage (CCS) change under different fuel price conditions?",
+    "ground_truth": "The use of CCS increases significantly when low gas prices are present but shows no major changes in overall capacity or generation under these conditions.",
+    "paper_id": "2411.13783v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What impact does low natural gas pricing have on emissions over time?",
+    "ground_truth": "Low natural gas pricing reduces emissions across all study periods but results in smaller emission reductions towards 2045 and 2050.",
+    "paper_id": "2411.13783v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Does the base configuration require unit commitment or limits on power plant ramp rates?",
+    "ground_truth": "No, the base configuration does not require unit commitment or limits on power plant ramp rates.",
+    "paper_id": "2411.13783v2",
+    "source_type": "text-table"
+  },
+  {
+    "question": "Is there a peak in CCS (Carbon Capture and Storage) generation at any point between now and 2050?",
+    "ground_truth": "Yes, there is a peak in CCS generation around the mid-2030s.",
+    "paper_id": "2411.13783v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How is the ADO invariant defined for colored knotted graphs?",
+    "ground_truth": "The ADO invariant is defined when the quantum parameter \\( q \\) is a root of unity. It has been generalized from knots and links to colored knotted graphs, allowing for calculations involving trivalent vertices and specific colorings.",
+    "paper_id": "2501.00225v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What role do regular ideal octahedra play in understanding fundamental groups of knots?",
+    "ground_truth": "Regular ideal octahedra serve as fundamental domains for certain group actions related to knots. They help represent the parabolic $\\operatorname{SL}(2, \\mathbb{C})$ representations of fundamental groups, aiding in visualizing and understanding complex geometric structures associated with knots.",
+    "paper_id": "2501.00225v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How do the ADO invariants relate to the computation of colored Jones polynomials?",
+    "ground_truth": "The ADO (Akutsu-Deguchi-Ohtsuki) invariants play a crucial role in computing colored Jones polynomials for framed links. They provide specific formulas that help calculate these polynomials, which remain independent of link framings, through limits involving knotted graphs.",
+    "paper_id": "2501.00225v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What are the Borromean rings and how do they relate to hyperbolic geometry?",
+    "ground_truth": "The Borromean rings are a set of three interlinked loops that cannot be separated without breaking one. In hyperbolic geometry, they are studied through their parabolic $\\operatorname{SL}(2, \\mathbb{C})$ representations, which help understand their geometric properties and volume conjectures.",
+    "paper_id": "2501.00225v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Do both diagrams of Borromean rings have identical structures?",
+    "ground_truth": "No, they have slight variations indicated by different labels such as \\(B_{1}\\) and \\(B_{1,1}\\).",
+    "paper_id": "2501.00225v2",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is the correlation range for USD/EUR and S&P500 in January 2020?",
+    "ground_truth": "The correlation range for USD/EUR and S&P500 in January 2020 is approximately -0.8 to -0.4.",
+    "paper_id": "2412.06343v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "How does the sample size and time step affect the bias and variance in estimating parameters for circular Brownian motion?",
+    "ground_truth": "For circular Brownian motion, as the sample size increases and the time step decreases, the bias of estimated parameters like $\\sigma$ remains close to zero, while the variance decreases. This indicates that larger sample sizes and smaller time steps lead to more accurate parameter estimates.",
+    "paper_id": "2412.06343v3",
+    "source_type": "text-table"
+  },
+  {
+    "question": "Is there a mean-reverting behavior observed in the wind direction at Sotavento Wind Farm?",
+    "ground_truth": "Yes, mean-reverting behavior is suggested in the study.",
+    "paper_id": "2412.06343v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is the purpose of using the Hellinger distance in numerical experiments?",
+    "ground_truth": "The Hellinger distance is used to quantify how close two probability density functions are, helping to validate the accuracy of an approximate analytical solution compared to a numerical solution.",
+    "paper_id": "2412.06343v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What role does concentration play in estimating circular variables like $\\mu$?",
+    "ground_truth": "The concentration metric provides a measure of accuracy for estimating circular variables such as $\\mu$. High concentration values indicate precise estimates of these variables across different simulation settings.",
+    "paper_id": "2412.06343v3",
+    "source_type": "text-table"
+  },
+  {
+    "question": "How does retouch transfer improve upon traditional photo editing techniques?",
+    "ground_truth": "Retouch transfer allows for precise control over image edits by learning from before-and-after examples, enabling complex and localized transformations beyond basic color adjustments.",
+    "paper_id": "2412.03848v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Why is a fair benchmark important in evaluating image retouching datasets?",
+    "ground_truth": "A fair benchmark is crucial for evaluating image retouching datasets as it ensures consistent and unbiased assessment of different methods' performance, particularly when dealing with diverse initial appearances of images.",
+    "paper_id": "2412.03848v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Why is it important for models to generalize effectively across different editing styles?",
+    "ground_truth": "Effective generalization ensures that models can handle a wide range of photographic conditions and artistic preferences without needing retraining for each new scenario. This adaptability makes them more practical and efficient for real-world applications.",
+    "paper_id": "2412.03848v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "What is the purpose of using diverse presets in photography retouching?",
+    "ground_truth": "Diverse presets are used to simulate different editing styles and conditions, enhancing the versatility and robustness of models trained on them. This allows for effective generalization across various styles, making it a valuable resource for handling complex retouching tasks.",
+    "paper_id": "2412.03848v3",
+    "source_type": "text-image"
+  },
+  {
+    "question": "Which photographer's edit has the most noticeable green tint?",
+    "ground_truth": "Photographer 1.",
+    "paper_id": "2412.03848v3",
+    "source_type": "text-image"
+  }
+]

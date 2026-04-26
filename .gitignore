@@ -163,12 +163,9 @@ historial_chat.json
 # 12. Evaluación y exportaciones puntuales
 # -----------------------------------------------------------------------------
 evaluation/chunks_*.txt
-evaluation/runs/inference/ragbench_visual/results/**
-!evaluation/runs/inference/ragbench_visual/results/
-!evaluation/runs/inference/ragbench_visual/results/.gitignore
-evaluation/runs/inference/ragbench_visual/debug/**
-evaluation/runs/ragas/test_*/
-evaluation/runs/ragas/pytest_*/
+evaluation/tmp/**
+evaluation/**/pytest_*/
+evaluation/**/pytest-cache-files-*/
 # Exportaciones locales (omitir .txt / .jsonl ad hoc); excepción: dumps versionables del prefijo fijo
 rag/show_fragments/*.txt
 !rag/show_fragments/chunks_vector_db_*.txt

@@ -167,3 +167,63 @@ def test_visual_inference_exports_results_without_ragas(monkeypatch, tmp_path):
 
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     assert payload["rows"][0]["contexts"] == json.dumps(["Context chunk"], ensure_ascii=False)
+
+
+def test_visual_ragas_only_reuses_inference_json(monkeypatch, tmp_path):
+    inference_json = tmp_path / "results" / "ragbench_visual_inference_image_table_1p_1q.json"
+    checkpoint = tmp_path / "debug" / "checkpoints" / "run.json"
+    inference_payload = {
+        "manifest": {
+            "dataset_path": str(tmp_path / "debug" / "dataset.json"),
+            "docs_dir": str(tmp_path / "docs"),
+        },
+        "generation": {
+            "checkpoint_path": str(checkpoint),
+            "indexed_fragments": 3,
+            "recomp_enabled": True,
+            "pipeline_flags": {"USAR_RERANKER": False},
+            "eval_corpus": "ragbench",
+            "docs_dir": str(tmp_path / "docs"),
+            "pipeline_seconds": 2.0,
+        },
+        "rows": [
+            {
+                "question": "Q?",
+                "ground_truth": "GT",
+                "answer": "A",
+                "contexts": json.dumps(["ctx1", "ctx2"], ensure_ascii=False),
+            }
+        ],
+        "question_statuses": [{"status": "ok", "reason": None}],
+    }
+    inference_json.parent.mkdir(parents=True)
+    inference_json.write_text(json.dumps(inference_payload), encoding="utf-8")
+    calls = {}
+
+    def fake_eval(**kwargs):
+        calls.update(kwargs)
+        generation = kwargs["generation"]
+        return {
+            "output_path": generation["output_path"],
+            "debug_path": generation["debug_path"],
+        }
+
+    monkeypatch.setattr(visual.run_eval, "evaluar_respuestas_con_ragas", fake_eval)
+
+    result = visual.evaluar_ragas_visual_desde_inferencia(
+        inference_json=inference_json,
+        scores_dir=tmp_path / "ragas" / "scores",
+        debug_dir=tmp_path / "ragas" / "debug",
+        ragas_metrics="answer_correctness",
+        ragas_batch_size=1,
+    )
+
+    generation = calls["generation"]
+    assert generation["questions"] == ["Q?"]
+    assert generation["ground_truths"] == ["GT"]
+    assert generation["answers"] == ["A"]
+    assert generation["contexts_list"] == [["ctx1", "ctx2"]]
+    assert generation["tiene_ground_truth"] is True
+    assert calls["ragas_metrics"] == "answer_correctness"
+    assert calls["ragas_batch_size"] == 1
+    assert result["output_path"].endswith("image_table_1p_1q\\scores.csv") or result["output_path"].endswith("image_table_1p_1q/scores.csv")

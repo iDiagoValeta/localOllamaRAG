@@ -75,6 +75,8 @@ Pipeline en estado de producción tras una sesión de mejoras completa. Reindexa
 
 ## 4. Estructura de archivos clave
 
+Nota de evaluacion: `evaluation/evaluate_ragas_bertscore.py` es el postproceso BERTScore para salidas RAGAS ya completadas. Lee CSVs de `evaluation/runs/ragas/single/`, `evaluation/runs/ragas/comparisons/`, `evaluation/runs/ragas/ragbench/` y `evaluation/runs/ragas/ragbench_visual/`, usa `microsoft/deberta-xlarge-mnli` con `rescale_with_baseline=True` para todos los idiomas y escribe resultados separados en `evaluation/runs/bertscore/`. No ejecuta inferencia ni RAGAS. Para RagBench visual, `evaluation/run_ragbench_visual_inference.py --ragas-only` evalua con RAGAS un JSON de inferencia ya completado sin regenerar respuestas.
+
 ```
 localOllamaRAG/
 ├── generate_diagram.py           # Diagrama de arquitectura vía Kroki.io
@@ -367,7 +369,7 @@ python evaluation/run_eval.py ragbench-eval                       # indexa + inf
 python evaluation/run_ragbench_visual_inference.py --n-papers 25 --max-q 5  # tablas/imágenes sin RAGAS
 
 # Tras compare: medias RAGAS por subconjunto del dataset (JSON/CSV; --etiquetas-es para informes en castellano)
-python evaluation/aggregate_comparison_by_conjunto.py --dir evaluation/runs/ragas/debug/comparison_runs/<label> --etiquetas-es
+python evaluation/aggregate_comparison_by_conjunto.py --dir evaluation/runs/ragas/comparisons/<label> --etiquetas-es
 ```
 
 Ver `evaluation/EVALUACIONES_PIPELINE.md` (sección *Agregación por conjunto*).
@@ -572,8 +574,9 @@ bert-score>=0.3.13
 | Artefactos LoRA Phi-4 | `training-output/phi-4/` | Convención Qwen3 + **subcarpetas por rank** (`16/`, `64/`, …) cuando `LORA_RANK≠32` en `train-phi4.py`; en raíz, run histórico r=32 |
 | Artefactos LoRA Gemma-3-12B | `training-output/gemma-3/` | `training_stats.json`, `evaluation_comparison.json` versionados. `generate_reports.py` → `plots/{train,eval}/`. Conversión GGUF pendiente (incompatibilidad tokenizer; ver `GEMMA3_CONVERSION_ISSUE.md`) |
 | Diagrama arquitectura | `docs/monkeygrab_architecture.png` / `.svg` | Generado por `generate_diagram.py` |
-| Datasets RAGAS (preguntas) | `evaluation/datasets/*.json` | p. ej. `dataset_eval_es.json`, `dataset_eval_ca.json`, `dataset_eval_mix.json` |
-| Resumen RAGAS por conjunto (post-`compare`) | `evaluation/runs/ragas/debug/comparison_runs/<label>/by_conjunto_*.json` (CSV opcional bajo `evaluation/runs/ragas/scores/comparison_runs/<label>/`) | Script `aggregate_comparison_by_conjunto.py`: cruza `<variant>.json` con el dataset por índice y calcula medias por `source_type`, `language`, etc.; `--etiquetas-es` para claves de métricas en castellano. Detalle en `evaluation/EVALUACIONES_PIPELINE.md`. |
+| Datasets RAGAS locales | `evaluation/datasets/local/*.json` | p. ej. `dataset_eval_es.json`, `dataset_eval_ca.json`, `dataset_eval_mix.json` |
+| Datasets RagBench preparados | `evaluation/datasets/ragbench/prepared/` | datasets/manifiestos de `ragbench-prepare`, dev congelado y RagBench visual |
+| Resumen RAGAS por conjunto (post-`compare`) | `evaluation/runs/ragas/comparisons/<label>/aggregates/by_conjunto_*.json` (CSV opcional bajo `evaluation/runs/ragas/comparisons/<label>/scores/`) | Script `aggregate_comparison_by_conjunto.py`: cruza `<variant>.json` con el dataset por indice y calcula medias por `source_type`, `language`, etc.; `--etiquetas-es` para claves de metricas en castellano. Detalle en `evaluation/EVALUACIONES_PIPELINE.md`. |
 
 ---
 
@@ -619,7 +622,7 @@ Se usa cuando la aplicación **espera un directorio** pero su contenido **no** d
 - En `.gitignore`: `rag/<carpeta>/**` + `!rag/<carpeta>/.gitkeep` (el `**` ignora también subcarpetas; la negación solo recupera el fichero vacío).
 - En disco: un archivo **vacío** `rag/<carpeta>/.gitkeep` commiteado.
 
-**Carpetas con este patrón en el repo:** `rag/docs/es/`, `rag/docs/ca/`, `rag/docs/en/`. La carpeta `rag/vector_db/` está completamente ignorada (sin `.gitkeep`; se crea automáticamente al indexar). `rag/docs/en_ragbench_dev/`, `rag/docs/en_ragbench_eval/`, `rag/docs/en_ragbench_visual/` y `evaluation/runs/inference/ragbench_visual/results/` **no** siguen este patrón: usan el `.gitignore` local autocontenido descrito en §11.7.
+**Carpetas con este patron en el repo:** `rag/docs/es/`, `rag/docs/ca/`, `rag/docs/en/`. La carpeta `rag/vector_db/` esta completamente ignorada (sin `.gitkeep`; se crea automaticamente al indexar). `rag/docs/en_ragbench_dev/`, `rag/docs/en_ragbench_eval/` y `rag/docs/en_ragbench_visual/` no versionan PDFs. Los datasets, checkpoints y resultados de `evaluation/` si deben versionarse salvo temporales bajo `evaluation/tmp/`.
 
 **Cuándo añadir otro `.gitkeep`:** solo si aparece una ruta nueva “obligatoria” en código (replicar el mismo par `/**` + `!.gitkeep` en la raíz `.gitignore` y documentar aquí).
 

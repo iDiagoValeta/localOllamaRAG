@@ -51,9 +51,9 @@ EVAL_DIR = ROOT / "evaluation"
 DEFAULT_VISUAL_SOURCES = ("text-image", "text-table")
 ALLOWED_VISUAL_SOURCES = set(DEFAULT_VISUAL_SOURCES)
 RAGBENCH_VISUAL_PDFS_DIR = ROOT / "rag" / "docs" / "en_ragbench_visual"
+VISUAL_DATASETS_DIR = EVAL_DIR / "datasets" / "ragbench" / "prepared" / "visual"
 VISUAL_RUN_DIR = EVAL_DIR / "runs" / "inference" / "ragbench_visual"
-VISUAL_DEBUG_DIR = VISUAL_RUN_DIR / "debug"
-VISUAL_RESULTS_DIR = VISUAL_RUN_DIR / "results"
+VISUAL_RAGAS_RUN_DIR = EVAL_DIR / "runs" / "ragas" / "ragbench_visual"
 VISUAL_PIPELINE_FLAGS = {
     **run_eval.RAGBENCH_FINAL_PIPELINE_FLAGS,
     "USAR_RERANKER": False,
@@ -359,6 +359,115 @@ def exportar_resultados_inferencia(
     print(f"Resultados JSON: {result_json}")
 
 
+def _load_visual_inference_generation(
+    inference_json: Path,
+    output_csv: Path,
+    debug_json: Path | None,
+) -> dict[str, Any]:
+    """Rebuild run_eval's generation payload from visual inference artifacts."""
+    payload = json.loads(inference_json.read_text(encoding="utf-8"))
+    rows = payload.get("rows", [])
+    if not isinstance(rows, list) or not rows:
+        raise SystemExit(f"ERROR: no hay filas de inferencia en {inference_json}")
+
+    questions: list[str] = []
+    ground_truths: list[str] = []
+    answers: list[str] = []
+    contexts_list: list[list[str]] = []
+    for idx, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise SystemExit(f"ERROR: fila invalida en {inference_json}: {idx}")
+        questions.append(str(row.get("question", "")))
+        ground_truths.append(str(row.get("ground_truth", "")))
+        answers.append(str(row.get("answer", "")))
+        raw_contexts = row.get("contexts", "[]")
+        if isinstance(raw_contexts, list):
+            contexts = [str(ctx) for ctx in raw_contexts]
+        else:
+            try:
+                decoded = json.loads(str(raw_contexts or "[]"))
+            except json.JSONDecodeError:
+                decoded = []
+            contexts = [str(ctx) for ctx in decoded] if isinstance(decoded, list) else []
+        contexts_list.append(contexts)
+
+    generation_meta = payload.get("generation", {}) if isinstance(payload.get("generation"), dict) else {}
+    manifest = payload.get("manifest", {}) if isinstance(payload.get("manifest"), dict) else {}
+    dataset_path = generation_meta.get("dataset_path") or manifest.get("dataset_path") or ""
+    checkpoint_path = generation_meta.get("checkpoint_path") or ""
+
+    return {
+        "dataset_path": str(Path(dataset_path).resolve()) if dataset_path else "",
+        "output_path": str(output_csv.resolve()),
+        "debug_path": str(debug_json.resolve()) if debug_json else None,
+        "checkpoint_path": str(Path(checkpoint_path).resolve()) if checkpoint_path else str(inference_json.resolve()),
+        "questions": questions,
+        "ground_truths": ground_truths,
+        "answers": answers,
+        "contexts_list": contexts_list,
+        "question_statuses": payload.get("question_statuses", []),
+        "questions_count": len(questions),
+        "indexed_fragments": int(generation_meta.get("indexed_fragments") or 0),
+        "recomp_enabled": bool(generation_meta.get("recomp_enabled", True)),
+        "pipeline_flags": generation_meta.get("pipeline_flags") or VISUAL_PIPELINE_FLAGS,
+        "eval_corpus": generation_meta.get("eval_corpus") or "ragbench",
+        "docs_dir": generation_meta.get("docs_dir") or manifest.get("docs_dir"),
+        "pipeline_seconds": float(generation_meta.get("pipeline_seconds") or 0.0),
+        "tiene_ground_truth": any(bool(gt) for gt in ground_truths),
+    }
+
+
+def evaluar_ragas_visual_desde_inferencia(
+    inference_json: Path,
+    scores_dir: Path,
+    debug_dir: Path,
+    save_debug: bool = True,
+    ragas_timeout: int = 90,
+    ragas_max_retries: int = 5,
+    ragas_max_wait: int = 60,
+    ragas_max_workers: int = 1,
+    ragas_batch_size: int | None = 5,
+    ragas_metrics: str | None = None,
+    google_timeout: int | None = None,
+    google_retries: int | None = None,
+    raise_exceptions: bool = False,
+) -> dict[str, Any]:
+    """Run RAGAS over a completed visual inference JSON without regenerating answers."""
+    if not inference_json.exists():
+        raise SystemExit(f"ERROR: no existe el JSON de inferencia: {inference_json}")
+
+    tag = inference_json.stem.replace("ragbench_visual_inference_", "")
+    run_dir = scores_dir / tag
+    output_csv = run_dir / "scores.csv"
+    output_debug = run_dir / "debug.json"
+    generation = _load_visual_inference_generation(
+        inference_json=inference_json,
+        output_csv=output_csv,
+        debug_json=output_debug if save_debug else None,
+    )
+
+    print("\nEjecutando RAGAS sobre inferencia RagBench visual existente:")
+    print(f"   inference_json: {inference_json}")
+    print(f"   questions: {generation['questions_count']}")
+    print(f"   output_csv: {output_csv}")
+    if save_debug:
+        print(f"   debug_json: {output_debug}")
+
+    return run_eval.evaluar_respuestas_con_ragas(
+        generation=generation,
+        save_debug=save_debug,
+        ragas_timeout=ragas_timeout,
+        ragas_max_retries=ragas_max_retries,
+        ragas_max_wait=ragas_max_wait,
+        ragas_max_workers=ragas_max_workers,
+        ragas_batch_size=ragas_batch_size,
+        ragas_metrics=ragas_metrics,
+        google_timeout=google_timeout,
+        google_retries=google_retries,
+        raise_exceptions=raise_exceptions,
+    )
+
+
 def ejecutar_inferencia_visual(
     manifest: dict[str, Any],
     result_dir: Path,
@@ -374,9 +483,10 @@ def ejecutar_inferencia_visual(
         raise SystemExit("ERROR: el manifiesto no contiene indexed_files.")
 
     tag = _safe_tag(Path(dataset_path).stem.replace("dataset_ragbench_visual_", ""))
-    result_csv = result_dir / f"ragbench_visual_inference_{tag}.csv"
-    result_json = result_dir / f"ragbench_visual_inference_{tag}.json"
-    checkpoint_path = debug_dir / "checkpoints" / f"ragbench_visual_inference_{tag}.json"
+    run_dir = result_dir / tag
+    result_csv = run_dir / "results.csv"
+    result_json = run_dir / "results.json"
+    checkpoint_path = run_dir / "checkpoint.json"
 
     print("\nEjecutando inferencia RagBench visual sin RAGAS:")
     print("   sources=" + ",".join(manifest.get("sources", [])))
@@ -384,7 +494,7 @@ def ejecutar_inferencia_visual(
     print(f"   dataset: {dataset_path}")
     print(f"   docs_dir: {docs_dir}")
     print(f"   indexed files: {len(indexed_files)}")
-    print(f"   output dir: {result_dir}")
+    print(f"   output dir: {run_dir}")
 
     generation = run_eval.generar_respuestas_rag(
         dataset_path=dataset_path,
@@ -424,8 +534,26 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--force-reindex", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--docs-dir", default=str(RAGBENCH_VISUAL_PDFS_DIR))
-    parser.add_argument("--debug-dir", default=str(VISUAL_DEBUG_DIR))
-    parser.add_argument("--output-dir", default=str(VISUAL_RESULTS_DIR))
+    parser.add_argument("--debug-dir", default=str(VISUAL_DATASETS_DIR), help="Directory for prepared visual dataset and manifest.")
+    parser.add_argument("--output-dir", default=str(VISUAL_RUN_DIR), help="Root directory for visual inference runs.")
+    parser.add_argument("--ragas-only", action="store_true", help="Evaluate an existing visual inference JSON with RAGAS.")
+    parser.add_argument(
+        "--inference-json",
+        default=None,
+        help="Visual inference JSON to evaluate. Defaults to the tag derived from sources/n-papers/max-q.",
+    )
+    parser.add_argument("--ragas-scores-dir", default=str(VISUAL_RAGAS_RUN_DIR), help="Root directory for visual RAGAS runs.")
+    parser.add_argument("--ragas-debug-dir", default=str(VISUAL_RAGAS_RUN_DIR), help="Deprecated; visual RAGAS debug is written next to scores.")
+    parser.add_argument("--no-debug", action="store_true", help="Do not write RAGAS debug JSON.")
+    parser.add_argument("--ragas-timeout", type=int, default=90)
+    parser.add_argument("--ragas-max-retries", type=int, default=5)
+    parser.add_argument("--ragas-max-wait", type=int, default=60)
+    parser.add_argument("--ragas-max-workers", type=int, default=1)
+    parser.add_argument("--ragas-batch-size", type=int, default=5)
+    parser.add_argument("--ragas-metrics", default=None)
+    parser.add_argument("--google-timeout", type=int, default=None)
+    parser.add_argument("--google-retries", type=int, default=None)
+    parser.add_argument("--raise-exceptions", action="store_true")
     parser.add_argument("--excluded-doc-ids", default=run_eval.RAGBENCH_DEV_DOC_IDS_PATH)
     return parser
 
@@ -437,6 +565,35 @@ def main() -> None:
         sources = parse_sources(args.sources)
     except ValueError as exc:
         parser.error(str(exc))
+
+    if args.ragas_only:
+        if args.inference_json:
+            inference_json = Path(args.inference_json)
+        else:
+            source_tag = "_".join(src.replace("text-", "") for src in sources)
+            paper_tag = args.only_doc.strip() if args.only_doc else f"{args.n_papers}p"
+            tag = _safe_tag(f"{source_tag}_{paper_tag}_{args.max_q}q")
+            inference_json = Path(args.output_dir) / tag / "results.json"
+        result = evaluar_ragas_visual_desde_inferencia(
+            inference_json=inference_json,
+            scores_dir=Path(args.ragas_scores_dir),
+            debug_dir=Path(args.ragas_debug_dir),
+            save_debug=not args.no_debug,
+            ragas_timeout=args.ragas_timeout,
+            ragas_max_retries=args.ragas_max_retries,
+            ragas_max_wait=args.ragas_max_wait,
+            ragas_max_workers=args.ragas_max_workers,
+            ragas_batch_size=args.ragas_batch_size,
+            ragas_metrics=args.ragas_metrics,
+            google_timeout=args.google_timeout,
+            google_retries=args.google_retries,
+            raise_exceptions=args.raise_exceptions,
+        )
+        print("\nRagBench visual RAGAS finished.")
+        print(f"CSV:   {result['output_path']}")
+        if result.get("debug_path"):
+            print(f"Debug: {result['debug_path']}")
+        return
 
     manifest = preparar_ragbench_visual(
         sources=sources,

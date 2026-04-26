@@ -258,6 +258,8 @@ python evaluation/run_eval.py single --corpus ca    # Catalan corpus
 python evaluation/run_eval.py ragbench-prepare      # build fixed EN eval corpus (25 docs / 5 q each)
 python evaluation/run_eval.py ragbench-eval         # index + infer + RAGAS from manifest
 python evaluation/run_ragbench_visual_inference.py --n-papers 25 --max-q 5  # table/image RagBench inference only
+python evaluation/run_ragbench_visual_inference.py --ragas-only --n-papers 25 --max-q 5  # RAGAS over completed visual inference
+python evaluation/evaluate_ragas_bertscore.py --all-completed  # BERTScore over completed RAGAS outputs
 ```
 
 <details>
@@ -274,11 +276,13 @@ Aggregate per-variant results by dataset subset:
 
 ```bash
 python evaluation/aggregate_comparison_by_conjunto.py \
-  --dir evaluation/runs/ragas/debug/comparison_runs/mi_eval \
+  --dir evaluation/runs/ragas/comparisons/mi_eval \
   --etiquetas-es
 ```
 
-Artifacts: `evaluation/runs/ragas/scores/` (CSVs), `evaluation/runs/ragas/debug/` (JSON traces), `evaluation/runs/ragas/checkpoints/` (resume state), and `evaluation/runs/inference/` for non-RAGAS inference runs. See `evaluation/EVALUACIONES_PIPELINE.md` for corpus presets and variant definitions.
+Artifacts: `evaluation/datasets/local/` (local eval datasets), `evaluation/datasets/ragbench/prepared/` (prepared RagBench datasets/manifests), `evaluation/runs/ragas/single/`, `evaluation/runs/ragas/comparisons/`, `evaluation/runs/ragas/ragbench/`, `evaluation/runs/ragas/ragbench_visual/`, `evaluation/runs/inference/`, and `evaluation/runs/bertscore/`. See `evaluation/EVALUACIONES_PIPELINE.md` for corpus presets and variant definitions.
+
+BERTScore is computed as a separate post-process over existing RAGAS CSVs. It uses `microsoft/deberta-xlarge-mnli` with `rescale_with_baseline=True` for all languages and never overwrites RAGAS artifacts.
 
 </details>
 

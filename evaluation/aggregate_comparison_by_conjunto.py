@@ -19,17 +19,17 @@
 aggregate_comparison_by_conjunto -- Agrupa métricas RAGAS por subconjunto del dataset.
 
 Lee los JSON de debug de un directorio de comparación (p. ej.
-``evaluation/runs/ragas/debug/comparison_runs/todas_ablacion``), alinea cada muestra con
+``evaluation/runs/ragas/comparisons/todas_ablacion``), alinea cada muestra con
 la fila del dataset por ``index`` y calcula medias por ``source_type``,
 ``language``, etc.
 
 Usage:
     python evaluation/aggregate_comparison_by_conjunto.py \\
-        --dir evaluation/runs/ragas/debug/comparison_runs/todas_ablacion
+        --dir evaluation/runs/ragas/comparisons/todas_ablacion
 
     python evaluation/aggregate_comparison_by_conjunto.py \\
-        --dir evaluation/runs/ragas/debug/comparison_runs/todas_ablacion \\
-        --group-by language --output evaluation/runs/ragas/debug/comparison_runs/todas_ablacion/por_idioma.json
+        --dir evaluation/runs/ragas/comparisons/todas_ablacion \\
+        --group-by language --output evaluation/runs/ragas/comparisons/todas_ablacion/aggregates/por_idioma.json
 
 Dependencies:
     - stdlib + optional pandas for CSV (--csv)
@@ -50,6 +50,7 @@ from typing import Any
 
 EVAL_DIR = Path(__file__).resolve().parent
 RAGAS_RUNS_DIR = EVAL_DIR / "runs" / "ragas"
+DEFAULT_COMPARISONS_DIR = RAGAS_RUNS_DIR / "comparisons"
 SUMMARY_NAME = "comparison_summary.json"
 
 # RAGAS display names (debug JSON) -> etiquetas en castellano para informes
@@ -69,10 +70,24 @@ def _resolver_dataset(ruta: str | None) -> Path:
     p = Path(ruta)
     if p.is_file():
         return p.resolve()
-    cand = EVAL_DIR / "datasets" / p.name
-    if cand.is_file():
-        return cand.resolve()
+    candidates = [
+        EVAL_DIR / "datasets" / "local" / p.name,
+        EVAL_DIR / "datasets" / "ragbench" / "prepared" / "en_eval" / p.name,
+        EVAL_DIR / "datasets" / "ragbench" / "prepared" / "dev_frozen" / p.name,
+        EVAL_DIR / "datasets" / "ragbench" / "prepared" / "visual" / p.name,
+        EVAL_DIR / "datasets" / p.name,
+    ]
+    for cand in candidates:
+        if cand.is_file():
+            return cand.resolve()
     raise FileNotFoundError(f"No se encuentra el dataset: {ruta} (tampoco {cand})")
+
+
+def _resolve_comparison_input(path: Path) -> tuple[Path, Path, Path]:
+    """Return comparison root, debug dir and aggregate dir for new or legacy layouts."""
+    if (path / "debug").is_dir():
+        return path, path / "debug", path / "aggregates"
+    return path, path, path
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -117,6 +132,8 @@ def _discover_variant_files(
     are already on disk.
     """
     summary_path = debug_dir / SUMMARY_NAME
+    if not summary_path.is_file() and (debug_dir.parent / SUMMARY_NAME).is_file():
+        summary_path = debug_dir.parent / SUMMARY_NAME
     dataset_from_summary: str | None = None
     out: list[tuple[str, Path]] = []
 
@@ -270,7 +287,7 @@ def main() -> None:
     parser.add_argument(
         "--dir",
         type=str,
-        default=str(RAGAS_RUNS_DIR / "debug" / "comparison_runs" / "todas_ablacion"),
+        default=str(DEFAULT_COMPARISONS_DIR / "todas_ablacion"),
         help="Carpeta con baseline_*.json / no_*.json y opcionalmente comparison_summary.json",
     )
     parser.add_argument(
@@ -311,7 +328,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    debug_dir = Path(args.dir).resolve()
+    comparison_root, debug_dir, aggregates_dir = _resolve_comparison_input(Path(args.dir).resolve())
     if not debug_dir.is_dir():
         raise SystemExit(f"No es un directorio: {debug_dir}")
 
@@ -336,7 +353,7 @@ def main() -> None:
     out_json = (
         Path(args.output)
         if args.output
-        else debug_dir
+        else aggregates_dir
         / (
             f"by_conjunto_{args.group_by}_metricas_es.json"
             if args.etiquetas_es
@@ -350,6 +367,10 @@ def main() -> None:
 
     if args.csv:
         csv_path = Path(args.csv)
+        _write_csv(report, csv_path)
+        print(f"Escrito: {csv_path.resolve()}")
+    elif (comparison_root / "scores").is_dir():
+        csv_path = comparison_root / "scores" / "resumen_por_conjunto.csv"
         _write_csv(report, csv_path)
         print(f"Escrito: {csv_path.resolve()}")
 

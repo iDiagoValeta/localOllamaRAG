@@ -219,13 +219,24 @@ def configurar_llm_evaluacion(
 # ─────────────────────────────────────────────
 
 EVAL_DIR = os.path.dirname(os.path.abspath(__file__))
+DATASETS_DIR = os.path.join(EVAL_DIR, "datasets")
+LOCAL_DATASETS_DIR = os.path.join(DATASETS_DIR, "local")
+RAGBENCH_DATASETS_DIR = os.path.join(DATASETS_DIR, "ragbench")
+RAGBENCH_PREPARED_DIR = os.path.join(RAGBENCH_DATASETS_DIR, "prepared")
 RUNS_DIR = os.path.join(EVAL_DIR, "runs")
 RAGAS_RUNS_DIR = os.path.join(RUNS_DIR, "ragas")
+SINGLE_RUNS_DIR = os.path.join(RAGAS_RUNS_DIR, "single")
+COMPARISON_RUNS_DIR = os.path.join(RAGAS_RUNS_DIR, "comparisons")
+RAGBENCH_RUNS_DIR = os.path.join(RAGAS_RUNS_DIR, "ragbench")
+RAGBENCH_VISUAL_RAGAS_DIR = os.path.join(RAGAS_RUNS_DIR, "ragbench_visual")
+TMP_DIR = os.path.join(EVAL_DIR, "tmp")
+
+# Legacy constants remain available for explicit CLI overrides and old artifacts.
 SCORES_DIR = os.path.join(RAGAS_RUNS_DIR, "scores")
 DEBUG_DIR = os.path.join(RAGAS_RUNS_DIR, "debug")
 CHECKPOINTS_DIR = os.path.join(RAGAS_RUNS_DIR, "checkpoints")
-COMPARISON_SCORES_DIR = os.path.join(SCORES_DIR, "comparison_runs")
-COMPARISON_DEBUG_DIR = os.path.join(DEBUG_DIR, "comparison_runs")
+COMPARISON_SCORES_DIR = COMPARISON_RUNS_DIR
+COMPARISON_DEBUG_DIR = COMPARISON_RUNS_DIR
 
 BASELINE_PIPELINE_FLAGS = {
     "USAR_LLM_QUERY_DECOMPOSITION": True,
@@ -305,7 +316,7 @@ def resolver_ruta_dataset(ruta: str) -> str:
         return expanded
     name = os.path.basename(expanded)
     if name.startswith("dataset_eval_") and name.lower().endswith(".json"):
-        alt = os.path.join(EVAL_DIR, "datasets", name)
+        alt = os.path.join(LOCAL_DATASETS_DIR, name)
         if os.path.isfile(alt):
             print(
                 f"   Note: dataset path resolved to {alt} (input was {ruta!r}; "
@@ -328,7 +339,7 @@ def _default_dataset_for_corpus(eval_corpus: str) -> str:
         valid = ", ".join(SUPPORTED_CORPORA)
         raise ValueError(f"Unsupported corpus {eval_corpus!r}. Valid: {valid}")
     name = f"dataset_eval_{eval_corpus}.json"
-    return os.path.join(EVAL_DIR, "datasets", name)
+    return os.path.join(LOCAL_DATASETS_DIR, name)
 
 
 def _default_docs_dir_for_corpus(eval_corpus: str) -> str | None:
@@ -371,18 +382,19 @@ def _build_output_stem(dataset_path: str) -> str:
     return _slugify(Path(dataset_path).stem)
 
 
+def _single_run_dir(dataset_path: str, artifact_suffix: str = "") -> str:
+    """Return the self-contained folder for one local RAGAS run."""
+    return os.path.join(SINGLE_RUNS_DIR, f"{_build_output_stem(dataset_path)}{artifact_suffix}")
+
+
 def _default_output_path(dataset_path: str, artifact_suffix: str = "") -> str:
-    """Return the default CSV output path inside evaluation/runs/ragas/scores."""
-    return os.path.join(
-        SCORES_DIR, f"ragas_scores_{_build_output_stem(dataset_path)}{artifact_suffix}.csv"
-    )
+    """Return the default CSV output path inside a self-contained single run."""
+    return os.path.join(_single_run_dir(dataset_path, artifact_suffix), "scores.csv")
 
 
 def _default_debug_path(dataset_path: str, artifact_suffix: str = "") -> str:
-    """Return the default debug JSON path inside evaluation/runs/ragas/debug."""
-    return os.path.join(
-        DEBUG_DIR, f"ragas_debug_{_build_output_stem(dataset_path)}{artifact_suffix}.json"
-    )
+    """Return the default debug JSON path inside a self-contained single run."""
+    return os.path.join(_single_run_dir(dataset_path, artifact_suffix), "debug.json")
 
 
 def _default_checkpoint_path(
@@ -390,10 +402,7 @@ def _default_checkpoint_path(
 ) -> str:
     """Return the checkpoint path used to resume generation question by question."""
     recomp_tag = "recomp_on" if recomp_enabled else "recomp_off"
-    return os.path.join(
-        CHECKPOINTS_DIR,
-        f"ragas_progress_{_build_output_stem(dataset_path)}{artifact_suffix}_{recomp_tag}.json",
-    )
+    return os.path.join(_single_run_dir(dataset_path, artifact_suffix), f"checkpoint_{recomp_tag}.json")
 
 
 def _cargar_checkpoint(checkpoint_path: str) -> dict[str, Any] | None:
@@ -1519,9 +1528,17 @@ def ejecutar_comparativa_pipeline(
 
     dataset_path = resolver_ruta_dataset(dataset_path)
     run_slug = _build_run_slug(dataset_path=dataset_path, label=label, eval_corpus=eval_corpus)
-    scores_dir = os.path.join(scores_root, run_slug)
-    debug_dir = os.path.join(debug_root, run_slug)
-    checkpoints_dir = os.path.join(CHECKPOINTS_DIR, "comparison_runs", run_slug)
+    if os.path.abspath(scores_root) == os.path.abspath(COMPARISON_RUNS_DIR):
+        run_dir = os.path.join(COMPARISON_RUNS_DIR, run_slug)
+        scores_dir = os.path.join(run_dir, "scores")
+        debug_dir = os.path.join(run_dir, "debug")
+        checkpoints_dir = os.path.join(run_dir, "checkpoints")
+        summary_dir = run_dir
+    else:
+        scores_dir = os.path.join(scores_root, run_slug)
+        debug_dir = os.path.join(debug_root, run_slug)
+        checkpoints_dir = os.path.join(CHECKPOINTS_DIR, "comparison_runs", run_slug)
+        summary_dir = debug_dir
     os.makedirs(scores_dir, exist_ok=True)
     os.makedirs(debug_dir, exist_ok=True)
     os.makedirs(checkpoints_dir, exist_ok=True)
@@ -1593,7 +1610,7 @@ def ejecutar_comparativa_pipeline(
         "runs": results,
         "mean_score_deltas_vs_baseline": _mean_score_deltas(results, baseline_variant),
     }
-    _guardar_json(os.path.join(debug_dir, "comparison_summary.json"), manifest)
+    _guardar_json(os.path.join(summary_dir, "comparison_summary.json"), manifest)
     return manifest
 
 
@@ -1625,8 +1642,8 @@ def ejecutar_evaluacion(
 
     Args:
         dataset_path: Path to the question dataset.
-        output_path: CSV output path. Defaults to ``evaluation/runs/ragas/scores/``.
-        debug_path: Debug JSON output path. Defaults to ``evaluation/runs/ragas/debug/``.
+        output_path: CSV output path. Defaults to ``evaluation/runs/ragas/single/<tag>/scores.csv``.
+        debug_path: Debug JSON output path. Defaults to ``evaluation/runs/ragas/single/<tag>/debug.json``.
         checkpoint_path: Progress JSON path used to resume question generation.
         verbose: Whether to print per-question progress.
         save_debug: Whether to persist the debug JSON.
@@ -1690,13 +1707,13 @@ ARXIV_HEADERS = {
 }
 
 RAGBENCH_PDFS_DIR = os.path.join(_proj_root, "rag", "docs", "en")
-_RAGBENCH_OUTPUT_CSV = os.path.join(SCORES_DIR, "ragas_scores_ragbench_en.csv")
-_RAGBENCH_OUTPUT_DEBUG = os.path.join(DEBUG_DIR, "ragas_debug_ragbench_en.json")
-_RAGBENCH_PREPARED_DIR = os.path.join(RAGAS_RUNS_DIR, "ragbench_prepared")
+_RAGBENCH_PREPARED_DIR = RAGBENCH_PREPARED_DIR
 RAGBENCH_LEGACY_DEV_PDFS_DIR = RAGBENCH_PDFS_DIR
 RAGBENCH_EVAL_PDFS_DIR = os.path.join(_proj_root, "rag", "docs", "en_ragbench_eval")
-RAGBENCH_DEV_DOC_IDS_PATH = os.path.join(EVAL_DIR, "datasets", "ragbench_en_dev_doc_ids.json")
-RAGBENCH_EVAL_MANIFEST_PATH = os.path.join(_RAGBENCH_PREPARED_DIR, "ragbench_en_eval_manifest.json")
+RAGBENCH_DEV_DOC_IDS_PATH = os.path.join(RAGBENCH_DATASETS_DIR, "ragbench_en_dev_doc_ids.json")
+RAGBENCH_EVAL_PREPARED_DIR = os.path.join(_RAGBENCH_PREPARED_DIR, "en_eval")
+RAGBENCH_DEV_FROZEN_PREPARED_DIR = os.path.join(_RAGBENCH_PREPARED_DIR, "dev_frozen")
+RAGBENCH_EVAL_MANIFEST_PATH = os.path.join(RAGBENCH_EVAL_PREPARED_DIR, "ragbench_en_eval_manifest.json")
 
 RAGBENCH_FINAL_PIPELINE_FLAGS = {
     **BASELINE_PIPELINE_FLAGS,
@@ -1987,10 +2004,12 @@ def escribir_dataset_preparado(
     paper_ids: list[str],
     safe_tag: str,
     filename_prefix: str = "dataset_ragbench",
+    output_dir: str | None = None,
 ) -> str:
     """Write a temporary JSON dataset consumable by ejecutar_evaluacion."""
-    os.makedirs(_RAGBENCH_PREPARED_DIR, exist_ok=True)
-    prepared_dataset = os.path.join(_RAGBENCH_PREPARED_DIR, f"{filename_prefix}_{safe_tag}.json")
+    target_dir = output_dir or _RAGBENCH_PREPARED_DIR
+    os.makedirs(target_dir, exist_ok=True)
+    prepared_dataset = os.path.join(target_dir, f"{filename_prefix}_{safe_tag}.json")
     with open(prepared_dataset, "w", encoding="utf-8") as f:
         json.dump(
             [
@@ -2081,6 +2100,7 @@ def preparar_ragbench_eval_en(
         paper_ids,
         safe_tag,
         filename_prefix="dataset_ragbench_en_eval",
+        output_dir=RAGBENCH_EVAL_PREPARED_DIR,
     )
     indexed_files = [f"{paper_id}.pdf" for paper_id in successful_papers]
     manifest = {
@@ -2120,9 +2140,10 @@ def ejecutar_ragbench_eval_en(
         raise SystemExit(1)
 
     safe_tag = _safe_tag(Path(dataset_path).stem)
-    output_csv = os.path.join(SCORES_DIR, f"ragas_scores_ragbench_en_final_{safe_tag}.csv")
-    output_debug = os.path.join(DEBUG_DIR, f"ragas_debug_ragbench_en_final_{safe_tag}.json")
-    checkpoint_path = os.path.join(CHECKPOINTS_DIR, "ragbench", f"ragbench_en_final_{safe_tag}.json")
+    run_dir = os.path.join(RAGBENCH_RUNS_DIR, "en_eval", safe_tag)
+    output_csv = os.path.join(run_dir, "scores.csv")
+    output_debug = os.path.join(run_dir, "debug.json")
+    checkpoint_path = os.path.join(run_dir, "checkpoint.json")
 
     print("\nEjecutando RagBench EN final con configuración fija:")
     print("   source=text, query_decomposition=off, resto de flags=on")
@@ -2216,13 +2237,20 @@ def _ejecutar_ragbench(
 
     dataset_tag = only_doc.strip() if only_doc else f"{source}_{len(successful_papers)}p_{max_q}q"
     safe_tag = _safe_tag(dataset_tag)
-    prepared_dataset = escribir_dataset_preparado(questions, ground_truths, paper_ids, safe_tag)
+    prepared_dataset = escribir_dataset_preparado(
+        questions,
+        ground_truths,
+        paper_ids,
+        safe_tag,
+        output_dir=RAGBENCH_DEV_FROZEN_PREPARED_DIR,
+    )
     solo_pdf = [f"{only_doc.strip()}.pdf"] if only_doc else None
     effective_recomp = rag_runtime.USAR_RECOMP_SYNTHESIS if recomp_enabled is None else bool(recomp_enabled)
     recomp_tag = "recomp_on" if effective_recomp else "recomp_off"
-    output_csv = os.path.join(SCORES_DIR, f"ragas_scores_ragbench_en_{recomp_tag}.csv")
-    output_debug = os.path.join(DEBUG_DIR, f"ragas_debug_ragbench_en_{recomp_tag}.json")
-    checkpoint_path = os.path.join(CHECKPOINTS_DIR, "ragbench", f"ragbench_{safe_tag}_{recomp_tag}.json")
+    run_dir = os.path.join(RAGBENCH_RUNS_DIR, "legacy", f"{safe_tag}_{recomp_tag}")
+    output_csv = os.path.join(run_dir, "scores.csv")
+    output_debug = os.path.join(run_dir, "debug.json")
+    checkpoint_path = os.path.join(run_dir, "checkpoint.json")
 
     if prepare_only:
         print(f"\nDataset preparado en: {prepared_dataset}")
