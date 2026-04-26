@@ -54,7 +54,10 @@ RAGBENCH_VISUAL_PDFS_DIR = ROOT / "rag" / "docs" / "en_ragbench_visual"
 VISUAL_RUN_DIR = EVAL_DIR / "runs" / "inference" / "ragbench_visual"
 VISUAL_DEBUG_DIR = VISUAL_RUN_DIR / "debug"
 VISUAL_RESULTS_DIR = VISUAL_RUN_DIR / "results"
-VISUAL_PIPELINE_FLAGS = dict(run_eval.RAGBENCH_FINAL_PIPELINE_FLAGS)
+VISUAL_PIPELINE_FLAGS = {
+    **run_eval.RAGBENCH_FINAL_PIPELINE_FLAGS,
+    "USAR_RERANKER": False,
+}
 
 
 def parse_sources(raw: str | None) -> list[str]:
@@ -377,7 +380,7 @@ def ejecutar_inferencia_visual(
 
     print("\nEjecutando inferencia RagBench visual sin RAGAS:")
     print("   sources=" + ",".join(manifest.get("sources", [])))
-    print("   query_decomposition=off, resto de flags=on")
+    print("   query_decomposition=off, reranker=off, resto de flags=on")
     print(f"   dataset: {dataset_path}")
     print(f"   docs_dir: {docs_dir}")
     print(f"   indexed files: {len(indexed_files)}")

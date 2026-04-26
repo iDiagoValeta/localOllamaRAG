@@ -220,6 +220,7 @@ Este script:
 
 - excluye el split dev congelado por defecto;
 - prepara preguntas `text-image` y `text-table`;
+- desactiva `USAR_RERANKER` por defecto para evitar bloqueos del cross-encoder durante inferencia larga;
 - descarga PDFs en `rag/docs/en_ragbench_visual/`;
 - usa una base vectorial separada: `rag/vector_db/en_ragbench_visual_<embed_slug>/`;
 - guarda dataset, manifiesto y checkpoints en `evaluation/runs/inference/ragbench_visual/debug/`;

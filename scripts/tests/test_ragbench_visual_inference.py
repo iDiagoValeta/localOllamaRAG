@@ -151,6 +151,7 @@ def test_visual_inference_exports_results_without_ragas(monkeypatch, tmp_path):
     assert calls["add_missing_from_filter"] is True
     assert calls["force_reindex"] is True
     assert calls["pipeline_flags"]["USAR_LLM_QUERY_DECOMPOSITION"] is False
+    assert calls["pipeline_flags"]["USAR_RERANKER"] is False
     assert "en_ragbench_visual" not in calls["docs_dir"]
 
     csv_path = Path(result["output_csv"])
