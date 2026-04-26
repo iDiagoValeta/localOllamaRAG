@@ -280,7 +280,7 @@ python evaluation/aggregate_comparison_by_conjunto.py \
   --etiquetas-es
 ```
 
-Artifacts: `evaluation/datasets/local/` (local eval datasets), `evaluation/datasets/ragbench/prepared/` (prepared RagBench datasets/manifests), `evaluation/runs/ragas/single/`, `evaluation/runs/ragas/comparisons/`, `evaluation/runs/ragas/ragbench/`, `evaluation/runs/ragas/ragbench_visual/`, `evaluation/runs/inference/`, and `evaluation/runs/bertscore/`. See `evaluation/EVALUACIONES_PIPELINE.md` for corpus presets and variant definitions.
+Artifacts: `evaluation/datasets/local/` (local eval datasets), `evaluation/datasets/ragbench/prepared/` (prepared RagBench datasets/manifests), `evaluation/runs/ragas/single/`, `evaluation/runs/ragas/comparisons/`, `evaluation/runs/ragas/ragbench/`, `evaluation/runs/ragas/ragbench_visual/` (RAGAS scores + `inference/` subfolder for pre-RAGAS outputs), and `evaluation/runs/bertscore/`. See `docs/EVALUACIONES_PIPELINE.md` for corpus presets and variant definitions.
 
 BERTScore is computed as a separate post-process over existing RAGAS CSVs. It uses `microsoft/deberta-xlarge-mnli` with `rescale_with_baseline=True` for all languages and never overwrites RAGAS artifacts.
 
@@ -342,7 +342,6 @@ localOllamaRAG/
 │   ├── run_ragbench_visual_inference.py  # RagBench table/image inference without RAGAS
 │   ├── runs/                     # Evaluation artifacts: ragas/ and inference/
 │   ├── aggregate_comparison_by_conjunto.py
-│   ├── EVALUACIONES_PIPELINE.md  # Eval presets, ablation variants, aggregation notes
 │   └── requirements.txt
 ├── training-output/
 │   ├── qwen-3/                   # LoRA artifacts + generate_reports.py
@@ -350,7 +349,7 @@ localOllamaRAG/
 │   ├── gemma-3/                  # LoRA artifacts + generate_reports.py
 │   └── baseline/                 # Seven-model baseline benchmark artifacts
 ├── models/gguf-output/           # Modelfile + docs per model (binaries gitignored)
-├── docs/                         # Architecture assets and methodology notes
+├── docs/                         # Architecture assets, methodology notes and EVALUACIONES_PIPELINE.md
 ├── README.md
 └── CLAUDE.md
 ```

@@ -143,9 +143,8 @@ localOllamaRAG/
 │   ├── datasets/                 # JSON de evaluación RAG (ES, CA, mix) + `ragbench_en_dev_doc_ids.json`
 │   ├── run_eval.py               # Runner RAGAS: subcomandos `single`, `compare`, `list-variants`, `ragbench`, `ragbench-prepare`, `ragbench-eval`
 │   ├── run_ragbench_visual_inference.py # RagBench tablas/imágenes: dataset + indexación + inferencia sin RAGAS
-│   ├── runs/                     # Artefactos de evaluación: `ragas/` e `inference/`
+│   ├── runs/                     # Artefactos de evaluación bajo `ragas/`; inferencia visual en `ragas/ragbench_visual/inference/`
 │   ├── aggregate_comparison_by_conjunto.py  # Post-compare: medias por conjunto (subset) desde debug JSON + dataset
-│   ├── EVALUACIONES_PIPELINE.md  # Presets, variantes de ablación y notas de agregación
 │   └── requirements.txt          # ragas, langchain-google-genai, pandas…
 ├── training-output/
 │   ├── qwen-3/                   # Adaptador LoRA Qwen3 (artefactos pesados gitignored)
@@ -175,7 +174,8 @@ localOllamaRAG/
 │   ├── investigacionMetricas.md  # Notas de métricas para el TFG
 │   ├── splits.md                 # Análisis de splits de datasets
 │   ├── palabras.md               # Borrador de vocabulario/terminología del TFG
-│   └── tensor.pdf                # Material académico de apoyo (referencia)
+│   ├── tensor.pdf                # Material académico de apoyo (referencia)
+│   └── EVALUACIONES_PIPELINE.md  # Presets de corpus, variantes de ablación y notas de agregación RAGAS
 ├── llama-bin/                    # Binarios llama.cpp compilados para Windows (gitignored)
 ├── models/
 │   ├── merged-model/             # Modelo HF denso post-merge LoRA (gitignored; se puede borrar tras GGUF)
@@ -372,7 +372,7 @@ python evaluation/run_ragbench_visual_inference.py --n-papers 25 --max-q 5  # ta
 python evaluation/aggregate_comparison_by_conjunto.py --dir evaluation/runs/ragas/comparisons/<label> --etiquetas-es
 ```
 
-Ver `evaluation/EVALUACIONES_PIPELINE.md` (sección *Agregación por conjunto*).
+Ver `docs/EVALUACIONES_PIPELINE.md` (sección *Agregación por conjunto*).
 
 ### Diagrama de arquitectura
 
@@ -576,9 +576,9 @@ bert-score>=0.3.13
 | Diagrama arquitectura | `docs/monkeygrab_architecture.png` / `.svg` | Generado por `generate_diagram.py` |
 | Datasets RAGAS locales | `evaluation/datasets/local/*.json` | p. ej. `dataset_eval_es.json`, `dataset_eval_ca.json`, `dataset_eval_mix.json` |
 | Datasets RagBench preparados | `evaluation/datasets/ragbench/prepared/` | datasets/manifiestos de `ragbench-prepare`, dev congelado y RagBench visual |
-| Resumen RAGAS por conjunto (post-`compare`) | `evaluation/runs/ragas/comparisons/<label>/aggregates/by_conjunto_*.json` (CSV opcional bajo `evaluation/runs/ragas/comparisons/<label>/scores/`) | Script `aggregate_comparison_by_conjunto.py`: cruza `<variant>.json` con el dataset por indice y calcula medias por `source_type`, `language`, etc.; `--etiquetas-es` para claves de metricas en castellano. Detalle en `evaluation/EVALUACIONES_PIPELINE.md`. |
+| Resumen RAGAS por conjunto (post-`compare`) | `evaluation/runs/ragas/comparisons/<label>/aggregates/by_conjunto_*.json` (CSV opcional bajo `evaluation/runs/ragas/comparisons/<label>/scores/`) | Script `aggregate_comparison_by_conjunto.py`: cruza `<variant>.json` con el dataset por indice y calcula medias por `source_type`, `language`, etc.; `--etiquetas-es` para claves de metricas en castellano. Detalle en `docs/EVALUACIONES_PIPELINE.md`. |
 | Resultados RAGAS RagBench visual | `evaluation/runs/ragas/ragbench_visual/<tag>/` | `scores.csv` + `debug.json` por tag (p. ej. `image_table_25p_5q`); generado por `run_ragbench_visual_inference.py --ragas-only` |
-| Inferencia RagBench visual (sin RAGAS) | `evaluation/runs/inference/ragbench_visual/<tag>/` | `results.csv`, `results.json`, `checkpoint.json`; generado por `run_ragbench_visual_inference.py` |
+| Inferencia RagBench visual (sin RAGAS) | `evaluation/runs/ragas/ragbench_visual/inference/<tag>/` | `results.csv`, `results.json`, `checkpoint.json`; generado por `run_ragbench_visual_inference.py` |
 | BERTScore post-proceso | `evaluation/runs/bertscore/<label>/` | `*_bertscore.csv` + `bertscore_summary.json`/`.csv`; generado por `evaluate_ragas_bertscore.py` sobre cualquier run RAGAS |
 
 ---

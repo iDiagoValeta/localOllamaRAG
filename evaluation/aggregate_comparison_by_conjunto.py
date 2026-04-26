@@ -35,7 +35,7 @@ Dependencies:
     - stdlib + optional pandas for CSV (--csv)
 
 Documentation (presets, flags, TFG notes):
-    ``evaluation/EVALUACIONES_PIPELINE.md`` — sección *Agregación por conjunto*.
+    ``docs/EVALUACIONES_PIPELINE.md`` — sección *Agregación por conjunto*.
 """
 
 from __future__ import annotations
@@ -157,6 +157,12 @@ def _discover_variant_files(
             if p.name == SUMMARY_NAME:
                 continue
             if p.name.startswith("by_conjunto_"):
+                continue
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                if not isinstance(data.get("results"), list):
+                    continue
+            except Exception:
                 continue
             out.append((p.stem, p.resolve()))
 

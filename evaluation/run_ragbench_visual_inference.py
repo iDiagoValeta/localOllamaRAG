@@ -52,7 +52,7 @@ DEFAULT_VISUAL_SOURCES = ("text-image", "text-table")
 ALLOWED_VISUAL_SOURCES = set(DEFAULT_VISUAL_SOURCES)
 RAGBENCH_VISUAL_PDFS_DIR = ROOT / "rag" / "docs" / "en_ragbench_visual"
 VISUAL_DATASETS_DIR = EVAL_DIR / "datasets" / "ragbench" / "prepared" / "visual"
-VISUAL_RUN_DIR = EVAL_DIR / "runs" / "inference" / "ragbench_visual"
+VISUAL_RUN_DIR = EVAL_DIR / "runs" / "ragas" / "ragbench_visual" / "inference"
 VISUAL_RAGAS_RUN_DIR = EVAL_DIR / "runs" / "ragas" / "ragbench_visual"
 VISUAL_PIPELINE_FLAGS = {
     **run_eval.RAGBENCH_FINAL_PIPELINE_FLAGS,
