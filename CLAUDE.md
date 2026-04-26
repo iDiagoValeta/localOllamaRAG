@@ -577,6 +577,9 @@ bert-score>=0.3.13
 | Datasets RAGAS locales | `evaluation/datasets/local/*.json` | p. ej. `dataset_eval_es.json`, `dataset_eval_ca.json`, `dataset_eval_mix.json` |
 | Datasets RagBench preparados | `evaluation/datasets/ragbench/prepared/` | datasets/manifiestos de `ragbench-prepare`, dev congelado y RagBench visual |
 | Resumen RAGAS por conjunto (post-`compare`) | `evaluation/runs/ragas/comparisons/<label>/aggregates/by_conjunto_*.json` (CSV opcional bajo `evaluation/runs/ragas/comparisons/<label>/scores/`) | Script `aggregate_comparison_by_conjunto.py`: cruza `<variant>.json` con el dataset por indice y calcula medias por `source_type`, `language`, etc.; `--etiquetas-es` para claves de metricas en castellano. Detalle en `evaluation/EVALUACIONES_PIPELINE.md`. |
+| Resultados RAGAS RagBench visual | `evaluation/runs/ragas/ragbench_visual/<tag>/` | `scores.csv` + `debug.json` por tag (p. ej. `image_table_25p_5q`); generado por `run_ragbench_visual_inference.py --ragas-only` |
+| Inferencia RagBench visual (sin RAGAS) | `evaluation/runs/inference/ragbench_visual/<tag>/` | `results.csv`, `results.json`, `checkpoint.json`; generado por `run_ragbench_visual_inference.py` |
+| BERTScore post-proceso | `evaluation/runs/bertscore/<label>/` | `*_bertscore.csv` + `bertscore_summary.json`/`.csv`; generado por `evaluate_ragas_bertscore.py` sobre cualquier run RAGAS |
 
 ---
 
