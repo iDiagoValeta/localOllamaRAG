@@ -1,0 +1,29 @@
+{
+  "label": "ragbench_visual_image_table_25p_5q",
+  "source": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\ragbench_visual\\image_table_25p_5q\\scores.csv",
+  "output_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\bertscore\\ragbench_visual_image_table_25p_5q",
+  "bertscore_model": "microsoft/deberta-xlarge-mnli",
+  "bertscore_lang": "en",
+  "bertscore_rescale_with_baseline": true,
+  "bertscore_batch_size": 8,
+  "runs": [
+    {
+      "input_csv": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\ragas\\ragbench_visual\\image_table_25p_5q\\scores.csv",
+      "output_csv": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\bertscore\\ragbench_visual_image_table_25p_5q\\scores_bertscore.csv",
+      "rows_total": 125,
+      "rows_scored": 125,
+      "rows_skipped": 0,
+      "response_column": "response",
+      "reference_column": "reference",
+      "bertscore_model": "microsoft/deberta-xlarge-mnli",
+      "bertscore_lang": "en",
+      "bertscore_rescale_with_baseline": true,
+      "mean_bertscore_precision": 0.114137,
+      "mean_bertscore_recall": 0.331088,
+      "mean_bertscore_f1": 0.20686
+    }
+  ],
+  "mean_bertscore_f1_across_runs": 0.20686,
+  "summary_json": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\bertscore\\ragbench_visual_image_table_25p_5q\\bertscore_summary.json",
+  "summary_csv": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\evaluation\\runs\\bertscore\\ragbench_visual_image_table_25p_5q\\bertscore_summary.csv"
+}

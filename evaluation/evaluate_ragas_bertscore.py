@@ -96,6 +96,19 @@ def _score_pairs(
 ) -> tuple[list[float], list[float], list[float]]:
     try:
         from bert_score import score as bert_score_fn
+        import bert_score.utils as _bsu  # noqa: PLC0415
+
+        # DeBERTa tokenizer sets model_max_length to a Python bigint that overflows
+        # a C int inside the HuggingFace Rust tokenizer on Windows (OverflowError).
+        # Cap it to 512 before bert_score calls sent_encode.
+        _orig_sent_encode = _bsu.sent_encode
+
+        def _patched_sent_encode(tokenizer, sent):  # noqa: ANN001, ANN202
+            if getattr(tokenizer, "model_max_length", 0) > 100_000:
+                tokenizer.model_max_length = 512
+            return _orig_sent_encode(tokenizer, sent)
+
+        _bsu.sent_encode = _patched_sent_encode
     except ImportError as e:
         print("Install BERTScore before running this script:")
         print("   pip install bert-score")

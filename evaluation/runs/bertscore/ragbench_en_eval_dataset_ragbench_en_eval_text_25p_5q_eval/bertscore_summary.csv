@@ -1,0 +1,2 @@
+input_csv,output_csv,rows_total,rows_scored,rows_skipped,mean_bertscore_precision,mean_bertscore_recall,mean_bertscore_f1,bertscore_model,bertscore_rescale_with_baseline
+C:\Users\nadiv\repos\localOllamaRAG\evaluation\runs\ragas\ragbench\en_eval\dataset_ragbench_en_eval_text_25p_5q_eval\scores.csv,C:\Users\nadiv\repos\localOllamaRAG\evaluation\runs\bertscore\ragbench_en_eval_dataset_ragbench_en_eval_text_25p_5q_eval\scores_bertscore.csv,125,125,0,0.185682,0.521678,0.296589,microsoft/deberta-xlarge-mnli,True
