@@ -71,7 +71,7 @@ MonkeyGrab is a Retrieval-Augmented Generation (RAG) system designed for researc
 
 **Web interface — querying a local document corpus**
 
-https://github.com/user-attachments/assets/cc36fc27-e4b9-49ac-a1f1-131f6e6afe4f
+https://github.com/user-attachments/assets/041385f7-5a5e-45a8-aa33-4afd01e7433b
 
 Sample query against a database of five Wikipedia articles indexed with the default settings. Models and parameters are fully configurable — results are specific to the hardware and models used during recording.
 
