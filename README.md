@@ -77,7 +77,7 @@ Sample query against a database of five Wikipedia articles indexed with the defa
 
 **RAGBench evaluation — indexing 25 documents from scratch**
 
-https://github.com/user-attachments/assets/f3e2bf0b-095a-416f-982e-9fdf4647c85e
+https://github.com/user-attachments/assets/9bbab813-0b7a-474c-a3b4-aad53f580672
 
 Left terminal: `ollama serve`. Right terminal: the full RAGBench pipeline — indexing, inference and RAGAS scoring in one run.
 
