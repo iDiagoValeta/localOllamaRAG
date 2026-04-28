@@ -12,26 +12,27 @@ from typing import List, Tuple
 
 
 COMMANDS: List[Tuple[str, str]] = [
-    ("/rag",     "Activar modo RAG"),
-    ("/chat",    "Activar modo CHAT"),
-    ("/limpiar", "Limpiar historial"),
-    ("/stats",   "Estado, modelos y base vectorial"),
-    ("/docs",    "Documentos indexados"),
-    ("/temas",   "Resumen de contenidos"),
-    ("/reindex", "Reconstruir el índice"),
-    ("/ayuda",   "Mostrar esta ayuda"),
-    ("/salir",   "Terminar la sesión"),
+    ("/rag",     "cmd.rag.desc"),
+    ("/chat",    "cmd.chat.desc"),
+    ("/limpiar", "cmd.limpiar.desc"),
+    ("/stats",   "cmd.stats.desc"),
+    ("/docs",    "cmd.docs.desc"),
+    ("/temas",   "cmd.temas.desc"),
+    ("/reindex", "cmd.reindex.desc"),
+    ("/ayuda",   "cmd.ayuda.desc"),
+    ("/salir",   "cmd.salir.desc"),
 ]
 
-ALIASES: List[Tuple[str, str]] = [
-    ("/clear", "/limpiar"),
-    ("/help",  "/ayuda"),
-    ("/exit",  "/salir"),
+# 3-tuple: (alias, canonical_command, description_key_for_help)
+ALIASES: List[Tuple[str, str, str]] = [
+    ("/clear", "/limpiar", "alias.clear.desc"),
+    ("/help",  "/ayuda",   "alias.help.desc"),
+    ("/exit",  "/salir",   "alias.exit.desc"),
 ]
 
 
 def all_command_names() -> List[str]:
     """All accepted slash tokens (primary + aliases), useful for autocomplete."""
     names = [cmd for cmd, _ in COMMANDS]
-    names.extend(alias for alias, _ in ALIASES)
+    names.extend(alias for alias, *_ in ALIASES)
     return names
