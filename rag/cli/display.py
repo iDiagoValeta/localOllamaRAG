@@ -63,7 +63,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme as RichTheme
 
-from rag.cli.commands import COMMANDS, all_command_names
+from rag.cli.commands import ALIASES, COMMANDS, all_command_names
 
 try:
     from colorama import just_fix_windows_console
@@ -72,8 +72,8 @@ except ImportError:  # pragma: no cover - dependency expected at runtime
 
 try:
     from prompt_toolkit import PromptSession
-    from prompt_toolkit.completion import Completer, Completion
-    from prompt_toolkit.formatted_text import ANSI
+    from prompt_toolkit.completion import Completer, Completion, FuzzyWordCompleter
+    from prompt_toolkit.formatted_text import ANSI, HTML
     from prompt_toolkit.history import FileHistory
     from prompt_toolkit.shortcuts import print_formatted_text
     from prompt_toolkit.shortcuts import prompt as ptk_prompt
@@ -83,6 +83,8 @@ except ImportError:  # pragma: no cover - dependency expected at runtime
     ANSI = None
     Completer = object  # type: ignore[assignment,misc]
     Completion = None  # type: ignore[assignment]
+    FuzzyWordCompleter = None  # type: ignore[assignment]
+    HTML = None  # type: ignore[assignment]
     FileHistory = None  # type: ignore[assignment]
     PromptSession = None  # type: ignore[assignment]
     print_formatted_text = None
@@ -327,22 +329,21 @@ class SessionStats:
 
 if PTK_AVAILABLE:
 
-    class _SlashCompleter(Completer):  # type: ignore[misc]
-        """Complete slash-commands only when the line starts with '/'.
+    class _FuzzySlashCompleter(Completer):  # type: ignore[misc]
+        """Fuzzy-complete slash-commands only when the line starts with '/'.
 
-        Avoids noisy popup suggestions during regular RAG/chat prompts.
+        Delegates to FuzzyWordCompleter so partial/out-of-order characters work
+        (e.g. '/sta' → '/stats', '/rei' → '/reindex') while still avoiding
+        noisy popup suggestions during regular RAG/chat input.
         """
 
         def __init__(self, commands: List[str]) -> None:
-            self._commands = sorted(set(commands))
+            self._fuzzy = FuzzyWordCompleter(sorted(set(commands)))
 
         def get_completions(self, document, complete_event):  # type: ignore[override]
-            text = document.text_before_cursor
-            if not text.startswith("/"):
+            if not document.text_before_cursor.startswith("/"):
                 return
-            for cmd in self._commands:
-                if cmd.startswith(text):
-                    yield Completion(cmd, start_position=-len(text))
+            yield from self._fuzzy.get_completions(document, complete_event)
 
 
 class Display:
@@ -362,10 +363,16 @@ class Display:
         self._stream_bold = False
         self._stream_line_start = True
         self._pending_stars = 0
+        # State for the persistent bottom toolbar (prompt_toolkit only)
+        self._toolbar_mode: str = "chat"
+        self._toolbar_model: str = ""
+        # Language: "es" (default) or "en", controlled by MONKEYGRAB_LANG env var
+        _raw_lang = os.getenv("MONKEYGRAB_LANG", "es").strip().lower()
+        self._lang: str = _raw_lang if _raw_lang in ("es", "en") else "es"
         self._ptk_session = self._build_ptk_session()
 
     def _build_ptk_session(self):
-        """Create a PromptSession with persistent history + slash completer."""
+        """Create a PromptSession with persistent history, fuzzy completer, and toolbar."""
         if not PTK_AVAILABLE or self.backend not in {"prompt_toolkit", "rich"}:
             return None
         try:
@@ -378,11 +385,38 @@ class Display:
                 os.makedirs(parent, exist_ok=True)
             return PromptSession(
                 history=FileHistory(history_path),
-                completer=_SlashCompleter(all_command_names()),
+                completer=_FuzzySlashCompleter(all_command_names()),
                 complete_while_typing=False,
+                bottom_toolbar=self._get_toolbar,
             )
         except Exception:
             return None
+
+    def _get_toolbar(self):
+        """Dynamic bottom toolbar rendered on every prompt redraw."""
+        if not PTK_AVAILABLE or HTML is None:
+            return ""
+        mode_color = "#5fafaf" if self._toolbar_mode == "rag" else "#87afd7"
+        shortcuts = self._s("toolbar.shortcuts")
+        return HTML(
+            f' <b><style fg="{mode_color}">{self._toolbar_mode.upper()}</style></b>'
+            f'  <style fg="#a8a8a8">{self._toolbar_model}</style>'
+            f'  <style fg="#606060">{shortcuts}</style>'
+        )
+
+    def _s(self, key: str, **kwargs) -> str:
+        """Return the localized string for *key* in the active language.
+
+        Thin wrapper around ``rag.cli.strings.s`` that automatically injects
+        the ``Display`` instance's current language so callers don't have to
+        pass it explicitly.
+
+        Keys not found in the active language fall back to Spanish, then to the
+        key itself, so raw values (paths, numbers, model names) pass through
+        unchanged.
+        """
+        from rag.cli.strings import s as _str
+        return _str(key, lang=self._lang, **kwargs)
 
     # ─────────────────────────────────────────────
     # SECTION 7: PRIMITIVES
@@ -458,22 +492,19 @@ class Display:
     # ─────────────────────────────────────────────
 
     def logo(self) -> None:
+        subtitle = self._s("brand.subtitle")
+        academic = self._s("brand.academic")
         if self.backend == "rich":
             title = Text()
             title.append("Monkey", style="brand")
             title.append("Grab", style="brand.dim")
             title.append("  ·  ", style="dim")
-            title.append("local PDF RAG", style="muted")
+            title.append(subtitle, style="muted")
             self.console.rule(title, style="brand.dim")
-            self.console.print(
-                "  [dim]TFG · ETSINF · UPV · 2025-2026[/]",
-                highlight=False,
-            )
+            self.console.print(f"  [dim]{academic}[/]", highlight=False)
             return
-        self._rule("MonkeyGrab · local PDF RAG", "═", Palette.BRAND)
-        self._print_line(
-            f"  {self._ansi('TFG · ETSINF · UPV · 2025-2026', Palette.DIM.ansi)}"
-        )
+        self._rule(f"MonkeyGrab · {subtitle}", "═", Palette.BRAND)
+        self._print_line(f"  {self._ansi(academic, Palette.DIM.ansi)}")
 
     def init_panel(self, info: Dict[str, Any]) -> None:
         mode = info.get("mode", "chat")
@@ -486,49 +517,49 @@ class Display:
         corpus = Table.grid(padding=(0, 2))
         corpus.add_column(style="dim", no_wrap=True)
         corpus.add_column(style="text")
-        corpus.add_row("PDFs", str(info.get("total_documentos", 0)))
-        corpus.add_row("Fragmentos", str(info.get("total_fragmentos", 0)))
-        corpus.add_row("Carpeta", str(info.get("docs_folder", "-")))
-        corpus.add_row("Colección", str(info.get("collection_name", "-")))
+        corpus.add_row(self._s("corpus.pdfs"), str(info.get("total_documentos", 0)))
+        corpus.add_row(self._s("corpus.fragments"), str(info.get("total_fragmentos", 0)))
+        corpus.add_row(self._s("corpus.folder"), str(info.get("docs_folder", "-")))
+        corpus.add_row(self._s("corpus.collection"), str(info.get("collection_name", "-")))
 
         details = Table.grid(padding=(0, 2))
         details.add_column(style="dim", no_wrap=True)
         details.add_column(style="muted")
-        details.add_row("Extractor", str(info.get("extractor", "-")))
-        details.add_row("Búsqueda", str(info.get("busqueda", "-")))
+        details.add_row(self._s("pipeline.extractor"), self._s(str(info.get("extractor", "-"))))
+        details.add_row(self._s("pipeline.search"), self._s(str(info.get("busqueda", "-"))))
         rr = "off"
         if info.get("reranker") == "on":
             rr = f"{info.get('reranker_model', '-')}, {info.get('reranker_device', '-')}"
-        details.add_row("Reranker", rr)
+        details.add_row(self._s("pipeline.reranker"), rr)
         details.add_row(
-            "Chunks",
+            self._s("pipeline.chunks"),
             f"{info.get('chunk_size', '-')}c, overlap {info.get('chunk_overlap', '-')}c",
         )
 
         models = self._themed_table(header=True, box_style=box.SIMPLE_HEAVY)
-        models.add_column("Rol", style="dim", width=12, no_wrap=True)
-        models.add_column("Modelo", style="text", overflow="ellipsis")
-        models.add_column("Tag", style="muted", width=12, overflow="ellipsis")
-        models.add_column("Uso", style="muted", width=12, no_wrap=True)
+        models.add_column(self._s("models.role"), style="dim", width=12, no_wrap=True)
+        models.add_column(self._s("models.model"), style="text", overflow="ellipsis")
+        models.add_column(self._s("models.tag"), style="muted", width=12, overflow="ellipsis")
+        models.add_column(self._s("models.use"), style="muted", width=12, no_wrap=True)
         model_width = 44 if self.console.width >= 110 else 28
         model_rows = [
-            ("RAG", info.get("modelo_rag", ""), "respuestas"),
-            ("Chat", info.get("modelo_chat", ""), "general"),
-            ("Embeddings", info.get("modelo_embedding", ""), "índice"),
+            (self._s("role.rag"), info.get("modelo_rag", ""), self._s("model.use.rag")),
+            (self._s("role.chat"), info.get("modelo_chat", ""), self._s("model.use.chat")),
+            (self._s("role.embed"), info.get("modelo_embedding", ""), self._s("model.use.embed")),
             (
-                "Contextual",
+                self._s("role.contextual"),
                 info.get("modelo_contextual", ""),
-                "indexación" if info.get("contextual") else "off",
+                self._s("model.use.contextual") if info.get("contextual") else "off",
             ),
             (
-                "RECOMP",
+                self._s("role.recomp"),
                 info.get("modelo_recomp", ""),
-                "síntesis" if info.get("recomp") else "off",
+                self._s("model.use.recomp") if info.get("recomp") else "off",
             ),
             (
-                "OCR",
+                self._s("role.ocr"),
                 info.get("modelo_ocr", ""),
-                "imágenes" if info.get("images") else "off",
+                self._s("model.use.ocr") if info.get("images") else "off",
             ),
         ]
         for role, model, use in model_rows:
@@ -563,47 +594,48 @@ class Display:
         for idx in range(0, len(cells), 3):
             flags.add_row(*cells[idx : idx + 3])
 
+        corpus_title = self._s("init.corpus_title")
+        pipeline_title = self._s("init.pipeline_title")
         top = Table.grid(expand=True)
         top.add_column(ratio=1)
         top.add_column(ratio=2)
         top.add_row(
-            Panel(corpus, title="[info]Corpus[/]", border_style="dim", box=box.ROUNDED),
-            Panel(details, title="[info]Pipeline[/]", border_style="dim", box=box.ROUNDED),
+            Panel(corpus, title=f"[info]{corpus_title}[/]", border_style="dim", box=box.ROUNDED),
+            Panel(details, title=f"[info]{pipeline_title}[/]", border_style="dim", box=box.ROUNDED),
         )
 
         header = Text()
-        header.append("Modo inicial ", style="dim")
+        header.append(f"{self._s('init.mode_prefix')} ", style="dim")
         header.append(mode, style=mode_style)
-        header.append("  ·  ")
-        header.append("usa /ayuda para comandos", style="dim")
+        header.append("  ·  ", style="dim")
+        header.append(self._s("init.use_help"), style="dim")
         self.console.print(header)
         self.console.print(top)
         self.console.print(models)
-        self.console.print(
-            Panel(flags, title="[info]Flags[/]", border_style="dim", box=box.ROUNDED)
-        )
+        # Flags as a compact inline row — no panel, no border
+        self.console.print(flags)
         self.console.print()
 
     def _init_panel_ansi(self, info: Dict[str, Any], mode: str) -> None:
         mode_color = self._mode_color(mode)
         self._print_line(
-            f"{self._ansi('Modo inicial:', Palette.DIM.ansi)} "
+            f"{self._ansi(self._s('init.mode_prefix') + ':', Palette.DIM.ansi)} "
             f"{self._ansi(mode, mode_color.ansi, ANSI_BOLD)}"
-            f"{self._ansi('  |  usa /ayuda para comandos', Palette.DIM.ansi)}"
+            f"{self._ansi('  |  ' + self._s('init.use_help'), Palette.DIM.ansi)}"
         )
         self._rule(color=Palette.DIM)
-        rows = [
-            ("PDFs", info.get("total_documentos", 0)),
-            ("Fragmentos", info.get("total_fragmentos", 0)),
-            ("Carpeta", info.get("docs_folder", "-")),
-            ("Colección", info.get("collection_name", "-")),
-            ("Extractor", info.get("extractor", "-")),
-            ("Búsqueda", info.get("busqueda", "-")),
-        ]
         rr = "off"
         if info.get("reranker") == "on":
             rr = f"{info.get('reranker_model', '-')}, {info.get('reranker_device', '-')}"
-        rows.append(("Reranker", rr))
+        rows = [
+            (self._s("corpus.pdfs"), info.get("total_documentos", 0)),
+            (self._s("corpus.fragments"), info.get("total_fragmentos", 0)),
+            (self._s("corpus.folder"), info.get("docs_folder", "-")),
+            (self._s("corpus.collection"), info.get("collection_name", "-")),
+            (self._s("pipeline.extractor"), self._s(str(info.get("extractor", "-")))),
+            (self._s("pipeline.search"), self._s(str(info.get("busqueda", "-")))),
+            (self._s("pipeline.reranker"), rr),
+        ]
         for key, value in rows:
             self._print_line(
                 f"  {self._ansi(f'{key}:', Palette.DIM.ansi)} "
@@ -627,25 +659,30 @@ class Display:
     def welcome(self) -> None:
         if self.backend != "rich":
             self._print_line()
-            self._rule("Modos", color=Palette.INFO)
+            self._rule(self._s("help.modes_title"), color=Palette.INFO)
             self._print_line(
-                f"  {self._ansi('CHAT', Palette.CHAT.ansi, ANSI_BOLD)} "
-                f"{self._ansi('Conversación libre con historial.', Palette.MUTED.ansi)}"
+                f"  {self._ansi(self._s('mode.chat.label'), Palette.CHAT.ansi, ANSI_BOLD)} "
+                f"{self._ansi(self._s('mode.chat.desc'), Palette.MUTED.ansi)}"
             )
             self._print_line(
-                f"  {self._ansi('RAG', Palette.RAG.ansi, ANSI_BOLD)}  "
-                f"{self._ansi('Consulta los PDFs indexados y muestra fuentes.', Palette.MUTED.ansi)}"
+                f"  {self._ansi(self._s('mode.rag.label'), Palette.RAG.ansi, ANSI_BOLD)}  "
+                f"{self._ansi(self._s('mode.rag.desc'), Palette.MUTED.ansi)}"
             )
             self._print_line()
-            self._rule("Comandos", color=Palette.BRAND)
-            for cmd, desc in COMMANDS:
+            self._rule(self._s("help.commands_title"), color=Palette.BRAND)
+            for cmd, desc_key in COMMANDS:
                 self._print_line(
                     f"  {self._ansi(f'{cmd:<12}', Palette.BRAND.ansi, ANSI_BOLD)} "
-                    f"{self._ansi(desc, Palette.TEXT.ansi)}"
+                    f"{self._ansi(self._s(desc_key), Palette.TEXT.ansi)}"
+                )
+            for alias, _, desc_key in ALIASES:
+                self._print_line(
+                    f"  {self._ansi(f'{alias:<12}', Palette.DIM.ansi)} "
+                    f"{self._ansi(self._s(desc_key), Palette.DIM.ansi)}"
                 )
             self._print_line(
-                f"  {self._ansi('Atajos:', Palette.DIM.ansi)} "
-                f"{self._ansi('flechas ↑/↓ = historial · Tab sobre / = autocompletar comandos', Palette.MUTED.ansi)}"
+                f"  {self._ansi(self._s('help.shortcuts_title') + ':', Palette.DIM.ansi)} "
+                f"{self._ansi('↑/↓  Tab  Ctrl-C', Palette.MUTED.ansi)}"
             )
             self._rule(color=Palette.DIM)
             self._print_line()
@@ -655,28 +692,33 @@ class Display:
         modes = Table.grid(padding=(0, 2))
         modes.add_column(no_wrap=True)
         modes.add_column(style="muted")
-        modes.add_row("[mode.chat]CHAT[/]", "Conversación libre con historial.")
-        modes.add_row("[mode.rag]RAG[/]", "Consulta los PDFs indexados y muestra fuentes.")
+        modes.add_row(f"[mode.chat]{self._s('mode.chat.label')}[/]", self._s("mode.chat.desc"))
+        modes.add_row(f"[mode.rag]{self._s('mode.rag.label')}[/]", self._s("mode.rag.desc"))
 
-        commands = self._themed_table(title="Comandos", header=False)
-        commands.add_column("Comando", style="brand", width=12, no_wrap=True)
-        commands.add_column("Descripción", style="muted")
-        for cmd, desc in COMMANDS:
-            commands.add_row(cmd, desc)
+        commands = self._themed_table(title=self._s("help.commands_title"), header=False)
+        commands.add_column(self._s("help.command_col"), style="brand", width=12, no_wrap=True)
+        commands.add_column(self._s("help.desc_col"), style="muted")
+        for cmd, desc_key in COMMANDS:
+            commands.add_row(cmd, self._s(desc_key))
+        # Aliases as dim rows at the end of the same table
+        for alias, _, desc_key in ALIASES:
+            commands.add_row(f"[dim]{alias}[/]", f"[dim]{self._s(desc_key)}[/]")
 
         shortcuts = Table.grid(padding=(0, 2))
         shortcuts.add_column(style="dim", no_wrap=True)
         shortcuts.add_column(style="muted")
-        shortcuts.add_row("↑ / ↓", "Recuperar consultas anteriores del historial.")
-        shortcuts.add_row("Tab", "Autocompletar sobre un comando que empiece por '/'.")
-        shortcuts.add_row("Ctrl-C / Ctrl-D", "Salir guardando el historial.")
+        shortcuts.add_row("↑ / ↓", self._s("help.shortcut.arrows"))
+        shortcuts.add_row("Tab", self._s("help.shortcut.tab"))
+        shortcuts.add_row("Ctrl-C / Ctrl-D", self._s("help.shortcut.ctrlc"))
 
+        modes_title = self._s("help.modes_title")
+        shortcuts_title = self._s("help.shortcuts_title")
         self.console.print(
-            Panel(modes, title="[info]Modos[/]", border_style="dim", box=box.ROUNDED)
+            Panel(modes, title=f"[info]{modes_title}[/]", border_style="dim", box=box.ROUNDED)
         )
         self.console.print(commands)
         self.console.print(
-            Panel(shortcuts, title="[info]Atajos[/]", border_style="dim", box=box.ROUNDED)
+            Panel(shortcuts, title=f"[info]{shortcuts_title}[/]", border_style="dim", box=box.ROUNDED)
         )
         self.console.print()
 
@@ -718,7 +760,7 @@ class Display:
 
     def exception(self, title: str, exc: Exception) -> None:
         detail = str(exc).strip() or exc.__class__.__name__
-        advice = "Comprueba que Ollama esté activo y que el modelo exista localmente."
+        advice = self._s("exception.advice")
         if self.backend != "rich":
             self._print_line()
             self._rule(title, color=Palette.ERROR)
@@ -740,19 +782,18 @@ class Display:
         if ok:
             self.success(detail)
             return
+        advice = self._s("ollama.advice")
+        ollama_title = self._s("ollama.title")
         if self.backend != "rich":
             self._print_line()
-            self._rule("Ollama", color=Palette.WARNING)
+            self._rule(ollama_title, color=Palette.WARNING)
             self._print_line(f"  {self._ansi(detail, Palette.TEXT.ansi)}")
-            self._print_line(
-                f"  {self._ansi('Arranca el servidor con `ollama serve` antes de consultar.', Palette.DIM.ansi)}"
-            )
+            self._print_line(f"  {self._ansi(advice, Palette.DIM.ansi)}")
             self._rule(color=Palette.DIM)
             return
         panel = Panel(
-            f"[muted]{detail}[/]\n\n"
-            "[dim]Arranca el servidor con `ollama serve` antes de consultar.[/]",
-            title="[warning]Ollama[/]",
+            f"[muted]{detail}[/]\n\n[dim]{advice}[/]",
+            title=f"[warning]{ollama_title}[/]",
             border_style="warning",
             box=box.ROUNDED,
             expand=False,
@@ -763,7 +804,9 @@ class Display:
     # SECTION 10: PIPELINE FEEDBACK
     # ─────────────────────────────────────────────
 
-    def pipeline_start(self, message: str = "Buscando en documentos...") -> Optional[Status]:
+    def pipeline_start(self, message: Optional[str] = None) -> Optional[Status]:
+        if message is None:
+            message = self._s("pipeline.start")
         self.pipeline_stop()
         if self.backend != "rich":
             self.info(message)
@@ -866,6 +909,9 @@ class Display:
 
     def read_input(self, mode: str, model: str = "") -> str:
         self.pipeline_stop()
+        # Keep toolbar state in sync so the bottom bar reflects the current mode
+        self._toolbar_mode = mode
+        self._toolbar_model = _short_model(model, max_len=22, keep_tag=False)
         if self.backend == "prompt_toolkit":
             return self._read_input_ptk(mode, model)
         if self.backend == "plain":
@@ -929,7 +975,7 @@ class Display:
 
     def response_header(self, mode: str, model: str = "") -> None:
         model_short = _short_model(model, max_len=36)
-        label = "RAG" if mode == "rag" else "Chat"
+        label = self._s("response.header.rag") if mode == "rag" else self._s("response.header.chat")
         if self.backend != "rich":
             self._print_line()
             self._rule(f"{label} · {model_short}", color=self._mode_color(mode))
@@ -970,9 +1016,10 @@ class Display:
         self.console.print()
 
     def render_response(self, text: str) -> None:
+        empty = self._s("response.empty")
         if self.backend != "rich":
-            body = self._plain_markdown((text or "(sin respuesta)").strip())
-            for line in body.splitlines() or ["(sin respuesta)"]:
+            body = self._plain_markdown((text or empty).strip())
+            for line in body.splitlines() or [empty]:
                 self._print_line(f"  {self._ansi(line.rstrip(), Palette.TEXT.ansi)}")
             self._print_line()
             return
@@ -993,25 +1040,27 @@ class Display:
             page = meta.get("page", None)
             sources_map.setdefault(doc, set()).add(page)
 
+        n_src = len(sources_map)
+        src_title = self._s("sources.title", n=n_src)
         if self.backend != "rich":
             self._print_line()
-            self._rule(f"Fuentes ({len(sources_map)})", color=Palette.BRAND)
+            self._rule(src_title, color=Palette.BRAND)
             for doc, pages in sorted(sources_map.items()):
                 self._print_line(
                     f"  {self._ansi(_short_model(doc, max_len=56, keep_tag=True), Palette.TEXT.ansi)} "
-                    f"{self._ansi(f'(páginas: {_safe_pages(pages)})', Palette.MUTED.ansi)}"
+                    f"{self._ansi(f'(pp. {_safe_pages(pages)})', Palette.MUTED.ansi)}"
                 )
             return
 
         table = self._themed_table(header=False, box_style=None)
-        table.add_column("Documento", style="muted", overflow="fold")
-        table.add_column("Páginas", style="dim", no_wrap=True)
+        table.add_column(self._s("sources.col.doc"), style="muted", overflow="fold")
+        table.add_column(self._s("sources.col.pages"), style="dim", no_wrap=True)
         for doc, pages in sorted(sources_map.items()):
             table.add_row(_short_model(doc, max_len=56, keep_tag=True), _safe_pages(pages))
         self.console.print(
             Panel(
                 table,
-                title=f"[dim]Fuentes ({len(sources_map)})[/]",
+                title=f"[dim]{src_title}[/]",
                 border_style="dim",
                 box=box.ROUNDED,
             )
@@ -1020,9 +1069,11 @@ class Display:
     def response_footer(self, sources: Optional[int] = None) -> None:
         if self.backend != "rich":
             if sources is not None:
+                src_text = (self._s("sources.footer.cited", n=sources)
+                            if sources else self._s("sources.footer.none"))
                 self._print_line(
                     f"  {self._ansi('·', Palette.DIM.ansi)} "
-                    f"{self._ansi(f'{sources} fuentes citadas' if sources else 'sin fuentes', Palette.DIM.ansi)}"
+                    f"{self._ansi(src_text, Palette.DIM.ansi)}"
                 )
             self._rule(color=Palette.DIM)
             self._print_line()
@@ -1030,6 +1081,100 @@ class Display:
         if sources is not None:
             tag = f"{sources} fuentes citadas" if sources else "sin fuentes"
             self.console.print(f"  [dim]· {tag}[/]")
+        self.console.rule(style="dim")
+        self.console.print()
+
+    def response_footer_rag(
+        self,
+        fragments: List[Dict[str, Any]],
+        timer: "QueryTimer",
+    ) -> None:
+        """Unified post-RAG footer combining sources, scores, and timings.
+
+        Replaces the three-call pattern ``sources_panel + query_summary +
+        response_footer`` with a single compact panel whose title carries the
+        timing summary and whose rows list each source with its relevance score.
+
+        Args:
+            fragments: Final list of retrieved fragments (with metadata and scores).
+            timer: QueryTimer instance after generation has completed.
+        """
+        if not fragments:
+            self.response_footer()
+            return
+
+        # Aggregate: best score and page set per source document
+        sources_map: Dict[str, Dict[str, Any]] = {}
+        for frag in fragments:
+            meta = frag.get("metadata", {}) or {}
+            doc = meta.get("source", "?")
+            page = meta.get("page", None)
+            score = frag.get("score_reranker") or frag.get("score_final") or 0.0
+            entry = sources_map.setdefault(doc, {"pages": set(), "score": 0.0})
+            entry["pages"].add(page)
+            entry["score"] = max(entry["score"], float(score))
+
+        n_sources = len(sources_map)
+        n_frags = len(fragments)
+        total_dur = _format_duration(timer.total)
+        phases = timer.phase_durations()
+        phase_parts = [
+            f"{name} {_format_duration(dur)}"
+            for name, dur in phases
+            if dur >= 0.05
+        ]
+
+        src_title = self._s("sources.title", n=n_sources)
+        if self.backend != "rich":
+            timing = "  ·  ".join([f"total {total_dur}"] + phase_parts + [f"{n_frags} frag."])
+            self._print_line(
+                f"  {self._ansi('·', Palette.INFO.ansi)} "
+                f"{self._ansi(timing, Palette.DIM.ansi)}"
+            )
+            self._rule(src_title, color=Palette.DIM)
+            for doc, data in sorted(sources_map.items()):
+                score_val = data["score"]
+                pages_str = f"pp. {_safe_pages(data['pages'])}"
+                self._print_line(
+                    f"  {self._ansi(_short_model(doc, max_len=48, keep_tag=True), Palette.TEXT.ansi)} "
+                    f"{self._ansi(pages_str, Palette.MUTED.ansi)} "
+                    f"{self._ansi(f'{score_val:.2f}', Palette.DIM.ansi)}"
+                )
+            self._rule(color=Palette.DIM)
+            self._print_line()
+            return
+
+        # Build panel title with timings
+        timing_str = "  ·  ".join([total_dur] + phase_parts + [f"{n_frags} frag."])
+        panel_title = f"[dim]{src_title}  ·  {timing_str}[/]"
+
+        table = self._themed_table(header=False, box_style=None)
+        table.add_column(self._s("sources.col.doc"), style="muted", overflow="fold")
+        table.add_column(self._s("sources.col.pages"), style="dim", no_wrap=True)
+        table.add_column(self._s("sources.col.score"), no_wrap=True, justify="right")
+
+        for doc, data in sorted(sources_map.items()):
+            score_val = data["score"]
+            if score_val >= 0.70:
+                score_style = "success"
+            elif score_val >= 0.50:
+                score_style = "warning"
+            else:
+                score_style = "off"
+            table.add_row(
+                _short_model(doc, max_len=48, keep_tag=True),
+                _safe_pages(data["pages"]),
+                Text(f"{score_val:.2f}", style=score_style),
+            )
+
+        self.console.print(
+            Panel(
+                table,
+                title=panel_title,
+                border_style="dim",
+                box=box.ROUNDED,
+            )
+        )
         self.console.rule(style="dim")
         self.console.print()
 
@@ -1045,17 +1190,17 @@ class Display:
     ) -> None:
         info = info or {}
         rows = [
-            ("PDFs", info.get("total_documentos", len(docs))),
-            ("Documentos indexados", len(docs)),
-            ("Fragmentos", total_fragments),
-            ("Carpeta", info.get("docs_folder", "-")),
-            ("Base vectorial", info.get("path_db", "-")),
-            ("Colección", info.get("collection_name", "-")),
+            (self._s("corpus.pdfs"), info.get("total_documentos", len(docs))),
+            (self._s("corpus.docs_indexed"), len(docs)),
+            (self._s("corpus.fragments"), total_fragments),
+            (self._s("corpus.folder"), info.get("docs_folder", "-")),
+            (self._s("corpus.vector_db"), info.get("path_db", "-")),
+            (self._s("corpus.collection"), info.get("collection_name", "-")),
         ]
 
         if self.backend != "rich":
             self._print_line()
-            self._rule("Estado", color=Palette.INFO)
+            self._rule(self._s("stats.title"), color=Palette.INFO)
             for key, value in rows:
                 self._print_line(
                     f"  {self._ansi(f'{key}:', Palette.DIM.ansi)} "
@@ -1065,22 +1210,187 @@ class Display:
             self._print_line()
             return
 
-        table = self._themed_table(title="Estado")
-        table.add_column("Métrica", style="dim", no_wrap=True)
-        table.add_column("Valor", style="text", overflow="fold")
+        table = self._themed_table(title=self._s("stats.title"))
+        table.add_column(self._s("stats.metric_col"), style="dim", no_wrap=True)
+        table.add_column(self._s("stats.value_col"), style="text", overflow="fold")
         for key, value in rows:
             table.add_row(key, str(value))
         self.console.print()
         self.console.print(table)
         self.console.print()
 
+    def stats_dashboard(
+        self,
+        total_fragments: int,
+        docs: List[Any],
+        info: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Consolidated stats dashboard replacing the separate stats_table + init_panel combo.
+
+        Shows corpus metrics, pipeline configuration, active models, and flags
+        in a single non-redundant view triggered by the ``/stats`` command.
+
+        Args:
+            total_fragments: Total chunk count in the vector DB.
+            docs: List of indexed document names or summary dicts.
+            info: Runtime metadata dict from ``_runtime_info``.
+        """
+        info = info or {}
+
+        if self.backend != "rich":
+            # Non-rich: compact list of all relevant stats
+            self._print_line()
+            self._rule(self._s("stats.dashboard.title"), color=Palette.INFO)
+            rr_ansi = (
+                f"{info.get('reranker_model', '-')}, {info.get('reranker_device', '-')}"
+                if info.get("reranker") == "on" else "off"
+            )
+            rows = [
+                (self._s("corpus.pdfs"), info.get("total_documentos", len(docs))),
+                (self._s("corpus.docs"), len(docs)),
+                (self._s("corpus.fragments"), total_fragments),
+                (self._s("corpus.folder"), info.get("docs_folder", "-")),
+                (self._s("corpus.vector_db"), info.get("path_db", "-")),
+                (self._s("corpus.collection"), info.get("collection_name", "-")),
+                (self._s("pipeline.extractor"), self._s(str(info.get("extractor", "-")))),
+                (self._s("pipeline.search"), self._s(str(info.get("busqueda", "-")))),
+                (self._s("pipeline.reranker"), rr_ansi),
+                (self._s("pipeline.chunks"),
+                 f"{info.get('chunk_size', '-')}c, overlap {info.get('chunk_overlap', '-')}c"),
+            ]
+            for key, value in rows:
+                self._print_line(
+                    f"  {self._ansi(f'{key}:', Palette.DIM.ansi)} "
+                    f"{self._ansi(str(value), Palette.TEXT.ansi)}"
+                )
+            flags_str = "  ".join(
+                f"{n}={'on' if _coerce_bool(v) else 'off'}"
+                for n, v in [
+                    ("hybrid", info.get("hybrid")),
+                    ("exhaustive", info.get("exhaustive")),
+                    ("rerank", info.get("reranker") == "on"),
+                    ("contextual", info.get("contextual")),
+                    ("recomp", info.get("recomp")),
+                    ("images", info.get("images")),
+                    ("expand", info.get("expand")),
+                ]
+            )
+            self._print_line(
+                f"  {self._ansi('Flags:', Palette.DIM.ansi)} "
+                f"{self._ansi(flags_str, Palette.MUTED.ansi)}"
+            )
+            self._rule(color=Palette.DIM)
+            self._print_line()
+            return
+
+        dashboard_title = self._s("stats.dashboard.title")
+        corpus_title = self._s("init.corpus_title")
+        pipeline_title = self._s("init.pipeline_title")
+
+        self.console.print()
+        self.console.rule(f"[info]{dashboard_title}[/]", style="dim")
+        self.console.print()
+
+        # --- Corpus panel (with base vectorial) ---
+        corpus = Table.grid(padding=(0, 2))
+        corpus.add_column(style="dim", no_wrap=True)
+        corpus.add_column(style="text")
+        corpus.add_row(self._s("corpus.pdfs"), str(info.get("total_documentos", len(docs))))
+        corpus.add_row(self._s("corpus.docs"), str(len(docs)))
+        corpus.add_row(self._s("corpus.fragments"), str(total_fragments))
+        corpus.add_row(self._s("corpus.folder"), str(info.get("docs_folder", "-")))
+        corpus.add_row(self._s("corpus.vector_db"), str(info.get("path_db", "-")))
+        corpus.add_row(self._s("corpus.collection"), str(info.get("collection_name", "-")))
+
+        # --- Pipeline panel ---
+        details = Table.grid(padding=(0, 2))
+        details.add_column(style="dim", no_wrap=True)
+        details.add_column(style="muted")
+        details.add_row(self._s("pipeline.extractor"), self._s(str(info.get("extractor", "-"))))
+        details.add_row(self._s("pipeline.search"), self._s(str(info.get("busqueda", "-"))))
+        rr = "off"
+        if info.get("reranker") == "on":
+            rr = f"{info.get('reranker_model', '-')}, {info.get('reranker_device', '-')}"
+        details.add_row(self._s("pipeline.reranker"), rr)
+        details.add_row(
+            self._s("pipeline.chunks"),
+            f"{info.get('chunk_size', '-')}c, overlap {info.get('chunk_overlap', '-')}c",
+        )
+
+        top = Table.grid(expand=True)
+        top.add_column(ratio=1)
+        top.add_column(ratio=2)
+        top.add_row(
+            Panel(corpus, title=f"[info]{corpus_title}[/]", border_style="dim", box=box.ROUNDED),
+            Panel(details, title=f"[info]{pipeline_title}[/]", border_style="dim", box=box.ROUNDED),
+        )
+        self.console.print(top)
+
+        # --- Models table (same as init_panel) ---
+        models = self._themed_table(header=True, box_style=box.SIMPLE_HEAVY)
+        models.add_column(self._s("models.role"), style="dim", width=12, no_wrap=True)
+        models.add_column(self._s("models.model"), style="text", overflow="ellipsis")
+        models.add_column(self._s("models.tag"), style="muted", width=12, overflow="ellipsis")
+        models.add_column(self._s("models.use"), style="muted", width=12, no_wrap=True)
+        model_width = 44 if self.console.width >= 110 else 28
+        model_rows = [
+            (self._s("role.rag"), info.get("modelo_rag", ""), self._s("model.use.rag")),
+            (self._s("role.chat"), info.get("modelo_chat", ""), self._s("model.use.chat")),
+            (self._s("role.embed"), info.get("modelo_embedding", ""), self._s("model.use.embed")),
+            (self._s("role.contextual"), info.get("modelo_contextual", ""),
+             self._s("model.use.contextual") if info.get("contextual") else "off"),
+            (self._s("role.recomp"), info.get("modelo_recomp", ""),
+             self._s("model.use.recomp") if info.get("recomp") else "off"),
+            (self._s("role.ocr"), info.get("modelo_ocr", ""),
+             self._s("model.use.ocr") if info.get("images") else "off"),
+        ]
+        for role, model, use in model_rows:
+            use_style = "off" if use == "off" else "muted"
+            models.add_row(
+                role,
+                _short_model(model, max_len=model_width, keep_tag=False),
+                _model_tag(model) or "-",
+                Text(str(use), style=use_style),
+            )
+        self.console.print(models)
+
+        # --- Flags compact row ---
+        flag_items = [
+            ("hybrid", info.get("hybrid")),
+            ("exhaustive", info.get("exhaustive")),
+            ("rerank", info.get("reranker") == "on"),
+            ("contextual", info.get("contextual")),
+            ("recomp", info.get("recomp")),
+            ("images", info.get("images")),
+            ("expand", info.get("expand")),
+        ]
+        flags = Table.grid(padding=(0, 2))
+        flags.add_column(no_wrap=True)
+        flags.add_column(no_wrap=True)
+        flags.add_column(no_wrap=True)
+        cells: List[Text] = []
+        for name, enabled in flag_items:
+            cell = Text()
+            cell.append(name, style="dim")
+            cell.append("=")
+            cell.append_text(_state_label(enabled))
+            cells.append(cell)
+        for idx in range(0, len(cells), 3):
+            row_cells = cells[idx: idx + 3]
+            # Pad to 3 columns so add_row always gets the same arity
+            while len(row_cells) < 3:
+                row_cells.append(Text(""))
+            flags.add_row(*row_cells)
+        self.console.print(flags)
+        self.console.print()
+
     def docs_table(self, docs: List[Any]) -> None:
         if not docs:
-            self.warning("No hay documentos indexados.")
+            self.warning(self._s("docs.none"))
             return
         if self.backend != "rich":
             self._print_line()
-            self._rule("Documentos", color=Palette.BRAND)
+            self._rule(self._s("docs.title"), color=Palette.BRAND)
             for idx, item in enumerate(docs, 1):
                 if isinstance(item, dict):
                     descr = (
@@ -1102,12 +1412,12 @@ class Display:
             self._print_line()
             return
 
-        table = self._themed_table(title="Documentos")
-        table.add_column("#", style="dim", width=4, justify="right")
-        table.add_column("Documento", style="text", overflow="fold")
-        table.add_column("Págs.", style="muted", justify="right", no_wrap=True)
-        table.add_column("Frag.", style="muted", justify="right", no_wrap=True)
-        table.add_column("Tipos", style="dim", no_wrap=True)
+        table = self._themed_table(title=self._s("docs.title"))
+        table.add_column(self._s("docs.col.num"), style="dim", width=4, justify="right")
+        table.add_column(self._s("docs.col.doc"), style="text", overflow="fold")
+        table.add_column(self._s("docs.col.pages"), style="muted", justify="right", no_wrap=True)
+        table.add_column(self._s("docs.col.frags"), style="muted", justify="right", no_wrap=True)
+        table.add_column(self._s("docs.col.types"), style="dim", no_wrap=True)
         for idx, item in enumerate(docs, 1):
             if isinstance(item, dict):
                 table.add_row(
@@ -1125,13 +1435,13 @@ class Display:
 
     def topics_display(self, docs_data: List[Dict[str, Any]]) -> None:
         if not docs_data:
-            self.warning("No hay documentos indexados.")
+            self.warning(self._s("docs.none"))
             return
-        tip = "Escribe una pregunta concreta o usa /docs para revisar el corpus."
+        tip = self._s("topics.tip")
 
         if self.backend != "rich":
             self._print_line()
-            self._rule("Contenidos", color=Palette.INFO)
+            self._rule(self._s("topics.title"), color=Palette.INFO)
             for doc_info in docs_data:
                 descr = (
                     f"(págs: {doc_info.get('pages', '-')}, "
@@ -1149,11 +1459,11 @@ class Display:
             self._print_line()
             return
 
-        table = self._themed_table(title="Contenidos")
-        table.add_column("Documento", style="text", overflow="fold")
-        table.add_column("Págs.", style="muted", justify="right", no_wrap=True)
-        table.add_column("Frag.", style="muted", justify="right", no_wrap=True)
-        table.add_column("Términos frecuentes", style="dim", overflow="fold")
+        table = self._themed_table(title=self._s("topics.title"))
+        table.add_column(self._s("topics.col.doc"), style="text", overflow="fold")
+        table.add_column(self._s("topics.col.pages"), style="muted", justify="right", no_wrap=True)
+        table.add_column(self._s("topics.col.frags"), style="muted", justify="right", no_wrap=True)
+        table.add_column(self._s("topics.col.terms"), style="dim", overflow="fold")
         for doc_info in docs_data:
             table.add_row(
                 doc_info.get("name", "-"),
@@ -1171,75 +1481,87 @@ class Display:
     # ─────────────────────────────────────────────
 
     def mode_change(self, mode: str, model: str = "") -> None:
-        purpose = "consulta documental" if mode == "rag" else "conversación libre"
+        # Keep toolbar state in sync when the user switches modes explicitly
+        self._toolbar_mode = mode
+        self._toolbar_model = _short_model(model, max_len=22, keep_tag=False)
+        purpose = self._s("mode.rag.purpose") if mode == "rag" else self._s("mode.chat.purpose")
+        mode_word = self._s("mode.rag.label").lower() if mode == "rag" else self._s("mode.chat.label").lower()
         if self.backend != "rich":
             color = self._mode_color(mode)
-            self._rule(color=Palette.DIM)
             self._print_line(
-                f"  {self._ansi('modo:', Palette.DIM.ansi)} "
-                f"{self._ansi(mode, color.ansi, ANSI_BOLD)}"
+                f"  {self._ansi('→', color.ansi, ANSI_BOLD)} "
+                f"{self._ansi(f'modo {mode_word}', color.ansi, ANSI_BOLD)} "
+                f"{self._ansi(f'· {purpose} · {_short_model(model, 36)}', Palette.DIM.ansi)}"
             )
-            self._print_line(
-                f"  {self._ansi('uso:', Palette.DIM.ansi)} "
-                f"{self._ansi(purpose, Palette.MUTED.ansi)}"
-            )
-            self._print_line(
-                f"  {self._ansi('modelo:', Palette.DIM.ansi)} "
-                f"{self._ansi(_short_model(model, 36), Palette.TEXT.ansi)}"
-            )
-            self._rule(color=Palette.DIM)
             return
         style = "mode.rag" if mode == "rag" else "mode.chat"
         self.console.print(
-            f"  [{style}]modo {mode}[/] [dim]{purpose} · {_short_model(model, 36)}[/]"
+            f"  [{style}]→ modo {mode_word}[/] [dim]{purpose} · {_short_model(model, 36)}[/]"
         )
 
     def history_loaded(self, n: int) -> None:
-        self.info(f"historial restaurado: {n} mensajes")
+        self.info(self._s("history.loaded", n=n))
 
     def history_cleared(self) -> None:
-        self.success("historial limpiado")
+        self.success(self._s("history.cleared"))
 
-    def unknown_command(self, cmd: str) -> None:
-        self.warning(f"Comando no reconocido: {cmd} (usa /ayuda)")
+    def unknown_command(self, cmd: str, suggestions: Optional[List[str]] = None) -> None:
+        self.warning(self._s("unknown_cmd.msg", cmd=cmd))
+        if suggestions:
+            hint = "  ".join(suggestions)
+            suggestion_text = self._s("unknown_cmd.suggestion", hint=hint)
+            if self.backend != "rich":
+                self._print_line(f"     {self._ansi(suggestion_text, Palette.DIM.ansi)}")
+            else:
+                self.console.print(f"     [dim]{suggestion_text}[/]")
+        else:
+            hint_text = self._s("unknown_cmd.hint")
+            if self.backend != "rich":
+                self._print_line(f"     {self._ansi(hint_text, Palette.DIM.ansi)}")
+            else:
+                self.console.print(f"     [dim]{hint_text}[/]")
 
     def reindex_start(self) -> None:
+        reindex_title = self._s("reindex.title")
+        reindex_msg = self._s("reindex.start")
         if self.backend != "rich":
             self._print_line()
-            self._rule("Reindex", color=Palette.WARNING)
-            self.warning("Reindexando documentos: se reconstruirá la base vectorial.")
+            self._rule(reindex_title, color=Palette.WARNING)
+            self.warning(reindex_msg)
             return
         self.console.print()
-        self.warning("Reindexando documentos: se reconstruirá la base vectorial.")
+        self.warning(reindex_msg)
 
     def reindex_complete(self, total: int) -> None:
-        self.success(f"Reindexación completada: {total} fragmentos")
-        self.warning("Reinicia el programa para usar la nueva base de datos")
+        self.success(self._s("reindex.complete", total=total))
+        self.warning(self._s("reindex.restart"))
 
     def farewell(self, stats: Optional[SessionStats] = None) -> None:
         if stats is not None and stats.total_queries > 0:
             self._session_summary(stats)
+        farewell_msg = self._s("farewell.msg")
         if self.backend != "rich":
             self._print_line()
             self._rule(color=Palette.DIM)
-            self._print_line(f"  {self._ansi('Sesión finalizada.', Palette.DIM.ansi)}")
+            self._print_line(f"  {self._ansi(farewell_msg, Palette.DIM.ansi)}")
             self._print_line()
             return
         self.console.print()
-        self.console.print("  [dim]Sesión finalizada.[/]")
+        self.console.print(f"  [dim]{farewell_msg}[/]")
         self.console.print()
 
     def _session_summary(self, stats: SessionStats) -> None:
         models = ", ".join(sorted(_short_model(m, max_len=24) for m in stats.models_used)) or "-"
         rows = [
-            ("Duración", _format_duration(stats.duration)),
-            ("Consultas RAG", f"{stats.rag_queries} · {_format_duration(stats.rag_time)}"),
-            ("Consultas CHAT", f"{stats.chat_queries} · {_format_duration(stats.chat_time)}"),
-            ("Modelos usados", models),
+            (self._s("farewell.duration"), _format_duration(stats.duration)),
+            (self._s("farewell.rag_queries"), f"{stats.rag_queries} · {_format_duration(stats.rag_time)}"),
+            (self._s("farewell.chat_queries"), f"{stats.chat_queries} · {_format_duration(stats.chat_time)}"),
+            (self._s("farewell.models"), models),
         ]
+        summary_title = self._s("farewell.title")
         if self.backend != "rich":
             self._print_line()
-            self._rule("Resumen de sesión", color=Palette.INFO)
+            self._rule(summary_title, color=Palette.INFO)
             for key, value in rows:
                 self._print_line(
                     f"  {self._ansi(f'{key}:', Palette.DIM.ansi)} "
@@ -1256,7 +1578,7 @@ class Display:
         self.console.print(
             Panel(
                 table,
-                title="[info]Resumen de sesión[/]",
+                title=f"[info]{summary_title}[/]",
                 border_style="dim",
                 box=box.ROUNDED,
                 expand=False,
@@ -1265,30 +1587,30 @@ class Display:
 
     def no_results(self) -> None:
         if self.backend != "rich":
-            self._rule("Sin resultados", color=Palette.WARNING)
+            self._rule("—", color=Palette.WARNING)
             self._print_line(
-                f"  {self._ansi('No se encontró información relevante en los documentos.', Palette.TEXT.ansi)}"
+                f"  {self._ansi(self._s('no_results.msg'), Palette.TEXT.ansi)}"
             )
             self._print_line(
-                f"  {self._ansi('- La información puede no estar indexada', Palette.MUTED.ansi)}"
+                f"  {self._ansi(self._s('no_results.reason1'), Palette.MUTED.ansi)}"
             )
             self._print_line(
-                f"  {self._ansi('- La pregunta puede necesitar más detalle', Palette.MUTED.ansi)}"
+                f"  {self._ansi(self._s('no_results.reason2'), Palette.MUTED.ansi)}"
             )
             self._print_line(
-                f"  {self._ansi('- El tema puede estar fuera del corpus', Palette.MUTED.ansi)}"
+                f"  {self._ansi(self._s('no_results.reason3'), Palette.MUTED.ansi)}"
             )
             self._print_line(
-                f"  {self._ansi('Prueba con /temas o reformula la consulta.', Palette.DIM.ansi)}"
+                f"  {self._ansi(self._s('no_results.tip'), Palette.DIM.ansi)}"
             )
             self._rule(color=Palette.DIM)
             return
         panel = Panel(
-            "[muted]No se encontró información relevante en los documentos.[/]\n\n"
-            "[dim]- La información puede no estar indexada\n"
-            "- La pregunta puede necesitar más detalle\n"
-            "- El tema puede estar fuera del corpus[/]\n\n"
-            "[dim]Prueba con /temas o reformula la consulta.[/]",
+            f"[muted]{self._s('no_results.msg')}[/]\n\n"
+            f"[dim]{self._s('no_results.reason1')}\n"
+            f"{self._s('no_results.reason2')}\n"
+            f"{self._s('no_results.reason3')}[/]\n\n"
+            f"[dim]{self._s('no_results.tip')}[/]",
             border_style="warning",
             box=box.ROUNDED,
             expand=False,
@@ -1296,26 +1618,27 @@ class Display:
         self.console.print(panel)
 
     def out_of_scope(self, score: float, threshold: float) -> None:
+        scope_title = self._s("out_of_scope.title")
+        scope_msg = self._s("out_of_scope.msg", score=score, threshold=threshold)
+        scope_tip = self._s("out_of_scope.tip")
         if self.backend != "rich":
-            self._rule("Fuera de ámbito", color=Palette.WARNING)
-            self.warning(f"Pregunta fuera de ámbito (score {score:.4f} < {threshold})")
-            self._print_line(
-                f"     {self._ansi('Usa /temas para explorar el corpus.', Palette.DIM.ansi)}"
-            )
+            self._rule(scope_title, color=Palette.WARNING)
+            self.warning(scope_msg)
+            self._print_line(f"     {self._ansi(scope_tip, Palette.DIM.ansi)}")
             self._rule(color=Palette.DIM)
             return
-        self.warning(f"Pregunta fuera de ámbito (score {score:.4f} < {threshold})")
-        self.console.print("     [dim]Usa /temas para explorar el corpus.[/]")
+        self.warning(scope_msg)
+        self.console.print(f"     [dim]{scope_tip}[/]")
 
     def question_too_short(self) -> None:
-        msg = "Pregunta demasiado corta. Formula una pregunta concreta o usa /chat."
+        msg = self._s("question_too_short")
         if self.backend != "rich":
             self._print_line(f"  {self._ansi(msg, Palette.DIM.ansi)}")
             return
         self.console.print(f"  [dim]{msg}[/]")
 
     def no_pdfs(self, folder: str) -> None:
-        self.warning(f"No existe la carpeta de PDFs o está vacía: {folder}")
+        self.warning(self._s("no_pdfs", folder=folder))
 
 
 # ─────────────────────────────────────────────
