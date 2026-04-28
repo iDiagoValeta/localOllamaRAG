@@ -362,6 +362,8 @@ localOllamaRAG/
 │   └── tests/                    # Ollama / pipeline smoke tests
 ├── evaluation/
 │   ├── datasets/                 # Question datasets (ES, CA, mix)
+│   ├── scripts/
+│   │   └── push_wikipedia_es_ca_hf.py  # Merge ES+CA datasets and push to HF Hub
 │   ├── run_eval.py               # RAGAS entrypoint: single | compare | ragbench
 │   ├── run_ragbench_visual_inference.py  # RagBench table/image inference without RAGAS
 │   ├── runs/                     # Evaluation artifacts: ragas/ and inference/

@@ -156,6 +156,8 @@ localOllamaRAG/
 │       └── test_run_eval_checkpoint.py     # Tests de reanudación por checkpoint en evaluation/run_eval.py
 ├── evaluation/
 │   ├── datasets/                 # JSON de evaluación RAG (ES, CA, mix) + `ragbench_en_dev_doc_ids.json`
+│   ├── scripts/
+│   │   └── push_wikipedia_es_ca_hf.py  # Fusiona dataset_eval_{es,ca}.json y sube a nadiva1243/wikipediaEs-Ca4RAG
 │   ├── run_eval.py               # Runner RAGAS: subcomandos `single`, `compare`, `list-variants`, `ragbench`, `ragbench-prepare`, `ragbench-eval`
 │   ├── run_ragbench_visual_inference.py # RagBench tablas/imágenes: dataset + indexación + inferencia sin RAGAS
 │   ├── runs/                     # Artefactos de evaluación bajo `ragas/`; inferencia visual en `ragas/ragbench_visual/inference/`
@@ -597,6 +599,7 @@ bert-score>=0.3.13
 | Artefactos LoRA Gemma-3-12B | `training-output/gemma-3/` | `training_stats.json`, `evaluation_comparison.json` versionados. `generate_reports.py` → `plots/{train,eval}/`. Conversión GGUF pendiente (incompatibilidad tokenizer; ver `GEMMA3_CONVERSION_ISSUE.md`) |
 | Diagrama arquitectura | `docs/monkeygrab_architecture.png` / `.svg` | Generado por `generate_diagram.py` |
 | Datasets RAGAS locales | `evaluation/datasets/local/*.json` | p. ej. `dataset_eval_es.json`, `dataset_eval_ca.json`, `dataset_eval_mix.json` |
+| Dataset ES+CA en Hugging Face | [nadiva1243/wikipediaEs-Ca4RAG](https://huggingface.co/datasets/nadiva1243/wikipediaEs-Ca4RAG) | Copia fusionada de `dataset_eval_es` + `dataset_eval_ca` (split `train`). Regenerar subida: `python evaluation/scripts/push_wikipedia_es_ca_hf.py` (requiere `HF_TOKEN` o `HUGGINGFACE_HUB_TOKEN`) |
 | Datasets RagBench preparados | `evaluation/datasets/ragbench/prepared/` | datasets/manifiestos de `ragbench-prepare`, dev congelado y RagBench visual |
 | Resumen RAGAS por conjunto (post-`compare`) | `evaluation/runs/ragas/comparisons/<label>/aggregates/by_conjunto_*.json` (CSV opcional bajo `evaluation/runs/ragas/comparisons/<label>/scores/`) | Script `aggregate_comparison_by_conjunto.py`: cruza `<variant>.json` con el dataset por indice y calcula medias por `source_type`, `language`, etc.; `--etiquetas-es` para claves de metricas en castellano. Detalle en `docs/EVALUACIONES_PIPELINE.md`. |
 | Resultados RAGAS RagBench visual | `evaluation/runs/ragas/ragbench_visual/<tag>/` | `scores.csv` + `debug.json` por tag (p. ej. `image_table_25p_5q`); generado por `run_ragbench_visual_inference.py --ragas-only` |
