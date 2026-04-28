@@ -176,3 +176,6 @@ rag/show_fragments/*.jsonl
 # -----------------------------------------------------------------------------
 .claude/
 MODIFICACIONES_EVALUACION.md
+
+# Salida temporal de pytest (refactor, visual, etc.)
+pipeline/
