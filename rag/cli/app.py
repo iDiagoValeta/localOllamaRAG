@@ -40,8 +40,11 @@ Dependencies:
 # SECTION 1: IMPORTS
 # ─────────────────────────────────────────────
 
+import difflib
 import os
 import shutil
+import signal
+import sys
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -93,7 +96,7 @@ class MonkeyGrabCLI:
             "/salir":   self._cmd_exit,
         }
         self._commands: Dict[str, Any] = dict(handlers)
-        for alias, target in ALIASES:
+        for alias, target, *_ in ALIASES:
             if target in handlers:
                 self._commands[alias] = handlers[target]
         self._validate_commands_registry()
@@ -105,7 +108,7 @@ class MonkeyGrabCLI:
         single source of truth; cheaper to fix at startup than to debug later.
         """
         listed = {cmd for cmd, _ in COMMANDS}
-        registered = set(self._commands.keys()) - {alias for alias, _ in ALIASES}
+        registered = set(self._commands.keys()) - {alias for alias, *_ in ALIASES}
         missing = listed - registered
         orphaned = registered - listed
         if missing or orphaned:
@@ -122,6 +125,14 @@ class MonkeyGrabCLI:
 
     def run(self) -> None:
         """Entry point. Initialize the system and start the main loop."""
+        # On Windows, MKL/Fortran runtime libraries register their own SIGINT
+        # handler that prints "forrtl: error 200" when Ctrl-C is pressed during
+        # Python cleanup.  Installing Python's default_int_handler first ensures
+        # that KeyboardInterrupt is raised cleanly and the Fortran handler never
+        # runs.
+        if os.name == "nt":
+            signal.signal(signal.SIGINT, signal.default_int_handler)
+
         ui.logo()
 
         ok, detail = self._ollama_health()
@@ -143,12 +154,11 @@ class MonkeyGrabCLI:
                 self.rag.CARPETA_DOCS, self.collection
             )
             if total_chunks == 0:
-                ui.warning("No se indexaron documentos.")
+                ui.warning(ui._s("indexing.none"))
                 return
-            ui.success(f"{total_chunks} fragmentos indexados")
+            ui.success(ui._s("indexing.done", total=total_chunks))
 
         self._show_init_info(pdfs_count, self.collection.count())
-        ui.info("usa /ayuda para ver todos los comandos")
 
         self.historial_chat = self.rag.cargar_historial()
         if self.historial_chat:
@@ -171,6 +181,13 @@ class MonkeyGrabCLI:
             except (EOFError, KeyboardInterrupt):
                 self.rag.guardar_historial(self.historial_chat)
                 ui.farewell(self.session)
+                # Suppress any pending SIGINT so MKL/Fortran cleanup does not
+                # re-fire it and print "forrtl: error 200" during Python exit.
+                if os.name == "nt":
+                    try:
+                        signal.signal(signal.SIGINT, signal.SIG_IGN)
+                    except Exception:
+                        pass
                 break
 
             if not pregunta:
@@ -184,7 +201,10 @@ class MonkeyGrabCLI:
                 continue
 
             if pregunta.startswith('/'):
-                ui.unknown_command(pregunta)
+                suggestions = difflib.get_close_matches(
+                    cmd_lower, self._commands.keys(), n=2, cutoff=0.6
+                )
+                ui.unknown_command(pregunta, suggestions=suggestions)
                 continue
 
             if self.mode == "rag":
@@ -293,8 +313,8 @@ class MonkeyGrabCLI:
         best_score: Optional[float] = None
 
         try:
-            ui.pipeline_start("Iniciando búsqueda...")
-            ui.pipeline_phase("búsqueda", "semántica + léxica (RRF)")
+            ui.pipeline_start()
+            ui.pipeline_phase(ui._s("phase.search"), ui._s("phase.search.detail"))
 
             fragmentos_ranked, mejor_score, metricas = (
                 self.rag.realizar_busqueda_hibrida(pregunta, self.collection)
@@ -327,8 +347,8 @@ class MonkeyGrabCLI:
 
             if self.rag.USAR_RERANKER:
                 ui.pipeline_phase(
-                    "rerank",
-                    f"cross-encoder · {len(fragmentos_ranked)} candidatos",
+                    ui._s("phase.rerank"),
+                    ui._s("phase.rerank.detail", n=len(fragmentos_ranked)),
                 )
                 fragmentos_filtrados = [
                     f for f in fragmentos_ranked
@@ -354,8 +374,8 @@ class MonkeyGrabCLI:
             if (self.rag.EXPANDIR_CONTEXTO and fragmentos_finales
                     and 'chunk' in fragmentos_finales[0]['metadata']):
                 ui.pipeline_phase(
-                    "expansión",
-                    f"chunks adyacentes a los top-{self.rag.N_TOP_PARA_EXPANSION}",
+                    ui._s("phase.expand"),
+                    ui._s("phase.expand.detail", n=self.rag.N_TOP_PARA_EXPANSION),
                 )
                 self._expand_context(fragmentos_finales, ids_usados)
                 timer.mark("expansión")
@@ -373,11 +393,14 @@ class MonkeyGrabCLI:
 
             if self.rag.USAR_RECOMP_SYNTHESIS:
                 ui.pipeline_phase(
-                    "síntesis",
-                    f"RECOMP · {self.rag.MODELO_RECOMP}",
+                    ui._s("phase.synthesis"),
+                    ui._s("phase.synthesis.detail", model=self.rag.MODELO_RECOMP),
                 )
 
-            ui.pipeline_phase("generación", f"streaming · {self.rag.MODELO_RAG}")
+            ui.pipeline_phase(
+                ui._s("phase.generation"),
+                ui._s("phase.generation.detail", model=self.rag.MODELO_RAG),
+            )
             ui.pipeline_stop()
 
             ui.response_header("rag", self.rag.MODELO_RAG)
@@ -408,11 +431,7 @@ class MonkeyGrabCLI:
 
         if not ui.can_stream_responses():
             ui.render_response(respuesta)
-        ui.sources_panel(fragmentos_finales)
-
-        sources_count = len({f['metadata'].get('source') for f in fragmentos_finales if f.get('metadata')})
-        ui.query_summary(timer, n_fragmentos=len(fragmentos_finales), best_score=best_score)
-        ui.response_footer(sources=sources_count)
+        ui.response_footer_rag(fragmentos_finales, timer)
         self.session.tick_rag(timer.total, self.rag.MODELO_RAG)
 
     def _expand_context(self, fragmentos: list, ids_usados: set) -> None:
@@ -479,8 +498,7 @@ class MonkeyGrabCLI:
     def _cmd_stats(self) -> bool:
         docs = self.rag.obtener_documentos_indexados(self.collection)
         info = self._runtime_info(len(self._list_pdf_files()), self.collection.count())
-        ui.stats_table(self.collection.count(), docs, info)
-        ui.init_panel(info)
+        ui.stats_dashboard(self.collection.count(), docs, info)
         return False
 
     def _cmd_help(self) -> bool:
@@ -505,7 +523,7 @@ class MonkeyGrabCLI:
         try:
             if os.path.exists(self.rag.PATH_DB):
                 shutil.rmtree(self.rag.PATH_DB)
-                ui.success("base de datos anterior eliminada")
+                ui.success(ui._s("reindex.db_deleted"))
 
             client_new = chromadb.PersistentClient(path=self.rag.PATH_DB)
             collection_new = client_new.get_or_create_collection(
@@ -525,6 +543,11 @@ class MonkeyGrabCLI:
         """Save history and exit the application."""
         self.rag.guardar_historial(self.historial_chat)
         ui.farewell(self.session)
+        if os.name == "nt":
+            try:
+                signal.signal(signal.SIGINT, signal.SIG_IGN)
+            except Exception:
+                pass
         return True
 
     # ─────────────────────────────────────────────
@@ -557,11 +580,10 @@ class MonkeyGrabCLI:
             'modelo_contextual': rag.MODELO_CONTEXTUAL,
             'modelo_recomp': rag.MODELO_RECOMP,
             'modelo_ocr': rag.MODELO_OCR,
-            'extractor': ('pymupdf4llm' if rag.PYMUPDF_AVAILABLE
-                          else 'pypdf (fallback)'),
-            'busqueda': ('híbrida (semántica + keywords)'
-                         if rag.USAR_BUSQUEDA_HIBRIDA
-                         else 'solo semántica'),
+            'extractor': ('extractor.pymupdf' if rag.PYMUPDF_AVAILABLE
+                          else 'extractor.pypdf'),
+            'busqueda': ('pipeline.search.hybrid' if rag.USAR_BUSQUEDA_HIBRIDA
+                         else 'pipeline.search.semantic'),
             'hybrid': rag.USAR_BUSQUEDA_HIBRIDA,
             'exhaustive': rag.USAR_BUSQUEDA_EXHAUSTIVA,
             'contextual': rag.USAR_CONTEXTUAL_RETRIEVAL,
