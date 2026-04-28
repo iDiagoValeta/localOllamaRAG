@@ -54,6 +54,12 @@ _RUNTIME_NAMES = {
 def get_runtime() -> ModuleType:
     module = sys.modules.get(_RUNTIME_MODULE)
     if module is None:
+        # Direct-run scenario: `python chat_pdfs.py` registers as __main__, not rag.chat_pdfs.
+        # Identify it by a distinctive constant that is guaranteed to exist before the engine
+        # imports fire (all constants are defined before line 441 in chat_pdfs.py).
+        main = sys.modules.get("__main__")
+        if main is not None and hasattr(main, "MODELO_RAG"):
+            return main
         import rag.chat_pdfs as module  # type: ignore[no-redef]
     return module
 
