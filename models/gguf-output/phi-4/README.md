@@ -23,9 +23,15 @@ Quantized **GGUF** build of **[microsoft/phi-4](https://huggingface.co/microsoft
 
 ## Source code, thesis, and contact
 
-The **full MonkeyGrab application repository is not public yet** (defense / publication timeline). This Hugging Face model repo ships **inference assets** (`Phi4-Q4_K_M.gguf`), the **Ollama `Modelfile`**, and a **`reproduction/`** folder with frozen copies of the training script, merge utility, and **`evaluation_comparison.json`** so methodology and metrics remain auditable without requiring access to the full codebase.
+The full **MonkeyGrab** source code is publicly available at:
 
-**Contact:** [nadiva1243@gmail.com](mailto:nadiva1243@gmail.com) for questions about training, evaluation, Ollama usage, or when the full repository will be released.
+> **[https://github.com/iDiagoValeta/localOllamaRAG](https://github.com/iDiagoValeta/localOllamaRAG)**
+
+The repository includes the complete RAG pipeline, CLI, web interface, training scripts, evaluation workflows, and documentation for the Bachelor's thesis (TFG) at UPV.
+
+This Hugging Face model repo ships **inference assets** (`Phi4-Q4_K_M.gguf`), the **Ollama `Modelfile`**, and a **`reproduction/`** folder with frozen copies of the training script, merge utility, and **`evaluation_comparison.json`** so methodology and metrics remain auditable alongside the full codebase.
+
+**Contact:** [nadiva1243@gmail.com](mailto:nadiva1243@gmail.com) for questions about training, evaluation, or Ollama usage.
 
 **GGUF pipeline (high level):** LoRA fine-tuning on the datasets below → merge with `merge_lora.py` (see `reproduction/`) → GGUF export via the llama.cpp toolchain → **Q4_K_M** quantization. The merge script documents expected paths and flags.
 
@@ -148,6 +154,6 @@ Generation defaults in the bundled `Modelfile`: `num_ctx` 16384, `temperature` 0
   author       = {nadiva1243},
   year         = {2026},
   howpublished = {Hugging Face: \url{https://huggingface.co/nadiva1243/phi4RAG}},
-  note         = {Base: microsoft/phi-4; training: MonkeyGrab train-phi4.py v1}
+  note         = {Base: microsoft/phi-4; training: MonkeyGrab train-phi4.py v1; source: https://github.com/iDiagoValeta/localOllamaRAG}
 }
 ```
