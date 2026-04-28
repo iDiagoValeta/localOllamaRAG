@@ -8,7 +8,7 @@ alwaysApply: true
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 <!-- Internal title: MonkeyGrab (localOllamaRAG) -->
-<!-- Última actualización: 2026-04-21 -->
+<!-- Última actualización: 2026-04-28 -->
 
 ## 1. Descripción del proyecto
 
@@ -81,7 +81,21 @@ Nota de evaluacion: `evaluation/evaluate_ragas_bertscore.py` es el postproceso B
 localOllamaRAG/
 ├── generate_diagram.py           # Diagrama de arquitectura vía Kroki.io
 ├── rag/
-│   ├── chat_pdfs.py              # Motor RAG principal: indexación, recuperación, generación
+│   ├── chat_pdfs.py              # Fachada pública + configuración global; la implementación vive en rag/engine/
+│   ├── engine/                   # Módulos de implementación del pipeline RAG (todos importados por chat_pdfs.py)
+│   │   ├── __init__.py           # Paquete vacío
+│   │   ├── runtime.py            # Capa de sincronización: expone globals/flags de chat_pdfs a los módulos hijos
+│   │   ├── chunking.py           # Chunking Markdown, IDs de chunks vecinos
+│   │   ├── lexical.py            # Stopwords, extracción de keywords, búsqueda léxica y exhaustiva
+│   │   ├── reranking.py          # Descomposición de consultas con LLM, CrossEncoder reranking
+│   │   ├── retrieval.py          # Orquestación de búsqueda híbrida (semántica + léxica + RRF)
+│   │   ├── context.py            # Limpieza de contexto, formato para el modelo, síntesis RECOMP
+│   │   ├── debug.py              # Dumps de debug por consulta RAG
+│   │   ├── generation.py         # Generación Ollama (streaming + ruta silenciosa de evaluación)
+│   │   ├── contextual.py         # Contextual retrieval (enriquecimiento de chunks en indexación)
+│   │   ├── images.py             # Extracción de imágenes de PDFs y descripción OCR con LLM
+│   │   ├── history.py            # Persistencia del historial de chat
+│   │   └── indexing.py           # Indexación de PDFs en ChromaDB y listado de documentos
 │   ├── show_fragments/
 │   │   └── export_fragments.py   # Exporta chunks de ChromaDB a TXT/JSONL para debug
 │   ├── requirements.txt
@@ -103,7 +117,8 @@ localOllamaRAG/
 │   └── cli/
 │       ├── app.py                # MonkeyGrabCLI: bucle interactivo, dispatch, health check Ollama, stats de sesión
 │       ├── display.py            # Singleton `ui`: Rich/ANSI/plain + QueryTimer + SessionStats + Palette unificada
-│       └── commands.py           # Fuente única de slash-commands (listado + alias) para dispatch/ayuda/autocompletado
+│       ├── commands.py           # Fuente única de slash-commands (listado + alias) para dispatch/ayuda/autocompletado
+│       └── strings.py            # Tablas de strings ES/EN; función `s(key, lang)` para i18n de la CLI
 ├── web/
 │   ├── app.py                    # Backend Flask: REST + SSE, sirve React
 │   ├── requirements.txt
@@ -218,6 +233,7 @@ Variables de entorno de referencia (ajustar según hardware y despliegue):
 | `OLLAMA_OCR_MODEL` | `gemma4:e4b` | Descripción de imágenes (multimodal, think=False) |
 | `DOCS_FOLDER` | `rag/docs/es/` | Carpeta de PDFs a indexar (es/ca/en según corpus) |
 | `RERANKER_QUALITY` | `quality` | `quality` (BAAI/bge) o `speed` (MiniLM) |
+| `MONKEYGRAB_LANG` | `es` | Idioma de la CLI: `es` (castellano, default) o `en` (inglés) |
 | `HF_TOKEN` | — | Token HuggingFace (necesario para Gemma-3) |
 | `GOOGLE_API_KEY` | — | API key Gemini para evaluación RAGAS |
 
@@ -272,8 +288,14 @@ Pregunta + <context>
 ### Arrancar el sistema
 
 ```bash
-# CLI
+# CLI (bash/zsh)
 cd rag && python chat_pdfs.py
+
+# CLI en inglés (bash/zsh)
+MONKEYGRAB_LANG=en python rag/chat_pdfs.py
+
+# CLI en inglés (PowerShell — Windows)
+$env:MONKEYGRAB_LANG = "en"; python rag/chat_pdfs.py
 
 # Web (backend Flask — sirve el build compilado de React)
 python web/app.py   # http://localhost:5000

@@ -57,7 +57,7 @@ MonkeyGrab is a Retrieval-Augmented Generation (RAG) system designed for researc
   </tr>
   <tr>
     <td><strong>Two interfaces</strong></td>
-    <td>Rich-based terminal CLI and a Flask + React 19 web UI with streaming responses.</td>
+    <td>Rich-based terminal CLI (bilingual ES/EN via <code>MONKEYGRAB_LANG</code>) and a Flask + React 19 web UI with streaming responses.</td>
   </tr>
   <tr>
     <td><strong>Research-ready</strong></td>
@@ -175,8 +175,14 @@ Fine-tuned weights ready to use with Ollama:
 Drop your PDFs into `rag/docs/es/` (Spanish corpus by default; use `rag/docs/ca/` or `rag/docs/en/` for other languages), then:
 
 ```bash
-# Terminal CLI
+# Terminal CLI (Spanish UI — default)
 cd rag && python chat_pdfs.py
+
+# Terminal CLI (English UI)
+# bash/zsh
+MONKEYGRAB_LANG=en python rag/chat_pdfs.py
+# PowerShell
+$env:MONKEYGRAB_LANG = "en"; python rag/chat_pdfs.py
 
 # Web interface — http://localhost:5000
 python web/app.py
@@ -200,6 +206,7 @@ All pipeline behaviour is controlled via environment variables. Set them in your
 | `OLLAMA_OCR_MODEL` | Vision model for PDF image descriptions |
 | `DOCS_FOLDER` | PDF folder to index (default: `rag/docs/es/`) |
 | `RERANKER_QUALITY` | Cross-encoder tier: `quality` (BAAI/bge) or `speed` (MiniLM) |
+| `MONKEYGRAB_LANG` | CLI language: `es` (Spanish, default) or `en` (English) |
 | `USAR_RECOMP_SYNTHESIS` | Enable/disable RECOMP synthesis (`true`/`false`, default: `true`) |
 
 > **ChromaDB paths** follow the pattern `rag/vector_db/<folder>_<embed_slug>/`. Changing `DOCS_FOLDER` or `OLLAMA_EMBED_MODEL` selects a different index path — re-run `/reindex` when you intentionally switch either.
@@ -314,9 +321,27 @@ Output: `plots/train/` (loss, learning rate, grad norm curves) and `plots/eval/`
 localOllamaRAG/
 ├── generate_diagram.py           # Architecture diagram (Kroki.io)
 ├── rag/
-│   ├── chat_pdfs.py              # Main RAG engine (indexing, retrieval, generation)
+│   ├── chat_pdfs.py              # Public API facade + global config; implementation lives in engine/
+│   ├── engine/                   # RAG pipeline implementation modules
+│   │   ├── runtime.py            # Sync layer: exposes chat_pdfs globals/flags to sub-modules
+│   │   ├── chunking.py           # Markdown chunking, neighbor IDs
+│   │   ├── lexical.py            # Stopwords, keyword extraction, lexical + exhaustive search
+│   │   ├── reranking.py          # LLM query decomposition, CrossEncoder reranking
+│   │   ├── retrieval.py          # Hybrid retrieval orchestration (semantic + lexical + RRF)
+│   │   ├── context.py            # Context cleanup, model formatting, RECOMP synthesis
+│   │   ├── debug.py              # Per-query RAG debug dumps
+│   │   ├── generation.py         # Ollama generation (streaming + silent eval path)
+│   │   ├── contextual.py         # Contextual retrieval helpers (chunk enrichment at indexing)
+│   │   ├── images.py             # PDF image extraction and OCR with LLM
+│   │   ├── history.py            # Chat history persistence
+│   │   └── indexing.py           # PDF indexing into ChromaDB, document listing
 │   ├── show_fragments/
 │   │   └── export_fragments.py   # Export ChromaDB chunks to TXT/JSONL for debug
+│   ├── cli/
+│   │   ├── app.py                # MonkeyGrabCLI: interactive loop, command dispatch, session stats
+│   │   ├── display.py            # `ui` singleton: Rich/ANSI/plain backends, QueryTimer, SessionStats
+│   │   ├── commands.py           # Single source of truth for slash-commands and aliases
+│   │   └── strings.py            # ES/EN string tables; s(key, lang) for CLI i18n
 │   ├── docs/
 │   │   ├── es/                   # Spanish PDF corpus (.gitkeep only in Git)
 │   │   ├── ca/                   # Catalan PDF corpus
@@ -326,7 +351,6 @@ localOllamaRAG/
 │   │   └── en_ragbench_visual/   # RagBench table/image inference PDFs (local .gitignore)
 │   ├── vector_db/                # ChromaDB indexes — gitignored, created at runtime
 │   ├── debug_rag/                # Per-query debug dumps — gitignored
-│   ├── cli/                      # Rich terminal UI (MonkeyGrabCLI)
 │   └── requirements.txt
 ├── web/
 │   ├── app.py                    # Flask backend (REST + SSE); serves React build
