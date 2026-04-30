@@ -7,6 +7,8 @@ import {
   ChevronDown, ChevronRight, Copy, Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 
 // =============================================================================
 // Types
@@ -203,9 +205,19 @@ async function streamSSE(
 // Small safe Markdown renderer
 // =============================================================================
 
+function MathInline({ tex }: { tex: string }) {
+  const html = katex.renderToString(tex, { throwOnError: false, displayMode: false });
+  return <span dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+function MathBlock({ tex }: { tex: string }) {
+  const html = katex.renderToString(tex, { throwOnError: false, displayMode: true });
+  return <div className="overflow-x-auto my-2" dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
 function renderInlineMarkdown(text: string, keyPrefix: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
-  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  const pattern = /(\$\$[^$\n]+\$\$|\$(?!\$)(?:[^$\n\\]|\\.)+\$|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
   let last = 0;
   let match: RegExpExecArray | null;
 
@@ -214,7 +226,11 @@ function renderInlineMarkdown(text: string, keyPrefix: string): React.ReactNode[
     const token = match[0];
     const key = `${keyPrefix}-${match.index}`;
 
-    if (token.startsWith('`')) {
+    if (token.startsWith('$$')) {
+      parts.push(<MathBlock key={key} tex={token.slice(2, -2)} />);
+    } else if (token.startsWith('$')) {
+      parts.push(<MathInline key={key} tex={token.slice(1, -1)} />);
+    } else if (token.startsWith('`')) {
       parts.push(<code key={key}>{token.slice(1, -1)}</code>);
     } else if (token.startsWith('**')) {
       parts.push(<strong key={key}>{token.slice(2, -2)}</strong>);
@@ -239,6 +255,8 @@ function MarkdownContent({ text, compact = false }: { text: string; compact?: bo
     let inCode = false;
     let codeLines: string[] = [];
     let paragraph: string[] = [];
+    let inMath = false;
+    let mathLines: string[] = [];
 
     const flushParagraph = (key: string) => {
       if (!paragraph.length) return;
@@ -247,6 +265,24 @@ function MarkdownContent({ text, compact = false }: { text: string; compact?: bo
     };
 
     text.split('\n').forEach((line, i) => {
+      if (line.trim() === '$$' && !inCode) {
+        if (inMath) {
+          flushParagraph(`p-${i}`);
+          nodes.push(<MathBlock key={`math-${i}`} tex={mathLines.join('\n')} />);
+          mathLines = [];
+          inMath = false;
+        } else {
+          flushParagraph(`p-${i}`);
+          inMath = true;
+        }
+        return;
+      }
+
+      if (inMath) {
+        mathLines.push(line);
+        return;
+      }
+
       if (/^```/.test(line)) {
         if (inCode) {
           nodes.push(<pre key={`code-${i}`}><code>{codeLines.join('\n')}</code></pre>);
@@ -278,6 +314,12 @@ function MarkdownContent({ text, compact = false }: { text: string; compact?: bo
       {text.split(/\n{2,}/).map((block, i) => {
         const lines = block.split('\n').filter(Boolean);
         if (!lines.length) return null;
+
+        const trimmed = block.trim();
+        if (trimmed.startsWith('$$') && trimmed.endsWith('$$') && trimmed.length > 4) {
+          const inner = trimmed.slice(2, -2).trim();
+          return <MathBlock key={i} tex={inner} />;
+        }
 
         const heading = lines[0].match(/^(#{1,3})\s+(.+)$/);
         if (heading) {
