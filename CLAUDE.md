@@ -81,11 +81,12 @@ localOllamaRAG/
 │   ├── show_fragments/export_fragments.py
 │   ├── requirements.txt
 │   ├── debug_rag/                # Query debug dumps (runtime, gitignored)
-│   ├── docs/                     # PDFs by corpus (content gitignored; .gitkeep in es/ca/en)
-│   │   ├── es/  ca/  en/
-│   │   ├── en_ragbench_dev/      # Frozen RagBench EN dev split (local .gitignore)
-│   │   ├── en_ragbench_eval/     # Final RagBench EN eval corpus (local .gitignore)
-│   │   └── en_ragbench_visual/   # RagBench EN visual — tables/images (local .gitignore)
+│   ├── docs/                     # PDFs por corpus — todos versionados como evidencia del TFG
+│   │   ├── libre/                # Corpus de uso libre (default DOCS_FOLDER)
+│   │   ├── es/  ca/  en/         # Corpora Wikipedia ES/CA + carpeta EN vacía
+│   │   ├── en_ragbench_dev/      # Frozen RagBench EN dev split
+│   │   ├── en_ragbench_eval/     # Final RagBench EN eval corpus
+│   │   └── en_ragbench_visual/   # RagBench EN visual — tables/images
 │   ├── vector_db/                # ChromaDB per corpus (gitignored; PATH_DB = {folder}_{embed_slug})
 │   └── cli/
 │       ├── app.py                # MonkeyGrabCLI: interactive loop, dispatch, Ollama health check
@@ -147,7 +148,7 @@ Reference environment (adjust per hardware):
 | `OLLAMA_CONTEXTUAL_MODEL` | `gemma4:e4b` | Contextual retrieval |
 | `OLLAMA_RECOMP_MODEL` | `gemma4:e4b` | RECOMP synthesis |
 | `OLLAMA_OCR_MODEL` | `gemma4:e4b` | Image description |
-| `DOCS_FOLDER` | `rag/docs/es/` | PDF folder to index |
+| `DOCS_FOLDER` | `rag/docs/libre/` | PDF folder to index |
 | `RERANKER_QUALITY` | `quality` | Reranker tier |
 | `MONKEYGRAB_LANG` | `es` | CLI language: `es` or `en` |
 | `HF_TOKEN` | — | HuggingFace token (required for Gemma-3) |
@@ -292,7 +293,11 @@ System: Python 3.10+, Ollama running locally, CUDA GPU recommended (~24 GB VRAM 
 
 ## 9. Git versioning policy
 
-**Single root `.gitignore`** plus `web/zip/.gitignore` as a complement. No additional scattered `.gitignore` files without a documented reason. Version the minimum needed to reproduce and defend the work: code, `Modelfile`, small metric JSONs, scripts — not weights, vector indices, or private PDFs.
+**Single root `.gitignore`** plus `web/zip/.gitignore` as a complement. No additional scattered `.gitignore` files. Version the minimum needed to reproduce and defend the work: code, `Modelfile`, small metric JSONs, scripts, corpus PDFs — not weights or vector indices.
+
+### rag/docs/
+
+All PDF corpora are versioned directly — no gitignore rules for `rag/docs/`. This applies to `es/`, `ca/`, `en/`, `libre/`, `en_ragbench_dev/`, `en_ragbench_eval/`, `en_ragbench_visual/`. The `rag/vector_db/` directory is fully ignored (auto-created at indexing time). The `.gitkeep` in `rag/docs/en/` keeps the empty folder tracked.
 
 ### training-output/\<model\>/
 
@@ -301,14 +306,6 @@ Pattern: `training-output/<slug>/*` ignores everything; explicit exceptions keep
 - **New model**: copy the 4-line block (one `/*` + three `!…`) and replace the slug.
 - **Phi-4 multi-rank**: each rank has its own 4-line block. Currently declared: `16`, `64`.
 - Do not replace `/*` with extension globs — easy to accidentally exclude scripts.
-
-### .gitkeep
-
-Pattern in root `.gitignore`: `rag/<folder>/**` + `!rag/<folder>/.gitkeep`.  
-Applied to: `rag/docs/es/`, `rag/docs/ca/`, `rag/docs/en/`.  
-`rag/vector_db/` is fully ignored (auto-created at indexing time).
-
-RagBench EN folders (`en_ragbench_dev/`, `en_ragbench_eval/`, `en_ragbench_visual/`) use a self-contained local `.gitignore` (`*` + `!.gitignore`) — documented exception to avoid committing local PDF corpora that can be regenerated.
 
 ### models/gguf-output/\<model\>/
 
