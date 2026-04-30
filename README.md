@@ -32,7 +32,7 @@
 
 ## 01. Overview
 
-MonkeyGrab is a Retrieval-Augmented Generation (RAG) system designed for researchers and students who need to query academic PDF documents without sending their data to external services. You point it at a folder of PDFs and ask questions in natural language; it returns answers grounded in the actual content of those files. The system works with any instruction-tuned model available in [Ollama](https://ollama.com/) and adapts to your hardware through environment variables.
+MonkeyGrab is a Retrieval-Augmented Generation (RAG) system designed for researchers and students who need to query PDF documents without sending their data to external services. You point it at a folder of PDFs and ask questions in natural language; it returns answers grounded in the actual content of those files. The system works with any instruction-tuned model available in [Ollama](https://ollama.com/) and adapts to your hardware through environment variables.
 
 <table>
   <tr>
@@ -77,7 +77,7 @@ https://github.com/user-attachments/assets/22582283-1b28-4054-a341-3aa1cbdc5057
 
 https://github.com/user-attachments/assets/4b8a84ca-422f-44a6-a0d5-a8078fa5e17a
 
-Sample querys against a database of five Wikipedia articles indexed with the default settings. Models and parameters are fully configurable — results are specific to the hardware and models used during recording.
+Sample queries against a database of five Wikipedia articles indexed with the default settings. Models and parameters are fully configurable — results are specific to the hardware and models used during recording.
 
 **RAGBench evaluation — indexing 25 documents from scratch**
 
@@ -167,7 +167,9 @@ ollama pull <your OLLAMA_RECOMP_MODEL>         # optional — context synthesis 
 ollama pull <your OLLAMA_OCR_MODEL>            # optional — vision model for PDF images
 ```
 
-Fine-tuned weights ready to use with Ollama:
+> **Any instruction-tuned model available in Ollama works as the generator** (`llama3.2`, `mistral`, `gemma4`, `qwen3`, etc.). The system prompt is injected automatically at query time, so no special configuration is needed. Fine-tuned models below were trained specifically on document Q&A tasks and yield higher accuracy on RAG benchmarks.
+
+**Fine-tuned weights (recommended):**
 
 - **Qwen3-14B RAG** (LoRA, Q4_K_M GGUF): [nadiva1243/qwen3RAG](https://huggingface.co/nadiva1243/qwen3RAG)
 - **Phi-4 RAG** (LoRA, Q4_K_M GGUF): [nadiva1243/phi4RAG](https://huggingface.co/nadiva1243/phi4RAG)
