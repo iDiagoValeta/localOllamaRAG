@@ -110,27 +110,10 @@ venv/
 .pytest_cache/
 
 # -----------------------------------------------------------------------------
-# 7. RAG — docs/ por idioma y base de datos vectorial unificada
+# 7. RAG — base de datos vectorial unificada
 # -----------------------------------------------------------------------------
-# Carpetas de PDFs organizadas por idioma (es/ca/en); solo .gitkeep versionado.
-rag/docs/es/**
-!rag/docs/es/.gitkeep
-
-rag/docs/ca/**
-!rag/docs/ca/.gitkeep
-
-rag/docs/en/**
-!rag/docs/en/.gitkeep
-
-rag/docs/en_ragbench_dev/**
-!rag/docs/en_ragbench_dev/.gitignore
-
-rag/docs/en_ragbench_eval/**
-!rag/docs/en_ragbench_eval/.gitignore
-
-rag/docs/en_ragbench_visual/**
-!rag/docs/en_ragbench_visual/.gitignore
-
+# Las carpetas de PDFs (es/, ca/, en/, libre/, en_ragbench_*/) se versionan
+# completas como evidencia de corpus del TFG.
 # Base de datos vectorial unificada (generada al indexar; nunca versionada).
 rag/vector_db/**
 
