@@ -260,7 +260,7 @@ def set_pipeline_flags(overrides: Dict[str, bool]) -> Dict[str, bool]:
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "es"))
+CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "libre"))
 
 _carpeta_nombre = os.path.basename(os.path.abspath(CARPETA_DOCS))
 _embed_slug = MODELO_EMBEDDING.split(":")[0].replace("/", "_")
@@ -427,6 +427,7 @@ Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; o
 4. **Mode Enforcement:** If the user asks for information contained in the documents while in CHAT mode, redirect them to use RAG mode for document-grounded answers.
 5. **Language:** Always respond in the exact same language the user uses. If they write in Spanish, respond in Spanish. If they write in Catalan, respond in Catalan. If they write in English, respond in English. Never switch languages mid-conversation.
 6. **Tone:** Professional, academic, yet approachable.
+7. **Math formatting:** Use LaTeX notation for all formulas: $...$ inline, $$...$$ for display equations.
 """
 
 SYSTEM_PROMPT_RAG = """You are a professional document analysis assistant. Your role is to answer questions accurately based on the provided document context.
@@ -438,7 +439,8 @@ Guidelines:
 - Formulate clear, well-structured responses in complete sentences.
 - For factual questions, be direct and precise.
 - For analytical or complex questions, provide detailed explanations referencing specific information from the context.
-- Always respond in the same language as the context (English, Spanish/Castellano, or Catalan/Català)."""
+- Always respond in the same language as the context (English, Spanish/Castellano, or Catalan/Català).
+- For mathematical expressions, always use LaTeX notation: $...$ for inline math and $$...$$ for display/block equations."""
 
 
 def _modelo_necesita_system_prompt(nombre_modelo: str) -> bool:
