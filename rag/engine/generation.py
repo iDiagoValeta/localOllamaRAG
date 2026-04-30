@@ -32,12 +32,8 @@ _sync_runtime_globals()
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 
-def _ollama_generate_stream(model: str, prompt: str, options: dict):
+def _ollama_generate_stream(model: str, prompt: str, options: dict, system: Optional[str] = None):
     """Stream tokens from the Ollama ``/api/generate`` endpoint.
-
-    The system prompt is intentionally omitted here: it is baked directly
-    into the model's Modelfile, so re-sending it via the API would be
-    redundant and would override the Modelfile default unnecessarily.
 
     ``think=False`` avoids spending ``num_predict`` on a reasoning trace when
     ``MODELO_RAG`` (or any substitute) is a thinking model.
@@ -46,6 +42,8 @@ def _ollama_generate_stream(model: str, prompt: str, options: dict):
         model: Ollama model name.
         prompt: User prompt.
         options: Generation options (temperature, top_p, etc.).
+        system: Optional system prompt. Pass ``None`` for fine-tuned models
+            that already have the system prompt baked into their Modelfile.
 
     Yields:
         Parsed JSON objects from each streamed line.
@@ -57,6 +55,8 @@ def _ollama_generate_stream(model: str, prompt: str, options: dict):
         "think": False,
         "options": options,
     }
+    if system:
+        payload["system"] = system
     with requests.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload, stream=True) as resp:
         for line in resp.iter_lines():
             if line:
@@ -74,11 +74,13 @@ def _preparar_mensaje_usuario_rag(pregunta: str, fragmentos: List[Dict[str, Any]
 
 def _generar_respuesta_stream(mensaje_usuario: str, on_token=None) -> str:
     """Stream the generator response, optionally forwarding tokens to a callback."""
+    system = SYSTEM_PROMPT_RAG if _modelo_necesita_system_prompt(MODELO_RAG) else None
     respuesta_completa = ""
     for chunk in _ollama_generate_stream(
         model=MODELO_RAG,
         prompt=mensaje_usuario,
         options={"temperature": 0.15, "top_p": 0.9, "repeat_penalty": 1.15, "num_ctx": 16384},
+        system=system,
     ):
         content = chunk.get("response", "")
         if content:

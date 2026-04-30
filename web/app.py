@@ -240,10 +240,14 @@ def _rag_stream(mensaje_usuario: str) -> Generator[str, None, None]:
     """
     import ollama
 
-    # System prompt is baked into the RAG model Modelfile (not sent via API).
+    rag_messages = []
+    if rag_engine._modelo_necesita_system_prompt(rag_engine.MODELO_RAG):
+        rag_messages.append({"role": "system", "content": rag_engine.SYSTEM_PROMPT_RAG})
+    rag_messages.append({"role": "user", "content": mensaje_usuario})
+
     stream = ollama.chat(
         model=rag_engine.MODELO_RAG,
-        messages=[{"role": "user", "content": mensaje_usuario}],
+        messages=rag_messages,
         stream=True,
         think=False,
         options={

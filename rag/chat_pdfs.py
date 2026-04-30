@@ -429,6 +429,27 @@ Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; o
 6. **Tone:** Professional, academic, yet approachable.
 """
 
+SYSTEM_PROMPT_RAG = """You are a professional document analysis assistant. Your role is to answer questions accurately based on the provided document context.
+
+Guidelines:
+- Base your answers strictly on the information within the <context> tags.
+- Do not add information beyond what the context provides.
+- Preserve technical terms, notation, formulas, and numbers exactly as they appear.
+- Formulate clear, well-structured responses in complete sentences.
+- For factual questions, be direct and precise.
+- For analytical or complex questions, provide detailed explanations referencing specific information from the context.
+- Always respond in the same language as the context (English, Spanish/Castellano, or Catalan/Català)."""
+
+
+def _modelo_necesita_system_prompt(nombre_modelo: str) -> bool:
+    """Return True if the model does not have a system prompt baked in its Modelfile.
+
+    Fine-tuned models in this project include 'finetuned' in their Ollama name
+    (e.g. phi4-finetuned:latest) and already carry the RAG system prompt via
+    their Modelfile. Any other model receives the prompt explicitly via the API.
+    """
+    return "finetuned" not in nombre_modelo.lower()
+
 
 # ─────────────────────────────────────────────
 

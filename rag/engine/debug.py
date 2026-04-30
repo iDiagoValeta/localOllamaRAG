@@ -127,7 +127,10 @@ def guardar_debug_rag(
             f.write("─" * 80 + "\n")
             f.write("  SYSTEM PROMPT\n")
             f.write("─" * 80 + "\n")
-            f.write("(baked into Modelfile — not sent via API)\n\n")
+            if _modelo_necesita_system_prompt(MODELO_RAG):
+                f.write(f"{SYSTEM_PROMPT_RAG}\n\n")
+            else:
+                f.write("(baked into Modelfile — not sent via API)\n\n")
 
             context_match = re.search(r'<context>(.*?)</context>', mensaje_usuario, re.DOTALL)
             contexto_enviado = context_match.group(1).strip() if context_match else "(empty)"
