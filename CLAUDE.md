@@ -31,12 +31,14 @@ alwaysApply: true
 | Task | Status |
 |------|--------|
 | Baseline evaluation (7 models, 320 samples/dataset) | ✅ Done — `research/training-output/baseline/` |
-| Fine-tuning Qwen3-14B (v10) | ✅ Artifacts in `research/training-output/qwen-3/` (weights gitignored; metrics versioned) |
-| Fine-tuning Phi-4 (v1) | ✅ r=32 in `research/training-output/phi-4/`; r=64 in `phi-4/64/`; r=16 in `phi-4/16/` |
-| Fine-tuning Gemma-3-12B (v2) | ✅ Done — `research/training-output/gemma-3/`. GGUF blocked by SentencePiece incompatibility in Ollama 0.21+ (see `research/scripts/conversion/GEMMA3_CONVERSION_ISSUE.md`) |
+| Fine-tuning Qwen3-14B (v10) | ✅ `research/training-output/qwen-3/` — LoRA **r=32** (weights gitignored; metrics versioned) |
+| Fine-tuning Phi-4 (v1) | ✅ `research/training-output/phi-4/` — LoRA **r=32** (optional exploration outputs may exist under `phi-4/16/`, `phi-4/64/`) |
+| Fine-tuning Gemma-3-12B (v2) | ✅ `research/training-output/gemma-3/` — LoRA **r=32**. **Not importable into Ollama** (technical limitations; see `research/scripts/conversion/GEMMA3_CONVERSION_ISSUE.md`) |
 | Base/adapted test evaluation | ✅ `evaluation_comparison.json` versioned in all model dirs |
 
-Production-viable models: Qwen3-14B, Phi-4, Gemma-3-12B.
+**LoRA training data:** [nadiva1243/wikipediaEs-Ca4RAG](https://huggingface.co/datasets/nadiva1243/wikipediaEs-Ca4RAG) (Hugging Face dataset).
+
+**Ollama:** Qwen3-14B and Phi-4 RAG builds are importable as Ollama models. The Gemma-3-12B fine-tune is **not importable into Ollama** today — technical limitations in `research/scripts/conversion/GEMMA3_CONVERSION_ISSUE.md`.
 
 ### RAG pipeline state (2026-04-10)
 
@@ -301,7 +303,7 @@ All PDF corpora are versioned directly — no gitignore rules for `rag/docs/`. T
 Pattern: `research/training-output/<slug>/*` ignores everything; explicit exceptions keep the three small versioned files: `generate_reports.py`, `training_stats.json`, `evaluation_comparison.json`.
 
 - **New model**: copy the 4-line block (one `/*` + three `!…`) and replace the slug.
-- **Phi-4 multi-rank**: each rank has its own 4-line block. Currently declared: `16`, `64`.
+- **Phi-4 alternate ranks**: optional `research/training-output/phi-4/16/` and `phi-4/64/` trees (exploration) each have their own 4-line `.gitignore` block alongside the main `phi-4/` block.
 - Do not replace `/*` with extension globs — easy to accidentally exclude scripts.
 
 ### research/models/gguf-output/\<model\>/

@@ -174,8 +174,9 @@ For development with hot-reload: run `npm run dev` inside `rag/web/zip/` (Vite o
 
 ## Known limitations
 
-- Vector graphics (SVG-based figures) embedded in PDFs are not extracted.
-- Increasing `CHUNK_SIZE` or enabling all optional stages increases indexing time and memory usage.
+- **Vector graphics** (SVG figures) embedded in PDFs are not extracted.
+- **Math, tables and images** are not plain text. Even with OCR and image captions, formulas and complex layouts can be misread, chunked awkwardly or poorly retrieved — expect occasional errors or incomplete answers on those pages.
+- **Indexing cost** grows with `CHUNK_SIZE`, contextual enrichment, image captions and similar options (time and memory).
 
 ---
 

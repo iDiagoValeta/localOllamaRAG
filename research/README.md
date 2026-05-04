@@ -33,6 +33,12 @@ pip install -r research/scripts/requirements.txt      # LoRA training stack (GPU
 
 ---
 
+## Training dataset (Hugging Face)
+
+LoRA fine-tuning is built from **[nadiva1243/wikipediaEs-Ca4RAG](https://huggingface.co/datasets/nadiva1243/wikipediaEs-Ca4RAG)** — Wikipedia-style ES/CA material for RAG-oriented QA.
+
+---
+
 ## RAGAS evaluation
 
 Requires `GOOGLE_API_KEY` in `.env` (Gemini as judge LLM).
@@ -79,9 +85,9 @@ python research/training-output/baseline/generate_reports.py
 ## LoRA fine-tuning
 
 ```bash
-python research/scripts/training/train-qwen3.py    # Qwen3-14B  (r=8, GPU required)
-python research/scripts/training/train-phi4.py     # Phi-4      (r=32/64/16 variants)
-python research/scripts/training/train-gemma3.py   # Gemma-3-12B
+python research/scripts/training/train-qwen3.py    # Qwen3-14B  (LoRA r=32, GPU)
+python research/scripts/training/train-phi4.py     # Phi-4      (LoRA r=32)
+python research/scripts/training/train-gemma3.py   # Gemma-3-12B (LoRA r=32)
 ```
 
 After training, merge and quantize:
@@ -130,13 +136,15 @@ pytest research/tests/research/ # eval runners (offline, no Ollama needed)
 
 ## Trained models
 
-| Model | HuggingFace | Rank | Notes |
-|-------|-------------|------|-------|
-| Qwen3-14B RAG | [nadiva1243/qwen3RAG](https://huggingface.co/nadiva1243/qwen3RAG) | r=8 | Best overall on RAGBench EN |
-| Phi-4 RAG | [nadiva1243/phi4RAG](https://huggingface.co/nadiva1243/phi4RAG) | r=32 | Best on ES/CA corpora |
-| Gemma-3-12B | — | r=16 | GGUF blocked by SentencePiece incompatibility in Ollama 0.21+ |
+All three fine-tunes use **LoRA rank 32** on [nadiva1243/wikipediaEs-Ca4RAG](https://huggingface.co/datasets/nadiva1243/wikipediaEs-Ca4RAG).
 
-Modelfiles and conversion notes: `research/models/gguf-output/<model>/`.
+| Model | HuggingFace model card | Ollama |
+|-------|------------------------|--------|
+| Qwen3-14B RAG | [nadiva1243/qwen3RAG](https://huggingface.co/nadiva1243/qwen3RAG) | GGUF + Modelfile in repo; importable |
+| Phi-4 RAG | [nadiva1243/phi4RAG](https://huggingface.co/nadiva1243/phi4RAG) | GGUF + Modelfile in repo; importable |
+| Gemma-3-12B | — | **Not importable into Ollama** — technical limitations (GGUF / tokenizer vs Ollama’s Gemma3 stack). See `research/scripts/conversion/GEMMA3_CONVERSION_ISSUE.md`. |
+
+Modelfiles and conversion notes (where applicable): `research/models/gguf-output/<model>/`.
 
 ---
 
