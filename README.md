@@ -39,7 +39,7 @@ MonkeyGrab lets you ask questions about your PDF documents in natural language. 
 | **Hybrid retrieval** | Semantic search + keyword search fused with RRF, followed by optional cross-encoder reranking. |
 | **Multilingual** | Spanish, Catalan and English out of the box. Active corpus selected via environment variable. |
 | **Two interfaces** | Rich-based terminal CLI and a Flask + React web UI with streaming responses. |
-| **Image-aware** | Optionally describes raster images and figures in PDFs with a vision model, making visual content retrievable. |
+| **Image-aware** | By default describes raster images and figures in PDFs with a vision model (`USAR_EMBEDDINGS_IMAGEN`); you can turn it off in `rag/chat_pdfs.py` to speed up indexing. |
 
 ---
 
@@ -142,7 +142,7 @@ These constants live in `rag/chat_pdfs.py`. Edit them directly to toggle pipelin
 | `USAR_RERANKER` | `True` | Cross-encoder reranking |
 | `USAR_RECOMP_SYNTHESIS` | `True` | RECOMP context compression before generation |
 | `EXPANDIR_CONTEXTO` | `True` | Include adjacent chunks around top results |
-| `USAR_EMBEDDINGS_IMAGEN` | `False` | Describe raster images in PDFs with a vision model |
+| `USAR_EMBEDDINGS_IMAGEN` | `True` | Describe raster images in PDFs with a vision model |
 
 </details>
 

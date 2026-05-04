@@ -53,6 +53,7 @@ Production-viable models: Qwen3-14B, Phi-4, Gemma-3-12B.
 | `USAR_RECOMP_SYNTHESIS` | `True` |
 | `USAR_CONTEXTUAL_RETRIEVAL` | `True` |
 | `USAR_RERANKER` | `True` |
+| `USAR_EMBEDDINGS_IMAGEN` | `True` |
 
 ---
 
