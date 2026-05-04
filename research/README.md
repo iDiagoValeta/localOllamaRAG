@@ -33,9 +33,30 @@ pip install -r research/scripts/requirements.txt      # LoRA training stack (GPU
 
 ---
 
-## Training dataset (Hugging Face)
+## Training data (LoRA)
 
-LoRA fine-tuning is built from **[nadiva1243/wikipediaEs-Ca4RAG](https://huggingface.co/datasets/nadiva1243/wikipediaEs-Ca4RAG)** — Wikipedia-style ES/CA material for RAG-oriented QA.
+LoRA adapters (**rank 32** for Qwen3, Phi-4 and Gemma-3) are trained on a **mixture of public Hugging Face corpora** — not on the proprietary Wikipedia evaluation set below.
+
+| Source | Hugging Face | Notes |
+|--------|--------------|-------|
+| Neural-Bridge RAG | [neural-bridge/rag-dataset-12000](https://huggingface.co/datasets/neural-bridge/rag-dataset-12000) | 12k EN triplets (question, context, answer); technical / encyclopaedic synthesis |
+| Dolly QA (filtered) | [databricks/databricks-dolly-15k](https://huggingface.co/datasets/databricks/databricks-dolly-15k) | EN; only document-grounded task types (`closed_qa`, `information_extraction`, `summarization`) → **4 467** training triplets |
+| Aina RAG Multilingual | [projecte-aina/RAG-multilingual](https://huggingface.co/datasets/projecte-aina/RAG-multilingual) | Multilingual news / Wikipedia-style RAG; used as **Aina-EN**, **Aina-ES** and **Aina-CA** splits |
+
+How these pools are filtered, shuffled and split for training/validation is described in the thesis (Chapter 4). The scripts under `research/scripts/training/` implement the concrete recipe.
+
+---
+
+## Evaluation datasets
+
+These corpora **do not** update LoRA weights; they score the **full PDF-indexed RAG pipeline** (retrieval + generation).
+
+| Dataset | Hugging Face / location | Role |
+|---------|-------------------------|------|
+| Proprietary Wikipedia **ES** & **Valencian/Catalan** (50 QA each, 5 PDFs per language) | **[nadiva1243/wikipediaEs-Ca4RAG](https://huggingface.co/datasets/nadiva1243/wikipediaEs-Ca4RAG)** | End-to-end evaluation on real PDFs in Spanish and Valencian/Catalan; published for reuse |
+| Vectara RAGBench (**arXiv / pdf** subset) | [vectara/open_ragbench](https://huggingface.co/datasets/vectara/open_ragbench) | External English academic-PDF benchmark (1000 PDFs, 3045 QA pairs in this work) |
+
+The **RagBench** PDF trees under `rag/docs/en_ragbench_*` are used by `research/evaluation/run_eval.py` for the English benchmark workflow; see `research/docs/EVALUACIONES_PIPELINE.md`.
 
 ---
 
@@ -136,7 +157,7 @@ pytest research/tests/research/ # eval runners (offline, no Ollama needed)
 
 ## Trained models
 
-All three fine-tunes use **LoRA rank 32** on [nadiva1243/wikipediaEs-Ca4RAG](https://huggingface.co/datasets/nadiva1243/wikipediaEs-Ca4RAG).
+All three fine-tunes use **LoRA rank 32** on the **training mixture** in the section *Training data (LoRA)* above (Neural-Bridge RAG + filtered Dolly QA + Aina splits).
 
 | Model | HuggingFace model card | Ollama |
 |-------|------------------------|--------|

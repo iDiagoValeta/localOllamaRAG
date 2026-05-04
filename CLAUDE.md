@@ -36,7 +36,11 @@ alwaysApply: true
 | Fine-tuning Gemma-3-12B (v2) | ✅ `research/training-output/gemma-3/` — LoRA **r=32**. **Not importable into Ollama** (technical limitations; see `research/scripts/conversion/GEMMA3_CONVERSION_ISSUE.md`) |
 | Base/adapted test evaluation | ✅ `evaluation_comparison.json` versioned in all model dirs |
 
-**LoRA training data:** [nadiva1243/wikipediaEs-Ca4RAG](https://huggingface.co/datasets/nadiva1243/wikipediaEs-Ca4RAG) (Hugging Face dataset).
+**LoRA training corpora (public HF):** [neural-bridge/rag-dataset-12000](https://huggingface.co/datasets/neural-bridge/rag-dataset-12000), filtered [databricks/databricks-dolly-15k](https://huggingface.co/datasets/databricks/databricks-dolly-15k) (document-grounded categories only, 4 467 samples), and [projecte-aina/RAG-multilingual](https://huggingface.co/datasets/projecte-aina/RAG-multilingual) (Aina-EN / Aina-ES / Aina-CA).
+
+**Evaluation-only HF dataset (not used in LoRA loss):** [nadiva1243/wikipediaEs-Ca4RAG](https://huggingface.co/datasets/nadiva1243/wikipediaEs-Ca4RAG) — proprietary Spanish + Valencian/Catalan Wikipedia-PDF QA for end-to-end pipeline evaluation.
+
+**External EN PDF benchmark:** [vectara/open_ragbench](https://huggingface.co/datasets/vectara/open_ragbench) (`pdf`/arXiv subset used in this work).
 
 **Ollama:** Qwen3-14B and Phi-4 RAG builds are importable as Ollama models. The Gemma-3-12B fine-tune is **not importable into Ollama** today — technical limitations in `research/scripts/conversion/GEMMA3_CONVERSION_ISSUE.md`.
 
