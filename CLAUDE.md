@@ -21,7 +21,7 @@ alwaysApply: true
    - Constants: `PATH_DB`, `COLLECTION_NAME`, `CARPETA_DOCS`, `SYSTEM_PROMPT_CHAT`, `SYSTEM_PROMPT_RAG`, `MAX_HISTORIAL_MENSAJES`, `MODELO_CHAT`, `MODELO_RAG`, `MIN_LONGITUD_PREGUNTA_RAG`, `UMBRAL_RELEVANCIA`, `UMBRAL_SCORE_RERANKER`, `TOP_K_FINAL`, `EXPANDIR_CONTEXTO`, `N_TOP_PARA_EXPANSION`, `MAX_CONTEXTO_CHARS`, `USAR_RERANKER`, `USAR_RECOMP_SYNTHESIS`, `RERANKER_AVAILABLE`, `STOPWORDS`
    - Functions (CLI/web): `indexar_documentos`, `realizar_busqueda_hibrida`, `expandir_con_chunks_adyacentes`, `sintetizar_contexto_recomp`, `construir_contexto_para_modelo`, `guardar_debug_rag`, `generar_respuesta_silenciosa`, `obtener_documentos_indexados`, `cargar_historial`, `guardar_historial`, `limpiar_historial`
    - Functions (eval/tests): `get_pipeline_flags`, `set_pipeline_flags`, `set_docs_folder_runtime`, `set_ragbench_reranker_low_score_fallback`, `evaluar_pregunta_rag`
-8. **After any change, check whether `CLAUDE.md` or `README.md` need updating** — file structure, flags, models, scripts, paths, experiment state, and code conventions must stay in sync. README is the public entry point; if the folder tree or commands change, update it in the same change.
+8. **After any change, check whether `CLAUDE.md` or the relevant README needs updating** — `README.md` is the user-facing entry point (installation, run, configuration, CLI commands only); `research/README.md` covers evaluation, training, benchmarks and thesis details. Update the correct file; do not add thesis/research content to the root README.
 9. **Changes to `.gitignore` or `.gitkeep`**: follow Section 9 (git policy). After editing rules, validate with `git check-ignore -v <path>` and update Section 9 if policy changes.
 
 ---

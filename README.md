@@ -19,65 +19,31 @@
 </p>
 
 <p align="center">
-  <a href="#01-overview">Overview</a> ·
-  <a href="#01b-for-users-and-research">Who needs what</a> ·
-  <a href="#02-demo">Demo</a> ·
-  <a href="#03-how-it-works">Architecture</a> ·
-  <a href="#04-getting-started">Getting started</a> ·
-  <a href="#05-configuration">Configuration</a> ·
-  <a href="#06-usage">Usage</a> ·
-  <a href="#07-evaluation">Evaluation</a>
+  <a href="#1-overview">Overview</a> ·
+  <a href="#2-demo">Demo</a> ·
+  <a href="#3-getting-started">Getting started</a> ·
+  <a href="#4-configuration">Configuration</a> ·
+  <a href="#5-usage">Usage</a>
 </p>
 
 ---
 
-## 01. Overview
+## 1. Overview
 
-MonkeyGrab is a Retrieval-Augmented Generation (RAG) system designed for researchers and students who need to query PDF documents without sending their data to external services. You point it at a folder of PDFs and ask questions in natural language; it returns answers grounded in the actual content of those files. The system works with any instruction-tuned model available in [Ollama](https://ollama.com/) and adapts to your hardware through environment variables.
+MonkeyGrab lets you ask questions about your PDF documents in natural language. Point it at a folder of PDFs, start the CLI or the web interface, and get answers grounded in the actual content of those files — no data sent to any cloud.
 
-<table>
-  <tr>
-    <td><strong>Local-first</strong></td>
-    <td>All indexing, retrieval and generation runs on your own hardware. No API keys required for the core pipeline.</td>
-  </tr>
-  <tr>
-    <td><strong>Hybrid retrieval</strong></td>
-    <td>Semantic search and keyword search fused with RRF (55/45 weights), followed by optional cross-encoder reranking.</td>
-  </tr>
-  <tr>
-    <td><strong>Multilingual</strong></td>
-    <td>Built and evaluated on English, Spanish and Catalan corpora. Active corpus is selected via environment variable.</td>
-  </tr>
-  <tr>
-    <td><strong>Model-flexible</strong></td>
-    <td>Every role — generator, embedder, reranker, RECOMP synthesiser, vision model — is independently configurable.</td>
-  </tr>
-  <tr>
-    <td><strong>PDF-aware</strong></td>
-    <td>Optionally describes raster images and figures in PDFs with a vision model, making visual content retrievable.</td>
-  </tr>
-  <tr>
-    <td><strong>Two interfaces</strong></td>
-    <td>Rich-based terminal CLI (bilingual ES/EN via <code>MONKEYGRAB_LANG</code>) and a Flask + React 19 web UI with streaming responses.</td>
-  </tr>
-  <tr>
-    <td><strong>Research-ready</strong></td>
-    <td>Includes LoRA fine-tuning scripts (Qwen3-14B, Phi-4, Gemma-3-12B), RAGAS evaluation and RAGBench workflows.</td>
-  </tr>
-</table>
+| | |
+|---|---|
+| **Local-first** | All indexing, retrieval and generation runs on your hardware. No API keys required for the core pipeline. |
+| **Any model** | Works with any instruction-tuned model in [Ollama](https://ollama.com/) — `llama3.2`, `mistral`, `gemma4`, `qwen3`, etc. |
+| **Hybrid retrieval** | Semantic search + keyword search fused with RRF, followed by optional cross-encoder reranking. |
+| **Multilingual** | Spanish, Catalan and English out of the box. Active corpus selected via environment variable. |
+| **Two interfaces** | Rich-based terminal CLI and a Flask + React web UI with streaming responses. |
+| **Image-aware** | Optionally describes raster images and figures in PDFs with a vision model, making visual content retrievable. |
 
 ---
 
-## 01b. Who needs what
-
-- **End users** — Run the CLI or Web UI on your PDFs with local Ollama. You only need the `rag/` tree (`rag/requirements.txt` for the pipeline, `rag/web/requirements.txt` for the optional web UI). See **Getting started — End users** below.
-- **Thesis / research** — LoRA training, RAGAS, RagBench, BERTScore post-processing, and Hugging Face upload helpers live under [`research/`](research/README.md). See **Getting started — Research / thesis reproduction** and the folder map in [`research/docs/PROJECT_LAYOUT.md`](research/docs/PROJECT_LAYOUT.md).
-
-For a **smaller clone**, see [`research/docs/USER_SPARSE_CHECKOUT.md`](research/docs/USER_SPARSE_CHECKOUT.md) or run [`research/scripts/package_user_bundle.ps1`](research/scripts/package_user_bundle.ps1) / [`research/scripts/package_user_bundle.sh`](research/scripts/package_user_bundle.sh) to build a zip without `research/` and without the large `rag/docs/en_ragbench_*` trees.
-
----
-
-## 02. Demo
+## 2. Demo
 
 **Web interface — querying a local document corpus**
 
@@ -87,132 +53,57 @@ https://github.com/user-attachments/assets/22582283-1b28-4054-a341-3aa1cbdc5057
 
 https://github.com/user-attachments/assets/4b8a84ca-422f-44a6-a0d5-a8078fa5e17a
 
-Sample queries against a database of five Wikipedia articles indexed with the default settings. Models and parameters are fully configurable — results are specific to the hardware and models used during recording.
-
-**RAGBench evaluation — indexing 25 documents from scratch**
-
-https://github.com/user-attachments/assets/9bbab813-0b7a-474c-a3b4-aad53f580672
-
-Left terminal: `ollama serve`. Right terminal: the full RAGBench pipeline — indexing, inference and RAGAS scoring in one run.
-
-**An example of document indexing for evaluating questions about specific images**
-
-<img width="1919" height="1033" alt="text-image-querys" src="https://github.com/user-attachments/assets/fdcdb934-625a-4b9e-9f56-ca6bbaebc948" />
-
-**LaTeX rendering — math formulas in answers are rendered natively in the web UI**
+**LaTeX rendering — math formulas rendered natively in the web UI**
 
 <img width="1277" height="674" alt="mathRender" src="https://github.com/user-attachments/assets/0a9dbcdf-fe91-4992-af82-e4e945fbf766" />
 
-The web interface uses [KaTeX](https://katex.org/) to render inline (`$...$`) and display (`$$...$$`) LaTeX expressions generated by the model, as in this answer about the DPO gradient update mechanism.
-
 ---
 
-## 03. How it works
+## 3. Getting started
 
-```mermaid
-flowchart TD
-    subgraph INDEXING
-        A[PDF corpus\nrag/docs/es · ca · en] --> B[Text extraction\npymupdf4llm / pypdf]
-        B --> C[Chunking\nsize · overlap · min-length]
-        C --> D{Optional stages}
-        D -->|USAR_CONTEXTUAL_RETRIEVAL| E[Chunk enrichment\nOLLAMA_CONTEXTUAL_MODEL]
-        D -->|USAR_EMBEDDINGS_IMAGEN| F[Image description\nOLLAMA_OCR_MODEL]
-        E --> G[Embedding\nOLLAMA_EMBED_MODEL]
-        F --> G
-        C --> G
-        G --> H[(ChromaDB\nrag/vector_db/)]
-    end
+**Prerequisites:** Python 3.10+, [Ollama](https://ollama.com/) running locally.
 
-    subgraph RETRIEVAL
-        I[User question] --> J{USAR_LLM_QUERY_DECOMPOSITION}
-        J -->|yes| K[Sub-queries\nOLLAMA_CHAT_MODEL]
-        J -->|no| L[Semantic search]
-        K --> L
-        L --> M[Keyword search\nUSAR_BUSQUEDA_HIBRIDA]
-        M --> N[RRF fusion\n55% semantic · 45% lexical]
-        N --> O{USAR_RERANKER}
-        O -->|yes| P[Cross-encoder\nRERANKER_QUALITY]
-        O -->|no| Q[Top-8 fragments]
-        P --> Q
-        Q --> R{USAR_RECOMP_SYNTHESIS}
-        R -->|yes| S[Context synthesis\nOLLAMA_RECOMP_MODEL]
-        R -->|no| T[Raw context]
-    end
-
-    subgraph GENERATION
-        S --> U[Prompt assembly]
-        T --> U
-        U --> V[OLLAMA_RAG_MODEL\nstreaming response]
-    end
-
-    H --> L
-```
-
-<p align="center">
-  <img src="research/docs/monkeygrab_architecture.png" alt="MonkeyGrab architecture diagram" width="720" />
-</p>
-
----
-
-## 04. Getting started
-
-**Prerequisites:** Python 3.10+, [Ollama](https://ollama.com/) running locally. A CUDA-capable GPU is recommended for the reranker; CPU works for inference.
-
-### End users (CLI + Web only)
+### Install
 
 ```bash
 git clone https://github.com/iDiagoValeta/localOllamaRAG
 cd localOllamaRAG
 
-pip install -r rag/requirements.txt            # core RAG system (required)
-pip install -r rag/web/requirements.txt            # web interface (optional)
-```
-
-### Research / thesis reproduction
-
-```bash
-pip install -r research/evaluation/requirements.txt   # RAGAS + Gemini judge (optional)
-pip install -r research/scripts/requirements.txt      # LoRA training stack (optional, GPU)
+pip install -r rag/requirements.txt        # core RAG pipeline (required)
+pip install -r rag/web/requirements.txt    # web interface (optional)
 ```
 
 ### Pull models
 
-At minimum you need a generator model and an embedding model:
+You need at minimum a generator and an embedding model:
 
 ```bash
-ollama pull <your OLLAMA_RAG_MODEL>            # required — document Q&A generator
-ollama pull <your OLLAMA_EMBED_MODEL>          # required — indexing and retrieval
+ollama pull <OLLAMA_RAG_MODEL>      # document Q&A generator (required)
+ollama pull <OLLAMA_EMBED_MODEL>    # indexing and retrieval (required)
 
-ollama pull <your OLLAMA_CHAT_MODEL>           # optional — chat mode and query decomposition
-ollama pull <your OLLAMA_CONTEXTUAL_MODEL>     # optional — contextual chunk enrichment
-ollama pull <your OLLAMA_RECOMP_MODEL>         # optional — context synthesis before generation
-ollama pull <your OLLAMA_OCR_MODEL>            # optional — vision model for PDF images
+ollama pull <OLLAMA_CHAT_MODEL>     # chat mode + query decomposition (optional)
+ollama pull <OLLAMA_RECOMP_MODEL>   # context synthesis before generation (optional)
+ollama pull <OLLAMA_OCR_MODEL>      # vision model for PDF images (optional)
 ```
 
-> **Any instruction-tuned model available in Ollama works as the generator** (`llama3.2`, `mistral`, `gemma4`, `qwen3`, etc.). The system prompt is injected automatically at query time, so no special configuration is needed. Fine-tuned models below were trained specifically on document Q&A tasks and yield higher accuracy on RAG benchmarks.
+**Fine-tuned weights trained specifically for RAG (recommended):**
 
-**Fine-tuned weights (recommended):**
-
-- **Qwen3-14B RAG** (LoRA, Q4_K_M GGUF): [nadiva1243/qwen3RAG](https://huggingface.co/nadiva1243/qwen3RAG)
-- **Phi-4 RAG** (LoRA, Q4_K_M GGUF): [nadiva1243/phi4RAG](https://huggingface.co/nadiva1243/phi4RAG)
-
-`Modelfile` templates live under `research/models/gguf-output/`. Conversion orchestration scripts are under `research/scripts/conversion/`. `.gguf` binaries are not committed to the repository.
+- **Qwen3-14B RAG** — [nadiva1243/qwen3RAG](https://huggingface.co/nadiva1243/qwen3RAG)
+- **Phi-4 RAG** — [nadiva1243/phi4RAG](https://huggingface.co/nadiva1243/phi4RAG)
 
 ### Run
 
-Drop your PDFs into `rag/docs/libre/` (the default free-use corpus), then:
+Drop your PDFs into `rag/docs/libre/` and start:
 
 ```bash
-# Terminal CLI (Spanish UI — default) — from repository root
+# CLI (Spanish UI by default)
 python rag/chat_pdfs.py
 
-# Terminal CLI (English UI)
-# bash/zsh
-MONKEYGRAB_LANG=en python rag/chat_pdfs.py
-# PowerShell
-$env:MONKEYGRAB_LANG = "en"; python rag/chat_pdfs.py
+# CLI in English
+MONKEYGRAB_LANG=en python rag/chat_pdfs.py          # bash/zsh
+$env:MONKEYGRAB_LANG = "en"; python rag/chat_pdfs.py # PowerShell
 
-# Web interface — http://localhost:5000
+# Web interface → http://localhost:5000
 python rag/web/app.py
 ```
 
@@ -220,37 +111,36 @@ The vector index is created automatically in `rag/vector_db/` on first run.
 
 ---
 
-## 05. Configuration
+## 4. Configuration
 
-All pipeline behaviour is controlled via environment variables. Set them in your shell or in a `.env` file at the project root.
+Set these in your shell or in a `.env` file at the project root.
 
 | Variable | Description |
 |----------|-------------|
 | `OLLAMA_RAG_MODEL` | Generator model for RAG mode |
-| `OLLAMA_CHAT_MODEL` | Generator for CHAT mode and query decomposition |
+| `OLLAMA_CHAT_MODEL` | Generator for chat mode and query decomposition |
 | `OLLAMA_EMBED_MODEL` | Embedding model for indexing and retrieval |
-| `OLLAMA_CONTEXTUAL_MODEL` | Auxiliary model for contextual chunk enrichment |
 | `OLLAMA_RECOMP_MODEL` | Model for context synthesis before generation |
 | `OLLAMA_OCR_MODEL` | Vision model for PDF image descriptions |
+| `OLLAMA_CONTEXTUAL_MODEL` | Auxiliary model for contextual chunk enrichment at indexing |
 | `DOCS_FOLDER` | PDF folder to index (default: `rag/docs/libre/`) |
 | `RERANKER_QUALITY` | Cross-encoder tier: `quality` (BAAI/bge) or `speed` (MiniLM) |
-| `MONKEYGRAB_LANG` | CLI language: `es` (Spanish, default) or `en` (English) |
-| `USAR_RECOMP_SYNTHESIS` | Enable/disable RECOMP synthesis (`true`/`false`, default: `true`) |
+| `MONKEYGRAB_LANG` | CLI language: `es` (default) or `en` |
 
-> **ChromaDB paths** follow the pattern `rag/vector_db/<folder>_<embed_slug>/`. Changing `DOCS_FOLDER` or `OLLAMA_EMBED_MODEL` selects a different index path — re-run `/reindex` when you intentionally switch either.
+> Changing `DOCS_FOLDER` or `OLLAMA_EMBED_MODEL` selects a different ChromaDB path — run `/reindex` when you intentionally switch either.
 
 <details>
-<summary><strong>Pipeline flags (advanced)</strong></summary>
+<summary><strong>Advanced pipeline flags</strong></summary>
 
-These are constants in `rag/chat_pdfs.py`. Edit them directly to change pipeline behaviour without environment variables.
+These constants live in `rag/chat_pdfs.py`. Edit them directly to toggle pipeline stages.
 
 | Flag | Default | Effect |
 |------|---------|--------|
-| `USAR_CONTEXTUAL_RETRIEVAL` | `True` | Enrich chunks with LLM context before indexing |
+| `USAR_CONTEXTUAL_RETRIEVAL` | `True` | Enrich chunks with LLM context at indexing time |
 | `USAR_LLM_QUERY_DECOMPOSITION` | `True` | Decompose query into sub-queries |
-| `USAR_BUSQUEDA_HIBRIDA` | `True` | Enable keyword search alongside semantic search |
-| `USAR_RERANKER` | `True` | Enable cross-encoder reranking |
-| `USAR_RECOMP_SYNTHESIS` | `True` | Enable RECOMP context compression |
+| `USAR_BUSQUEDA_HIBRIDA` | `True` | Add keyword search alongside semantic search |
+| `USAR_RERANKER` | `True` | Cross-encoder reranking |
+| `USAR_RECOMP_SYNTHESIS` | `True` | RECOMP context compression before generation |
 | `EXPANDIR_CONTEXTO` | `True` | Include adjacent chunks around top results |
 | `USAR_EMBEDDINGS_IMAGEN` | `False` | Describe raster images in PDFs with a vision model |
 
@@ -258,203 +148,35 @@ These are constants in `rag/chat_pdfs.py`. Edit them directly to change pipeline
 
 ---
 
-## 06. Usage
+## 5. Usage
 
-### Terminal CLI
+### CLI commands
 
 | Command | Description |
 |---------|-------------|
-| `/rag` | Switch to RAG mode — answers grounded in your documents |
-| `/chat` | Switch to CHAT mode — general conversation without document context |
+| `/rag` | RAG mode — answers grounded in your documents |
+| `/chat` | Chat mode — free conversation without document context |
 | `/docs` | List indexed documents |
-| `/temas` | Show a topic summary per document |
-| `/stats` | Show vector database statistics |
-| `/reindex` | Delete the current index and re-index all documents |
-| `/limpiar` or `/clear` | Clear the conversation history |
-| `/ayuda` or `/help` | Show all available commands |
-| `/salir` or `/exit` | Exit and save history |
+| `/temas` | Topic summary per document |
+| `/stats` | Vector database statistics |
+| `/reindex` | Drop the current index and re-index all documents |
+| `/limpiar` `/clear` | Clear conversation history |
+| `/ayuda` `/help` | Show all available commands |
+| `/salir` `/exit` | Exit and save history |
 
 ### Web interface
 
-Available at `http://localhost:5000`. Supports document upload, streaming responses and pipeline settings through the UI.
+Open `http://localhost:5000`. Supports document upload, streaming responses and pipeline settings through the UI.
 
-For development with hot-reload: run `npm run dev` inside `rag/web/zip/` (Vite on :3000 proxies to Flask on :5000); run `npm run build` to compile the production bundle served by Flask.
-
----
-
-## 07. Evaluation
-
-Requires a **`GOOGLE_API_KEY`** in `.env` ([Gemini](https://ai.google.dev/) as judge LLM) and `pip install -r research/evaluation/requirements.txt`.
-
-```bash
-python research/evaluation/run_eval.py single --corpus es    # Spanish corpus
-python research/evaluation/run_eval.py single --corpus ca    # Catalan corpus
-
-python research/evaluation/run_eval.py ragbench-prepare      # build fixed EN eval corpus (25 docs / 5 q each)
-python research/evaluation/run_eval.py ragbench-eval         # index + infer + RAGAS from manifest
-python research/evaluation/run_ragbench_visual_inference.py --n-papers 25 --max-q 5  # table/image RagBench inference only
-python research/evaluation/run_ragbench_visual_inference.py --ragas-only --n-papers 25 --max-q 5  # RAGAS over completed visual inference
-python research/evaluation/evaluate_ragas_bertscore.py --all-completed  # BERTScore over completed RAGAS outputs
-```
-
-<details>
-<summary><strong>Ablation comparison and aggregation</strong></summary>
-
-Run multiple pipeline variants against a shared index and compare scores:
-
-```bash
-python research/evaluation/run_eval.py compare --corpus ca --label mi_eval --reindex
-python research/evaluation/run_eval.py list-variants
-```
-
-Aggregate per-variant results by dataset subset:
-
-```bash
-python research/evaluation/aggregate_comparison_by_conjunto.py \
-  --dir research/evaluation/runs/ragas/comparisons/mi_eval \
-  --etiquetas-es
-```
-
-Artifacts: `research/evaluation/datasets/local/` (local eval datasets), `research/evaluation/datasets/ragbench/prepared/` (prepared RagBench datasets/manifests), `research/evaluation/runs/ragas/single/`, `research/evaluation/runs/ragas/comparisons/`, `research/evaluation/runs/ragas/ragbench/`, `research/evaluation/runs/ragas/ragbench_visual/` (RAGAS scores + `inference/` subfolder for pre-RAGAS outputs), and `research/evaluation/runs/bertscore/`. See `research/docs/EVALUACIONES_PIPELINE.md` for corpus presets and variant definitions.
-
-BERTScore is computed as a separate post-process over existing RAGAS CSVs. It uses `microsoft/deberta-xlarge-mnli` with `rescale_with_baseline=True` for all languages and never overwrites RAGAS artifacts.
-
-</details>
-
-<details>
-<summary><strong>LoRA fine-tuning and reports</strong></summary>
-
-Training scripts are under `research/scripts/training/`. Each model folder under `research/training-output/` includes a `generate_reports.py` that produces training curves and evaluation comparison tables:
-
-```bash
-python research/scripts/training/train-qwen3.py    # Qwen3-14B
-python research/scripts/training/train-phi4.py     # Phi-4
-python research/scripts/training/train-gemma3.py   # Gemma-3-12B
-
-python research/training-output/qwen-3/generate_reports.py
-python research/training-output/phi-4/generate_reports.py
-python research/training-output/gemma-3/generate_reports.py
-```
-
-Output: `plots/train/` (loss, learning rate, grad norm curves) and `plots/eval/` (per-metric tables and base vs. adapted comparison figures). Optional flags: `--model-dir`, `--eval-input`, `--train-input`, `--plots-dir`, `--no-figures`.
-
-</details>
-
----
-
-<details>
-<summary><strong>Repository structure</strong></summary>
-
-```
-localOllamaRAG/
-├── pytest.ini                    # Pytest: pythonpath + research/tests/
-├── rag/
-│   ├── chat_pdfs.py              # Public API facade + global config; implementation lives in engine/
-│   ├── engine/                   # RAG pipeline implementation modules
-│   │   ├── runtime.py            # Sync layer: exposes chat_pdfs globals/flags to sub-modules
-│   │   ├── chunking.py           # Markdown chunking, neighbor IDs
-│   │   ├── lexical.py            # Stopwords, keyword extraction, lexical + exhaustive search
-│   │   ├── reranking.py          # LLM query decomposition, CrossEncoder reranking
-│   │   ├── retrieval.py          # Hybrid retrieval orchestration (semantic + lexical + RRF)
-│   │   ├── context.py            # Context cleanup, model formatting, RECOMP synthesis
-│   │   ├── debug.py              # Per-query RAG debug dumps
-│   │   ├── generation.py         # Ollama generation (streaming + silent eval path)
-│   │   ├── contextual.py         # Contextual retrieval helpers (chunk enrichment at indexing)
-│   │   ├── images.py             # PDF image extraction and OCR with LLM
-│   │   ├── history.py            # Chat history persistence
-│   │   └── indexing.py           # PDF indexing into ChromaDB, document listing
-│   ├── show_fragments/
-│   │   └── export_fragments.py   # Export ChromaDB chunks to TXT/JSONL for debug
-│   ├── cli/
-│   │   ├── app.py                # MonkeyGrabCLI: interactive loop, command dispatch, session stats
-│   │   ├── display.py            # `ui` singleton: Rich/ANSI/plain backends, QueryTimer, SessionStats
-│   │   ├── commands.py           # Single source of truth for slash-commands and aliases
-│   │   └── strings.py            # ES/EN string tables; s(key, lang) for CLI i18n
-│   ├── docs/
-│   │   ├── libre/                # Default free-use corpus (any PDFs; default DOCS_FOLDER)
-│   │   ├── es/                   # Spanish Wikipedia corpus (TFG evidence)
-│   │   ├── ca/                   # Catalan Wikipedia corpus (TFG evidence)
-│   │   ├── en/                   # Generic English corpus (empty)
-│   │   ├── en_ragbench_dev/      # Frozen RagBench EN dev split (TFG evidence)
-│   │   ├── en_ragbench_eval/     # RagBench EN final eval corpus (TFG evidence)
-│   │   └── en_ragbench_visual/   # RagBench EN visual corpus — tables/images (TFG evidence)
-│   ├── vector_db/                # ChromaDB indexes — gitignored, created at runtime
-│   ├── debug_rag/                # Per-query debug dumps — gitignored
-│   ├── web/                      # Flask backend (REST + SSE); serves React build
-│   │   ├── app.py
-│   │   └── zip/                  # React source + Vite config; production build → dist/
-│   └── requirements.txt
-├── research/
-│   ├── README.md                 # Pointer to thesis / research tooling
-│   ├── evaluation/               # RAGAS runner, datasets, runs/, BERTScore, aggregates
-│   ├── docs/                     # Architecture assets, methodology, sparse-checkout notes
-│   ├── training-output/          # LoRA runs + baseline benchmark artifacts
-│   ├── models/                   # merged-model/ (gitignored) + gguf-output/ Modelfiles
-│   ├── tests/                    # pytest: core/ + research/
-│   └── scripts/
-│       ├── training/             # LoRA fine-tuning (Qwen3, Phi-4, Gemma-3)
-│       ├── evaluation/           # Baseline benchmark + split inspection + SLURM helpers
-│       ├── conversion/           # LoRA merge, GGUF build, quantization notes
-│       ├── generate_diagram.py   # Architecture diagram (Kroki.io)
-│       ├── hf_upload_model_cards.py
-│       ├── package_user_bundle.ps1   # Optional minimal zip (excludes research + RagBench PDFs)
-│       ├── package_user_bundle.sh
-│       └── requirements.txt      # Training stack (pinned)
-├── README.md
-└── CLAUDE.md
-```
-
-</details>
+For development with hot-reload: run `npm run dev` inside `rag/web/zip/` (Vite on :3000 proxies to Flask on :5000).
 
 ---
 
 ## Known limitations
 
-- Vector graphics (SVG-based figures) embedded in PDFs are not extracted and will not be retrievable.
-- The RAGAS evaluation pipeline requires a `GOOGLE_API_KEY` and is therefore not fully local.
+- Vector graphics (SVG-based figures) embedded in PDFs are not extracted.
+- Increasing `CHUNK_SIZE` or enabling all optional stages increases indexing time and memory usage.
 
 ---
 
-## Links
-
-**RAG pipeline**
-
-| Technology | Role |
-|------------|------|
-| [Ollama](https://ollama.com/) | Local LLM and embedding server |
-| [ChromaDB](https://www.trychroma.com/) | Vector store |
-| [pymupdf4llm](https://pymupdf.readthedocs.io/en/latest/pymupdf4llm/) | PDF text extraction (primary) |
-| [pypdf](https://pypdf.readthedocs.io/) | PDF text extraction (fallback) |
-| [sentence-transformers](https://www.sbert.net/) | Cross-encoder reranker (BAAI/bge, MiniLM) |
-
-**Interfaces**
-
-| Technology | Role |
-|------------|------|
-| [Rich](https://rich.readthedocs.io/) | Terminal UI |
-| [Flask](https://flask.palletsprojects.com/) | Web backend |
-| [React](https://react.dev/) | Web frontend |
-| [Vite](https://vitejs.dev/) | Frontend build tool |
-
-**Training**
-
-| Technology | Role |
-|------------|------|
-| [PyTorch](https://pytorch.org/) | Deep learning framework |
-| [Transformers](https://huggingface.co/docs/transformers/) | Model loading and training |
-| [PEFT](https://huggingface.co/docs/peft/) | LoRA fine-tuning |
-| [bitsandbytes](https://github.com/bitsandbytes-foundation/bitsandbytes) | Quantization and QLoRA |
-| [llama.cpp](https://github.com/ggml-org/llama.cpp) | GGUF conversion and quantization |
-| [Hugging Face Hub](https://huggingface.co/) | Model hosting |
-
-**Evaluation**
-
-| Technology | Role |
-|------------|------|
-| [RAGAS](https://docs.ragas.io/) | RAG evaluation framework |
-| [BERTScore](https://github.com/Tiiiger/bert_score) | Semantic similarity metric |
-| [Google Gemini](https://ai.google.dev/) | Judge LLM for RAGAS (requires API key) |
-
----
-
-*Bachelor's thesis (TFG) — Grado en Ingeniería Informática, ETSINF, Universitat Politècnica de València. Author: Ignacio Diago Valeta. Tutor: Adrià Giménez Pastor. 2025–2026.*
+*For thesis reproduction, RAGAS evaluation, LoRA fine-tuning and benchmark results see [`research/`](research/README.md).*
