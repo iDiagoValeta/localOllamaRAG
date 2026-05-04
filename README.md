@@ -20,6 +20,7 @@
 
 <p align="center">
   <a href="#01-overview">Overview</a> ·
+  <a href="#01b-for-users-and-research">Who needs what</a> ·
   <a href="#02-demo">Demo</a> ·
   <a href="#03-how-it-works">Architecture</a> ·
   <a href="#04-getting-started">Getting started</a> ·
@@ -64,6 +65,15 @@ MonkeyGrab is a Retrieval-Augmented Generation (RAG) system designed for researc
     <td>Includes LoRA fine-tuning scripts (Qwen3-14B, Phi-4, Gemma-3-12B), RAGAS evaluation and RAGBench workflows.</td>
   </tr>
 </table>
+
+---
+
+## 01b. Who needs what
+
+- **End users** — Run the CLI or Web UI on your PDFs with local Ollama. You only need the `rag/` tree (`rag/requirements.txt` for the pipeline, `rag/web/requirements.txt` for the optional web UI). See **Getting started — End users** below.
+- **Thesis / research** — LoRA training, RAGAS, RagBench, BERTScore post-processing, and Hugging Face upload helpers live under [`research/`](research/README.md). See **Getting started — Research / thesis reproduction** and the folder map in [`research/docs/PROJECT_LAYOUT.md`](research/docs/PROJECT_LAYOUT.md).
+
+For a **smaller clone**, see [`research/docs/USER_SPARSE_CHECKOUT.md`](research/docs/USER_SPARSE_CHECKOUT.md) or run [`research/scripts/package_user_bundle.ps1`](research/scripts/package_user_bundle.ps1) / [`research/scripts/package_user_bundle.sh`](research/scripts/package_user_bundle.sh) to build a zip without `research/` and without the large `rag/docs/en_ragbench_*` trees.
 
 ---
 
@@ -139,7 +149,7 @@ flowchart TD
 ```
 
 <p align="center">
-  <img src="docs/monkeygrab_architecture.png" alt="MonkeyGrab architecture diagram" width="720" />
+  <img src="research/docs/monkeygrab_architecture.png" alt="MonkeyGrab architecture diagram" width="720" />
 </p>
 
 ---
@@ -148,15 +158,21 @@ flowchart TD
 
 **Prerequisites:** Python 3.10+, [Ollama](https://ollama.com/) running locally. A CUDA-capable GPU is recommended for the reranker; CPU works for inference.
 
-### Install
+### End users (CLI + Web only)
 
 ```bash
 git clone https://github.com/iDiagoValeta/localOllamaRAG
 cd localOllamaRAG
 
 pip install -r rag/requirements.txt            # core RAG system (required)
-pip install -r web/requirements.txt            # web interface (optional)
-pip install -r evaluation/requirements.txt     # RAGAS evaluation (optional)
+pip install -r rag/web/requirements.txt            # web interface (optional)
+```
+
+### Research / thesis reproduction
+
+```bash
+pip install -r research/evaluation/requirements.txt   # RAGAS + Gemini judge (optional)
+pip install -r research/scripts/requirements.txt      # LoRA training stack (optional, GPU)
 ```
 
 ### Pull models
@@ -180,15 +196,15 @@ ollama pull <your OLLAMA_OCR_MODEL>            # optional — vision model for P
 - **Qwen3-14B RAG** (LoRA, Q4_K_M GGUF): [nadiva1243/qwen3RAG](https://huggingface.co/nadiva1243/qwen3RAG)
 - **Phi-4 RAG** (LoRA, Q4_K_M GGUF): [nadiva1243/phi4RAG](https://huggingface.co/nadiva1243/phi4RAG)
 
-`Modelfile` templates and conversion scripts are under `models/gguf-output/` and `scripts/conversion/` respectively. `.gguf` binaries are not committed to the repository.
+`Modelfile` templates live under `research/models/gguf-output/`. Conversion orchestration scripts are under `research/scripts/conversion/`. `.gguf` binaries are not committed to the repository.
 
 ### Run
 
 Drop your PDFs into `rag/docs/libre/` (the default free-use corpus), then:
 
 ```bash
-# Terminal CLI (Spanish UI — default)
-cd rag && python chat_pdfs.py
+# Terminal CLI (Spanish UI — default) — from repository root
+python rag/chat_pdfs.py
 
 # Terminal CLI (English UI)
 # bash/zsh
@@ -197,7 +213,7 @@ MONKEYGRAB_LANG=en python rag/chat_pdfs.py
 $env:MONKEYGRAB_LANG = "en"; python rag/chat_pdfs.py
 
 # Web interface — http://localhost:5000
-python web/app.py
+python rag/web/app.py
 ```
 
 The vector index is created automatically in `rag/vector_db/` on first run.
@@ -262,23 +278,23 @@ These are constants in `rag/chat_pdfs.py`. Edit them directly to change pipeline
 
 Available at `http://localhost:5000`. Supports document upload, streaming responses and pipeline settings through the UI.
 
-For development with hot-reload: run `npm run dev` inside `web/zip/` (Vite on :3000 proxies to Flask on :5000); run `npm run build` to compile the production bundle served by Flask.
+For development with hot-reload: run `npm run dev` inside `rag/web/zip/` (Vite on :3000 proxies to Flask on :5000); run `npm run build` to compile the production bundle served by Flask.
 
 ---
 
 ## 07. Evaluation
 
-Requires a **`GOOGLE_API_KEY`** in `.env` ([Gemini](https://ai.google.dev/) as judge LLM) and `pip install -r evaluation/requirements.txt`.
+Requires a **`GOOGLE_API_KEY`** in `.env` ([Gemini](https://ai.google.dev/) as judge LLM) and `pip install -r research/evaluation/requirements.txt`.
 
 ```bash
-python evaluation/run_eval.py single --corpus es    # Spanish corpus
-python evaluation/run_eval.py single --corpus ca    # Catalan corpus
+python research/evaluation/run_eval.py single --corpus es    # Spanish corpus
+python research/evaluation/run_eval.py single --corpus ca    # Catalan corpus
 
-python evaluation/run_eval.py ragbench-prepare      # build fixed EN eval corpus (25 docs / 5 q each)
-python evaluation/run_eval.py ragbench-eval         # index + infer + RAGAS from manifest
-python evaluation/run_ragbench_visual_inference.py --n-papers 25 --max-q 5  # table/image RagBench inference only
-python evaluation/run_ragbench_visual_inference.py --ragas-only --n-papers 25 --max-q 5  # RAGAS over completed visual inference
-python evaluation/evaluate_ragas_bertscore.py --all-completed  # BERTScore over completed RAGAS outputs
+python research/evaluation/run_eval.py ragbench-prepare      # build fixed EN eval corpus (25 docs / 5 q each)
+python research/evaluation/run_eval.py ragbench-eval         # index + infer + RAGAS from manifest
+python research/evaluation/run_ragbench_visual_inference.py --n-papers 25 --max-q 5  # table/image RagBench inference only
+python research/evaluation/run_ragbench_visual_inference.py --ragas-only --n-papers 25 --max-q 5  # RAGAS over completed visual inference
+python research/evaluation/evaluate_ragas_bertscore.py --all-completed  # BERTScore over completed RAGAS outputs
 ```
 
 <details>
@@ -287,19 +303,19 @@ python evaluation/evaluate_ragas_bertscore.py --all-completed  # BERTScore over 
 Run multiple pipeline variants against a shared index and compare scores:
 
 ```bash
-python evaluation/run_eval.py compare --corpus ca --label mi_eval --reindex
-python evaluation/run_eval.py list-variants
+python research/evaluation/run_eval.py compare --corpus ca --label mi_eval --reindex
+python research/evaluation/run_eval.py list-variants
 ```
 
 Aggregate per-variant results by dataset subset:
 
 ```bash
-python evaluation/aggregate_comparison_by_conjunto.py \
-  --dir evaluation/runs/ragas/comparisons/mi_eval \
+python research/evaluation/aggregate_comparison_by_conjunto.py \
+  --dir research/evaluation/runs/ragas/comparisons/mi_eval \
   --etiquetas-es
 ```
 
-Artifacts: `evaluation/datasets/local/` (local eval datasets), `evaluation/datasets/ragbench/prepared/` (prepared RagBench datasets/manifests), `evaluation/runs/ragas/single/`, `evaluation/runs/ragas/comparisons/`, `evaluation/runs/ragas/ragbench/`, `evaluation/runs/ragas/ragbench_visual/` (RAGAS scores + `inference/` subfolder for pre-RAGAS outputs), and `evaluation/runs/bertscore/`. See `docs/EVALUACIONES_PIPELINE.md` for corpus presets and variant definitions.
+Artifacts: `research/evaluation/datasets/local/` (local eval datasets), `research/evaluation/datasets/ragbench/prepared/` (prepared RagBench datasets/manifests), `research/evaluation/runs/ragas/single/`, `research/evaluation/runs/ragas/comparisons/`, `research/evaluation/runs/ragas/ragbench/`, `research/evaluation/runs/ragas/ragbench_visual/` (RAGAS scores + `inference/` subfolder for pre-RAGAS outputs), and `research/evaluation/runs/bertscore/`. See `research/docs/EVALUACIONES_PIPELINE.md` for corpus presets and variant definitions.
 
 BERTScore is computed as a separate post-process over existing RAGAS CSVs. It uses `microsoft/deberta-xlarge-mnli` with `rescale_with_baseline=True` for all languages and never overwrites RAGAS artifacts.
 
@@ -308,16 +324,16 @@ BERTScore is computed as a separate post-process over existing RAGAS CSVs. It us
 <details>
 <summary><strong>LoRA fine-tuning and reports</strong></summary>
 
-Training scripts are under `scripts/training/`. Each model folder under `training-output/` includes a `generate_reports.py` that produces training curves and evaluation comparison tables:
+Training scripts are under `research/scripts/training/`. Each model folder under `research/training-output/` includes a `generate_reports.py` that produces training curves and evaluation comparison tables:
 
 ```bash
-python scripts/training/train-qwen3.py    # Qwen3-14B
-python scripts/training/train-phi4.py     # Phi-4
-python scripts/training/train-gemma3.py   # Gemma-3-12B
+python research/scripts/training/train-qwen3.py    # Qwen3-14B
+python research/scripts/training/train-phi4.py     # Phi-4
+python research/scripts/training/train-gemma3.py   # Gemma-3-12B
 
-python training-output/qwen-3/generate_reports.py
-python training-output/phi-4/generate_reports.py
-python training-output/gemma-3/generate_reports.py
+python research/training-output/qwen-3/generate_reports.py
+python research/training-output/phi-4/generate_reports.py
+python research/training-output/gemma-3/generate_reports.py
 ```
 
 Output: `plots/train/` (loss, learning rate, grad norm curves) and `plots/eval/` (per-metric tables and base vs. adapted comparison figures). Optional flags: `--model-dir`, `--eval-input`, `--train-input`, `--plots-dir`, `--no-figures`.
@@ -331,7 +347,7 @@ Output: `plots/train/` (loss, learning rate, grad norm curves) and `plots/eval/`
 
 ```
 localOllamaRAG/
-├── generate_diagram.py           # Architecture diagram (Kroki.io)
+├── pytest.ini                    # Pytest: pythonpath + research/tests/
 ├── rag/
 │   ├── chat_pdfs.py              # Public API facade + global config; implementation lives in engine/
 │   ├── engine/                   # RAG pipeline implementation modules
@@ -364,31 +380,26 @@ localOllamaRAG/
 │   │   └── en_ragbench_visual/   # RagBench EN visual corpus — tables/images (TFG evidence)
 │   ├── vector_db/                # ChromaDB indexes — gitignored, created at runtime
 │   ├── debug_rag/                # Per-query debug dumps — gitignored
+│   ├── web/                      # Flask backend (REST + SSE); serves React build
+│   │   ├── app.py
+│   │   └── zip/                  # React source + Vite config; production build → dist/
 │   └── requirements.txt
-├── web/
-│   ├── app.py                    # Flask backend (REST + SSE); serves React build
-│   └── zip/                      # React source + Vite config; production build → dist/
-├── scripts/
-│   ├── training/                 # LoRA fine-tuning (Qwen3, Phi-4, Gemma-3)
-│   ├── evaluation/               # Baseline benchmark + split inspection + SLURM helpers
-│   ├── conversion/               # LoRA merge, GGUF build, quantization notes
-│   └── tests/                    # Ollama / pipeline smoke tests
-├── evaluation/
-│   ├── datasets/                 # Question datasets (ES, CA, mix)
-│   ├── scripts/
-│   │   └── push_wikipedia_es_ca_hf.py  # Merge ES+CA datasets and push to HF Hub
-│   ├── run_eval.py               # RAGAS entrypoint: single | compare | ragbench
-│   ├── run_ragbench_visual_inference.py  # RagBench table/image inference without RAGAS
-│   ├── runs/                     # Evaluation artifacts: ragas/ and inference/
-│   ├── aggregate_comparison_by_conjunto.py
-│   └── requirements.txt
-├── training-output/
-│   ├── qwen-3/                   # LoRA artifacts + generate_reports.py
-│   ├── phi-4/                    # LoRA artifacts; other ranks under phi-4/<rank>/
-│   ├── gemma-3/                  # LoRA artifacts + generate_reports.py
-│   └── baseline/                 # Seven-model baseline benchmark artifacts
-├── models/gguf-output/           # Modelfile + docs per model (binaries gitignored)
-├── docs/                         # Architecture assets, methodology notes and EVALUACIONES_PIPELINE.md
+├── research/
+│   ├── README.md                 # Pointer to thesis / research tooling
+│   ├── evaluation/               # RAGAS runner, datasets, runs/, BERTScore, aggregates
+│   ├── docs/                     # Architecture assets, methodology, sparse-checkout notes
+│   ├── training-output/          # LoRA runs + baseline benchmark artifacts
+│   ├── models/                   # merged-model/ (gitignored) + gguf-output/ Modelfiles
+│   ├── tests/                    # pytest: core/ + research/
+│   └── scripts/
+│       ├── training/             # LoRA fine-tuning (Qwen3, Phi-4, Gemma-3)
+│       ├── evaluation/           # Baseline benchmark + split inspection + SLURM helpers
+│       ├── conversion/           # LoRA merge, GGUF build, quantization notes
+│       ├── generate_diagram.py   # Architecture diagram (Kroki.io)
+│       ├── hf_upload_model_cards.py
+│       ├── package_user_bundle.ps1   # Optional minimal zip (excludes research + RagBench PDFs)
+│       ├── package_user_bundle.sh
+│       └── requirements.txt      # Training stack (pinned)
 ├── README.md
 └── CLAUDE.md
 ```

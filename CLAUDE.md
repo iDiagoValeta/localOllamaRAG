@@ -17,7 +17,7 @@ alwaysApply: true
 4. **Do not modify `requirements.txt`** without confirmation — versions are intentionally pinned (especially the training stack).
 5. **Do not change pipeline flags** (`USAR_RECOMP_SYNTHESIS`, etc.) without agreement — they directly affect latency and cost.
 6. **Do not touch `llama.cpp/`** — external submodule.
-7. **`chat_pdfs.py` public API** — `web/app.py` imports it as `rag_engine`; `evaluation/run_eval.py` and `scripts/tests/` also consume its symbols directly. Renaming anything breaks the web backend, eval runner, and tests. Full public API:
+7. **`chat_pdfs.py` public API** — `rag/web/app.py` imports it as `rag_engine`; `research/evaluation/run_eval.py` and `research/tests/` also consume its symbols directly. Renaming anything breaks the web backend, eval runner, and tests. Full public API:
    - Constants: `PATH_DB`, `COLLECTION_NAME`, `CARPETA_DOCS`, `SYSTEM_PROMPT_CHAT`, `SYSTEM_PROMPT_RAG`, `MAX_HISTORIAL_MENSAJES`, `MODELO_CHAT`, `MODELO_RAG`, `MIN_LONGITUD_PREGUNTA_RAG`, `UMBRAL_RELEVANCIA`, `UMBRAL_SCORE_RERANKER`, `TOP_K_FINAL`, `EXPANDIR_CONTEXTO`, `N_TOP_PARA_EXPANSION`, `MAX_CONTEXTO_CHARS`, `USAR_RERANKER`, `USAR_RECOMP_SYNTHESIS`, `RERANKER_AVAILABLE`, `STOPWORDS`
    - Functions (CLI/web): `indexar_documentos`, `realizar_busqueda_hibrida`, `expandir_con_chunks_adyacentes`, `sintetizar_contexto_recomp`, `construir_contexto_para_modelo`, `guardar_debug_rag`, `generar_respuesta_silenciosa`, `obtener_documentos_indexados`, `cargar_historial`, `guardar_historial`, `limpiar_historial`
    - Functions (eval/tests): `get_pipeline_flags`, `set_pipeline_flags`, `set_docs_folder_runtime`, `set_ragbench_reranker_low_score_fallback`, `evaluar_pregunta_rag`
@@ -30,10 +30,10 @@ alwaysApply: true
 
 | Task | Status |
 |------|--------|
-| Baseline evaluation (7 models, 320 samples/dataset) | ✅ Done — `training-output/baseline/` |
-| Fine-tuning Qwen3-14B (v10) | ✅ Artifacts in `training-output/qwen-3/` (weights gitignored; metrics versioned) |
-| Fine-tuning Phi-4 (v1) | ✅ r=32 in root; r=64 in `phi-4/64/`; r=16 in `phi-4/16/` |
-| Fine-tuning Gemma-3-12B (v2) | ✅ Done — `training-output/gemma-3/`. GGUF blocked by SentencePiece incompatibility in Ollama 0.21+ (see `scripts/conversion/GEMMA3_CONVERSION_ISSUE.md`) |
+| Baseline evaluation (7 models, 320 samples/dataset) | ✅ Done — `research/training-output/baseline/` |
+| Fine-tuning Qwen3-14B (v10) | ✅ Artifacts in `research/training-output/qwen-3/` (weights gitignored; metrics versioned) |
+| Fine-tuning Phi-4 (v1) | ✅ r=32 in `research/training-output/phi-4/`; r=64 in `phi-4/64/`; r=16 in `phi-4/16/` |
+| Fine-tuning Gemma-3-12B (v2) | ✅ Done — `research/training-output/gemma-3/`. GGUF blocked by SentencePiece incompatibility in Ollama 0.21+ (see `research/scripts/conversion/GEMMA3_CONVERSION_ISSUE.md`) |
 | Base/adapted test evaluation | ✅ `evaluation_comparison.json` versioned in all model dirs |
 
 Production-viable models: Qwen3-14B, Phi-4, Gemma-3-12B.
@@ -58,11 +58,11 @@ Production-viable models: Qwen3-14B, Phi-4, Gemma-3-12B.
 
 ## 3. File structure
 
-`evaluation/evaluate_ragas_bertscore.py` is BERTScore post-processing for completed RAGAS runs. Reads CSVs from `evaluation/runs/ragas/`, uses `microsoft/deberta-xlarge-mnli` with `rescale_with_baseline=True`, writes to `evaluation/runs/bertscore/`. Does **not** run inference or RAGAS. For RagBench visual, `run_ragbench_visual_inference.py --ragas-only` runs RAGAS on a completed inference JSON without regenerating responses.
+`research/evaluation/evaluate_ragas_bertscore.py` is BERTScore post-processing for completed RAGAS runs. Reads CSVs from `research/evaluation/runs/ragas/`, uses `microsoft/deberta-xlarge-mnli` with `rescale_with_baseline=True`, writes to `research/evaluation/runs/bertscore/`. Does **not** run inference or RAGAS. For RagBench visual, `run_ragbench_visual_inference.py --ragas-only` runs RAGAS on a completed inference JSON without regenerating responses.
 
 ```
 localOllamaRAG/
-├── generate_diagram.py
+├── pytest.ini                    # Pytest: pythonpath + research/tests
 ├── rag/
 │   ├── chat_pdfs.py              # Public facade + global config; implementation in rag/engine/
 │   ├── engine/
@@ -93,29 +93,25 @@ localOllamaRAG/
 │       ├── display.py            # `ui` singleton: Rich/ANSI/plain + QueryTimer + SessionStats
 │       ├── commands.py           # Slash-command registry (list + aliases)
 │       └── strings.py            # ES/EN string tables; s(key, lang) for i18n
-├── web/
-│   ├── app.py                    # Flask backend: REST + SSE, serves React build
-│   └── zip/                      # React source (src/, public/) + build (dist/, gitignored)
-├── scripts/
-│   ├── training/                 # train-qwen3.py, train-phi4.py, train-gemma3.py, run-general.sh
-│   ├── evaluation/               # evaluate_baselines.py, inspect_splits.py, run-baselines.sh
-│   ├── conversion/               # merge_lora.py, build_ollama.bat, quantize_to_q4km.ps1, GEMMA3_CONVERSION_ISSUE.md
-│   ├── tests/                    # test_nothink.py, test_image_rag.py, test_cli_display_safe_tty.py, test_run_eval_checkpoint.py, …
-│   └── hf_upload_model_cards.py  # Upload model cards; --upload-qwen-q4-gguf for the GGUF binary
-├── evaluation/
-│   ├── datasets/                 # RAG evaluation JSONs (ES, CA, mix) + ragbench manifests
-│   ├── scripts/push_wikipedia_es_ca_hf.py
-│   ├── run_eval.py               # RAGAS runner: single, compare, ragbench, ragbench-prepare, ragbench-eval
-│   ├── run_ragbench_visual_inference.py
-│   ├── aggregate_comparison_by_conjunto.py
-│   └── runs/                     # Eval artifacts: ragas/, bertscore/
-├── training-output/
-│   ├── qwen-3/  phi-4/  gemma-3/ # LoRA artifacts; generate_reports.py + training_stats.json + evaluation_comparison.json versioned
-│   └── baseline/                 # 7-model benchmark; baseline_evaluation.json, predictions_*.json, reports/
-├── docs/                         # Architecture diagrams, methodology notes, EVALUACIONES_PIPELINE.md
-├── models/
-│   ├── merged-model/             # Dense HF model post-merge (gitignored; delete after GGUF)
-│   └── gguf-output/              # Modelfile + README + LICENSE versioned; .gguf binaries gitignored
+│   ├── web/                      # Flask backend + React (Vite in zip/)
+│   │   ├── app.py                # REST + SSE; serves zip/dist/
+│   │   └── zip/                  # React source + build (dist/, gitignored)
+├── research/
+│   ├── README.md
+│   ├── evaluation/               # RAG evaluation + run_eval.py + runs/
+│   ├── docs/                     # EVALUACIONES_PIPELINE.md, PROJECT_LAYOUT, sparse-checkout, diagrams
+│   ├── training-output/          # LoRA runs + baseline benchmark artifacts
+│   ├── models/                   # merged-model/ (gitignored) + gguf-output/ Modelfiles
+│   ├── tests/                    # pytest: core/ + research/
+│   └── scripts/
+│       ├── training/             # train-qwen3.py, train-phi4.py, train-gemma3.py, run-general.sh
+│       ├── evaluation/           # evaluate_baselines.py, inspect_splits.py, run-baselines.sh
+│       ├── conversion/           # merge_lora.py, build_ollama.bat, quantize_to_q4km.ps1, GEMMA3_CONVERSION_ISSUE.md
+│       ├── generate_diagram.py   # Kroki architecture diagram
+│       ├── package_user_bundle.ps1
+│       ├── package_user_bundle.sh
+│       ├── hf_upload_model_cards.py
+│       └── requirements.txt      # Training stack (pinned)
 ├── llama-bin/                    # Compiled llama.cpp binaries for Windows (gitignored)
 ├── llama.cpp/                    # External submodule — do not modify
 ├── README.md
@@ -202,37 +198,37 @@ Question + <context>
 ## 6. Key commands
 
 ```bash
-# CLI
-cd rag && python chat_pdfs.py
+# CLI (from repo root)
+python rag/chat_pdfs.py
 MONKEYGRAB_LANG=en python rag/chat_pdfs.py           # English UI (bash)
 $env:MONKEYGRAB_LANG = "en"; python rag/chat_pdfs.py # English UI (PowerShell)
 
 # Web — http://localhost:5000
-python web/app.py
+python rag/web/app.py
 
 # React dev (Vite on :3000, proxied to Flask on :5000)
-cd web/zip && npm run dev
-cd web/zip && npm run build      # production build -> web/zip/dist/
+cd rag/web/zip && npm run dev
+cd rag/web/zip && npm run build      # production build -> rag/web/zip/dist/
 
 # LoRA training (all runs complete)
-python scripts/training/train-{qwen3,phi4,gemma3}.py
-python scripts/conversion/merge_lora.py --model qwen-3    # options: qwen-3, phi-4, gemma-3
-python scripts/hf_upload_model_cards.py [--upload-qwen-q4-gguf]
+python research/scripts/training/train-{qwen3,phi4,gemma3}.py
+python research/scripts/conversion/merge_lora.py --model qwen-3    # options: qwen-3, phi-4, gemma-3
+python research/scripts/hf_upload_model_cards.py [--upload-qwen-q4-gguf]
 
 # Evaluation
-python scripts/evaluation/evaluate_baselines.py             # 7-model baseline benchmark
-python training-output/baseline/generate_reports.py         # regenerate tables/CSVs
-python training-output/{qwen-3,phi-4,gemma-3}/generate_reports.py
-python evaluation/run_eval.py single --corpus es            # RAGAS on live pipeline (GOOGLE_API_KEY required)
-python evaluation/run_eval.py compare --corpus ca --label my_eval
-python evaluation/run_eval.py ragbench-prepare
-python evaluation/run_eval.py ragbench-eval
-python evaluation/run_ragbench_visual_inference.py --n-papers 25 --max-q 5
-python evaluation/run_ragbench_visual_inference.py --ragas-only  # RAGAS on existing inference JSON
-python evaluation/aggregate_comparison_by_conjunto.py --dir evaluation/runs/ragas/comparisons/<label> --etiquetas-es
+python research/scripts/evaluation/evaluate_baselines.py             # 7-model baseline benchmark
+python research/training-output/baseline/generate_reports.py         # regenerate tables/CSVs
+python research/training-output/{qwen-3,phi-4,gemma-3}/generate_reports.py
+python research/evaluation/run_eval.py single --corpus es            # RAGAS on live pipeline (GOOGLE_API_KEY required)
+python research/evaluation/run_eval.py compare --corpus ca --label my_eval
+python research/evaluation/run_eval.py ragbench-prepare
+python research/evaluation/run_eval.py ragbench-eval
+python research/evaluation/run_ragbench_visual_inference.py --n-papers 25 --max-q 5
+python research/evaluation/run_ragbench_visual_inference.py --ragas-only  # RAGAS on existing inference JSON
+python research/evaluation/aggregate_comparison_by_conjunto.py --dir research/evaluation/runs/ragas/comparisons/<label> --etiquetas-es
 
 # Misc
-python generate_diagram.py --output docs/monkeygrab_architecture.png
+python research/scripts/generate_diagram.py --output research/docs/monkeygrab_architecture.png
 python rag/show_fragments/export_fragments.py [--language es] [--ragbench dev|eval]
 git check-ignore -v <path>      # validate gitignore rules
 ```
@@ -275,9 +271,9 @@ git check-ignore -v <path>      # validate gitignore rules
 
 ```bash
 pip install -r rag/requirements.txt          # RAG core (required)
-pip install -r web/requirements.txt          # Web UI (optional)
-pip install -r evaluation/requirements.txt   # RAGAS evaluation (optional)
-pip install -r scripts/requirements.txt      # LoRA fine-tuning (optional, GPU required)
+pip install -r rag/web/requirements.txt          # Web UI (optional)
+pip install -r research/evaluation/requirements.txt   # RAGAS evaluation (optional)
+pip install -r research/scripts/requirements.txt      # LoRA fine-tuning (optional, GPU required)
 ```
 
 **Training stack (pinned — do not change without confirmation):**
@@ -293,21 +289,21 @@ System: Python 3.10+, Ollama running locally, CUDA GPU recommended (~24 GB VRAM 
 
 ## 9. Git versioning policy
 
-**Single root `.gitignore`** plus `web/zip/.gitignore` as a complement. No additional scattered `.gitignore` files. Version the minimum needed to reproduce and defend the work: code, `Modelfile`, small metric JSONs, scripts, corpus PDFs — not weights or vector indices.
+**Single root `.gitignore`** plus `rag/web/zip/.gitignore` as a complement. No additional scattered `.gitignore` files. Version the minimum needed to reproduce and defend the work: code, `Modelfile`, small metric JSONs, scripts, corpus PDFs — not weights or vector indices.
 
 ### rag/docs/
 
 All PDF corpora are versioned directly — no gitignore rules for `rag/docs/`. This applies to `es/`, `ca/`, `en/`, `libre/`, `en_ragbench_dev/`, `en_ragbench_eval/`, `en_ragbench_visual/`. The `rag/vector_db/` directory is fully ignored (auto-created at indexing time). The `.gitkeep` in `rag/docs/en/` keeps the empty folder tracked.
 
-### training-output/\<model\>/
+### research/training-output/\<model\>/
 
-Pattern: `training-output/<slug>/*` ignores everything; explicit exceptions keep the three small versioned files: `generate_reports.py`, `training_stats.json`, `evaluation_comparison.json`.
+Pattern: `research/training-output/<slug>/*` ignores everything; explicit exceptions keep the three small versioned files: `generate_reports.py`, `training_stats.json`, `evaluation_comparison.json`.
 
 - **New model**: copy the 4-line block (one `/*` + three `!…`) and replace the slug.
 - **Phi-4 multi-rank**: each rank has its own 4-line block. Currently declared: `16`, `64`.
 - Do not replace `/*` with extension globs — easy to accidentally exclude scripts.
 
-### models/gguf-output/\<model\>/
+### research/models/gguf-output/\<model\>/
 
 Versioned: `Modelfile`, `README.md`, `LICENSE`, `CONVERSION.md` (where they exist). `.gguf` binaries excluded by `*.gguf` global rule. Host binaries on Hugging Face Hub and link from README — do not commit to GitHub.
 

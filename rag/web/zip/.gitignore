@@ -1,0 +1,9 @@
+# Complemento al .gitignore del repositorio (rutas relativas a rag/web/zip/).
+# node_modules/ y dist/ ya están excluidos desde la raíz.
+
+build/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example

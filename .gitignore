@@ -14,7 +14,7 @@
 # -----------------------------------------------------------------------------
 # Salida de merge_lora.py: modelo denso HF antes de convert_hf_to_gguf.py
 # (safetensors ya cae bajo *.safetensors; esta regla evita ruido de JSON/tokenizer.)
-models/merged-model/**
+research/models/merged-model/**
 
 *.gguf
 *.safetensors
@@ -29,66 +29,66 @@ llama.cpp/
 llama-bin/
 
 # -----------------------------------------------------------------------------
-# 3. Fine-tuning LoRA — training-output/<modelo>/
+# 3. Fine-tuning LoRA — research/training-output/<modelo>/
 # -----------------------------------------------------------------------------
 # Se ignoran casi todos los hijos del directorio de cada run (checkpoints,
 # adaptadores, predicciones, plots…). Excepciones explícitas: script de informes
 # y JSON de resumen exportados por los train-*.py.
 #
 # Si en el futuro quieres versionar predicciones concretas, añade una línea
-# !training-output/<modelo>/nombre.json bajo el bloque correspondiente.
+# !research/training-output/<modelo>/nombre.json bajo el bloque correspondiente.
 
 # --- Qwen 3 ---
-training-output/qwen-3/*
-!training-output/qwen-3/generate_reports.py
-!training-output/qwen-3/training_stats.json
-!training-output/qwen-3/evaluation_comparison.json
+research/training-output/qwen-3/*
+!research/training-output/qwen-3/generate_reports.py
+!research/training-output/qwen-3/training_stats.json
+!research/training-output/qwen-3/evaluation_comparison.json
 
 # --- Gemma 3 ---
-training-output/gemma-3/*
-!training-output/gemma-3/generate_reports.py
-!training-output/gemma-3/training_stats.json
-!training-output/gemma-3/evaluation_comparison.json
+research/training-output/gemma-3/*
+!research/training-output/gemma-3/generate_reports.py
+!research/training-output/gemma-3/training_stats.json
+!research/training-output/gemma-3/evaluation_comparison.json
 
 # --- Phi-4 ---
 # Rank 32 escribe en la raíz de phi-4/ (train-phi4.py). Otros ranks usan
 # subcarpeta numérica (p. ej. 16/, 64/) sin pisar el run r=32.
-training-output/phi-4/*
-!training-output/phi-4/generate_reports.py
-!training-output/phi-4/training_stats.json
-!training-output/phi-4/evaluation_comparison.json
+research/training-output/phi-4/*
+!research/training-output/phi-4/generate_reports.py
+!research/training-output/phi-4/training_stats.json
+!research/training-output/phi-4/evaluation_comparison.json
 
 # Subcarpetas por rank: solo JSON de resumen (el resto sigue excluido por *.safetensors, *.pt…).
-!training-output/phi-4/16/
-training-output/phi-4/16/*
-!training-output/phi-4/16/training_stats.json
-!training-output/phi-4/16/evaluation_comparison.json
+!research/training-output/phi-4/16/
+research/training-output/phi-4/16/*
+!research/training-output/phi-4/16/training_stats.json
+!research/training-output/phi-4/16/evaluation_comparison.json
 
-!training-output/phi-4/64/
-training-output/phi-4/64/*
-!training-output/phi-4/64/training_stats.json
-!training-output/phi-4/64/evaluation_comparison.json
+!research/training-output/phi-4/64/
+research/training-output/phi-4/64/*
+!research/training-output/phi-4/64/training_stats.json
+!research/training-output/phi-4/64/evaluation_comparison.json
 
 # --- Baseline: informes regenerables (JSON maestro sí se versiona) ---
-training-output/baseline/reports/
+research/training-output/baseline/reports/
 
 # -----------------------------------------------------------------------------
 # 4. GGUF ensamblado en repo — Modelfile (+ README.md model card si aplica)
 # -----------------------------------------------------------------------------
-models/gguf-output/qwen-3/*
-!models/gguf-output/qwen-3/Modelfile
-!models/gguf-output/qwen-3/README.md
-!models/gguf-output/qwen-3/LICENSE
-!models/gguf-output/qwen-3/CONVERSION.md
+research/models/gguf-output/qwen-3/*
+!research/models/gguf-output/qwen-3/Modelfile
+!research/models/gguf-output/qwen-3/README.md
+!research/models/gguf-output/qwen-3/LICENSE
+!research/models/gguf-output/qwen-3/CONVERSION.md
 
-models/gguf-output/gemma-3/*
-!models/gguf-output/gemma-3/Modelfile
+research/models/gguf-output/gemma-3/*
+!research/models/gguf-output/gemma-3/Modelfile
 
-models/gguf-output/phi-4/*
-!models/gguf-output/phi-4/Modelfile
-!models/gguf-output/phi-4/README.md
-!models/gguf-output/phi-4/LICENSE
-!models/gguf-output/phi-4/CONVERSION.md
+research/models/gguf-output/phi-4/*
+!research/models/gguf-output/phi-4/Modelfile
+!research/models/gguf-output/phi-4/README.md
+!research/models/gguf-output/phi-4/LICENSE
+!research/models/gguf-output/phi-4/CONVERSION.md
 
 # -----------------------------------------------------------------------------
 # 5. Logs y volcados genéricos
@@ -121,10 +121,10 @@ rag/vector_db/**
 rag/debug_rag/
 
 # -----------------------------------------------------------------------------
-# 8. Interfaz web (frontend empaquetado en web/zip)
+# 8. Interfaz web (frontend empaquetado en rag/web/zip)
 # -----------------------------------------------------------------------------
-web/zip/node_modules/
-web/zip/dist/
+rag/web/zip/node_modules/
+rag/web/zip/dist/
 
 # -----------------------------------------------------------------------------
 # 9. IDE y sistema operativo
@@ -145,10 +145,10 @@ historial_chat.json
 # -----------------------------------------------------------------------------
 # 12. Evaluación y exportaciones puntuales
 # -----------------------------------------------------------------------------
-evaluation/chunks_*.txt
-evaluation/tmp/**
-evaluation/**/pytest_*/
-evaluation/**/pytest-cache-files-*/
+research/evaluation/chunks_*.txt
+research/evaluation/tmp/**
+research/evaluation/**/pytest_*/
+research/evaluation/**/pytest-cache-files-*/
 # Exportaciones locales (omitir .txt / .jsonl ad hoc); excepción: dumps versionables del prefijo fijo
 rag/show_fragments/*.txt
 !rag/show_fragments/chunks_vector_db_*.txt
@@ -164,3 +164,5 @@ MODIFICACIONES_EVALUACION.md
 pipeline/
 
 media/
+
+.conda/

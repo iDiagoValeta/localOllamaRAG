@@ -30,7 +30,7 @@ How to run (interactive CLI):
     such as ``/rag``, ``/chat``, ``/reindex``, ``/docs``, ``/salir``.
 
     The Flask web app does **not** execute this file as ``__main__``; it imports
-    functions and constants from here. Start the UI with ``python web/app.py``
+    functions and constants from here. Start the UI with ``python rag/web/app.py``
     from the repository root.
 
     Prerequisites: Ollama running; PDFs under ``rag/pdfs/`` unless ``DOCS_FOLDER``
@@ -152,7 +152,7 @@ if hasattr(sys.stderr, "reconfigure"):
         pass
 
 
-MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "phi4-finetuned:latest")
+MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "gemma4:e4b")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e2b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b")
@@ -274,7 +274,7 @@ _DEFAULT_COLLECTION_NAME = COLLECTION_NAME
 
 
 def set_docs_folder_runtime(carpeta: str | None) -> tuple[str, str, str]:
-    """Switch ``CARPETA_DOCS`` and derived Chroma paths (for evaluation scripts/tests).
+    """Switch ``CARPETA_DOCS`` and derived Chroma paths (for research/evaluation and tests).
 
     Restores module-level defaults when ``carpeta`` is ``None`` (values captured
     at import from ``DOCS_FOLDER`` / ``rag/pdfs``).
