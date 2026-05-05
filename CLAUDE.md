@@ -95,14 +95,14 @@ localOllamaRAG/
 │   │   ├── en_ragbench_eval/     # Final RagBench EN eval corpus
 │   │   └── en_ragbench_visual/   # RagBench EN visual — tables/images
 │   ├── vector_db/                # ChromaDB per corpus (gitignored; PATH_DB = {folder}_{embed_slug})
-│   └── cli/
+│   ├── cli/
 │       ├── app.py                # MonkeyGrabCLI: interactive loop, dispatch, Ollama health check
 │       ├── display.py            # `ui` singleton: Rich/ANSI/plain + QueryTimer + SessionStats
 │       ├── commands.py           # Slash-command registry (list + aliases)
-│       └── strings.py            # ES/EN string tables; s(key, lang) for i18n
-│   ├── web/                      # Flask backend + React (Vite in zip/)
-│   │   ├── app.py                # REST + SSE; serves zip/dist/
-│   │   └── zip/                  # React source + build (dist/, gitignored)
+│       └── strings.py            # ES/EN/CA string tables; s(key, lang) for i18n
+│   └── web/                      # Flask backend + React (Vite in zip/)
+│       ├── app.py                # REST + SSE; serves zip/dist/
+│       └── zip/                  # React source + build (dist/, gitignored)
 ├── research/
 │   ├── README.md
 │   ├── evaluation/               # RAG evaluation + run_eval.py + runs/
@@ -153,7 +153,7 @@ Reference environment (adjust per hardware):
 | `OLLAMA_OCR_MODEL` | `gemma4:e4b` | Image description |
 | `DOCS_FOLDER` | `rag/docs/libre/` | PDF folder to index |
 | `RERANKER_QUALITY` | `quality` | Reranker tier |
-| `MONKEYGRAB_LANG` | `es` | CLI language: `es` or `en` |
+| `MONKEYGRAB_LANG` | `es` | CLI language: `es`, `en` or `ca` |
 | `HF_TOKEN` | — | HuggingFace token (required for Gemma-3) |
 | `GOOGLE_API_KEY` | — | Gemini API key for RAGAS evaluation |
 
@@ -209,9 +209,15 @@ Question + <context>
 python rag/chat_pdfs.py
 MONKEYGRAB_LANG=en python rag/chat_pdfs.py           # English UI (bash)
 $env:MONKEYGRAB_LANG = "en"; python rag/chat_pdfs.py # English UI (PowerShell)
+MONKEYGRAB_LANG=ca python rag/chat_pdfs.py           # Valencian UI (bash)
+$env:MONKEYGRAB_LANG = "ca"; python rag/chat_pdfs.py # Valencian UI (PowerShell)
 
 # Web — http://localhost:5000
 python rag/web/app.py
+# Web UI has an ES / EN / VAL selector persisted in localStorage.
+
+# PowerShell note: use $env:MONKEYGRAB_LANG = "en" / "ca".
+# set MONKEYGRAB_LANG=... is cmd.exe syntax and does not update PowerShell env.
 
 # React dev (Vite on :3000, proxied to Flask on :5000)
 cd rag/web/zip && npm run dev
@@ -247,12 +253,12 @@ git check-ignore -v <path>      # validate gitignore rules
 | `/rag` | RAG mode (document query) |
 | `/chat` | Chat mode (general conversation) |
 | `/docs` | List indexed documents |
-| `/temas` | Topic summary per document |
+| `/temas` `/topics` `/temes` | Topic summary per document |
 | `/stats` | Vector DB statistics |
 | `/reindex` | Drop DB and re-index all PDFs |
-| `/limpiar` `/clear` | Clear chat history |
-| `/ayuda` `/help` | Show help |
-| `/salir` `/exit` | Exit saving history |
+| `/limpiar` `/clear` `/netejar` | Clear chat history |
+| `/ayuda` `/help` `/ajuda` | Show help |
+| `/salir` `/exit` `/eixir` | Exit saving history |
 
 ---
 
