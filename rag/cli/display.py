@@ -63,7 +63,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme as RichTheme
 
-from rag.cli.commands import ALIASES, COMMANDS, all_command_names
+from rag.cli.commands import ALIASES, COMMANDS, primary_commands
 
 try:
     from colorama import just_fix_windows_console
@@ -202,12 +202,12 @@ def _model_tag(model: str) -> str:
     return model.split(":", 1)[1]
 
 
-def _state_label(enabled: Any, on_label: str = "on") -> Text:
+def _state_label(enabled: Any, on_label: str = "on", off_label: str = "off") -> Text:
     text = Text()
     if _coerce_bool(enabled):
         text.append(on_label, style="success")
     else:
-        text.append("off", style="off")
+        text.append(off_label, style="off")
     return text
 
 
@@ -366,9 +366,9 @@ class Display:
         # State for the persistent bottom toolbar (prompt_toolkit only)
         self._toolbar_mode: str = "chat"
         self._toolbar_model: str = ""
-        # Language: "es" (default) or "en", controlled by MONKEYGRAB_LANG env var
+        # Language: "es" (default), "en", or "ca", controlled by MONKEYGRAB_LANG env var
         _raw_lang = os.getenv("MONKEYGRAB_LANG", "es").strip().lower()
-        self._lang: str = _raw_lang if _raw_lang in ("es", "en") else "es"
+        self._lang: str = _raw_lang if _raw_lang in ("es", "en", "ca") else "es"
         self._ptk_session = self._build_ptk_session()
 
     def _build_ptk_session(self):
@@ -385,7 +385,7 @@ class Display:
                 os.makedirs(parent, exist_ok=True)
             return PromptSession(
                 history=FileHistory(history_path),
-                completer=_FuzzySlashCompleter(all_command_names()),
+                completer=_FuzzySlashCompleter([cmd for cmd, _ in primary_commands(self._lang)]),
                 complete_while_typing=False,
                 bottom_toolbar=self._get_toolbar,
             )
@@ -417,6 +417,9 @@ class Display:
         """
         from rag.cli.strings import s as _str
         return _str(key, lang=self._lang, **kwargs)
+
+    def _state_word(self, enabled: Any) -> str:
+        return self._s("state.on") if _coerce_bool(enabled) else self._s("state.off")
 
     # ─────────────────────────────────────────────
     # SECTION 7: PRIMITIVES
@@ -533,7 +536,7 @@ class Display:
         details.add_row(self._s("pipeline.reranker"), rr)
         details.add_row(
             self._s("pipeline.chunks"),
-            f"{info.get('chunk_size', '-')}c, overlap {info.get('chunk_overlap', '-')}c",
+            f"{info.get('chunk_size', '-')}c, {self._s('pipeline.overlap')} {info.get('chunk_overlap', '-')}c",
         )
 
         models = self._themed_table(header=True, box_style=box.SIMPLE_HEAVY)
@@ -589,7 +592,7 @@ class Display:
             cell = Text()
             cell.append(name, style="dim")
             cell.append("=")
-            cell.append_text(_state_label(enabled))
+            cell.append_text(_state_label(enabled, self._s("state.on"), self._s("state.off")))
             cells.append(cell)
         for idx in range(0, len(cells), 3):
             flags.add_row(*cells[idx : idx + 3])
@@ -642,16 +645,16 @@ class Display:
                 f"{self._ansi(str(value), Palette.TEXT.ansi)}"
             )
         flags = (
-            f"hybrid={_coerce_bool(info.get('hybrid'))} "
-            f"exhaustive={_coerce_bool(info.get('exhaustive'))} "
-            f"rerank={info.get('reranker') == 'on'} "
-            f"contextual={_coerce_bool(info.get('contextual'))} "
-            f"recomp={_coerce_bool(info.get('recomp'))} "
-            f"images={_coerce_bool(info.get('images'))} "
-            f"expand={_coerce_bool(info.get('expand'))}"
+            f"hybrid={self._state_word(info.get('hybrid'))} "
+            f"exhaustive={self._state_word(info.get('exhaustive'))} "
+            f"rerank={self._state_word(info.get('reranker') == 'on')} "
+            f"contextual={self._state_word(info.get('contextual'))} "
+            f"recomp={self._state_word(info.get('recomp'))} "
+            f"images={self._state_word(info.get('images'))} "
+            f"expand={self._state_word(info.get('expand'))}"
         )
         self._print_line(
-            f"  {self._ansi('Flags:', Palette.DIM.ansi)} {self._ansi(flags, Palette.MUTED.ansi)}"
+            f"  {self._ansi(self._s('pipeline.flags') + ':', Palette.DIM.ansi)} {self._ansi(flags, Palette.MUTED.ansi)}"
         )
         self._rule(color=Palette.DIM)
         self._print_line()
@@ -670,19 +673,14 @@ class Display:
             )
             self._print_line()
             self._rule(self._s("help.commands_title"), color=Palette.BRAND)
-            for cmd, desc_key in COMMANDS:
+            for cmd, desc_key in primary_commands(self._lang):
                 self._print_line(
                     f"  {self._ansi(f'{cmd:<12}', Palette.BRAND.ansi, ANSI_BOLD)} "
                     f"{self._ansi(self._s(desc_key), Palette.TEXT.ansi)}"
                 )
-            for alias, _, desc_key in ALIASES:
-                self._print_line(
-                    f"  {self._ansi(f'{alias:<12}', Palette.DIM.ansi)} "
-                    f"{self._ansi(self._s(desc_key), Palette.DIM.ansi)}"
-                )
             self._print_line(
                 f"  {self._ansi(self._s('help.shortcuts_title') + ':', Palette.DIM.ansi)} "
-                f"{self._ansi('↑/↓  Tab  Ctrl-C', Palette.MUTED.ansi)}"
+                f"{self._ansi(self._s('help.shortcuts.inline'), Palette.MUTED.ansi)}"
             )
             self._rule(color=Palette.DIM)
             self._print_line()
@@ -698,11 +696,8 @@ class Display:
         commands = self._themed_table(title=self._s("help.commands_title"), header=False)
         commands.add_column(self._s("help.command_col"), style="brand", width=12, no_wrap=True)
         commands.add_column(self._s("help.desc_col"), style="muted")
-        for cmd, desc_key in COMMANDS:
+        for cmd, desc_key in primary_commands(self._lang):
             commands.add_row(cmd, self._s(desc_key))
-        # Aliases as dim rows at the end of the same table
-        for alias, _, desc_key in ALIASES:
-            commands.add_row(f"[dim]{alias}[/]", f"[dim]{self._s(desc_key)}[/]")
 
         shortcuts = Table.grid(padding=(0, 2))
         shortcuts.add_column(style="dim", no_wrap=True)
@@ -1079,7 +1074,8 @@ class Display:
             self._print_line()
             return
         if sources is not None:
-            tag = f"{sources} fuentes citadas" if sources else "sin fuentes"
+            tag = (self._s("sources.footer.cited", n=sources)
+                   if sources else self._s("sources.footer.none"))
             self.console.print(f"  [dim]· {tag}[/]")
         self.console.rule(style="dim")
         self.console.print()
@@ -1256,7 +1252,7 @@ class Display:
                 (self._s("pipeline.search"), self._s(str(info.get("busqueda", "-")))),
                 (self._s("pipeline.reranker"), rr_ansi),
                 (self._s("pipeline.chunks"),
-                 f"{info.get('chunk_size', '-')}c, overlap {info.get('chunk_overlap', '-')}c"),
+                 f"{info.get('chunk_size', '-')}c, {self._s('pipeline.overlap')} {info.get('chunk_overlap', '-')}c"),
             ]
             for key, value in rows:
                 self._print_line(
@@ -1264,7 +1260,7 @@ class Display:
                     f"{self._ansi(str(value), Palette.TEXT.ansi)}"
                 )
             flags_str = "  ".join(
-                f"{n}={'on' if _coerce_bool(v) else 'off'}"
+                f"{n}={self._state_word(v)}"
                 for n, v in [
                     ("hybrid", info.get("hybrid")),
                     ("exhaustive", info.get("exhaustive")),
@@ -1276,7 +1272,7 @@ class Display:
                 ]
             )
             self._print_line(
-                f"  {self._ansi('Flags:', Palette.DIM.ansi)} "
+                f"  {self._ansi(self._s('pipeline.flags') + ':', Palette.DIM.ansi)} "
                 f"{self._ansi(flags_str, Palette.MUTED.ansi)}"
             )
             self._rule(color=Palette.DIM)
@@ -1314,7 +1310,7 @@ class Display:
         details.add_row(self._s("pipeline.reranker"), rr)
         details.add_row(
             self._s("pipeline.chunks"),
-            f"{info.get('chunk_size', '-')}c, overlap {info.get('chunk_overlap', '-')}c",
+            f"{info.get('chunk_size', '-')}c, {self._s('pipeline.overlap')} {info.get('chunk_overlap', '-')}c",
         )
 
         top = Table.grid(expand=True)
@@ -1373,7 +1369,7 @@ class Display:
             cell = Text()
             cell.append(name, style="dim")
             cell.append("=")
-            cell.append_text(_state_label(enabled))
+            cell.append_text(_state_label(enabled, self._s("state.on"), self._s("state.off")))
             cells.append(cell)
         for idx in range(0, len(cells), 3):
             row_cells = cells[idx: idx + 3]
@@ -1393,10 +1389,11 @@ class Display:
             self._rule(self._s("docs.title"), color=Palette.BRAND)
             for idx, item in enumerate(docs, 1):
                 if isinstance(item, dict):
-                    descr = (
-                        f"(págs: {item.get('pages', '-')}, "
-                        f"frag: {item.get('fragments', '-')}, "
-                        f"tipos: {item.get('formats', '-')})"
+                    descr = self._s(
+                        "docs.inline.meta",
+                        pages=item.get("pages", "-"),
+                        frags=item.get("fragments", "-"),
+                        types=item.get("formats", "-"),
                     )
                     self._print_line(
                         f"  {self._ansi(f'{idx}.', Palette.DIM.ansi)} "
@@ -1443,9 +1440,10 @@ class Display:
             self._print_line()
             self._rule(self._s("topics.title"), color=Palette.INFO)
             for doc_info in docs_data:
-                descr = (
-                    f"(págs: {doc_info.get('pages', '-')}, "
-                    f"frag: {doc_info.get('fragments', '-')})"
+                descr = self._s(
+                    "topics.inline.meta",
+                    pages=doc_info.get("pages", "-"),
+                    frags=doc_info.get("fragments", "-"),
                 )
                 self._print_line(
                     f"  {self._ansi(doc_info.get('name', '-'), Palette.TEXT.ansi)} "
@@ -1486,17 +1484,18 @@ class Display:
         self._toolbar_model = _short_model(model, max_len=22, keep_tag=False)
         purpose = self._s("mode.rag.purpose") if mode == "rag" else self._s("mode.chat.purpose")
         mode_word = self._s("mode.rag.label").lower() if mode == "rag" else self._s("mode.chat.label").lower()
+        mode_prefix = self._s("mode.switch.prefix")
         if self.backend != "rich":
             color = self._mode_color(mode)
             self._print_line(
                 f"  {self._ansi('→', color.ansi, ANSI_BOLD)} "
-                f"{self._ansi(f'modo {mode_word}', color.ansi, ANSI_BOLD)} "
+                f"{self._ansi(f'{mode_prefix} {mode_word}', color.ansi, ANSI_BOLD)} "
                 f"{self._ansi(f'· {purpose} · {_short_model(model, 36)}', Palette.DIM.ansi)}"
             )
             return
         style = "mode.rag" if mode == "rag" else "mode.chat"
         self.console.print(
-            f"  [{style}]→ modo {mode_word}[/] [dim]{purpose} · {_short_model(model, 36)}[/]"
+            f"  [{style}]→ {mode_prefix} {mode_word}[/] [dim]{purpose} · {_short_model(model, 36)}[/]"
         )
 
     def history_loaded(self, n: int) -> None:

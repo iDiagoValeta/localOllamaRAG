@@ -50,8 +50,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import chromadb
 
-from rag.cli.commands import ALIASES, COMMANDS
+from rag.cli.commands import ALIASES, COMMANDS, primary_commands
 from rag.cli.display import QueryTimer, SessionStats, ui
+from rag.cli.strings import s
 
 
 # ─────────────────────────────────────────────
@@ -202,7 +203,7 @@ class MonkeyGrabCLI:
 
             if pregunta.startswith('/'):
                 suggestions = difflib.get_close_matches(
-                    cmd_lower, self._commands.keys(), n=2, cutoff=0.6
+                    cmd_lower, [cmd for cmd, _ in primary_commands()], n=2, cutoff=0.6
                 )
                 ui.unknown_command(pregunta, suggestions=suggestions)
                 continue
@@ -714,6 +715,6 @@ class MonkeyGrabCLI:
             r = requests.get(f"{base}/api/tags", timeout=timeout)
             r.raise_for_status()
             models = r.json().get("models", []) or []
-            return True, f"Ollama activo en {base} · {len(models)} modelos locales"
+            return True, s("ollama.active", base=base, n=len(models))
         except Exception as e:
-            return False, f"Ollama no responde en {base}: {e.__class__.__name__}"
+            return False, s("ollama.unavailable", base=base, error=e.__class__.__name__)
