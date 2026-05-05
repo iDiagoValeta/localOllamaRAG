@@ -1,6 +1,6 @@
 # MonkeyGrab — Research workspace
 
-This folder contains everything needed to reproduce and extend the thesis work: RAGAS evaluation, RAGBench benchmarks, BERTScore post-processing, LoRA fine-tuning, model conversion and upload helpers.
+This folder contains everything needed to reproduce and extend the thesis work: [RAGAS](https://docs.ragas.io/) evaluation, RAGBench benchmarks, [BERTScore](https://github.com/Tiiiger/bert_score) post-processing, [LoRA](https://arxiv.org/abs/2106.09685) fine-tuning, model conversion and upload helpers.
 
 It is **not required** to run the user-facing RAG stack (`python rag/chat_pdfs.py` or `python rag/web/app.py`).
 
@@ -14,13 +14,13 @@ It is **not required** to run the user-facing RAG stack (`python rag/chat_pdfs.p
 | `scripts/training/` | LoRA fine-tuning scripts (Qwen3-14B, Phi-4, Gemma-3-12B) |
 | `scripts/evaluation/` | 7-model baseline benchmark, split inspection, SLURM helpers |
 | `scripts/conversion/` | LoRA merge, GGUF build, quantization (`quantize_to_q4km.ps1`), Modelfile notes |
-| `scripts/generate_diagram.py` | Architecture diagram via Kroki.io |
-| `scripts/hf_upload_model_cards.py` | Upload weights + model cards to Hugging Face Hub |
+| `scripts/generate_diagram.py` | Architecture diagram via [Kroki.io](https://kroki.io/) |
+| `scripts/hf_upload_model_cards.py` | Upload weights + model cards to [Hugging Face Hub](https://huggingface.co/) |
 | `scripts/package_user_bundle.*` | Build a minimal user zip (excludes `research/` and RagBench PDFs) |
 | `training-output/` | LoRA metrics, `generate_reports.py` and `evaluation_comparison.json` per model (weights gitignored) |
 | `models/gguf-output/` | `Modelfile`, `README.md` and `CONVERSION.md` per model (`.gguf` binaries gitignored) |
 | `docs/` | `EVALUACIONES_PIPELINE.md`, layout guide, sparse-checkout notes, architecture diagrams |
-| `tests/` | Pytest suites: `core/` (pipeline + CLI) and `research/` (eval runners) |
+| `tests/` | [pytest](https://docs.pytest.org/) suites: `core/` (pipeline + CLI) and `research/` (eval runners) |
 
 ---
 
@@ -35,7 +35,7 @@ pip install -r research/scripts/requirements.txt      # LoRA training stack (GPU
 
 ## Training data (LoRA)
 
-LoRA adapters (**rank 32** for Qwen3, Phi-4 and Gemma-3) are trained on a **mixture of public Hugging Face corpora** — not on the proprietary Wikipedia evaluation set below.
+[LoRA](https://arxiv.org/abs/2106.09685) adapters (**rank 32** for [Qwen3-14B](https://huggingface.co/Qwen/Qwen3-14B), [Phi-4](https://huggingface.co/microsoft/phi-4) and [Gemma-3-12B](https://huggingface.co/google/gemma-3-12b-it)) are trained on a **mixture of public Hugging Face corpora** — not on the proprietary Wikipedia evaluation set below.
 
 | Source | Hugging Face | Notes |
 |--------|--------------|-------|
@@ -62,7 +62,7 @@ The **RagBench** PDF trees under `rag/docs/en_ragbench_*` are used by `research/
 
 ## RAGAS evaluation
 
-Requires `GOOGLE_API_KEY` in `.env` (Gemini as judge LLM).
+Requires `GOOGLE_API_KEY` in `.env` ([Gemini](https://deepmind.google/models/gemini/) as judge LLM).
 
 ```bash
 # Single run on a local corpus
@@ -143,6 +143,8 @@ python research/scripts/hf_upload_model_cards.py --upload-qwen-q4-gguf
 python research/scripts/generate_diagram.py --output research/docs/monkeygrab_architecture.png
 ```
 
+Renders the Mermaid flowchart via [Kroki.io](https://kroki.io/) and saves the result locally.
+
 ---
 
 ## Tests
@@ -161,9 +163,9 @@ All three fine-tunes use **LoRA rank 32** on the **training mixture** in the sec
 
 | Model | HuggingFace model card | Ollama |
 |-------|------------------------|--------|
-| Qwen3-14B RAG | [nadiva1243/qwen3RAG](https://huggingface.co/nadiva1243/qwen3RAG) | GGUF + Modelfile in repo; importable |
-| Phi-4 RAG | [nadiva1243/phi4RAG](https://huggingface.co/nadiva1243/phi4RAG) | GGUF + Modelfile in repo; importable |
-| Gemma-3-12B | — | **Not importable into Ollama** — technical limitations (GGUF / tokenizer vs Ollama’s Gemma3 stack). See `research/scripts/conversion/GEMMA3_CONVERSION_ISSUE.md`. |
+| [Qwen3-14B](https://huggingface.co/Qwen/Qwen3-14B) RAG | [nadiva1243/qwen3RAG](https://huggingface.co/nadiva1243/qwen3RAG) | GGUF + Modelfile in repo; importable |
+| [Phi-4](https://huggingface.co/microsoft/phi-4) RAG | [nadiva1243/phi4RAG](https://huggingface.co/nadiva1243/phi4RAG) | GGUF + Modelfile in repo; importable |
+| [Gemma-3-12B](https://huggingface.co/google/gemma-3-12b-it) | — | **Not importable into Ollama** — technical limitations (GGUF / tokenizer vs Ollama's Gemma3 stack). See `research/scripts/conversion/GEMMA3_CONVERSION_ISSUE.md`. |
 
 Modelfiles and conversion notes (where applicable): `research/models/gguf-output/<model>/`.
 
