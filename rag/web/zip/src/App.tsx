@@ -4,7 +4,7 @@ import {
   Database,
   Search, Layers, FileUp, Menu, X,
   RefreshCw, Loader2, AlertCircle, CheckCircle2, Trash2,
-  ChevronDown, ChevronRight, Copy, Check
+  ChevronDown, ChevronRight, Copy, Check, Languages
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import katex from 'katex';
@@ -47,6 +47,188 @@ interface IndexingProgress {
   file: string;
   file_index: number;
   total_files: number;
+}
+
+// =============================================================================
+// i18n
+// =============================================================================
+
+type Lang = 'es' | 'en' | 'ca';
+
+const STRINGS = {
+  es: {
+    tabDocs: 'Documentos', tabPipeline: 'Pipeline RAG',
+    uploading: 'Añadiendo…', addPdf: 'Añadir PDF',
+    addPdfHint: 'Usa los ajustes actuales del pipeline',
+    collection: 'Colección ({n} docs)', noDocs: 'No hay documentos indexados',
+    deleteDoc: 'Eliminar documento',
+    indexingFile: 'Indexando {file}', reindexingStatus: 'Re-indexación en curso...',
+    section1: '1. Indexación',
+    labelContextual: 'Recuperación contextual', descContextual: 'Enriquece fragmentos con LLM',
+    section2: '2. Recuperación',
+    labelHybrid: 'Búsqueda híbrida', descHybrid: 'Semántica + palabras clave',
+    labelQueryDecomp: 'Descomposición de consultas', descQueryDecomp: 'Subconsultas con LLM auxiliar',
+    labelExhaustive: 'Búsqueda exhaustiva', descExhaustive: 'Escaneo profundo (lento)',
+    section3: '3. Ranking y contexto',
+    labelReranker: 'Reordenador cross-encoder', descReranker: 'Reordenamiento de precisión',
+    labelExpandContext: 'Expandir contexto', descExpandContext: 'Añade fragmentos adyacentes',
+    labelOptimizeContext: 'Optimizar contexto', descOptimizeContext: 'Limpia artefactos PDF',
+    labelRecomp: 'Síntesis RECOMP', descRecomp: 'Sintetiza contexto con LLM',
+    section4: '4. Reindexación',
+    reindexHint: 'Ajusta las opciones arriba y reindexa para aplicarlas. Opcionalmente añade PDFs nuevos.',
+    addPdfs: 'Añadir PDFs', remove: 'Quitar', reindexBtn: 'Reindexar',
+    fragments: '{n} fragmentos', ollamaStatus: 'Ollama Local',
+    clearChat: 'Limpiar chat', youLabel: 'Tú',
+    sources: '{n} fuentes', copyMsg: 'Copiar mensaje',
+    placeholderRag: 'Pregunta sobre tus documentos…', placeholderChat: 'Escribe un mensaje…',
+    footerMode: 'Modo documento', footerModeChat: 'Modo conversación',
+    indexingTitle: 'Se están indexando los documentos',
+    indexingHint: 'Puede tardar unos minutos dependiendo de tu hardware.',
+    processing: 'Procesando:', fileUnit: 'archivo', fileUnitPlural: 'archivos',
+    autoRefresh: 'La página se actualizará automáticamente al terminar.',
+    retry: 'Reintentar', connErrorTitle: 'Error de conexión',
+    connecting: 'Conectando con MonkeyGrab…',
+    addedMsg: '✓ **{names}** añadido con los ajustes actuales ({total} fragmentos).',
+    uploadError: '✗ Error al subir: {error}',
+    uploadConnError: '✗ Error de conexión al subir el archivo.',
+    addingMsg: '⟳ Añadiendo {n} PDF(s) y re-indexando…',
+    reindexingMsg: '⟳ Re-indexando con ajustes actuales…',
+    reindexDone: '✓ Re-indexación completada: {total} fragmentos, {docs} documentos.',
+    reindexError: '✗ Error: {error}', reindexConnError: '✗ Error de conexión.',
+    confirmDelete: '¿Eliminar "{name}"? Se borrará del índice y del disco.',
+    docDeleted: '✓ Documento **{name}** eliminado.',
+    deleteError: '✗ Error al eliminar: {error}',
+    deleteConnError: '✗ Error de conexión al eliminar.',
+    unknownError: 'Error desconocido', queryError: 'Error en la consulta',
+    modelError: 'Error en la respuesta del modelo',
+    connClosed: 'La conexión se cerró antes de completar la respuesta.',
+    settingsSaveError: 'No se pudo guardar el ajuste.',
+    noServer: 'No se pudo conectar con el servidor. ¿Está Flask ejecutándose?',
+    retryError: 'Error al reintentar',
+    indexingFailed: 'La indexación no pudo completarse.',
+    historyCleared: 'Historial limpiado.',
+    appFooter: 'RAG local con Ollama',
+  },
+  en: {
+    tabDocs: 'Documents', tabPipeline: 'RAG Pipeline',
+    uploading: 'Adding…', addPdf: 'Add PDF',
+    addPdfHint: 'Uses current pipeline settings',
+    collection: 'Collection ({n} docs)', noDocs: 'No documents indexed',
+    deleteDoc: 'Delete document',
+    indexingFile: 'Indexing {file}', reindexingStatus: 'Re-indexing in progress...',
+    section1: '1. Indexing',
+    labelContextual: 'Contextual Retrieval', descContextual: 'Enrich chunks with LLM',
+    section2: '2. Retrieval',
+    labelHybrid: 'Hybrid Search', descHybrid: 'Semantic + Keywords',
+    labelQueryDecomp: 'Query Decomposition', descQueryDecomp: 'Sub-queries via auxiliary LLM',
+    labelExhaustive: 'Exhaustive Search', descExhaustive: 'Deep scan (slow)',
+    section3: '3. Ranking & Context',
+    labelReranker: 'Cross-Encoder Reranker', descReranker: 'Precision reordering',
+    labelExpandContext: 'Expand Context', descExpandContext: 'Add adjacent chunks',
+    labelOptimizeContext: 'Optimize Context', descOptimizeContext: 'Clean PDF artifacts',
+    labelRecomp: 'RECOMP Synthesis', descRecomp: 'Synthesize context with LLM',
+    section4: '4. Re-index',
+    reindexHint: 'Adjust settings above and re-index to apply. Optionally add new PDFs.',
+    addPdfs: 'Add PDFs', remove: 'Remove', reindexBtn: 'Re-index',
+    fragments: '{n} fragments', ollamaStatus: 'Ollama Local',
+    clearChat: 'Clear chat', youLabel: 'You',
+    sources: '{n} sources', copyMsg: 'Copy message',
+    placeholderRag: 'Ask about your documents…', placeholderChat: 'Type a message…',
+    footerMode: 'Document mode', footerModeChat: 'Conversation mode',
+    indexingTitle: 'Indexing documents',
+    indexingHint: 'This may take a few minutes depending on your hardware.',
+    processing: 'Processing:', fileUnit: 'file', fileUnitPlural: 'files',
+    autoRefresh: 'The page will refresh automatically when done.',
+    retry: 'Retry', connErrorTitle: 'Connection error',
+    connecting: 'Connecting to MonkeyGrab…',
+    addedMsg: '✓ **{names}** added with current settings ({total} fragments).',
+    uploadError: '✗ Upload error: {error}',
+    uploadConnError: '✗ Connection error while uploading.',
+    addingMsg: '⟳ Adding {n} PDF(s) and re-indexing…',
+    reindexingMsg: '⟳ Re-indexing with current settings…',
+    reindexDone: '✓ Re-indexing complete: {total} fragments, {docs} documents.',
+    reindexError: '✗ Error: {error}', reindexConnError: '✗ Connection error.',
+    confirmDelete: 'Delete "{name}"? It will be removed from the index and disk.',
+    docDeleted: '✓ Document **{name}** deleted.',
+    deleteError: '✗ Error deleting: {error}',
+    deleteConnError: '✗ Connection error while deleting.',
+    unknownError: 'Unknown error', queryError: 'Query error',
+    modelError: 'Error in model response',
+    connClosed: 'The connection closed before the response was complete.',
+    settingsSaveError: 'Could not save setting.',
+    noServer: 'Could not connect to the server. Is Flask running?',
+    retryError: 'Retry failed',
+    indexingFailed: 'Indexing could not be completed.',
+    historyCleared: 'History cleared.',
+    appFooter: 'Local RAG with Ollama',
+  },
+  ca: {
+    tabDocs: 'Documents', tabPipeline: 'Pipeline RAG',
+    uploading: 'Afegint…', addPdf: 'Afegir PDF',
+    addPdfHint: 'Usa els ajustos actuals del pipeline',
+    collection: "Col·lecció ({n} docs)", noDocs: 'No hi ha documents indexats',
+    deleteDoc: 'Eliminar document',
+    indexingFile: 'Indexant {file}', reindexingStatus: 'Re-indexació en curs...',
+    section1: '1. Indexació',
+    labelContextual: 'Recuperació contextual', descContextual: 'Enriqueix fragments amb LLM',
+    section2: '2. Recuperació',
+    labelHybrid: 'Cerca híbrida', descHybrid: 'Semàntica + paraules clau',
+    labelQueryDecomp: 'Descomposició de consultes', descQueryDecomp: 'Sub-consultes amb LLM auxiliar',
+    labelExhaustive: 'Cerca exhaustiva', descExhaustive: 'Escaneig profund (lent)',
+    section3: '3. Rànquing i context',
+    labelReranker: 'Reordenador cross-encoder', descReranker: 'Reordenament de precisió',
+    labelExpandContext: 'Expandir context', descExpandContext: 'Afig fragments adjacents',
+    labelOptimizeContext: 'Optimitzar context', descOptimizeContext: 'Neteja artefactes PDF',
+    labelRecomp: 'Síntesi RECOMP', descRecomp: 'Sintetitza context amb LLM',
+    section4: '4. Re-indexació',
+    reindexHint: "Ajusta les opcions dalt i torna a indexar per a aplicar-les. Opcionalment afig PDFs nous.",
+    addPdfs: 'Afegir PDFs', remove: 'Llevar', reindexBtn: 'Re-indexar',
+    fragments: '{n} fragments', ollamaStatus: 'Ollama Local',
+    clearChat: 'Netejar xat', youLabel: 'Tu',
+    sources: '{n} fonts', copyMsg: 'Copiar missatge',
+    placeholderRag: 'Pregunta sobre els teus documents…', placeholderChat: 'Escriu un missatge…',
+    footerMode: 'Mode document', footerModeChat: 'Mode conversa',
+    indexingTitle: "S'estan indexant els documents",
+    indexingHint: 'Pot tardar uns minuts depenent del teu maquinari.',
+    processing: 'Processant:', fileUnit: 'arxiu', fileUnitPlural: 'arxius',
+    autoRefresh: "La pàgina s'actualitzarà automàticament en acabar.",
+    retry: 'Reintentar', connErrorTitle: 'Error de connexió',
+    connecting: 'Connectant amb MonkeyGrab…',
+    addedMsg: '✓ **{names}** afegit amb els ajustos actuals ({total} fragments).',
+    uploadError: '✗ Error en pujar: {error}',
+    uploadConnError: '✗ Error de connexió en pujar el fitxer.',
+    addingMsg: '⟳ Afegint {n} PDF(s) i re-indexant…',
+    reindexingMsg: '⟳ Re-indexant amb ajustos actuals…',
+    reindexDone: '✓ Re-indexació completada: {total} fragments, {docs} documents.',
+    reindexError: '✗ Error: {error}', reindexConnError: '✗ Error de connexió.',
+    confirmDelete: 'Eliminar "{name}"? S\'esborrarà de l\'índex i del disc.',
+    docDeleted: '✓ Document **{name}** eliminat.',
+    deleteError: '✗ Error en eliminar: {error}',
+    deleteConnError: '✗ Error de connexió en eliminar.',
+    unknownError: 'Error desconegut', queryError: 'Error en la consulta',
+    modelError: 'Error en la resposta del model',
+    connClosed: 'La connexió es va tancar abans de completar la resposta.',
+    settingsSaveError: "No s'ha pogut guardar l'ajust.",
+    noServer: "No s'ha pogut connectar amb el servidor. Està Flask executant-se?",
+    retryError: 'Error en reintentar',
+    indexingFailed: "La indexació no s'ha pogut completar.",
+    historyCleared: 'Historial netejat.',
+    appFooter: 'RAG local amb Ollama',
+  },
+} as const;
+
+const LANG_OPTIONS: Array<{ code: Lang; label: string }> = [
+  { code: 'es', label: 'ES' },
+  { code: 'en', label: 'EN' },
+  { code: 'ca', label: 'VAL' },
+];
+
+function normalizeLang(value: string | null): Lang {
+  return value === 'en' || value === 'ca' || value === 'es' ? value : 'es';
+}
+
+function fill(tpl: string, vars: Record<string, string | number>): string {
+  return tpl.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
 }
 
 // =============================================================================
@@ -129,16 +311,17 @@ async function streamSSE(
   onToken: (token: string) => void,
   onDone: (sources: Citation[] | null) => void,
   onError: (msg: string) => void,
+  fb?: { unknown?: string; queryError?: string; modelError?: string; closed?: string },
 ) {
   const contentType = response.headers.get('content-type') || '';
 
   // If the response is NOT a stream (error responses come as JSON)
   if (!contentType.includes('event-stream')) {
-    const data = await response.json().catch(() => ({ message: 'Error desconocido' }));
+    const data = await response.json().catch(() => ({ message: fb?.unknown ?? 'Error desconocido' }));
     if (!data.ok && data.message) {
       onError(data.message);
     } else if (!data.ok && data.error) {
-      onError(typeof data.error === 'string' ? data.error : 'Error en la consulta');
+      onError(typeof data.error === 'string' ? data.error : (fb?.queryError ?? 'Error en la consulta'));
     } else {
       onDone(null);
     }
@@ -172,7 +355,7 @@ async function streamSSE(
       const data = JSON.parse(dataLines.join('\n'));
       if (event === 'error' || data.error) {
         finished = true;
-        onError(data.message || data.error || 'Error en la respuesta del modelo');
+        onError(data.message || data.error || fb?.modelError || 'Error en la respuesta del modelo');
         return;
       }
       if (event === 'token' || data.token) onToken(data.token || '');
@@ -198,22 +381,22 @@ async function streamSSE(
 
   buffer += decoder.decode();
   if (buffer.trim()) processBlock(buffer);
-  if (!finished) onError('La conexión se cerró antes de completar la respuesta.');
+  if (!finished) onError(fb?.closed ?? 'La conexión se cerró antes de completar la respuesta.');
 }
 
 // =============================================================================
 // Small safe Markdown renderer
 // =============================================================================
 
-function MathInline({ tex }: { tex: string }) {
+const MathInline: React.FC<{ tex: string }> = ({ tex }) => {
   const html = katex.renderToString(tex, { throwOnError: false, displayMode: false });
   return <span dangerouslySetInnerHTML={{ __html: html }} />;
-}
+};
 
-function MathBlock({ tex }: { tex: string }) {
+const MathBlock: React.FC<{ tex: string }> = ({ tex }) => {
   const html = katex.renderToString(tex, { throwOnError: false, displayMode: true });
   return <div className="overflow-x-auto my-2" dangerouslySetInnerHTML={{ __html: html }} />;
-}
+};
 
 function renderInlineMarkdown(text: string, keyPrefix: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
@@ -367,6 +550,15 @@ function MarkdownContent({ text, compact = false }: { text: string; compact?: bo
 // =============================================================================
 
 export default function App() {
+  const [lang, setLangState] = useState<Lang>(() =>
+    normalizeLang(localStorage.getItem('monkeygrab_lang'))
+  );
+  const setLang = useCallback((l: Lang) => {
+    setLangState(l);
+    localStorage.setItem('monkeygrab_lang', l);
+  }, []);
+  const T = STRINGS[lang];
+
   const [mode, setMode] = useState<Mode>('rag');
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -455,7 +647,7 @@ export default function App() {
           /* ignorar fallo de settings */
         }
       } catch (err) {
-        if (!cancelled) setInitError('No se pudo conectar con el servidor. ¿Está Flask ejecutándose?');
+        if (!cancelled) setInitError(STRINGS[lang].noServer);
       }
     }
     init();
@@ -482,9 +674,9 @@ export default function App() {
       setSettings(prev => ({ ...prev, [key]: result.settings[key] }));
     } else {
       setSettings(prev => ({ ...prev, [key]: previousVal }));
-      setSettingsError(result?.error || 'No se pudo guardar el ajuste.');
+      setSettingsError(result?.error || T.settingsSaveError);
     }
-  }, [settings]);
+  }, [settings, lang]);
 
   const waitForIndexingToFinish = useCallback(async () => {
     for (;;) {
@@ -496,9 +688,9 @@ export default function App() {
         setIndexingError(status.error || null);
         continue;
       }
-      throw new Error(status.message || status.error || 'La indexación no pudo completarse.');
+      throw new Error(status.message || status.error || T.indexingFailed);
     }
-  }, []);
+  }, [lang]);
 
   // ---- Add PDF (add-only, sin reindexar) ----
   const handleAddPdf = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -515,14 +707,14 @@ export default function App() {
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'system',
-          content: `✓ **${names}** añadido con los ajustes actuales (${result.total_fragments} fragmentos).`,
+          content: fill(T.addedMsg, { names, total: result.total_fragments }),
           mode,
         }]);
       } else {
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'system',
-          content: `✗ Error al subir: ${result.error}`,
+          content: fill(T.uploadError, { error: result.error }),
           mode,
           isError: true,
         }]);
@@ -531,7 +723,7 @@ export default function App() {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'system',
-        content: '✗ Error de conexión al subir el archivo.',
+        content: T.uploadConnError,
         mode,
         isError: true,
       }]);
@@ -539,7 +731,7 @@ export default function App() {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
-  }, [mode]);
+  }, [mode, lang]);
 
   // ---- Reindex (full, con ajustes del pipeline) ----
   const handleReindex = useCallback(async () => {
@@ -550,7 +742,7 @@ export default function App() {
     setMessages(prev => [...prev, {
       id: Date.now().toString(),
       role: 'system',
-      content: fileList.length ? `⟳ Añadiendo ${fileList.length} PDF(s) y re-indexando…` : '⟳ Re-indexando con ajustes actuales…',
+      content: fileList.length ? fill(T.addingMsg, { n: fileList.length }) : T.reindexingMsg,
       mode,
     }]);
 
@@ -569,7 +761,7 @@ export default function App() {
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'system',
-          content: `✓ Re-indexación completada: ${finalStatus.total_fragments || 0} fragmentos, ${(finalStatus.documents || []).length} documentos.`,
+          content: fill(T.reindexDone, { total: finalStatus.total_fragments || 0, docs: (finalStatus.documents || []).length }),
           mode,
         }]);
       } else if (result.ok) {
@@ -578,14 +770,14 @@ export default function App() {
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'system',
-          content: `✓ Re-indexación completada: ${result.total_fragments || 0} fragmentos, ${(result.documents || []).length} documentos.`,
+          content: fill(T.reindexDone, { total: result.total_fragments || 0, docs: (result.documents || []).length }),
           mode,
         }]);
       } else {
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'system',
-          content: `✗ Error: ${result.error}`,
+          content: fill(T.reindexError, { error: result.error }),
           mode,
           isError: true,
         }]);
@@ -594,7 +786,7 @@ export default function App() {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'system',
-        content: '✗ Error de conexión.',
+        content: T.reindexConnError,
         mode,
         isError: true,
       }]);
@@ -602,12 +794,12 @@ export default function App() {
       setIsReindexing(false);
       if (reindexFileInputRef.current) reindexFileInputRef.current.value = '';
     }
-  }, [mode, isReindexing, pendingReindexFiles, waitForIndexingToFinish]);
+  }, [mode, isReindexing, pendingReindexFiles, waitForIndexingToFinish, lang]);
 
   // ---- Delete document ----
   const handleDeleteDoc = useCallback(async (docName: string) => {
     if (deletingDoc) return;
-    if (!window.confirm(`¿Eliminar "${docName}"? Se borrará del índice y del disco.`)) return;
+    if (!window.confirm(fill(T.confirmDelete, { name: docName }))) return;
     setDeletingDoc(docName);
     try {
       const result = await api.deleteDoc(docName);
@@ -617,14 +809,14 @@ export default function App() {
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'system',
-          content: `✓ Documento **${docName}** eliminado.`,
+          content: fill(T.docDeleted, { name: docName }),
           mode,
         }]);
       } else {
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'system',
-          content: `✗ Error al eliminar: ${result.error}`,
+          content: fill(T.deleteError, { error: result.error }),
           mode,
           isError: true,
         }]);
@@ -633,14 +825,14 @@ export default function App() {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'system',
-        content: '✗ Error de conexión al eliminar.',
+        content: T.deleteConnError,
         mode,
         isError: true,
       }]);
     } finally {
       setDeletingDoc(null);
     }
-  }, [mode, deletingDoc]);
+  }, [mode, deletingDoc, lang]);
 
   // ---- Send message (streaming) ----
   const handleSend = useCallback(async () => {
@@ -710,19 +902,20 @@ export default function App() {
             )
           );
         },
+        { unknown: T.unknownError, queryError: T.queryError, modelError: T.modelError, closed: T.connClosed },
       );
     } catch {
       setMessages(prev =>
         prev.map(m =>
           m.id === assistantId
-            ? { ...m, content: 'Error de conexión con el servidor.', isStreaming: false, isError: true }
+            ? { ...m, content: T.connClosed, isStreaming: false, isError: true }
             : m
         )
       );
     } finally {
       setIsLoading(false);
     }
-  }, [input, mode, isLoading]);
+  }, [input, mode, isLoading, lang]);
 
   // ---- Copy message ----
   const handleCopyMessage = useCallback(async (msg: Message) => {
@@ -742,10 +935,10 @@ export default function App() {
     setMessages([{
       id: 'cleared',
       role: 'system',
-      content: 'Historial limpiado.',
+      content: T.historyCleared,
       mode,
     }]);
-  }, [mode]);
+  }, [mode, lang]);
 
   // ---- Textarea auto-resize ----
   useEffect(() => {
@@ -775,14 +968,14 @@ export default function App() {
         setIndexingProgress(result.progress || null);
         setRetryTrigger(t => t + 1);
       } else {
-        setInitError(result.error || 'Error al reintentar');
+        setInitError(result.error || T.retryError);
         setIsIndexing(false);
       }
     } catch {
-      setInitError('No se pudo conectar con el servidor. ¿Está Flask ejecutándose?');
+      setInitError(T.noServer);
       setIsIndexing(false);
     }
-  }, []);
+  }, [lang]);
 
   // ---- Indexing screen (cuando ok: false desde API, nunca "Error de conexión") ----
   if (isIndexing) {
@@ -792,10 +985,10 @@ export default function App() {
         <div className="glass-panel rounded-3xl p-10 max-w-md text-center space-y-4">
           <Loader2 className="w-12 h-12 text-orange-500 animate-spin mx-auto" />
           <h2 className="text-xl font-semibold text-white">
-            Se están indexando los documentos
+            {T.indexingTitle}
           </h2>
           <p className="text-zinc-400 text-sm">
-            Puede tardar unos minutos dependiendo de tu hardware.
+            {T.indexingHint}
           </p>
           {indexingError && showRetry && (
             <p className="text-amber-400 text-sm">{indexingError}</p>
@@ -803,10 +996,10 @@ export default function App() {
           {indexingProgress ? (
             <div className="space-y-1">
               <p className="text-zinc-300 text-sm font-medium">
-                Procesando: <span className="text-orange-500">{indexingProgress.file}</span>
+                {T.processing} <span className="text-orange-500">{indexingProgress.file}</span>
               </p>
               <p className="text-zinc-500 text-xs">
-                {indexingProgress.file_index} / {indexingProgress.total_files} archivo{indexingProgress.total_files !== 1 ? 's' : ''}
+                {indexingProgress.file_index} / {indexingProgress.total_files} {indexingProgress.total_files !== 1 ? T.fileUnitPlural : T.fileUnit}
               </p>
               <div className="w-full bg-zinc-800 rounded-full h-1.5 mt-2">
                 <div
@@ -817,7 +1010,7 @@ export default function App() {
             </div>
           ) : (
             <p className="text-zinc-500 text-xs">
-              La página se actualizará automáticamente al terminar.
+              {T.autoRefresh}
             </p>
           )}
           {showRetry && (
@@ -825,7 +1018,7 @@ export default function App() {
               className="px-6 py-2 bg-orange-500 text-black rounded-full font-semibold hover:bg-orange-400 transition-colors"
               onClick={handleRetry}
             >
-              Reintentar
+              {T.retry}
             </button>
           )}
         </div>
@@ -839,13 +1032,13 @@ export default function App() {
       <div className="flex h-screen items-center justify-center bg-[#050505] text-zinc-300 p-4">
         <div className="glass-panel rounded-3xl p-10 max-w-md text-center space-y-4">
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
-          <h2 className="text-xl font-semibold text-white">Error de conexión</h2>
+          <h2 className="text-xl font-semibold text-white">{T.connErrorTitle}</h2>
           <p className="text-zinc-400 text-sm">{initError}</p>
           <button
             className="px-6 py-2 bg-orange-500 text-black rounded-full font-semibold hover:bg-orange-400 transition-colors"
             onClick={handleRetry}
           >
-            Reintentar
+            {T.retry}
           </button>
         </div>
       </div>
@@ -858,7 +1051,7 @@ export default function App() {
       <div className="flex h-screen items-center justify-center bg-[#050505] text-zinc-300">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
-          <p className="text-zinc-500 text-sm">Conectando con MonkeyGrab…</p>
+          <p className="text-zinc-500 text-sm">{T.connecting}</p>
         </div>
       </div>
     );
@@ -920,13 +1113,13 @@ export default function App() {
               className={`flex-1 py-2 text-xs font-semibold rounded-full transition-all ${activeTab === 'docs' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
               onClick={() => setActiveTab('docs')}
             >
-              Documentos
+              {T.tabDocs}
             </button>
             <button
               className={`flex-1 py-2 text-xs font-semibold rounded-full transition-all ${activeTab === 'settings' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
               onClick={() => setActiveTab('settings')}
             >
-              Pipeline RAG
+              {T.tabPipeline}
             </button>
           </div>
         </div>
@@ -955,19 +1148,19 @@ export default function App() {
                       <FileUp className="w-5 h-5 group-hover:text-orange-400" />
                     )}
                   </div>
-                  <span className="font-medium">{isUploading ? 'Añadiendo…' : 'Añadir PDF'}</span>
-                  <span className="text-[10px] text-zinc-600">Usa los ajustes actuales del pipeline</span>
+                  <span className="font-medium">{isUploading ? T.uploading : T.addPdf}</span>
+                  <span className="text-[10px] text-zinc-600">{T.addPdfHint}</span>
                 </button>
 
                 {/* Documents list */}
                 <div className="space-y-3">
                   <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-2">
-                    Colección ({documents.length} docs)
+                    {fill(T.collection, { n: documents.length })}
                   </div>
 
                   <div className="space-y-2">
                     {documents.length === 0 ? (
-                      <p className="text-xs text-zinc-600 text-center py-4">No hay documentos indexados</p>
+                      <p className="text-xs text-zinc-600 text-center py-4">{T.noDocs}</p>
                     ) : (
                       documents.map((doc, i) => (
                         <div key={i} className="group flex items-center gap-3 p-3.5 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all">
@@ -979,7 +1172,7 @@ export default function App() {
                             className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all flex-shrink-0 disabled:opacity-50"
                             onClick={() => handleDeleteDoc(doc)}
                             disabled={deletingDoc !== null}
-                            title="Eliminar documento"
+                            title={T.deleteDoc}
                           >
                             {deletingDoc === doc ? (
                               <Loader2 className="w-4 h-4 animate-spin" />
@@ -1008,7 +1201,7 @@ export default function App() {
                     ) : indexingProgress ? (
                       <div className="space-y-1">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="truncate">Indexando {indexingProgress.file}</span>
+                          <span className="truncate">{fill(T.indexingFile, { file: indexingProgress.file })}</span>
                           <span className="font-mono text-[10px] text-orange-300">{indexingProgress.file_index}/{indexingProgress.total_files}</span>
                         </div>
                         <div className="h-1.5 rounded-full bg-black/30 overflow-hidden">
@@ -1019,7 +1212,7 @@ export default function App() {
                         </div>
                       </div>
                     ) : (
-                      <span>Re-indexación en curso...</span>
+                      <span>{T.reindexingStatus}</span>
                     )}
                   </div>
                 )}
@@ -1032,11 +1225,11 @@ export default function App() {
                   >
                     {openSections.indexacion ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     <span className="w-4 h-[1px] bg-orange-400/50" />
-                    1. Indexación
+                    {T.section1}
                   </button>
                   {openSections.indexacion && (
                     <div className="p-2 pt-0 space-y-1 bg-white/[0.02]">
-                      <Toggle label="Contextual Retrieval" checked={settings.contextualRetrieval} onChange={() => toggleSetting('contextualRetrieval')} desc="Enriquece chunks con LLM" />
+                      <Toggle label={T.labelContextual} checked={settings.contextualRetrieval} onChange={() => toggleSetting('contextualRetrieval')} desc={T.descContextual} />
                     </div>
                   )}
                 </div>
@@ -1049,13 +1242,13 @@ export default function App() {
                   >
                     {openSections.recuperacion ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     <span className="w-4 h-[1px] bg-orange-400/50" />
-                    2. Recuperación
+                    {T.section2}
                   </button>
                   {openSections.recuperacion && (
                     <div className="p-2 pt-0 space-y-1 bg-white/[0.02]">
-                      <Toggle label="Búsqueda Híbrida" checked={settings.hybridSearch} onChange={() => toggleSetting('hybridSearch')} desc="Semántica + Keywords" />
-                      <Toggle label="Query Decomposition" checked={settings.queryDecomposition} onChange={() => toggleSetting('queryDecomposition')} desc="Sub-queries con LLM auxiliar" />
-                      <Toggle label="Búsqueda Exhaustiva" checked={settings.exhaustiveSearch} onChange={() => toggleSetting('exhaustiveSearch')} desc="Escaneo profundo (lento)" />
+                      <Toggle label={T.labelHybrid} checked={settings.hybridSearch} onChange={() => toggleSetting('hybridSearch')} desc={T.descHybrid} />
+                      <Toggle label={T.labelQueryDecomp} checked={settings.queryDecomposition} onChange={() => toggleSetting('queryDecomposition')} desc={T.descQueryDecomp} />
+                      <Toggle label={T.labelExhaustive} checked={settings.exhaustiveSearch} onChange={() => toggleSetting('exhaustiveSearch')} desc={T.descExhaustive} />
                     </div>
                   )}
                 </div>
@@ -1068,14 +1261,14 @@ export default function App() {
                   >
                     {openSections.ranking ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     <span className="w-4 h-[1px] bg-orange-400/50" />
-                    3. Ranking & Contexto
+                    {T.section3}
                   </button>
                   {openSections.ranking && (
                     <div className="p-2 pt-0 space-y-1 bg-white/[0.02]">
-                      <Toggle label="Cross-Encoder Reranker" checked={settings.reranker} onChange={() => toggleSetting('reranker')} desc="Reordenamiento de precisión" />
-                      <Toggle label="Expandir Contexto" checked={settings.expandContext} onChange={() => toggleSetting('expandContext')} desc="Añade chunks adyacentes" />
-                      <Toggle label="Optimizar Contexto" checked={settings.optimizeContext} onChange={() => toggleSetting('optimizeContext')} desc="Limpia artefactos PDF" />
-                      <Toggle label="RECOMP Synthesis" checked={settings.recompSynthesis} onChange={() => toggleSetting('recompSynthesis')} desc="Sintetiza contexto con LLM" />
+                      <Toggle label={T.labelReranker} checked={settings.reranker} onChange={() => toggleSetting('reranker')} desc={T.descReranker} />
+                      <Toggle label={T.labelExpandContext} checked={settings.expandContext} onChange={() => toggleSetting('expandContext')} desc={T.descExpandContext} />
+                      <Toggle label={T.labelOptimizeContext} checked={settings.optimizeContext} onChange={() => toggleSetting('optimizeContext')} desc={T.descOptimizeContext} />
+                      <Toggle label={T.labelRecomp} checked={settings.recompSynthesis} onChange={() => toggleSetting('recompSynthesis')} desc={T.descRecomp} />
                     </div>
                   )}
                 </div>
@@ -1088,12 +1281,12 @@ export default function App() {
                   >
                     {openSections.reindexacion ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     <span className="w-4 h-[1px] bg-orange-400/50" />
-                    4. Reindexación
+                    {T.section4}
                   </button>
                   {openSections.reindexacion && (
                     <div className="p-3 pt-0 space-y-3 bg-orange-500/5">
                       <p className="text-xs text-zinc-500">
-                        Ajusta las opciones arriba y reindexa para aplicarlas. Opcionalmente añade PDFs nuevos.
+                        {T.reindexHint}
                       </p>
                       <div className="flex gap-2">
                         <button
@@ -1103,14 +1296,14 @@ export default function App() {
                         >
                           <FileUp className="w-5 h-5 group-hover:text-orange-400" />
                           <span className="font-medium">
-                            {pendingReindexFiles.length ? `${pendingReindexFiles.length} PDF(s)` : 'Añadir PDFs'}
+                            {pendingReindexFiles.length ? `${pendingReindexFiles.length} PDF(s)` : T.addPdfs}
                           </span>
                         </button>
                         {pendingReindexFiles.length > 0 && (
                           <button
                             className="px-3 rounded-2xl text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
                             onClick={() => { setPendingReindexFiles([]); if (reindexFileInputRef.current) reindexFileInputRef.current.value = ''; }}
-                            title="Quitar"
+                            title={T.remove}
                           >
                             <X className="w-5 h-5" />
                           </button>
@@ -1126,7 +1319,7 @@ export default function App() {
                         ) : (
                           <RefreshCw className="w-5 h-5" />
                         )}
-                        Reindexar
+                        {T.reindexBtn}
                       </button>
                     </div>
                   )}
@@ -1138,10 +1331,10 @@ export default function App() {
 
         {/* Sidebar Footer */}
         <div className="p-5 border-t border-white/5 text-xs text-zinc-500 flex items-center justify-between bg-black/20 rounded-b-xl">
-          <span className="font-mono text-[10px] tracking-wider">{totalFragments} fragmentos</span>
+          <span className="font-mono text-[10px] tracking-wider">{fill(T.fragments, { n: totalFragments })}</span>
           <div className="flex items-center gap-2 bg-white/5 px-2.5 py-1 rounded-full border border-white/10">
             <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
-            <span className="font-medium text-zinc-300">Ollama Local</span>
+            <span className="font-medium text-zinc-300">{T.ollamaStatus}</span>
           </div>
         </div>
       </motion.aside>
@@ -1176,13 +1369,16 @@ export default function App() {
             </div>
           </div>
 
-          {/* Clear button */}
-          <button
-            className="text-xs text-zinc-500 hover:text-orange-400 transition-colors px-3 py-1.5 rounded-full hover:bg-white/5 border border-transparent hover:border-white/10"
-            onClick={handleClear}
-          >
-            Limpiar chat
-          </button>
+          <div className="flex items-center gap-3">
+            <LanguageToggle lang={lang} setLang={setLang} />
+            {/* Clear button */}
+            <button
+              className="text-xs text-zinc-500 hover:text-orange-400 transition-colors px-3 py-1.5 rounded-full hover:bg-white/5 border border-transparent hover:border-white/10"
+              onClick={handleClear}
+            >
+              {T.clearChat}
+            </button>
+          </div>
         </header>
 
         {/* Chat Area */}
@@ -1210,7 +1406,7 @@ export default function App() {
                       {/* Meta label + copy */}
                       <div className="flex items-center gap-2 px-2 group/meta">
                         <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                          {msg.role === 'user' ? 'Tú' : 'MonkeyGrab'}
+                          {msg.role === 'user' ? T.youLabel : 'MonkeyGrab'}
                         </span>
                         {msg.role === 'assistant' && (
                           <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase tracking-widest font-bold ${msg.mode === 'rag' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' : 'bg-white/10 text-zinc-400 border border-white/5'}`}>
@@ -1220,7 +1416,7 @@ export default function App() {
                         <button
                           onClick={() => handleCopyMessage(msg)}
                           className="p-1.5 rounded-full text-zinc-500 hover:text-orange-400 hover:bg-orange-500/10 border border-transparent hover:border-orange-500/20 transition-all opacity-60 group-hover/meta:opacity-100"
-                          title="Copiar mensaje"
+                          title={T.copyMsg}
                         >
                           {copiedId === msg.id ? (
                             <Check className="w-3.5 h-3.5 text-green-400" />
@@ -1265,7 +1461,7 @@ export default function App() {
                             <div className="flex items-center gap-4 text-[11px] text-zinc-500 font-mono bg-black/20 inline-flex px-3 py-1.5 rounded-full border border-white/5">
                               <span className="flex items-center gap-1.5"><Search className="w-3.5 h-3.5 text-zinc-400" /> {msg.metrics.searchTime}</span>
                               <span className="w-1 h-1 rounded-full bg-zinc-700"></span>
-                              <span className="flex items-center gap-1.5"><Layers className="w-3.5 h-3.5 text-zinc-400" /> {msg.metrics.chunks} fuentes</span>
+                              <span className="flex items-center gap-1.5"><Layers className="w-3.5 h-3.5 text-zinc-400" /> {fill(T.sources, { n: msg.metrics.chunks })}</span>
                             </div>
                           )}
                         </div>
@@ -1293,7 +1489,7 @@ export default function App() {
                     handleSend();
                   }
                 }}
-                placeholder={mode === 'rag' ? 'Pregunta sobre tus documentos…' : 'Escribe un mensaje…'}
+                placeholder={mode === 'rag' ? T.placeholderRag : T.placeholderChat}
                 className="flex-1 max-h-48 min-h-[52px] bg-transparent border-none focus:ring-0 focus:outline-none resize-none py-3.5 px-4 text-[15px] text-white placeholder:text-zinc-500 custom-scrollbar font-medium"
                 rows={1}
                 disabled={isLoading}
@@ -1312,7 +1508,7 @@ export default function App() {
               </button>
             </div>
             <div className="text-center mt-4 text-[11px] font-medium text-zinc-600 tracking-wide">
-              MonkeyGrab · RAG local con Ollama · {mode === 'rag' ? 'Modo documento' : 'Modo conversación'}
+              MonkeyGrab · {T.appFooter} · {mode === 'rag' ? T.footerMode : T.footerModeChat}
             </div>
           </div>
         </div>
@@ -1342,5 +1538,28 @@ function Toggle({ label, checked, onChange, desc }: { label: string; checked: bo
         <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition duration-300 ease-in-out ${checked ? 'translate-x-2.5' : '-translate-x-2.5'}`} />
       </span>
     </button>
+  );
+}
+
+function LanguageToggle({ lang, setLang }: { lang: Lang; setLang: (lang: Lang) => void }) {
+  return (
+    <div className="flex items-center gap-1 rounded-full border border-white/10 bg-black/30 p-1">
+      <Languages className="ml-2 h-3.5 w-3.5 text-zinc-500" />
+      {LANG_OPTIONS.map(option => (
+        <button
+          key={option.code}
+          type="button"
+          className={`rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide transition-all ${
+            lang === option.code
+              ? 'bg-orange-500 text-black shadow-[0_0_12px_rgba(242,125,38,0.25)]'
+              : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
+          }`}
+          onClick={() => setLang(option.code)}
+          aria-pressed={lang === option.code}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   );
 }
