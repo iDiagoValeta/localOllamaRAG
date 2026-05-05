@@ -50,80 +50,38 @@ PDFs are indexed once into a [ChromaDB](https://www.trychroma.com/) vector store
 
 ```mermaid
 flowchart TD
-    WEB["React Web App\nserved by Flask or Vite dev server"]
-    CLI["Rich CLI"]
-
-    API["Flask API  ·  rag/web/app.py\nREST + SSE streaming"]
-
-    subgraph IDX["  Indexing Pipeline  "]
-        direction TB
-        EXT["PDF Extraction\npymupdf4llm · pypdf fallback"]
-        IMG["Image Description\nPyMuPDF + OLLAMA_OCR_MODEL"]
-        CHUNK["Chunking\nconfigurable size + overlap"]
-        CTX["Contextual Enrichment\noptional · OLLAMA_CONTEXTUAL_MODEL"]
-        EMB["Embedding\nOLLAMA_EMBED_MODEL"]
-        EXT --> CHUNK
-        IMG --> CHUNK
-        CHUNK --> CTX --> EMB
+    subgraph INDEXING
+        A[PDF corpus\nrag/docs/es · ca · en] --> B[Text extraction\npymupdf4llm / pypdf]
+        B --> C[Chunking\nsize · overlap · min-length]
+        C --> D{Optional stages}
+        D -->|USAR_CONTEXTUAL_RETRIEVAL| E[Chunk enrichment\nOLLAMA_CONTEXTUAL_MODEL]
+        D -->|USAR_EMBEDDINGS_IMAGEN| F[Image description\nOLLAMA_OCR_MODEL]
+        E --> G[Embedding\nOLLAMA_EMBED_MODEL]
+        F --> G
+        C --> G
+        G --> H[(ChromaDB\nrag/vector_db/)]
     end
-
-    subgraph RET["  Hybrid Retrieval Pipeline  "]
-        direction TB
-        D1["① Query Decomposition\noptional · OLLAMA_CHAT_MODEL"]
-        D2["② Semantic + Keyword + Exhaustive Search\nChromaDB · top-80 + top-40 + critical terms"]
-        D3["③ RRF Fusion + Cross-Encoder\n55% semantic · 45% lexical"]
-        D4["④ Context Expansion + Cleanup\nadjacent chunks · artifact removal"]
-        D5["⑤ RECOMP Synthesis\noptional · OLLAMA_RECOMP_MODEL"]
-        D1 --> D2 --> D3 --> D4 --> D5
+    subgraph RETRIEVAL
+        I[User question] --> J{USAR_LLM_QUERY_DECOMPOSITION}
+        J -->|yes| K[Sub-queries\nOLLAMA_CHAT_MODEL]
+        J -->|no| L[Semantic search]
+        K --> L
+        L --> M[Keyword search\nUSAR_BUSQUEDA_HIBRIDA]
+        M --> N[RRF fusion\n55% semantic · 45% lexical]
+        N --> O{USAR_RERANKER}
+        O -->|yes| P[Cross-encoder\nRERANKER_QUALITY]
+        O -->|no| Q[Top-8 fragments]
+        P --> Q
+        Q --> R{USAR_RECOMP_SYNTHESIS}
+        R -->|yes| S[Context synthesis\nOLLAMA_RECOMP_MODEL]
+        R -->|no| T[Raw context]
     end
-
-    DB[("ChromaDB\nPersistent Vector Store\nrag/vector_db/<folder>_<embed_slug>")]
-    GEN["Generation\nOLLAMA_RAG_MODEL\ndefault: phi4-finetuned:latest"]
-
-    subgraph OLL["  Ollama / Local Models  "]
-        direction LR
-        M1["embeddinggemma\nEmbeddings"]
-        M2["gemma4:e2b\nChat / decomposition"]
-        M3["BAAI/bge-reranker\nCross-Encoder"]
-        M4["gemma4:e4b\nOCR / contextual / RECOMP"]
-        M5["phi4-finetuned\nRAG generator"]
+    subgraph GENERATION
+        S --> U[Prompt assembly]
+        T --> U
+        U --> V[OLLAMA_RAG_MODEL\nstreaming response]
     end
-
-    WEB & CLI -->|"query / PDF upload"| API
-
-    API -->|"PDF files"| IDX
-    EMB -->|"store vectors"| DB
-
-    API -->|"user question"| RET
-    D2 <-->|"vector + lexical lookup"| DB
-    D5 -->|"compressed context"| GEN
-    D4 -. "fallback: raw chunks" .-> GEN
-    GEN -->|"answer + sources"| API
-    API -->|"SSE tokens"| WEB
-
-    M1 -. embeddings .-> EMB
-    M2 -. orchestration .-> D1
-    M3 -. reranking .-> D3
-    M4 -. "OCR / contextual / RECOMP" .-> IMG
-    M4 -. "OCR / contextual / RECOMP" .-> CTX
-    M4 -. "OCR / contextual / RECOMP" .-> D5
-    M5 -. generation .-> GEN
-
-    classDef client  fill:#4A90D9,stroke:#2C5F8A,color:#fff,font-weight:bold
-    classDef api     fill:#5BAD6F,stroke:#3A7A4A,color:#fff,font-weight:bold
-    classDef idx     fill:#E8A838,stroke:#B07820,color:#fff
-    classDef ret     fill:#8B6BB1,stroke:#5E4080,color:#fff
-    classDef gen     fill:#D45F5F,stroke:#9A3535,color:#fff,font-weight:bold
-    classDef db      fill:#2D7D9A,stroke:#1A5570,color:#fff
-    classDef model   fill:#3A3A3A,stroke:#111,color:#eee
-
-    class WEB,CLI client
-    class API api
-    class EXT,IMG,CHUNK,CTX,EMB idx
-    class D1,D2,D3,D4,D5 ret
-    class GEN gen
-    class DB db
-    class M1,M2,M3,M4,M5 model
+    H --> L
 ```
 
 ---
