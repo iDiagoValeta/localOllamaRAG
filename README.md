@@ -90,11 +90,11 @@ flowchart TD
 
 **Web interface — querying a local document corpus**
 
-https://github.com/user-attachments/assets/22582283-1b28-4054-a341-3aa1cbdc5057
+https://github.com/user-attachments/assets/e62d6f0a-bdfb-4887-9bfe-429cdbd54e68
 
 **CLI — querying a local document corpus**
 
-https://github.com/user-attachments/assets/4b8a84ca-422f-44a6-a0d5-a8078fa5e17a
+https://github.com/user-attachments/assets/714f3347-f3b2-407e-a45f-0d7f85de7833
 
 **LaTeX rendering — math formulas rendered natively in the web UI**
 
