@@ -31,8 +31,8 @@ Usage (from repository root):
     python rag/show_fragments/export_fragments.py --ragbench eval
     python rag/show_fragments/export_fragments.py --format jsonl --out-dir ./mi_salida
 
-By default, files are written under ``rag/show_fragments/exports/`` (gitignored)
-so the script folder stays uncluttered; use ``--out-dir`` to override.
+By default, files are written under ``rag/show_fragments/exports/`` (tracked in
+Git) so outputs live in one place; use ``--out-dir`` to override.
 
 Dependencies:
     - chromadb (see rag/requirements.txt)

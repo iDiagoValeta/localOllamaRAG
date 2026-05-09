@@ -149,9 +149,10 @@ research/evaluation/chunks_*.txt
 research/evaluation/tmp/**
 research/evaluation/**/pytest_*/
 research/evaluation/**/pytest-cache-files-*/
-# Exportaciones locales (omitir .txt / .jsonl ad hoc); excepción: dumps versionables del prefijo fijo
+# Salida por defecto de export_fragments.py: rag/show_fragments/exports/ (versionada).
+# Cualquier .txt / .jsonl suelto en show_fragments/ (no solo en exports/) — antes
+# estaban cubiertos y al quitarlos reaparecían como untracked.
 rag/show_fragments/*.txt
-!rag/show_fragments/chunks_vector_db_*.txt
 rag/show_fragments/*.jsonl
 
 # -----------------------------------------------------------------------------

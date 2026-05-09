@@ -85,7 +85,7 @@ localOllamaRAG/
 │   │   ├── images.py             # PDF image extraction + LLM OCR description
 │   │   ├── history.py            # Chat history persistence
 │   │   └── indexing.py           # PDF indexing into ChromaDB
-│   ├── show_fragments/export_fragments.py
+│   ├── show_fragments/export_fragments.py  # salida por defecto: show_fragments/exports/ (versionada)
 │   ├── requirements.txt
 │   ├── debug_rag/                # Query debug dumps (runtime, gitignored)
 │   ├── docs/                     # PDFs por corpus — todos versionados como evidencia del TFG
@@ -306,7 +306,7 @@ System: Python 3.10+, Ollama running locally, CUDA GPU recommended (~24 GB VRAM 
 
 ### rag/docs/
 
-All PDF corpora are versioned directly — no gitignore rules for `rag/docs/`. This applies to `es/`, `ca/`, `en/`, `libre/`, `en_ragbench_dev/`, `en_ragbench_eval/`, `en_ragbench_visual/`. The `rag/vector_db/` directory is fully ignored (auto-created at indexing time). The `.gitkeep` in `rag/docs/en/` keeps the empty folder tracked.
+All PDF corpora are versioned directly — no gitignore rules for `rag/docs/`. This applies to `es/`, `ca/`, `en/`, `libre/`, `en_ragbench_dev/`, `en_ragbench_eval/`, `en_ragbench_visual/`. The `rag/vector_db/` directory is fully ignored (auto-created at indexing time). Default chunk dumps from `export_fragments.py` go to `rag/show_fragments/exports/` (versioned). Any `*.txt` / `*.jsonl` placed directly under `rag/show_fragments/` (not under `exports/`) remains ignored. The `.gitkeep` in `rag/docs/en/` keeps the empty folder tracked.
 
 ### research/training-output/\<model\>/
 
