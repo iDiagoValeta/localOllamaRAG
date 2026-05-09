@@ -1,18 +1,35 @@
-# =============================================================================
-# SCRIPT DE CUANTIZACIÓN GGUF (TFG)
-# =============================================================================
-# Convierte un modelo GGUF en precisión F16 a formato cuantizado Q4_K_M para
-# inferencia eficiente en Ollama/llama.cpp.
-# =============================================================================
+# Quantize a GGUF F16 checkpoint to Q4_K_M for Ollama / llama.cpp inference.
+#
+# Usage:
+#   .\quantize_to_q4km.ps1 [<input.gguf>] [<output.gguf>]
+#   Defaults: research\models\gguf-output\qwen-3\Qwen3-14B-f16.gguf ->
+#             research\models\gguf-output\qwen-3\Qwen3-14B-Q4_K_M.gguf
+#
+# Dependencies:
+#   - llama-quantize.exe from a local llama.cpp build, or extracted under
+#     repo-root llama-bin\ (script may download a Windows CPU release if missing).
+
+# ─────────────────────────────────────────────
+# MODULE MAP -- Section index
+# ─────────────────────────────────────────────
+#
+#  CONFIGURATION
+#  +-- 1. Paths and default input/output GGUF
+#
+#  TOOLING
+#  +-- 2. Resolve llama-quantize.exe (build + llama-bin)
+#  +-- 3. Optional download of prebuilt llama.cpp binaries
+#
+#  PIPELINE
+#  +-- 4. Run quantization and validate exit code
+#
+# ─────────────────────────────────────────────
 
 $ErrorActionPreference = "Stop"
 
-# =============================================================================
-# SECCIÓN 1: RUTAS Y PARÁMETROS DE ENTRADA
-# =============================================================================
-# Calcula rutas base del proyecto y resuelve archivo de entrada/salida a partir
-# de argumentos opcionales o valores por defecto.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 1: PATHS AND DEFAULT INPUT/OUTPUT
+# ─────────────────────────────────────────────
 
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PROJECT_ROOT = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $SCRIPT_DIR))
@@ -26,12 +43,9 @@ if (-not (Test-Path $INPUT_GGUF)) {
     exit 1
 }
 
-# =============================================================================
-# SECCIÓN 2: LOCALIZACIÓN DE HERRAMIENTA DE CUANTIZACIÓN
-# =============================================================================
-# Busca `llama-quantize.exe` en rutas esperadas del proyecto para reutilizar
-# compilaciones locales o binarios previamente descargados.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 2: RESOLVE llama-quantize.exe
+# ─────────────────────────────────────────────
 
 $LLAMA_CPP = Join-Path $PROJECT_ROOT "llama.cpp"
 $QUANTIZE_EXE = $null
@@ -50,22 +64,19 @@ foreach ($c in $candidates) {
     }
 }
 
-# =============================================================================
-# SECCIÓN 3: DESCARGA AUTOMÁTICA DE BINARIOS (FALLBACK)
-# =============================================================================
-# Si no hay binario local, descarga una release precompilada de llama.cpp,
-# extrae su contenido y vuelve a resolver la ruta del ejecutable.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 3: DOWNLOAD PREBUILT BINARIES (FALLBACK)
+# ─────────────────────────────────────────────
 
 if (-not $QUANTIZE_EXE) {
     $BIN_DIR = Join-Path $PROJECT_ROOT "llama-bin"
     $QUANTIZE_EXE = Join-Path $BIN_DIR "bin\llama-quantize.exe"
-    
+
     if (-not (Test-Path $QUANTIZE_EXE)) {
         Write-Host "Descargando llama.cpp binarios (Windows x64 CPU)..."
         $ZIP_URL = "https://github.com/ggml-org/llama.cpp/releases/download/b7999/llama-b7999-bin-win-cpu-x64.zip"
         $ZIP_PATH = Join-Path $env:TEMP "llama-bin.zip"
-        
+
         try {
             Invoke-WebRequest -Uri $ZIP_URL -OutFile $ZIP_PATH -UseBasicParsing
         } catch {
@@ -74,11 +85,11 @@ if (-not $QUANTIZE_EXE) {
             Write-Host "Extrae en: $BIN_DIR"
             exit 1
         }
-        
+
         if (-not (Test-Path $BIN_DIR)) { New-Item -ItemType Directory -Path $BIN_DIR -Force | Out-Null }
         Expand-Archive -Path $ZIP_PATH -DestinationPath $BIN_DIR -Force
         Remove-Item $ZIP_PATH -Force -ErrorAction SilentlyContinue
-        
+
         $found = Get-ChildItem $BIN_DIR -Recurse -Filter "llama-quantize.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($found) {
             $QUANTIZE_EXE = $found.FullName
@@ -93,12 +104,9 @@ if (-not (Test-Path $QUANTIZE_EXE)) {
     exit 1
 }
 
-# =============================================================================
-# SECCIÓN 4: EJECUCIÓN DE CUANTIZACIÓN Y SALIDA
-# =============================================================================
-# Ejecuta la conversión a Q4_K_M y valida código de retorno para asegurar que
-# el artefacto final quede listo para registro en Ollama.
-# =============================================================================
+# ─────────────────────────────────────────────
+# SECTION 4: RUN QUANTIZATION
+# ─────────────────────────────────────────────
 
 Write-Host "Convirtiendo a Q4_K_M..."
 Write-Host "  Entrada:  $INPUT_GGUF"
