@@ -17,20 +17,22 @@
 """
 export_fragments.py -- Dump indexed ChromaDB chunks to text or JSONL files.
 
-**Default:** exports every local vector store used by the project under
-``rag/vector_db``: the language corpora ``ca_embeddinggemma``,
-``en_embeddinggemma``, ``es_embeddinggemma`` and the two RagBench EN corpora
-``en_ragbench_dev_embeddinggemma`` and ``en_ragbench_eval_embeddinggemma``.
-Stores that are absent from disk are silently skipped. Each chunk is labeled as
+**Default:** scans ``rag/vector_db`` and exports **every** Chroma persistent
+store found (one output file per collection). Corpus folders may use any
+embedding slug in the path (``{carpeta}_{embed_slug}`` as in ``chat_pdfs``).
+Stores that are not valid Chroma directories are skipped. Each chunk is labeled as
 **imagen** (descripción de figura), **texto plano** or **texto Markdown**
 according to ``metadata["format"]`` from ``chat_pdfs.indexar_documentos``.
 
 Usage (from repository root):
-    python rag/show_fragments/export_fragments.py                # all stores
+    python rag/show_fragments/export_fragments.py                # all stores -> exports/
     python rag/show_fragments/export_fragments.py --language es  # one language
     python rag/show_fragments/export_fragments.py --ragbench dev # RagBench dev
     python rag/show_fragments/export_fragments.py --ragbench eval
     python rag/show_fragments/export_fragments.py --format jsonl --out-dir ./mi_salida
+
+By default, files are written under ``rag/show_fragments/exports/`` (gitignored)
+so the script folder stays uncluttered; use ``--out-dir`` to override.
 
 Dependencies:
     - chromadb (see rag/requirements.txt)
@@ -66,7 +68,7 @@ DEFAULT_LANGUAGES = ("ca", "en", "es")
 RAGBENCH_SPLITS = ("dev", "eval")
 DEFAULT_STORE_SLUGS = DEFAULT_LANGUAGES + tuple(f"en_ragbench_{s}" for s in RAGBENCH_SPLITS)
 
-DEFAULT_OUT_DIR = os.path.join(RAG_DIR, "show_fragments")
+DEFAULT_OUT_DIR = os.path.join(RAG_DIR, "show_fragments", "exports")
 DEFAULT_FILE_TEMPLATE = "chunks_vector_db_{slug}.txt"
 DEFAULT_OUTPUT_MONKEYGRAB = os.path.join(DEFAULT_OUT_DIR, "monkeygrab_chunks_export.txt")
 BATCH_SIZE = 500
@@ -107,6 +109,46 @@ def build_store_spec(slug: str) -> StoreSpec:
 def default_store_specs() -> List[StoreSpec]:
     """Return the local vector stores exported by default (languages + RagBench)."""
     return [build_store_spec(slug) for slug in DEFAULT_STORE_SLUGS]
+
+
+def discover_store_specs() -> List[StoreSpec]:
+    """Scan ``VECTOR_DB_DIR`` for every Chroma store and return one spec per collection.
+
+    Folder names follow ``{carpeta_nombre}_{embed_slug}`` from indexing; collection
+    names are typically ``docs_{carpeta_nombre}``. If a store contains several
+    collections, each gets a distinct ``slug`` for the output filename.
+    """
+    specs: List[StoreSpec] = []
+    if not os.path.isdir(VECTOR_DB_DIR):
+        return specs
+    for entry in sorted(os.listdir(VECTOR_DB_DIR)):
+        full = os.path.join(VECTOR_DB_DIR, entry)
+        if not os.path.isdir(full):
+            continue
+        try:
+            client = chromadb.PersistentClient(path=full)
+            cols = client.list_collections()
+        except Exception:
+            continue
+        if not cols:
+            continue
+        for col in cols:
+            cn = (
+                col.name[len("docs_") :]
+                if col.name.startswith("docs_")
+                else col.name
+            )
+            out_slug = entry if len(cols) == 1 else f"{entry}__{col.name}"
+            specs.append(
+                StoreSpec(
+                    slug=out_slug,
+                    db_path=full,
+                    collection_name=col.name,
+                    store_label=f"vector_db/{entry} ({col.name})",
+                    pdf_folder_hint=os.path.join(RAG_DIR, "docs", cn),
+                )
+            )
+    return specs
 
 
 def classify_fragment(meta: Dict[str, Any]) -> Dict[str, str]:
@@ -320,8 +362,8 @@ def run_export(
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description=(
-            "Export ChromaDB fragments; por defecto exporta los almacenes locales "
-            "bajo rag/vector_db (idiomas ca/en/es + RagBench dev/eval)."
+            "Export ChromaDB fragments; por defecto descubre y exporta todos los "
+            "almacenes persistentes bajo rag/vector_db."
         ),
     )
     target = p.add_mutually_exclusive_group()
@@ -426,18 +468,29 @@ def main() -> None:
         print("ERROR: --output solo se puede usar con --language, --ragbench o --db-path")
         raise SystemExit(1)
 
-    # --- Default: all local stores under rag/vector_db ---
+    # --- Default: discover every Chroma store under rag/vector_db ---
     os.makedirs(out_dir, exist_ok=True)
     ext = ".jsonl" if out_fmt == "jsonl" else ".txt"
     exported_paths: List[str] = []
     failures = 0
 
-    slugs_humanos = ", ".join(DEFAULT_STORE_SLUGS)
-    print(f"Exportación de las bases vectoriales locales ({slugs_humanos})\n")
-    for spec in default_store_specs():
+    specs = discover_store_specs()
+    if not specs:
+        print(
+            f"No se encontraron bases vectoriales en:\n  {os.path.abspath(VECTOR_DB_DIR)}\n"
+            "(carpetas Chroma vacías o ausentes — indexa PDFs antes con el CLI o la web)."
+        )
+        raise SystemExit(0)
+
+    print(
+        f"Exportación de {len(specs)} colección(es) en "
+        f"{os.path.abspath(VECTOR_DB_DIR)}\n"
+    )
+    for spec in specs:
+        safe_slug = spec.slug.replace(os.sep, "_").replace("/", "_")
         out_path = os.path.join(
             out_dir,
-            DEFAULT_FILE_TEMPLATE.format(slug=spec.slug).replace(".txt", ext),
+            DEFAULT_FILE_TEMPLATE.format(slug=safe_slug).replace(".txt", ext),
         )
         n = run_export(
             os.path.abspath(spec.db_path),
