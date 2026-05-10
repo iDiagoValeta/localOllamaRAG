@@ -38,6 +38,68 @@ Comando base desde la raiz del repositorio:
 python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\ragbench\en_eval\dataset_ragbench_en_eval_text_40p_5q_eval\checkpoint.json --checkpoint .\research\evaluation\runs\ragas\ragbench_visual\inference\image_table_25p_5q\checkpoint.json --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion\checkpoints --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion_ca_ca\checkpoints --checkpoint .\research\evaluation\runs\ragas\comparisons\ragbench_ablation_en_dev10_frozen\checkpoints --metrics all
 ```
 
+### Comandos de ejecucion
+
+Ejecutar una prueba pequena de 5 preguntas con todas las metricas:
+
+```powershell
+python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion\checkpoints\baseline_all_on.json --limit 5 --metrics all --output-root .\research\evaluation\runs\ragas_nvidia_prueba_5
+```
+
+Ejecutar solo el conjunto propio en castellano, todas las variantes de ablacion:
+
+```powershell
+python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion\checkpoints --metrics all
+```
+
+Ejecutar solo el conjunto propio en valenciano/catalan, todas las variantes de ablacion:
+
+```powershell
+python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion_ca_ca\checkpoints --metrics all
+```
+
+Ejecutar solo RagBench ablacion, todas las variantes:
+
+```powershell
+python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\ragbench_ablation_en_dev10_frozen\checkpoints --metrics all
+```
+
+Ejecutar RagBench final texto 40p x 5q:
+
+```powershell
+python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\ragbench\en_eval\dataset_ragbench_en_eval_text_40p_5q_eval\checkpoint.json --metrics all
+```
+
+Ejecutar RagBench visual final:
+
+```powershell
+python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\ragbench_visual\inference\image_table_25p_5q\checkpoint.json --metrics all
+```
+
+Ejecutar el recalculo completo seleccionado, 26 checkpoints:
+
+```powershell
+python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\ragbench\en_eval\dataset_ragbench_en_eval_text_40p_5q_eval\checkpoint.json --checkpoint .\research\evaluation\runs\ragas\ragbench_visual\inference\image_table_25p_5q\checkpoint.json --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion\checkpoints --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion_ca_ca\checkpoints --checkpoint .\research\evaluation\runs\ragas\comparisons\ragbench_ablation_en_dev10_frozen\checkpoints --metrics all
+```
+
+Probar `workers=3` y `batch_size=3` guardando en un directorio alternativo:
+
+```powershell
+python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion\checkpoints --metrics all --ragas-max-workers 3 --ragas-batch-size 3 --output-root .\research\evaluation\runs\ragas_nvidia_revaluation_w3_b3
+```
+
+Usar una API key temporal solo para la sesion actual de PowerShell:
+
+```powershell
+$env:NVIDIA_API_KEY="PEGA_AQUI_LA_API_KEY"; python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\ragbench_ablation_en_dev10_frozen\checkpoints --metrics all --ragas-max-workers 3 --ragas-batch-size 3 --output-root .\research\evaluation\runs\ragas_nvidia_revaluation_ragbench_ablation_w3_b3
+```
+
+Comprobar valores nulos al terminar una ejecucion:
+
+```powershell
+python -c "import pandas as pd; p='research/evaluation/runs/ragas_nvidia_revaluation/comparisons/todas_ablacion/baseline_all_on/scores.csv'; df=pd.read_csv(p); print(df.isna().sum())"
+```
+
 ## 1. Dataset propio en castellano
 
 Dataset indicado en el resumen: `research/evaluation/datasets/local/dataset_eval_es.json`  
