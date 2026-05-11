@@ -48,7 +48,7 @@ except ImportError:  # pragma: no cover - dependency is checked again before rea
 
 
 DEFAULT_BASE_URL = "https://integrate.api.nvidia.com/v1"
-DEFAULT_CHAT_MODEL = "openai/gpt-oss-120b"
+DEFAULT_CHAT_MODEL = "mistralai/mistral-small-4-119b-2603"
 DEFAULT_EMBEDDING_MODEL = "nvidia/llama-3.2-nv-embedqa-1b-v2"
 DEFAULT_OUTPUT_ROOT = ROOT / "research" / "evaluation" / "runs" / "ragas_nvidia_revaluation"
 DEFAULT_SOURCE_ROOT = ROOT / "research" / "evaluation" / "runs" / "ragas"
