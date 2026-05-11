@@ -18,11 +18,12 @@ Directorio de salida diferenciado por defecto:
 - `research/evaluation/runs/ragas_nvidia_revaluation`
 
 Configuracion actual del script:
-- LLM juez: `openai/gpt-oss-120b`
+- LLM juez: `mistralai/mistral-small-4-119b-2603`
 - Embeddings: `nvidia/llama-3.2-nv-embedqa-1b-v2`
 - Rate limit compartido: `40` llamadas/minuto
-- RAGAS workers/batch por defecto: `2` / `2`
-- Max tokens por defecto: `16384`
+- RAGAS workers/batch por defecto: `3` / `3`
+- Max tokens por defecto: `32768`
+- `reasoning_effort`: `none` por defecto para Mistral Small mediante `--reasoning-effort auto`
 
 Checkpoints y carpetas que se quieren recalcular:
 
@@ -98,6 +99,12 @@ Comprobar valores nulos al terminar una ejecucion:
 
 ```powershell
 python -c "import pandas as pd; p='research/evaluation/runs/ragas_nvidia_revaluation/comparisons/todas_ablacion/baseline_all_on/scores.csv'; df=pd.read_csv(p); print(df.isna().sum())"
+```
+
+Reintentar solo filas con metricas nulas de un `scores.csv` ya existente:
+
+```powershell
+python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\ragbench_visual\inference\image_table_25p_5q\checkpoint.json --output-root .\research\evaluation\runs\ragas_nvidia_revaluation --retry-failed
 ```
 
 ## 1. Dataset propio en castellano

@@ -21,6 +21,7 @@ import argparse
 import json
 import os
 import sys
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,9 @@ DEFAULT_CHAT_MODEL = "mistralai/mistral-small-4-119b-2603"
 DEFAULT_EMBEDDING_MODEL = "nvidia/llama-3.2-nv-embedqa-1b-v2"
 DEFAULT_OUTPUT_ROOT = ROOT / "research" / "evaluation" / "runs" / "ragas_nvidia_revaluation"
 DEFAULT_SOURCE_ROOT = ROOT / "research" / "evaluation" / "runs" / "ragas"
+DEFAULT_MAX_TOKENS = 32768
+DEFAULT_REASONING_EFFORT = "auto"
+MISTRAL_SMALL_MODEL_ID = "mistralai/mistral-small-4-119b-2603"
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -260,6 +264,86 @@ def _expand_input_path(path: Path) -> list[Path]:
     return [path.resolve()]
 
 
+def _is_mistral_small_model(model: str) -> bool:
+    return model.lower().strip() == MISTRAL_SMALL_MODEL_ID
+
+
+def _resolve_reasoning_effort(args: argparse.Namespace) -> str | None:
+    if args.reasoning_effort != "auto":
+        return args.reasoning_effort
+    if _is_mistral_small_model(args.model):
+        return "none"
+    return None
+
+
+def _build_extra_body(args: argparse.Namespace) -> dict[str, Any] | None:
+    extra_body: dict[str, Any] = {}
+    reasoning_effort = _resolve_reasoning_effort(args)
+    if reasoning_effort is not None:
+        extra_body["reasoning_effort"] = reasoning_effort
+    return extra_body or None
+
+
+def _metric_columns_in_csv(df: Any) -> list[str]:
+    return [name for name in run_eval.METRIC_NAMES if name in df.columns]
+
+
+def _failed_score_indexes(scores_csv: Path) -> list[int]:
+    import pandas as pd
+
+    df = pd.read_csv(scores_csv)
+    metric_cols = _metric_columns_in_csv(df)
+    if not metric_cols:
+        raise ValueError(f"No RAGAS metric columns found in {scores_csv}")
+    mask = df[metric_cols].isna().any(axis=1)
+    return [int(idx) for idx in df.index[mask].tolist()]
+
+
+def _subset_generation(generation: dict[str, Any], indexes: list[int]) -> dict[str, Any]:
+    subset = dict(generation)
+    for key in ("questions", "ground_truths", "answers", "contexts_list", "question_statuses"):
+        value = generation.get(key)
+        if isinstance(value, list):
+            subset[key] = [value[i] for i in indexes if i < len(value)]
+    subset["questions_count"] = len(indexes)
+    subset["tiene_ground_truth"] = any(bool(gt) for gt in subset.get("ground_truths", []))
+    return subset
+
+
+def _merge_retry_scores(original_csv: Path, retry_csv: Path, retry_indexes: list[int]) -> dict[str, Any]:
+    import pandas as pd
+
+    original_df = pd.read_csv(original_csv)
+    retry_df = pd.read_csv(retry_csv)
+    metric_cols = _metric_columns_in_csv(original_df)
+    recovered: list[dict[str, Any]] = []
+
+    for retry_row_idx, original_row_idx in enumerate(retry_indexes):
+        if retry_row_idx >= len(retry_df) or original_row_idx >= len(original_df):
+            continue
+        recovered_metrics = []
+        for metric_name in metric_cols:
+            original_value = original_df.at[original_row_idx, metric_name]
+            retry_value = retry_df.at[retry_row_idx, metric_name]
+            if pd.isna(original_value) and not pd.isna(retry_value):
+                original_df.at[original_row_idx, metric_name] = retry_value
+                recovered_metrics.append(metric_name)
+        if recovered_metrics:
+            recovered.append(
+                {
+                    "row": original_row_idx + 1,
+                    "metrics": recovered_metrics,
+                }
+            )
+
+    original_df.to_csv(original_csv, index=False, encoding="utf-8")
+    remaining_nan = int(original_df[metric_cols].isna().sum().sum()) if metric_cols else 0
+    return {
+        "recovered_rows": recovered,
+        "remaining_nan_cells": remaining_nan,
+    }
+
+
 class NvidiaEmbeddings(Embeddings):
     """NVIDIA embedding wrapper with required input_type for asymmetric models."""
 
@@ -317,10 +401,21 @@ def _build_nvidia_configurator(args: argparse.Namespace):
         try:
             from langchain_core.rate_limiters import InMemoryRateLimiter
             from langchain_openai import ChatOpenAI
+            from ragas.llms.base import LangchainLLMWrapper
         except ImportError as err:
             print(f"Error: {err}")
-            print("Install with: pip install langchain-openai")
+            print("Install with: pip install langchain-openai ragas")
             raise SystemExit(1) from err
+
+        class NvidiaChatOpenAI(ChatOpenAI):
+            """ChatOpenAI variant that emits NVIDIA NIM-compatible payload keys."""
+
+            def _get_request_payload(self, input_, *, stop=None, **kwargs):
+                payload = super()._get_request_payload(input_, stop=stop, **kwargs)
+                if "max_completion_tokens" in payload:
+                    payload["max_tokens"] = payload.pop("max_completion_tokens")
+                payload.pop("n", None)
+                return payload
 
         requests_per_second = max(args.rate_limit_per_minute, 1) / 60.0
         limiter = InMemoryRateLimiter(
@@ -329,17 +424,34 @@ def _build_nvidia_configurator(args: argparse.Namespace):
             max_bucket_size=1,
         )
 
-        eval_llm = ChatOpenAI(
-            model=args.model,
-            api_key=api_key,
-            base_url=args.base_url,
-            temperature=args.temperature,
-            top_p=args.top_p,
-            timeout=args.timeout,
-            max_retries=args.max_retries,
-            max_completion_tokens=args.max_tokens,
-            rate_limiter=limiter,
+        extra_body = _build_extra_body(args)
+        chat_kwargs: dict[str, Any] = {
+            "model": args.model,
+            "api_key": api_key,
+            "base_url": args.base_url,
+            "temperature": args.temperature,
+            "top_p": args.top_p,
+            "timeout": args.timeout,
+            "max_retries": args.max_retries,
+            "max_tokens": args.max_tokens,
+            "rate_limiter": limiter,
+        }
+        if extra_body is not None:
+            chat_kwargs["extra_body"] = extra_body
+
+        raw_eval_llm = NvidiaChatOpenAI(
+            **chat_kwargs,
         )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="LangchainLLMWrapper is deprecated.*",
+                category=DeprecationWarning,
+            )
+            eval_llm = LangchainLLMWrapper(
+                raw_eval_llm,
+                bypass_n=True,
+            )
 
         eval_embeddings = None
         if args.embedding_model.lower() != "none":
@@ -361,6 +473,17 @@ def _build_nvidia_configurator(args: argparse.Namespace):
         )
         print(f"NVIDIA base_url: {args.base_url}")
         print(f"Shared API rate limit: {args.rate_limit_per_minute} calls/minute")
+        print(
+            "NVIDIA request config: "
+            f"max_tokens={args.max_tokens}, "
+            f"reasoning_effort={_resolve_reasoning_effort(args) or 'default'}, "
+            f"bypass_n=True"
+        )
+        print(
+            "RAGAS throughput config: "
+            f"workers={args.ragas_max_workers}, "
+            f"batch_size={args.ragas_batch_size or 'auto'}"
+        )
         return eval_llm, eval_embeddings
 
     return configurar_llm_nvidia
@@ -389,7 +512,23 @@ def evaluate_one(source_path: Path, args: argparse.Namespace) -> dict[str, Any] 
     generation["output_path"] = str(output_csv.resolve())
     generation["debug_path"] = str(debug_json.resolve()) if args.save_debug else None
 
-    if output_csv.exists() and not args.overwrite:
+    retry_indexes: list[int] = []
+    original_output_csv = output_csv
+    original_debug_json = debug_json
+    if args.retry_failed:
+        if not output_csv.exists():
+            raise FileNotFoundError(f"--retry-failed requires an existing scores CSV: {output_csv}")
+        retry_indexes = _failed_score_indexes(output_csv)
+        if not retry_indexes:
+            print(f"[skip] no NaN metric cells found: {output_csv}")
+            return None
+        generation = _subset_generation(generation, retry_indexes)
+        output_csv = output_csv.with_name(f"{output_csv.stem}.retry_failed.csv")
+        debug_json = debug_json.with_name(f"{debug_json.stem}.retry_failed.json")
+        generation["output_path"] = str(output_csv.resolve())
+        generation["debug_path"] = str(debug_json.resolve()) if args.save_debug else None
+
+    if output_csv.exists() and not args.overwrite and not args.retry_failed:
         print(f"[skip] exists: {output_csv}")
         return None
 
@@ -399,6 +538,13 @@ def evaluate_one(source_path: Path, args: argparse.Namespace) -> dict[str, Any] 
     print(f"Output: {output_csv}")
     if args.save_debug:
         print(f"Debug:  {debug_json}")
+    if args.retry_failed:
+        retry_rows = ", ".join(str(i + 1) for i in retry_indexes[:20])
+        retry_suffix = "..." if len(retry_indexes) > 20 else ""
+        print(
+            "Retry failed rows from existing scores: "
+            f"{retry_rows}{retry_suffix}"
+        )
     print("=" * 80)
 
     if args.dry_run:
@@ -409,7 +555,7 @@ def evaluate_one(source_path: Path, args: argparse.Namespace) -> dict[str, Any] 
         }
 
     run_dir.mkdir(parents=True, exist_ok=True)
-    return run_eval.evaluar_respuestas_con_ragas(
+    result = run_eval.evaluar_respuestas_con_ragas(
         generation=generation,
         save_debug=args.save_debug,
         ragas_timeout=args.ragas_timeout,
@@ -420,6 +566,22 @@ def evaluate_one(source_path: Path, args: argparse.Namespace) -> dict[str, Any] 
         ragas_metrics=args.metrics,
         raise_exceptions=args.raise_exceptions,
     )
+    if args.retry_failed:
+        merge_summary = _merge_retry_scores(original_output_csv, output_csv, retry_indexes)
+        result["output_path"] = str(original_output_csv.resolve())
+        result["retry_output_path"] = str(output_csv.resolve())
+        result["retry_debug_path"] = str(debug_json.resolve()) if args.save_debug else None
+        result["retry_failed_rows"] = [idx + 1 for idx in retry_indexes]
+        result["retry_merge_summary"] = merge_summary
+        print(f"\nMerged retry scores into: {original_output_csv}")
+        print(
+            "Retry recovery: "
+            f"{len(merge_summary['recovered_rows'])}/{len(retry_indexes)} row(s) recovered; "
+            f"remaining NaN metric cells={merge_summary['remaining_nan_cells']}"
+        )
+        if args.save_debug and original_debug_json.exists():
+            print(f"Original debug remains at: {original_debug_json}")
+    return result
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -446,7 +608,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top-p", type=float, default=1.0)
-    parser.add_argument("--max-tokens", type=int, default=16384)
+    parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
+    parser.add_argument(
+        "--reasoning-effort",
+        choices=("auto", "none", "high"),
+        default=DEFAULT_REASONING_EFFORT,
+        help="NVIDIA reasoning_effort. auto disables reasoning for Mistral Small.",
+    )
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--max-retries", type=int, default=3)
     parser.add_argument("--rate-limit-per-minute", type=int, default=40)
@@ -462,6 +630,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--no-debug", action="store_true")
     parser.add_argument("--raise-exceptions", action="store_true")
+    parser.add_argument(
+        "--retry-failed",
+        action="store_true",
+        help="Re-evaluate only rows with NaN metric cells in an existing scores.csv.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser
 
@@ -514,6 +687,10 @@ def main() -> int:
                     "model": args.model,
                     "embedding_model": args.embedding_model,
                     "base_url": args.base_url,
+                    "max_tokens": args.max_tokens,
+                    "reasoning_effort": _resolve_reasoning_effort(args),
+                    "ragas_max_workers": args.ragas_max_workers,
+                    "ragas_batch_size": args.ragas_batch_size,
                     "rate_limit_per_minute": args.rate_limit_per_minute,
                     "results": results,
                 },
