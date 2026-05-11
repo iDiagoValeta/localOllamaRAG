@@ -1,19 +1,3 @@
-# =============================================================================
-# MonkeyGrab — .gitignore
-# =============================================================================
-# Objetivo: no versionar pesos, índices locales ni artefactos regenerables;
-# sí mantener scripts, Modelfiles y JSON de métricas pequeños.
-#
-# Los bloques numerados 1–10 y 12–13 son índices locales a ESTE archivo.
-# Las convenciones de política (qué versionar, .gitkeep, GGUF) están en
-# CLAUDE.md § «Versionado Git» (apartado 11 del documento).
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# 1. Modelos y tensores (pesados)
-# -----------------------------------------------------------------------------
-# Salida de merge_lora.py: modelo denso HF antes de convert_hf_to_gguf.py
-# (safetensors ya cae bajo *.safetensors; esta regla evita ruido de JSON/tokenizer.)
 research/models/merged-model/**
 
 *.gguf
@@ -22,43 +6,24 @@ research/models/merged-model/**
 *.bin
 *.pth
 
-# -----------------------------------------------------------------------------
-# 2. Herramientas locales de cuantización (no submódulo versionado)
-# -----------------------------------------------------------------------------
 llama.cpp/
 llama-bin/
 
-# -----------------------------------------------------------------------------
-# 3. Fine-tuning LoRA — research/training-output/<modelo>/
-# -----------------------------------------------------------------------------
-# Se ignoran casi todos los hijos del directorio de cada run (checkpoints,
-# adaptadores, predicciones, plots…). Excepciones explícitas: script de informes
-# y JSON de resumen exportados por los train-*.py.
-#
-# Si en el futuro quieres versionar predicciones concretas, añade una línea
-# !research/training-output/<modelo>/nombre.json bajo el bloque correspondiente.
-
-# --- Qwen 3 ---
 research/training-output/qwen-3/*
 !research/training-output/qwen-3/generate_reports.py
 !research/training-output/qwen-3/training_stats.json
 !research/training-output/qwen-3/evaluation_comparison.json
 
-# --- Gemma 3 ---
 research/training-output/gemma-3/*
 !research/training-output/gemma-3/generate_reports.py
 !research/training-output/gemma-3/training_stats.json
 !research/training-output/gemma-3/evaluation_comparison.json
 
-# --- Phi-4 ---
-# Rank 32 escribe en la raíz de phi-4/ (train-phi4.py). Otros ranks usan
-# subcarpeta numérica (p. ej. 16/, 64/) sin pisar el run r=32.
 research/training-output/phi-4/*
 !research/training-output/phi-4/generate_reports.py
 !research/training-output/phi-4/training_stats.json
 !research/training-output/phi-4/evaluation_comparison.json
 
-# Subcarpetas por rank: solo JSON de resumen (el resto sigue excluido por *.safetensors, *.pt…).
 !research/training-output/phi-4/16/
 research/training-output/phi-4/16/*
 !research/training-output/phi-4/16/training_stats.json
@@ -69,12 +34,8 @@ research/training-output/phi-4/64/*
 !research/training-output/phi-4/64/training_stats.json
 !research/training-output/phi-4/64/evaluation_comparison.json
 
-# --- Baseline: informes regenerables (JSON maestro sí se versiona) ---
 research/training-output/baseline/reports/
 
-# -----------------------------------------------------------------------------
-# 4. GGUF ensamblado en repo — Modelfile (+ README.md model card si aplica)
-# -----------------------------------------------------------------------------
 research/models/gguf-output/qwen-3/*
 !research/models/gguf-output/qwen-3/Modelfile
 !research/models/gguf-output/qwen-3/README.md
@@ -90,15 +51,9 @@ research/models/gguf-output/phi-4/*
 !research/models/gguf-output/phi-4/LICENSE
 !research/models/gguf-output/phi-4/CONVERSION.md
 
-# -----------------------------------------------------------------------------
-# 5. Logs y volcados genéricos
-# -----------------------------------------------------------------------------
 *.log
 salida_*
 
-# -----------------------------------------------------------------------------
-# 6. Python
-# -----------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
@@ -109,26 +64,14 @@ venv/
 .eggs/
 .pytest_cache/
 
-# -----------------------------------------------------------------------------
-# 7. RAG — base de datos vectorial unificada
-# -----------------------------------------------------------------------------
-# Las carpetas de PDFs (es/, ca/, en/, libre/, en_ragbench_*/) se versionan
-# completas como evidencia de corpus del TFG.
-# Base de datos vectorial unificada (generada al indexar; nunca versionada).
 rag/vector_db/**
 
 
 rag/debug_rag/
 
-# -----------------------------------------------------------------------------
-# 8. Interfaz web (frontend empaquetado en rag/web/zip)
-# -----------------------------------------------------------------------------
 rag/web/zip/node_modules/
 rag/web/zip/dist/
 
-# -----------------------------------------------------------------------------
-# 9. IDE y sistema operativo
-# -----------------------------------------------------------------------------
 .idea/
 .vscode/
 *.swp
@@ -136,34 +79,24 @@ rag/web/zip/dist/
 .DS_Store
 Thumbs.db
 
-# -----------------------------------------------------------------------------
-# 10. Historial de chat CLI y secretos
-# -----------------------------------------------------------------------------
 historial_chat.json
 .env
 
-# -----------------------------------------------------------------------------
-# 12. Evaluación y exportaciones puntuales
-# -----------------------------------------------------------------------------
 research/evaluation/chunks_*.txt
 research/evaluation/tmp/**
 research/evaluation/**/pytest_*/
 research/evaluation/**/pytest-cache-files-*/
-# Salida por defecto de export_fragments.py: rag/show_fragments/exports/ (versionada).
-# Cualquier .txt / .jsonl suelto en show_fragments/ (no solo en exports/) — antes
-# estaban cubiertos y al quitarlos reaparecían como untracked.
 rag/show_fragments/*.txt
 rag/show_fragments/*.jsonl
 
-# -----------------------------------------------------------------------------
-# 13. Otros (notas locales / asistente)
-# -----------------------------------------------------------------------------
 .claude/
 MODIFICACIONES_EVALUACION.md
 
-# Salida temporal de pytest (refactor, visual, etc.)
 pipeline/
 
 media/
 
 .conda/
+
+.codex
+AGENTS.md
