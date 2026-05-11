@@ -925,6 +925,37 @@ def _extraer_justificaciones_traces(traces: list, metric_cols: list) -> list[dic
     return justificaciones
 
 
+def _resumen_nan_ragas(df: pd.DataFrame, metric_cols: list[str]) -> dict[str, Any]:
+    """Build a compact summary of missing RAGAS metric cells."""
+    rows: list[dict[str, Any]] = []
+    by_metric: dict[str, int] = {}
+    for metric_name in metric_cols:
+        missing_count = int(df[metric_name].isna().sum())
+        if missing_count:
+            by_metric[metric_name] = missing_count
+
+    if by_metric:
+        for idx, row in df.iterrows():
+            missing_metrics = [
+                metric_name
+                for metric_name in metric_cols
+                if pd.isna(row.get(metric_name))
+            ]
+            if missing_metrics:
+                rows.append(
+                    {
+                        "index": int(idx) + 1,
+                        "missing_metrics": missing_metrics,
+                    }
+                )
+
+    return {
+        "total_missing_cells": int(sum(by_metric.values())),
+        "by_metric": by_metric,
+        "rows": rows,
+    }
+
+
 def guardar_debug(
     result,
     questions: list,
@@ -949,6 +980,7 @@ def guardar_debug(
     """
     df = result.to_pandas()
     metric_cols = [c for c in METRIC_NAMES if c in df.columns]
+    nan_summary = _resumen_nan_ragas(df, metric_cols)
 
     traces = getattr(result, "traces", []) or []
     justificaciones = _extraer_justificaciones_traces(traces, metric_cols) if traces else [{}] * len(questions)
@@ -983,9 +1015,12 @@ def guardar_debug(
         },
         "results": debug_entries,
         "global_averages": {
-            METRIC_DISPLAY_NAMES.get(m, m): float(df[m].mean())
+            METRIC_DISPLAY_NAMES.get(m, m): (
+                float(df[m].mean()) if not pd.isna(df[m].mean()) else None
+            )
             for m in metric_cols
         },
+        "nan_summary": nan_summary,
     }
 
     with open(debug_path, "w", encoding="utf-8") as f:
@@ -1450,7 +1485,22 @@ def evaluar_respuestas_con_ragas(
     print(f"   Evaluation completed in {t_eval:.1f}s")
 
     df_scores = result.to_pandas()
+    metric_cols = [c for c in METRIC_NAMES if c in df_scores.columns]
+    nan_summary = _resumen_nan_ragas(df_scores, metric_cols)
     imprimir_resultados(df_scores, questions)
+    if nan_summary["total_missing_cells"]:
+        print(
+            "   RAGAS missing metric cells: "
+            f"{nan_summary['total_missing_cells']} "
+            f"across {len(nan_summary['rows'])} row(s)."
+        )
+        print(
+            "   Missing by metric: "
+            + ", ".join(
+                f"{metric}={count}"
+                for metric, count in nan_summary["by_metric"].items()
+            )
+        )
 
     output_path = generation["output_path"]
     output_dir = os.path.dirname(os.path.abspath(output_path))
@@ -1473,7 +1523,6 @@ def evaluar_respuestas_con_ragas(
     else:
         debug_path = None
 
-    metric_cols = [c for c in METRIC_NAMES if c in df_scores.columns]
     mean_scores = {}
     for metric_name in metric_cols:
         metric_value = df_scores[metric_name].mean(numeric_only=True)
@@ -1493,6 +1542,7 @@ def evaluar_respuestas_con_ragas(
         "pipeline_seconds": generation["pipeline_seconds"],
         "evaluation_seconds": t_eval,
         "mean_scores": mean_scores,
+        "nan_summary": nan_summary,
         "checkpoint_path": os.path.abspath(generation["checkpoint_path"]),
     }
 
