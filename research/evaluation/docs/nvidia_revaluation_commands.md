@@ -12,18 +12,18 @@ Notas:
 Objetivo: reevaluar con RAGAS usando la API gratuita de NVIDIA Build/API, en lugar del juez anterior de Google.
 
 Script dedicado:
-- `ragas_nvidia_revaluation/eval_ragas_nvidia_from_checkpoints.py`
+- `research/evaluation/eval_ragas_nvidia_from_checkpoints.py`
 
 Directorio de salida diferenciado por defecto:
 - `research/evaluation/runs/ragas_nvidia_revaluation`
 
 Configuracion actual del script:
-- LLM juez: `mistralai/mistral-small-4-119b-2603`
+- LLM juez: `mistralai/mistral-medium-3.5-128b`
 - Embeddings: `nvidia/llama-3.2-nv-embedqa-1b-v2`
 - Rate limit compartido: `40` llamadas/minuto
 - RAGAS workers/batch por defecto: `3` / `3`
 - Max tokens por defecto: `32768`
-- `reasoning_effort`: `none` por defecto para Mistral Small mediante `--reasoning-effort auto`
+- `reasoning_effort`: valor por defecto del proveedor mediante `--reasoning-effort auto` (solo se fuerza `none` al seleccionar Mistral Small)
 
 Checkpoints y carpetas que se quieren recalcular:
 
@@ -36,7 +36,7 @@ Checkpoints y carpetas que se quieren recalcular:
 Comando base desde la raiz del repositorio:
 
 ```powershell
-python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\ragbench\en_eval\dataset_ragbench_en_eval_text_40p_5q_eval\checkpoint.json --checkpoint .\research\evaluation\runs\ragas\ragbench_visual\inference\image_table_25p_5q\checkpoint.json --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion\checkpoints --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion_ca_ca\checkpoints --checkpoint .\research\evaluation\runs\ragas\comparisons\ragbench_ablation_en_dev10_frozen\checkpoints --metrics all
+python .\research\evaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\ragbench\en_eval\dataset_ragbench_en_eval_text_40p_5q_eval\checkpoint.json --checkpoint .\research\evaluation\runs\ragas\ragbench_visual\inference\image_table_25p_5q\checkpoint.json --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion\checkpoints --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion_ca_ca\checkpoints --checkpoint .\research\evaluation\runs\ragas\comparisons\ragbench_ablation_en_dev10_frozen\checkpoints --metrics all
 ```
 
 ### Comandos de ejecucion
@@ -44,55 +44,55 @@ python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkp
 Ejecutar una prueba pequena de 5 preguntas con todas las metricas:
 
 ```powershell
-python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion\checkpoints\baseline_all_on.json --limit 5 --metrics all --output-root .\research\evaluation\runs\ragas_nvidia_prueba_5
+python .\research\evaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion\checkpoints\baseline_all_on.json --limit 5 --metrics all --output-root .\research\evaluation\runs\ragas_nvidia_prueba_5
 ```
 
 Ejecutar solo el conjunto propio en castellano, todas las variantes de ablacion:
 
 ```powershell
-python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion\checkpoints --metrics all
+python .\research\evaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion\checkpoints --metrics all
 ```
 
 Ejecutar solo el conjunto propio en valenciano/catalan, todas las variantes de ablacion:
 
 ```powershell
-python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion_ca_ca\checkpoints --metrics all
+python .\research\evaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion_ca_ca\checkpoints --metrics all
 ```
 
 Ejecutar solo RagBench ablacion, todas las variantes:
 
 ```powershell
-python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\ragbench_ablation_en_dev10_frozen\checkpoints --metrics all
+python .\research\evaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\ragbench_ablation_en_dev10_frozen\checkpoints --metrics all
 ```
 
 Ejecutar RagBench final texto 40p x 5q:
 
 ```powershell
-python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\ragbench\en_eval\dataset_ragbench_en_eval_text_40p_5q_eval\checkpoint.json --metrics all
+python .\research\evaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\ragbench\en_eval\dataset_ragbench_en_eval_text_40p_5q_eval\checkpoint.json --metrics all
 ```
 
 Ejecutar RagBench visual final:
 
 ```powershell
-python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\ragbench_visual\inference\image_table_25p_5q\checkpoint.json --metrics all
+python .\research\evaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\ragbench_visual\inference\image_table_25p_5q\checkpoint.json --metrics all
 ```
 
 Ejecutar el recalculo completo seleccionado, 26 checkpoints:
 
 ```powershell
-python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\ragbench\en_eval\dataset_ragbench_en_eval_text_40p_5q_eval\checkpoint.json --checkpoint .\research\evaluation\runs\ragas\ragbench_visual\inference\image_table_25p_5q\checkpoint.json --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion\checkpoints --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion_ca_ca\checkpoints --checkpoint .\research\evaluation\runs\ragas\comparisons\ragbench_ablation_en_dev10_frozen\checkpoints --metrics all
+python .\research\evaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\ragbench\en_eval\dataset_ragbench_en_eval_text_40p_5q_eval\checkpoint.json --checkpoint .\research\evaluation\runs\ragas\ragbench_visual\inference\image_table_25p_5q\checkpoint.json --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion\checkpoints --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion_ca_ca\checkpoints --checkpoint .\research\evaluation\runs\ragas\comparisons\ragbench_ablation_en_dev10_frozen\checkpoints --metrics all
 ```
 
 Probar `workers=3` y `batch_size=3` guardando en un directorio alternativo:
 
 ```powershell
-python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion\checkpoints --metrics all --ragas-max-workers 3 --ragas-batch-size 3 --output-root .\research\evaluation\runs\ragas_nvidia_revaluation_w3_b3
+python .\research\evaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\todas_ablacion\checkpoints --metrics all --ragas-max-workers 3 --ragas-batch-size 3 --output-root .\research\evaluation\runs\ragas_nvidia_revaluation_w3_b3
 ```
 
 Usar una API key temporal solo para la sesion actual de PowerShell:
 
 ```powershell
-$env:NVIDIA_API_KEY="PEGA_AQUI_LA_API_KEY"; python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\ragbench_ablation_en_dev10_frozen\checkpoints --metrics all --ragas-max-workers 3 --ragas-batch-size 3 --output-root .\research\evaluation\runs\ragas_nvidia_revaluation_ragbench_ablation_w3_b3
+$env:NVIDIA_API_KEY="PEGA_AQUI_LA_API_KEY"; python .\research\evaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\comparisons\ragbench_ablation_en_dev10_frozen\checkpoints --metrics all --ragas-max-workers 3 --ragas-batch-size 3 --output-root .\research\evaluation\runs\ragas_nvidia_revaluation_ragbench_ablation_w3_b3
 ```
 
 Comprobar valores nulos al terminar una ejecucion:
@@ -104,7 +104,7 @@ python -c "import pandas as pd; p='research/evaluation/runs/ragas_nvidia_revalua
 Reintentar solo filas con metricas nulas de un `scores.csv` ya existente:
 
 ```powershell
-python .\ragas_nvidia_revaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\ragbench_visual\inference\image_table_25p_5q\checkpoint.json --output-root .\research\evaluation\runs\ragas_nvidia_revaluation --retry-failed
+python .\research\evaluation\eval_ragas_nvidia_from_checkpoints.py --checkpoint .\research\evaluation\runs\ragas\ragbench_visual\inference\image_table_25p_5q\checkpoint.json --output-root .\research\evaluation\runs\ragas_nvidia_revaluation --retry-failed
 ```
 
 ## 1. Dataset propio en castellano

@@ -254,7 +254,7 @@ def _rag_stream(mensaje_usuario: str) -> Generator[str, None, None]:
             "temperature": 0.15,
             "top_p": 0.85,
             "repeat_penalty": 1.15,
-            "num_ctx": 8192,
+            "num_ctx": rag_engine.OLLAMA_RAG_NUM_CTX,
         },
     )
 
