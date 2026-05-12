@@ -61,6 +61,8 @@ alwaysApply: true
 | `USAR_RERANKER` | `True` |
 | `USAR_EMBEDDINGS_IMAGEN` | `True` |
 
+**Response truncation (Phi-4 / Qwen3):** both models occasionally cut responses mid-sentence (e.g. "el año 2…"). This is not a render bug — it reflects the Modelfile `num_ctx` limit (16k by default) interacting with long contexts. Set `OLLAMA_RAG_NUM_CTX=32768` in evaluation runs to reduce occurrence. Ollama's default if no context env var is set is 4096, which causes systematic truncation.
+
 ---
 
 ## 3. File structure
@@ -105,7 +107,7 @@ localOllamaRAG/
 │       └── zip/                  # React source + build (dist/, gitignored)
 ├── research/
 │   ├── README.md
-│   ├── evaluation/               # RAG evaluation + run_eval.py + runs/
+│   ├── evaluation/               # RAG evaluation + run_eval.py + NVIDIA re-evaluator + runs/
 │   ├── docs/                     # EVALUACIONES_PIPELINE.md, PROJECT_LAYOUT, sparse-checkout, diagrams
 │   ├── training-output/          # LoRA runs + baseline benchmark artifacts
 │   ├── models/                   # merged-model/ (gitignored) + gguf-output/ Modelfiles
@@ -155,7 +157,14 @@ Reference environment (adjust per hardware):
 | `RERANKER_QUALITY` | `quality` | Reranker tier |
 | `MONKEYGRAB_LANG` | `es` | CLI language: `es`, `en` or `ca` |
 | `HF_TOKEN` | — | HuggingFace token (required for Gemma-3) |
-| `GOOGLE_API_KEY` | — | Gemini API key for RAGAS evaluation |
+| `GOOGLE_API_KEY` | — | Gemini API key for RAGAS evaluation (provider A) |
+| `NVIDIA_API_KEY` | — | NVIDIA Build API key for RAGAS re-evaluation (provider B, free) |
+| `OLLAMA_NUM_CTX` | 16384 | Global context window for all Ollama models; Ollama defaults to 4096 if not set |
+| `OLLAMA_RAG_NUM_CTX` | 32768 | Context override for the RAG generator (takes precedence over `OLLAMA_NUM_CTX`) |
+| `OLLAMA_AUX_NUM_CTX` | 32768 | Context override for auxiliary models (RECOMP, contextual retrieval, OCR) |
+| `OLLAMA_REQUEST_TIMEOUT` | 900 | HTTP timeout (seconds) for Ollama requests in evaluation runs |
+
+**`embeddinggemma` context limit:** Ollama caps this model at ~2048 tokens. The pipeline's `CHUNK_SIZE` (2000 chars) is usually within the limit, but monitor `ollama serve` output for `truncated` warnings on unusually long chunks (e.g. contextual-retrieval-enriched chunks).
 
 ---
 
@@ -239,6 +248,11 @@ python research/evaluation/run_eval.py ragbench-eval
 python research/evaluation/run_ragbench_visual_inference.py --n-papers 25 --max-q 5
 python research/evaluation/run_ragbench_visual_inference.py --ragas-only  # RAGAS on existing inference JSON
 python research/evaluation/aggregate_comparison_by_conjunto.py --dir research/evaluation/runs/ragas/comparisons/<label> --etiquetas-es
+
+# RAGAS re-evaluation using NVIDIA Build API (NVIDIA_API_KEY required; free, rate limit 40 req/min)
+python research/evaluation/eval_ragas_nvidia_from_checkpoints.py --all-known --dry-run
+python research/evaluation/eval_ragas_nvidia_from_checkpoints.py --all-known
+python research/evaluation/eval_ragas_nvidia_from_checkpoints.py --checkpoint <path> --limit 5
 
 # Misc
 python research/scripts/generate_diagram.py --output research/docs/monkeygrab_architecture.png

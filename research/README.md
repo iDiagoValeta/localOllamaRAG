@@ -10,7 +10,7 @@ It is **not required** to run the user-facing RAG stack (`python rag/chat_pdfs.p
 
 | Path | Purpose |
 |------|---------|
-| `evaluation/` | RAGAS runner (`run_eval.py`), RagBench preparation, BERTScore post-processing, datasets and `runs/` artifacts |
+| `evaluation/` | RAGAS runner (`run_eval.py`), NVIDIA re-evaluator (`eval_ragas_nvidia_from_checkpoints.py`), RagBench preparation, BERTScore post-processing, datasets and `runs/` artifacts |
 | `scripts/training/` | LoRA fine-tuning scripts (Qwen3-14B, Phi-4, Gemma-3-12B) |
 | `scripts/evaluation/` | 7-model baseline benchmark, split inspection, SLURM helpers |
 | `scripts/conversion/` | LoRA merge, GGUF build, quantization (`quantize_to_q4km.ps1`), Modelfile notes |
@@ -28,6 +28,7 @@ It is **not required** to run the user-facing RAG stack (`python rag/chat_pdfs.p
 
 ```bash
 pip install -r research/evaluation/requirements.txt   # RAGAS + Gemini judge
+pip install langchain-openai openai                   # extra deps for NVIDIA evaluation provider (see below)
 pip install -r research/scripts/requirements.txt      # LoRA training stack (GPU, pinned versions)
 ```
 
@@ -62,6 +63,10 @@ The **RagBench** PDF trees under `rag/docs/en_ragbench_*` are used by `research/
 
 ## RAGAS evaluation
 
+Two judge providers are supported: **Google Gemini** (original) and **NVIDIA Build API** (free, no token limit).
+
+### Provider A — Google Gemini (live inference)
+
 Requires `GOOGLE_API_KEY` in `.env` ([Gemini](https://deepmind.google/models/gemini/) as judge LLM).
 
 ```bash
@@ -89,6 +94,31 @@ python research/evaluation/aggregate_comparison_by_conjunto.py \
   --dir research/evaluation/runs/ragas/comparisons/<label> \
   --etiquetas-es
 ```
+
+### Provider B — NVIDIA Build API (re-evaluation from checkpoints)
+
+Re-evaluates **existing checkpoint JSON files** (no new RAG inference). Uses NVIDIA's free OpenAI-compatible API — rate limit 40 req/min, no token quota. Requires `NVIDIA_API_KEY`.
+
+Default models: `mistralai/mistral-medium-3.5-128b` (judge), `nvidia/llama-3.2-nv-embedqa-1b-v2` (embeddings).
+
+```bash
+# Dry-run — list what would be evaluated
+python research/evaluation/eval_ragas_nvidia_from_checkpoints.py --all-known --dry-run
+
+# Re-evaluate all known checkpoints
+python research/evaluation/eval_ragas_nvidia_from_checkpoints.py --all-known
+
+# Re-evaluate a single checkpoint (optional row limit for testing)
+python research/evaluation/eval_ragas_nvidia_from_checkpoints.py \
+  --checkpoint research/evaluation/runs/ragas/comparisons/<label>/<file>.json \
+  --limit 5
+
+# Retry rows that scored NaN in a previous run
+python research/evaluation/eval_ragas_nvidia_from_checkpoints.py \
+  --checkpoint <file>.json --retry-failed
+```
+
+Outputs go to `research/evaluation/runs/ragas_nvidia_revaluation/`. Command reference and checkpoint inventory: [`research/evaluation/docs/nvidia_revaluation_commands.md`](evaluation/docs/nvidia_revaluation_commands.md).
 
 Artifacts are written under `research/evaluation/runs/`. See `research/docs/EVALUACIONES_PIPELINE.md` for corpus presets, variant definitions and artifact layout.
 
