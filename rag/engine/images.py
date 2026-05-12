@@ -274,7 +274,7 @@ def describir_imagen_con_llm(
                 "images": [image_b64],
             }],
             think=False,
-            options={"temperature": 0.1, "num_predict": 2000},
+            options={"temperature": 0.1, "num_predict": 2000, "num_ctx": OLLAMA_AUX_NUM_CTX},
         )
         descripcion = response["message"]["content"].strip()
 

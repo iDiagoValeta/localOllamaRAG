@@ -57,7 +57,13 @@ def _ollama_generate_stream(model: str, prompt: str, options: dict, system: Opti
     }
     if system:
         payload["system"] = system
-    with requests.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload, stream=True) as resp:
+    with requests.post(
+        f"{OLLAMA_BASE_URL}/api/generate",
+        json=payload,
+        stream=True,
+        timeout=OLLAMA_REQUEST_TIMEOUT,
+    ) as resp:
+        resp.raise_for_status()
         for line in resp.iter_lines():
             if line:
                 yield json.loads(line)
@@ -79,7 +85,12 @@ def _generar_respuesta_stream(mensaje_usuario: str, on_token=None) -> str:
     for chunk in _ollama_generate_stream(
         model=MODELO_RAG,
         prompt=mensaje_usuario,
-        options={"temperature": 0.15, "top_p": 0.9, "repeat_penalty": 1.15, "num_ctx": 16384},
+        options={
+            "temperature": 0.15,
+            "top_p": 0.9,
+            "repeat_penalty": 1.15,
+            "num_ctx": OLLAMA_RAG_NUM_CTX,
+        },
         system=system,
     ):
         content = chunk.get("response", "")

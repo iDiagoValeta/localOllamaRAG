@@ -120,7 +120,7 @@ def generar_contexto_situacional(
                 {"role": "user",   "content": user_prompt}
             ],
             think=False,
-            options={"temperature": 0.1, "num_predict": 250},
+            options={"temperature": 0.1, "num_predict": 250, "num_ctx": OLLAMA_AUX_NUM_CTX},
         )
         contexto = response['message']['content'].strip()
         if contexto:
