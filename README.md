@@ -183,6 +183,7 @@ Set these in your shell or in a `.env` file at the project root.
 | `OLLAMA_OCR_NUM_CTX` | Context window for PDF image descriptions; defaults to `OLLAMA_AUX_NUM_CTX` |
 | `OLLAMA_REQUEST_TIMEOUT` | HTTP timeout in seconds for long Ollama generation calls |
 | `MAX_CONTEXTO_CHARS` | Maximum retrieved-context characters sent to the answer/RECOMP stage (default: `24000`) |
+| `CONTEXTUAL_DOC_CHARS` | Maximum document-level characters sent to contextual retrieval while indexing each chunk (default: `12000`) |
 | `DOCS_FOLDER` | PDF folder to index (default: `rag/docs/libre/`) |
 | `RERANKER_QUALITY` | Cross-encoder tier: `quality` ([BAAI/bge](https://huggingface.co/BAAI/bge-reranker-v2-m3)) or `speed` (MiniLM) |
 | `MONKEYGRAB_LANG` | CLI language: `es` (default), `en` or `ca` |
@@ -190,6 +191,7 @@ Set these in your shell or in a `.env` file at the project root.
 > [ChromaDB](https://www.trychroma.com/) paths follow the pattern `rag/vector_db/<folder>_<embed_slug>/`. Changing `DOCS_FOLDER` or `OLLAMA_EMBED_MODEL` selects a different index — run `/reindex` when you intentionally switch either.
 > Context variables are requested per Ollama call. The effective window can still be capped by the model/Modelfile; use role-specific variables when only one auxiliary stage needs a larger window.
 > `MAX_CONTEXTO_CHARS` is measured in characters, not tokens; it trims retrieved evidence before the model prompt is sent.
+> `CONTEXTUAL_DOC_CHARS` is also measured in characters and only affects future indexing/reindexing, because the enriched chunk text is stored in ChromaDB.
 
 <details>
 <summary><strong>Advanced pipeline flags</strong></summary>

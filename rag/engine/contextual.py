@@ -40,8 +40,8 @@ def _detectar_idioma(texto: str) -> str:
     """Heuristic language detector from a document text sample.
 
     Counts distinctive function-word occurrences to distinguish Spanish,
-    Catalan, and English. Designed for documents where the first ~4000
-    characters are available; accuracy degrades on very short samples.
+    Catalan, and English. Designed for the representative document sample
+    prepared during indexing; accuracy degrades on very short samples.
 
     Args:
         texto: Representative text sample from the document (ideally ≥500 chars).

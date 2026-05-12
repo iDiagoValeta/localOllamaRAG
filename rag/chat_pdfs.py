@@ -342,6 +342,7 @@ else:
     _EMBED_PREFIX_DESC = "no prefixes (native)"
 
 MAX_CHARS_EMBED = 4000
+CONTEXTUAL_DOC_CHARS = _leer_env_int("CONTEXTUAL_DOC_CHARS", 12000)  # document sample chars for contextual retrieval
 CHUNK_SIZE = 2000          # raised from 1500: keeps full subsections (e.g. 3.2.3) in one chunk
 CHUNK_OVERLAP = 400        # raised from 350: ~20% overlap, proportional to new chunk size
 MIN_CHUNK_LENGTH = 150     # raised from 80: discards very short artefact chunks (copyright, author lists)

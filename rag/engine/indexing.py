@@ -109,6 +109,23 @@ def indexar_documentos(
                 logging.error(f"Error embedding {id_doc}: {e}")
             return False
 
+    def _preparar_texto_base_doc(textos_paginas: List[str]) -> str:
+        """Build the document-level sample used by contextual retrieval."""
+        partes: List[str] = []
+        caracteres = 0
+
+        for texto in textos_paginas:
+            if not texto:
+                continue
+            restante = CONTEXTUAL_DOC_CHARS - caracteres
+            if restante <= 0:
+                break
+            parte = texto[:restante]
+            partes.append(parte)
+            caracteres += len(parte)
+
+        return "\n\n".join(partes)[:CONTEXTUAL_DOC_CHARS]
+
     for idx, archivo in enumerate(archivos_pdf):
         if progress_callback:
             try:
@@ -133,8 +150,8 @@ def indexar_documentos(
                 try:
                     page_chunks = pymupdf4llm.to_markdown(ruta_pdf, page_chunks=True)
 
-                    _textos_paginas = [p['text'][:500] for p in page_chunks[:10]]
-                    texto_base_doc = "\n\n".join(_textos_paginas)[:4000]
+                    _textos_paginas = [p.get('text', '') for p in page_chunks[:10]]
+                    texto_base_doc = _preparar_texto_base_doc(_textos_paginas)
                     idioma_doc = _detectar_idioma(texto_base_doc)
 
                     for page_info in page_chunks:
@@ -177,8 +194,8 @@ def indexar_documentos(
             if not PYMUPDF_AVAILABLE or usar_pypdf_fallback:
                 reader = PdfReader(ruta_pdf)
 
-                _textos_paginas = [p.extract_text()[:500] for p in reader.pages[:10]]
-                texto_base_doc = "\n\n".join(_textos_paginas)[:4000]
+                _textos_paginas = [(p.extract_text() or "") for p in reader.pages[:10]]
+                texto_base_doc = _preparar_texto_base_doc(_textos_paginas)
                 idioma_doc = _detectar_idioma(texto_base_doc)
 
                 for i, page in enumerate(reader.pages):
