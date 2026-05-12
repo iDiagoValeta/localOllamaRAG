@@ -218,20 +218,10 @@ $env:OLLAMA_MAX_LOADED_MODELS="3"
 ollama serve
 
 # Terminal 2: repetition inference, no RAGAS
+# Ollama context, RAG model, context char caps and eval timeouts use repo defaults
+# from rag/chat_pdfs.py (and EVAL_* in run_eval / repeticion_run_eval). Optional:
+# copy .env at repo root — repeticion_run_eval loads it before importing chat_pdfs.
 cd C:\Users\nadiv\repos\localOllamaRAG
-$env:OLLAMA_RAG_MODEL="Qwen3-FineTuned:latest"
-$env:OLLAMA_NUM_CTX="8192"
-$env:OLLAMA_RAG_NUM_CTX="16384"
-$env:OLLAMA_AUX_NUM_CTX="8192"
-$env:OLLAMA_CONTEXTUAL_NUM_CTX="32768"
-$env:OLLAMA_RECOMP_NUM_CTX="8192"
-$env:OLLAMA_QUERY_NUM_CTX="8192"
-$env:OLLAMA_OCR_NUM_CTX="8192"
-$env:MAX_CONTEXTO_CHARS="24000"
-$env:CONTEXTUAL_DOC_CHARS="24000"
-$env:OLLAMA_REQUEST_TIMEOUT="900"
-$env:EVAL_OLLAMA_TIMEOUT="900"
-$env:EVAL_OLLAMA_ATTEMPTS="2"
 python .\repeticion_run_eval.py repeticion --run-id repeticion_20260512_132549 --corpus all
 ```
 

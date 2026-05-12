@@ -1256,7 +1256,7 @@ def generar_respuestas_rag(
                 f"Regenerating {len(pending_answer_indexes)} question(s): {first_missing}{suffix}"
             )
 
-        _ollama_timeout = int(os.getenv("EVAL_OLLAMA_TIMEOUT", "300"))
+        _ollama_timeout = int(os.getenv("EVAL_OLLAMA_TIMEOUT", "900"))
         _max_attempts_per_question = max(1, int(os.getenv("EVAL_OLLAMA_ATTEMPTS", "2")))
         try:
             for i in pending_answer_indexes:

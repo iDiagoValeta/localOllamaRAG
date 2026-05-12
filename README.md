@@ -174,13 +174,13 @@ Set these in your shell or in a `.env` file at the project root.
 | `OLLAMA_RECOMP_MODEL` | Model for context synthesis before generation |
 | `OLLAMA_OCR_MODEL` | Vision model for PDF image descriptions |
 | `OLLAMA_CONTEXTUAL_MODEL` | Auxiliary model for contextual chunk enrichment at indexing |
-| `OLLAMA_NUM_CTX` | Default context window requested from Ollama model calls |
-| `OLLAMA_RAG_NUM_CTX` | Context window requested for the final RAG generator; defaults to `OLLAMA_NUM_CTX` |
-| `OLLAMA_AUX_NUM_CTX` | Fallback context window for auxiliary LLM calls; defaults to `OLLAMA_NUM_CTX` |
-| `OLLAMA_QUERY_NUM_CTX` | Context window for LLM query decomposition; defaults to `OLLAMA_AUX_NUM_CTX` |
-| `OLLAMA_RECOMP_NUM_CTX` | Context window for RECOMP synthesis; defaults to `OLLAMA_AUX_NUM_CTX` |
-| `OLLAMA_CONTEXTUAL_NUM_CTX` | Context window for contextual retrieval at indexing time; defaults to `OLLAMA_AUX_NUM_CTX` |
-| `OLLAMA_OCR_NUM_CTX` | Context window for PDF image descriptions; defaults to `OLLAMA_AUX_NUM_CTX` |
+| `OLLAMA_NUM_CTX` | Default context window requested from Ollama model calls (default: `8192`) |
+| `OLLAMA_RAG_NUM_CTX` | Context window for the final RAG generator (default: `16384`) |
+| `OLLAMA_AUX_NUM_CTX` | Fallback context for auxiliary LLM calls (default: `8192`) |
+| `OLLAMA_QUERY_NUM_CTX` | Context window for LLM query decomposition (default: `8192`) |
+| `OLLAMA_RECOMP_NUM_CTX` | Context window for RECOMP synthesis (default: `8192`) |
+| `OLLAMA_CONTEXTUAL_NUM_CTX` | Context window for contextual retrieval at indexing time (default: `32768`) |
+| `OLLAMA_OCR_NUM_CTX` | Context window for PDF image descriptions (default: `8192`) |
 | `OLLAMA_REQUEST_TIMEOUT` | HTTP timeout in seconds for long Ollama generation calls |
 | `MAX_CONTEXTO_CHARS` | Maximum retrieved-context characters sent to the answer/RECOMP stage (default: `24000`) |
 | `CONTEXTUAL_DOC_CHARS` | Maximum document-level characters sent to contextual retrieval while indexing each chunk (default: `24000`) |
