@@ -174,6 +174,10 @@ Set these in your shell or in a `.env` file at the project root.
 | `OLLAMA_RECOMP_MODEL` | Model for context synthesis before generation |
 | `OLLAMA_OCR_MODEL` | Vision model for PDF image descriptions |
 | `OLLAMA_CONTEXTUAL_MODEL` | Auxiliary model for contextual chunk enrichment at indexing |
+| `OLLAMA_NUM_CTX` | Default context window requested from Ollama model calls |
+| `OLLAMA_RAG_NUM_CTX` | Context window requested for the final RAG generator; defaults to `OLLAMA_NUM_CTX` |
+| `OLLAMA_AUX_NUM_CTX` | Context window requested for auxiliary LLM calls (RECOMP, OCR, contextual retrieval, query decomposition); defaults to `OLLAMA_NUM_CTX` |
+| `OLLAMA_REQUEST_TIMEOUT` | HTTP timeout in seconds for long Ollama generation calls |
 | `DOCS_FOLDER` | PDF folder to index (default: `rag/docs/libre/`) |
 | `RERANKER_QUALITY` | Cross-encoder tier: `quality` ([BAAI/bge](https://huggingface.co/BAAI/bge-reranker-v2-m3)) or `speed` (MiniLM) |
 | `MONKEYGRAB_LANG` | CLI language: `es` (default), `en` or `ca` |
