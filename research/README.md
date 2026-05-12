@@ -205,6 +205,36 @@ Modelfiles and conversion notes (where applicable): `research/models/gguf-output
 
 ---
 
+## 2026 Repetition Commands
+
+PowerShell commands for the inference-only repetition run:
+
+```powershell
+# Terminal 1: Ollama server
+cd C:\Users\nadiv\repos\localOllamaRAG
+$env:OLLAMA_CONTEXT_LENGTH="32768"
+$env:OLLAMA_KEEP_ALIVE="-1"
+$env:OLLAMA_MAX_LOADED_MODELS="3"
+ollama serve
+
+# Terminal 2: repetition inference, no RAGAS
+cd C:\Users\nadiv\repos\localOllamaRAG
+$env:OLLAMA_RAG_MODEL="Qwen3-FineTuned:latest"
+$env:OLLAMA_NUM_CTX="8192"
+$env:OLLAMA_RAG_NUM_CTX="16384"
+$env:OLLAMA_AUX_NUM_CTX="8192"
+$env:OLLAMA_CONTEXTUAL_NUM_CTX="32768"
+$env:OLLAMA_RECOMP_NUM_CTX="8192"
+$env:OLLAMA_QUERY_NUM_CTX="8192"
+$env:OLLAMA_OCR_NUM_CTX="8192"
+$env:MAX_CONTEXTO_CHARS="24000"
+$env:CONTEXTUAL_DOC_CHARS="24000"
+$env:OLLAMA_REQUEST_TIMEOUT="900"
+$env:EVAL_OLLAMA_TIMEOUT="900"
+$env:EVAL_OLLAMA_ATTEMPTS="2"
+python .\repeticion_run_eval.py repeticion --run-id repeticion_20260512_132549 --corpus all
+```
+
 ## RagBench PDF corpora
 
 PDFs remain under `rag/docs/en_ragbench_*` so that `DOCS_FOLDER` and evaluation manifests keep working without path changes. For a lighter clone without these trees, see `research/docs/USER_SPARSE_CHECKOUT.md` or run `research/scripts/package_user_bundle.ps1` / `package_user_bundle.sh`.
