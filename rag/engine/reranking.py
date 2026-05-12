@@ -210,7 +210,7 @@ def generar_queries_con_llm(pregunta: str) -> List[str]:
             options={
                 "temperature": 0.5,
                 "num_predict": 400,
-                "num_ctx": OLLAMA_AUX_NUM_CTX,
+                "num_ctx": OLLAMA_QUERY_NUM_CTX,
                 "stop": ["\n\n\n"],
             },
         )

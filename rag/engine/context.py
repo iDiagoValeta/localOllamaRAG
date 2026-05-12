@@ -384,7 +384,7 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
                 "num_predict": 10000,
                 "top_p": 0.9,
                 "repeat_penalty": 1.15,
-                "num_ctx": OLLAMA_AUX_NUM_CTX,
+                "num_ctx": OLLAMA_RECOMP_NUM_CTX,
             },
         }
         resp = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=OLLAMA_REQUEST_TIMEOUT)
