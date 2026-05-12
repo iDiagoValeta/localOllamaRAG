@@ -368,7 +368,7 @@ UMBRAL_SCORE_RERANKER = 0.55  # raised from 0.40: debug showed fragments at 0.47
 RRF_K = 20                    # reciprocal rank fusion damping factor (was hardcoded 60)
 
 MIN_LONGITUD_PREGUNTA_RAG = 10
-MAX_CONTEXTO_CHARS = 12000    # raised from 8192 to accommodate expanded neighbor chunks
+MAX_CONTEXTO_CHARS = _leer_env_int("MAX_CONTEXTO_CHARS", 24000)  # max retrieved-context chars before generation
 
 
 LOG_LEVEL = logging.ERROR
