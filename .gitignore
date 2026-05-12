@@ -101,6 +101,5 @@ media/
 .codex
 AGENTS.md
 
-# Work-in-progress inference repetition scripts (not ready for versioning)
 repeticion_run_eval.py
 repeticion_*/
