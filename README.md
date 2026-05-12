@@ -183,7 +183,7 @@ Set these in your shell or in a `.env` file at the project root.
 | `OLLAMA_OCR_NUM_CTX` | Context window for PDF image descriptions; defaults to `OLLAMA_AUX_NUM_CTX` |
 | `OLLAMA_REQUEST_TIMEOUT` | HTTP timeout in seconds for long Ollama generation calls |
 | `MAX_CONTEXTO_CHARS` | Maximum retrieved-context characters sent to the answer/RECOMP stage (default: `24000`) |
-| `CONTEXTUAL_DOC_CHARS` | Maximum document-level characters sent to contextual retrieval while indexing each chunk (default: `12000`) |
+| `CONTEXTUAL_DOC_CHARS` | Maximum document-level characters sent to contextual retrieval while indexing each chunk (default: `24000`) |
 | `DOCS_FOLDER` | PDF folder to index (default: `rag/docs/libre/`) |
 | `RERANKER_QUALITY` | Cross-encoder tier: `quality` ([BAAI/bge](https://huggingface.co/BAAI/bge-reranker-v2-m3)) or `speed` (MiniLM) |
 | `MONKEYGRAB_LANG` | CLI language: `es` (default), `en` or `ca` |

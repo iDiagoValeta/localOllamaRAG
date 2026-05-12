@@ -86,6 +86,10 @@ python research/evaluation/run_eval.py ragbench-eval
 python research/evaluation/run_ragbench_visual_inference.py --n-papers 25 --max-q 5
 python research/evaluation/run_ragbench_visual_inference.py --ragas-only
 
+# 2026 repetition run: inference only, no RAGAS
+python repeticion_run_eval.py repeticion --corpus all
+python repeticion_run_eval.py repeticion --corpus ragbench_eval --final-variant baseline_all_on
+
 # BERTScore post-process over all completed RAGAS runs
 python research/evaluation/evaluate_ragas_bertscore.py --all-completed
 

@@ -77,7 +77,7 @@ def indexar_documentos(
     def _indexar_chunk(id_doc: str, chunk_text: str, chunk_doc_text: str,
                        metadata: Dict, collection_ref: chromadb.Collection) -> bool:
         """Embed a chunk and add it to ChromaDB. Retries with truncation on length errors."""
-        text_to_embed = f"{EMBED_PREFIX_DOC}{chunk_text[:MAX_CHARS_EMBED]}"
+        text_to_embed = f"{EMBED_PREFIX_DOC}{chunk_text}"
 
         try:
             response = ollama.embeddings(model=MODELO_EMBEDDING, prompt=text_to_embed)
