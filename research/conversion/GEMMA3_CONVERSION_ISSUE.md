@@ -3,7 +3,7 @@
 Fecha: 2026-04-18  
 Modelo: `google/gemma-3-12b-it` fine-tuneado con LoRA (adaptador en `research/training-output/gemma-3/`)  
 Modelo merged: `research/models/merged-model/gemma-3/`  
-GGUF destino: `research/models/gguf-output/gemma-3/`
+GGUF destino: `research/models/gguf/gemma-3/`
 
 ---
 
@@ -193,10 +193,10 @@ Descargar el build b8833 o posterior y colocarlo en `llama-bin/bin/llama-quantiz
 
 Luego:
 ```powershell
-.\scripts\conversion\quantize_to_q4km.ps1 `
-    models\gguf-output\gemma-3\gemma3-finetuned-f16.gguf `
-    models\gguf-output\gemma-3\Gemma3-12B-Q4_K_M.gguf
-ollama create Gemma3-FineTuned -f research/models/gguf-output/gemma-3/Modelfile
+.\conversion\quantize_to_q4km.ps1 `
+    models\gguf\gemma-3\gemma3-finetuned-f16.gguf `
+    models\gguf\gemma-3\Gemma3-12B-Q4_K_M.gguf
+ollama create Gemma3-FineTuned -f research/models/gguf/gemma-3/Modelfile
 ```
 
 ### Opción B — Compilar `llama-quantize` desde el submódulo

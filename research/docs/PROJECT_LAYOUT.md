@@ -16,11 +16,14 @@ You do **not** need anything under `research/` to run `python rag/chat_pdfs.py` 
 | Path | Purpose |
 |------|---------|
 | `research/evaluation/` | RAGAS (`run_eval.py`), datasets, `runs/`, BERTScore, aggregates |
-| `research/scripts/` | Training, conversion, HF upload, `generate_diagram.py`, packaging helpers |
+| `research/training/` | LoRA fine-tuning scripts + `requirements.txt` |
+| `research/conversion/` | LoRA merge, GGUF export, quantization helpers |
+| `research/baselines/` | 7-model baseline benchmark and split inspection |
+| `research/utils/` | Architecture diagram, HF upload, user bundle packaging |
 | `research/training-output/` | LoRA runs: `generate_reports.py` + small JSON versioned; weights gitignored |
-| `research/models/` | `merged-model/` (gitignored) and `gguf-output/` Modelfiles + cards |
+| `research/models/` | `merged-model/` (gitignored) and `gguf/` Modelfiles + cards |
 | `research/docs/` | This file, `EVALUACIONES_PIPELINE.md`, sparse-checkout notes, diagrams |
-| `research/tests/` | Pytest (`core` + `research`) |
+| `research/tests/` | Pytest (`core/` + `evaluation/`) |
 
 ## Corpora
 

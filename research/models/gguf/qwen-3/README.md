@@ -43,8 +43,8 @@ This Hugging Face model repo ships **inference assets** (`Qwen3-14B-Q4_K_M.gguf`
 | `Modelfile` | Ollama recipe: Qwen3 chat template (thinking disabled), RAG system prompt, sampling parameters. |
 | `README.md` | This model card. |
 | `LICENSE` | MIT — applies to the model card, `Modelfile`, and files added here by nadiva1243 (not to Alibaba's base terms). |
-| `reproduction/train-qwen3.py` | Snapshot of `research/scripts/training/train-qwen3.py` (v10) used for this adapter. |
-| `reproduction/merge_lora.py` | Snapshot of `research/scripts/conversion/merge_lora.py` used to merge the LoRA weights into a dense checkpoint before GGUF export. |
+| `reproduction/train-qwen3.py` | Snapshot of `research/training/train_qwen3.py` (v10) used for this adapter. |
+| `reproduction/merge_lora.py` | Snapshot of `research/conversion/merge_lora.py` used to merge the LoRA weights into a dense checkpoint before GGUF export. |
 | `reproduction/evaluation_comparison.json` | Frozen evaluation export (base vs. adapted, dev/test splits, per dataset + weighted aggregate). |
 | `reproduction/CONVERSION.md` | Step-by-step notes: merge → GGUF → Q4_K_M quantization → Ollama import. |
 

@@ -43,8 +43,8 @@ This Hugging Face model repo ships **inference assets** (`Phi4-Q4_K_M.gguf`), th
 | `Modelfile` | Ollama recipe: ChatML template, RAG system prompt, sampling parameters. |
 | `README.md` | This model card. |
 | `LICENSE` | MIT — applies to the model card, `Modelfile`, and files added here by nadiva1243 (not to Microsoft's base terms). |
-| `reproduction/train-phi4.py` | Snapshot of `research/scripts/training/train-phi4.py` (v1) used for this adapter. |
-| `reproduction/merge_lora.py` | Snapshot of `research/scripts/conversion/merge_lora.py` used to merge the LoRA weights into a dense checkpoint before GGUF export. |
+| `reproduction/train-phi4.py` | Snapshot of `research/training/train_phi4.py` (v1) used for this adapter. |
+| `reproduction/merge_lora.py` | Snapshot of `research/conversion/merge_lora.py` used to merge the LoRA weights into a dense checkpoint before GGUF export. |
 | `reproduction/evaluation_comparison.json` | Frozen evaluation export (base vs. adapted, dev/test splits, per dataset + weighted aggregate). |
 | `reproduction/CONVERSION.md` | Step-by-step notes: merge → GGUF → Q4_K_M quantization → Ollama import. |
 

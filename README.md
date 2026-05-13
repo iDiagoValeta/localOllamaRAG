@@ -232,7 +232,7 @@ These constants live in `rag/chat_pdfs.py`. Edit them directly to toggle pipelin
 
 Open `http://localhost:5000`. Supports document upload, streaming responses, pipeline settings and an `ES / EN / VAL` language selector through the UI. The selected web language is stored in the browser.
 
-For development with hot-reload: run `npm run dev` inside `rag/web/zip/` ([Vite](https://vitejs.dev/) on :3000 proxies to [Flask](https://flask.palletsprojects.com/) on :5000).
+For development with hot-reload: run `npm run dev` inside `rag/web/frontend/` ([Vite](https://vitejs.dev/) on :3000 proxies to [Flask](https://flask.palletsprojects.com/) on :5000).
 
 ---
 
