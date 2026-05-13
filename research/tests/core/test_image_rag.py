@@ -58,8 +58,15 @@ from rag.chat_pdfs import evaluar_pregunta_rag, MODELO_EMBEDDING
 # SECTION 2: CONSTANTES
 # ─────────────────────────────────────────────
 
-RAGBENCH_DB_PATH   = os.path.join(_proj_root, "rag", "vector_db", "en_embeddinggemma")
-RAGBENCH_COLLECTION = "ragbench_arxiv_eval"
+_embed_slug = MODELO_EMBEDDING.split(":")[0].replace("/", "_")
+RAGBENCH_VISUAL_CORPUS = "en_ragbench_visual"
+RAGBENCH_DB_PATH = os.path.join(
+    _proj_root,
+    "rag",
+    "vector_db",
+    f"{RAGBENCH_VISUAL_CORPUS}_{_embed_slug}",
+)
+RAGBENCH_COLLECTION = f"docs_{RAGBENCH_VISUAL_CORPUS}"
 
 # Preguntas de ejemplo orientadas a contenido visual del paper 2408.07618v3
 PREGUNTAS_IMAGEN = [
@@ -249,7 +256,7 @@ def main():
     except Exception:
         print(f"ERROR: colección '{RAGBENCH_COLLECTION}' no encontrada.")
         print(
-            "  Ejecuta primero: python research/evaluation/run_eval.py ragbench "
+            "  Ejecuta primero: python research/evaluation/run_ragbench_visual_inference.py "
             "--n-papers 1 --max-q 3 --force-reindex"
         )
         raise SystemExit(1)
