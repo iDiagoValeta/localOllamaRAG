@@ -71,6 +71,7 @@ rag/debug_rag/
 
 rag/web/frontend/node_modules/
 rag/web/frontend/dist/
+rag/web/zip/
 
 .idea/
 .vscode/
