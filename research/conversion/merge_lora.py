@@ -7,7 +7,7 @@ model and its tokenizer are saved together to preserve compatibility
 for downstream conversion and quantization steps.
 
 Usage:
-    python research/scripts/conversion/merge_lora.py --model qwen-3
+    python research/conversion/merge_lora.py --model qwen-3
 Dependencies:
     - torch
     - peft (PeftModel, PeftConfig)
@@ -57,16 +57,14 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-PROJECT_ROOT = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 LORA_PATH   = os.path.join(PROJECT_ROOT, "research", "training-output", args.model)
 MERGED_PATH = os.path.join(PROJECT_ROOT, "research", "models", "merged-model", args.model)
 
 if not os.path.exists(os.path.join(LORA_PATH, "adapter_config.json")):
     raise FileNotFoundError(
         f"LoRA adapter not found at {LORA_PATH}. "
-        f"Run training first (research/scripts/training/train-{args.model}.py)."
+        f"Run training first (research/training/train_{args.model.replace('-', '')}.py)."
     )
 
 os.makedirs(MERGED_PATH, exist_ok=True)

@@ -12,7 +12,7 @@ Filters:
                            context non-empty.
 
 Usage:
-    python research/scripts/evaluation/inspect_splits.py
+    python research/baselines/inspect_splits.py
 
 Dependencies:
     - datasets

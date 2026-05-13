@@ -15,7 +15,7 @@ REM
 REM Requisitos:
 REM   - Entorno conda `lora-gguf` disponible.
 REM   - Repositorio `llama.cpp` accesible en la raíz del proyecto.
-REM   - Script `quantize_to_q4km.ps1` en research/scripts/conversion.
+REM   - Script `quantize_to_q4km.ps1` en research/conversion.
 REM =============================================================================
 
 echo ========================================
@@ -66,9 +66,10 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-set PROJECT_ROOT=%~dp0..\..\..
-set MERGED_PATH=%PROJECT_ROOT%\research\models\merged-model
-set GGUF_PATH=%PROJECT_ROOT%\research\models\gguf-output
+set "PROJECT_ROOT=%~dp0..\.."
+for %%I in ("%PROJECT_ROOT%") do set "PROJECT_ROOT=%%~fI"
+set "MERGED_PATH=%PROJECT_ROOT%\research\models\merged-model"
+set "GGUF_PATH=%PROJECT_ROOT%\research\models\gguf"
 
 REM =============================================================================
 REM SECCIÓN 3: FUSIÓN DEL ADAPTADOR LORA
@@ -77,7 +78,7 @@ REM Genera el modelo consolidado en `models/merged-model`.
 REM =============================================================================
 
 echo [1/4] Fusionando LoRA con modelo base (%MODEL%)...
-python "%PROJECT_ROOT%\research\scripts\conversion\merge_lora.py" --model %MODEL%
+python "%PROJECT_ROOT%\research\conversion\merge_lora.py" --model %MODEL%
 if %errorlevel% neq 0 (
     echo ERROR: Fallo en merge
     pause
@@ -109,7 +110,7 @@ REM ============================================================================
 
 echo.
 echo [3/4] Cuantizando a Q4_K_M...
-powershell -ExecutionPolicy Bypass -File "%PROJECT_ROOT%\research\scripts\conversion\quantize_to_q4km.ps1" "%GGUF_PATH%\%MODEL%\%GGUF_PREFIX%-f16.gguf" "%GGUF_PATH%\%MODEL%\%GGUF_PREFIX%-Q4_K_M.gguf"
+powershell -ExecutionPolicy Bypass -File "%PROJECT_ROOT%\research\conversion\quantize_to_q4km.ps1" "%GGUF_PATH%\%MODEL%\%GGUF_PREFIX%-f16.gguf" "%GGUF_PATH%\%MODEL%\%GGUF_PREFIX%-Q4_K_M.gguf"
 if %errorlevel% neq 0 (
     echo ERROR: Fallo en cuantizacion
     pause

@@ -14,10 +14,10 @@
 """Upload MonkeyGrab model cards + reproduction/ snapshots to Hugging Face Hub.
 
 Usage (from repo root, with HUGGINGFACE_HUB_TOKEN set):
-    python research/scripts/hf_upload_model_cards.py
-    python research/scripts/hf_upload_model_cards.py --upload-qwen-q4-gguf
+    python research/utils/hf_upload_model_cards.py
+    python research/utils/hf_upload_model_cards.py --upload-qwen-q4-gguf
 
-``--upload-qwen-q4-gguf`` uploads only ``research/models/gguf-output/qwen-3/Qwen3-14B-Q4_K_M.gguf``
+``--upload-qwen-q4-gguf`` uploads only ``research/models/gguf/qwen-3/Qwen3-14B-Q4_K_M.gguf``
 (~9 GB); use when the binary is ready after local conversion.
 """
 from __future__ import annotations
@@ -32,7 +32,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 QWEN_GGUF_REPO = "nadiva1243/qwen3RAG"
 QWEN_GGUF_LOCAL = os.path.join(
-    ROOT, "research", "models", "gguf-output", "qwen-3", "Qwen3-14B-Q4_K_M.gguf"
+    ROOT, "research", "models", "gguf", "qwen-3", "Qwen3-14B-Q4_K_M.gguf"
 )
 QWEN_GGUF_REMOTE = "Qwen3-14B-Q4_K_M.gguf"
 
@@ -72,7 +72,7 @@ def main() -> int:
         size_gb = os.path.getsize(QWEN_GGUF_LOCAL) / (1024**3)
         print(f"Uploading {QWEN_GGUF_REMOTE} ({size_gb:.2f} GiB) to {QWEN_GGUF_REPO} …")
         up(
-            "research/models/gguf-output/qwen-3/Qwen3-14B-Q4_K_M.gguf",
+            "research/models/gguf/qwen-3/Qwen3-14B-Q4_K_M.gguf",
             QWEN_GGUF_REPO,
             QWEN_GGUF_REMOTE,
         )
@@ -80,22 +80,22 @@ def main() -> int:
         return 0
 
     print("Uploading nadiva1243/phi4RAG …")
-    up("research/models/gguf-output/phi-4/README.md", "nadiva1243/phi4RAG", "README.md")
-    up("research/models/gguf-output/phi-4/Modelfile", "nadiva1243/phi4RAG", "Modelfile")
-    up("research/models/gguf-output/phi-4/LICENSE", "nadiva1243/phi4RAG", "LICENSE")
-    up("research/models/gguf-output/phi-4/CONVERSION.md", "nadiva1243/phi4RAG", "reproduction/CONVERSION.md")
-    up("research/scripts/training/train-phi4.py", "nadiva1243/phi4RAG", "reproduction/train-phi4.py")
-    up("research/scripts/conversion/merge_lora.py", "nadiva1243/phi4RAG", "reproduction/merge_lora.py")
+    up("research/models/gguf/phi-4/README.md", "nadiva1243/phi4RAG", "README.md")
+    up("research/models/gguf/phi-4/Modelfile", "nadiva1243/phi4RAG", "Modelfile")
+    up("research/models/gguf/phi-4/LICENSE", "nadiva1243/phi4RAG", "LICENSE")
+    up("research/models/gguf/phi-4/CONVERSION.md", "nadiva1243/phi4RAG", "reproduction/CONVERSION.md")
+    up("research/training/train_phi4.py", "nadiva1243/phi4RAG", "reproduction/train_phi4.py")
+    up("research/conversion/merge_lora.py", "nadiva1243/phi4RAG", "reproduction/merge_lora.py")
     up("research/training-output/phi-4/evaluation_comparison.json", "nadiva1243/phi4RAG", "reproduction/evaluation_comparison.json")
     up("research/training-output/phi-4/training_stats.json", "nadiva1243/phi4RAG", "reproduction/training_stats.json")
 
     print("Uploading nadiva1243/qwen3RAG …")
-    up("research/models/gguf-output/qwen-3/README.md", "nadiva1243/qwen3RAG", "README.md")
-    up("research/models/gguf-output/qwen-3/Modelfile", "nadiva1243/qwen3RAG", "Modelfile")
-    up("research/models/gguf-output/qwen-3/LICENSE", "nadiva1243/qwen3RAG", "LICENSE")
-    up("research/models/gguf-output/qwen-3/CONVERSION.md", "nadiva1243/qwen3RAG", "reproduction/CONVERSION.md")
-    up("research/scripts/training/train-qwen3.py", "nadiva1243/qwen3RAG", "reproduction/train-qwen3.py")
-    up("research/scripts/conversion/merge_lora.py", "nadiva1243/qwen3RAG", "reproduction/merge_lora.py")
+    up("research/models/gguf/qwen-3/README.md", "nadiva1243/qwen3RAG", "README.md")
+    up("research/models/gguf/qwen-3/Modelfile", "nadiva1243/qwen3RAG", "Modelfile")
+    up("research/models/gguf/qwen-3/LICENSE", "nadiva1243/qwen3RAG", "LICENSE")
+    up("research/models/gguf/qwen-3/CONVERSION.md", "nadiva1243/qwen3RAG", "reproduction/CONVERSION.md")
+    up("research/training/train_qwen3.py", "nadiva1243/qwen3RAG", "reproduction/train_qwen3.py")
+    up("research/conversion/merge_lora.py", "nadiva1243/qwen3RAG", "reproduction/merge_lora.py")
     up("research/training-output/qwen-3/evaluation_comparison.json", "nadiva1243/qwen3RAG", "reproduction/evaluation_comparison.json")
     up("research/training-output/qwen-3/training_stats.json", "nadiva1243/qwen3RAG", "reproduction/training_stats.json")
 

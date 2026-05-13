@@ -5,9 +5,9 @@ Sends the Mermaid diagram to the Kroki.io rendering API via POST and saves
 the result as a local image. No URL length limits; supports PNG, SVG and PDF.
 
 Usage (from repository root):
-    python research/scripts/generate_diagram.py
-    python research/scripts/generate_diagram.py --output research/docs/architecture.png
-    python research/scripts/generate_diagram.py --format svg --output research/docs/architecture.svg
+    python research/utils/generate_diagram.py
+    python research/utils/generate_diagram.py --output research/docs/architecture.png
+    python research/utils/generate_diagram.py --format svg --output research/docs/architecture.svg
 
 Dependencies:
     requests  (pip install requests)

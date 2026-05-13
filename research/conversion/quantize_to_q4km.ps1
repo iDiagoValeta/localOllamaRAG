@@ -2,8 +2,8 @@
 #
 # Usage:
 #   .\quantize_to_q4km.ps1 [<input.gguf>] [<output.gguf>]
-#   Defaults: research\models\gguf-output\qwen-3\Qwen3-14B-f16.gguf ->
-#             research\models\gguf-output\qwen-3\Qwen3-14B-Q4_K_M.gguf
+#   Defaults: research\models\gguf\qwen-3\Qwen3-14B-f16.gguf ->
+#             research\models\gguf\qwen-3\Qwen3-14B-Q4_K_M.gguf
 #
 # Dependencies:
 #   - llama-quantize.exe from a local llama.cpp build, or extracted under
@@ -32,8 +32,8 @@ $ErrorActionPreference = "Stop"
 # ─────────────────────────────────────────────
 
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
-$PROJECT_ROOT = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $SCRIPT_DIR))
-$GGUF_DIR = Join-Path $PROJECT_ROOT "research\models\gguf-output"
+$PROJECT_ROOT = Split-Path -Parent (Split-Path -Parent $SCRIPT_DIR)
+$GGUF_DIR = Join-Path $PROJECT_ROOT "research\models\gguf"
 
 $INPUT_GGUF = if ($args[0]) { $args[0] } else { Join-Path $GGUF_DIR "qwen-3\Qwen3-14B-f16.gguf" }
 $OUTPUT_GGUF = if ($args[1]) { $args[1] } else { Join-Path $GGUF_DIR "qwen-3\Qwen3-14B-Q4_K_M.gguf" }

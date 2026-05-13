@@ -6,8 +6,8 @@ uploads as a single ``train`` split via ``datasets``, and refreshes the dataset 
 
 Usage (from repo root, with HF token in env or ``.env``)::
 
-    python research/evaluation/scripts/push_wikipedia_es_ca_hf.py
-    python research/evaluation/scripts/push_wikipedia_es_ca_hf.py --repo-id nadiva1243/wikipediaEs-Ca4RAG --private
+    python research/utils/push_wikipedia_es_ca_hf.py
+    python research/utils/push_wikipedia_es_ca_hf.py --repo-id nadiva1243/wikipediaEs-Ca4RAG --private
 
 Dependencies:
     pip install -r research/evaluation/requirements.txt
@@ -41,7 +41,7 @@ from pathlib import Path
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+    return Path(__file__).resolve().parents[2]
 
 
 def _load_json(path: Path) -> list:
