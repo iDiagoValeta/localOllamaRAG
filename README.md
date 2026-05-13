@@ -67,7 +67,8 @@ flowchart TD
         J -->|no| L[Semantic search]
         K --> L
         L --> M[Keyword search\nUSAR_BUSQUEDA_HIBRIDA]
-        M --> N[RRF fusion\n55% semantic · 45% lexical]
+        M --> M2[Exhaustive scan\nUSAR_BUSQUEDA_EXHAUSTIVA]
+        M2 --> N[RRF fusion\n55% semantic · 45% lexical]
         N --> O{USAR_RERANKER}
         O -->|yes| P[Cross-encoder\nRERANKER_QUALITY]
         O -->|no| Q[Top-8 fragments]
@@ -185,7 +186,7 @@ Set these in your shell or in a `.env` file at the project root.
 | `MAX_CONTEXTO_CHARS` | Maximum retrieved-context characters sent to the answer/RECOMP stage (default: `24000`) |
 | `CONTEXTUAL_DOC_CHARS` | Maximum document-level characters sent to contextual retrieval while indexing each chunk (default: `24000`) |
 | `DOCS_FOLDER` | PDF folder to index (default: `rag/docs/libre/`) |
-| `RERANKER_QUALITY` | Cross-encoder tier: `quality` ([BAAI/bge](https://huggingface.co/BAAI/bge-reranker-v2-m3)) or `speed` (MiniLM) |
+| `RERANKER_QUALITY` | Cross-encoder tier: `quality` ([BAAI/bge](https://huggingface.co/BAAI/bge-reranker-v2-m3)) or `fast` (MiniLM) |
 | `MONKEYGRAB_LANG` | CLI language: `es` (default), `en` or `ca` |
 
 > [ChromaDB](https://www.trychroma.com/) paths follow the pattern `rag/vector_db/<folder>_<embed_slug>/`. Changing `DOCS_FOLDER` or `OLLAMA_EMBED_MODEL` selects a different index — run `/reindex` when you intentionally switch either.
@@ -203,9 +204,11 @@ These constants live in `rag/chat_pdfs.py`. Edit them directly to toggle pipelin
 | `USAR_CONTEXTUAL_RETRIEVAL` | `True` | Enrich chunks with LLM context at indexing time |
 | `USAR_LLM_QUERY_DECOMPOSITION` | `True` | Decompose query into sub-queries |
 | `USAR_BUSQUEDA_HIBRIDA` | `True` | Add keyword search alongside semantic search |
-| `USAR_RERANKER` | `True` | [Cross-encoder reranking](https://www.sbert.net/) |
+| `USAR_BUSQUEDA_EXHAUSTIVA` | `True` | Full-collection scan for critical multi-word terms |
+| `USAR_RERANKER` | auto | [Cross-encoder reranking](https://www.sbert.net/) — enabled when `sentence-transformers` is installed |
 | `USAR_RECOMP_SYNTHESIS` | `True` | RECOMP context compression before generation |
 | `EXPANDIR_CONTEXTO` | `True` | Include adjacent chunks around top results |
+| `USAR_OPTIMIZACION_CONTEXTO` | `True` | Strip PDF extraction artefacts from context before generation |
 | `USAR_EMBEDDINGS_IMAGEN` | `True` | Describe raster images in PDFs with a vision model |
 
 </details>
