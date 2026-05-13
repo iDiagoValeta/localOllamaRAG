@@ -21,7 +21,7 @@ try {
         Copy-Item -LiteralPath $src -Destination $dst -Force
     }
     New-Item -ItemType Directory -Path (Join-Path $Stage "rag") -Force | Out-Null
-    robocopy (Join-Path $RepoRoot "rag") (Join-Path $Stage "rag") /E /XD "en_ragbench_dev" "en_ragbench_eval" "en_ragbench_visual" "vector_db" "debug_rag" "__pycache__" "web\zip\node_modules" | Out-Null
+    robocopy (Join-Path $RepoRoot "rag") (Join-Path $Stage "rag") /E /XD "en_ragbench_dev" "en_ragbench_eval" "en_ragbench_visual" "vector_db" "debug_rag" "__pycache__" "web\frontend\node_modules" | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "robocopy failed with exit $LASTEXITCODE" }
     if (Test-Path $OutputZip) { Remove-Item $OutputZip -Force }
     Compress-Archive -Path (Join-Path $Stage "*") -DestinationPath $OutputZip

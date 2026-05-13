@@ -4,7 +4,7 @@ MonkeyGrab -- Local web interface.
 Flask server for the full RAG pipeline. Provides the same functionality
 as the CLI: CHAT mode (free conversation) and RAG mode (document query).
 
-Serves the React interface (build in rag/web/zip/dist/) and the API at /api/*.
+Serves the React interface (build in rag/web/frontend/dist/) and the API at /api/*.
 
 Usage (from project root):
     python rag/web/app.py
@@ -65,7 +65,7 @@ if _project_root not in sys.path:
 import rag.chat_pdfs as rag_engine
 
 _web_dir = os.path.dirname(os.path.abspath(__file__))
-_react_dist = os.path.join(_web_dir, "zip", "dist")
+_react_dist = os.path.join(_web_dir, "frontend", "dist")
 
 app = Flask(
     __name__,
@@ -343,7 +343,7 @@ def index():
     if os.path.isfile(react_index):
         return send_from_directory(_react_dist, "index.html")
     return (
-        "<h1>MonkeyGrab</h1><p>Build React no encontrado. Ejecuta: <code>cd rag/web/zip && npm install && npm run build</code></p>",
+        "<h1>MonkeyGrab</h1><p>Build React no encontrado. Ejecuta: <code>cd rag/web/frontend && npm install && npm run build</code></p>",
         503,
         {"Content-Type": "text/html; charset=utf-8"},
     )
@@ -895,7 +895,7 @@ def main():
         print(f"  Frontend React: {_react_dist}")
     else:
         print(f"  ⚠  Build React no encontrado en {_react_dist}")
-        print(f"     Ejecuta: cd rag/web/zip && npm install && npm run build")
+        print(f"     Ejecuta: cd rag/web/frontend && npm install && npm run build")
         print(f"     (Usando template legacy como fallback)")
     print()
     app.run(host=host, port=port, debug=False, threaded=True)
