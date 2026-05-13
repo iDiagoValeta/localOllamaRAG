@@ -15,22 +15,23 @@ Required:
     pip install langchain-aws boto3
 
 AWS credentials via any of:
-    - Environment: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION
+    - Bedrock long-term API key: AWS_BEARER_TOKEN_BEDROCK=<key>  (recommended)
+    - IAM credentials: AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY + AWS_DEFAULT_REGION
     - ~/.aws/credentials (aws configure)
     - --profile <name>
 
 Bedrock model access must be enabled in the AWS console (Bedrock → Model access).
+Anthropic models also require submitting the use case form (once per account).
 
-Candidate LLM judges:
-    anthropic.claude-3-5-haiku-20241022-v1:0   (default) fast, cheap, best JSON following
-    anthropic.claude-3-5-sonnet-20241022-v2:0  highest quality
-    amazon.nova-lite-v1:0                      cheapest AWS option
-    amazon.nova-pro-v1:0                       good quality, moderate cost
-    meta.llama3-3-70b-instruct-v1:0            same model as NVIDIA (for cross-provider comparison)
+Candidate LLM judges (cross-region inference profile IDs):
+    eu.anthropic.claude-sonnet-4-20250514-v1:0  (default) Claude Sonnet 4, EU region
+    eu.anthropic.claude-3-5-haiku-20241022-v1:0 fast, cheap, best JSON following
+    eu.anthropic.claude-3-5-sonnet-20241022-v2:0 high quality
+    us.anthropic.claude-sonnet-4-20250514-v1:0   US cross-region alternative
 
 Candidate embedding models:
-    amazon.titan-embed-text-v2:0   (default) 100+ languages, 8K context, Catalan likely works
-    cohere.embed-multilingual-v3   best multilingual on Bedrock, Catalan likely works
+    amazon.titan-embed-text-v2:0   (default) 100+ languages incl. Catalan, 8K context
+    cohere.embed-multilingual-v3   100+ languages, Catalan not explicitly documented
 """
 
 from __future__ import annotations
@@ -61,9 +62,9 @@ if str(ROOT) not in sys.path:
 from research.evaluation import run_eval  # noqa: E402
 
 
-DEFAULT_CHAT_MODEL = "anthropic.claude-3-5-haiku-20241022-v1:0"
+DEFAULT_CHAT_MODEL = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
 DEFAULT_EMBEDDING_MODEL = "amazon.titan-embed-text-v2:0"
-DEFAULT_REGION = "us-east-1"
+DEFAULT_REGION = "eu-north-1"
 DEFAULT_OUTPUT_ROOT = ROOT / "research" / "evaluation" / "runs" / "ragas_aws_revaluation"
 DEFAULT_SOURCE_ROOT = ROOT / "research" / "evaluation" / "runs" / "ragas"
 DEFAULT_MAX_TOKENS = 4096
@@ -333,7 +334,7 @@ def _build_aws_configurator(args: argparse.Namespace):
         google_retries: int | None = None,
     ):
         try:
-            from langchain_aws import BedrockEmbeddings, ChatBedrock
+            from langchain_aws import BedrockEmbeddings, ChatBedrockConverse
             from ragas.llms.base import LangchainLLMWrapper
         except ImportError as err:
             print(f"Error: {err}")
@@ -347,13 +348,11 @@ def _build_aws_configurator(args: argparse.Namespace):
                 profile_name=args.profile,
             )
 
-        raw_eval_llm = ChatBedrock(
-            model_id=args.model,
+        raw_eval_llm = ChatBedrockConverse(
+            model=args.model,
             region_name=args.region,
-            model_kwargs={
-                "temperature": args.temperature,
-                "max_tokens": args.max_tokens,
-            },
+            temperature=args.temperature,
+            max_tokens=args.max_tokens,
         )
         with warnings.catch_warnings():
             warnings.filterwarnings(
