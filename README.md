@@ -39,7 +39,7 @@ MonkeyGrab lets you ask questions about your PDF documents in natural language. 
 | **Any model** | Works with any instruction-tuned model in [Ollama](https://ollama.com/) — `llama3.2`, `mistral`, `gemma4`, `qwen3`, etc. |
 | **Hybrid retrieval** | Semantic search + keyword search fused with RRF, followed by optional [cross-encoder reranking](https://www.sbert.net/). |
 | **Multilingual UI** | Spanish, English and Valencian out of the box. The CLI uses `MONKEYGRAB_LANG`; the web UI has an `ES / EN / VAL` selector. |
-| **Two interfaces** | [Rich](https://rich.readthedocs.io/en/stable/)-based terminal CLI and a [Flask](https://flask.palletsprojects.com/) + [React](https://react.dev/) web UI with streaming responses. |
+| **Two interfaces** | [Rich](https://rich.readthedocs.io/en/stable/)-based terminal CLI and a [Flask](https://flask.palletsprojects.com/) + [React](https://react.dev/) web UI with streaming responses and inline PDF viewer. |
 | **Image-aware** | Optionally describes raster images in PDFs with a vision model via [pymupdf4llm](https://pymupdf.readthedocs.io/en/latest/pymupdf4llm/), making visual content retrievable. |
 
 ---
@@ -234,6 +234,8 @@ These constants live in `rag/chat_pdfs.py`. Edit them directly to toggle pipelin
 ### Web interface
 
 Open `http://localhost:5000`. Supports document upload, streaming responses, pipeline settings and an `ES / EN / VAL` language selector through the UI. The selected web language is stored in the browser.
+
+**Inline PDF viewer** — click the eye icon next to any document in the sidebar, or click any source citation in a RAG response, to open the PDF directly in the browser. Citations open at the page of the highest-scoring retrieved fragment for that document.
 
 For development with hot-reload: run `npm run dev` inside `rag/web/frontend/` ([Vite](https://vitejs.dev/) on :3000 proxies to [Flask](https://flask.palletsprojects.com/) on :5000).
 

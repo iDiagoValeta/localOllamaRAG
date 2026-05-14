@@ -4,7 +4,7 @@ import {
   Database,
   Search, Layers, FileUp, Menu, X,
   RefreshCw, Loader2, AlertCircle, CheckCircle2, Trash2,
-  ChevronDown, ChevronRight, Copy, Check, Languages
+  ChevronDown, ChevronRight, Copy, Check, Languages, Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import katex from 'katex';
@@ -19,6 +19,7 @@ type Mode = 'chat' | 'rag';
 interface Citation {
   document: string;
   pages: number[];
+  best_page?: number;
 }
 
 interface Message {
@@ -61,7 +62,7 @@ const STRINGS = {
     uploading: 'Añadiendo…', addPdf: 'Añadir PDF',
     addPdfHint: 'Usa los ajustes actuales del pipeline',
     collection: 'Colección ({n} docs)', noDocs: 'No hay documentos indexados',
-    deleteDoc: 'Eliminar documento',
+    deleteDoc: 'Eliminar documento', viewPdf: 'Ver PDF',
     indexingFile: 'Indexando {file}', reindexingStatus: 'Re-indexación en curso...',
     section1: '1. Indexación',
     labelContextual: 'Recuperación contextual', descContextual: 'Enriquece fragmentos con LLM',
@@ -114,7 +115,7 @@ const STRINGS = {
     uploading: 'Adding…', addPdf: 'Add PDF',
     addPdfHint: 'Uses current pipeline settings',
     collection: 'Collection ({n} docs)', noDocs: 'No documents indexed',
-    deleteDoc: 'Delete document',
+    deleteDoc: 'Delete document', viewPdf: 'View PDF',
     indexingFile: 'Indexing {file}', reindexingStatus: 'Re-indexing in progress...',
     section1: '1. Indexing',
     labelContextual: 'Contextual Retrieval', descContextual: 'Enrich chunks with LLM',
@@ -167,7 +168,7 @@ const STRINGS = {
     uploading: 'Afegint…', addPdf: 'Afegir PDF',
     addPdfHint: 'Usa els ajustos actuals del pipeline',
     collection: "Col·lecció ({n} docs)", noDocs: 'No hi ha documents indexats',
-    deleteDoc: 'Eliminar document',
+    deleteDoc: 'Eliminar document', viewPdf: 'Veure PDF',
     indexingFile: 'Indexant {file}', reindexingStatus: 'Re-indexació en curs...',
     section1: '1. Indexació',
     labelContextual: 'Recuperació contextual', descContextual: 'Enriqueix fragments amb LLM',
@@ -601,6 +602,11 @@ export default function App() {
   const [indexingError, setIndexingError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [pdfViewer, setPdfViewer] = useState<{ doc: string; page: number } | null>(null);
+
+  const openPdf = useCallback((doc: string, page = 1) => {
+    setPdfViewer({ doc, page });
+  }, []);
 
   // ---- Scroll to bottom ----
   const scrollToBottom = useCallback(() => {
@@ -1169,6 +1175,13 @@ export default function App() {
                           </div>
                           <span className="text-sm text-zinc-300 group-hover:text-white truncate font-medium flex-1 min-w-0">{doc}</span>
                           <button
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full text-zinc-500 hover:text-orange-400 hover:bg-orange-500/10 transition-all flex-shrink-0"
+                            onClick={() => openPdf(doc)}
+                            title={T.viewPdf}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
                             className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all flex-shrink-0 disabled:opacity-50"
                             onClick={() => handleDeleteDoc(doc)}
                             disabled={deletingDoc !== null}
@@ -1449,12 +1462,17 @@ export default function App() {
                         <div className="mt-3 w-full space-y-3 pl-2">
                           <div className="flex flex-wrap gap-2">
                             {msg.citations.map((cite, i) => (
-                              <div key={i} className="inline-flex max-w-full items-center gap-2 px-3 py-1.5 rounded-lg bg-black/40 border border-white/5 text-xs text-zinc-300 hover:bg-white/10 hover:border-white/10 transition-all group">
+                              <button
+                                key={i}
+                                className="inline-flex max-w-full items-center gap-2 px-3 py-1.5 rounded-lg bg-black/40 border border-white/5 text-xs text-zinc-300 hover:bg-white/10 hover:border-orange-500/30 hover:text-orange-300 transition-all group cursor-pointer"
+                                onClick={() => openPdf(cite.document, cite.best_page ?? cite.pages[0] ?? 1)}
+                                title={T.viewPdf}
+                              >
                                 <FileText className="w-3.5 h-3.5 text-orange-400/70 group-hover:text-orange-400" />
                                 <span className="font-medium truncate min-w-0">{cite.document}</span>
                                 <span className="text-zinc-600">|</span>
                                 <span className="text-zinc-400 shrink-0">p. {cite.pages.join(', ')}</span>
-                              </div>
+                              </button>
                             ))}
                           </div>
                           {msg.metrics && (
@@ -1474,6 +1492,15 @@ export default function App() {
             <div ref={messagesEndRef} />
           </div>
         </div>
+
+        {/* PDF Viewer Modal */}
+        {pdfViewer && (
+          <PdfViewerModal
+            doc={pdfViewer.doc}
+            page={pdfViewer.page}
+            onClose={() => setPdfViewer(null)}
+          />
+        )}
 
         {/* Input Area */}
         <div className="p-6 bg-gradient-to-t from-[#050505] via-[#050505]/90 to-transparent absolute bottom-0 left-0 right-0 z-20">
@@ -1513,6 +1540,46 @@ export default function App() {
           </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+// =============================================================================
+// PDF Viewer Modal
+// =============================================================================
+
+function PdfViewerModal({ doc, page, onClose }: { doc: string; page: number; onClose: () => void }) {
+  const src = `/api/pdf/${encodeURIComponent(doc)}#page=${page}`;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/95 backdrop-blur-sm">
+      <div className="flex items-center justify-between px-4 py-3 bg-[#0a0a0a] border-b border-white/10 flex-shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <FileText className="w-4 h-4 text-orange-400 flex-shrink-0" />
+          <span className="text-sm font-medium text-zinc-200 truncate">{doc}</span>
+          {page > 1 && (
+            <span className="text-xs text-zinc-500 flex-shrink-0 ml-1">— p. {page}</span>
+          )}
+        </div>
+        <button
+          onClick={onClose}
+          className="p-2 rounded-lg text-zinc-500 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
+          title="Cerrar (Esc)"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+      <iframe
+        src={src}
+        className="flex-1 w-full border-none bg-zinc-900"
+        title={doc}
+      />
     </div>
   );
 }

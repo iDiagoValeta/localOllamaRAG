@@ -269,9 +269,13 @@ def _format_sources(fragments: list) -> list:
 
     Args:
         fragments: List of fragment dicts with metadata (source, page).
+            Fragments must be ordered by descending relevance score so that
+            the first occurrence of each document is its highest-scoring fragment.
 
     Returns:
-        List of dicts with 'document' and 'pages' keys, sorted by document name.
+        List of dicts with 'document', 'pages', and 'best_page' keys, sorted
+        by document name. 'best_page' is the page of the highest-scoring fragment
+        for that document, intended as the default scroll target in the viewer.
     """
     sources_map = {}
     for frag in fragments:
@@ -279,13 +283,18 @@ def _format_sources(fragments: list) -> list:
         doc = meta.get("source", "?")
         page = meta.get("page", 0)
         page_num = page + 1 if isinstance(page, int) else page
+        score = frag.get("score_reranker", frag.get("score_final", 0.0))
         if doc not in sources_map:
-            sources_map[doc] = set()
-        sources_map[doc].add(page_num)
+            sources_map[doc] = {"pages": set(), "best_page": page_num, "best_score": score}
+        else:
+            if score > sources_map[doc]["best_score"]:
+                sources_map[doc]["best_score"] = score
+                sources_map[doc]["best_page"] = page_num
+        sources_map[doc]["pages"].add(page_num)
 
     return [
-        {"document": doc, "pages": sorted(pages)}
-        for doc, pages in sorted(sources_map.items())
+        {"document": doc, "pages": sorted(info["pages"]), "best_page": info["best_page"]}
+        for doc, info in sorted(sources_map.items())
     ]
 
 
@@ -705,6 +714,20 @@ def api_delete_doc(filename):
         return jsonify({"ok": True, "documents": docs, "total_fragments": coll.count()})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/pdf/<path:filename>", methods=["GET"])
+def api_serve_pdf(filename):
+    """Serve a PDF file for in-browser viewing.
+
+    Args:
+        filename: Name of the PDF file to serve.
+    """
+    filename = secure_filename(os.path.basename(filename))
+    if not filename or not filename.lower().endswith(".pdf"):
+        return jsonify({"ok": False, "error": "Archivo inválido"}), 400
+    docs_folder = os.path.abspath(rag_engine.CARPETA_DOCS)
+    return send_from_directory(docs_folder, filename, mimetype="application/pdf")
 
 
 @app.route("/api/topics", methods=["GET"])
