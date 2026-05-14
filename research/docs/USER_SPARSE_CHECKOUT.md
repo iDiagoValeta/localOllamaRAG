@@ -10,10 +10,10 @@ cd localOllamaRAG
 git sparse-checkout set rag README.md CLAUDE.md pytest.ini
 ```
 
-To include the default free-use PDF folder but skip RagBench trees:
+To include the default English PDF folder but skip RagBench trees:
 
 ```bash
-git sparse-checkout set rag README.md CLAUDE.md pytest.ini rag/docs/libre
+git sparse-checkout set rag README.md CLAUDE.md pytest.ini rag/docs/en
 ```
 
 **Caveats**

@@ -151,10 +151,9 @@ if hasattr(sys.stderr, "reconfigure"):
     except Exception:
         pass
 
-"""
-Qwen3-FineTuned:latest
-phi4-finetuned:latest
-"""
+# Any compatible Ollama generator can be selected through OLLAMA_RAG_MODEL.
+# The same pattern applies to chat, embeddings, contextual retrieval, RECOMP,
+# and OCR through their corresponding OLLAMA_* environment variables.
 
 MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "gemma4:e2b")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e2b")
@@ -406,6 +405,7 @@ Your purpose is to help users query indexed PDF documents and understand the sys
 
 ### SYSTEM OVERVIEW
 - **Architecture:** Runs fully locally using Ollama (LLM inference) and ChromaDB (vector store).
+- **Model configuration:** All model roles are configurable through environment variables. Explain roles and variables, not fixed model names.
 - **Modes:**
   1. **CHAT**: General conversation, project guidance, and command help. Maintains local history.
   2. **RAG**: Document-grounded answers from indexed PDFs using hybrid retrieval.
@@ -419,18 +419,18 @@ Use this reference to explain how the system works or which parts are mandatory 
 #### 1. INDEXING PHASE
 * **CORE (Mandatory):**
     * **Extraction & Chunking:** Reading PDFs and splitting text (`dividir_en_chunks`).
-    * **Embeddings:** Converting text to vectors and saving to ChromaDB.
+    * **Embeddings:** Converting text to vectors with `MODELO_EMBEDDING` configured through `OLLAMA_EMBED_MODEL`, then saving them to ChromaDB.
 * **OPTIONAL (Flag: `USAR_CONTEXTUAL_RETRIEVAL`):**
-    * **Contextual Retrieval:** Uses an LLM to generate a summary/context for each chunk before indexing to improve retrieval accuracy.
+    * **Contextual Retrieval:** Uses `MODELO_CONTEXTUAL` configured through `OLLAMA_CONTEXTUAL_MODEL` to generate summary/context for each chunk before indexing to improve retrieval accuracy.
 * **OPTIONAL (Flag: `USAR_EMBEDDINGS_IMAGEN`):**
-    * **Image Indexing:** Extracts raster images from each PDF page with PyMuPDF (fitz), describes them with `MODELO_OCR` (default: `gemma4:e4b`, override with `OLLAMA_OCR_MODEL`) using a structured OCR prompt that transcribes tables cell by cell, chart axes and legends, diagram components, and equations, then stores the result as a regular text chunk in ChromaDB.
+    * **Image Indexing:** Extracts raster images from each PDF page with PyMuPDF (fitz), describes them with `MODELO_OCR` configured through `OLLAMA_OCR_MODEL` using a structured OCR prompt that transcribes tables cell by cell, chart axes and legends, diagram components, and equations, then stores the result as a regular text chunk in ChromaDB.
 
 #### 2. RETRIEVAL PHASE
 Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; optional components extend it.
 * **CORE (Mandatory):**
-    * **Semantic Search:** Vector distance lookup; always performed.
+    * **Semantic Search:** Vector distance lookup using `MODELO_EMBEDDING`; always performed.
 * **OPTIONAL (execution order):**
-    * **Query Decomposition** (`USAR_LLM_QUERY_DECOMPOSITION`): Uses an auxiliary LLM to generate sub-queries before semantic search; activates for long questions (>60 chars).
+    * **Query Decomposition** (`USAR_LLM_QUERY_DECOMPOSITION`): Uses `MODELO_CHAT` configured through `OLLAMA_CHAT_MODEL` to generate sub-queries before semantic search; activates for long questions (>60 chars).
     * **Hybrid Search** (`USAR_BUSQUEDA_HIBRIDA`): Adds keyword/lexical search.
     * **Exhaustive Search** (`USAR_BUSQUEDA_EXHAUSTIVA`): Deep scan for critical terms (computationally expensive).
 
@@ -440,11 +440,11 @@ Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; o
 
 #### 4. CONTEXT & GENERATION
 * **CORE (Mandatory):**
-    * **Generation:** The RAG model (`MODELO_RAG`) generates the final answer based on the retrieved text.
+    * **Generation:** `MODELO_RAG`, configured through `OLLAMA_RAG_MODEL`, generates the final answer based on the retrieved text.
 * **OPTIONAL:**
     * **Context Optimization** (`USAR_OPTIMIZACION_CONTEXTO`): Cleans PDF artifacts (headers, footers, noise) before sending to the LLM.
     * **Neighbor Expansion** (`EXPANDIR_CONTEXTO`): Retrieves adjacent chunks to provide continuous context.
-    * **RECOMP Synthesis** (`USAR_RECOMP_SYNTHESIS`): Uses `MODELO_RECOMP` (separate from `MODELO_RAG`) to summarize/synthesize the context instead of feeding raw chunks (Default: False).
+    * **RECOMP Synthesis** (`USAR_RECOMP_SYNTHESIS`): Uses `MODELO_RECOMP`, configured through `OLLAMA_RECOMP_MODEL` and separate from `MODELO_RAG`, to summarize/synthesize the context instead of feeding raw chunks (default: True, env-overridable).
 
 ---
 
@@ -453,9 +453,10 @@ Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; o
 2. **Honesty:** Never fabricate system state or document contents. If you don't know, say so.
 3. **Guidance:** If a user asks "what should I do?", provide concrete next steps (e.g., suggest switching to RAG mode to search their PDFs).
 4. **Mode Enforcement:** If the user asks for information contained in the documents while in CHAT mode, redirect them to use RAG mode for document-grounded answers.
-5. **Language:** Always respond in the exact same language the user uses. If they write in Spanish, respond in Spanish. If they write in Catalan, respond in Catalan. If they write in English, respond in English. Never switch languages mid-conversation.
-6. **Tone:** Professional, academic, yet approachable.
-7. **Math formatting:** Use LaTeX notation for all formulas: $...$ inline, $$...$$ for display equations.
+5. **Configuration framing:** When explaining the pipeline, describe configurable roles (`OLLAMA_*`, `RERANKER_QUALITY`) instead of presenting any specific model as required.
+6. **Language:** Always respond in the exact same language the user uses. If they write in Spanish, respond in Spanish. If they write in Catalan, respond in Catalan. If they write in English, respond in English. Never switch languages mid-conversation.
+7. **Tone:** Professional, academic, yet approachable.
+8. **Math formatting:** Use LaTeX notation for all formulas: $...$ inline, $$...$$ for display equations.
 """
 
 SYSTEM_PROMPT_RAG = """You are a professional document analysis assistant. Your role is to answer questions accurately based on the provided document context.
@@ -475,8 +476,8 @@ def _modelo_necesita_system_prompt(nombre_modelo: str) -> bool:
     """Return True if the model does not have a system prompt baked in its Modelfile.
 
     Fine-tuned models in this project include 'finetuned' in their Ollama name
-    (e.g. phi4-finetuned:latest) and already carry the RAG system prompt via
-    their Modelfile. Any other model receives the prompt explicitly via the API.
+    and already carry the RAG system prompt via their Modelfile. Any other model
+    receives the prompt explicitly via the API.
     """
     return "finetuned" not in nombre_modelo.lower()
 

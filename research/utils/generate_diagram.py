@@ -74,15 +74,15 @@ flowchart TD
     end
 
     DB[("ChromaDB\\nPersistent Vector Store\\nrag/vector_db/<folder>_<embed_slug>")]
-    GEN["Generation\\nOLLAMA_RAG_MODEL\\ndefault: Qwen3-FineTuned:latest"]
+    GEN["Generation\\nOLLAMA_RAG_MODEL\\nconfigurable generator"]
 
     subgraph OLL["  Ollama / Local Models  "]
         direction LR
-        M1["embeddinggemma\\nEmbeddings"]
-        M2["gemma4:e2b\\nChat / decomposition"]
-        M3["BAAI/bge-reranker\\nCross-Encoder"]
-        M4["gemma4:e4b\\nOCR / contextual / RECOMP"]
-        M5["Qwen3-FineTuned\\nRAG generator"]
+        M1["OLLAMA_EMBED_MODEL\\nEmbeddings"]
+        M2["OLLAMA_CHAT_MODEL\\nChat / decomposition"]
+        M3["RERANKER_QUALITY\\nCross-Encoder tier"]
+        M4["OLLAMA_CONTEXTUAL_MODEL / OLLAMA_RECOMP_MODEL / OLLAMA_OCR_MODEL\\nAuxiliary stages"]
+        M5["OLLAMA_RAG_MODEL\\nRAG generator"]
     end
 
     WEB & CLI -->|"query / PDF upload"| API
