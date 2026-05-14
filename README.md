@@ -71,9 +71,10 @@ flowchart TD
         M2 --> N[RRF fusion\n55% semantic · 45% lexical]
         N --> O{USAR_RERANKER}
         O -->|yes| P[Cross-encoder\nRERANKER_QUALITY]
-        O -->|no| Q[Top-8 fragments]
+        O -->|no| Q[Top-K fragments\nTOP_K_FINAL]
         P --> Q
-        Q --> R{USAR_RECOMP_SYNTHESIS}
+        Q --> Q2[Context expansion\nEXPANDIR_CONTEXTO]
+        Q2 --> R{USAR_RECOMP_SYNTHESIS}
         R -->|yes| S[Context synthesis\nOLLAMA_RECOMP_MODEL]
         R -->|no| T[Raw context]
     end
