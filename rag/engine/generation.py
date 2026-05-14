@@ -66,7 +66,10 @@ def _ollama_generate_stream(model: str, prompt: str, options: dict, system: Opti
         resp.raise_for_status()
         for line in resp.iter_lines():
             if line:
-                yield json.loads(line)
+                data = json.loads(line)
+                if data.get("done") and data.get("done_reason") not in (None, "stop"):
+                    logging.warning("RAG generator stopped early: done_reason=%s", data.get("done_reason"))
+                yield data
 
 
 def _preparar_mensaje_usuario_rag(pregunta: str, fragmentos: List[Dict[str, Any]]) -> str:
@@ -89,6 +92,8 @@ def _generar_respuesta_stream(mensaje_usuario: str, on_token=None) -> str:
             "temperature": 0.15,
             "top_p": 0.9,
             "repeat_penalty": 1.15,
+            "repeat_last_n": 64,
+            "num_predict": -1,
             "num_ctx": OLLAMA_RAG_NUM_CTX,
         },
         system=system,
