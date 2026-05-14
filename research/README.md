@@ -1,6 +1,6 @@
 # MonkeyGrab — Research workspace
 
-This folder contains everything needed to reproduce and extend the thesis work: [RAGAS](https://docs.ragas.io/) evaluation, RAGBench benchmarks, [BERTScore](https://github.com/Tiiiger/bert_score) post-processing, [LoRA](https://arxiv.org/abs/2106.09685) fine-tuning, model conversion and upload helpers.
+This folder contains everything needed to reproduce and extend the thesis work: [RAGAS](https://docs.ragas.io/) evaluation, RAGBench benchmarks, [LoRA](https://arxiv.org/abs/2106.09685) fine-tuning, model conversion and upload helpers.
 
 It is **not required** to run the user-facing RAG stack (`python rag/chat_pdfs.py` or `python rag/web/app.py`).
 
@@ -10,7 +10,7 @@ It is **not required** to run the user-facing RAG stack (`python rag/chat_pdfs.p
 
 | Path | Purpose |
 |------|---------|
-| `evaluation/` | RAGAS runner (`run_eval.py`), re-evaluators (`eval_ragas_nvidia_from_checkpoints.py`, `eval_ragas_aws_from_checkpoints.py`), judge benchmarking (`judge_benchmark.py`), BERTScore post-processing, datasets and `runs/` artifacts |
+| `evaluation/` | 3 operative CLIs (`index.py`, `infer.py`, `evaluate.py`) consuming `_lib/` (datasets, checkpoints, inference, RAGAS runner, providers, aggregation). `evaluate.py` auto-aggregates by subset after comparison runs. Artifacts under `runs/` |
 | `training/` | LoRA fine-tuning scripts (Qwen3-14B, Phi-4, Gemma-3-12B) and `requirements.txt` |
 | `baselines/` | 7-model baseline benchmark, split inspection, SLURM helpers |
 | `conversion/` | LoRA merge, GGUF build, quantization (`quantize_to_q4km.ps1`), Modelfile notes |
@@ -55,95 +55,125 @@ These corpora **do not** update LoRA weights; they score the **full PDF-indexed 
 | Proprietary Wikipedia **ES** & **Valencian/Catalan** (50 QA each, 5 PDFs per language) | **[nadiva1243/wikipediaEs-Ca4RAG](https://huggingface.co/datasets/nadiva1243/wikipediaEs-Ca4RAG)** | End-to-end evaluation on real PDFs in Spanish and Valencian/Catalan; published for reuse |
 | Vectara RAGBench (**arXiv / pdf** subset) | [vectara/open_ragbench](https://huggingface.co/datasets/vectara/open_ragbench) | External English academic-PDF benchmark (1000 PDFs, 3045 QA pairs in this work) |
 
-The **RagBench** PDF trees under `rag/docs/en_ragbench_*` are used by `research/evaluation/run_eval.py` for the English benchmark workflow; see `research/docs/EVALUACIONES_PIPELINE.md`.
+The **RagBench** PDF trees under `rag/docs/en_ragbench_*` are used by `research/evaluation/infer.py` (subcommands `ragbench-prepare`, `ragbench-eval`, `visual`) for the English benchmark workflow; see `research/docs/EVALUACIONES_PIPELINE.md`.
 
 ---
 
 ## RAGAS evaluation
 
-Three judge providers are supported: **Google Gemini** (original), **NVIDIA Build API** (free, no token limit) and **Amazon Bedrock** (AWS managed).
+El flujo se divide en tres pasos operativos respaldados por tres CLIs en
+`research/evaluation/` que comparten el paquete `_lib/`:
 
-### Provider A — Google Gemini (live inference)
+1. **`index.py`** — indexa un corpus en ChromaDB.
+2. **`infer.py`** — genera respuestas RAG y persiste checkpoints (sin RAGAS).
+3. **`evaluate.py`** — ejecuta RAGAS sobre checkpoints con `--provider google|aws|nvidia`.
 
-Requires `GOOGLE_API_KEY` in `.env` ([Gemini](https://deepmind.google/models/gemini/) as judge LLM).
+### Paso 1 — Indexación
 
 ```bash
-# Single run on a local corpus
-python research/evaluation/run_eval.py single --corpus es
-python research/evaluation/run_eval.py single --corpus ca
-
-# Ablation comparison (multiple pipeline variants)
-python research/evaluation/run_eval.py compare --corpus ca --label mi_eval --reindex
-python research/evaluation/run_eval.py list-variants
-
-# RagBench EN (fixed eval corpus — 25 papers, 5 q each)
-python research/evaluation/run_eval.py ragbench-prepare
-python research/evaluation/run_eval.py ragbench-eval
-
-# RagBench visual (tables and images)
-python research/evaluation/run_ragbench_visual_inference.py --n-papers 25 --max-q 5
-python research/evaluation/run_ragbench_visual_inference.py --ragas-only
-
-# 2026 repetition run: inference only, no RAGAS
-python repeticion_run_eval.py repeticion --corpus all
-python repeticion_run_eval.py repeticion --corpus ragbench_eval --final-variant baseline_all_on
-
-# BERTScore post-process over all completed RAGAS runs
-python research/evaluation/evaluate_ragas_bertscore.py --all-completed
-
-# Aggregate ablation by dataset subset
-python research/evaluation/aggregate_comparison_by_conjunto.py \
-  --dir research/evaluation/runs/ragas/comparisons/<label> \
-  --etiquetas-es
+python research/evaluation/index.py --corpus es                 # rag/docs/es → ChromaDB
+python research/evaluation/index.py --corpus ca --force         # re-indexa desde cero
+python research/evaluation/index.py --corpus ragbench-eval      # usa el file-filter del manifest preparado
+python research/evaluation/index.py --docs-dir custom/path --force
 ```
 
-### Provider B — NVIDIA Build API (re-evaluation from checkpoints)
-
-Re-evaluates **existing checkpoint JSON files** (no new RAG inference). Uses NVIDIA's free OpenAI-compatible API — rate limit 40 req/min, no token quota. Requires `NVIDIA_API_KEY`.
-
-Default models: `mistralai/mistral-medium-3.5-128b` (judge), `nvidia/llama-3.2-nv-embedqa-1b-v2` (embeddings).
+### Paso 2 — Inferencia (genera checkpoints)
 
 ```bash
-# Dry-run — list what would be evaluated
-python research/evaluation/eval_ragas_nvidia_from_checkpoints.py --all-known --dry-run
+# Baseline sobre un corpus local
+python research/evaluation/infer.py single --corpus es
+python research/evaluation/infer.py single --corpus ca
 
-# Re-evaluate all known checkpoints
-python research/evaluation/eval_ragas_nvidia_from_checkpoints.py --all-known
+# Ablation (8 variantes, una por flag desactivado)
+python research/evaluation/infer.py compare --corpus ca --label mi_eval --reindex
+python research/evaluation/infer.py list-variants
 
-# Re-evaluate a single checkpoint (optional row limit for testing)
-python research/evaluation/eval_ragas_nvidia_from_checkpoints.py \
-  --checkpoint research/evaluation/runs/ragas/comparisons/<label>/<file>.json \
+# RagBench EN (corpus fijo — 25 papers, 5 q each)
+python research/evaluation/infer.py ragbench-prepare
+python research/evaluation/infer.py ragbench-eval
+
+# RagBench visual (tablas/imágenes)
+python research/evaluation/infer.py visual --n-papers 25 --max-q 5
+```
+
+Los checkpoints siguen el mismo schema que antes y se guardan bajo
+`research/evaluation/runs/ragas/{single,comparisons,ragbench,ragbench_visual}/`.
+
+### Paso 3 — RAGAS desde checkpoint (Google / NVIDIA / AWS)
+
+`evaluate.py` no genera respuestas: solo lee checkpoints y aplica RAGAS con el
+backend pedido. Soporta un único checkpoint (`--checkpoint`), descubrimiento
+automático (`--all-known`) o un árbol concreto (`--source-root`).
+
+#### Google Gemini (`GOOGLE_API_KEY`)
+
+```bash
+python research/evaluation/evaluate.py --provider google \
+  --source-root research/evaluation/runs/ragas/comparisons/mi_eval
+python research/evaluation/evaluate.py --provider google --all-known
+```
+
+Salida: `research/evaluation/runs/ragas_google_revaluation/`.
+
+#### NVIDIA Build API (`NVIDIA_API_KEY`)
+
+Modelos por defecto: `mistralai/mistral-medium-3.5-128b` (juez),
+`nvidia/llama-3.2-nv-embedqa-1b-v2` (embeddings). Rate limit ajustable.
+
+```bash
+python research/evaluation/evaluate.py --provider nvidia --all-known --dry-run
+python research/evaluation/evaluate.py --provider nvidia --all-known \
+  --nvidia-rate-limit-per-minute 40
+python research/evaluation/evaluate.py --provider nvidia \
+  --checkpoint research/evaluation/runs/ragas/comparisons/<label>/checkpoints/<file>.json \
   --limit 5
-
-# Retry rows that scored NaN in a previous run
-python research/evaluation/eval_ragas_nvidia_from_checkpoints.py \
+python research/evaluation/evaluate.py --provider nvidia \
   --checkpoint <file>.json --retry-failed
 ```
 
-Outputs go to `research/evaluation/runs/ragas_nvidia_revaluation/`. Command reference and checkpoint inventory: [`research/docs/nvidia_revaluation_commands.md`](docs/nvidia_revaluation_commands.md).
+Salida: `research/evaluation/runs/ragas_nvidia_revaluation/`.
 
-### Provider C — Amazon Bedrock (re-evaluation from checkpoints)
+#### Amazon Bedrock (boto3 / `AWS_BEARER_TOKEN_BEDROCK`)
 
-Same checkpoint interface as Provider B but uses AWS Bedrock models. Requires boto3 credentials (`AWS_ACCESS_KEY_ID` / `~/.aws/credentials`).
-
-Default models: `anthropic.claude-3-5-haiku-20241022-v1:0` (judge), `amazon.titan-embed-text-v2:0` (embeddings).
+Modelos por defecto: `eu.anthropic.claude-sonnet-4-20250514-v1:0` (juez),
+`amazon.titan-embed-text-v2:0` (embeddings). Requiere acceso habilitado en la
+consola de Bedrock.
 
 ```bash
-python research/evaluation/eval_ragas_aws_from_checkpoints.py --all-known --dry-run
-python research/evaluation/eval_ragas_aws_from_checkpoints.py --all-known
-python research/evaluation/eval_ragas_aws_from_checkpoints.py \
-  --checkpoint research/evaluation/runs/ragas/comparisons/<label>/<file>.json --limit 5
+python research/evaluation/evaluate.py --provider aws --all-known --dry-run
+python research/evaluation/evaluate.py --provider aws --all-known
+python research/evaluation/evaluate.py --provider aws \
+  --checkpoint research/evaluation/runs/ragas/comparisons/<label>/checkpoints/<file>.json \
+  --limit 5
 ```
 
-Outputs go to `research/evaluation/runs/ragas_aws_revaluation/`.
+Salida: `research/evaluation/runs/ragas_aws_revaluation/`.
 
-### Judge benchmarking
+### Agregación por subconjunto (integrada en `evaluate.py`)
 
-Compare multiple judge LLMs for RAGAS stability across the 5 evaluation datasets:
+Tras una run de comparación ablation, `evaluate.py` genera automáticamente
+`by_conjunto_<group_by>.json` (+ CSV) por etiqueta, con medias variante ×
+subconjunto × métrica. Se controla con tres flags:
 
 ```bash
-python research/evaluation/judge_benchmark.py --dry-run
-python research/evaluation/judge_benchmark.py --ragas-workers 2 --ragas-batch 2 --rate-limit-per-minute 25
+# Agregar por source_type (default) y por idioma, con etiquetas en castellano
+python research/evaluation/evaluate.py --provider google \
+  --source-root research/evaluation/runs/ragas/comparisons/<label> \
+  --aggregate-group-by source_type,language \
+  --aggregate-etiquetas-es
+
+# Saltar la agregación
+python research/evaluation/evaluate.py --provider nvidia --all-known --no-aggregate
+```
+
+Subconjuntos soportados: `source_type`, `language`, `source_type_language`,
+`id_prefix`.
+
+### 2026 repetition runs
+
+```bash
+python repeticion_run_eval.py repeticion --corpus all
+python repeticion_run_eval.py repeticion --corpus ragbench_eval --final-variant baseline_all_on
 ```
 
 Artifacts are written under `research/evaluation/runs/`. See `research/docs/EVALUACIONES_PIPELINE.md` for corpus presets, variant definitions and artifact layout.

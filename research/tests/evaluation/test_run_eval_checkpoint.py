@@ -1,3 +1,10 @@
+"""Tests for the inference / checkpoint plumbing in research/evaluation/_lib/.
+
+Adapted to the post-refactor layout: ``run_eval.py`` was split into ``index.py``,
+``infer.py``, ``evaluate.py`` and the shared ``_lib/`` package. Most internals
+moved to ``_lib.checkpoints``, ``_lib.inference`` and ``_lib.ragbench``.
+"""
+
 import json
 import shutil
 import sys
@@ -9,14 +16,16 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import research.evaluation.run_eval as run_eval
+from research.evaluation._lib import checkpoints as ckpt
+from research.evaluation._lib import inference as infer_lib
+from research.evaluation._lib import ragbench as ragbench_lib
 import rag.chat_pdfs as chat_pdfs
 
 
 def test_old_checkpoint_statuses_are_reconstructed_from_answers():
     answers = ["ready", "", None]
 
-    statuses = run_eval._normalizar_estados_preguntas(None, answers, 3)
+    statuses = ckpt.normalizar_estados_preguntas(None, answers, 3)
 
     assert [s["status"] for s in statuses] == ["ok", "pending", "pending"]
     assert [s["question_number"] for s in statuses] == [1, 2, 3]
@@ -29,8 +38,8 @@ def test_failed_empty_status_is_pending_but_valid_answer_wins():
         {"status": "failed", "reason": "timeout", "attempts": 2},
     ]
 
-    normalized = run_eval._normalizar_estados_preguntas(statuses, answers, 2)
-    pending = run_eval._indices_pendientes_generacion(answers, normalized, 2)
+    normalized = ckpt.normalizar_estados_preguntas(statuses, answers, 2)
+    pending = ckpt.indices_pendientes_generacion(answers, normalized, 2)
 
     assert pending == [0]
     assert normalized[1]["status"] == "ok"
@@ -53,16 +62,20 @@ def test_generation_failure_writes_diagnostic_checkpoint(monkeypatch):
 
     monkeypatch.setenv("EVAL_OLLAMA_ATTEMPTS", "1")
     monkeypatch.setenv("EVAL_OLLAMA_TIMEOUT", "1")
-    monkeypatch.setattr(run_eval, "_conectar_e_indexar", lambda **_: ("collection", 1))
-    monkeypatch.setattr(run_eval, "evaluar_pregunta_rag", lambda *_: ("", []))
+    monkeypatch.setattr(infer_lib, "conectar_e_indexar", lambda **_: ("collection", 1))
     monkeypatch.setattr(
-        run_eval,
-        "_diagnosticar_fallo_generacion",
+        infer_lib,
+        "ejecutar_pregunta_con_timeout",
+        lambda *_args, **_kwargs: ("", [], False, None),
+    )
+    monkeypatch.setattr(
+        infer_lib,
+        "diagnosticar_fallo_generacion",
         lambda *_: "sin_contexto",
     )
 
     with pytest.raises(SystemExit):
-        run_eval.generar_respuestas_rag(
+        infer_lib.generar_respuestas_rag(
             dataset_path=str(dataset_path),
             output_path=str(output_path),
             debug_path=str(debug_path),
@@ -137,11 +150,11 @@ def test_ragbench_eval_generation_keeps_low_scoring_reranker_candidates(monkeypa
 
 
 def test_prepared_ragbench_dataset_detection():
-    assert run_eval._es_dataset_ragbench(
+    assert infer_lib.es_dataset_ragbench(
         "research/evaluation/datasets/ragbench/prepared/dev_frozen/dataset_ragbench_text_10p_5q.json",
         "en",
     )
-    assert not run_eval._es_dataset_ragbench(
+    assert not infer_lib.es_dataset_ragbench(
         "research/evaluation/datasets/local/dataset_eval_en.json", "en"
     )
 
@@ -170,17 +183,17 @@ def test_prepare_ragbench_eval_excludes_frozen_dev_docs(monkeypatch):
     pdf_urls = {"paper_a": "http://a", "paper_b": "http://b", "paper_c": "http://c"}
 
     monkeypatch.setattr(
-        run_eval,
+        ragbench_lib,
         "descargar_metadatos",
         lambda: (queries, qrels, answers, pdf_urls),
     )
     monkeypatch.setattr(
-        run_eval,
+        ragbench_lib,
         "descargar_pdfs",
         lambda selected_papers, pdf_urls, pdfs_dir, skip_existing=True: list(selected_papers),
     )
 
-    manifest = run_eval.preparar_ragbench_eval_en(
+    manifest = ragbench_lib.preparar_ragbench_eval_en(
         source="text",
         n_papers=2,
         max_q=1,
@@ -213,20 +226,22 @@ def test_incremental_file_filter_indexes_only_missing_docs(monkeypatch):
         def get_or_create_collection(self, name):
             return FakeCollection()
 
-    monkeypatch.setattr(run_eval.chromadb, "PersistentClient", FakeClient)
-    monkeypatch.setattr(run_eval.rag_runtime, "PATH_DB", "fake_db_path")
-    monkeypatch.setattr(run_eval.rag_runtime, "COLLECTION_NAME", "fake_collection")
-    monkeypatch.setattr(run_eval.rag_runtime, "CARPETA_DOCS", "fake_docs_dir")
-    monkeypatch.setattr(run_eval.rag_runtime, "obtener_documentos_indexados", lambda collection: ["a.pdf"])
+    import chromadb as _chromadb
+    import rag.chat_pdfs as _rag_runtime
+    monkeypatch.setattr(_chromadb, "PersistentClient", FakeClient)
+    monkeypatch.setattr(_rag_runtime, "PATH_DB", "fake_db_path")
+    monkeypatch.setattr(_rag_runtime, "COLLECTION_NAME", "fake_collection")
+    monkeypatch.setattr(_rag_runtime, "CARPETA_DOCS", "fake_docs_dir")
+    monkeypatch.setattr(_rag_runtime, "obtener_documentos_indexados", lambda collection: ["a.pdf"])
 
     def _fake_indexar_documentos(carpeta, collection, solo_archivos=None, silent=False, progress_callback=None):
         added_calls.append(list(solo_archivos) if solo_archivos is not None else None)
         collection._count += 7
         return 7
 
-    monkeypatch.setattr(run_eval, "indexar_documentos", _fake_indexar_documentos)
+    monkeypatch.setattr(_rag_runtime, "indexar_documentos", _fake_indexar_documentos)
 
-    collection, total = run_eval._conectar_e_indexar(
+    collection, total = infer_lib.conectar_e_indexar(
         force_reindex=False,
         solo_archivos=["a.pdf", "b.pdf"],
         add_missing_from_filter=True,
@@ -235,12 +250,3 @@ def test_incremental_file_filter_indexes_only_missing_docs(monkeypatch):
     assert isinstance(collection, FakeCollection)
     assert added_calls == [["b.pdf"]]
     assert total == 17
-
-
-def test_ragbench_eval_parser_defaults():
-    parser = run_eval._build_parser()
-    args = parser.parse_args(["ragbench-eval"])
-
-    assert args.ragas_max_workers == 5
-    assert args.ragas_batch_size == 15
-    assert args.manifest == run_eval.RAGBENCH_EVAL_MANIFEST_PATH

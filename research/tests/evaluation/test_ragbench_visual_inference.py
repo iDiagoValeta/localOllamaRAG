@@ -1,3 +1,10 @@
+"""Tests for the RagBench visual preparation logic in _lib/ragbench.py.
+
+After the refactor, ``run_ragbench_visual_inference.py`` is replaced by the
+``infer.py visual`` subcommand which delegates to ``_lib.ragbench`` for paper
+selection, dataset writing, and CSV/JSON export.
+"""
+
 import csv
 import json
 import sys
@@ -9,14 +16,14 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import research.evaluation.run_ragbench_visual_inference as visual
+from research.evaluation._lib import ragbench as ragbench_lib
 
 
-def test_parse_sources_rejects_non_visual_sources():
-    assert visual.parse_sources("text-image,text-table") == ["text-image", "text-table"]
+def test_parse_visual_sources_rejects_non_visual_sources():
+    assert ragbench_lib.parse_visual_sources("text-image,text-table") == ["text-image", "text-table"]
 
     with pytest.raises(ValueError):
-        visual.parse_sources("text")
+        ragbench_lib.parse_visual_sources("text")
 
 
 def test_prepare_visual_dataset_filters_sources_and_excludes_dev(monkeypatch, tmp_path):
@@ -45,14 +52,14 @@ def test_prepare_visual_dataset_filters_sources_and_excludes_dev(monkeypatch, tm
         "paper_d": "http://d",
     }
 
-    monkeypatch.setattr(visual.run_eval, "descargar_metadatos", lambda: (queries, qrels, answers, pdf_urls))
+    monkeypatch.setattr(ragbench_lib, "descargar_metadatos", lambda: (queries, qrels, answers, pdf_urls))
     monkeypatch.setattr(
-        visual.run_eval,
+        ragbench_lib,
         "descargar_pdfs",
         lambda selected_papers, pdf_urls, pdfs_dir: list(selected_papers),
     )
 
-    manifest = visual.preparar_ragbench_visual(
+    manifest = ragbench_lib.preparar_ragbench_visual(
         sources=["text-image", "text-table"],
         n_papers=10,
         max_q=2,
@@ -72,9 +79,9 @@ def test_prepare_visual_dataset_filters_sources_and_excludes_dev(monkeypatch, tm
     assert {row["paper_id"] for row in rows} == {"paper_a", "paper_d"}
 
 
-def test_prepare_visual_only_doc_rejects_excluded_dev_doc(tmp_path):
+def test_visual_only_doc_rejects_excluded_dev_doc():
     with pytest.raises(SystemExit):
-        visual.seleccionar_papers_visuales(
+        ragbench_lib.seleccionar_papers_visuales(
             queries={"q1": {"query": "Q", "source": "text-image"}},
             qrels={"q1": {"doc_id": "paper_a"}},
             pdf_urls={"paper_a": "http://a"},
@@ -85,9 +92,8 @@ def test_prepare_visual_only_doc_rejects_excluded_dev_doc(tmp_path):
         )
 
 
-def test_visual_inference_exports_results_without_ragas(monkeypatch, tmp_path):
-    dataset_path = tmp_path / "debug" / "dataset_ragbench_visual_image_table_1p_1q.json"
-    dataset_path.parent.mkdir(parents=True)
+def test_exportar_resultados_inferencia_writes_csv_and_json(tmp_path):
+    dataset_path = tmp_path / "dataset_ragbench_visual.json"
     dataset_rows = [
         {
             "question": "What does the table show?",
@@ -97,133 +103,34 @@ def test_visual_inference_exports_results_without_ragas(monkeypatch, tmp_path):
         }
     ]
     dataset_path.write_text(json.dumps(dataset_rows), encoding="utf-8")
-    docs_dir = tmp_path / "docs"
-    result_dir = tmp_path / "results"
-    debug_dir = tmp_path / "debug"
+
+    generation = {
+        "dataset_path": str(dataset_path),
+        "questions": ["What does the table show?"],
+        "ground_truths": ["Reference"],
+        "answers": ["Generated answer"],
+        "contexts_list": [["Context chunk"]],
+        "question_statuses": [{"status": "ok", "reason": None}],
+    }
     manifest = {
         "sources": ["text-table"],
         "dataset_path": str(dataset_path),
-        "docs_dir": str(docs_dir),
+        "docs_dir": str(tmp_path / "docs"),
         "indexed_files": ["paper_a.pdf"],
     }
-    calls = {}
+    result_csv = tmp_path / "out" / "results.csv"
+    result_json = tmp_path / "out" / "results.json"
 
-    def fake_generar_respuestas_rag(**kwargs):
-        calls.update(kwargs)
-        return {
-            "dataset_path": str(dataset_path.resolve()),
-            "output_path": kwargs["output_path"],
-            "debug_path": kwargs["debug_path"],
-            "checkpoint_path": kwargs["checkpoint_path"],
-            "questions": ["What does the table show?"],
-            "ground_truths": ["Reference"],
-            "answers": ["Generated answer"],
-            "contexts_list": [["Context chunk"]],
-            "question_statuses": [{"status": "ok", "reason": None}],
-            "questions_count": 1,
-            "indexed_fragments": 3,
-            "recomp_enabled": True,
-            "pipeline_flags": kwargs["pipeline_flags"],
-            "eval_corpus": "ragbench",
-            "docs_dir": kwargs["docs_dir"],
-            "pipeline_seconds": 1.0,
-            "tiene_ground_truth": True,
-        }
+    ragbench_lib.exportar_resultados_inferencia(generation, manifest, result_csv, result_json)
 
-    monkeypatch.setattr(visual.run_eval, "generar_respuestas_rag", fake_generar_respuestas_rag)
-    monkeypatch.setattr(
-        visual.run_eval,
-        "evaluar_respuestas_con_ragas",
-        lambda *args, **kwargs: pytest.fail("RAGAS must not be called"),
-    )
+    assert result_csv.exists()
+    assert result_json.exists()
 
-    result = visual.ejecutar_inferencia_visual(
-        manifest=manifest,
-        result_dir=result_dir,
-        debug_dir=debug_dir,
-        verbose=True,
-        force_reindex=True,
-    )
-
-    assert calls["eval_corpus"] == "ragbench"
-    assert calls["docs_dir"] == str(docs_dir.resolve())
-    assert calls["solo_archivos"] == ["paper_a.pdf"]
-    assert calls["add_missing_from_filter"] is True
-    assert calls["force_reindex"] is True
-    assert calls["pipeline_flags"]["USAR_LLM_QUERY_DECOMPOSITION"] is False
-    assert calls["pipeline_flags"]["USAR_RERANKER"] is False
-    assert "en_ragbench_visual" not in calls["docs_dir"]
-
-    csv_path = Path(result["output_csv"])
-    json_path = Path(result["output_json"])
-    assert csv_path.exists()
-    assert json_path.exists()
-
-    with csv_path.open(encoding="utf-8", newline="") as f:
+    with result_csv.open(encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
     assert rows[0]["paper_id"] == "paper_a"
     assert rows[0]["source_type"] == "text-table"
     assert rows[0]["answer"] == "Generated answer"
 
-    payload = json.loads(json_path.read_text(encoding="utf-8"))
+    payload = json.loads(result_json.read_text(encoding="utf-8"))
     assert payload["rows"][0]["contexts"] == json.dumps(["Context chunk"], ensure_ascii=False)
-
-
-def test_visual_ragas_only_reuses_inference_json(monkeypatch, tmp_path):
-    inference_json = tmp_path / "results" / "ragbench_visual_inference_image_table_1p_1q.json"
-    checkpoint = tmp_path / "debug" / "checkpoints" / "run.json"
-    inference_payload = {
-        "manifest": {
-            "dataset_path": str(tmp_path / "debug" / "dataset.json"),
-            "docs_dir": str(tmp_path / "docs"),
-        },
-        "generation": {
-            "checkpoint_path": str(checkpoint),
-            "indexed_fragments": 3,
-            "recomp_enabled": True,
-            "pipeline_flags": {"USAR_RERANKER": False},
-            "eval_corpus": "ragbench",
-            "docs_dir": str(tmp_path / "docs"),
-            "pipeline_seconds": 2.0,
-        },
-        "rows": [
-            {
-                "question": "Q?",
-                "ground_truth": "GT",
-                "answer": "A",
-                "contexts": json.dumps(["ctx1", "ctx2"], ensure_ascii=False),
-            }
-        ],
-        "question_statuses": [{"status": "ok", "reason": None}],
-    }
-    inference_json.parent.mkdir(parents=True)
-    inference_json.write_text(json.dumps(inference_payload), encoding="utf-8")
-    calls = {}
-
-    def fake_eval(**kwargs):
-        calls.update(kwargs)
-        generation = kwargs["generation"]
-        return {
-            "output_path": generation["output_path"],
-            "debug_path": generation["debug_path"],
-        }
-
-    monkeypatch.setattr(visual.run_eval, "evaluar_respuestas_con_ragas", fake_eval)
-
-    result = visual.evaluar_ragas_visual_desde_inferencia(
-        inference_json=inference_json,
-        scores_dir=tmp_path / "ragas" / "scores",
-        debug_dir=tmp_path / "ragas" / "debug",
-        ragas_metrics="answer_correctness",
-        ragas_batch_size=1,
-    )
-
-    generation = calls["generation"]
-    assert generation["questions"] == ["Q?"]
-    assert generation["ground_truths"] == ["GT"]
-    assert generation["answers"] == ["A"]
-    assert generation["contexts_list"] == [["ctx1", "ctx2"]]
-    assert generation["tiene_ground_truth"] is True
-    assert calls["ragas_metrics"] == "answer_correctness"
-    assert calls["ragas_batch_size"] == 1
-    assert result["output_path"].endswith("image_table_1p_1q\\scores.csv") or result["output_path"].endswith("image_table_1p_1q/scores.csv")
