@@ -1,20 +1,24 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# MonkeyGrab web frontend
 
-# Run and deploy your AI Studio app
+React + Vite single-page app for the MonkeyGrab web interface.
 
-This contains everything you need to run your app locally.
+The backend lives in [`rag/web/app.py`](../app.py) (Flask, port 5000) and serves
+the built assets in production. During development this dev server runs on
+port 3000 and proxies API calls to Flask.
 
-View your app in AI Studio: https://ai.studio/apps/496871e5-5239-4ef7-9cbc-a3b9bea622ff
+## Run locally
 
-## Run Locally
+**Prerequisites:** Node.js 20+, the Flask backend running (`python rag/web/app.py`).
 
-**Prerequisites:**  Node.js
+```bash
+npm install
+npm run dev      # Vite on http://localhost:3000 — proxies /api → :5000
+```
 
+## Build for production
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+npm run build    # emits to rag/web/frontend/dist (gitignored)
+```
+
+Flask serves the built assets automatically when you open `http://localhost:5000`.

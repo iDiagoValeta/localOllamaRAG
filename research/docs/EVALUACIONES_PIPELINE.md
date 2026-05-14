@@ -53,7 +53,7 @@ columna `question` o `pregunta`, opcional `ground_truth` (alias aceptados:
 # 1 variante (baseline_all_on) sobre el corpus indicado
 python research\evaluation\infer.py single --corpus es
 
-# Suite ablation completa (8 variantes, una por etapa opcional)
+# Suite ablation completa (9 variantes: baseline + 7 single-flag-off + all_off)
 python research\evaluation\infer.py compare --corpus ca --label mi_eval_ca_ablation --reindex
 
 # Listar variantes
@@ -63,8 +63,9 @@ python research\evaluation\infer.py list-variants
 ### 2.2. Suite `ablation`
 
 `baseline_all_on` activa todas las etapas opcionales de inferencia; cada
-variante `no_*` desactiva exactamente una. Las 8 variantes comparten la
-misma colección ChromaDB; `--reindex` solo afecta a la primera.
+variante `no_*` desactiva exactamente una; `all_off` desactiva todas a la vez
+(suelo del experimento). Las 9 variantes comparten la misma colección
+ChromaDB; `--reindex` solo afecta a la primera.
 
 | Variante | Cambio |
 | --- | --- |
@@ -76,6 +77,7 @@ misma colección ChromaDB; `--reindex` solo afecta a la primera.
 | `no_context_expansion` | Desactiva `EXPANDIR_CONTEXTO` |
 | `no_context_optimization` | Desactiva `USAR_OPTIMIZACION_CONTEXTO` |
 | `no_recomp_synthesis` | Desactiva `USAR_RECOMP_SYNTHESIS` |
+| `all_off` | Todas las etapas opcionales desactivadas (recuperación semántica pura + filtro por umbral) |
 
 Etapas excluidas de la suite por defecto: `USAR_CONTEXTUAL_RETRIEVAL` y
 `USAR_EMBEDDINGS_IMAGEN` afectan al contenido **indexado**, no a la

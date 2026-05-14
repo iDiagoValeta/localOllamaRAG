@@ -44,6 +44,7 @@ research/models/gguf/qwen-3/*
 
 research/models/gguf/gemma-3/*
 !research/models/gguf/gemma-3/Modelfile
+!research/models/gguf/gemma-3/README.md
 
 research/models/gguf/phi-4/*
 !research/models/gguf/phi-4/Modelfile

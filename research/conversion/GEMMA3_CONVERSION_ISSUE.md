@@ -1,5 +1,13 @@
 # Problema de conversión Gemma-3 Fine-tuned → Ollama
 
+> **Estado final (2026-05-14):** Gemma-3 fine-tuneado **no se incluye** en la
+> evaluación final del TFG. El adaptador LoRA está entrenado y los pesos
+> mergeados se conservan, pero ninguno de los tres intentos descritos abajo
+> consigue una conversión a GGUF importable en Ollama sin romper la
+> generación de tokens no-ASCII (acentos / ñ). Este documento queda como
+> post-mortem técnico; el README del directorio del modelo
+> (`research/models/gguf/gemma-3/README.md`) apunta aquí.
+
 Fecha: 2026-04-18  
 Modelo: `google/gemma-3-12b-it` fine-tuneado con LoRA (adaptador en `research/training-output/gemma-3/`)  
 Modelo merged: `research/models/merged-model/gemma-3/`  

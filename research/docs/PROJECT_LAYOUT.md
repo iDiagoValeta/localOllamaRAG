@@ -15,14 +15,14 @@ You do **not** need anything under `research/` to run `python rag/chat_pdfs.py` 
 
 | Path | Purpose |
 |------|---------|
-| `research/evaluation/` | 3 CLIs (`index.py`, `infer.py`, `evaluate.py`) + shared `_lib/` (datasets, checkpoints, inference, RAGAS runner, providers, aggregation). `runs/` artifacts |
+| `research/evaluation/` | 3 CLIs (`index.py`, `infer.py`, `evaluate.py`), reranker score probe (`probe_reranker_scores.py`) and shared `_lib/` (datasets, checkpoints, inference, RAGAS runner, providers, aggregation). `runs/` artifacts |
 | `research/training/` | LoRA fine-tuning scripts + `requirements.txt` |
 | `research/conversion/` | LoRA merge, GGUF export, quantization helpers |
 | `research/baselines/` | 7-model baseline benchmark and split inspection |
 | `research/utils/` | Architecture diagram, HF upload, user bundle packaging |
 | `research/training-output/` | LoRA runs: `generate_reports.py` + small JSON versioned; weights gitignored |
-| `research/models/` | `merged-model/` (gitignored) and `gguf/` Modelfiles + cards |
-| `research/docs/` | This file, `EVALUACIONES_PIPELINE.md`, `investigacionMetricas.md`, `splits.md`, `palabras.md`, sparse-checkout notes, architecture diagrams |
+| `research/models/` | `merged-model/` (gitignored) and `gguf/<model>/` with `Modelfile`, `README.md` and (where applicable) `CONVERSION.md`; `.gguf` binaries gitignored and hosted on HF Hub |
+| `research/docs/` | This file, `EVALUACIONES_PIPELINE.md`, `REINFERENCIA_FINAL.md`, `DOCS_AUDIT.md`, `USER_SPARSE_CHECKOUT.md`, architecture diagrams |
 | `research/tests/` | Pytest (`core/` + `evaluation/`) |
 
 ## Corpora

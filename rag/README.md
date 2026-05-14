@@ -396,7 +396,7 @@ Activa si `USAR_RERANKER = True` (auto-detectado según disponibilidad de `sente
 2. Construye pares `(pregunta, texto_cuerpo)` para los `TOP_K_RERANK_CANDIDATES` (200) mejores candidatos por `score_final`.
 3. Ejecuta `CrossEncoder.rank()` en CPU (FP32) o CUDA (FP16, auto-detectado).
 4. Sustituye `score_final` por `score_reranker` (rango [0, 1]).
-5. Filtra por `UMBRAL_SCORE_RERANKER = 0.55` y retiene el top `TOP_K_AFTER_RERANK` (15).
+5. Filtra por `UMBRAL_SCORE_RERANKER = 0.65` y retiene el top `TOP_K_AFTER_RERANK` (15).
 
 ---
 
@@ -549,9 +549,13 @@ def _ollama_generate_stream(
     "temperature":    0.15,
     "top_p":          0.9,
     "repeat_penalty": 1.15,
+    "repeat_last_n":  64,                   # pinned to avoid Ollama default drift
+    "num_predict":    -1,                   # no token cap; relies on num_ctx
     "num_ctx":        OLLAMA_RAG_NUM_CTX,   # 16384
 }
 ```
+
+Adicionalmente el payload fuerza `think=False` para que los modelos con razonamiento (Qwen3, Gemma 4) no consuman `num_predict` en una traza interna antes de emitir la respuesta.
 
 Si el nombre del modelo contiene `"finetuned"`, el system prompt está horneado en el Modelfile y **no** se envía vía API. En caso contrario se envía `SYSTEM_PROMPT_RAG` explícitamente.
 
@@ -677,7 +681,7 @@ Ollama.
 | `N_TOP_PARA_EXPANSION` | 3 | Fragmentos que reciben expansión de vecinos |
 | `RRF_K` | 20 | Factor de amortiguamiento RRF |
 | `UMBRAL_RELEVANCIA` | 0.50 | Score RRF mínimo para pasar |
-| `UMBRAL_SCORE_RERANKER` | 0.55 | Score Cross-Encoder mínimo |
+| `UMBRAL_SCORE_RERANKER` | 0.65 | Score Cross-Encoder mínimo (subido desde 0.55 tras sonda 2026-05-14) |
 | `MAX_CONTEXTO_CHARS` | 24000 | Máximo de chars de contexto al LLM |
 | `MIN_LONGITUD_PREGUNTA_RAG` | 10 | Mínimo de caracteres para activar el pipeline RAG |
 | `MAX_IMAGENES_POR_PAGINA` | 5 | Máximo de imágenes extraídas por página PDF |
@@ -773,7 +777,7 @@ Consulta: `"¿Qué componentes tiene una arquitectura Transformer?"`
 6. RERANKING  (USAR_RERANKER=True)
    Entrada: top 200 candidatos por score_final
    CrossEncoder.rank(pairs=[(pregunta, texto_chunk)])
-   Umbral: score_reranker >= 0.55
+   Umbral: score_reranker >= 0.65
    Salida: top 15 fragmentos con score_reranker
 
 7. EXPANSIÓN DE VECINOS  (EXPANDIR_CONTEXTO=True)
