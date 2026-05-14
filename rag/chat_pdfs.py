@@ -33,7 +33,7 @@ How to run (interactive CLI):
     functions and constants from here. Start the UI with ``python rag/web/app.py``
     from the repository root.
 
-    Prerequisites: Ollama running; PDFs under ``rag/docs/en/`` unless ``DOCS_FOLDER``
+    Prerequisites: Ollama running; PDFs under ``rag/docs/es/`` unless ``DOCS_FOLDER``
     points elsewhere. Model names via ``OLLAMA_RAG_MODEL``, ``OLLAMA_EMBED_MODEL``,
     ``OLLAMA_OCR_MODEL`` (image indexing), etc., as documented in the project README
     / ``CLAUDE.md``.
@@ -155,7 +155,7 @@ if hasattr(sys.stderr, "reconfigure"):
 # The same pattern applies to chat, embeddings, contextual retrieval, RECOMP,
 # and OCR through their corresponding OLLAMA_* environment variables.
 
-MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "gemma4:e2b")
+MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "Qwen3-FineTuned:latest")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e2b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b")
@@ -287,7 +287,7 @@ def set_pipeline_flags(overrides: Dict[str, bool]) -> Dict[str, bool]:
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "en"))
+CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "es"))
 
 _carpeta_nombre = os.path.basename(os.path.abspath(CARPETA_DOCS))
 _embed_slug = MODELO_EMBEDDING.split(":")[0].replace("/", "_")
@@ -304,7 +304,7 @@ def set_docs_folder_runtime(carpeta: str | None) -> tuple[str, str, str]:
     """Switch ``CARPETA_DOCS`` and derived Chroma paths (for research/evaluation and tests).
 
     Restores module-level defaults when ``carpeta`` is ``None`` (values captured
-    at import from ``DOCS_FOLDER`` / ``rag/docs/en``).
+    at import from ``DOCS_FOLDER`` / ``rag/docs/es``).
 
     Args:
         carpeta: Absolute or relative path to a PDF directory, or ``None`` to restore defaults.
