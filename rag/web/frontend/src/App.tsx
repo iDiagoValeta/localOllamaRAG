@@ -61,6 +61,13 @@ const STRINGS = {
     tabDocs: 'Documentos', tabPipeline: 'Pipeline RAG',
     uploading: 'Añadiendo…', addPdf: 'Añadir PDF',
     addPdfHint: 'Usa los ajustes actuales del pipeline',
+    corpusLabel: 'Corpus (PDFs / base vectorial)',
+    corpusEs: 'Castellano — rag/docs/es',
+    corpusCa: 'Català / valencià — rag/docs/ca',
+    corpusEn: 'English — rag/docs/en',
+    corpusError: 'No se pudo cambiar el corpus.',
+    corpusConflict: 'Hay indexación en curso; espera un momento.',
+    corpusConnError: '✗ Error de conexión al cambiar el corpus.',
     collection: 'Colección ({n} docs)', noDocs: 'No hay documentos indexados',
     deleteDoc: 'Eliminar documento', viewPdf: 'Ver PDF',
     indexingFile: 'Indexando {file}', reindexingStatus: 'Re-indexación en curso...',
@@ -114,6 +121,13 @@ const STRINGS = {
     tabDocs: 'Documents', tabPipeline: 'RAG Pipeline',
     uploading: 'Adding…', addPdf: 'Add PDF',
     addPdfHint: 'Uses current pipeline settings',
+    corpusLabel: 'Corpus (PDFs / vector DB)',
+    corpusEs: 'Spanish — rag/docs/es',
+    corpusCa: 'Catalan — rag/docs/ca',
+    corpusEn: 'English — rag/docs/en',
+    corpusError: 'Could not switch corpus.',
+    corpusConflict: 'Indexing in progress; please wait.',
+    corpusConnError: '✗ Connection error while switching corpus.',
     collection: 'Collection ({n} docs)', noDocs: 'No documents indexed',
     deleteDoc: 'Delete document', viewPdf: 'View PDF',
     indexingFile: 'Indexing {file}', reindexingStatus: 'Re-indexing in progress...',
@@ -167,6 +181,13 @@ const STRINGS = {
     tabDocs: 'Documents', tabPipeline: 'Pipeline RAG',
     uploading: 'Afegint…', addPdf: 'Afegir PDF',
     addPdfHint: 'Usa els ajustos actuals del pipeline',
+    corpusLabel: 'Corpus (PDFs / base vectorial)',
+    corpusEs: 'Castellà — rag/docs/es',
+    corpusCa: 'Català / valencià — rag/docs/ca',
+    corpusEn: 'Anglès — rag/docs/en',
+    corpusError: 'No s\'ha pogut canviar el corpus.',
+    corpusConflict: 'Hi ha indexació en curs; espera un moment.',
+    corpusConnError: '✗ Error de connexió en canviar el corpus.',
     collection: "Col·lecció ({n} docs)", noDocs: 'No hi ha documents indexats',
     deleteDoc: 'Eliminar document', viewPdf: 'Veure PDF',
     indexingFile: 'Indexant {file}', reindexingStatus: 'Re-indexació en curs...',
@@ -232,6 +253,22 @@ function fill(tpl: string, vars: Record<string, string | number>): string {
   return tpl.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
 }
 
+type CorpusPreset = 'es' | 'ca' | 'en';
+
+/** Align UI with backend ``docs_folder`` / ``corpus_preset`` (defaults to ES). */
+function presetFromInit(initData: { corpus_preset?: string | null; docs_folder?: string }): CorpusPreset {
+  const p = initData.corpus_preset;
+  if (p === 'es' || p === 'ca' || p === 'en') return p;
+  const folder = initData.docs_folder;
+  if (folder) {
+    const norm = folder.replace(/\\/g, '/').replace(/\/+$/, '');
+    const parts = norm.split('/').filter(Boolean);
+    const base = parts[parts.length - 1] ?? '';
+    if (base === 'es' || base === 'ca' || base === 'en') return base;
+  }
+  return 'es';
+}
+
 // =============================================================================
 // API Service — connects to Flask backend
 // =============================================================================
@@ -275,6 +312,13 @@ const api = {
 
   clear: () =>
     fetch(`${API_BASE}/clear`, { method: 'POST' }).then(r => r.json()),
+
+  setCorpus: (preset: CorpusPreset) =>
+    fetch(`${API_BASE}/corpus`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preset }),
+    }).then(r => r.json()),
 
   reindex: (files?: File[]) => {
     const form = new FormData();
@@ -576,6 +620,7 @@ export default function App() {
   const [isReindexing, setIsReindexing] = useState(false);
   const [deletingDoc, setDeletingDoc] = useState<string | null>(null);
   const [pendingReindexFiles, setPendingReindexFiles] = useState<File[]>([]);
+  const [corpusPreset, setCorpusPreset] = useState<CorpusPreset>('es');
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     indexacion: false,
     recuperacion: false,
@@ -634,6 +679,7 @@ export default function App() {
           setMode(initData.mode || 'rag');
           setDocuments(initData.documents || []);
           setTotalFragments(initData.total_fragments || 0);
+          setCorpusPreset(presetFromInit(initData));
           setIsInitialized(true);
 
           setMessages([]);
@@ -840,6 +886,49 @@ export default function App() {
     }
   }, [mode, deletingDoc, lang]);
 
+  const handleCorpusChange = useCallback(async (next: CorpusPreset) => {
+    if (next === corpusPreset) return;
+    const prev = corpusPreset;
+    const S = STRINGS[lang];
+    setCorpusPreset(next);
+    try {
+      const res = await api.setCorpus(next);
+      if (!res.ok) {
+        setCorpusPreset(prev);
+        const err =
+          res.error === 'indexing_in_progress'
+            ? S.corpusConflict
+            : `${S.corpusError} (${String(res.error ?? '')})`;
+        setMessages(p => [...p, {
+          id: Date.now().toString(),
+          role: 'system',
+          content: err,
+          mode,
+          isError: true,
+        }]);
+        return;
+      }
+      if (res.indexing) {
+        setIndexingError(null);
+        setIndexingProgress(null);
+        setIsIndexing(true);
+        setRetryTrigger(t => t + 1);
+        return;
+      }
+      setDocuments(res.documents || []);
+      setTotalFragments(res.total_fragments || 0);
+    } catch {
+      setCorpusPreset(prev);
+      setMessages(p => [...p, {
+        id: Date.now().toString(),
+        role: 'system',
+        content: S.corpusConnError,
+        mode,
+        isError: true,
+      }]);
+    }
+  }, [corpusPreset, mode, lang]);
+
   // ---- Send message (streaming) ----
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -965,6 +1054,7 @@ export default function App() {
         setMode(result.mode || 'rag');
         setDocuments(result.documents || []);
         setTotalFragments(result.total_fragments || 0);
+        setCorpusPreset(presetFromInit(result));
         setIndexingError(null);
         setIndexingProgress(null);
         setIsInitialized(true);
@@ -1104,7 +1194,7 @@ export default function App() {
         {/* Sidebar Header */}
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/logo.jpg" alt="MonkeyGrab" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+            <img src="/logo.png" alt="MonkeyGrab" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
             <h1 className="font-semibold text-orange-400 text-lg tracking-tight">MonkeyGrab</h1>
           </div>
           <button className="md:hidden text-zinc-500 hover:text-white transition-colors bg-white/5 p-2 rounded-full" onClick={() => setIsSidebarOpen(false)}>
@@ -1141,6 +1231,51 @@ export default function App() {
                 exit={{ opacity: 0, x: 10 }}
                 className="space-y-6"
               >
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 pl-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                    <Database className="h-3 w-3 text-orange-400/70" />
+                    {T.corpusLabel}
+                  </div>
+                  <div
+                    role="radiogroup"
+                    aria-label={T.corpusLabel}
+                    className={`rounded-2xl border border-white/10 bg-black/30 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${isUploading || isReindexing || isLoading ? 'opacity-50' : ''}`}
+                  >
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { preset: 'es' as CorpusPreset, label: 'ES', detail: 'rag/docs/es', title: T.corpusEs },
+                        { preset: 'ca' as CorpusPreset, label: 'VAL', detail: 'rag/docs/ca', title: T.corpusCa },
+                        { preset: 'en' as CorpusPreset, label: 'EN', detail: 'rag/docs/en', title: T.corpusEn },
+                      ].map(option => {
+                        const isActive = corpusPreset === option.preset;
+                        return (
+                          <button
+                            key={option.preset}
+                            type="button"
+                            role="radio"
+                            aria-checked={isActive}
+                            title={option.title}
+                            className={`min-w-0 rounded-xl border px-2.5 py-2 text-left transition-all focus:outline-none focus:ring-2 focus:ring-orange-500/40 disabled:cursor-not-allowed ${isActive
+                              ? 'border-orange-500/50 bg-orange-500/15 text-white shadow-[0_0_18px_rgba(242,125,38,0.16)]'
+                              : 'border-transparent bg-white/[0.03] text-zinc-500 hover:border-white/10 hover:bg-white/[0.06] hover:text-zinc-300'
+                              }`}
+                            onClick={() => handleCorpusChange(option.preset)}
+                            disabled={isUploading || isReindexing || isLoading}
+                          >
+                            <span className="flex items-center justify-between gap-1">
+                              <span className="truncate text-xs font-bold tracking-wide">{option.label}</span>
+                              {isActive && <Check className="h-3 w-3 flex-shrink-0 text-orange-300" />}
+                            </span>
+                            <span className={`mt-1 block truncate font-mono text-[9px] ${isActive ? 'text-orange-200/80' : 'text-zinc-600'}`}>
+                              {option.detail}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Add PDF button (add-only, sin reindexar) */}
                 <button
                   className="w-full py-4 px-4 rounded-2xl border border-dashed border-white/20 text-zinc-400 hover:text-white hover:border-orange-500/50 hover:bg-orange-500/5 transition-all flex flex-col items-center justify-center gap-2 text-sm group disabled:opacity-50"

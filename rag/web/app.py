@@ -30,7 +30,7 @@ Dependencies:
 #  +-- 3. STREAMING HELPERS       _chat_stream, _rag_stream, _format_sources
 #
 #  API
-#  +-- 4. API ROUTES              all Flask @app.route endpoints
+#  +-- 4. API ROUTES              all Flask @app.route endpoints (incl. ``/api/corpus``)
 #
 #  ENTRY
 #  +-- 5. ENTRY POINT             main()
@@ -91,7 +91,34 @@ _state = {
     "indexing_done_empty": False,   # True if indexing completed with 0 chunks (no PDFs)
     "indexing_progress": None,      # {"file": str, "file_index": int, "total_files": int}
 }
-_indexing_lock = threading.Lock()
+_indexing_lock = threading.RLock()
+
+_CORPUS_PRESET_IDS = frozenset({"es", "ca", "en"})
+
+
+def _infer_corpus_preset() -> str | None:
+    """Return ``es``/``ca``/``en`` when ``CARPETA_DOCS`` basename matches a preset tree."""
+    base = os.path.basename(os.path.abspath(rag_engine.CARPETA_DOCS))
+    return base if base in _CORPUS_PRESET_IDS else None
+
+
+def _init_paths_payload() -> dict:
+    """Paths exposed to the web UI for corpus / vector-db selection."""
+    return {
+        "docs_folder": os.path.abspath(rag_engine.CARPETA_DOCS),
+        "corpus_preset": _infer_corpus_preset(),
+    }
+
+
+def _safe_pdf_basename(filename: str) -> str:
+    """Validate a routed PDF filename while preserving Unicode characters."""
+    normalized = (filename or "").replace("\\", "/")
+    basename = os.path.basename(normalized)
+    if basename != normalized or basename in ("", ".", ".."):
+        return ""
+    if not basename.lower().endswith(".pdf"):
+        return ""
+    return basename
 
 
 # ─────────────────────────────────────────────
@@ -115,14 +142,15 @@ def _get_collection():
     Returns:
         The ChromaDB collection object.
     """
-    _invalidate_collection_if_deleted()
-    if _state["collection"] is None:
-        os.makedirs(os.path.dirname(rag_engine.PATH_DB), exist_ok=True)
-        client = chromadb.PersistentClient(path=rag_engine.PATH_DB)
-        _state["collection"] = client.get_or_create_collection(
-            name=rag_engine.COLLECTION_NAME
-        )
-    return _state["collection"]
+    with _indexing_lock:
+        _invalidate_collection_if_deleted()
+        if _state["collection"] is None:
+            os.makedirs(os.path.dirname(rag_engine.PATH_DB), exist_ok=True)
+            client = chromadb.PersistentClient(path=rag_engine.PATH_DB)
+            _state["collection"] = client.get_or_create_collection(
+                name=rag_engine.COLLECTION_NAME
+            )
+        return _state["collection"]
 
 
 def _run_indexing_bg():
@@ -254,6 +282,8 @@ def _rag_stream(mensaje_usuario: str) -> Generator[str, None, None]:
             "temperature": 0.15,
             "top_p": 0.85,
             "repeat_penalty": 1.15,
+            "repeat_last_n": 64,
+            "num_predict": -1,
             "num_ctx": rag_engine.OLLAMA_RAG_NUM_CTX,
         },
     )
@@ -402,6 +432,7 @@ def _api_init_logic():
         }
         if _state["indexing_progress"]:
             resp["progress"] = _state["indexing_progress"]
+        resp.update(_init_paths_payload())
         return resp, 202
 
     coll = _get_collection()
@@ -416,11 +447,13 @@ def _api_init_logic():
                 "documents": docs,
                 "document_details": [],
                 "history_count": len(_state["historial_chat"]),
+                **_init_paths_payload(),
             }, 200
         return {
             "ok": False,
             "indexing": True,
             "error": "Iniciando indexación de documentos...",
+            **_init_paths_payload(),
         }, 202
 
     docs = rag_engine.obtener_documentos_indexados(coll)
@@ -433,7 +466,45 @@ def _api_init_logic():
         "documents": docs,
         "document_details": _collection_document_details(coll),
         "history_count": len(_state["historial_chat"]),
+        **_init_paths_payload(),
     }, 200
+
+
+@app.route("/api/corpus", methods=["POST"])
+def api_corpus():
+    """Switch the PDF corpus folder (``rag/docs/{es,ca,en}``) and derived Chroma path."""
+    if _state["indexing"]:
+        return jsonify({"ok": False, "error": "indexing_in_progress"}), 409
+    data = request.get_json() or {}
+    preset = (data.get("preset") or "").strip().lower()
+    if preset not in _CORPUS_PRESET_IDS:
+        return jsonify({"ok": False, "error": "invalid_preset"}), 400
+    abs_path = os.path.join(_project_root, "rag", "docs", preset)
+    if not os.path.isdir(abs_path):
+        return jsonify({"ok": False, "error": "missing_docs_folder", "path": abs_path}), 400
+    with _indexing_lock:
+        rag_engine.set_docs_folder_runtime(abs_path)
+        _state["collection"] = None
+        _state["indexing"] = False
+        _state["indexing_failed"] = False
+        _state["indexing_error"] = None
+        _state["indexing_done_empty"] = False
+        _state["indexing_progress"] = None
+    gc.collect()
+    coll = _get_collection()
+    total_fragments = coll.count()
+    if total_fragments == 0:
+        _ensure_indexed()
+    docs = rag_engine.obtener_documentos_indexados(coll) if total_fragments > 0 else []
+    return jsonify({
+        "ok": True,
+        "preset": preset,
+        "indexing": _state["indexing"],
+        "total_fragments": total_fragments,
+        "documents": docs,
+        "document_details": _collection_document_details(coll) if total_fragments > 0 else [],
+        **_init_paths_payload(),
+    })
 
 
 @app.route("/api/init", methods=["GET"])
@@ -701,9 +772,9 @@ def api_delete_doc(filename):
     Args:
         filename: Name of the PDF file to delete.
     """
-    if not filename or not filename.lower().endswith(".pdf"):
+    filename = _safe_pdf_basename(filename)
+    if not filename:
         return jsonify({"ok": False, "error": "Nombre de archivo inválido"}), 400
-    filename = secure_filename(os.path.basename(filename))
     filepath = os.path.join(rag_engine.CARPETA_DOCS, filename)
     try:
         coll = _get_collection()
@@ -723,8 +794,8 @@ def api_serve_pdf(filename):
     Args:
         filename: Name of the PDF file to serve.
     """
-    filename = secure_filename(os.path.basename(filename))
-    if not filename or not filename.lower().endswith(".pdf"):
+    filename = _safe_pdf_basename(filename)
+    if not filename:
         return jsonify({"ok": False, "error": "Archivo inválido"}), 400
     docs_folder = os.path.abspath(rag_engine.CARPETA_DOCS)
     return send_from_directory(docs_folder, filename, mimetype="application/pdf")
