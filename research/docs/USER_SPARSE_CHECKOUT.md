@@ -10,15 +10,15 @@ cd localOllamaRAG
 git sparse-checkout set rag README.md CLAUDE.md pytest.ini
 ```
 
-To include the default English PDF folder but skip RagBench trees:
+To include the default Spanish PDF folder but skip RagBench trees:
 
 ```bash
-git sparse-checkout set rag README.md CLAUDE.md pytest.ini rag/docs/en
+git sparse-checkout set rag README.md CLAUDE.md pytest.ini rag/docs/es
 ```
 
 **Caveats**
 
-- Sparse checkout hides paths locally; they still exist on the remote. Do not run `research/evaluation/run_eval.py` RagBench modes unless you restore the matching `rag/docs/en_ragbench_*` paths and datasets (or clone `research/` fully).
+- Sparse checkout hides paths locally; they still exist on the remote. Do not run `research/evaluation/infer.py ragbench-eval` or `infer.py visual` unless you restore the matching `rag/docs/en_ragbench_*` paths and datasets (or clone `research/` fully).
 - `git pull` behaviour with sparse patterns is normal Git behaviour; re-run `git sparse-checkout set …` if you add paths later.
 
 PowerShell (Git 2.25+):
