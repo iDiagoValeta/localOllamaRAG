@@ -116,6 +116,8 @@ const STRINGS = {
     indexingFailed: 'La indexación no pudo completarse.',
     historyCleared: 'Historial limpiado.',
     appFooter: 'RAG local con Ollama',
+    outOfScope: 'La pregunta está fuera del ámbito de los documentos indexados.',
+    noResults: 'No se encontró información relevante en los documentos.',
   },
   en: {
     tabDocs: 'Documents', tabPipeline: 'RAG Pipeline',
@@ -176,6 +178,8 @@ const STRINGS = {
     indexingFailed: 'Indexing could not be completed.',
     historyCleared: 'History cleared.',
     appFooter: 'Local RAG with Ollama',
+    outOfScope: 'The query is outside the scope of the indexed documents.',
+    noResults: 'No relevant information found in the documents.',
   },
   ca: {
     tabDocs: 'Documents', tabPipeline: 'Pipeline RAG',
@@ -236,6 +240,8 @@ const STRINGS = {
     indexingFailed: "La indexació no s'ha pogut completar.",
     historyCleared: 'Historial netejat.',
     appFooter: 'RAG local amb Ollama',
+    outOfScope: "La pregunta està fora de l'àmbit dels documents indexats.",
+    noResults: "No s'ha trobat informació rellevant als documents.",
   },
 } as const;
 
@@ -356,7 +362,7 @@ async function streamSSE(
   onToken: (token: string) => void,
   onDone: (sources: Citation[] | null) => void,
   onError: (msg: string) => void,
-  fb?: { unknown?: string; queryError?: string; modelError?: string; closed?: string },
+  fb?: { unknown?: string; queryError?: string; modelError?: string; closed?: string; out_of_scope?: string; no_results?: string },
 ) {
   const contentType = response.headers.get('content-type') || '';
 
@@ -364,7 +370,8 @@ async function streamSSE(
   if (!contentType.includes('event-stream')) {
     const data = await response.json().catch(() => ({ message: fb?.unknown ?? 'Error desconocido' }));
     if (!data.ok && data.message) {
-      onError(data.message);
+      const mapped = data.error && fb?.[data.error as keyof typeof fb];
+      onError(typeof mapped === 'string' ? mapped : data.message);
     } else if (!data.ok && data.error) {
       onError(typeof data.error === 'string' ? data.error : (fb?.queryError ?? 'Error en la consulta'));
     } else {
@@ -997,7 +1004,7 @@ export default function App() {
             )
           );
         },
-        { unknown: T.unknownError, queryError: T.queryError, modelError: T.modelError, closed: T.connClosed },
+        { unknown: T.unknownError, queryError: T.queryError, modelError: T.modelError, closed: T.connClosed, out_of_scope: T.outOfScope, no_results: T.noResults },
       );
     } catch {
       setMessages(prev =>
