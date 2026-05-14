@@ -139,7 +139,7 @@ ollama pull <OLLAMA_OCR_MODEL>      # vision model for PDF images (optional)
 
 ### Run
 
-Drop your PDFs into `rag/docs/libre/` and start:
+Drop your PDFs into `rag/docs/en/` and start:
 
 ```bash
 # CLI (Spanish UI by default)
@@ -185,7 +185,7 @@ Set these in your shell or in a `.env` file at the project root.
 | `OLLAMA_REQUEST_TIMEOUT` | HTTP timeout in seconds for long Ollama generation calls |
 | `MAX_CONTEXTO_CHARS` | Maximum retrieved-context characters sent to the answer/RECOMP stage (default: `24000`) |
 | `CONTEXTUAL_DOC_CHARS` | Maximum document-level characters sent to contextual retrieval while indexing each chunk (default: `24000`) |
-| `DOCS_FOLDER` | PDF folder to index (default: `rag/docs/libre/`) |
+| `DOCS_FOLDER` | PDF folder to index (default: `rag/docs/en/`) |
 | `RERANKER_QUALITY` | Cross-encoder tier: `quality` ([BAAI/bge](https://huggingface.co/BAAI/bge-reranker-v2-m3)) or `fast` (MiniLM) |
 | `MONKEYGRAB_LANG` | CLI language: `es` (default), `en` or `ca` |
 

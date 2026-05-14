@@ -1,6 +1,6 @@
 # ChromaDB — exportación de fragmentos
-# almacén: vector_db/libre_embeddinggemma (docs_libre)
-# carpeta PDFs (referencia): C:\Users\nadiv\repos\localOllamaRAG\rag\docs\libre
+# almacén: vector_db/en_embeddinggemma (docs_en)
+# carpeta PDFs (referencia): C:\Users\nadiv\repos\localOllamaRAG\rag\docs\en
 # total fragmentos: 69
 # Resumen por tipo:
 #   - imagen: 2
@@ -18,7 +18,7 @@ meta.section_header: ## Direct Preference Optimization: Your Language Model is S
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO), a novel method for aligning large language models with human preferences. The abstract explains that existing techniques like Reinforcement Learning from Human Feedback (RLHF) are complex and unstable because they require fitting a separate reward model and then using reinforcement learning. DPO simplifies this by directly optimizing for the desired policy using a simple classification loss, making it more stable and computationally efficient than traditional RLHF methods.\n\n## Direct Preference Optimization: Your Language Model is Secretly a Reward Model
+This document introduces Direct Preference Optimization (DPO), a novel method for aligning large language models with human preferences. The excerpt, which contains the abstract and introduction, establishes the problem by noting that existing Reinforcement Learning from Human Feedback (RLHF) methods are complex and unstable. DPO is presented as a simpler, more stable alternative that achieves the same goal by reformulating the objective into a simple classification loss.\n\n## Direct Preference Optimization: Your Language Model is Secretly a Reward Model
 Rafael Rafailov _[∗†]_ Archit Sharma _[∗†]_ Eric Mitchell _[∗†]_
 
 Stefano Ermon _[†‡]_ Christopher D. Manning _[†]_ Chelsea Finn _[†]_
@@ -63,7 +63,7 @@ meta.section_header: ## Direct Preference Optimization: Your Language Model is S
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative method for aligning large language models with human preferences. The excerpt establishes the necessity of steering LMs' behavior from their broad knowledge base to ensure safety and performance. It highlights that while existing methods use reinforcement learning, DPO offers a simpler and effective alternative for fine-tuning models to match desired human preferences.\n\ntuning. Our experiments show that DPO can fine-tune
+The document introduces Direct Preference Optimization (DPO) as a simpler, more stable alternative to Reinforcement Learning from Human Feedback (RLHF) for aligning large language models with human preferences. The excerpt fits this context by summarizing the core problem—controlling LMs' behavior—and highlighting the superior performance and simplicity of DPO compared to existing RLHF methods.\n\ntuning. Our experiments show that DPO can fine-tune
 LMs to align with human preferences as well as or better than existing methods.
 Notably, fine-tuning with DPO exceeds PPO-based RLHF in ability to control sentiment of generations, and matches or improves response quality in summarization
 and single-turn dialogue while being substantially simpler to implement and train.
@@ -97,39 +97,26 @@ meta.page: 1
 meta.section_header: 
 meta.source: 2305.18290v3.pdf
 ------------------------------------------------------------------------
-The document details Direct Preference Optimization (DPO) as an alternative to traditional Reinforcement Learning from Human Feedback (RLHF) for fine-tuning language models using human preferences. The excerpt provides a visual comparison, showing architectural diagrams that contrast the multi-stage process of RLHF, which requires a separate reward model and RL steps, with the streamlined, direct optimization approach of DPO.\n\nThis image contains two distinct architectural diagrams presented side-by-side, illustrating two methods for training language models: Reinforcement Learning from Human Feedback (RLHF) and Direct Preference Optimization (DPO).
+The document introduces Direct Preference Optimization (DPO) as a simpler, more stable alternative to Reinforcement Learning from Human Feedback (RLHF) for aligning large language models with human preferences. The excerpt visually summarizes this core comparison by presenting two architectural diagrams side-by-side, contrasting the multi-stage process of RLHF with the direct, single-stage optimization flow of DPO.\n\nThis image contains two distinct architectural diagrams presented side-by-side, illustrating two methods for training language models: Reinforcement Learning from Human Feedback (RLHF) and Direct Preference Optimization (DPO).
 
 **Left Diagram: Reinforcement Learning from Human Feedback (RLHF)**
 
-*   **Labeled Blocks:**
-    *   Input block: $\text{x: "write me a poem about the history of jazz"}$ (Input text)
-    *   Output block: $\text{y}_{\text{w}}$ (A stylized block representing a generated sequence)
-    *   Output block: $\text{y}_{\text{l}}$ (A stylized block representing a generated sequence)
-    *   Block: $\text{reward model}$ (A neural network diagram)
-    *   Block: $\text{LM policy}$ (A neural network diagram)
-*   **Inputs and Outputs:**
-    *   The initial input $\text{x: "write me a poem about the history of jazz"}$ feeds into the process.
-    *   The process generates $\text{y}_{\text{w}}$ and $\text{y}_{\text{l}}$ (implied outputs or inputs to the next stage).
-    *   An arrow labeled "label rewards" points from the comparison of $\text{y}_{\text{w}}$ and $\text{y}_{\text{l}}$ (or the comparison itself) into the $\text{reward model}$.
-    *   An arrow labeled "sample completions" points from the comparison of $\text{y}_{\text{w}}$ and $\text{y}_{\text{l}}$ into the $\text{LM policy}$.
-    *   The overall process is labeled "reinforcement learning".
-*   **Architecture Family:** This diagram illustrates a conceptual workflow involving a reward model and a policy model, characteristic of Reinforcement Learning.
+*   **Input Block:** A stylized representation of text input, labeled with the prompt: "x: write me a poem about the history of jazz". Below this, there are two output labels: "preference data" and "maximum likelihood".
+*   **Process Flow:**
+    1.  An arrow points from the input block to a block labeled "reward model".
+    2.  The "reward model" block has an output arrow pointing to a block labeled "LM policy".
+    3.  An arrow labeled "label rewards" points from the "reward model" to the "LM policy".
+    4.  A curved arrow labeled "sample completions" points from the "LM policy" back towards the general flow, suggesting iterative refinement.
+*   **Overall Label:** Below the flow, the process is labeled "reinforcement learning".
 
 **Right Diagram: Direct Preference Optimization (DPO)**
 
-*   **Labeled Blocks:**
-    *   Input block: $\text{x: "write me a poem about the history of jazz"}$ (Input text)
-    *   Output block: $\text{y}_{\text{w}}$ (A stylized block representing a generated sequence)
-    *   Output block: $\text{y}_{\text{l}}$ (A stylized block representing a generated sequence)
-    *   Output block: $\text{final LM}$ (A stylized block representing a final model)
-*   **Inputs and Outputs:**
-    *   The initial input $\text{x: "write me a poem about the history of jazz"}$ feeds into the process.
-    *   The process generates $\text{y}_{\text{w}}$ and $\text{y}_{\text{l}}$ (implied outputs or inputs to the next stage).
-    *   An arrow points from the comparison of $\text{y}_{\text{w}}$ and $\text{y}_{\text{l}}$ towards the $\text{final LM}$.
-    *   The overall process is labeled "Direct Preference Optimization".
-*   **Architecture Family:** This diagram illustrates a direct optimization process leading to a final language model.
+*   **Input Block:** A stylized representation of text input, labeled with the prompt: "x: write me a poem about the history of jazz". Below this, there are two output labels: "preference data" and "maximum likelihood".
+*   **Process Flow:**
+    1.  A direct arrow points from the input block to a final block labeled "final LM".
+*   **Overall Label:** No overarching process label is provided below the flow, but the title above indicates "Direct Preference Optimization (DPO)".
 
-The figure compares two methods, RLHF and DPO, for fine-tuning language models using human preference data.
+The figure illustrates a comparison between two advanced fine-tuning techniques for language models: RLHF, which uses a separate reward model to guide policy updates, and DPO, which optimizes directly using preference data.
 
 ========================================================================
 FRAGMENTO 4 / 69
@@ -143,7 +130,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to complex reinforcement learning methods for fine-tuning language models using human feedback. The excerpt details the limitations and complexity of existing Reinforcement Learning from Human Feedback (RLHF) methods, which require fitting a separate reward model and using iterative RL optimization. It then positions DPO as a simpler approach that directly optimizes for human preferences using a straightforward classification objective, thereby avoiding the full RL pipeline.\n\nFigure 1: DPO optimizes for human preferences while avoiding reinforcement learning. Existing methods
+The document introduces Direct Preference Optimization (DPO) as a simpler alternative to Reinforcement Learning from Human Feedback (RLHF) for aligning language models with human preferences. The excerpt summarizes this contrast by explaining that existing RLHF methods require fitting an explicit reward model and then using complex reinforcement learning, whereas DPO directly optimizes the policy using a simple classification objective. This highlights DPO's core advantage of simplifying the entire preference learning pipeline.\n\nFigure 1: DPO optimizes for human preferences while avoiding reinforcement learning. Existing methods
 for fine-tuning language models with human feedback first fit a reward model to a dataset of prompts and
 human preferences over pairs of responses, and then use RL to find a policy that maximizes the learned reward.
 In contrast, DPO directly optimizes for the policy best satisfying the preferences with a simple classification
@@ -176,7 +163,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as a simpler alternative to complex Reinforcement Learning from Human Feedback (RLHF) for fine-tuning language models based on human preferences. The excerpt details DPO's mechanism, explaining that it directly optimizes the language model policy using a simple binary cross-entropy objective, thereby bypassing the need to explicitly train a separate reward model and perform iterative reinforcement learning. This positions DPO as a straightforward, RL-free method achieving performance comparable to established RLHF techniques.\n\nmodel
+The document introduces Direct Preference Optimization (DPO) as a simpler, more stable alternative to Reinforcement Learning from Human Feedback (RLHF) for aligning large language models with human preferences. The excerpt details this core proposal, explaining that DPO bypasses the complex, multi-stage process of explicit reward modeling and reinforcement learning by directly optimizing the policy using a simple binary cross-entropy objective. This section establishes DPO's theoretical advantage over existing RLHF methods while confirming its practical effectiveness across various tasks.\n\nmodel
 policy to produce responses assigned high reward without drifting excessively far from the original
 model. While RLHF produces models with impressive conversational and coding abilities, the RLHF
 pipeline is considerably more complex than supervised learning, involving training multiple LMs and
@@ -213,7 +200,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO), a novel, simpler algorithm for aligning language models using human preferences without requiring reinforcement learning. The excerpt situates DPO within the broader context of fine-tuning large language models, noting that while instruction tuning is effective, using relative human judgments of response quality is a common alternative. It highlights that previous methods relying on human preferences typically involve first fitting a separate reward model before optimizing the language model.\n\nmain contribution is Direct Preference Optimization (DPO), a simple RL-free algorithm for
+The document introduces Direct Preference Optimization (DPO) as a novel, simpler, and RL-free method for aligning large language models with human preferences. The excerpt highlights DPO as the main contribution, asserting its effectiveness compared to established methods like PPO-based RLHF across various tasks. This section situates DPO within the broader context of fine-tuning LLMs using human preferences, noting that previous work often relied on complex reinforcement learning pipelines.\n\nmain contribution is Direct Preference Optimization (DPO), a simple RL-free algorithm for
 training language models from preferences. Our experiments show that DPO is at least as effective
 as existing methods, including PPO-based RLHF, for learning from preferences in tasks such as
 sentiment modulation, summarization, and dialogue, using language models with up to 6B parameters.
@@ -243,7 +230,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 4
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional methods for fine-tuning language models using human feedback. The excerpt contrasts DPO with existing techniques that first fit a reward model and then use reinforcement learning, highlighting that DPO offers a theoretically justified approach to optimizing relative preferences without the complexities of RL.\n\nBradley-Terry model [5], then fine-tune a language model to maximize the given reward using
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences. The excerpt fits within the related work section by contextualizing DPO against existing state-of-the-art methods that rely on complex reinforcement learning pipelines, such as those using the Bradley-Terry model and PPO. It highlights that DPO offers a theoretically justified alternative to the major practical challenge of using RL for fine-tuning with human preferences.\n\nBradley-Terry model [5], then fine-tune a language model to maximize the given reward using
 reinforcement learning algorithms, commonly REINFORCE [47], proximal policy optimization
 (PPO; [39]), or variants [34]. A closely-related line of work leverages LLMs fine-tuned for instruction
 following with human feedback to generate additional synthetic preference data for targeted attributes
@@ -267,7 +254,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 4
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional Reinforcement Learning from Human Feedback (RLHF) for fine-tuning language models. The excerpt details the limitations and multi-stage nature of existing preference learning methods, such as those involving explicit reward model estimation and subsequent RL optimization. It sets the stage for DPO by contrasting its direct, single-stage policy optimization approach against the established three-phase RLHF pipeline.\n\nlearning for a variety
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt reviews related work in preference learning, noting that existing methods for preference-based RL typically require explicitly estimating a latent reward model before optimizing the policy. This sets up the motivation for DPO by highlighting the practical challenges associated with the multi-stage, reward-model-dependent nature of prior state-of-the-art techniques.\n\nlearning for a variety
 of objectives [35, 29, 48] and another body of work on general methods for learning from human
 preferences [12, 21]. Despite the appeal of using relative human preferences, fine-tuning large
 language models with reinforcement learning remains a major practical challenge; this work provides
@@ -305,7 +292,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 4
 ------------------------------------------------------------------------
-The document introduces Direct Preference Optimization (DPO) as an alternative to traditional Reinforcement Learning from Human Feedback (RLHF) for fine-tuning language models. The excerpt details the standard RLHF pipeline, which involves supervised fine-tuning, training a reward model on human preferences, and finally using RL optimization. This excerpt describes the initial steps of the conventional RLHF process, contrasting it with DPO's direct optimization approach.\n\nRLHF pipeline in Ziegler et al. (and later [40, 1, 28]). It usually includes three phases:
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free alternative to Reinforcement Learning from Human Feedback (RLHF) for aligning language models with human preferences. The excerpt details the standard, multi-stage RLHF pipeline, which involves supervised fine-tuning, training a reward model based on human comparisons, and finally using reinforcement learning to optimize the policy. This section establishes the complex, existing methodology that DPO aims to simplify and surpass.\n\nRLHF pipeline in Ziegler et al. (and later [40, 1, 28]). It usually includes three phases:
 1) supervised fine-tuning (SFT); 2) preference sampling and reward learning and 3) RL optimization.
 
 SFT : RLHF typically begins by fine-tuning a pre-trained LM with supervised learning on high-quality
@@ -346,7 +333,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 4
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt details the mechanics of prior reward modeling approaches, specifically showing the objective function used during the Reinforcement Learning Fine-Tuning Phase. This illustrates the complex, multi-term optimization that DPO aims to simplify or replace.\n\nIn the context of LMs, the network _rϕ_ ( _x, y_ ) is often initialized from
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free alternative to existing methods for aligning large language models with human preferences. The excerpt details the mechanics of the traditional Reinforcement Learning (RL) fine-tuning phase within the standard RLHF pipeline. Specifically, it describes how the learned reward function is used to formulate an optimization objective that maximizes expected reward while constraining the model's deviation from a reference policy.\n\nIn the context of LMs, the network _rϕ_ ( _x, y_ ) is often initialized from
 the SFT model _π_ [SFT] ( _y_ _|_ _x_ ) with the addition of a linear layer on top of the final transformer layer
 that produces a single scalar prediction for the reward value [51]. To ensure a reward function with
 lower variance, prior works normalize the rewards, such that E _x,y∼D_ [ _rϕ_ ( _x, y_ )] = 0 for all _x_ . RL Fine-Tuning Phase : During the RL phase, the learned reward function is used to provide
@@ -368,7 +355,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional Reinforcement Learning from Human Feedback (RLHF) for fine-tuning language models. The excerpt details the motivation for DPO, explaining that it bypasses the need to explicitly fit a separate reward model and subsequent RL training loop. Specifically, it describes how DPO leverages an analytical mapping to derive a policy optimization loss directly from human preference data.\n\nwhere _β_ is a parameter controlling the deviation from the base reference policy _π_ ref, namely the initial SFT model _π_ [SFT] . In practice, the language model policy _πθ_ is also initialized to _π_ [SFT] . The
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free alternative to Reinforcement Learning from Human Feedback (RLHF) for aligning large language models with human preferences. The excerpt details the limitations of existing RLHF methods, which require complex reward model fitting and unstable reinforcement learning procedures. It then introduces DPO's core idea: leveraging an analytical mapping to transform the objective from optimizing a reward function into directly optimizing the policy using a simple loss function.\n\nwhere _β_ is a parameter controlling the deviation from the base reference policy _π_ ref, namely the initial SFT model _π_ [SFT] . In practice, the language model policy _πθ_ is also initialized to _π_ [SFT] . The
 added constraint is important, as it prevents the model from deviating too far from the distribution on which the reward model is accurate, as well as maintaining the generation diversity
 and preventing mode-collapse to single high-reward answers. Due to the discrete nature of language generation, this objective is not differentiable and is typically optimized with reinforcement learning. The standard approach [51, 40, 1, 28] has been to construct the reward function
 _r_ ( _x, y_ ) = _rϕ_ ( _x, y_ ) _−_ _β_ (log _πθ_ ( _y_ _| x_ ) _−_ log _π_ ref( _y_ _| x_ )), and maximize using PPO [39].
@@ -398,7 +385,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional Reinforcement Learning from Human Feedback (RLHF) for fine-tuning language models. The excerpt details the mathematical derivation showing how DPO reformulates the objective, transforming a loss over reward functions into a direct loss over policies. This mathematical manipulation allows the model to optimize directly against human preferences without explicitly fitting a standalone reward model.\n\nwhich enables us to transform a loss function over reward functions into a loss function
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method to align large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details the mathematical derivation of the DPO objective, showing how the optimal policy can be expressed directly in terms of the reward function and reference policy, thereby bypassing the need to explicitly model the reward. This derivation is crucial because it allows the authors to reformulate the entire preference learning process into a simple, closed-form loss function over the policy itself.\n\nwhich enables us to transform a loss function over reward functions into a loss function
 over policies. This change-of-variables approach avoids fitting an explicit, standalone reward model,
 while still optimizing under existing models of human preferences, such as the Bradley-Terry model.
 In essence, the policy network represents both the language model and the (implicit) reward. Deriving the DPO objective. We start with the same RL objective as prior work, Eq. 3, under a
@@ -443,7 +430,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional Reinforcement Learning from Human Feedback (RLHF) for fine-tuning language models. The excerpt details the mathematical derivation showing how the optimal policy under the Bradley-Terry model can be expressed directly in terms of the optimal policy and the reference policy. This derivation allows the authors to formulate a maximum likelihood objective for the policy, bypassing the explicit need to fit a separate reward model.\n\nthe reparameterization
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method to align large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details the core mathematical breakthrough of DPO, showing how the human preference probability can be expressed solely in terms of the optimal policy and the reference policy, leading to a simplified binary cross-entropy loss function. This derivation is crucial because it transforms the problem from optimizing an explicit, latent reward model to directly optimizing the language model's policy.\n\nthe reparameterization
 in Eq. 5 for _r_ _[∗]_ ( _x, y_ ) into the preference model Eq. 1, the partition function cancels, and we can
 express the human preference probability in terms of only the optimal policy _π_ _[∗]_ and reference policy
 _π_ ref. Thus, the optimal RLHF policy _π_ _[∗]_ under the Bradley-Terry model satisfies the preference model:
@@ -498,7 +485,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt details the mathematical formulation of the DPO loss function and its gradient, explaining that the update increases the likelihood of preferred responses while decreasing the likelihood of dispreferred ones. This mechanism is further refined by a weighting factor that accounts for how incorrectly the implicit reward model orders the completions.\n\nmodel, it enjoys certain theoretical properties, such as consistencies under suitable assumption of the
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details the mechanistic understanding of DPO by presenting the gradient of the DPO loss function. This gradient analysis shows that the loss function increases the likelihood of preferred responses while decreasing the likelihood of dispreferred ones, with an added weighting factor that accounts for how incorrectly the implicit reward model orders the completions.\n\nmodel, it enjoys certain theoretical properties, such as consistencies under suitable assumption of the
 preference data distribution [4]. In Section 5, we further discuss theoretical properties of DPO in
 relation to other works.
 
@@ -546,7 +533,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-The document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt details the practical steps of the DPO pipeline, explaining how to construct the necessary offline dataset from human preferences and how to initialize the reference policy when the original supervised fine-tuning model is unavailable. This section provides the procedural guide for implementing DPO, which is central to the paper's methodology.\n\nthe implicit reward model ˆ _rθ_ rates
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free alternative to complex Reinforcement Learning from Human Feedback (RLHF) for aligning large language models with human preferences. The excerpt details the practical implementation steps of DPO, explaining how to construct the necessary offline preference dataset and how to initialize the reference policy when the original supervised fine-tuning model is unavailable. This section provides the necessary procedural guidance for applying the DPO algorithm.\n\nthe implicit reward model ˆ _rθ_ rates
 the dispreferred completions, scaled by _β_, i.e, how incorrectly the implicit reward model orders
 the completions, accounting for the strength of the KL constraint. Our experiments suggest the
 importance of this weighting, as a naïve version of this method without the weighting coefficient can
@@ -580,7 +567,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-The document introduces Direct Preference Optimization (DPO) as an alternative to traditional Reinforcement Learning from Human Feedback (RLHF) for fine-tuning language models. The excerpt delves into the theoretical underpinnings of DPO, explaining how it bypasses explicit reward modeling and RL by using a single maximum likelihood objective. Specifically, it defines an equivalence relation between reward functions, establishing that different reward functions within the same class yield the same optimal policy.\n\n_π_ ref used by DPO. Further details
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details the theoretical analysis of DPO, establishing that the method's objective is mathematically equivalent to a reward model optimization under a specific change of variables. This section proves that different reward functions within the same equivalence class yield the same optimal policy, which is the theoretical foundation supporting DPO's direct optimization approach.\n\n_π_ ref used by DPO. Further details
 related to the implementation and hyperparameters can be found in Appendix B.
 
 5 Theoretical Analysis of DPO
@@ -624,7 +611,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt delves into the theoretical underpinnings of DPO, specifically addressing the mathematical constraints and representations of reward functions. It demonstrates that all reward functions within a certain class can be equivalently represented using a specific reparameterization involving the reference model, which simplifies the objective for the final optimization.\n\nwe usually have to impose additional identifiability constraints to achieve any guarantees on the MLE
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details the theoretical foundation for DPO by showing that all reward functions within the same equivalence class induce the same optimal policy, which allows for a specific reparameterization of the reward function. This mathematical result proves that the proposed DPO formulation is theoretically sound and does not lose generality compared to the original reward function.\n\nwe usually have to impose additional identifiability constraints to achieve any guarantees on the MLE
 estimates from Eq. 2 [4]. The second lemma states that all reward functions from the same class
 yield the same optimal policy, hence for our final objective, we are only interested in recovering an
 arbitrary reward function from the optimal class. We prove the following Theorem in Appendix A.6:
@@ -662,7 +649,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt details the mathematical derivation and theoretical underpinnings of DPO, specifically showing how the algorithm reparameterizes the reward function to make the optimal policy analytically tractable. This section demonstrates the mathematical formulation that allows DPO to directly optimize for preferences while maintaining the representational power of the underlying reward model.\n\nreplacing _r_ with the RHS of Eq. 5 (which
+This document introduces Direct Preference Optimization (DPO) as a simpler, stable alternative to Reinforcement Learning from Human Feedback (RLHF) for aligning large language models with human preferences. The excerpt details the theoretical foundation of DPO, showing how the optimal policy derived from the standard RLHF objective can be analytically reparameterized into a closed-form expression. This reparameterization is the core insight that allows DPO to bypass explicit reward modeling and RL training entirely.\n\nreplacing _r_ with the RHS of Eq. 5 (which
 holds for any reward function), we have _f_ ( _r_ ; _π_ ref _, β_ )( _x, y_ ) = _β_ log _π_ _[π]_ ref _[r]_ [(] ( _[y]_ _y_ _[|]_ _|_ _[x]_ _x_ [)] ) [.] [That is, the projection]
 
 _f_ produces a member of the equivalence class of _r_ with the desired form, and we do not lose any
@@ -723,7 +710,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt details the mathematical formulation of the DPO objective function, showing how it directly optimizes for human preferences without explicitly fitting a separate reward model. This formulation is presented as an advantage over prior works because it avoids the need for complex baselines or value function estimations.\n\nis the optimal policy from Eq. 7 induced by the reward function
+The document introduces Direct Preference Optimization (DPO) as a stable, RL-free method to align language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF) pipelines. The excerpt details how the DPO objective can be mathematically shown to be equivalent to the standard RLHF objective when using a specific reparameterization of the reward function. This equivalence demonstrates that DPO achieves the same goal as prior methods but avoids the need for explicit reward modeling or complex RL training steps.\n\nis the optimal policy from Eq. 7 induced by the reward function
 _rϕ_ ( _y, x_ ). With some algebra this leads to the optimization objective:
 
 (10)
@@ -765,7 +752,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt details the experimental evaluation of DPO, comparing its performance against established algorithms like PPO across various tasks. Specifically, it uses Figure 2 to demonstrate that DPO achieves superior trade-offs between expected reward and KL-divergence while also showing better summarization win rates than PPO.\n\n1.0
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details the experimental evaluation of DPO, showing its performance in trade-offs between expected reward and KL-divergence compared to PPO, and demonstrating superior results in tasks like summarization and dialogue.\n\n1.0
 
 0.9
 
@@ -828,7 +815,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional Reinforcement Learning from Human Feedback (RLHF) for fine-tuning language models. The excerpt details the experimental setup used to test DPO across three distinct open-ended text generation tasks: sentiment control, summarization, and dialogue. These descriptions illustrate the specific datasets and procedures employed to generate the necessary human preference pairs for training the model.\n\nmore
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method to align large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details the experimental setup used to validate DPO's performance across three distinct open-ended text generation tasks: controlled sentiment generation, summarization, and single-turn dialogue. This section demonstrates the practical application of the DPO method using specific, publicly available datasets for each task type.\n\nmore
 difficult RLHF tasks, including summarization and dialogue. We find that with almost no tuning
 of hyperparameters, DPO tends to perform as well or better than strong baselines like RLHF with
 PPO as well as returning the best of _N_ sampled trajectories under a learned reward function. Before
@@ -864,7 +851,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt details the experimental setup for evaluating various algorithms, describing the use of large dialogue datasets and outlining two evaluation approaches: measuring the frontier of achieved reward versus KL-divergence when the ground-truth reward function is known, and using win rates against a baseline when the ground-truth reward is unknown.\n\n170k
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method to align large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF) pipelines. The excerpt describes the practical evaluation setup for testing these alignment algorithms, detailing the use of human-generated preference data and proxy models like GPT-4 when the true reward function is unknown.\n\n170k
 dialogues between a human and an automated assistant. Each transcript ends with a pair of responses
 generated by a large (although unknown) language model along with a preference label denoting
 the human-preferred response. In this setting, no pre-trained SFT model is available; we therefore
@@ -894,7 +881,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an efficient method for fine-tuning language models using human feedback, contrasting it with traditional reinforcement learning approaches. The excerpt discusses the empirical results of DPO, specifically showing its superior performance in win rates on the Anthropic-HH dialogue test set compared to other methods. This evidence supports the paper's central claim that DPO effectively optimizes language models based on human preferences.\n\n0.6
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt, which includes a figure and text discussing evaluation, fits into the discussion of DPO's empirical performance by showing comparative results on a specific benchmark. Specifically, the figure demonstrates DPO's superior performance in win rates compared to other methods on a dialogue test set, supporting the paper's claims of DPO's effectiveness.\n\n0.6
 
 0.5
 
@@ -952,7 +939,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt details the experimental setup for comparing DPO against several existing and baseline methods, including zero-shot prompting, supervised fine-tuning, and various forms of Proximal Policy Optimization (PPO). This section establishes the comprehensive evaluation framework used to demonstrate the efficacy of DPO across different tasks and settings.\n\ndifferent sampling temperatures.
+This document introduces Direct Preference Optimization (DPO) as a simpler, stable alternative to complex Reinforcement Learning from Human Feedback (RLHF) for aligning large language models with human preferences. The excerpt details the experimental evaluation of DPO by comparing it against several existing and baseline methods, including zero-shot prompting, supervised fine-tuning, and various PPO implementations. This section fits within the overall discussion by providing empirical evidence of DPO's performance relative to the state-of-the-art techniques it aims to replace.\n\ndifferent sampling temperatures.
 
 test dataset as the baseline. While existing studies suggest LMs can be better automated evaluators
 than existing metrics [10], we conduct a human study to justify our usage of GPT-4 for evaluation
@@ -990,7 +977,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-The document introduces Direct Preference Optimization (DPO) as an alternative to traditional Reinforcement Learning from Human Feedback (RLHF) for fine-tuning language models. The excerpt discusses the theoretical comparison between DPO and standard RLHF methods, specifically focusing on the trade-off between maximizing reward and controlling the divergence from the original model policy. It demonstrates that DPO achieves the best balance on the reward-KL frontier, suggesting superior efficiency compared to PPO.\n\nin dialogue) and returning the highest-scoring response according to
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free alternative to complex Reinforcement Learning from Human Feedback (RLHF) for aligning large language models with human preferences. The excerpt discusses the comparative performance of various alignment methods, specifically demonstrating that DPO achieves the most efficient trade-off between maximizing reward and maintaining closeness to the original model, even when compared to PPO-based RLHF.\n\nin dialogue) and returning the highest-scoring response according to
 a reward function learned from the preference dataset. This high-performing method decouples the
 quality of the reward model from the PPO optimization, but is computationally impractical even for
 moderate _N_ as it requires sampling _N_ completions for every query at test time.
@@ -1025,7 +1012,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt details the empirical evaluation of DPO's performance on specific tasks, such as summarization and dialogue, comparing it directly against established methods like PPO. The results presented in the excerpt demonstrate that DPO consistently outperforms PPO across various sampling temperatures and tasks.\n\nDPO’s reward/KL tradeoff strictly dominates PPO. Second, DPO achieves a better frontier than PPO,
+This document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details the empirical evaluation of DPO, demonstrating its superior performance compared to PPO-based RLHF methods across various tasks like summarization and dialogue. Specifically, the results show that DPO achieves higher win rates and is more robust to sampling temperature than PPO, even when compared to PPO using ground truth rewards.\n\nDPO’s reward/KL tradeoff strictly dominates PPO. Second, DPO achieves a better frontier than PPO,
 _even when PPO can access ground truth rewards_ (PPO-GT).
 
 6.2 Can DPO scale to real preference datasets?
@@ -1059,7 +1046,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional Reinforcement Learning methods for fine-tuning language models using human feedback. The excerpt details the empirical evaluation of DPO against other methods like PPO and Preferred-FT across various tasks and conditions. Specifically, it demonstrates DPO's superior and robust performance compared to PPO, particularly in human evaluations and generalization to new input distributions.\n\nDPO to be much more robust to the sampling temperature than
+This document introduces Direct Preference Optimization (DPO), a novel, simpler, and more stable method for aligning large language models with human preferences without relying on complex reinforcement learning. The excerpt details the empirical evaluation of DPO against established methods like PPO-based RLHF, demonstrating DPO's superior performance and computational efficiency across various tasks, including single-turn dialogue.\n\nDPO to be much more robust to the sampling temperature than
 PPO, the performance of which can degrade to that of the base GPT-J model at high temperatures.
 Preferred-FT does not improve significantly over the SFT model. We also compare DPO and PPO
 head-to-head in human evaluations in Section 6.4, where DPO samples at temperature 0.25 were
@@ -1101,7 +1088,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt details an evaluation of DPO's performance, specifically testing its ability to generalize to a new, out-of-distribution dataset. The results show that DPO continues to significantly outperform the PPO policy when tested on news articles from the CNN/DailyMail dataset, suggesting strong generalization capabilities.\n\nbaseline. Finally, Figure 3 shows that DPO converges to its best performance relatively quickly.
+This document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details experimental results comparing DPO and PPO performance, specifically showing that DPO maintains a significant outperformance margin when tested on a new, out-of-distribution dataset of news articles. This evidence supports the paper's claim that DPO policies generalize well, even when the training distribution shifts away from the original data.\n\nbaseline. Finally, Figure 3 shows that DPO converges to its best performance relatively quickly.
 
 6.3 Generalization to a new input distribution
 
@@ -1148,7 +1135,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-The document details Direct Preference Optimization (DPO), a method for fine-tuning language models using human preferences without explicit reinforcement learning. The excerpt discusses validating the model's performance by comparing automated judgments from GPT-4 against actual human evaluations in a summarization task. This section fits into the broader context by providing empirical evidence to support the claims made about DPO's effectiveness relative to other methods like PPO and SFT.\n\n6.4 Validating GPT-4 judgments with human judgments
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details an experiment validating the judgments of GPT-4 against human evaluations using a summarization task. This excerpt fits into the broader discussion by providing empirical evidence comparing the performance of DPO, PPO, and SFT methods against human consensus in a specific downstream task.\n\n6.4 Validating GPT-4 judgments with human judgments
 
 We conduct a human study to verify the reliability of GPT-4’s judgments, using the results of
 the TL;DR summarization experiment and two different GPT-4 prompts. The GPT-4 (S) (simple) prompt simply asks for which summary better-summarizes the important information in the
@@ -1198,7 +1185,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for aligning language models with human preferences. The excerpt details the practical advantages of DPO, showing that it achieves performance comparable to or better than existing RLHF algorithms like PPO without the complexity of reinforcement learning. Specifically, the table and surrounding text compare DPO's performance against human and GPT-4 evaluations on summarization tasks.\n\n13
+This document introduces Direct Preference Optimization (DPO), a novel, simpler method for aligning large language models with human preferences that bypasses complex reinforcement learning. The excerpt summarizes the practical benefits of DPO by comparing its performance against existing methods, including PPO-based RLHF, using concrete results from a summarization task. It emphasizes that DPO achieves comparable or superior performance while significantly simplifying the training process.\n\n13
 GPT-4 (C) win % 54 32 12
 Human win % 58 43 17
 
@@ -1231,7 +1218,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional Reinforcement Learning from Human Feedback (RLHF) for fine-tuning language models based on human preferences. The excerpt discusses the practical advantages and future research directions of DPO, noting its simplicity and comparable performance to PPO while also pointing to areas needing further investigation, such as out-of-distribution generalization and scaling to larger models.\n\ntraining a language model to
+The document introduces Direct Preference Optimization (DPO) as a novel, simpler, and more stable method for aligning large language models with human preferences compared to complex Reinforcement Learning from Human Feedback (RLHF). The excerpt summarizes the practical benefits and outlines future research directions for DPO, noting its performance parity or superiority to PPO-based RLHF while also discussing potential limitations and scaling challenges.\n\ntraining a language model to
 satisfy human preferences _directly_, with a simple cross-entropy loss, without reinforcement learning
 or loss of generality. With virtually no tuning of hyperparameters, DPO performs similarly or better
 than existing RLHF algorithms, including those based on PPO; DPO thus meaningfully reduces the
@@ -1271,7 +1258,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The provided excerpt contains the bibliography, listing academic references that support the concepts and methodologies discussed throughout the paper. These references cite foundational work in areas like reinforcement learning from human feedback and statistical modeling, providing the scholarly backing for DPO's claims.\n\nReferences
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The provided excerpt is a list of references, which supports the document by citing foundational and related works in the fields of AI safety, language model training, and statistical modeling.\n\nReferences
 
 [1] Y. Bai, A. Jones, K. Ndousse, A. Askell, A. Chen, N. DasSarma, D. Drain, S. Fort, D. Ganguli,
 T. Henighan, N. Joseph, S. Kadavath, J. Kernion, T. Conerly, S. El-Showk, N. Elhage, Z. HatfieldDodds, D. Hernandez, T. Hume, S. Johnston, S. Kravec, L. Lovitt, N. Nanda, C. Olsson,
@@ -1308,7 +1295,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-The document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides several academic citations, including foundational works on machine learning and language model capabilities. These citations serve to support the theoretical underpinnings and related prior art discussed within the main body of the paper.\n\nH. Bong and A. Rinaldo. Generalized results for the existence and consistency of the MLE
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The provided excerpt contains citations for related work, specifically referencing foundational papers on language model capabilities and preference modeling techniques. This citation block supports the document's discussion of the existing literature that DPO aims to improve upon or replace.\n\nH. Bong and A. Rinaldo. Generalized results for the existence and consistency of the MLE
 in the Bradley-Terry-Luce model. _International_ _Conference_ _on_ _Machine_ _Learning_, 2022.
 arXiv:2110.11487.
 
@@ -1346,7 +1333,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-The document introduces Direct Preference Optimization (DPO) as an alternative to traditional methods for fine-tuning language models using human feedback. The excerpt provides a list of academic references, citing various works related to machine learning, reinforcement learning, and language models. This reference list supports the technical claims made in the main body of the paper regarding related research in the field.\n\narXiv preprint arXiv:2303.12712.
+The document introduces Direct Preference Optimization (DPO) as a simpler, more stable alternative to Reinforcement Learning from Human Feedback (RLHF) for aligning large language models with human preferences. The excerpt provides citations for related work, specifically referencing prior methods for preference-based reinforcement learning and general language model scaling. This placement shows that the authors are situating their novel DPO method within the existing academic landscape of preference learning and RLHF.\n\narXiv preprint arXiv:2303.12712.
 
 [9] R. Busa-Fekete, B. Szörényi, P. Weng, W. Cheng, and E. Hüllermeier. Preference-based
 reinforcement learning: evolutionary direct policy search using a preference-based racing
@@ -1379,7 +1366,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides a list of academic citations, which serve to support the technical claims and related work discussed throughout the paper. These references ground the DPO methodology within the broader context of machine learning research, particularly in areas like preference learning and model alignment.\n\n[13] H. W. Chung, L. Hou, S. Longpre, B. Zoph, Y. Tay, W. Fedus, Y. Li, X. Wang, M. Dehghani,
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The provided excerpts are citations to related work, including papers on scaling instruction-finetuned models, contextual dueling bandits, and other methods for aligning models with preferences. These citations situate DPO within the broader academic landscape of model alignment and preference learning.\n\n[13] H. W. Chung, L. Hou, S. Longpre, B. Zoph, Y. Tay, W. Fedus, Y. Li, X. Wang, M. Dehghani,
 S. Brahma, A. Webson, S. S. Gu, Z. Dai, M. Suzgun, X. Chen, A. Chowdhery, A. Castro-Ros,
 M. Pellat, K. Robinson, D. Valter, S. Narang, G. Mishra, A. Yu, V. Zhao, Y. Huang, A. Dai,
 H. Yu, S. Petrov, E. H. Chi, J. Dean, J. Devlin, A. Roberts, D. Zhou, Q. V. Le, and J. Wei.
@@ -1415,7 +1402,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides a list of academic citations, referencing various works on topics like sequence generation, reinforcement learning, and human feedback in AI. These citations serve to ground the paper's technical claims by referencing prior research in the field of model fine-tuning and learning from human preferences.\n\n.
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The provided excerpt contains citations for related work, specifically referencing papers on conservative fine-tuning and human-centric dialog training. This placement shows the academic context by citing prior research that addresses the challenges and methodologies related to fine-tuning language models using human feedback.\n\n.
 
 [17] N. Jaques, S. Gu, D. Bahdanau, J. M. Hernández-Lobato, R. E. Turner, and D. Eck. Sequence
 tutor: Conservative fine-tuning of sequence generation models with kl-control. In _International_
@@ -1457,7 +1444,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-The document details Direct Preference Optimization (DPO), a method for fine-tuning language models using human feedback that avoids traditional reinforcement learning steps. The excerpt, which contains academic citations and references to robotics and NLP proceedings, appears to be from a different, unrelated academic paper. This excerpt does not fit the context of DPO because it references external works on topics like robot-human interaction and general NLP proceedings rather than the technical details of DPO itself.\n\n_Learning Dynamic Robot-to-Human Object Handover_
+The document details Direct Preference Optimization (DPO), a novel, simpler, and more stable method for aligning large language models with human preferences without relying on complex reinforcement learning. The excerpt is a citation list containing references to various academic works, including one related to robot-to-human object handover. This citation list provides external academic context but does not relate directly to the technical explanation or methodology of DPO presented in the main body of the paper.\n\n_Learning Dynamic Robot-to-Human Object Handover_
 _from Human Feedback_, pages 161–176. Springer International Publishing, 01 2018. ISBN
 978-3-319-51531-1. doi: 10.1007/978-3-319-51532-8_10.
 
@@ -1490,7 +1477,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides citations to related work in the field, specifically referencing papers on abstractive text summarization, large-scale model training, and instruction-following with human feedback. These citations situate the DPO methodology within the broader academic context of advanced NLP model training techniques.\n\n[26] R. Nallapati, B. Zhou, C. dos Santos, Ç. Gulçehre, and B. Xiang. Abstractive text summarization
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The provided excerpts are citations for related work, specifically referencing papers on abstractive text summarization, large-scale model training, and instruction-following with human feedback. These citations support the document's discussion of existing methods for improving language model performance and alignment.\n\n[26] R. Nallapati, B. Zhou, C. dos Santos, Ç. Gulçehre, and B. Xiang. Abstractive text summarization
 using sequence-to-sequence RNNs and beyond. In _Proceedings of the 20th SIGNLL Conference_
 _on Computational Natural Language Learning_, pages 280–290, Berlin, Germany, Aug. 2016.
 Association for Computational Linguistics. doi: 10.18653/v1/K16-1028. URL `[https://](https://aclanthology.org/K16-1028)`
@@ -1523,7 +1510,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-The document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt consists of a list of academic citations, which are references supporting the claims and background work discussed in the main text. These citations provide the scholarly foundation for the various techniques and models mentioned throughout the paper.\n\n27730–27744.
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The provided excerpt contains citations to related works, such as those concerning language model capabilities and previous research in reinforcement learning and preference modeling. This citation list supports the document's claims by referencing the academic foundation of the problem space DPO seeks to improve upon.\n\n27730–27744.
 Curran Associates, Inc., 2022. URL `[https://proceedings.neurips.cc/paper_files/](https://proceedings.neurips.cc/paper_files/paper/2022/file/b1efde53be364a73914f58805a001731-Paper-Conference.pdf)`
 `[paper/2022/file/b1efde53be364a73914f58805a001731-Paper-Conference.pdf](https://proceedings.neurips.cc/paper_files/paper/2022/file/b1efde53be364a73914f58805a001731-Paper-Conference.pdf)` . [29] R. Paulus, C. Xiong, and R. Socher. A deep reinforced model for abstractive summarization. In
 _International Conference on Learning Representations_, 2018. URL `[https://openreview.](https://openreview.net/forum?id=HkAClQgA-)`
@@ -1566,7 +1553,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides a list of academic citations, which are used throughout the paper to reference prior work in sequence modeling, preference learning, and large language model training. These citations support the technical claims and background context established in the main body of the paper.\n\n.
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt provides citations for related work, specifically referencing a paper that details how multitask prompted training enables zero-shot task generalization. This citation supports the document's discussion of prior methods for improving LLM performance beyond basic unsupervised pre-training.\n\n.
 
 [35] M. Ranzato, S. Chopra, M. Auli, and W. Zaremba. Sequence level training with recurrent neural
 networks. _CoRR_, abs/1511.06732, 2015.
@@ -1598,7 +1585,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides citations for related work, specifically referencing papers on Proximal Policy Optimization (PPO), learning to summarize from human feedback, and other large language models. These citations support the technical discussion by grounding DPO within the existing landscape of RLHF and LLM fine-tuning techniques.\n\n[39] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov. Proximal policy optimization
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The provided excerpts are citations for related work, specifically referencing papers on Proximal Policy Optimization (PPO), summarization from human feedback, and large language models like Llama. These citations situate DPO within the existing landscape of advanced LLM fine-tuning techniques.\n\n[39] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov. Proximal policy optimization
 algorithms, 2017.
 
 [40] N. Stiennon, L. Ouyang, J. Wu, D. M. Ziegler, R. Lowe, C. Voss, A. Radford, D. Amodei, and
@@ -1634,7 +1621,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt consists of a list of academic citations, which provide the foundational literature supporting the methods and concepts discussed in the main body of the paper. These references cite prior work on summarization, language model architectures, and reinforcement learning algorithms that are relevant to the DPO framework.\n\narXiv:2302.13971_, 2023.
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The provided excerpt consists of a list of academic citations, which serve as references supporting the claims and related work discussed throughout the paper. These citations ground the technical discussion by pointing to prior research in areas like summarization and language model development.\n\narXiv:2302.13971_, 2023.
 
 [43] M. Völske, M. Potthast, S. Syed, and B. Stein. TL;DR: Mining Reddit to learn automatic
 summarization. In _Proceedings of the Workshop on New Frontiers in Summarization_, pages
@@ -1673,7 +1660,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides citations to related academic works, including papers on learning from human preferences and dueling bandits. These citations serve to ground the technical discussion of DPO within the existing literature on preference modeling and reinforcement learning for NLP tasks.\n\nWu and B. Hu. Learning to extract coherent summary via deep reinforcement learning.
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt provides citations for related work, specifically referencing papers on learning from human preferences using dueling bandits and prior work on fine-tuning language models from human preferences. This placement shows that the authors are situating DPO within the existing academic landscape of preference-based model alignment techniques.\n\nWu and B. Hu. Learning to extract coherent summary via deep reinforcement learning.
 In _Proceedings of the Thirty-Second AAAI Conference on Artificial Intelligence and Thirtieth_
 _Innovative Applications of Artificial Intelligence Conference and Eighth AAAI Symposium on_
 _Educational_ _Advances_ _in_ _Artificial_ _Intelligence_, AAAI’18/IAAI’18/EAAI’18. AAAI Press,
@@ -1705,7 +1692,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document details Direct Preference Optimization (DPO), a method for fine-tuning language models using human preferences without explicit reinforcement learning. The excerpt provides the detailed author contributions, outlining the specific roles and intellectual inputs of each author in developing the DPO objective, conducting experiments, and writing the paper. This section serves to formally acknowledge the collaborative effort behind the research presented in the main body of the work.\n\nAuthor Contributions
+This document introduces Direct Preference Optimization (DPO), a novel, simpler method for aligning large language models with human preferences that bypasses complex reinforcement learning. The excerpt details the specific contributions of each author, highlighting who was responsible for deriving the DPO objective, proving its theoretical properties, and conducting the various experimental implementations. This section serves to formally acknowledge the intellectual labor and specific roles of the research team members in developing and validating the DPO methodology.\n\nAuthor Contributions
 
 All authors provided valuable contributions to designing, analyzing, and iterating on experiments,
 writing and editing the paper, and generally managing the project’s progress.
@@ -1748,7 +1735,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-The document discusses Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt details the mathematical derivation for optimizing a KL-constrained reward maximization objective, which is a core component of understanding the theoretical underpinnings of such fine-tuning methods. This section provides the rigorous mathematical background for the objective function that DPO aims to optimize.\n\nand analyzed results from the
+This document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details the mathematical derivation of the optimal policy for the KL-constrained reward maximization objective, which is a core theoretical step in understanding the underlying mechanics of RLHF. This section provides the rigorous mathematical foundation for the objective function that DPO seeks to simplify and bypass.\n\nand analyzed results from the
 human study; wrote the abstract, introduction, related work, discussion, and most of experiments;
 and assisted with editing the rest of the paper.
 
@@ -1827,7 +1814,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt details the mathematical derivation of the DPO objective, showing how the optimal policy can be derived by minimizing a KL-divergence term. This mathematical section supports the core argument of the paper by providing the rigorous foundation for the DPO loss function under the Bradley-Terry model.\n\nwhich is a valid probability distribution as _π_ _[∗]_ ( _y|x_ ) _≥_ 0 for all _y_ and [�] _y_ _[π][∗]_ [(] _[y][|][x]_ [) = 1][.] [Since] _[ Z]_ [(] _[x]_ [)][ is]
+This document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details the mathematical derivation of the DPO objective under the Bradley-Terry model, showing how the optimal policy can be derived by minimizing a KL-divergence term. This section provides the theoretical foundation for transforming the preference learning problem from one involving an explicit reward model to one directly optimizing the policy.\n\nwhich is a valid probability distribution as _π_ _[∗]_ ( _y|x_ ) _≥_ 0 for all _y_ and [�] _y_ _[π][∗]_ [(] _[y][|][x]_ [) = 1][.] [Since] _[ Z]_ [(] _[x]_ [)][ is]
 not a function of _y_, we can then re-organize the final objective in Eq 12 as:
 
 log _[π]_ [(] _[y][|][x]_ [)]
@@ -1892,7 +1879,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document details Direct Preference Optimization (DPO), a method for fine-tuning language models using human preferences without explicit reinforcement learning. The excerpt provides mathematical derivations, specifically showing how the DPO objective is derived under the Plackett-Luce model, which generalizes pairwise comparisons. This mathematical section supports the core technical argument of the paper by formalizing the loss function used to optimize the language model directly against observed preferences.\n\nEq. 17 into Eq. 16 we obtain:
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details the mathematical derivation of the DPO objective under the Plackett-Luce model, showing how the general preference probability simplifies to a form directly expressible using the optimal policy and the reference policy. This mathematical derivation is crucial because it transforms the complex, reward-based objective of RLHF into a straightforward, closed-form classification loss function.\n\nEq. 17 into Eq. 16 we obtain:
 
 _p_ _[∗]_ ( _y_ 1 _≻_ _y_ 2 _|x_ ) = exp - _β_ log _π_ _[π]_ ref _[∗]_ [(] ( _[y]_ _y_ [1] 1 _[|]_ _|_ _[x]_ _x_ [)]
 
@@ -1973,7 +1960,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-The document details Direct Preference Optimization (DPO), a method for fine-tuning language models using human preferences without explicit reinforcement learning. The excerpt provides the mathematical derivation for the DPO objective function and its gradient. This section fits into the document by offering the rigorous mathematical foundation for the core DPO update rule, showing how the loss function is formulated and differentiated.\n\nSimilarly to the approach of Section 4, if we have access to a dataset _D_ =
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details the mathematical derivation of the DPO objective and its gradient, showing how the loss function can be optimized using maximum likelihood for multiple rankings. This section provides the technical foundation for the DPO update rule, building directly upon the core objective established in the main body of the paper.\n\nSimilarly to the approach of Section 4, if we have access to a dataset _D_ =
 _{τ_ [(] _[i]_ [)] _, y_ 1 [(] _[i]_ [)] _[, . . ., y]_ _K_ [(] _[i]_ [)] _[, x]_ [(] _[i]_ [)] _[}]_ _i_ _[N]_ =1 [of prompts and user-specified rankings,] [we can use a parameterized]
 model and optimize this objective with maximum-likelihood.:
 
@@ -2055,7 +2042,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-The document details Direct Preference Optimization (DPO), a method for fine-tuning language models using human preferences without explicit reinforcement learning. The excerpt provides the mathematical derivation and proof for a lemma related to the equivalence of reward functions within the Plackett-Luce framework. This section supports the theoretical foundation of DPO by proving that different reward functions within the same class yield the same optimal policy.\n\nE( _x,yw,yl_ ) _∼D_
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details the mathematical proof for Lemma 1, which establishes that under the Plackett-Luce framework, two reward functions belonging to the same equivalence class induce the same preference distribution. This section provides the theoretical backing for DPO by proving that the underlying preference signal is invariant to certain transformations of the reward function.\n\nE( _x,yw,yl_ ) _∼D_
 
 - _βσ_ _β_ log _[π][θ]_ [(] _[y][w][|][x]_ [)]
 
@@ -2140,7 +2127,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt details mathematical proofs supporting the theoretical underpinnings of DPO, specifically demonstrating that different reward functions within the same equivalence class lead to the same optimal policy. This mathematical rigor supports the core claim that the optimization process is robust and well-defined.\n\nLemma 2 Restated. _Two reward functions from the same equivalence class induce the same optimal_
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt provides a detailed mathematical proof demonstrating that any two reward functions belonging to the same equivalence class induce the exact same optimal policy under the constrained RL problem. This lemma supports the core theoretical claim of DPO: that the final policy optimization only depends on the equivalence class of the reward function, not its specific parametrization.\n\nLemma 2 Restated. _Two reward functions from the same equivalence class induce the same optimal_
 _policy under the constrained RL problem._
 
 _Proof._ Let us consider two reward functions from the same class, such that _r_ _[′]_ ( _x, y_ ) = _r_ ( _x, y_ ) + _f_ ( _x_ )
@@ -2202,7 +2189,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides a detailed mathematical proof supporting the theoretical underpinnings of DPO, specifically demonstrating the equivalence and uniqueness of reward functions within certain classes. This mathematical section solidifies the theoretical claim that DPO's objective function effectively captures the optimal policy without explicitly needing to learn a separate reward model.\n\n_β_ log _πref_ ( _y|x_ ) _[for some model]_
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt provides a detailed proof sketch supporting the core theoretical claim of DPO, demonstrating that any reward function within a specific equivalence class can be uniquely represented by a simple reparameterization involving the optimal policy and the reference model. This mathematical derivation solidifies the theoretical foundation that allows DPO to bypass explicit reward modeling and RL training.\n\n_β_ log _πref_ ( _y|x_ ) _[for some model]_
 _π_ ( _y|x_ ) _._
 
 _Proof._ Consider any reward function _r_ ( _x, y_ ), which induces an optimal model _πr_ ( _y|x_ ) under the
@@ -2254,7 +2241,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 1
 ------------------------------------------------------------------------
-The document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides a detailed mathematical proof supporting a theorem within the paper, demonstrating that all reward functions belonging to the same class are equivalent. This mathematical rigor supports the core claim that the optimal policy can be uniquely determined from the preference data without needing to explicitly model the reward function.\n\n_Proof._ We will proceed using proof by contradiction. Assume we have two reward functions from
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt provides the formal proof supporting the core theoretical claim of the paper: that any two reward functions belonging to the same equivalence class induce the same optimal policy. This proof is crucial because it validates the reparameterization used in DPO, showing that the optimal policy is uniquely determined by the preference data, regardless of the specific reward function chosen within that class.\n\n_Proof._ We will proceed using proof by contradiction. Assume we have two reward functions from
 the same class, such that _r_ _[′]_ ( _x, y_ ) = _r_ ( _x, y_ ) + _f_ ( _x_ ). Moreover, assume that _r_ _[′]_ ( _x, y_ ) = _β_ log _π_ _[π]_ ref _[′]_ [(] ( _[y]_ _y_ _[|]_ _|_ _[x]_ _x_ [)] )
 
 for some model _π_ _[′]_ ( _y|x_ ) and _r_ ( _x, y_ ) = _β_ log _ππ_ ref(( _yy|x|x_ )) [for some model] _[ π]_ [(] _[y][|][x]_ [)][, such that] _[ π]_ [=] _[ π][′]_ [.] [We]
@@ -2308,7 +2295,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The provided excerpt contains the Python implementation of the DPO loss function, which calculates the necessary log-probability ratios and loss components using the policy and reference model log-probabilities. This code snippet directly illustrates the mathematical objective function central to the DPO method described in the paper.\n\n```
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free alternative to complex Reinforcement Learning from Human Feedback (RLHF) for aligning large language models with human preferences. The provided code snippet implements the core DPO loss function, which calculates the loss based on the log probabilities of preferred versus dispreferred responses relative to a reference model. This code directly translates the mathematical objective derived in the paper for training the language model using preference pairs.\n\n```
 import torch.nn.functional as F
 
 def dpo_loss(pi_logps, ref_logps, yw_idxs, yl_idxs, beta):
@@ -2358,7 +2345,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional Reinforcement Learning from Human Feedback (RLHF) for fine-tuning language models. The excerpt details the specific experimental setup used for evaluating DPO, including the use of GPT-4 for judging summarization and dialogue win rates, and provides the exact prompts utilized for these evaluations.\n\noptimizer with a
+This document introduces Direct Preference Optimization (DPO), a novel, stable, and computationally lightweight method for aligning large language models with human preferences without relying on complex reinforcement learning. The excerpt details the specific experimental setup used to test DPO, including the use of the IMDB dataset for sentiment analysis and the utilization of GPT-4 for evaluating summarization and dialogue performance. This material provides the practical implementation context for the theoretical advancements presented in the main body of the paper.\n\noptimizer with a
 learning rate of `1e-6` by default. We linearly warmup the learning rate from 0 to `1e-6` over 150 steps.
 For TL;DR summarization, we use _β_ = 0 _._ 5, while rest of the parameters remain the same.
 
@@ -2407,7 +2394,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 1
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt demonstrates the practical application of DPO by showing structured prompts designed to evaluate model performance on tasks like summarization and dialogue response selection. These examples illustrate how DPO's underlying mechanism is used to create comparative evaluation tasks that require judging the relative quality of two outputs.\n\n```
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free alternative to Reinforcement Learning from Human Feedback (RLHF) for aligning large language models with human preferences. The excerpt discusses the specific baselines used in the paper's experiments, noting that the unlikelihood baseline is included for sentiment tasks but omitted for summarization. This excerpt fits within the document's discussion of experimental setup and related work by detailing the specific comparison methods employed during evaluation.\n\n```
 <post>
 
 Summary A:
@@ -2490,7 +2477,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides examples of Reddit posts, including a "TL;DR" summary, which illustrates the type of human-generated preference data that DPO aims to optimize for.\n\nPrompt Response
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method to align large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The provided excerpt contains examples of user-generated content from Reddit, including relationship advice and a "TIFU" story, which serves as sample data illustrating the kind of human-generated text that DPO aims to learn from.\n\nPrompt Response
 
 SUBREDDIT: r/relationships
 TITLE: The girl [26 F] I [22 M] have been
@@ -2555,7 +2542,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt discusses empirical results, specifically showing that unlikelihood sampling fails for complex tasks like summarization and dialogue due to unconstrained likelihood minimization. This fits into the broader context by providing evidence comparing DPO's performance against other baselines and methods in practical scenarios.\n\nwhen
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt discusses the empirical results of DPO, specifically noting that unlikelihood sampling fails to generate meaningful responses for complex tasks like summarization and dialogue. This fits within the document's overall narrative by providing concrete evidence from the experiments that validates DPO's performance while also cautioning against other, related techniques.\n\nwhen
 when when when when when when when when
 when when when when when when when when
 when when when when when when when when
@@ -2617,7 +2604,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides an example comparison of the outputs generated by DPO and PPO for a specific user prompt, illustrating the practical difference in the model's response style. This visual comparison serves to demonstrate the superior performance and refinement achieved by the DPO method over existing techniques.\n\nAnthropic-HH Dialogue Win Rate vs Chosen
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt provides a comparative example using a Reddit prompt, showing how DPO and PPO generate different, yet related, suggested responses to the same user query. This illustrates the practical difference in the desired behavioral output between the two alignment techniques discussed in the paper.\n\nAnthropic-HH Dialogue Win Rate vs Chosen
 
 0.60
 
@@ -2697,7 +2684,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides concrete examples comparing the outputs of DPO and PPO on a specific user query, illustrating DPO's ability to generate a more focused and relevant summary compared to PPO.\n\nTL;DR: I’ve been a shitty child and I want to make up for it, what can I do for my
+This document introduces Direct Preference Optimization (DPO), a novel, simpler, and more stable method for aligning large language models with human preferences compared to complex Reinforcement Learning from Human Feedback (RLHF). The excerpt provides an example of DPO's performance by comparing its generated summaries to those from PPO, demonstrating DPO's ability to effectively capture the core meaning of a user's emotional request. This illustrates the practical superiority of DPO in achieving desired behavioral alignment with minimal training complexity.\n\nTL;DR: I’ve been a shitty child and I want to make up for it, what can I do for my
 parents on their birthdays and christmas to show them how much I love them?
 
 PPO TL;DR: I’ve been a shitty person to my parents, what can I do to make it up to them,
@@ -2726,7 +2713,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides an example comparison of how DPO and PPO summarize a user's anxious post about an upcoming proposal. This illustrates the practical advantage of DPO, showing it generates a more effective and concise summary compared to PPO.\n\nPrompt SUBREDDIT: r/relationships TITLE: I [22 M] am about to propose to my girlfriend
+The document details Direct Preference Optimization (DPO), a novel, simpler, and more stable method for aligning large language models with human preferences compared to complex Reinforcement Learning from Human Feedback (RLHF). The excerpt demonstrates DPO's capability by summarizing a user's anxious post about an upcoming proposal, showing how the DPO-generated summary is more effective than a PPO-generated one. This illustrates the core claim of the paper: that DPO can effectively distill and convey the essence of human preferences from complex inputs.\n\nPrompt SUBREDDIT: r/relationships TITLE: I [22 M] am about to propose to my girlfriend
 
 [22F] of almost 2 years, and I can’t calm myself down POST: Alright, so I am
 preparing to propose to my girlfriend of almost 2 years (we were friends for
@@ -2765,7 +2752,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-The document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides concrete examples comparing the summarization outputs of DPO and PPO on different prompts. These examples illustrate DPO's ability to generate summaries that more accurately capture the nuanced intent of the original text compared to other methods.\n\nI can’t calm myself down. Any tips on how to relax? I would like to be able to sleep tonight (and the night before)..............................................................................................................................
+The document details Direct Preference Optimization (DPO), a novel, simpler, and more stable method for aligning large language models with human preferences compared to complex Reinforcement Learning from Human Feedback (RLHF). The excerpt provides an example of DPO's application in summarizing user posts, contrasting its output with those from PPO, thereby illustrating the practical effectiveness of the DPO technique.\n\nI can’t calm myself down. Any tips on how to relax? I would like to be able to sleep tonight (and the night before)..............................................................................................................................
 
 Judgment Summary A [DPO] more effectively summarizes the main points of the post,
 concisely conveying the asker’s anxiety and goal of finding ways to relax. Table 5: Sample summaries to a post from the TL;DR test set. DPO sample generated with a temperature 0.25;
@@ -2808,7 +2795,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 3
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides a concrete example comparing the performance of DPO against PPO in summarizing user intent from a forum post. This illustrates DPO's ability to generate summaries that more accurately capture the core meaning without making unwarranted assumptions, as demonstrated in the comparison of generated summaries.\n\nregular pasta and seems like it
+This document introduces Direct Preference Optimization (DPO) as a simpler, more stable alternative to Reinforcement Learning from Human Feedback (RLHF) for aligning large language models with human preferences. The excerpt provides an example comparison of DPO and PPO outputs when summarizing a user's query about pasta, illustrating DPO's ability to capture the user's core intent more accurately than the PPO-generated summary.\n\nregular pasta and seems like it
 would be a good substitute. Is it bullshit?
 
 PPO TL;DR: I want to lose weight, but I love pasta and don’t want to give it up. Is there
@@ -2835,7 +2822,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt demonstrates DPO's practical application by comparing its output to other models when prompted to write about the Civil Rights Movement. Specifically, the excerpt shows that the DPO response was judged as more helpful because it provided detailed information and offered structured suggestions for the essay.\n\nPrompt Can you help me write an essay on the Civil Rights Movement?
+This document introduces Direct Preference Optimization (DPO), a novel, simpler, and more stable method for aligning large language models with human preferences compared to complex Reinforcement Learning from Human Feedback (RLHF). The excerpt demonstrates DPO's practical application by comparing its generated response to a user prompt against a baseline model's response. This illustrates the core claim of the paper: that DPO can generate higher-quality, more helpful outputs that better align with user intent.\n\nPrompt Can you help me write an essay on the Civil Rights Movement?
 
 DPO The Civil Rights Movement was a series of social and political movements that took
 place between the 1950s and the 1980s, leading to the integration of public spaces,
@@ -2874,7 +2861,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-The document details Direct Preference Optimization (DPO), a method for fine-tuning language models using human preferences without explicit reinforcement learning. The excerpt provides concrete examples comparing DPO's performance against other methods (GT) using sample dialogues from a test set. These examples illustrate how DPO's preference for safety and helpfulness aligns with the document's overall theme of optimizing model behavior based on human feedback.\n\nan essay, but I can at least help you think
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt provides empirical evidence comparing DPO's performance against existing methods (GT) using sample responses from a specific test set. This illustrates the practical superiority of DPO by showing its ability to adhere to safety guidelines while providing more helpful and detailed information than the baseline.\n\nan essay, but I can at least help you think
 through the process. First, can you tell me what you’re trying to write about? In
 other words, what are the main points or questions you want to address?
 
@@ -2918,7 +2905,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-The document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides a comparative example, showing the model's generated response (DPO) versus a guideline response (GT) for a historical question. This illustrates the practical application of the model's improved performance in generating preferred, high-quality answers.\n\nPrompt Can you tell me what got the USA involved in World War II?
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences compared to complex Reinforcement Learning from Human Feedback (RLHF). The excerpt demonstrates DPO's capability by comparing a model's generated response (DPO) against a ground-truth answer (GT) when answering a historical question. This illustrates the practical application of the alignment techniques discussed in the paper.\n\nPrompt Can you tell me what got the USA involved in World War II?
 
 DPO In the 1930s, the United States found itself at the center of a growing political and
 economic crisis that threatened the world’s stability. The Great Depression had
@@ -2956,7 +2943,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-The document discusses Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt provides concrete examples, such as comparing model responses on historical and arithmetic prompts, to illustrate instances where the DPO-generated response is deemed inferior to a ground truth or a preferred response. These examples serve to demonstrate the practical performance differences between DPO and other methods in real-world evaluation scenarios.\n\nPearl Harbor, Hawaii, on December 7, 1941. This was a full month before the
+The document details Direct Preference Optimization (DPO), a novel, simpler, and more stable method for aligning large language models with human preferences without relying on complex reinforcement learning. The excerpt illustrates the practical comparison of DPO's output against a ground truth (GT) response across various prompts, showing instances where DPO generates verbose or factually incorrect information compared to the direct and accurate GT. This demonstrates the core theme of the paper: evaluating the performance and reliability of DPO against established benchmarks.\n\nPearl Harbor, Hawaii, on December 7, 1941. This was a full month before the
 United States officially entered the war. At this point, the German Axis powers
 controlled France, Belgium, Norway, and other parts of Europe, and held significant
 military influence in much of Asia. President Roosevelt officially asked Congress
@@ -3008,29 +2995,31 @@ meta.page: 26
 meta.section_header: 
 meta.source: 2305.18290v3.pdf
 ------------------------------------------------------------------------
-The document discusses Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt describes a survey interface used for evaluating text summaries, which relates to the general concept of using human preferences to guide model improvement. This suggests the excerpt provides an example of the type of preference data that DPO aims to optimize for.\n\nThe provided image is a screenshot of a survey or questionnaire, not a flowchart, architecture diagram, or table in the strict sense for detailed structural analysis. It contains text prompts and multiple-choice options.
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method to align large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt describes a survey interface for evaluating summaries based on a forum post, which relates to the document's discussion of fine-tuning LMs using human preferences. This shows a practical example of the type of human preference data that DPO aims to learn from.\n\nThe provided image is a screenshot of a survey or questionnaire, not a flowchart, architecture diagram, or table in the structured sense described. It contains text prompts and multiple-choice options.
 
 **Visual Content Description:**
 
-The image displays several sections of text, suggesting a survey format.
+The image displays several sections of text, appearing to be questions or prompts for a survey related to summarizing information.
 
-1.  **Title/Context:** There are several prompts asking the user to evaluate summaries based on given text.
-2.  **Prompt 1:** "Summarization Evaluation [id ZHbV X3RlbXAWlJAx; group 5; key 18209903]" followed by a question about which summaries do a better job of summarizing the most important points in the given post.
-3.  **Prompt 2:** A section starting with "Which of the following summaries does a better job of summarizing the most important points in the given post?" followed by a list of radio button options:
-    *   "My boyfriend and I have been together for 4 years, but I'm becoming tired of his childish hobbies. Two days ago he spent over $100 on these Nintendo toys and game, but this isn't the worst part. He has a "toy room" and it's lined with *very expensive* action figures from video games, Legos and cartoons, some that I consider quite lewd for someone in a relationship. All together I'm pretty sure he's spent thousands of dollars all together in that room, not including his video game collection. Over this past month he probably bought 8 different games for his Playstation and I think that was overboard."
-    *   "Some responses may be very similar; please do your best to compare them and only use the "I can't tell" if the summaries are really nearly-identical."
-    *   A placeholder for more options (indicated by three dots).
-4.  **Prompt 3:** "6. Which of the following summaries does a better job of summarizing the most important points in the given forum post?" followed by radio button options:
-    *   "Post: My boyfriend and I have been together for 4 years, but I'm becoming tired of his childish hobbies. Two days ago he spent over $100 on these Nintendo toys and game, but this isn't the worst part. He has a "toy room" and it's lined with *very expensive* action figures from video games, Legos and cartoons, some that I consider quite lewd for someone in a relationship. All together I'm pretty sure he's spent thousands of dollars all together in that room, not including his video game collection. Over this past month he probably bought 8 different games for his Playstation and I think that was overboard."
-    *   "I recently invited some out of town friends for dinner and she accidentally walked into his "toy room" and I she also agreed that this is pretty embarrassing for someone that's an adult. He makes decent money, a lot more than me but I think it's time for him to give up and sell these things so he can finally move on and become an adult with me. It'd be shameful to have a my parents see this too, especially when we get engaged soon"
-    *   "How should I approach this?"
+1.  **Section 1 (Title/Prompt):** "Summarization Evaluation [id ZHbV X3RlbXAWlJAx; group 5; key 18209903]"
+2.  **Section 2 (Prompt):** "Which of the following summaries does a better job of summarizing the most important points in the given post?"
+3.  **Section 3 (Prompt):** "Post: My boyfriend and I have been together for 4 years, but I'm becoming tired of his childish hobbies. Two days ago he spent over $100 on these Nintendo toys and game, but this isn't the worst part. He has a "toy room" and it's lined with *very expensive* action figures from video games, Legos and cartoons, some that I consider quite lewd for someone in a relationship. All together I'm pretty sure he's spent thousands of dollars all together in that room, not including his video game collection. Over this past month he probably bought 8 different games for his Playstation and I think that was overboard."
+4.  **Section 4 (Prompt):** "Which of the following summaries does a better job of summarizing the most important points in the given forum post?"
+5.  **Section 5 (Options for Section 4):**
+    *   "Some responses may be very similar; please do your best to compare them and only use the "I can't tell" if at all."
+    *   "A: Boyfriend has a room full of toys from video games, cartoons and Legos, and spends a lot of money on them. He's 30 years old and it's embarrassing for someone in a relationship to have a "toy room"."
+    *   "B: What should I do /r/relationships?"
+    *   "I think it's time for him to give up and sell these things so he can finally move on and become an adult with me. It'd be shameful to have a my parents see this too, especially when we get engaged soon"
+    *   "I can't tell (please use only if the summaries are really nearly-identical)"
+6.  **Section 6 (Prompt):** "How should I approach this /r/relationships?"
+7.  **Section 7 (Options for Section 6):**
     *   "Summary A: Boyfriend has a room full of toys from video games, cartoons and Legos, and spends a lot of money on them. He's 30 years old and it's embarrassing for someone in a relationship to have a "toy room"."
-    *   "What should I do /r/relationships?"
-    *   "Summary B: Boyfriend has a "toy room" lined with expensive video game and cartoon action figures and toys."
-    *   "I think it's time for him to give up his childish hobbies and become an adult with me. How should I approach this?"
+    *   "Summary B: What should I do /r/relationships?"
+    *   "I think it's time for him to give up and sell these things so he can finally move on and become an adult with me. It'd be shameful to have a my parents see this too, especially when we get engaged soon"
     *   "I can't tell (please use only if the summaries are really nearly-identical)"
 
-The figure illustrates a segment of a survey designed to evaluate the quality of different text summaries based on a provided source post.
+**Summary:**
+This figure illustrates a segment of a survey designed to evaluate the quality of different text summaries based on a provided forum post.
 
 ========================================================================
 FRAGMENTO 68 / 69
@@ -3044,7 +3033,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document introduces Direct Preference Optimization (DPO) as an alternative to traditional reinforcement learning methods for fine-tuning language models using human feedback. The excerpt details the methodology for a human study designed to validate the performance of different fine-tuning approaches, including DPO, in a summarization setting. Specifically, the authors describe collecting human preference data by having volunteer raters compare summaries generated by various algorithms.\n\nD.3 Human study details
+The document introduces Direct Preference Optimization (DPO) as a simpler, RL-free method for aligning large language models with human preferences, contrasting it with complex Reinforcement Learning from Human Feedback (RLHF). The excerpt details the methodology used to validate DPO by describing a human study where participants rated matchups between different model algorithms, including DPO and PPO, in a summarization setting. This section provides empirical evidence supporting the claims made in the main body of the paper regarding the performance and usability of the DPO technique.\n\nD.3 Human study details
 
 In order to validate the usage of GPT4 for computing win rates, our human
 study collects human preference data for
@@ -3085,7 +3074,7 @@ meta.section_header:
 meta.source: 2305.18290v3.pdf
 meta.total_chunks_in_page: 2
 ------------------------------------------------------------------------
-This document details Direct Preference Optimization (DPO), a method for fine-tuning language models using human preferences without explicit reinforcement learning. The provided excerpt appears to be an acknowledgment section listing the volunteers who participated in the data collection or evaluation process for the research. This context suggests the authors are detailing the human subjects whose feedback was used to train or test the models discussed in the main body of the paper.\n\n(one
+This document introduces Direct Preference Optimization (DPO), a novel, simpler, and more stable method for aligning large language models with human preferences compared to complex Reinforcement Learning from Human Feedback (RLHF). The excerpt appears to be an acknowledgment section from the final paper, listing the volunteers who participated in collecting the human preference data necessary for training the model.\n\n(one
 volunteer completed the survey late and was not included in the final analysis, but is listed here).
 The raters were Stanford students (from undergrad through Ph.D.), or recent Stanford graduates or
 visitors, with a STEM (mainly CS) focus. See Figure 5 for a screenshot of the survey interface. We
