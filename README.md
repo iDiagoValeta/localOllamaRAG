@@ -236,6 +236,8 @@ These constants live in `rag/chat_pdfs.py`. Edit them directly to toggle pipelin
 
 Open `http://localhost:5000`. Supports document upload, streaming responses, pipeline settings and an `ES / EN / VAL` language selector through the UI. The selected web language is stored in the browser.
 
+**Corpus selector** — the sidebar exposes an `ES / VAL / EN` switch that swaps the active PDF folder (`rag/docs/es | ca | en`) and its associated ChromaDB collection at runtime. Triggers indexing automatically if the target collection is empty. Backed by `POST /api/corpus` and `set_docs_folder_runtime()` in `rag/chat_pdfs.py`.
+
 **Inline PDF viewer** — click the eye icon next to any document in the sidebar, or click any source citation in a RAG response, to open the PDF directly in the browser. Citations open at the page of the highest-scoring retrieved fragment for that document.
 
 For development with hot-reload: run `npm run dev` inside `rag/web/frontend/` ([Vite](https://vitejs.dev/) on :3000 proxies to [Flask](https://flask.palletsprojects.com/) on :5000).
