@@ -366,7 +366,7 @@ RERANKER_MODEL_QUALITY = os.getenv("RERANKER_QUALITY", "quality")
 # ``USAR_RERANKER`` off, ``score_final`` stays RRF-based (much smaller scale); callers
 # must not compare that to this threshold — see CLI/web/eval paths.
 UMBRAL_RELEVANCIA = 0.50
-UMBRAL_SCORE_RERANKER = 0.55  # raised from 0.40: debug showed fragments at 0.47-0.52 are noise
+UMBRAL_SCORE_RERANKER = 0.65  # raised from 0.55 (probe 2026-05-14): noise band 0.40-0.60, 0.65 is the post-noise plateau across es/ca/en
 
 RRF_K = 20                    # reciprocal rank fusion damping factor (was hardcoded 60)
 
