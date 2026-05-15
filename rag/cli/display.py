@@ -239,8 +239,10 @@ def _select_backend() -> BackendName:
         return env  # type: ignore[return-value]
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         return "plain"
-    if os.name == "nt":
-        return "prompt_toolkit" if PTK_AVAILABLE else "plain"
+    # Rich output on every TTY (incl. Windows). The "rich" backend already
+    # delegates input to the prompt_toolkit session, so history, the fuzzy
+    # completer and the bottom toolbar are preserved. "prompt_toolkit" stays
+    # available only as an explicit MONKEYGRAB_CLI_BACKEND escape hatch.
     return "rich"
 
 
@@ -349,6 +351,14 @@ if PTK_AVAILABLE:
 class Display:
     """Centralized terminal interface manager for MonkeyGrab."""
 
+    # Single visual language for the Rich backend (minimalist refined):
+    # light rounded panels, tight padding, airy tables — no heavy boxes.
+    PANEL_BOX = box.ROUNDED
+    PANEL_PADDING = (0, 1)
+    TABLE_BOX = box.SIMPLE
+    # Below this width side-by-side panels stack vertically instead of truncating.
+    NARROW_WIDTH = 90
+
     def __init__(self) -> None:
         self.console = Console(theme=MONKEYGRAB_THEME, highlight=False, safe_box=True)
         self._status: Optional[Status] = None
@@ -370,6 +380,30 @@ class Display:
         _raw_lang = os.getenv("MONKEYGRAB_LANG", "es").strip().lower()
         self._lang: str = _raw_lang if _raw_lang in ("es", "en", "ca") else "es"
         self._ptk_session = self._build_ptk_session()
+        self._verify_rich_backend()
+
+    def _verify_rich_backend(self) -> None:
+        """Probe the Rich console once; degrade to plain on failure.
+
+        Worst case (an exotic console without VT support) falls back to the
+        legacy ANSI path instead of raising mid-session.
+        """
+        if self.backend != "rich":
+            return
+        try:
+            self.console.print("", end="")
+        except Exception:
+            self.backend = "plain"
+            self.safe_tty = True
+
+    def _term_width(self) -> int:
+        """Current terminal width, preferring Rich's measured console width."""
+        if self.backend == "rich":
+            try:
+                return self.console.width
+            except Exception:
+                pass
+        return max(40, shutil.get_terminal_size(fallback=(88, 24)).columns)
 
     def _build_ptk_session(self):
         """Create a PromptSession with persistent history, fuzzy completer, and toolbar."""
@@ -440,7 +474,7 @@ class Display:
             print(text, flush=True)
 
     def _rule(self, title: str = "", char: str = "─", color: Optional[_Color] = None) -> None:
-        width = max(40, shutil.get_terminal_size(fallback=(88, 24)).columns)
+        width = self._term_width()
         ansi = (color or Palette.DIM).ansi
         if not title:
             self._print_line(self._ansi(char * width, ansi))
@@ -473,12 +507,40 @@ class Display:
             lines.append(line)
         return "\n".join(lines)
 
+    def _panel(
+        self,
+        content: Any,
+        title: Optional[str] = None,
+        *,
+        border: str = "dim",
+        expand: bool = True,
+    ) -> Panel:
+        """Build a panel with the single MonkeyGrab visual language."""
+        return Panel(
+            content,
+            title=title,
+            border_style=border,
+            box=self.PANEL_BOX,
+            padding=self.PANEL_PADDING,
+            expand=expand,
+        )
+
+    def _two_panels(self, left: Panel, right: Panel) -> Any:
+        """Lay two panels side by side, stacking them on narrow terminals."""
+        if self._term_width() < self.NARROW_WIDTH:
+            return Group(left, right)
+        grid = Table.grid(expand=True)
+        grid.add_column(ratio=1)
+        grid.add_column(ratio=2)
+        grid.add_row(left, right)
+        return grid
+
     def _themed_table(
         self,
         title: Optional[str] = None,
         *,
         header: bool = True,
-        box_style=box.ROUNDED,
+        box_style=TABLE_BOX,
     ) -> Table:
         """Return a Table preconfigured with the MonkeyGrab visual language."""
         return Table(
@@ -539,12 +601,12 @@ class Display:
             f"{info.get('chunk_size', '-')}c, {self._s('pipeline.overlap')} {info.get('chunk_overlap', '-')}c",
         )
 
-        models = self._themed_table(header=True, box_style=box.SIMPLE_HEAVY)
+        models = self._themed_table(header=True)
         models.add_column(self._s("models.role"), style="dim", width=12, no_wrap=True)
         models.add_column(self._s("models.model"), style="text", overflow="ellipsis")
         models.add_column(self._s("models.tag"), style="muted", width=12, overflow="ellipsis")
         models.add_column(self._s("models.use"), style="muted", width=12, no_wrap=True)
-        model_width = 44 if self.console.width >= 110 else 28
+        model_width = 44 if self._term_width() >= 110 else 28
         model_rows = [
             (self._s("role.rag"), info.get("modelo_rag", ""), self._s("model.use.rag")),
             (self._s("role.chat"), info.get("modelo_chat", ""), self._s("model.use.chat")),
@@ -599,12 +661,9 @@ class Display:
 
         corpus_title = self._s("init.corpus_title")
         pipeline_title = self._s("init.pipeline_title")
-        top = Table.grid(expand=True)
-        top.add_column(ratio=1)
-        top.add_column(ratio=2)
-        top.add_row(
-            Panel(corpus, title=f"[info]{corpus_title}[/]", border_style="dim", box=box.ROUNDED),
-            Panel(details, title=f"[info]{pipeline_title}[/]", border_style="dim", box=box.ROUNDED),
+        top = self._two_panels(
+            self._panel(corpus, title=f"[info]{corpus_title}[/]"),
+            self._panel(details, title=f"[info]{pipeline_title}[/]"),
         )
 
         header = Text()
@@ -612,6 +671,7 @@ class Display:
         header.append(mode, style=mode_style)
         header.append("  ·  ", style="dim")
         header.append(self._s("init.use_help"), style="dim")
+        self.console.print()
         self.console.print(header)
         self.console.print(top)
         self.console.print(models)
@@ -708,13 +768,9 @@ class Display:
 
         modes_title = self._s("help.modes_title")
         shortcuts_title = self._s("help.shortcuts_title")
-        self.console.print(
-            Panel(modes, title=f"[info]{modes_title}[/]", border_style="dim", box=box.ROUNDED)
-        )
+        self.console.print(self._panel(modes, title=f"[info]{modes_title}[/]"))
         self.console.print(commands)
-        self.console.print(
-            Panel(shortcuts, title=f"[info]{shortcuts_title}[/]", border_style="dim", box=box.ROUNDED)
-        )
+        self.console.print(self._panel(shortcuts, title=f"[info]{shortcuts_title}[/]"))
         self.console.print()
 
     # ─────────────────────────────────────────────
@@ -763,14 +819,14 @@ class Display:
             self._print_line(f"  {self._ansi(advice, Palette.DIM.ansi)}")
             self._rule(color=Palette.DIM)
             return
-        panel = Panel(
-            f"[muted]{detail}[/]\n\n[dim]{advice}[/]",
-            title=f"[error]{title}[/]",
-            border_style="error",
-            box=box.ROUNDED,
-            expand=False,
+        self.console.print(
+            self._panel(
+                f"[muted]{detail}[/]\n\n[dim]{advice}[/]",
+                title=f"[error]{title}[/]",
+                border="error",
+                expand=False,
+            )
         )
-        self.console.print(panel)
 
     def ollama_status(self, ok: bool, detail: str) -> None:
         """Render the Ollama health check result at startup."""
@@ -786,14 +842,14 @@ class Display:
             self._print_line(f"  {self._ansi(advice, Palette.DIM.ansi)}")
             self._rule(color=Palette.DIM)
             return
-        panel = Panel(
-            f"[muted]{detail}[/]\n\n[dim]{advice}[/]",
-            title=f"[warning]{ollama_title}[/]",
-            border_style="warning",
-            box=box.ROUNDED,
-            expand=False,
+        self.console.print(
+            self._panel(
+                f"[muted]{detail}[/]\n\n[dim]{advice}[/]",
+                title=f"[warning]{ollama_title}[/]",
+                border="warning",
+                expand=False,
+            )
         )
-        self.console.print(panel)
 
     # ─────────────────────────────────────────────
     # SECTION 10: PIPELINE FEEDBACK
@@ -918,7 +974,7 @@ class Display:
             return self._read_input_ptk(mode, model)
         mode_style = "mode.rag" if mode == "rag" else "mode.chat"
         model_short = _short_model(
-            model, max_len=max(18, min(34, self.console.width - 28))
+            model, max_len=max(18, min(34, self._term_width() - 28))
         )
         prompt_text = Text()
         prompt_text.append("monkeygrab", style="brand")
@@ -1019,7 +1075,7 @@ class Display:
             self._print_line()
             return
         self.console.print()
-        self.console.print(Markdown(text), width=min(self.console.width - 4, 100))
+        self.console.print(Markdown(text), width=min(self._term_width() - 4, 100))
         self.console.print()
 
     def render_markdown(self, text: str) -> None:
@@ -1052,14 +1108,7 @@ class Display:
         table.add_column(self._s("sources.col.pages"), style="dim", no_wrap=True)
         for doc, pages in sorted(sources_map.items()):
             table.add_row(_short_model(doc, max_len=56, keep_tag=True), _safe_pages(pages))
-        self.console.print(
-            Panel(
-                table,
-                title=f"[dim]{src_title}[/]",
-                border_style="dim",
-                box=box.ROUNDED,
-            )
-        )
+        self.console.print(self._panel(table, title=f"[dim]{src_title}[/]"))
 
     def response_footer(self, sources: Optional[int] = None) -> None:
         if self.backend != "rich":
@@ -1163,14 +1212,7 @@ class Display:
                 Text(f"{score_val:.2f}", style=score_style),
             )
 
-        self.console.print(
-            Panel(
-                table,
-                title=panel_title,
-                border_style="dim",
-                box=box.ROUNDED,
-            )
-        )
+        self.console.print(self._panel(table, title=panel_title))
         self.console.rule(style="dim")
         self.console.print()
 
@@ -1313,22 +1355,19 @@ class Display:
             f"{info.get('chunk_size', '-')}c, {self._s('pipeline.overlap')} {info.get('chunk_overlap', '-')}c",
         )
 
-        top = Table.grid(expand=True)
-        top.add_column(ratio=1)
-        top.add_column(ratio=2)
-        top.add_row(
-            Panel(corpus, title=f"[info]{corpus_title}[/]", border_style="dim", box=box.ROUNDED),
-            Panel(details, title=f"[info]{pipeline_title}[/]", border_style="dim", box=box.ROUNDED),
+        top = self._two_panels(
+            self._panel(corpus, title=f"[info]{corpus_title}[/]"),
+            self._panel(details, title=f"[info]{pipeline_title}[/]"),
         )
         self.console.print(top)
 
         # --- Models table (same as init_panel) ---
-        models = self._themed_table(header=True, box_style=box.SIMPLE_HEAVY)
+        models = self._themed_table(header=True)
         models.add_column(self._s("models.role"), style="dim", width=12, no_wrap=True)
         models.add_column(self._s("models.model"), style="text", overflow="ellipsis")
         models.add_column(self._s("models.tag"), style="muted", width=12, overflow="ellipsis")
         models.add_column(self._s("models.use"), style="muted", width=12, no_wrap=True)
-        model_width = 44 if self.console.width >= 110 else 28
+        model_width = 44 if self._term_width() >= 110 else 28
         model_rows = [
             (self._s("role.rag"), info.get("modelo_rag", ""), self._s("model.use.rag")),
             (self._s("role.chat"), info.get("modelo_chat", ""), self._s("model.use.chat")),
@@ -1575,13 +1614,7 @@ class Display:
             table.add_row(key, str(value))
         self.console.print()
         self.console.print(
-            Panel(
-                table,
-                title=f"[info]{summary_title}[/]",
-                border_style="dim",
-                box=box.ROUNDED,
-                expand=False,
-            )
+            self._panel(table, title=f"[info]{summary_title}[/]", expand=False)
         )
 
     def no_results(self) -> None:
@@ -1604,17 +1637,17 @@ class Display:
             )
             self._rule(color=Palette.DIM)
             return
-        panel = Panel(
-            f"[muted]{self._s('no_results.msg')}[/]\n\n"
-            f"[dim]{self._s('no_results.reason1')}\n"
-            f"{self._s('no_results.reason2')}\n"
-            f"{self._s('no_results.reason3')}[/]\n\n"
-            f"[dim]{self._s('no_results.tip')}[/]",
-            border_style="warning",
-            box=box.ROUNDED,
-            expand=False,
+        self.console.print(
+            self._panel(
+                f"[muted]{self._s('no_results.msg')}[/]\n\n"
+                f"[dim]{self._s('no_results.reason1')}\n"
+                f"{self._s('no_results.reason2')}\n"
+                f"{self._s('no_results.reason3')}[/]\n\n"
+                f"[dim]{self._s('no_results.tip')}[/]",
+                border="warning",
+                expand=False,
+            )
         )
-        self.console.print(panel)
 
     def out_of_scope(self, score: float, threshold: float) -> None:
         scope_title = self._s("out_of_scope.title")
