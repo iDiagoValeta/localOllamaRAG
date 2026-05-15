@@ -16,7 +16,7 @@ import argparse
 import warnings
 from typing import Callable
 
-DEFAULT_CHAT_MODEL = "eu.anthropic.claude-sonnet-4-20250514-v1:0"
+DEFAULT_CHAT_MODEL = "eu.anthropic.claude-haiku-4-5-20251001-v1:0"
 DEFAULT_EMBEDDING_MODEL = "amazon.titan-embed-text-v2:0"
 DEFAULT_REGION = "eu-north-1"
 DEFAULT_MAX_TOKENS = 4096
