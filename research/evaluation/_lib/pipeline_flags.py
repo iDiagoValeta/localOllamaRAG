@@ -70,6 +70,11 @@ ABLATION_VARIANTS = [
         "description": "Disable RECOMP/LLM context synthesis.",
         "flags": {**BASELINE_PIPELINE_FLAGS, "USAR_RECOMP_SYNTHESIS": False},
     },
+    {
+        "name": "all_off",
+        "description": "All optional inference-time stages disabled (semantic-only floor).",
+        "flags": {k: False for k in BASELINE_PIPELINE_FLAGS},
+    },
 ]
 
 VARIANT_SUITES = {"ablation": ABLATION_VARIANTS}
