@@ -48,6 +48,16 @@ def indices_respuestas_vacias(answers: list[str], total: int) -> list[int]:
     ]
 
 
+_TERMINAL_PUNCTUATION = frozenset('.!?»”’)…')
+
+
+def respuesta_truncada(respuesta: Any) -> bool:
+    """Return True when a non-empty answer appears cut off mid-sentence."""
+    if respuesta_vacia(respuesta):
+        return False
+    return respuesta.strip()[-1] not in _TERMINAL_PUNCTUATION
+
+
 def estado_pregunta_base(index: int, answer: Any = "") -> dict[str, Any]:
     """Build a checkpoint status entry for one evaluation question."""
     status = "ok" if not respuesta_vacia(answer) else "pending"

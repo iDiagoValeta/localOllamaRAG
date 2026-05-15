@@ -39,6 +39,7 @@ from .checkpoints import (
     indices_pendientes_generacion,
     indices_respuestas_vacias,
     normalizar_estados_preguntas,
+    respuesta_truncada,
     respuesta_vacia,
     resumen_estados_fallidos,
 )
@@ -320,6 +321,21 @@ def generar_respuestas_rag(
             len(questions),
         )
 
+        truncated_indexes = [
+            i for i, (ans, st) in enumerate(zip(answers, question_statuses))
+            if st.get("status") == "ok" and respuesta_truncada(ans)
+        ]
+        for i in truncated_indexes:
+            question_statuses[i]["status"] = "failed"
+            question_statuses[i]["reason"] = "respuesta_truncada"
+        if truncated_indexes:
+            listed = ", ".join(str(i + 1) for i in truncated_indexes[:20])
+            suffix = "..." if len(truncated_indexes) > 20 else ""
+            print(
+                f"   Found {len(truncated_indexes)} truncated answer(s). "
+                f"Will regenerate: {listed}{suffix}"
+            )
+
         pending_answer_indexes = indices_pendientes_generacion(
             answers,
             question_statuses,
@@ -366,26 +382,32 @@ def generar_respuestas_rag(
                             f"   [ERROR] Q{i+1} failed on attempt "
                             f"{attempt + 1}/{max_attempts}: {last_error}"
                         )
-                    if not respuesta_vacia(answer):
+                    if not respuesta_vacia(answer) and not respuesta_truncada(answer):
                         break
 
                 reason = diagnosticar_fallo_generacion(
                     q, collection, answer, contexts, timed_out, last_error,
                 )
-                if respuesta_vacia(answer) and max_attempts > 1 and not timed_out:
+                is_bad = respuesta_vacia(answer) or respuesta_truncada(answer)
+                if is_bad and max_attempts > 1 and not timed_out:
+                    label = "empty" if respuesta_vacia(answer) else "truncated"
                     print(
-                        f"   [WARN] Q{i+1} still empty after {max_attempts} attempts; "
+                        f"   [WARN] Q{i+1} still {label} after {max_attempts} attempts; "
                         f"reason={reason}. Rerun to retry only incomplete answers."
                     )
+                final_reason = (
+                    None if not is_bad
+                    else (reason if respuesta_vacia(answer) else "respuesta_truncada")
+                )
                 answers[i] = answer
                 contexts_list[i] = contexts
                 question_statuses[i] = {
                     "index": i,
                     "question_number": i + 1,
-                    "status": "ok" if not respuesta_vacia(answer) else "failed",
+                    "status": "ok" if not is_bad else "failed",
                     "attempts": attempt_count,
                     "duration_seconds": round(time.time() - question_start, 3),
-                    "reason": None if not respuesta_vacia(answer) else reason,
+                    "reason": final_reason,
                     "error": (
                         f"{type(last_error).__name__}: {last_error}"
                         if last_error is not None else None
