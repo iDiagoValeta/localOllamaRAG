@@ -438,6 +438,13 @@ def _run_aggregation_step(results: list[dict[str, Any]], args: argparse.Namespac
         except ValueError:
             rel = Path("comparisons") / label_dir.name
         out_dir = args.output_root / rel / "aggregates"
+        label_out_dir = out_dir.parent
+        already_included = {name for name, _ in info["variants"]}
+        for existing_debug in sorted(label_out_dir.glob("*/debug.json")):
+            variant_name = existing_debug.parent.name
+            if variant_name not in already_included:
+                info["variants"].append((variant_name, existing_debug))
+                already_included.add(variant_name)
         print(f"\n  Comparison: {label_dir.name}")
         print(f"  Variants:   {len(info['variants'])}")
         print(f"  Output dir: {out_dir}")

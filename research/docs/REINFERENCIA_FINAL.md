@@ -129,10 +129,19 @@ $env:OLLAMA_REQUEST_TIMEOUT     = "900s"
 ```
 
 > **Resiliencia ante truncados (verificado 2026-05-14):**
-> `_lib/checkpoints.py::indices_pendientes_generacion` (línea 93) reincorpora
-> a la cola todos los índices con `status != "ok"|"skipped"` y todos los que
-> tengan respuesta vacía vía `indices_respuestas_vacias` (línea 42). Eso
-> garantiza que **basta con relanzar `infer.py compare` con el mismo
+> Al reanudar, `_lib/inference.py` aplica dos capas de detección antes de
+> calcular los pendientes:
+>
+> 1. **Respuestas vacías** — `indices_respuestas_vacias` (`checkpoints.py:42`)
+>    devuelve todos los índices sin respuesta no-vacía.
+> 2. **Respuestas truncadas** — `respuesta_truncada` (`checkpoints.py`) detecta
+>    respuestas no-vacías cuyo último carácter no es puntuación terminal
+>    (`. ! ? » " ' ) …`). Las marca como `status=failed/respuesta_truncada`
+>    antes de pasar a `indices_pendientes_generacion`, lo que las incluye en la
+>    cola de reintento. El log muestra `Found N truncated answer(s). Will
+>    regenerate: …` cuando hay casos detectados.
+>
+> Eso garantiza que **basta con relanzar `infer.py compare` con el mismo
 > `--label`**: el checkpoint vive en `runs/ragas/comparisons/<label>/checkpoints/<variant>.json`,
 > se carga al arrancar la variante, y sólo se generan respuestas para las
 > preguntas pendientes. No hace falta `--resume`. Cuidado: si entre una pasada

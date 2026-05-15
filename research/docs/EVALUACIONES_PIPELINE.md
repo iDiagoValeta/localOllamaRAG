@@ -242,6 +242,17 @@ Solo se agregan automáticamente las runs ablation (`comparisons/<label>/`).
 `single`, `ragbench-eval` y `visual` no se agregan porque por construcción
 solo tienen una variante.
 
+**Agregación acumulativa (verificado 2026-05-15):** el paso de agregación no
+se limita a las variantes evaluadas en la llamada actual. Antes de agregar,
+escanea `output_root/comparisons/<label>/*/debug.json` e incorpora todas las
+variantes ya evaluadas en pasadas anteriores. Esto permite evaluar **variante
+a variante** (`--checkpoint <variante>.json`) y obtener igualmente un aggregate
+completo: cada variante vive en su propia carpeta
+`comparisons/<label>/<variante>/` (nombre tomado del stem del checkpoint), las
+ya evaluadas se saltan con `[skip] exists` sin volver a llamar al juez salvo
+`--overwrite`, y el aggregate refleja siempre el total acumulado. No es
+necesario reevaluar todo con `--source-root --overwrite`.
+
 ---
 
 ## 5. Protocolo TFG (mesa principal por idioma)
