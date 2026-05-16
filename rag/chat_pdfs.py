@@ -215,7 +215,7 @@ def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
 
 MODELO_DESC = os.getenv("MODELO_DESC", _inferir_descripcion_modelo(MODELO_RAG))
 OLLAMA_NUM_CTX = _leer_env_int("OLLAMA_NUM_CTX", 8192)
-OLLAMA_RAG_NUM_CTX = _leer_env_int("OLLAMA_RAG_NUM_CTX", 16384)
+OLLAMA_RAG_NUM_CTX = _leer_env_int("OLLAMA_RAG_NUM_CTX", 8192)
 OLLAMA_AUX_NUM_CTX = _leer_env_int("OLLAMA_AUX_NUM_CTX", 8192)
 OLLAMA_QUERY_NUM_CTX = _leer_env_int("OLLAMA_QUERY_NUM_CTX", 8192)
 OLLAMA_RECOMP_NUM_CTX = _leer_env_int("OLLAMA_RECOMP_NUM_CTX", 8192)
