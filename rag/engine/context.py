@@ -373,6 +373,7 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
     try:
         payload = {
             "model": MODELO_RECOMP,
+            "keep_alive": 0,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -381,7 +382,7 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
             "think": False,
             "options": {
                 "temperature": 0.1,
-                "num_predict": 10000,
+                "num_predict": 1500,
                 "top_p": 0.9,
                 "repeat_penalty": 1.15,
                 "num_ctx": OLLAMA_RECOMP_NUM_CTX,
