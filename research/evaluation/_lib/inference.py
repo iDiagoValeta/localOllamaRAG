@@ -44,6 +44,8 @@ from .checkpoints import (
     resumen_estados_fallidos,
 )
 
+DEFAULT_EVAL_OLLAMA_TIMEOUT = 120
+
 
 # ─────────────────────────────────────────────
 # SECTION 1: OLLAMA TIMEOUT-AWARE EXECUTION
@@ -72,6 +74,19 @@ def ejecutar_pregunta_con_timeout(
         return "", [], False, exc
 
 
+def es_timeout_ollama(exc: Exception | None) -> bool:
+    """Return True when an exception represents an Ollama/request timeout."""
+    if exc is None:
+        return False
+    exc_name = exc.__class__.__name__.lower()
+    exc_text = str(exc).lower()
+    return (
+        "timeout" in exc_name
+        or "timed out" in exc_text
+        or "read timed out" in exc_text
+    )
+
+
 # ─────────────────────────────────────────────
 # SECTION 2: FAILURE DIAGNOSTICS
 # ─────────────────────────────────────────────
@@ -96,10 +111,10 @@ def diagnosticar_fallo_generacion(
     """Classify why a question did not produce a usable answer."""
     import rag.chat_pdfs as rag_runtime
 
-    if error is not None:
-        return "excepcion"
     if timed_out:
         return "timeout"
+    if error is not None:
+        return "excepcion"
     if not contexts:
         try:
             fragmentos_ranked, mejor_score, _ = rag_runtime.realizar_busqueda_hibrida(pregunta, collection)
@@ -203,6 +218,10 @@ def generar_respuestas_rag(
     add_missing_from_filter: bool = False,
 ) -> dict[str, Any]:
     """Run only indexing/retrieval/generation and persist a reusable checkpoint."""
+    os.environ.setdefault(
+        "OLLAMA_REQUEST_TIMEOUT",
+        os.getenv("EVAL_OLLAMA_TIMEOUT", str(DEFAULT_EVAL_OLLAMA_TIMEOUT)),
+    )
     import rag.chat_pdfs as rag_runtime
 
     previous_pipeline_flags = None
@@ -349,7 +368,7 @@ def generar_respuestas_rag(
                 f"Regenerating {len(pending_answer_indexes)} question(s): {first_missing}{suffix}"
             )
 
-        ollama_timeout = int(os.getenv("EVAL_OLLAMA_TIMEOUT", "900"))
+        ollama_timeout = int(os.getenv("EVAL_OLLAMA_TIMEOUT", str(DEFAULT_EVAL_OLLAMA_TIMEOUT)))
         max_attempts = max(1, int(os.getenv("EVAL_OLLAMA_ATTEMPTS", "2")))
         try:
             for i in pending_answer_indexes:
@@ -382,6 +401,13 @@ def generar_respuestas_rag(
                             f"   [ERROR] Q{i+1} failed on attempt "
                             f"{attempt + 1}/{max_attempts}: {last_error}"
                         )
+                        if es_timeout_ollama(last_error):
+                            timed_out = True
+                            print(
+                                f"   [TIMEOUT] Q{i+1} hit Ollama/request timeout "
+                                f"after {ollama_timeout}s. Moving to next question."
+                            )
+                            break
                     if not respuesta_vacia(answer) and not respuesta_truncada(answer):
                         break
 
