@@ -84,17 +84,12 @@ VARIANT_SUITES = {"ablation": ABLATION_VARIANTS}
 # SECTION 2: RAGBENCH-SPECIFIC PRESETS
 # ─────────────────────────────────────────────
 
-RAGBENCH_FINAL_PIPELINE_FLAGS = {
-    **BASELINE_PIPELINE_FLAGS,
-    "USAR_LLM_QUERY_DECOMPOSITION": False,
-}
+RAGBENCH_FINAL_PIPELINE_FLAGS = dict(BASELINE_PIPELINE_FLAGS)
 
-# RagBench visual disables both query decomposition and the reranker
-# (visual sources struggle with CE-rerank thresholds).
-RAGBENCH_VISUAL_PIPELINE_FLAGS = {
-    **RAGBENCH_FINAL_PIPELINE_FLAGS,
-    "USAR_RERANKER": False,
-}
+# All flags on by default. Opt-out must be done explicitly (e.g. via a custom
+# variant or by overriding flags in the caller). Previously this preset
+# silently disabled USAR_LLM_QUERY_DECOMPOSITION and USAR_RERANKER.
+RAGBENCH_VISUAL_PIPELINE_FLAGS = dict(BASELINE_PIPELINE_FLAGS)
 
 
 # ─────────────────────────────────────────────

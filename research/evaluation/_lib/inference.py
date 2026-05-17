@@ -87,6 +87,14 @@ def es_timeout_ollama(exc: Exception | None) -> bool:
     )
 
 
+def es_error_servidor_ollama(exc: Exception | None) -> bool:
+    """Return True when an exception is an Ollama 500 server crash (runner died)."""
+    if exc is None:
+        return False
+    text = str(exc)
+    return "500" in text or "Internal Server Error" in text
+
+
 # ─────────────────────────────────────────────
 # SECTION 2: FAILURE DIAGNOSTICS
 # ─────────────────────────────────────────────
@@ -383,6 +391,15 @@ def generar_respuestas_rag(
                 for attempt in range(max_attempts):
                     attempt_count = attempt + 1
                     if attempt > 0:
+                        if es_error_servidor_ollama(last_error):
+                            recovery_sleep = int(
+                                os.getenv("EVAL_OLLAMA_RECOVERY_SLEEP", "60")
+                            )
+                            print(
+                                f"   [RECOVERY] Q{i+1}: 500 server error — "
+                                f"waiting {recovery_sleep}s for Ollama runner to restart..."
+                            )
+                            time.sleep(recovery_sleep)
                         print(
                             f"   [RETRY] Q{i+1} attempt {attempt + 1}/{max_attempts} "
                             f"(previous: empty or timeout)."
@@ -421,6 +438,16 @@ def generar_respuestas_rag(
                         f"   [WARN] Q{i+1} still {label} after {max_attempts} attempts; "
                         f"reason={reason}. Rerun to retry only incomplete answers."
                     )
+                    if reason == "excepcion" and es_error_servidor_ollama(last_error):
+                        cascade_sleep = int(
+                            os.getenv("EVAL_OLLAMA_CASCADE_SLEEP", "30")
+                        )
+                        if cascade_sleep > 0:
+                            print(
+                                f"   [RECOVERY] Waiting {cascade_sleep}s before "
+                                f"next question (Ollama post-crash cooldown)..."
+                            )
+                            time.sleep(cascade_sleep)
                 final_reason = (
                     None if not is_bad
                     else (reason if respuesta_vacia(answer) else "respuesta_truncada")
