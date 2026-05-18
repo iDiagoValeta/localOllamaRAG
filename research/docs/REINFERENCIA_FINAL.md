@@ -15,13 +15,15 @@
 ## 1. Objetivo
 
 Volver a generar respuestas RAG sobre los siguientes corpus, **sin evaluar con
-RAGAS** todavía, recorriendo todas las variantes de ablación:
+RAGAS** todavía, usando solo la comparación final `baseline_all_on` vs
+`all_off`:
 
 | Corpus | ChromaDB (ya indexado) | Dataset por defecto |
 |---|---|---|
 | `es` (español) | `rag/vector_db/es_embeddinggemma` | `research/evaluation/datasets/local/dataset_eval_es.json` |
 | `ca` (catalán) | `rag/vector_db/ca_embeddinggemma` | `research/evaluation/datasets/local/dataset_eval_ca.json` |
-| `en_ragbench_dev` | `rag/vector_db/en_ragbench_dev_embeddinggemma` | manifest RagBench dev (preparado previamente) |
+| `en_ragbench_eval_40p` | `rag/vector_db/en_ragbench_eval_embeddinggemma` | `research/evaluation/datasets/ragbench/en_eval/dataset_ragbench_en_eval_text_40p_5q_eval.json` |
+| `en_ragbench_visual` | `rag/vector_db/en_ragbench_visual_embeddinggemma` | `research/evaluation/datasets/ragbench/visual/dataset_ragbench_visual_image_table_25p_5q.json` |
 
 El generador final es **Qwen3-14B fine-tuneado** (Modelfile `qwen3-finetuned-...`
 en `research/models/gguf/qwen-3/`). Como el nombre contiene `finetuned`, el
@@ -33,26 +35,19 @@ nuevos. Por ahora sólo persistimos checkpoints + debug.
 
 ---
 
-## 2. Variantes de ablación
+## 2. Variantes de comparación
 
-`research/evaluation/_lib/pipeline_flags.py::ABLATION_VARIANTS` define
-**9 variantes** tras añadir `all_off` (decisión confirmada 2026-05-14):
+`research/evaluation/_lib/pipeline_flags.py` mantiene la suite legacy
+`ablation`, pero la reinferencia final usa la suite por defecto `final` con
+**2 variantes**:
 
 1. `baseline_all_on` — todas las fases opcionales activas.
-2. `no_query_decomposition`
-3. `no_lexical_search`
-4. `no_exhaustive_search`
-5. `no_reranker`
-6. `no_context_expansion`
-7. `no_context_optimization`
-8. `no_recomp_synthesis`
-9. `all_off` — todas las flags opcionales desactivadas. Equivale a
+2. `all_off` — todas las flags opcionales desactivadas. Equivale a
    recuperación semántica pura + filtro por `UMBRAL_RELEVANCIA` + `TOP_K_FINAL`
    chunks pasados al generador.
 
-> `all_off` actúa como **suelo** de la ablación: cualquier variante con una
-> sola fase encendida debería superarla en al menos una métrica. Si no, esa
-> fase no aporta y se discute en el capítulo 4.
+> La suite larga puede lanzarse explícitamente con `--suite ablation`, pero no
+> forma parte de la repetición final.
 
 ---
 
@@ -71,17 +66,23 @@ python research/evaluation/infer.py compare --corpus es `
 python research/evaluation/infer.py compare --corpus ca `
     --label reinferencia_v2_ca --verbose
 
-# Inglés / RagBench dev (frozen)
+# Inglés / RagBench eval 40p
 python research/evaluation/infer.py compare --corpus en `
-    --dataset research/evaluation/datasets/ragbench/prepared/dev_frozen/dataset_ragbench_text_10p_5q_dev10_frozen.json `
-    --docs-dir rag/docs/en_ragbench_dev `
-    --label reinferencia_v2_en_ragbench_dev --verbose
+    --dataset research/evaluation/datasets/ragbench/en_eval/dataset_ragbench_en_eval_text_40p_5q_eval.json `
+    --docs-dir rag/docs/en_ragbench_eval `
+    --label reinferencia_v2_en_ragbench_eval_40p --verbose
+
+# Inglés / RagBench visual (text-image + text-table)
+python research/evaluation/infer.py compare --corpus en `
+    --dataset research/evaluation/datasets/ragbench/visual/dataset_ragbench_visual_image_table_25p_5q.json `
+    --docs-dir rag/docs/en_ragbench_visual `
+    --label reinferencia_v2_en_ragbench_visual_image_table_25p --verbose
 ```
 
-> Ruta confirmada (`ls research/evaluation/datasets/ragbench/prepared/dev_frozen/`):
-> `dataset_ragbench_text_10p_5q_dev10_frozen.json` — 10 papers × 5 preguntas
-> dev. Corresponde al ChromaDB `rag/vector_db/en_ragbench_dev_embeddinggemma`
-> y al run viejo `runs/ragas/comparisons/ragbench_ablation_en_dev10_frozen/`.
+> Rutas confirmadas: `research/evaluation/datasets/ragbench/en_eval/` y
+> `research/evaluation/datasets/ragbench/visual/`. El split dev congelado vive
+> en `research/evaluation/datasets/ragbench/dev_frozen/` y solo se usa para
+> excluir papers del held-out.
 
 Cada ejecución produce:
 
@@ -236,11 +237,11 @@ Cada `probe_<corpus>_<timestamp>.json` contiene:
 
 ## 8. Decisiones cerradas (2026-05-14)
 
-1. **9 variantes** — `all_off` añadido a `ABLATION_VARIANTS` en
-   `research/evaluation/_lib/pipeline_flags.py` (commit pendiente).
+1. **2 variantes finales** — la suite por defecto `final` usa
+   `baseline_all_on` y `all_off`; la suite `ablation` queda como legacy.
 2. **Modelo generador**: `Qwen3-FineTuned:latest` (default en `chat_pdfs.py:158`).
-3. **Manifest RagBench dev**:
-   `research/evaluation/datasets/ragbench/prepared/dev_frozen/dataset_ragbench_text_10p_5q_dev10_frozen.json`.
+3. **Datasets RagBench reubicados**:
+   `research/evaluation/datasets/ragbench/{dev_frozen,en_eval,visual}/`.
 4. **Sonda de scores**: pendiente (ver §6 actualizado).
 5. **Reranker `0.55 → 0.65`** — aplicado en `rag/chat_pdfs.py:369`. Decisión
    informada por la sonda 2026-05-14: 0.70 colapsaba CA-Q3 a 1 candidato
@@ -254,9 +255,9 @@ Cada `probe_<corpus>_<timestamp>.json` contiene:
 
 ## 9. Coste estimado
 
-3 corpus × 8 variantes = **24 ejecuciones** completas (+ 3 si se añade
-`all_off`). Con ~320 preguntas/corpus y generación local (Ollama Qwen3-14B FT,
-streaming), cada variante son del orden de horas, no minutos. Conviene lanzar
+Cada corpus ejecuta **2 variantes** (`baseline_all_on` y `all_off`). Con
+generación local (Ollama Qwen3-14B FT, streaming), cada variante son del orden
+de horas, no minutos. Conviene lanzar
 **una variante en background** con `run_in_background` y monitorizar con
-`Monitor` para no bloquear la sesión interactiva. **No** lanzar las 24 a la vez:
+`Monitor` para no bloquear la sesión interactiva. **No** lanzar todo a la vez:
 saturarían VRAM / sumarían latencia de cola.

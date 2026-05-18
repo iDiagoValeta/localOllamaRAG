@@ -62,12 +62,13 @@ Tres pasos, tres CLIs (`research/evaluation/`):
 
 ```bash
 # 1. Indexar
-python research/evaluation/index.py --corpus es        # es | ca | en | mix | ragbench-eval
+python research/evaluation/index.py --corpus es        # es | ca | en | ragbench-eval
 python research/evaluation/index.py --corpus ca --force
 
 # 2. Generar respuestas (sin RAGAS)
 python research/evaluation/infer.py single  --corpus es
-python research/evaluation/infer.py compare --corpus ca --label mi_eval     # 9 variantes ablation
+python research/evaluation/infer.py compare --corpus ca --label mi_eval     # baseline_all_on + all_off
+python research/evaluation/infer.py compare --corpus ca --suite ablation    # suite larga legacy
 python research/evaluation/infer.py list-variants
 python research/evaluation/infer.py ragbench-prepare && python research/evaluation/infer.py ragbench-eval
 
@@ -79,6 +80,8 @@ python research/evaluation/evaluate.py --provider aws    --all-known
 
 Checkpoints → `research/evaluation/runs/ragas/{single,comparisons,ragbench,ragbench_visual}/`.
 Salidas RAGAS → `research/evaluation/runs/ragas_<provider>_revaluation/`.
+
+Métricas adicionales tipo training: `python research/evaluation/training_metrics.py --checkpoint-dir <comparisons/label/checkpoints>`.
 
 Providers, variables de entorno (`GOOGLE_API_KEY`, `NVIDIA_API_KEY`, `AWS_BEARER_TOKEN_BEDROCK`), modelos juez por defecto, opciones de agregación (`--aggregate-group-by`, `--aggregate-etiquetas-es`) y los detalles del flujo RagBench: ver [`docs/EVALUACIONES_PIPELINE.md`](docs/EVALUACIONES_PIPELINE.md).
 

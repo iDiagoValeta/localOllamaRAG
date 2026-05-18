@@ -42,8 +42,7 @@ Presets de corpus:
 | --- | --- | --- |
 | `es` | `research/evaluation/datasets/local/dataset_eval_es.json` | `rag/docs/es` |
 | `ca` | `research/evaluation/datasets/local/dataset_eval_ca.json` | `rag/docs/ca` |
-| `en` | `research/evaluation/datasets/local/dataset_eval_en.json` | `rag/docs/en` |
-| `mix` | `research/evaluation/datasets/local/dataset_eval_mix.json` | `rag/docs/es` |
+| `en` | sin dataset local por defecto; usar `--dataset` o los subcomandos RagBench | `rag/docs/en` |
 
 Formato de dataset (cualquiera de los soportados — JSON/CSV/Excel):
 columna `question` o `pregunta`, opcional `ground_truth` (alias aceptados:
@@ -53,19 +52,24 @@ columna `question` o `pregunta`, opcional `ground_truth` (alias aceptados:
 # 1 variante (baseline_all_on) sobre el corpus indicado
 python research\evaluation\infer.py single --corpus es
 
-# Suite ablation completa (9 variantes: baseline + 7 single-flag-off + all_off)
-python research\evaluation\infer.py compare --corpus ca --label mi_eval_ca_ablation --reindex
+# Suite final por defecto (2 variantes: baseline_all_on + all_off)
+python research\evaluation\infer.py compare --corpus ca --label mi_eval_ca_final --reindex
+
+# Suite ablation legacy completa (9 variantes)
+python research\evaluation\infer.py compare --corpus ca --suite ablation --label mi_eval_ca_ablation --reindex
 
 # Listar variantes
 python research\evaluation\infer.py list-variants
 ```
 
-### 2.2. Suite `ablation`
+### 2.2. Suites de variantes
 
-`baseline_all_on` activa todas las etapas opcionales de inferencia; cada
-variante `no_*` desactiva exactamente una; `all_off` desactiva todas a la vez
-(suelo del experimento). Las 9 variantes comparten la misma colección
-ChromaDB; `--reindex` solo afecta a la primera.
+La suite por defecto es `final`: ejecuta solo `baseline_all_on` y `all_off`.
+Es la que se usa en la reinferencia final para evitar multiplicar análisis.
+La suite `ablation` queda disponible como flujo legacy: añade las variantes
+`no_*`, donde cada una desactiva exactamente una fase opcional. Todas las
+variantes de una misma comparación comparten la colección ChromaDB; `--reindex`
+solo afecta a la primera.
 
 | Variante | Cambio |
 | --- | --- |
@@ -92,9 +96,9 @@ python research\evaluation\infer.py ragbench-prepare   # descarga PDFs + manifes
 python research\evaluation\infer.py ragbench-eval      # inferencia sobre el manifest
 ```
 
-- Manifest: `research/evaluation/datasets/ragbench/prepared/en_eval/ragbench_en_eval_manifest.json`
+- Manifest: `research/evaluation/datasets/ragbench/en_eval/ragbench_en_eval_manifest_40p.json`
 - PDFs: `rag/docs/en_ragbench_eval/`
-- Excluye el split dev congelado declarado en `research/evaluation/datasets/ragbench/ragbench_en_dev_doc_ids.json`.
+- Excluye el split dev congelado declarado en `research/evaluation/datasets/ragbench/dev_frozen/ragbench_en_dev_manifest_10p_5q_frozen.json`.
 - ChromaDB: `rag/vector_db/en_ragbench_eval_<embed_slug>/`
 
 ### 2.4. RagBench visual (tablas e imágenes)
@@ -106,15 +110,15 @@ python research\evaluation\infer.py visual --n-papers 25 --max-q 5
 - Filtra solo preguntas `text-image` y `text-table` del split.
 - PDFs: `rag/docs/en_ragbench_visual/`
 - ChromaDB: `rag/vector_db/en_ragbench_visual_<embed_slug>/`
-- Pipeline-flags: `USAR_LLM_QUERY_DECOMPOSITION=False` y `USAR_RERANKER=False`
-  (el cross-encoder tiende a infrafiltrar evidencia tabular bajo el umbral
-  calibrado para chat interactivo).
+- El subcomando `visual` prepara el dataset y ejecuta una inferencia all-on.
+  Para la comparación final (`baseline_all_on` vs `all_off`), usar
+  `infer.py compare --dataset research/evaluation/datasets/ragbench/visual/dataset_ragbench_visual_image_table_25p_5q.json --docs-dir rag/docs/en_ragbench_visual`.
 - Salidas: `research/evaluation/runs/ragas/ragbench_visual/inference/<tag>/results.{csv,json}` y `checkpoint.json`.
 
 ### 2.5. Fallback de reranker en RagBench
 
 En cualquier flujo RagBench (`ragbench-eval`, `visual` y cualquier dataset
-preparado bajo `research/evaluation/datasets/ragbench/prepared/`) el runner
+preparado bajo `research/evaluation/datasets/ragbench/`) el runner
 activa un *fallback*: si el reranker puntúa todos los candidatos por debajo
 de `UMBRAL_SCORE_RERANKER`, conserva los mejores candidatos recuperados en
 vez de devolver contexto vacío. **No** equivale a apagar el reranker — sigue
@@ -201,6 +205,20 @@ canónicos RAGAS (`user_input`, `response`, `retrieved_contexts`, `reference`).
 `debug.json` añade prompts internos del juez (justifications) para
 trazabilidad.
 
+### 3.2. Métricas adicionales tipo training
+
+`training_metrics.py` calcula Token F1, ROUGE-L y BERTScore directamente desde
+los checkpoints de `infer.py`. No llama a RAGAS ni regenera respuestas.
+
+```powershell
+python research\evaluation\training_metrics.py `
+  --checkpoint-dir research\evaluation\runs\ragas\comparisons\reinferencia_v2_en_ragbench_eval_40p\checkpoints
+```
+
+Por defecto escribe `training_metrics/<variant>.csv`,
+`training_metrics/comparison_training_metrics.csv` y, si se pasan varios
+directorios, un `training_metrics_comparison_all.csv` común.
+
 ---
 
 ## 4. Agregación por subconjunto (integrada en `evaluate.py`)
@@ -228,7 +246,7 @@ Subconjuntos soportados:
 | Valor | Conjunto por |
 | --- | --- |
 | `source_type` | Campo `source_type` del dataset (default) |
-| `language` | Campo `language` (útil en `dataset_eval_mix.json`) |
+| `language` | Campo `language` si el dataset lo incluye |
 | `source_type_language` | `source_type` + `language` |
 | `id_prefix` | Prefijo del `id` antes del bloque numérico final (p. ej. `wiki_es` en `wiki_es_001`) |
 
@@ -238,7 +256,7 @@ Salidas (junto al run de comparación, mirroring de `output_root`):
 - `aggregates/resumen_por_conjunto_<criterio>.csv` — tabla larga
   (variante × conjunto × métrica) lista para importar en la memoria.
 
-Solo se agregan automáticamente las runs ablation (`comparisons/<label>/`).
+Solo se agregan automáticamente las runs de comparación (`comparisons/<label>/`).
 `single`, `ragbench-eval` y `visual` no se agregan porque por construcción
 solo tienen una variante.
 
@@ -260,20 +278,20 @@ necesario reevaluar todo con `--source-root --overwrite`.
 Comandos canónicos:
 
 ```powershell
-# Fase 1 — inferencia (3 corridas ablation, una por idioma)
-python research\evaluation\infer.py compare --corpus es --label mi_eval_es_ablation --reindex
-python research\evaluation\infer.py compare --corpus ca --label mi_eval_ca_ablation --reindex
-python research\evaluation\infer.py compare --corpus en --label mi_eval_en_ablation --reindex
+# Fase 1 — inferencia (suite final: baseline_all_on + all_off)
+python research\evaluation\infer.py compare --corpus es --label mi_eval_es_final --reindex
+python research\evaluation\infer.py compare --corpus ca --label mi_eval_ca_final --reindex
+python research\evaluation\infer.py compare --corpus en --dataset <dataset_en.json> --label mi_eval_en_final --reindex
 
 # Fase 2 — RAGAS + agregación (juez Gemini, etiquetas en castellano)
 python research\evaluation\evaluate.py --provider google `
-  --source-root research\evaluation\runs\ragas\comparisons\mi_eval_es_ablation `
+  --source-root research\evaluation\runs\ragas\comparisons\mi_eval_es_final `
   --aggregate-etiquetas-es
 python research\evaluation\evaluate.py --provider google `
-  --source-root research\evaluation\runs\ragas\comparisons\mi_eval_ca_ablation `
+  --source-root research\evaluation\runs\ragas\comparisons\mi_eval_ca_final `
   --aggregate-etiquetas-es
 python research\evaluation\evaluate.py --provider google `
-  --source-root research\evaluation\runs\ragas\comparisons\mi_eval_en_ablation `
+  --source-root research\evaluation\runs\ragas\comparisons\mi_eval_en_final `
   --aggregate-etiquetas-es
 ```
 
