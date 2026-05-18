@@ -155,8 +155,8 @@ if hasattr(sys.stderr, "reconfigure"):
 # The same pattern applies to chat, embeddings, contextual retrieval, RECOMP,
 # and OCR through their corresponding OLLAMA_* environment variables.
 
-MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "Qwen3-FineTuned:latest")
-MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e2b")
+MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "gemma4:e4b")
+MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e4b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b")
 MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma4:e4b")
@@ -215,7 +215,7 @@ def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
 
 MODELO_DESC = os.getenv("MODELO_DESC", _inferir_descripcion_modelo(MODELO_RAG))
 OLLAMA_NUM_CTX = _leer_env_int("OLLAMA_NUM_CTX", 8192)
-OLLAMA_RAG_NUM_CTX = _leer_env_int("OLLAMA_RAG_NUM_CTX", 8192)
+OLLAMA_RAG_NUM_CTX = _leer_env_int("OLLAMA_RAG_NUM_CTX", 16384)
 OLLAMA_AUX_NUM_CTX = _leer_env_int("OLLAMA_AUX_NUM_CTX", 8192)
 OLLAMA_QUERY_NUM_CTX = _leer_env_int("OLLAMA_QUERY_NUM_CTX", 2048)
 OLLAMA_RECOMP_NUM_CTX = _leer_env_int("OLLAMA_RECOMP_NUM_CTX", 8192)
