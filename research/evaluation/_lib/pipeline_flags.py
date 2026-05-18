@@ -77,7 +77,17 @@ ABLATION_VARIANTS = [
     },
 ]
 
-VARIANT_SUITES = {"ablation": ABLATION_VARIANTS}
+FINAL_COMPARISON_VARIANTS = [
+    ABLATION_VARIANTS[0],
+    ABLATION_VARIANTS[-1],
+]
+
+DEFAULT_VARIANT_SUITE = "final"
+
+VARIANT_SUITES = {
+    "final": FINAL_COMPARISON_VARIANTS,
+    "ablation": ABLATION_VARIANTS,
+}
 
 
 # ─────────────────────────────────────────────
@@ -99,13 +109,17 @@ RAGBENCH_VISUAL_PIPELINE_FLAGS = dict(BASELINE_PIPELINE_FLAGS)
 def seleccionar_variantes(suite: str, variant_names: str | None = None) -> list[dict[str, Any]]:
     """Resolve requested variant names into concrete pipeline-flag specs."""
     available = {variant["name"]: variant for variant in VARIANT_SUITES[suite]}
+    aliases = {
+        "all_on": "baseline_all_on",
+        "baseline_all_off": "all_off",
+    }
     if not variant_names:
         return list(available.values())
 
     selected = []
     unknown = []
     for raw_name in variant_names.split(","):
-        name = raw_name.strip()
+        name = aliases.get(raw_name.strip(), raw_name.strip())
         if not name:
             continue
         if name not in available:

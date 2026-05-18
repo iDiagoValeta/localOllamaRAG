@@ -80,7 +80,7 @@ def _resolve_docs_dir(corpus: str, override: str | None) -> tuple[str, list[str]
 
     docs_dir = default_docs_dir_for_corpus(corpus)
     if docs_dir is None:
-        # ``es`` / ``mix`` fall back to the RAG module default folder.
+        # ``es`` falls back to the RAG module default folder.
         docs_dir = rag_runtime.CARPETA_DOCS
     return os.path.abspath(docs_dir), None
 

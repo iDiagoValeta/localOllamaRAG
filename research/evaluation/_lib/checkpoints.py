@@ -299,15 +299,18 @@ def _resolve_dataset_path(raw_path: str | None) -> Path | None:
     for marker in markers:
         if marker in text:
             suffix = text.split(marker, 1)[1]
-            mapped = Path(DATASETS_DIR) / suffix
-            if mapped.is_file():
-                return mapped.resolve()
+            suffixes = [suffix]
+            if suffix.startswith("ragbench/prepared/"):
+                suffixes.append("ragbench/" + suffix.removeprefix("ragbench/prepared/"))
+            for candidate_suffix in suffixes:
+                mapped = Path(DATASETS_DIR) / candidate_suffix
+                if mapped.is_file():
+                    return mapped.resolve()
 
     if text.endswith("dataset_ragbench_text_10p_5q.json"):
         mapped = (
             Path(DATASETS_DIR)
             / "ragbench"
-            / "prepared"
             / "dev_frozen"
             / "dataset_ragbench_text_10p_5q_dev10_frozen.json"
         )

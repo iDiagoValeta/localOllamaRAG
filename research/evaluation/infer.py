@@ -5,7 +5,7 @@ Genera respuestas RAG sobre datasets de evaluación y persiste checkpoints que
 
 Subcomandos:
     single             Inferencia con la variante baseline para un corpus local.
-    compare            Bucle ablation (8 variantes) sobre un corpus local.
+    compare            Comparación final o ablation legacy sobre un corpus local.
     ragbench-prepare   Prepara el corpus EN final RagBench (descarga + dataset + manifest).
     ragbench-eval      Inferencia sobre el manifest preparado RagBench EN.
     visual             Prepara + ejecuta inferencia RagBench visual (tablas/imágenes).
@@ -63,6 +63,7 @@ from research.evaluation._lib.datasets import (
 )
 from research.evaluation._lib.inference import generar_respuestas_rag
 from research.evaluation._lib.pipeline_flags import (
+    DEFAULT_VARIANT_SUITE,
     RAGBENCH_FINAL_PIPELINE_FLAGS,
     RAGBENCH_VISUAL_PIPELINE_FLAGS,
     VARIANT_SUITES,
@@ -223,7 +224,7 @@ def ejecutar_ragbench_eval(args: argparse.Namespace) -> None:
     os.makedirs(run_dir, exist_ok=True)
 
     print("\nEjecutando inferencia RagBench EN final:")
-    print("   source=text, query_decomposition=off, resto de flags=on")
+    print("   source=text, baseline pipeline flags=on")
     print(f"   dataset:    {dataset_path}")
     print(f"   docs_dir:   {docs_dir}")
     print(f"   files:      {len(indexed_files)}")
@@ -278,7 +279,7 @@ def ejecutar_visual(args: argparse.Namespace) -> None:
 
     print("\nEjecutando inferencia RagBench visual sin RAGAS:")
     print(f"   sources={','.join(sources)}")
-    print("   query_decomposition=off, reranker=off, resto de flags=on")
+    print("   baseline pipeline flags=on")
     print(f"   output dir: {run_dir}")
 
     generation = generar_respuestas_rag(
@@ -326,7 +327,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_compare.add_argument("--dataset", default=None)
     p_compare.add_argument("--docs-dir", default=None)
     p_compare.add_argument("--label", default=None, help="Folder suffix for this comparison batch")
-    p_compare.add_argument("--suite", choices=sorted(VARIANT_SUITES), default="ablation")
+    p_compare.add_argument("--suite", choices=sorted(VARIANT_SUITES), default=DEFAULT_VARIANT_SUITE)
     p_compare.add_argument("--variants", default=None, help="Comma-separated variant names")
     p_compare.add_argument("--reindex", action="store_true", help="Rebuild Chroma before the first variant")
     p_compare.add_argument("--verbose", action="store_true")
@@ -334,13 +335,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # ── list-variants ─────────────────────────────────────
     p_list = sub.add_parser("list-variants", help="List available comparison variants")
-    p_list.add_argument("--suite", choices=sorted(VARIANT_SUITES), default="ablation")
+    p_list.add_argument("--suite", choices=sorted(VARIANT_SUITES), default=DEFAULT_VARIANT_SUITE)
     p_list.set_defaults(func=lambda args: listar_variantes(args.suite))
 
     # ── ragbench-prepare ──────────────────────────────────
     p_prep = sub.add_parser("ragbench-prepare", help="Prepare the fixed RagBench EN evaluation corpus")
     p_prep.add_argument("--source", default="text", choices=["text"])
-    p_prep.add_argument("--n-papers", type=int, default=25)
+    p_prep.add_argument("--n-papers", type=int, default=40)
     p_prep.add_argument("--max-q", type=int, default=5)
     p_prep.add_argument("--skip-download", action="store_true")
     p_prep.add_argument("--docs-dir", default=RAGBENCH_EVAL_PDFS_DIR)

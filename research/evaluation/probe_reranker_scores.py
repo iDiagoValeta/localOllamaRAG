@@ -73,7 +73,7 @@ CORPUS_MAP = {
     },
     "en_ragbench_dev": {
         "docs": _PROJ / "rag" / "docs" / "en_ragbench_dev",
-        "dataset": _PROJ / "research" / "evaluation" / "datasets" / "ragbench" / "prepared"
+        "dataset": _PROJ / "research" / "evaluation" / "datasets" / "ragbench"
                    / "dev_frozen" / "dataset_ragbench_text_10p_5q_dev10_frozen.json",
     },
 }

@@ -29,8 +29,11 @@ from typing import Any
 from .datasets import (
     PROJ_ROOT,
     RAGBENCH_DATASETS_DIR,
-    RAGBENCH_PREPARED_DIR,
+    RAGBENCH_DEV_FROZEN_DATASETS_DIR,
+    RAGBENCH_EVAL_DATASETS_DIR,
+    RAGBENCH_VISUAL_DATASETS_DIR,
     guardar_json,
+    resolver_ruta_dataset,
     safe_tag,
 )
 
@@ -64,11 +67,17 @@ ARXIV_HEADERS = {
 RAGBENCH_DEV_PDFS_DIR = os.path.join(PROJ_ROOT, "rag", "docs", "en")
 RAGBENCH_EVAL_PDFS_DIR = os.path.join(PROJ_ROOT, "rag", "docs", "en_ragbench_eval")
 RAGBENCH_VISUAL_PDFS_DIR = os.path.join(PROJ_ROOT, "rag", "docs", "en_ragbench_visual")
-RAGBENCH_DEV_DOC_IDS_PATH = os.path.join(RAGBENCH_DATASETS_DIR, "ragbench_en_dev_doc_ids.json")
-RAGBENCH_EVAL_PREPARED_DIR = os.path.join(RAGBENCH_PREPARED_DIR, "en_eval")
-RAGBENCH_DEV_FROZEN_PREPARED_DIR = os.path.join(RAGBENCH_PREPARED_DIR, "dev_frozen")
-RAGBENCH_VISUAL_PREPARED_DIR = os.path.join(RAGBENCH_PREPARED_DIR, "visual")
-RAGBENCH_EVAL_MANIFEST_PATH = os.path.join(RAGBENCH_EVAL_PREPARED_DIR, "ragbench_en_eval_manifest.json")
+RAGBENCH_DEV_DOC_IDS_PATH = os.path.join(
+    RAGBENCH_DEV_FROZEN_DATASETS_DIR,
+    "ragbench_en_dev_manifest_10p_5q_frozen.json",
+)
+RAGBENCH_EVAL_PREPARED_DIR = RAGBENCH_EVAL_DATASETS_DIR
+RAGBENCH_DEV_FROZEN_PREPARED_DIR = RAGBENCH_DEV_FROZEN_DATASETS_DIR
+RAGBENCH_VISUAL_PREPARED_DIR = RAGBENCH_VISUAL_DATASETS_DIR
+RAGBENCH_EVAL_MANIFEST_PATH = os.path.join(
+    RAGBENCH_EVAL_PREPARED_DIR,
+    "ragbench_en_eval_manifest_40p.json",
+)
 
 DEFAULT_VISUAL_SOURCES = ("text-image", "text-table")
 ALLOWED_VISUAL_SOURCES = set(DEFAULT_VISUAL_SOURCES)
@@ -452,6 +461,9 @@ def cargar_manifest_ragbench_eval(path: str = RAGBENCH_EVAL_MANIFEST_PATH) -> di
     if not isinstance(manifest, dict):
         print(f"ERROR: manifiesto RagBench EN inválido: {path}")
         raise SystemExit(1)
+    dataset_path = manifest.get("dataset_path")
+    if dataset_path:
+        manifest["dataset_path"] = resolver_ruta_dataset(str(dataset_path))
     return manifest
 
 
@@ -473,7 +485,7 @@ def escribir_dataset_preparado(
     output_dir: str | None = None,
 ) -> str:
     """Write a JSON dataset consumable by infer.py."""
-    target_dir = output_dir or RAGBENCH_PREPARED_DIR
+    target_dir = output_dir or RAGBENCH_DATASETS_DIR
     os.makedirs(target_dir, exist_ok=True)
     prepared_dataset = os.path.join(target_dir, f"{filename_prefix}_{tag}.json")
     with open(prepared_dataset, "w", encoding="utf-8") as f:
@@ -503,7 +515,7 @@ def escribir_dataset_visual(rows: list[dict[str, str]], output_dir: Path, tag: s
 
 def preparar_ragbench_eval_en(
     source: str = "text",
-    n_papers: int = 25,
+    n_papers: int = 40,
     max_q: int = 5,
     skip_download: bool = False,
     docs_dir: str = RAGBENCH_EVAL_PDFS_DIR,

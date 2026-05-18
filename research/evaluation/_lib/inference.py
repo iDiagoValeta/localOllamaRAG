@@ -100,7 +100,7 @@ def es_error_servidor_ollama(exc: Exception | None) -> bool:
 # ─────────────────────────────────────────────
 
 def es_dataset_ragbench(dataset_path: str, eval_corpus: str) -> bool:
-    """Return True for RagBench runs, including prepared datasets run as corpus en."""
+    """Return True for RagBench runs, including bundled datasets run as corpus en."""
     if eval_corpus == "ragbench":
         return True
     path = Path(dataset_path)

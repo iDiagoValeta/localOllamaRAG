@@ -51,14 +51,17 @@ def _resolver_dataset(ruta: str | Path) -> Path:
         return p.resolve()
     candidates = [
         Path(DATASETS_DIR) / "local" / p.name,
-        Path(DATASETS_DIR) / "ragbench" / "prepared" / "en_eval" / p.name,
-        Path(DATASETS_DIR) / "ragbench" / "prepared" / "dev_frozen" / p.name,
-        Path(DATASETS_DIR) / "ragbench" / "prepared" / "visual" / p.name,
+        Path(DATASETS_DIR) / "ragbench" / "en_eval" / p.name,
+        Path(DATASETS_DIR) / "ragbench" / "dev_frozen" / p.name,
+        Path(DATASETS_DIR) / "ragbench" / "visual" / p.name,
         Path(DATASETS_DIR) / p.name,
     ]
     for cand in candidates:
         if cand.is_file():
             return cand.resolve()
+    matches = sorted(Path(DATASETS_DIR).rglob(p.name))
+    if matches:
+        return matches[0].resolve()
     raise FileNotFoundError(f"No se encuentra el dataset: {ruta}")
 
 

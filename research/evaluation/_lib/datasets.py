@@ -31,7 +31,13 @@ PROJ_ROOT = os.path.dirname(os.path.dirname(EVAL_DIR))
 DATASETS_DIR = os.path.join(EVAL_DIR, "datasets")
 LOCAL_DATASETS_DIR = os.path.join(DATASETS_DIR, "local")
 RAGBENCH_DATASETS_DIR = os.path.join(DATASETS_DIR, "ragbench")
-RAGBENCH_PREPARED_DIR = os.path.join(RAGBENCH_DATASETS_DIR, "prepared")
+RAGBENCH_EVAL_DATASETS_DIR = os.path.join(RAGBENCH_DATASETS_DIR, "en_eval")
+RAGBENCH_DEV_FROZEN_DATASETS_DIR = os.path.join(RAGBENCH_DATASETS_DIR, "dev_frozen")
+RAGBENCH_VISUAL_DATASETS_DIR = os.path.join(RAGBENCH_DATASETS_DIR, "visual")
+# Backward-compatible alias: old code imported this name when RagBench lived
+# under datasets/ragbench/prepared/. New generated artifacts go directly under
+# datasets/ragbench/{en_eval,dev_frozen,visual}/.
+RAGBENCH_PREPARED_DIR = RAGBENCH_DATASETS_DIR
 RUNS_DIR = os.path.join(EVAL_DIR, "runs")
 RAGAS_RUNS_DIR = os.path.join(RUNS_DIR, "ragas")
 SINGLE_RUNS_DIR = os.path.join(RAGAS_RUNS_DIR, "single")
@@ -40,7 +46,11 @@ RAGBENCH_RUNS_DIR = os.path.join(RAGAS_RUNS_DIR, "ragbench")
 RAGBENCH_VISUAL_RUNS_DIR = os.path.join(RAGAS_RUNS_DIR, "ragbench_visual")
 TMP_DIR = os.path.join(EVAL_DIR, "tmp")
 
-SUPPORTED_CORPORA = ("es", "ca", "en", "mix")
+SUPPORTED_CORPORA = ("es", "ca", "en")
+BUNDLED_LOCAL_DATASETS = {
+    "es": os.path.join(LOCAL_DATASETS_DIR, "dataset_eval_es.json"),
+    "ca": os.path.join(LOCAL_DATASETS_DIR, "dataset_eval_ca.json"),
+}
 
 
 # ─────────────────────────────────────────────
@@ -98,6 +108,14 @@ def resolver_ruta_dataset(ruta: str) -> str:
                 "use research/evaluation/datasets/… to silence this message)"
             )
             return alt
+    matches = sorted(Path(DATASETS_DIR).rglob(name))
+    if matches:
+        resolved = str(matches[0].resolve())
+        print(
+            f"   Note: dataset path resolved to {resolved} (input was {ruta!r}; "
+            "update the stored path to silence this message)"
+        )
+        return resolved
     raise FileNotFoundError(
         f"Dataset file not found: {expanded}. "
         f"Bundled datasets are under {DATASETS_DIR!r}, "
@@ -114,8 +132,12 @@ def default_dataset_for_corpus(eval_corpus: str) -> str:
     if eval_corpus not in SUPPORTED_CORPORA:
         valid = ", ".join(SUPPORTED_CORPORA)
         raise ValueError(f"Unsupported corpus {eval_corpus!r}. Valid: {valid}")
-    name = f"dataset_eval_{eval_corpus}.json"
-    return os.path.join(LOCAL_DATASETS_DIR, name)
+    if eval_corpus not in BUNDLED_LOCAL_DATASETS:
+        raise FileNotFoundError(
+            f"No bundled default dataset for corpus {eval_corpus!r}. "
+            "Pass --dataset explicitly, or use the RagBench subcommands."
+        )
+    return BUNDLED_LOCAL_DATASETS[eval_corpus]
 
 
 def default_docs_dir_for_corpus(eval_corpus: str) -> str | None:
@@ -124,7 +146,6 @@ def default_docs_dir_for_corpus(eval_corpus: str) -> str | None:
         "es": None,
         "ca": os.path.join(PROJ_ROOT, "rag", "docs", "ca"),
         "en": os.path.join(PROJ_ROOT, "rag", "docs", "en"),
-        "mix": None,
         "ragbench": os.path.join(PROJ_ROOT, "rag", "docs", "en"),
     }
     return corpus_to_folder.get(eval_corpus)
@@ -136,7 +157,6 @@ def artifact_suffix(eval_corpus: str) -> str:
         "es": "_es",
         "ca": "_ca",
         "en": "_en",
-        "mix": "_mix",
         "ragbench": "_en",
     }
     return suffix_map.get(eval_corpus, f"_{eval_corpus}")
