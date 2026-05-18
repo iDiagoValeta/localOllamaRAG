@@ -1,0 +1,12 @@
+[
+  {
+    "question": "Question A",
+    "ground_truth": "A",
+    "paper_id": "paper_a"
+  },
+  {
+    "question": "Question C",
+    "ground_truth": "C",
+    "paper_id": "paper_c"
+  }
+]
