@@ -102,6 +102,8 @@ media/
 .conda/
 
 .codex
+.cursor/
+.codegraph/
 AGENTS.md
 
 repeticion_run_eval.py
