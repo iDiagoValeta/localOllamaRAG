@@ -50,40 +50,68 @@ PDFs are indexed once into a [ChromaDB](https://www.trychroma.com/) vector store
 
 ```mermaid
 flowchart TD
-    subgraph INDEXING
-        A[PDF corpus\nrag/docs/es · ca · en] --> B[Text extraction\npymupdf4llm / pypdf]
-        B --> C[Chunking\nsize · overlap · min-length]
-        C --> D{Optional stages}
-        D -->|USAR_CONTEXTUAL_RETRIEVAL| E[Chunk enrichment\nOLLAMA_CONTEXTUAL_MODEL]
-        D -->|USAR_EMBEDDINGS_IMAGEN| F[Image description\nOLLAMA_OCR_MODEL]
-        E --> G[Embedding\nOLLAMA_EMBED_MODEL]
-        F --> G
-        C --> G
-        G --> H[(ChromaDB\nrag/vector_db/)]
+    subgraph ENTRY["Entry points"]
+        A[CLI or Web interface] --> B{Interaction mode}
+        B -->|Free chat| C[General conversation]
+        B -->|Document query| D[Question about the corpus]
+        E[Corpus selection] --> F[Active PDF folder]
     end
-    subgraph RETRIEVAL
-        I[User question] --> J{USAR_LLM_QUERY_DECOMPOSITION}
-        J -->|yes| K[Sub-queries\nOLLAMA_CHAT_MODEL]
-        J -->|no| L[Semantic search]
-        K --> L
-        L --> M[Keyword search\nUSAR_BUSQUEDA_HIBRIDA]
-        M --> M2[Exhaustive scan\nUSAR_BUSQUEDA_EXHAUSTIVA]
-        M2 --> N[RRF fusion\n55% semantic · 45% lexical]
-        N --> O{USAR_RERANKER}
-        O -->|yes| P[Cross-encoder\nRERANKER_QUALITY]
-        O -->|no| Q[Top-K fragments\nTOP_K_FINAL]
-        P --> Q
-        Q --> Q2[Context expansion\nEXPANDIR_CONTEXTO]
-        Q2 --> R{USAR_RECOMP_SYNTHESIS}
-        R -->|yes| S[Context synthesis\nOLLAMA_RECOMP_MODEL]
-        R -->|no| T[Raw context]
+
+    subgraph INDEXING["Persistent indexing"]
+        F --> I1[PDF corpus]
+        I1 --> I2[Text extraction]
+        I1 --> I3[Visual extraction]
+        I3 --> I4[Image and table description]
+        I2 --> I5[Text fragmentation]
+        I4 --> I6[Visual fragments]
+        I5 --> I7[Context enrichment]
+        I6 --> I7
+        I7 --> I8[Vector encoding]
+        I8 --> I9[(Local vector store)]
     end
-    subgraph GENERATION
-        S --> U[Prompt assembly]
-        T --> U
-        U --> V[OLLAMA_RAG_MODEL\nstreaming response]
+
+    subgraph RETRIEVAL["Document retrieval"]
+        D --> R1{Valid question}
+        R1 -->|No| R2[Short-question rejection]
+        R1 -->|Yes| R3[Query reformulation]
+        R3 --> R4[Semantic search]
+        R3 --> R5[Lexical search]
+        R3 --> R6[Exact-term scan]
+        I9 --> R4
+        I9 --> R5
+        I9 --> R6
+        R4 --> R7[Candidate fusion]
+        R5 --> R7
+        R6 --> R7
+        R7 --> R8[Relevance reranking]
+        R8 --> R9[Result filtering]
+        R9 --> R10[Main fragment selection]
     end
-    H --> L
+
+    subgraph CONTEXT["Context preparation"]
+        R10 --> X1[Neighbor expansion]
+        X1 --> X2[Context cleanup and ordering]
+        X2 --> X3[Size control]
+        X3 --> X4{Context synthesis}
+        X4 -->|Yes| X5[Synthesized context]
+        X4 -->|No| X6[Optimized source context]
+    end
+
+    subgraph GENERATION["Answer generation"]
+        X5 --> G1[Question and context assembly]
+        X6 --> G1
+        G1 --> G2[Local answer generation]
+        G2 --> G3[Streaming answer]
+        G3 --> G4[Cited sources]
+        G3 --> G5[Interaction trace]
+    end
+
+    subgraph CHAT["Free chat"]
+        C --> C1[Recent conversation history]
+        C1 --> C2[Conversational generation]
+        C2 --> C3[Chat answer]
+        C3 --> C4[Updated history]
+    end
 ```
 
 ---
