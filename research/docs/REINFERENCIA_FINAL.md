@@ -8,6 +8,13 @@
 > tocan**: la reinferencia escribe en un árbol paralelo y, cuando termine la
 > nueva evaluación RAGAS, se sustituirán.
 >
+> **Estado (2026-05-19): corrida definitiva COMPLETADA.** Generación con
+> `phi4-finetuned:latest` y evaluación RAGAS con juez AWS Bedrock
+> (`eu.anthropic.claude-haiku-4-5-20251001-v1:0` + `amazon.titan-embed-text-v2:0`).
+> Resultados y análisis en
+> [`runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md`](../evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md)
+> y [`ANALISIS_METRICAS_ENTRENAMIENTO.md`](../evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md).
+>
 > Autor del TFG: Ignacio Diago Valeta · Tutor: Adrià Giménez Pastor · ETSINF — UPV.
 
 ---
@@ -57,22 +64,34 @@ Asumiendo que los Chroma ya están construidos para `embeddinggemma`, **no se
 reindexa** (`--reindex` se omite). El flag `--label` envía todo a un directorio
 paralelo `runs/ragas/comparisons/<label>/`, que evita pisar la primera pasada.
 
+> **Labels definitivos** (corrida final, generador `phi4-finetuned:latest`):
+> `reinferencia_v3_es_50_final`, `reinferencia_v3_ca_50_final_ca`,
+> `reinferencia_v3_en_ragbench_dev_50_final`,
+> `reinferencia_v2_en_ragbench_eval_40p`,
+> `reinferencia_v2_en_ragbench_visual_image_table_25p`.
+
 ```powershell
-# Español
+# Español (50q)
 python research/evaluation/infer.py compare --corpus es `
-    --label reinferencia_v2_es --verbose
+    --label reinferencia_v3_es_50_final --verbose
 
-# Catalán
+# Catalán (50q)
 python research/evaluation/infer.py compare --corpus ca `
-    --label reinferencia_v2_ca --verbose
+    --label reinferencia_v3_ca_50_final_ca --verbose
 
-# Inglés / RagBench eval 40p
+# Inglés / RagBench dev (50q, par baseline_all_on + all_off)
+python research/evaluation/infer.py compare --corpus en `
+    --dataset research/evaluation/datasets/ragbench/dev_frozen/dataset_ragbench_text_10p_5q_dev10_frozen.json `
+    --docs-dir rag/docs/en_ragbench_dev `
+    --label reinferencia_v3_en_ragbench_dev_50_final --verbose
+
+# Inglés / RagBench eval 40p (200q, solo baseline_all_on)
 python research/evaluation/infer.py compare --corpus en `
     --dataset research/evaluation/datasets/ragbench/en_eval/dataset_ragbench_en_eval_text_40p_5q_eval.json `
     --docs-dir rag/docs/en_ragbench_eval `
     --label reinferencia_v2_en_ragbench_eval_40p --verbose
 
-# Inglés / RagBench visual (text-image + text-table)
+# Inglés / RagBench visual text-image + text-table (125q, solo baseline_all_on)
 python research/evaluation/infer.py compare --corpus en `
     --dataset research/evaluation/datasets/ragbench/visual/dataset_ragbench_visual_image_table_25p_5q.json `
     --docs-dir rag/docs/en_ragbench_visual `
@@ -87,12 +106,19 @@ python research/evaluation/infer.py compare --corpus en `
 Cada ejecución produce:
 
 ```
-research/evaluation/runs/ragas/comparisons/reinferencia_v2_<corpus>/
+research/evaluation/runs/ragas/comparisons/<label-definitivo>/
 ├── checkpoints/<variant>.json   # ← entrada de evaluate.py en el siguiente paso
 ├── scores/<variant>.csv
 ├── debug/<variant>.json
 └── inference_summary.json
 ```
+
+La evaluación RAGAS (`evaluate.py --provider aws`) escribe en un árbol paralelo
+`research/evaluation/runs/ragas_aws_revaluation/comparisons/<label>/<variant>/{scores.csv,debug.json}`
+más `aws_ragas_revaluation/aws_ragas_summary.json` y agregados en `<label>/aggregates/`.
+Las métricas léxicas/embedding (`training_metrics.py`) van a
+`runs/ragas/comparisons/<label>/training_metrics/` con resumen global
+`runs/ragas/comparisons/training_metrics_comparison_all.csv`.
 
 ---
 
@@ -103,7 +129,7 @@ fijarlas en la sesión de PowerShell antes de invocar `infer.py`:
 
 ```powershell
 # OLLAMA_RAG_MODEL no hace falta exportarlo: chat_pdfs.py:158 ya tiene
-# default = "Qwen3-FineTuned:latest". El resto sigue el default del módulo
+# default = "phi4-finetuned:latest". El resto sigue el default del módulo
 # salvo que se quiera forzar.
 
 $env:OLLAMA_CHAT_MODEL       = "qwen3:14b"                # sub-queries
@@ -226,10 +252,11 @@ Cada `probe_<corpus>_<timestamp>.json` contiene:
 
 - **No tocar** `research/evaluation/runs/ragas/comparisons/todas_ablacion*/` ni
   `runs/ragas/ragbench/en_eval/`. Son la primera pasada.
-- Reinferencia nueva → siempre con `--label reinferencia_v2_<corpus>`.
+- Reinferencia definitiva → labels `reinferencia_v3_*_final` (es/ca/dev) y
+  `reinferencia_v2_en_ragbench_{eval_40p,visual_image_table_25p}`.
 - El día que la nueva pasada RAGAS supere a la vieja en `evaluation_comparison`
   consolidaremos: mover `todas_ablacion*` a `runs/ragas/_archive_v1/` y
-  renombrar `reinferencia_v2_*` a su sitio.
+  renombrar los labels definitivos a su sitio.
 - Los checkpoints son los únicos artefactos que `evaluate.py` consume — no
   hace falta versionar nada más en git.
 
@@ -239,7 +266,7 @@ Cada `probe_<corpus>_<timestamp>.json` contiene:
 
 1. **2 variantes finales** — la suite por defecto `final` usa
    `baseline_all_on` y `all_off`; la suite `ablation` queda como legacy.
-2. **Modelo generador**: `Qwen3-FineTuned:latest` (default en `chat_pdfs.py:158`).
+2. **Modelo generador**: `phi4-finetuned:latest` (default en `chat_pdfs.py:158`).
 3. **Datasets RagBench reubicados**:
    `research/evaluation/datasets/ragbench/{dev_frozen,en_eval,visual}/`.
 4. **Sonda de scores**: pendiente (ver §6 actualizado).
@@ -255,8 +282,9 @@ Cada `probe_<corpus>_<timestamp>.json` contiene:
 
 ## 9. Coste estimado
 
-Cada corpus ejecuta **2 variantes** (`baseline_all_on` y `all_off`). Con
-generación local (Ollama Qwen3-14B FT, streaming), cada variante son del orden
+Cada corpus pareado ejecuta **2 variantes** (`baseline_all_on` y `all_off`);
+RagBench eval_40p y visual solo `baseline_all_on`. Con generación local
+(Ollama `phi4-finetuned:latest`, streaming), cada variante son del orden
 de horas, no minutos. Conviene lanzar
 **una variante en background** con `run_in_background` y monitorizar con
 `Monitor` para no bloquear la sesión interactiva. **No** lanzar todo a la vez:

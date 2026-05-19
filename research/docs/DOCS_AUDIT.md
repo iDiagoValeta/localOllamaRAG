@@ -26,8 +26,10 @@
 | `research/docs/EVALUACIONES_PIPELINE.md` | Protocolo TFG de evaluación RAGAS | Tutor / autor | 2026-05-14 | Alto |
 | `research/docs/PROJECT_LAYOUT.md` | Árbol top-level del repo | Cualquiera | 2026-05-14 | Medio |
 | `research/docs/USER_SPARSE_CHECKOUT.md` | Cómo clonar sólo `rag/` con sparse checkout | Usuario final | 2026-05-14 | Bajo |
-| `research/docs/REINFERENCIA_FINAL.md` | Protocolo de segunda pasada de inferencia | Autor | 2026-05-14 | Medio |
-| `research/docs/DOCS_AUDIT.md` | Este índice | Autor | 2026-05-14 | — |
+| `research/docs/REINFERENCIA_FINAL.md` | Protocolo de la reinferencia definitiva (completada 2026-05-19) | Autor | 2026-05-19 | Medio |
+| `research/docs/DOCS_AUDIT.md` | Este índice | Autor | 2026-05-19 | — |
+| `research/evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md` | Informe RAGAS corrida definitiva (juez AWS Bedrock) | Tutor / autor | 2026-05-19 | Alto |
+| `research/evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md` | Token F1 / ROUGE-L / BERTScore + §12 cruce RAGAS | Tutor / autor | 2026-05-19 | Alto |
 | `research/models/gguf/gemma-3/README.md` | Estado final de Gemma-3 (abandonado) | HF Hub / tutor | 2026-05-14 | Bajo |
 | `research/models/gguf/phi-4/CONVERSION.md` | Checklist merge LoRA → GGUF → Ollama | Autor | 2026-05-14 | Bajo |
 | `research/models/gguf/phi-4/README.md` | Model card Phi-4 RAG fine-tuned | HF Hub / tutor | 2026-05-14 | Medio |

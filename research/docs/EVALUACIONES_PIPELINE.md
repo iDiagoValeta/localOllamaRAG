@@ -219,6 +219,12 @@ Por defecto escribe `training_metrics/<variant>.csv`,
 `training_metrics/comparison_training_metrics.csv` y, si se pasan varios
 directorios, un `training_metrics_comparison_all.csv` común.
 
+> **Corrida definitiva (2026-05-19)** — generador `phi4-finetuned:latest`, juez
+> RAGAS AWS Bedrock `eu.anthropic.claude-haiku-4-5-20251001-v1:0` +
+> `amazon.titan-embed-text-v2:0`. Análisis completos en
+> [`../evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md`](../evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md)
+> y [`ANALISIS_METRICAS_ENTRENAMIENTO.md`](../evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md).
+
 ---
 
 ## 4. Agregación por subconjunto (integrada en `evaluate.py`)

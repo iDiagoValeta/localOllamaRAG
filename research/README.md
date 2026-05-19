@@ -83,6 +83,8 @@ Salidas RAGAS → `research/evaluation/runs/ragas_<provider>_revaluation/`.
 
 Métricas adicionales tipo training: `python research/evaluation/training_metrics.py --checkpoint-dir <comparisons/label/checkpoints>`.
 
+> **Corrida definitiva (2026-05-19)** — generador `phi4-finetuned:latest`, juez RAGAS AWS Bedrock. Resultados y análisis: [`runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md`](evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md) y [`ANALISIS_METRICAS_ENTRENAMIENTO.md`](evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md) (§12 cruce BERTScore↔RAGAS).
+
 Providers, variables de entorno (`GOOGLE_API_KEY`, `NVIDIA_API_KEY`, `AWS_BEARER_TOKEN_BEDROCK`), modelos juez por defecto, opciones de agregación (`--aggregate-group-by`, `--aggregate-etiquetas-es`) y los detalles del flujo RagBench: ver [`docs/EVALUACIONES_PIPELINE.md`](docs/EVALUACIONES_PIPELINE.md).
 
 ---
