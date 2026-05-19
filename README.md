@@ -120,6 +120,23 @@ pip install -r rag/requirements.txt        # core RAG pipeline (required)
 pip install -r rag/web/requirements.txt    # web interface (optional)
 ```
 
+#### Lighter clone (sparse checkout, optional)
+
+If you only want the end-user RAG stack and can skip the thesis corpora and all
+of `research/`, use Git sparse checkout after cloning:
+
+```bash
+git clone --filter=blob:none --sparse https://github.com/iDiagoValeta/localOllamaRAG
+cd localOllamaRAG
+git sparse-checkout set rag README.md CLAUDE.md pytest.ini       # core only
+git sparse-checkout set rag README.md CLAUDE.md pytest.ini rag/docs/es  # + default ES PDFs
+```
+
+PowerShell (Git 2.25+) uses the same `git sparse-checkout set …` commands.
+Sparse checkout only hides paths locally; they still exist on the remote, so
+re-run `git sparse-checkout set …` if you later need `research/` or the
+`rag/docs/en_ragbench_*` trees.
+
 ### Pull models
 
 You need at minimum a generator and an embedding model:

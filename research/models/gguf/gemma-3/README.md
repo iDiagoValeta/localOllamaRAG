@@ -12,7 +12,7 @@ que mantenga la generación de caracteres no-ASCII (acentos, ñ, ç). Todas
 las muestras se truncan justo antes del primer byte multibyte.
 
 Detalles técnicos, intentos y diagnóstico:
-[`../../../conversion/GEMMA3_CONVERSION_ISSUE.md`](../../../conversion/GEMMA3_CONVERSION_ISSUE.md).
+[`../../../docs/GEMMA3_CONVERSION_ISSUE.md`](../../../docs/GEMMA3_CONVERSION_ISSUE.md).
 
 ## Qué se conserva en el repo
 

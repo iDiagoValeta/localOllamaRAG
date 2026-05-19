@@ -1,245 +1,288 @@
-# Evaluaciones del pipeline RAG
+# RAG pipeline evaluation protocol (TFG)
 
-Esta guía describe el protocolo de evaluación RAGAS usado en el TFG y los
-comandos concretos para reproducirlo. El flujo se divide en **tres fases**
-respaldadas por tres CLIs en `research/evaluation/` (más el paquete compartido
-`_lib/`):
+This guide describes the RAGAS evaluation protocol used in the TFG and the exact
+commands to reproduce it. The flow has **three phases**, backed by three CLIs in
+`research/evaluation/` plus the shared `_lib/` package:
 
-1. **`index.py`** — indexa el corpus en ChromaDB.
-2. **`infer.py`** — genera respuestas RAG y persiste checkpoints (sin RAGAS).
-3. **`evaluate.py`** — ejecuta RAGAS desde checkpoint con `--provider google|aws|nvidia` y agrega resultados por subconjunto del dataset.
+1. **`index.py`** — index the corpus into ChromaDB.
+2. **`infer.py`** — generate RAG answers and persist checkpoints (no RAGAS).
+3. **`evaluate.py`** — run RAGAS from a checkpoint with `--provider google|aws|nvidia` and aggregate results by dataset subset.
 
-Los scripts antiguos (`run_eval.py`, `eval_ragas_*_from_checkpoints.py`,
+Legacy scripts (`run_eval.py`, `eval_ragas_*_from_checkpoints.py`,
 `run_ragbench_visual_inference.py`, `evaluate_ragas_bertscore.py`,
-`judge_benchmark.py`, `aggregate_comparison_by_conjunto.py`) **han sido
-sustituidos**; toda su lógica vive ahora en `_lib/` o como subcomando de los
-tres CLIs.
+`judge_benchmark.py`, `aggregate_comparison_by_conjunto.py`) **have been
+superseded**; their logic now lives in `_lib/` or as subcommands of the three CLIs.
+
+> **Definitive run — completed 2026-05-19.** Generator `phi4-finetuned:latest`;
+> RAGAS judge AWS Bedrock `eu.anthropic.claude-haiku-4-5-20251001-v1:0` +
+> `amazon.titan-embed-text-v2:0` (`eu-north-1`, workers=8, batch=8). Definitive
+> labels: `reinferencia_v3_es_50_final`, `reinferencia_v3_ca_50_final_ca`,
+> `reinferencia_v3_en_ragbench_dev_50_final` (paired `baseline_all_on` +
+> `all_off`), `reinferencia_v2_en_ragbench_eval_40p` (200q, `baseline_all_on`
+> only), `reinferencia_v2_en_ragbench_visual_image_table_25p` (125q,
+> `baseline_all_on` only). Full analysis:
+> [`../evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md`](../evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md)
+> and [`ANALISIS_METRICAS_ENTRENAMIENTO.md`](../evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md)
+> (§12 BERTScore↔RAGAS cross-check).
 
 ---
 
-## 1. Indexación
+## 1. Indexing
 
 ```powershell
 python research\evaluation\index.py --corpus es              # rag/docs/es → ChromaDB
-python research\evaluation\index.py --corpus ca --force      # reconstruye desde cero
+python research\evaluation\index.py --corpus ca --force      # rebuild from scratch
 python research\evaluation\index.py --corpus en
-python research\evaluation\index.py --corpus ragbench-eval   # usa el file-filter del manifest RagBench EN
-python research\evaluation\index.py --docs-dir ruta\custom --force
+python research\evaluation\index.py --corpus ragbench-eval   # uses the RagBench EN manifest file-filter
+python research\evaluation\index.py --docs-dir path\custom --force
 ```
 
-El destino se deriva de `rag.chat_pdfs.PATH_DB` (`rag/vector_db/{folder}_{embed_slug}/`).
-Solo crea la base si no existe; usa `--force` para borrarla y reindexar.
+The destination is derived from `rag.chat_pdfs.PATH_DB`
+(`rag/vector_db/{folder}_{embed_slug}/`). The DB is created only if it does not
+exist; use `--force` to drop and reindex.
 
 ---
 
-## 2. Inferencia (checkpoints sin RAGAS)
+## 2. Inference (checkpoints, no RAGAS)
 
-### 2.1. Corpus locales
+### 2.1. Local corpora
 
-Presets de corpus:
+Corpus presets:
 
-| Corpus | Dataset por defecto | PDFs por defecto |
+| Corpus | Default dataset | Default PDFs |
 | --- | --- | --- |
 | `es` | `research/evaluation/datasets/local/dataset_eval_es.json` | `rag/docs/es` |
 | `ca` | `research/evaluation/datasets/local/dataset_eval_ca.json` | `rag/docs/ca` |
-| `en` | sin dataset local por defecto; usar `--dataset` o los subcomandos RagBench | `rag/docs/en` |
+| `en` | no default local dataset; use `--dataset` or the RagBench subcommands | `rag/docs/en` |
 
-Formato de dataset (cualquiera de los soportados — JSON/CSV/Excel):
-columna `question` o `pregunta`, opcional `ground_truth` (alias aceptados:
-`reference`, `respuesta_esperada`, `respuesta_referencia`).
+Dataset format (any supported — JSON/CSV/Excel): a `question` or `pregunta`
+column, optional `ground_truth` (accepted aliases: `reference`,
+`respuesta_esperada`, `respuesta_referencia`).
 
 ```powershell
-# 1 variante (baseline_all_on) sobre el corpus indicado
+# 1 variant (baseline_all_on) on the given corpus
 python research\evaluation\infer.py single --corpus es
 
-# Suite final por defecto (2 variantes: baseline_all_on + all_off)
-python research\evaluation\infer.py compare --corpus ca --label mi_eval_ca_final --reindex
+# Default final suite (2 variants: baseline_all_on + all_off)
+python research\evaluation\infer.py compare --corpus ca --label my_eval_ca_final --reindex
 
-# Suite ablation legacy completa (9 variantes)
-python research\evaluation\infer.py compare --corpus ca --suite ablation --label mi_eval_ca_ablation --reindex
+# Legacy full ablation suite (9 variants)
+python research\evaluation\infer.py compare --corpus ca --suite ablation --label my_eval_ca_ablation --reindex
 
-# Listar variantes
+# List variants
 python research\evaluation\infer.py list-variants
 ```
 
-### 2.2. Suites de variantes
+### 2.2. Variant suites
 
-La suite por defecto es `final`: ejecuta solo `baseline_all_on` y `all_off`.
-Es la que se usa en la reinferencia final para evitar multiplicar análisis.
-La suite `ablation` queda disponible como flujo legacy: añade las variantes
-`no_*`, donde cada una desactiva exactamente una fase opcional. Todas las
-variantes de una misma comparación comparten la colección ChromaDB; `--reindex`
-solo afecta a la primera.
+The default suite is `final`: only `baseline_all_on` and `all_off`. It is the
+one used in the definitive run to avoid multiplying analyses. The `ablation`
+suite remains available as a legacy flow: it adds the `no_*` variants, each
+disabling exactly one optional stage. All variants of a comparison share the
+ChromaDB collection; `--reindex` only affects the first.
 
-| Variante | Cambio |
+| Variant | Change |
 | --- | --- |
-| `baseline_all_on` | Todas las etapas opcionales activadas |
-| `no_query_decomposition` | Desactiva `USAR_LLM_QUERY_DECOMPOSITION` |
-| `no_lexical_search` | Desactiva `USAR_BUSQUEDA_HIBRIDA` |
-| `no_exhaustive_search` | Desactiva `USAR_BUSQUEDA_EXHAUSTIVA` |
-| `no_reranker` | Desactiva `USAR_RERANKER` |
-| `no_context_expansion` | Desactiva `EXPANDIR_CONTEXTO` |
-| `no_context_optimization` | Desactiva `USAR_OPTIMIZACION_CONTEXTO` |
-| `no_recomp_synthesis` | Desactiva `USAR_RECOMP_SYNTHESIS` |
-| `all_off` | Todas las etapas opcionales desactivadas (recuperación semántica pura + filtro por umbral) |
+| `baseline_all_on` | All optional stages enabled |
+| `no_query_decomposition` | Disables `USAR_LLM_QUERY_DECOMPOSITION` |
+| `no_lexical_search` | Disables `USAR_BUSQUEDA_HIBRIDA` |
+| `no_exhaustive_search` | Disables `USAR_BUSQUEDA_EXHAUSTIVA` |
+| `no_reranker` | Disables `USAR_RERANKER` |
+| `no_context_expansion` | Disables `EXPANDIR_CONTEXTO` |
+| `no_context_optimization` | Disables `USAR_OPTIMIZACION_CONTEXTO` |
+| `no_recomp_synthesis` | Disables `USAR_RECOMP_SYNTHESIS` |
+| `all_off` | All optional stages disabled (pure semantic retrieval + threshold filter) |
 
-Etapas excluidas de la suite por defecto: `USAR_CONTEXTUAL_RETRIEVAL` y
-`USAR_EMBEDDINGS_IMAGEN` afectan al contenido **indexado**, no a la
-inferencia. Para compararlas hace falta una colección distinta por
-configuración (reindexar). Se ejecutan como experimentos separados y se
-etiquetan explícitamente.
+Stages excluded from the default suite: `USAR_CONTEXTUAL_RETRIEVAL` and
+`USAR_EMBEDDINGS_IMAGEN` affect the **indexed** content, not inference. Comparing
+them requires a different collection per configuration (reindex). They are run as
+separate, explicitly labelled experiments.
 
-### 2.3. RagBench EN (corpus final fijo)
+### 2.3. RagBench EN (fixed final corpus)
 
 ```powershell
-python research\evaluation\infer.py ragbench-prepare   # descarga PDFs + manifest
-python research\evaluation\infer.py ragbench-eval      # inferencia sobre el manifest
+python research\evaluation\infer.py ragbench-prepare   # downloads PDFs + manifest
+python research\evaluation\infer.py ragbench-eval      # inference over the manifest
 ```
 
 - Manifest: `research/evaluation/datasets/ragbench/en_eval/ragbench_en_eval_manifest_40p.json`
 - PDFs: `rag/docs/en_ragbench_eval/`
-- Excluye el split dev congelado declarado en `research/evaluation/datasets/ragbench/dev_frozen/ragbench_en_dev_manifest_10p_5q_frozen.json`.
+- Excludes the frozen dev split declared in `research/evaluation/datasets/ragbench/dev_frozen/ragbench_en_dev_manifest_10p_5q_frozen.json`.
 - ChromaDB: `rag/vector_db/en_ragbench_eval_<embed_slug>/`
 
-### 2.4. RagBench visual (tablas e imágenes)
+### 2.4. RagBench visual (tables and images)
 
 ```powershell
 python research\evaluation\infer.py visual --n-papers 25 --max-q 5
 ```
 
-- Filtra solo preguntas `text-image` y `text-table` del split.
+- Filters only `text-image` and `text-table` questions from the split.
 - PDFs: `rag/docs/en_ragbench_visual/`
 - ChromaDB: `rag/vector_db/en_ragbench_visual_<embed_slug>/`
-- El subcomando `visual` prepara el dataset y ejecuta una inferencia all-on.
-  Para la comparación final (`baseline_all_on` vs `all_off`), usar
+- The `visual` subcommand prepares the dataset and runs an all-on inference. For
+  the final comparison (`baseline_all_on` vs `all_off`) use
   `infer.py compare --dataset research/evaluation/datasets/ragbench/visual/dataset_ragbench_visual_image_table_25p_5q.json --docs-dir rag/docs/en_ragbench_visual`.
-- Salidas: `research/evaluation/runs/ragas/ragbench_visual/inference/<tag>/results.{csv,json}` y `checkpoint.json`.
+- Output: `research/evaluation/runs/ragas/ragbench_visual/inference/<tag>/results.{csv,json}` and `checkpoint.json`.
 
-### 2.5. Fallback de reranker en RagBench
+### 2.5. RagBench reranker fallback
 
-En cualquier flujo RagBench (`ragbench-eval`, `visual` y cualquier dataset
-preparado bajo `research/evaluation/datasets/ragbench/`) el runner
-activa un *fallback*: si el reranker puntúa todos los candidatos por debajo
-de `UMBRAL_SCORE_RERANKER`, conserva los mejores candidatos recuperados en
-vez de devolver contexto vacío. **No** equivale a apagar el reranker — sigue
-reordenando los fragmentos; solo se desactiva como filtro duro cuando dejaría
-la pregunta sin contexto.
+In any RagBench flow (`ragbench-eval`, `visual`, and any dataset prepared under
+`research/evaluation/datasets/ragbench/`) the runner enables a *fallback*: if the
+reranker scores every candidate below `UMBRAL_SCORE_RERANKER`, it keeps the best
+retrieved candidates instead of returning empty context. This is **not** the same
+as turning the reranker off — it still reorders fragments; it only stops acting
+as a hard filter when that would leave the question with no context. Reason:
+RagBench has very short factual questions where the cross-encoder sometimes
+scores useful evidence below the threshold calibrated to avoid noise in
+interactive chat.
 
-Motivo: RagBench contiene preguntas factuales muy cortas donde el
-cross-encoder a veces puntúa evidencia útil por debajo del umbral calibrado
-para evitar ruido en chat interactivo.
+### 2.6. Checkpoint schema
 
-### 2.6. Esquema de checkpoint
-
-Cada inferencia escribe un checkpoint JSON reanudable que `evaluate.py`
-consume. Contiene como mínimo:
+Each inference writes a resumable JSON checkpoint that `evaluate.py` consumes. It
+contains at least:
 
 - `dataset_path`, `questions_count`, `eval_corpus`, `docs_dir`
-- `pipeline_flags` (snapshot de las flags efectivas)
-- `modelo_rag`, `modelo_chat`, `modelo_embedding`, `modelo_recomp` (invalidan
-  el checkpoint si cambian entre corridas)
-- `answers`, `contexts_list`, `question_statuses` (estado por pregunta)
-- `ragbench_reranker_low_score_fallback` (booleano, ver §2.5)
+- `pipeline_flags` (snapshot of the effective flags)
+- `modelo_rag`, `modelo_chat`, `modelo_embedding`, `modelo_recomp` (invalidate the checkpoint if they change between runs)
+- `answers`, `contexts_list`, `question_statuses` (per-question state)
+- `ragbench_reranker_low_score_fallback` (boolean, see §2.5)
+
+### 2.7. Environment configuration before launching
+
+All settings are **environment variables** read by `chat_pdfs.py` at import.
+Set them in the PowerShell session before invoking `infer.py`:
+
+```powershell
+# OLLAMA_RAG_MODEL need not be exported: chat_pdfs.py:158 already defaults to
+# "phi4-finetuned:latest". The rest follow module defaults unless forced.
+
+$env:OLLAMA_CHAT_MODEL       = "qwen3:14b"                # sub-queries
+$env:OLLAMA_EMBED_MODEL      = "embeddinggemma:latest"
+$env:OLLAMA_CONTEXTUAL_MODEL = "qwen3:14b"
+$env:OLLAMA_RECOMP_MODEL     = "qwen3:14b"
+$env:OLLAMA_OCR_MODEL        = "qwen3-vl:8b"
+
+# Ollama context sizes (root cause of the truncation seen in the old pass)
+$env:OLLAMA_NUM_CTX             = "8192"
+$env:OLLAMA_RAG_NUM_CTX         = "16384"
+$env:OLLAMA_AUX_NUM_CTX         = "8192"
+$env:OLLAMA_QUERY_NUM_CTX       = "8192"
+$env:OLLAMA_RECOMP_NUM_CTX      = "8192"
+$env:OLLAMA_CONTEXTUAL_NUM_CTX  = "32768"
+$env:OLLAMA_OCR_NUM_CTX         = "8192"
+$env:OLLAMA_REQUEST_TIMEOUT     = "900s"
+```
+
+`UMBRAL_SCORE_RERANKER` is **not** env-overridable; it is a module constant in
+`rag/chat_pdfs.py`. **Closed decision (2026-05-14): raised 0.55 → 0.65**,
+informed by the reranker score probe (`research/evaluation/probe_reranker_scores.py`):
+0.70 collapsed CA-Q3 to a single candidate (multi-evidence risk); 0.65 keeps the
+post-noise plateau across the three corpora (ES 30 candidates, CA 15,
+EN-RagBench 34 over 8 questions). Rationale: precision > recall in context — the
+RAGAS judge penalizes irrelevant chunks.
+
+> **Resilience to truncated/empty answers (verified 2026-05-14).** On resume,
+> `_lib/inference.py` applies two detection layers before computing pending work:
+> (1) **empty answers** — `indices_respuestas_vacias` (`checkpoints.py`) returns
+> indices with no non-empty answer; (2) **truncated answers** —
+> `respuesta_truncada` (`checkpoints.py`) flags non-empty answers whose last
+> character is not terminal punctuation (`. ! ? » " ' ) …`) as
+> `status=failed/respuesta_truncada` and re-queues them. Therefore **re-running
+> `infer.py compare` with the same `--label` is enough**: the checkpoint in
+> `runs/ragas/comparisons/<label>/checkpoints/<variant>.json` is loaded on start
+> and only pending questions are regenerated (no `--resume` needed). If pipeline
+> flags or models change between passes, `checkpoint_pipeline_flags_match` /
+> `checkpoint_models_match` invalidate the checkpoint and the variant restarts.
 
 ---
 
-## 3. RAGAS desde checkpoint (`evaluate.py`)
+## 3. RAGAS from checkpoint (`evaluate.py`)
 
-`evaluate.py` **nunca** genera respuestas — solo aplica RAGAS sobre los
-checkpoints producidos por `infer.py`. Soporta tres jueces:
+`evaluate.py` **never** generates answers — it only applies RAGAS to the
+checkpoints produced by `infer.py`. It supports three judges:
 
 ```powershell
-# Google Gemini (default; requiere GOOGLE_API_KEY)
+# Google Gemini (default; requires GOOGLE_API_KEY)
 python research\evaluation\evaluate.py --provider google `
-  --source-root research\evaluation\runs\ragas\comparisons\mi_eval_ca_ablation
+  --source-root research\evaluation\runs\ragas\comparisons\my_eval_ca_ablation
 
-# NVIDIA NIM (requiere NVIDIA_API_KEY; rate-limit ajustable)
+# NVIDIA NIM (requires NVIDIA_API_KEY; tunable rate limit)
 python research\evaluation\evaluate.py --provider nvidia --all-known `
   --nvidia-rate-limit-per-minute 40
 
-# AWS Bedrock (requiere AWS_BEARER_TOKEN_BEDROCK o boto3 profile)
+# AWS Bedrock (requires AWS_BEARER_TOKEN_BEDROCK or a boto3 profile)
 python research\evaluation\evaluate.py --provider aws --all-known --dry-run
 ```
 
-Selección de checkpoints:
+Checkpoint selection:
 
-- `--checkpoint PATH` — uno o varios (repetible) o un directorio (`*.json`).
-- `--all-known` — descubre automáticamente los checkpoints conocidos bajo
-  `--source-root` (`comparisons/*/checkpoints/*.json`, `single/**/checkpoint*.json`,
+- `--checkpoint PATH` — one or many (repeatable) or a directory (`*.json`).
+- `--all-known` — auto-discovers known checkpoints under `--source-root`
+  (`comparisons/*/checkpoints/*.json`, `single/**/checkpoint*.json`,
   `ragbench/**/checkpoint.json`, `ragbench_visual/**/checkpoint.json`,
   `ragbench_visual/**/results.json`).
-- `--source-root PATH` — combinado con `--all-known`, restringe el descubrimiento.
-- `--retry-failed` — re-evalúa **solo** las filas con celdas NaN del
-  `scores.csv` previo y fusiona el resultado.
-- `--limit N` — recorta a las primeras N preguntas de cada checkpoint
-  (smoke tests).
-- `--dry-run` — lista lo que evaluaría sin ejecutar RAGAS.
+- `--source-root PATH` — with `--all-known`, restricts discovery.
+- `--retry-failed` — re-evaluates **only** rows with NaN cells in the previous `scores.csv` and merges the result.
+- `--limit N` — truncates to the first N questions per checkpoint (smoke tests).
+- `--dry-run` — lists what it would evaluate without running RAGAS.
 
-Métricas RAGAS por defecto (con ground truth):
+Default RAGAS metrics (with ground truth):
 
-- `answer_correctness` — precisión factual vs. referencia (TP/FP/FN, F1).
-- `faithfulness` — consistencia respuesta ↔ contexto recuperado.
-- `answer_relevancy` — adecuación respuesta ↔ pregunta.
-- `context_precision` — orden de fragmentos recuperados.
-- `context_recall` — cobertura del contexto necesario.
+- `answer_correctness` — factual precision vs reference (TP/FP/FN, F1).
+- `faithfulness` — answer ↔ retrieved-context consistency.
+- `answer_relevancy` — answer ↔ question adequacy.
+- `context_precision` — ordering of retrieved fragments.
+- `context_recall` — coverage of the required context.
 
-Filtrar a un subconjunto con `--metrics faithfulness,answer_relevancy` o
-todas con `--metrics all`.
+Filter to a subset with `--metrics faithfulness,answer_relevancy` or all with
+`--metrics all`.
 
-### 3.1. Salidas
+### 3.1. Outputs
 
-Cada provider escribe bajo su propia raíz, espejando la ruta relativa del
-checkpoint:
+Each provider writes under its own root, mirroring the checkpoint's relative path:
 
 ```
 runs/ragas_google_revaluation/    runs/ragas_aws_revaluation/    runs/ragas_nvidia_revaluation/
 └── comparisons/<label>/<variant>/
-    ├── scores.csv         # tabla RAGAS (una fila por pregunta + métricas)
-    ├── debug.json         # respuestas, contextos (preview), justificaciones del juez
+    ├── scores.csv         # RAGAS table (one row per question + metrics)
+    ├── debug.json         # answers, context previews, judge justifications
     └── ...
-└── <provider>_ragas_summary.json   # índice de todos los checkpoints evaluados
+└── <provider>_ragas_summary.json   # index of every evaluated checkpoint
 ```
 
-`scores.csv` tiene como columnas las métricas seleccionadas más los campos
-canónicos RAGAS (`user_input`, `response`, `retrieved_contexts`, `reference`).
-`debug.json` añade prompts internos del juez (justifications) para
-trazabilidad.
+`scores.csv` columns are the selected metrics plus the canonical RAGAS fields
+(`user_input`, `response`, `retrieved_contexts`, `reference`). `debug.json` adds
+the judge's internal justifications for traceability.
 
-### 3.2. Métricas adicionales tipo training
+### 3.2. Training-style metrics
 
-`training_metrics.py` calcula Token F1, ROUGE-L y BERTScore directamente desde
-los checkpoints de `infer.py`. No llama a RAGAS ni regenera respuestas.
+`training_metrics.py` computes Token F1, ROUGE-L and BERTScore directly from the
+`infer.py` checkpoints. It does not call RAGAS or regenerate answers.
 
 ```powershell
 python research\evaluation\training_metrics.py `
   --checkpoint-dir research\evaluation\runs\ragas\comparisons\reinferencia_v2_en_ragbench_eval_40p\checkpoints
 ```
 
-Por defecto escribe `training_metrics/<variant>.csv`,
-`training_metrics/comparison_training_metrics.csv` y, si se pasan varios
-directorios, un `training_metrics_comparison_all.csv` común.
-
-> **Corrida definitiva (2026-05-19)** — generador `phi4-finetuned:latest`, juez
-> RAGAS AWS Bedrock `eu.anthropic.claude-haiku-4-5-20251001-v1:0` +
-> `amazon.titan-embed-text-v2:0`. Análisis completos en
-> [`../evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md`](../evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md)
-> y [`ANALISIS_METRICAS_ENTRENAMIENTO.md`](../evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md).
+By default it writes `training_metrics/<variant>.csv`,
+`training_metrics/comparison_training_metrics.csv` and, if several directories
+are passed, a shared `training_metrics_comparison_all.csv`.
 
 ---
 
-## 4. Agregación por subconjunto (integrada en `evaluate.py`)
+## 4. Per-subset aggregation (built into `evaluate.py`)
 
-Tras una run de comparación, `evaluate.py` genera automáticamente medias
-**variante × subconjunto × métrica** alineando cada fila del debug con la
-posición del dataset. Se controla con:
+After a comparison run, `evaluate.py` automatically produces
+**variant × subset × metric** means by aligning each debug row with the dataset
+position. Controlled with:
 
 ```powershell
-# Default: agrupa por source_type
+# Default: group by source_type
 python research\evaluation\evaluate.py --provider google --all-known
 
-# Múltiples agrupaciones + etiquetas en castellano para la memoria
+# Multiple groupings + Spanish labels for the thesis
 python research\evaluation\evaluate.py --provider google `
-  --source-root research\evaluation\runs\ragas\comparisons\mi_eval_ca_ablation `
+  --source-root research\evaluation\runs\ragas\comparisons\my_eval_ca_ablation `
   --aggregate-group-by source_type,language `
   --aggregate-etiquetas-es
 
@@ -247,84 +290,66 @@ python research\evaluation\evaluate.py --provider google `
 python research\evaluation\evaluate.py --provider nvidia --all-known --no-aggregate
 ```
 
-Subconjuntos soportados:
+Supported subsets:
 
-| Valor | Conjunto por |
+| Value | Grouped by |
 | --- | --- |
-| `source_type` | Campo `source_type` del dataset (default) |
-| `language` | Campo `language` si el dataset lo incluye |
+| `source_type` | Dataset `source_type` field (default) |
+| `language` | `language` field if the dataset includes it |
 | `source_type_language` | `source_type` + `language` |
-| `id_prefix` | Prefijo del `id` antes del bloque numérico final (p. ej. `wiki_es` en `wiki_es_001`) |
+| `id_prefix` | `id` prefix before the final numeric block (e.g. `wiki_es` in `wiki_es_001`) |
 
-Salidas (junto al run de comparación, mirroring de `output_root`):
+Outputs (next to the comparison run, mirroring `output_root`):
 
-- `aggregates/by_conjunto_<criterio>.json` (o `_metricas_es.json` con etiquetas en castellano).
-- `aggregates/resumen_por_conjunto_<criterio>.csv` — tabla larga
-  (variante × conjunto × métrica) lista para importar en la memoria.
+- `aggregates/by_conjunto_<criterion>.json` (or `_metricas_es.json` with Spanish labels).
+- `aggregates/resumen_por_conjunto_<criterion>.csv` — long table (variant × subset × metric), ready to import into the thesis.
 
-Solo se agregan automáticamente las runs de comparación (`comparisons/<label>/`).
-`single`, `ragbench-eval` y `visual` no se agregan porque por construcción
-solo tienen una variante.
+Only comparison runs (`comparisons/<label>/`) are auto-aggregated. `single`,
+`ragbench-eval` and `visual` are not, since by construction they have a single
+variant.
 
-**Agregación acumulativa (verificado 2026-05-15):** el paso de agregación no
-se limita a las variantes evaluadas en la llamada actual. Antes de agregar,
-escanea `output_root/comparisons/<label>/*/debug.json` e incorpora todas las
-variantes ya evaluadas en pasadas anteriores. Esto permite evaluar **variante
-a variante** (`--checkpoint <variante>.json`) y obtener igualmente un aggregate
-completo: cada variante vive en su propia carpeta
-`comparisons/<label>/<variante>/` (nombre tomado del stem del checkpoint), las
-ya evaluadas se saltan con `[skip] exists` sin volver a llamar al juez salvo
-`--overwrite`, y el aggregate refleja siempre el total acumulado. No es
-necesario reevaluar todo con `--source-root --overwrite`.
+**Cumulative aggregation (verified 2026-05-15):** the aggregation step is not
+limited to the variants evaluated in the current call. Before aggregating it
+scans `output_root/comparisons/<label>/*/debug.json` and incorporates every
+variant already evaluated in earlier passes. This allows **variant-by-variant**
+evaluation (`--checkpoint <variant>.json`) while still getting a complete
+aggregate: already-evaluated variants are `[skip] exists` unless `--overwrite`,
+and the aggregate always reflects the cumulative total.
 
 ---
 
-## 5. Protocolo TFG (mesa principal por idioma)
+## 5. TFG protocol (main table per language)
 
-Comandos canónicos:
+Canonical commands:
 
 ```powershell
-# Fase 1 — inferencia (suite final: baseline_all_on + all_off)
-python research\evaluation\infer.py compare --corpus es --label mi_eval_es_final --reindex
-python research\evaluation\infer.py compare --corpus ca --label mi_eval_ca_final --reindex
-python research\evaluation\infer.py compare --corpus en --dataset <dataset_en.json> --label mi_eval_en_final --reindex
+# Phase 1 — inference (final suite: baseline_all_on + all_off)
+python research\evaluation\infer.py compare --corpus es --label my_eval_es_final --reindex
+python research\evaluation\infer.py compare --corpus ca --label my_eval_ca_final --reindex
+python research\evaluation\infer.py compare --corpus en --dataset <dataset_en.json> --label my_eval_en_final --reindex
 
-# Fase 2 — RAGAS + agregación (juez Gemini, etiquetas en castellano)
-python research\evaluation\evaluate.py --provider google `
-  --source-root research\evaluation\runs\ragas\comparisons\mi_eval_es_final `
-  --aggregate-etiquetas-es
-python research\evaluation\evaluate.py --provider google `
-  --source-root research\evaluation\runs\ragas\comparisons\mi_eval_ca_final `
-  --aggregate-etiquetas-es
-python research\evaluation\evaluate.py --provider google `
-  --source-root research\evaluation\runs\ragas\comparisons\mi_eval_en_final `
+# Phase 2 — RAGAS + aggregation
+python research\evaluation\evaluate.py --provider aws `
+  --source-root research\evaluation\runs\ragas\comparisons\my_eval_es_final `
   --aggregate-etiquetas-es
 ```
 
-### 5.1. Interpretación recomendada
+### 5.1. Recommended interpretation
 
-- `answer_correctness` mide cercanía a la referencia (TP/FP/FN basados en
-  hechos atomizados por el juez).
-- `faithfulness` mide consistencia de la respuesta con los **contextos
-  exportados a RAGAS** (es decir, `retrieved_contexts`).
-- `answer_relevancy` mide si la respuesta atiende la pregunta del usuario.
-- `context_precision` y `context_recall` se calculan sobre `retrieved_contexts`,
-  que son los chunks **crudos** devueltos por la recuperación final. Etapas
-  como RECOMP u optimización de contexto pueden cambiar la respuesta
-  generada sin cambiar necesariamente esos chunks → un `faithfulness` que
-  baja al desactivar RECOMP indica respuestas menos fieles al contexto crudo
-  *sin* que el recall del retriever se vea afectado.
+- `answer_correctness` measures closeness to the reference (TP/FP/FN over facts atomized by the judge).
+- `faithfulness` measures consistency of the answer with the **contexts exported to RAGAS** (`retrieved_contexts`).
+- `answer_relevancy` measures whether the answer addresses the user's question.
+- `context_precision` / `context_recall` are computed over `retrieved_contexts`, the **raw** chunks returned by final retrieval. Stages like RECOMP or context optimization can change the generated answer without changing those chunks → a `faithfulness` drop when disabling RECOMP means answers less faithful to the raw context *without* the retriever recall being affected.
 
-Para reducir variabilidad del juez LLM, el protocolo separa generación
-(`infer.py`, una vez) de evaluación (`evaluate.py`, reproducible y
-relanzable contra los mismos checkpoints). Cambios de juez o de provider
-no requieren regenerar respuestas.
+To reduce LLM-judge variability the protocol separates generation (`infer.py`,
+once) from evaluation (`evaluate.py`, reproducible and rerunnable against the
+same checkpoints). Changing judge or provider does not require regenerating
+answers.
 
-### 5.2. Re-evaluación entre proveedores
+### 5.2. Cross-provider re-evaluation
 
-Como la inferencia y la evaluación están desacopladas, una misma corrida
-ablation puede ser puntuada por los tres jueces para reportar correlaciones
-o robustez:
+Because inference and evaluation are decoupled, the same ablation run can be
+scored by all three judges to report correlation/robustness:
 
 ```powershell
 python research\evaluation\evaluate.py --provider google  --source-root … --aggregate-etiquetas-es
@@ -332,25 +357,21 @@ python research\evaluation\evaluate.py --provider nvidia  --source-root … --nv
 python research\evaluation\evaluate.py --provider aws     --source-root … --aws-region eu-north-1
 ```
 
-Cada provider escribe en `runs/ragas_<provider>_revaluation/` sin pisarse.
+Each provider writes to `runs/ragas_<provider>_revaluation/` without clobbering.
 
 ---
 
-## 6. Verificación rápida
+## 6. Quick verification
 
-Después de cualquier cambio en el pipeline o en el runner:
+After any change to the pipeline or runner:
 
 ```powershell
-# Smoke test (10 preguntas, 1 variante)
+# Smoke test (10 questions, 1 variant)
 python research\evaluation\infer.py single --corpus es
 python research\evaluation\evaluate.py --provider google `
   --checkpoint research\evaluation\runs\ragas\single\dataset_eval_es_es\checkpoint_recomp_on.json `
   --limit 10 --dry-run
-```
 
-Tests automáticos sobre la plumbing (checkpoint I/O, RagBench filters,
-visual export):
-
-```powershell
-pytest research\tests\evaluation\
+# Plumbing tests (checkpoint I/O, RagBench filters, visual export)
+pytest research\tests\evaluation
 ```

@@ -7,9 +7,7 @@ STAGE="$(mktemp -d)"
 cleanup() { rm -rf "$STAGE"; }
 trap cleanup EXIT
 
-mkdir -p "$STAGE/docs"
 cp "$REPO_ROOT/README.md" "$REPO_ROOT/CLAUDE.md" "$REPO_ROOT/pytest.ini" "$STAGE/"
-cp "$REPO_ROOT/research/docs/PROJECT_LAYOUT.md" "$REPO_ROOT/research/docs/USER_SPARSE_CHECKOUT.md" "$STAGE/docs/"
 
 rsync -a --exclude 'en_ragbench_dev' --exclude 'en_ragbench_eval' --exclude 'en_ragbench_visual' \
   --exclude 'vector_db' --exclude 'debug_rag' --exclude '__pycache__' --exclude 'web/frontend/node_modules' \

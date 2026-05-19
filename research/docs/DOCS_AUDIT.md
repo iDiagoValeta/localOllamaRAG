@@ -1,55 +1,64 @@
-# Inventario y auditoría de documentación
+# Documentation inventory and audit
 
-> Único índice de toda la documentación del repositorio. Cada fila indica
-> propósito, audiencia y la última fecha en que se verificó contra el código.
-> Se actualiza tras cada cambio en el doc correspondiente.
+> Single index of all repository documentation. Each row states purpose,
+> audience and the last date it was verified against the code. Update it after
+> any change to the corresponding doc.
 >
-> **Política de qué se documenta dónde** (para evitar drift entre docs):
+> **What is documented where** (to avoid drift between docs):
 >
-> - `CLAUDE.md` → reglas operativas para Claude Code (símbolos públicos, flags
->   prohibidas, política git).
-> - `README.md` (raíz) → instalación y uso del producto (CLI + Web).
-> - `rag/README.md` → referencia técnica del pipeline RAG (módulos, signaturas, parámetros).
-> - `research/README.md` → mapa del workspace experimental; los detalles viven en sub-docs.
-> - `research/docs/EVALUACIONES_PIPELINE.md` → protocolo TFG de evaluación.
-> - `research/docs/REINFERENCIA_FINAL.md` → protocolo de la segunda pasada de inferencia.
-> - Model cards en `research/models/gguf/<modelo>/README.md` → auto-contenidas, HF Hub.
+> - `CLAUDE.md` / `AGENTS.md` → operating rules for agents (public symbols,
+>   forbidden flags, git policy) and the repository layout tree.
+> - `README.md` (root) → product install and usage (CLI + Web), including the
+>   lighter sparse-checkout clone.
+> - `rag/README.md` → RAG pipeline technical reference (modules, signatures, parameters).
+> - `research/README.md` → experimental workspace map; details live in sub-docs.
+> - `research/docs/EVALUACIONES_PIPELINE.md` → TFG evaluation + reinference protocol (English).
+> - `research/docs/GEMMA3_CONVERSION_ISSUE.md` → Gemma-3 conversion failure post-mortem (English).
+> - Analysis reports under `research/evaluation/runs/ragas/comparisons/ANALISIS_*.md`.
+> - Model cards in `research/models/gguf/<model>/README.md` → self-contained, HF Hub.
 
-| Doc | Propósito | Audiencia | Última verificación | Riesgo de drift |
+| Doc | Purpose | Audience | Last verified | Drift risk |
 |---|---|---|---|---|
-| `CLAUDE.md` | Reglas operativas del proyecto (símbolos públicos, flags, git) | Claude Code / autor | 2026-05-14 | Alto |
-| `README.md` | Instalación y uso del producto (CLI + Web) | Usuario final | 2026-05-14 | Medio |
-| `rag/README.md` | Referencia técnica del pipeline RAG | Desarrollador | 2026-05-14 | Alto |
-| `rag/web/frontend/README.md` | Comandos `npm` del frontend React | Desarrollador frontend | 2026-05-14 | Bajo |
-| `research/README.md` | Mapa del workspace experimental TFG | Tutor / autor | 2026-05-14 | Medio |
-| `research/conversion/GEMMA3_CONVERSION_ISSUE.md` | Post-mortem de Gemma-3 (abandonado) | Autor / tutor | 2026-05-14 | Bajo (congelado) |
-| `research/docs/EVALUACIONES_PIPELINE.md` | Protocolo TFG de evaluación RAGAS | Tutor / autor | 2026-05-14 | Alto |
-| `research/docs/PROJECT_LAYOUT.md` | Árbol top-level del repo | Cualquiera | 2026-05-14 | Medio |
-| `research/docs/USER_SPARSE_CHECKOUT.md` | Cómo clonar sólo `rag/` con sparse checkout | Usuario final | 2026-05-14 | Bajo |
-| `research/docs/REINFERENCIA_FINAL.md` | Protocolo de la reinferencia definitiva (completada 2026-05-19) | Autor | 2026-05-19 | Medio |
-| `research/docs/DOCS_AUDIT.md` | Este índice | Autor | 2026-05-19 | — |
-| `research/evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md` | Informe RAGAS corrida definitiva (juez AWS Bedrock) | Tutor / autor | 2026-05-19 | Alto |
-| `research/evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md` | Token F1 / ROUGE-L / BERTScore + §12 cruce RAGAS | Tutor / autor | 2026-05-19 | Alto |
-| `research/models/gguf/gemma-3/README.md` | Estado final de Gemma-3 (abandonado) | HF Hub / tutor | 2026-05-14 | Bajo |
-| `research/models/gguf/phi-4/CONVERSION.md` | Checklist merge LoRA → GGUF → Ollama | Autor | 2026-05-14 | Bajo |
-| `research/models/gguf/phi-4/README.md` | Model card Phi-4 RAG fine-tuned | HF Hub / tutor | 2026-05-14 | Medio |
-| `research/models/gguf/qwen-3/CONVERSION.md` | Checklist merge LoRA → GGUF → Ollama | Autor | 2026-05-14 | Bajo |
-| `research/models/gguf/qwen-3/README.md` | Model card Qwen3-14B RAG fine-tuned | HF Hub / tutor | 2026-05-14 | Medio |
+| `CLAUDE.md` / `AGENTS.md` | Operating rules + layout (public symbols, flags, git) | Agents / author | 2026-05-19 | High |
+| `README.md` | Product install and usage (CLI + Web + sparse checkout) | End user | 2026-05-19 | Medium |
+| `rag/README.md` | RAG pipeline technical reference | Developer | 2026-05-14 | High |
+| `rag/web/frontend/README.md` | React frontend `npm` commands | Frontend dev | 2026-05-14 | Low |
+| `research/README.md` | TFG experimental workspace map | Tutor / author | 2026-05-19 | Medium |
+| `research/docs/EVALUACIONES_PIPELINE.md` | TFG evaluation + reinference protocol (English) | Tutor / author | 2026-05-19 | High |
+| `research/docs/GEMMA3_CONVERSION_ISSUE.md` | Gemma-3 conversion failure post-mortem (English, problems only) | Author / tutor | 2026-05-19 | Low (frozen) |
+| `research/docs/DOCS_AUDIT.md` | This index | Author | 2026-05-19 | — |
+| `research/evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md` | Definitive RAGAS report (AWS Bedrock judge) | Tutor / author | 2026-05-19 | High |
+| `research/evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md` | Token F1 / ROUGE-L / BERTScore + §12 RAGAS cross-check | Tutor / author | 2026-05-19 | High |
+| `research/models/gguf/gemma-3/README.md` | Gemma-3 final state (abandoned) | HF Hub / tutor | 2026-05-14 | Low |
+| `research/models/gguf/phi-4/CONVERSION.md` | LoRA → GGUF → Ollama merge checklist | Author | 2026-05-14 | Low |
+| `research/models/gguf/phi-4/README.md` | Phi-4 RAG fine-tuned model card | HF Hub / tutor | 2026-05-14 | Medium |
+| `research/models/gguf/qwen-3/CONVERSION.md` | LoRA → GGUF → Ollama merge checklist | Author | 2026-05-14 | Low |
+| `research/models/gguf/qwen-3/README.md` | Qwen3-14B RAG fine-tuned model card | HF Hub / tutor | 2026-05-14 | Medium |
 
-## Historial de borrados (2026-05-14)
+## Deletion history
 
-- `research/docs/palabras.md` — formulario administrativo TFG, fuera del repo.
-- `research/docs/investigacionMetricas.md` — ya plasmado en la memoria del TFG.
-- `research/docs/splits.md` — ya plasmado en la memoria del TFG.
+**2026-05-14**
 
-## Cómo usar este índice
+- `research/docs/palabras.md` — TFG administrative form, out of repo scope.
+- `research/docs/investigacionMetricas.md` — already captured in the thesis.
+- `research/docs/splits.md` — already captured in the thesis.
 
-Cuando cambies código (signaturas en `rag/chat_pdfs.py`, CLIs en
-`research/evaluation/*.py`, métricas en `training-output/`), revisa la columna
-**Riesgo de drift**:
+**2026-05-19 (documentation consolidation)**
 
-- **Alto** → el doc casi seguro necesita actualización.
-- **Medio** → revisar comandos/paths que toquen tu cambio.
-- **Bajo** → improbable, pero un vistazo no cuesta nada.
+- `research/docs/PROJECT_LAYOUT.md` — redundant with the "Layout" section of `CLAUDE.md`/`AGENTS.md`; removed.
+- `research/docs/USER_SPARSE_CHECKOUT.md` — content moved into the root `README.md` ("Lighter clone"); removed.
+- `research/docs/REINFERENCIA_FINAL.md` — essentials (definitive labels, generator `phi4-finetuned:latest`, env config, reranker-threshold 0.65 decision, truncation resilience) consolidated into `EVALUACIONES_PIPELINE.md`; removed.
+- `research/conversion/GEMMA3_CONVERSION_ISSUE.md` — rewritten in English (problems only, no unblock options) and moved to `research/docs/GEMMA3_CONVERSION_ISSUE.md`.
+- `research/docs/EVALUACIONES_PIPELINE.md` — translated to English and merged with the reinference essentials above.
 
-Actualiza la columna **Última verificación** al terminar.
+## How to use this index
+
+When you change code (signatures in `rag/chat_pdfs.py`, CLIs in
+`research/evaluation/*.py`, metrics in `training-output/`), check the **Drift
+risk** column:
+
+- **High** → the doc almost certainly needs updating.
+- **Medium** → review commands/paths touched by your change.
+- **Low** → unlikely, but a quick glance is cheap.
+
+Update the **Last verified** column when done.

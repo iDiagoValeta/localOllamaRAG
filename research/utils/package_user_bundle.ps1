@@ -14,12 +14,6 @@ try {
     foreach ($item in @("README.md", "CLAUDE.md", "pytest.ini")) {
         Copy-Item -LiteralPath (Join-Path $RepoRoot $item) -Destination (Join-Path $Stage $item) -Force
     }
-    New-Item -ItemType Directory -Path (Join-Path $Stage "docs") -Force | Out-Null
-    foreach ($d in @("PROJECT_LAYOUT.md", "USER_SPARSE_CHECKOUT.md")) {
-        $src = Join-Path (Join-Path $RepoRoot "research\docs") $d
-        $dst = Join-Path (Join-Path $Stage "docs") $d
-        Copy-Item -LiteralPath $src -Destination $dst -Force
-    }
     New-Item -ItemType Directory -Path (Join-Path $Stage "rag") -Force | Out-Null
     robocopy (Join-Path $RepoRoot "rag") (Join-Path $Stage "rag") /E /XD "en_ragbench_dev" "en_ragbench_eval" "en_ragbench_visual" "vector_db" "debug_rag" "__pycache__" "web\frontend\node_modules" | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "robocopy failed with exit $LASTEXITCODE" }

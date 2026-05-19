@@ -22,8 +22,8 @@ Goal:
     candidates with the Cross-Encoder manually so the full reranker-score
     distribution is exposed (not only the top-K kept by TOP_K_AFTER_RERANK).
     Output is a single JSON per corpus under rag/debug_rag/, suitable for
-    threshold calibration (currently UMBRAL_SCORE_RERANKER = 0.55, candidate
-    new value 0.70 — see research/docs/REINFERENCIA_FINAL.md).
+    threshold calibration (UMBRAL_SCORE_RERANKER closed at 0.65 — see
+    research/docs/EVALUACIONES_PIPELINE.md §2.7).
 """
 
 from __future__ import annotations

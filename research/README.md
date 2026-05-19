@@ -5,10 +5,10 @@ Todo lo necesario para reproducir el TFG: evaluación [RAGAS](https://docs.ragas
 **No es necesario** para usar el producto (`python rag/chat_pdfs.py` / `python rag/web/app.py`).
 
 > Las referencias detalladas viven en sub-docs:
-> - Protocolo de evaluación → [`docs/EVALUACIONES_PIPELINE.md`](docs/EVALUACIONES_PIPELINE.md)
-> - Protocolo de reinferencia → [`docs/REINFERENCIA_FINAL.md`](docs/REINFERENCIA_FINAL.md)
-> - Mapa de directorios → [`docs/PROJECT_LAYOUT.md`](docs/PROJECT_LAYOUT.md)
+> - Protocolo de evaluación y reinferencia → [`docs/EVALUACIONES_PIPELINE.md`](docs/EVALUACIONES_PIPELINE.md)
+> - Post-mortem de Gemma-3 → [`docs/GEMMA3_CONVERSION_ISSUE.md`](docs/GEMMA3_CONVERSION_ISSUE.md)
 > - Auditoría de toda la documentación → [`docs/DOCS_AUDIT.md`](docs/DOCS_AUDIT.md)
+> - Mapa de directorios → sección "Layout" de [`CLAUDE.md`](../CLAUDE.md) y este README
 
 ---
 
@@ -98,7 +98,7 @@ python research/evaluation/probe_reranker_scores.py --corpus ca              --n
 python research/evaluation/probe_reranker_scores.py --corpus en_ragbench_dev --n 8
 ```
 
-Salida en `rag/debug_rag/probe_<corpus>_<timestamp>.json`. Protocolo y decisión 0.55 → 0.65 en [`docs/REINFERENCIA_FINAL.md`](docs/REINFERENCIA_FINAL.md).
+Salida en `rag/debug_rag/probe_<corpus>_<timestamp>.json`. Protocolo y decisión 0.55 → 0.65 en [`docs/EVALUACIONES_PIPELINE.md`](docs/EVALUACIONES_PIPELINE.md) §2.7.
 
 ---
 
@@ -143,13 +143,13 @@ Los tres usan LoRA rank 32 sobre la mezcla de la sección *Datasets → Training
 |---|---|---|
 | [Qwen3-14B](https://huggingface.co/Qwen/Qwen3-14B) RAG | [nadiva1243/qwen3RAG](https://huggingface.co/nadiva1243/qwen3RAG) | Modelfile en `research/models/gguf/qwen-3/`, importable |
 | [Phi-4](https://huggingface.co/microsoft/phi-4) RAG | [nadiva1243/phi4RAG](https://huggingface.co/nadiva1243/phi4RAG) | Modelfile en `research/models/gguf/phi-4/`, importable |
-| [Gemma-3-12B](https://huggingface.co/google/gemma-3-12b-it) | — | **No importable en Ollama** (GGUF/tokenizer vs stack de Gemma3). Ver [`conversion/GEMMA3_CONVERSION_ISSUE.md`](conversion/GEMMA3_CONVERSION_ISSUE.md). |
+| [Gemma-3-12B](https://huggingface.co/google/gemma-3-12b-it) | — | **No importable en Ollama** (GGUF/tokenizer vs stack de Gemma3). Ver [`docs/GEMMA3_CONVERSION_ISSUE.md`](docs/GEMMA3_CONVERSION_ISSUE.md). |
 
 ---
 
 ## Corpus RagBench
 
-Los PDFs viven en `rag/docs/en_ragbench_*` para que `DOCS_FOLDER` y los manifests no requieran reescritura. Clon ligero sin estos árboles: [`docs/USER_SPARSE_CHECKOUT.md`](docs/USER_SPARSE_CHECKOUT.md) o `research/utils/package_user_bundle.{ps1,sh}`.
+Los PDFs viven en `rag/docs/en_ragbench_*` para que `DOCS_FOLDER` y los manifests no requieran reescritura. Clon ligero sin estos árboles: sección "Lighter clone (sparse checkout)" del [`README.md`](../README.md) raíz o `research/utils/package_user_bundle.{ps1,sh}`.
 
 ---
 
