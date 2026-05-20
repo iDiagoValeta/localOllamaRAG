@@ -1,4 +1,4 @@
-research/models/merged-model/**
+﻿research/models/merged-model/**
 
 *.gguf
 *.safetensors
@@ -103,7 +103,6 @@ media/
 
 .codex
 .cursor/
-.codegraph/
 AGENTS.md
 
 repeticion_run_eval.py
