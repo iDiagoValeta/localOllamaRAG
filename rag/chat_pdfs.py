@@ -205,7 +205,7 @@ def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
     """Extract the base model name by stripping the tag suffix.
 
     Args:
-        nombre_modelo: Full model identifier (e.g. ``"gemma3:4b"``).
+        nombre_modelo: Full model identifier (e.g. ``"gemma4:e4b"``).
 
     Returns:
         Model name without the colon-separated tag.

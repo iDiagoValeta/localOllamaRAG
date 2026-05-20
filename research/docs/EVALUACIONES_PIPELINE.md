@@ -156,11 +156,11 @@ Set them in the PowerShell session before invoking `infer.py`:
 # OLLAMA_RAG_MODEL need not be exported: chat_pdfs.py:158 already defaults to
 # "phi4-finetuned:latest". The rest follow module defaults unless forced.
 
-$env:OLLAMA_CHAT_MODEL       = "qwen3:14b"                # sub-queries
+$env:OLLAMA_CHAT_MODEL       = "gemma4:e4b"               # sub-queries
 $env:OLLAMA_EMBED_MODEL      = "embeddinggemma:latest"
-$env:OLLAMA_CONTEXTUAL_MODEL = "qwen3:14b"
-$env:OLLAMA_RECOMP_MODEL     = "qwen3:14b"
-$env:OLLAMA_OCR_MODEL        = "qwen3-vl:8b"
+$env:OLLAMA_CONTEXTUAL_MODEL = "gemma4:e4b"
+$env:OLLAMA_RECOMP_MODEL     = "gemma4:e4b"
+$env:OLLAMA_OCR_MODEL        = "gemma4:e4b"
 
 # Ollama context sizes (root cause of the truncation seen in the old pass)
 $env:OLLAMA_NUM_CTX             = "8192"
