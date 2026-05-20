@@ -48,7 +48,7 @@ MonkeyGrab lets you ask questions about your PDF documents in natural language. 
 
 PDFs are indexed once into a [ChromaDB](https://www.trychroma.com/) vector store. Each query then passes through a configurable multi-stage retrieval pipeline before reaching the generator — all running locally via [Ollama](https://ollama.com/).
 
-![RAG pipeline architecture](research/docs/rag_pipeline.png)
+<img width="2491" height="1140" alt="rag_pipeline" src="https://github.com/user-attachments/assets/2830ff33-8dc2-40dc-806b-11398e91f41b" />
 
 ---
 
