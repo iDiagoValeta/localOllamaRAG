@@ -330,7 +330,7 @@ score_keyword[doc_id] += 1.0 / (rank + RRF_K)
 
 ### 3.5 D) Búsqueda exhaustiva: `busqueda_exhaustiva_texto()`
 
-**Archivo**: `rag/engine/retrieval.py`
+**Archivo**: `rag/engine/lexical.py`
 
 ```python
 def busqueda_exhaustiva_texto(
