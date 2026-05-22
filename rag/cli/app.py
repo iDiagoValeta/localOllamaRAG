@@ -581,8 +581,7 @@ class MonkeyGrabCLI:
             'modelo_contextual': rag.MODELO_CONTEXTUAL,
             'modelo_recomp': rag.MODELO_RECOMP,
             'modelo_ocr': rag.MODELO_OCR,
-            'extractor': ('extractor.pymupdf' if rag.PYMUPDF_AVAILABLE
-                          else 'extractor.pypdf'),
+            'extractor': 'extractor.pymupdf',
             'busqueda': ('pipeline.search.hybrid' if rag.USAR_BUSQUEDA_HIBRIDA
                          else 'pipeline.search.semantic'),
             'hybrid': rag.USAR_BUSQUEDA_HIBRIDA,

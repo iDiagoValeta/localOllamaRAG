@@ -44,14 +44,16 @@ How to run (interactive CLI):
 #
 #  CONFIGURATION (startup)
 #  +-- 1. Imports             stdlib -> third-party (ollama, chromadb, pypdf) -> local
-#  +-- 2. Optional deps       pymupdf4llm (PDF), CrossEncoder (reranking)
+#  +-- 2. Required deps       PDF extraction, reranking and BM25
 #  +-- 3. Global config
 #  |      +-- 3.1 Terminal runtime (UTF-8)
-#  |      +-- 3.2 Ollama models (RAG, CHAT, embedding, contextual, RECOMP)
-#  |      +-- 3.3 Pipeline flags (per-stage toggle)
-#  |      +-- 3.4 Paths and persistence (DB, history, debug)
-#  |      +-- 3.5 Retrieval / generation parameters
-#  |      +-- 3.6 Logging and environment
+#  |      +-- 3.2 Environment readers
+#  |      +-- 3.3 Model roles and Ollama runtime
+#  |      +-- 3.4 Pipeline flags
+#  |      +-- 3.5 Paths and persistence
+#  |      +-- 3.6 Embedding prefixes
+#  |      +-- 3.7 Indexing, retrieval and ranking parameters
+#  |      +-- 3.8 Logging and process environment
 #  |
 #  PUBLIC FACADE
 #  +-- 4. System prompts      CHAT (identity + language); RAG prompt baked into Modelfile
@@ -110,41 +112,31 @@ from rag.cli.display import ui
 
 
 # ─────────────────────────────────────────────
-# SECTION 2: OPTIONAL DEPENDENCIES
+# SECTION 2: REQUIRED DEPENDENCIES
 # ─────────────────────────────────────────────
 
 
-try:
-    with redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
-        import pymupdf4llm
-    PYMUPDF_AVAILABLE = True
-except ImportError:
-    PYMUPDF_AVAILABLE = False
+with redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
+    import pymupdf4llm
+import fitz
+from rank_bm25 import BM25Okapi
+from sentence_transformers import CrossEncoder
 
-try:
-    import fitz
-    FITZ_DISPONIBLE = True
-except ImportError:
-    FITZ_DISPONIBLE = False
 
-try:
-    from sentence_transformers import CrossEncoder
-    RERANKER_AVAILABLE = True
-except ImportError:
-    RERANKER_AVAILABLE = False
-
-try:
-    from rank_bm25 import BM25Okapi
-    BM25_AVAILABLE = True
-except ImportError:
-    BM25Okapi = None
-    BM25_AVAILABLE = False
+# Public compatibility constants. The imports above are mandatory and fail at
+# startup when the Python environment is incomplete.
+PYMUPDF_AVAILABLE = True
+FITZ_DISPONIBLE = True
+RERANKER_AVAILABLE = True
+BM25_AVAILABLE = True
 
 
 # ─────────────────────────────────────────────
 # SECTION 3: GLOBAL CONFIGURATION
 # ─────────────────────────────────────────────
 
+
+# 3.1 Terminal runtime
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -157,16 +149,7 @@ if hasattr(sys.stderr, "reconfigure"):
     except Exception:
         pass
 
-# Any compatible Ollama generator can be selected through OLLAMA_RAG_MODEL.
-# The same pattern applies to chat, embeddings, contextual retrieval, RECOMP,
-# and OCR through their corresponding OLLAMA_* environment variables.
-
-MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "gemma4:e4b")
-MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e4b")
-MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
-MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b")
-MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma4:e4b")
-MODELO_OCR = os.getenv("OLLAMA_OCR_MODEL", "gemma4:e4b")
+# 3.2 Environment readers
 
 
 def _leer_env_bool(nombre_variable: str, default: bool) -> bool:
@@ -235,7 +218,16 @@ def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
     return nombre_modelo.split(":")[0]
 
 
+# 3.3 Model roles and Ollama runtime
+
+MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "gemma4:e4b")
+MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e4b")
+MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
+MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b")
+MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma4:e4b")
+MODELO_OCR = os.getenv("OLLAMA_OCR_MODEL", "gemma4:e4b")
 MODELO_DESC = os.getenv("MODELO_DESC", _inferir_descripcion_modelo(MODELO_RAG))
+
 OLLAMA_NUM_CTX = _leer_env_int("OLLAMA_NUM_CTX", 8192)
 OLLAMA_RAG_NUM_CTX = _leer_env_int("OLLAMA_RAG_NUM_CTX", 16384)
 OLLAMA_AUX_NUM_CTX = _leer_env_int("OLLAMA_AUX_NUM_CTX", 8192)
@@ -246,10 +238,12 @@ OLLAMA_OCR_NUM_CTX = _leer_env_int("OLLAMA_OCR_NUM_CTX", 8192)
 OLLAMA_REQUEST_TIMEOUT = _leer_env_int("OLLAMA_REQUEST_TIMEOUT", 900)
 
 
+# 3.4 Pipeline flags
+
 USAR_CONTEXTUAL_RETRIEVAL = True
 USAR_LLM_QUERY_DECOMPOSITION = True
 USAR_BUSQUEDA_HIBRIDA = True
-USAR_RERANKER = RERANKER_AVAILABLE
+USAR_RERANKER = True
 EXPANDIR_CONTEXTO = True
 USAR_OPTIMIZACION_CONTEXTO = True
 USAR_RECOMP_SYNTHESIS = _leer_env_bool("USAR_RECOMP_SYNTHESIS", True)
@@ -258,6 +252,8 @@ EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK = False
 LOGGING_METRICAS = True
 GUARDAR_DEBUG_RAG = True
 
+# Runtime toggles are inference-time only; indexing flags require a fresh
+# Chroma collection to compare fairly.
 PIPELINE_RUNTIME_FLAGS = (
     "USAR_LLM_QUERY_DECOMPOSITION",
     "USAR_BUSQUEDA_HIBRIDA",
@@ -305,6 +301,8 @@ def set_pipeline_flags(overrides: Dict[str, bool]) -> Dict[str, bool]:
         globals()[name] = bool(value)
     return previous
 
+
+# 3.5 Paths and persistence
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "es"))
@@ -354,6 +352,8 @@ MAX_HISTORIAL_MENSAJES = 40
 CARPETA_DEBUG_RAG = os.path.join(BASE_DIR, "debug_rag")
 
 
+# 3.6 Embedding prefixes
+
 _embed_name_lower = MODELO_EMBEDDING.lower().split(":")[0]
 if "nomic" in _embed_name_lower:
     EMBED_PREFIX_QUERY = "search_query: "
@@ -364,39 +364,40 @@ else:
     EMBED_PREFIX_DOC = ""
     _EMBED_PREFIX_DESC = "no prefixes (native)"
 
-CONTEXTUAL_DOC_CHARS = _leer_env_int("CONTEXTUAL_DOC_CHARS", 24000)  # document sample chars for contextual retrieval
-CHUNK_SIZE = _leer_env_int("RAG_CHUNK_SIZE", 2000)          # raised from 1500: keeps full subsections (e.g. 3.2.3) in one chunk
-CHUNK_OVERLAP = _leer_env_int("RAG_CHUNK_OVERLAP", 400)     # raised from 350: ~20% overlap, proportional to new chunk size
-MIN_CHUNK_LENGTH = _leer_env_int("RAG_MIN_CHUNK_LENGTH", 150)  # raised from 80: discards very short artefact chunks
+
+# 3.7 Indexing, retrieval and ranking parameters
+
+CONTEXTUAL_DOC_CHARS = _leer_env_int("CONTEXTUAL_DOC_CHARS", 24000)
+CHUNK_SIZE = _leer_env_int("RAG_CHUNK_SIZE", 2000)
+CHUNK_OVERLAP = _leer_env_int("RAG_CHUNK_OVERLAP", 400)
+MIN_CHUNK_LENGTH = _leer_env_int("RAG_MIN_CHUNK_LENGTH", 150)
 MAX_IMAGENES_POR_PAGINA = _leer_env_int("RAG_MAX_IMAGES_PER_PAGE", 5)
 MIN_IMAGEN_SIZE_PX = _leer_env_int("RAG_MIN_IMAGE_SIZE_PX", 100)
-CAPTION_MARGIN_PX = _leer_env_int("RAG_CAPTION_MARGIN_PX", 80)  # px below image bbox to search for figure caption text
+CAPTION_MARGIN_PX = _leer_env_int("RAG_CAPTION_MARGIN_PX", 80)
 _IMAGEN_CHUNK_OFFSET = 10_000
 
 N_RESULTADOS_SEMANTICOS = _leer_env_int("RAG_N_RESULTADOS_SEMANTICOS", 80)
 N_RESULTADOS_KEYWORD = _leer_env_int("RAG_N_RESULTADOS_KEYWORD", 40)
 TOP_K_RERANK_CANDIDATES = _leer_env_int("RAG_TOP_K_RERANK_CANDIDATES", 200)
 TOP_K_AFTER_RERANK = _leer_env_int("RAG_TOP_K_AFTER_RERANK", 15)
-TOP_K_FINAL = _leer_env_int("RAG_TOP_K_FINAL", 8)  # raised from 6: more fragments reach RECOMP, reducing split-list failures
+TOP_K_FINAL = _leer_env_int("RAG_TOP_K_FINAL", 8)
 N_TOP_PARA_EXPANSION = _leer_env_int("RAG_N_TOP_PARA_EXPANSION", 3)
 
 RERANKER_MODEL_QUALITY = os.getenv("RERANKER_QUALITY", "quality")
-# Relevance gate on the *top* fused score. After Cross-Encoder reranking, ``score_final``
-# is replaced by the reranker score (same order as ``UMBRAL_SCORE_RERANKER``). With
-# ``USAR_RERANKER`` off, ``score_final`` stays RRF-based (much smaller scale); callers
-# must not compare that to this threshold — see CLI/web/eval paths.
 UMBRAL_RELEVANCIA = _leer_env_float("RAG_UMBRAL_RELEVANCIA", 0.50)
-UMBRAL_SCORE_RERANKER = _leer_env_float("RAG_UMBRAL_SCORE_RERANKER", 0.65)  # raised from 0.55 (probe 2026-05-14): noise band 0.40-0.60, 0.65 is the post-noise plateau across es/ca/en
+UMBRAL_SCORE_RERANKER = _leer_env_float("RAG_UMBRAL_SCORE_RERANKER", 0.65)
 
-RRF_K = _leer_env_int("RAG_RRF_K", 20)                 # reciprocal rank fusion damping factor
-BM25_K1 = _leer_env_float("RAG_BM25_K1", 1.5)          # Okapi BM25 term-frequency saturation
-BM25_B = _leer_env_float("RAG_BM25_B", 0.75)           # Okapi BM25 document-length normalization
+RRF_K = _leer_env_int("RAG_RRF_K", 20)
+BM25_K1 = _leer_env_float("RAG_BM25_K1", 1.5)
+BM25_B = _leer_env_float("RAG_BM25_B", 0.75)
 PESO_SEMANTICO_RRF = _leer_env_float("RAG_PESO_SEMANTICO_RRF", 0.55)
 PESO_BM25_RRF = _leer_env_float("RAG_PESO_BM25_RRF", 0.45)
 
 MIN_LONGITUD_PREGUNTA_RAG = _leer_env_int("RAG_MIN_LONGITUD_PREGUNTA", 10)
-MAX_CONTEXTO_CHARS = _leer_env_int("MAX_CONTEXTO_CHARS", 24000)  # max retrieved-context chars before generation
+MAX_CONTEXTO_CHARS = _leer_env_int("MAX_CONTEXTO_CHARS", 24000)
 
+
+# 3.8 Logging and process environment
 
 LOG_LEVEL = logging.ERROR
 

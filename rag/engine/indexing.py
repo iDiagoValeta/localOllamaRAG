@@ -57,8 +57,6 @@ def indexar_documentos(
     Returns:
         Total number of chunks successfully indexed.
     """
-    global PYMUPDF_AVAILABLE
-
     os.makedirs(carpeta, exist_ok=True)
     archivos_pdf = [f for f in os.listdir(carpeta) if f.endswith('.pdf')]
     if solo_archivos is not None:
@@ -140,58 +138,57 @@ def indexar_documentos(
             ruta_pdf = os.path.join(carpeta, archivo)
 
             imagenes_pdf: Dict[int, List[Dict[str, Any]]] = {}
-            if USAR_EMBEDDINGS_IMAGEN and FITZ_DISPONIBLE:
+            if USAR_EMBEDDINGS_IMAGEN:
                 imagenes_pdf = extraer_imagenes_pdf(ruta_pdf)
                 n_imgs_total = sum(len(v) for v in imagenes_pdf.values())
                 if n_imgs_total > 0 and not silent:
                     ui.debug(f"  {n_imgs_total} images found across {len(imagenes_pdf)} page(s)")
 
-            if PYMUPDF_AVAILABLE:
-                try:
-                    page_chunks = pymupdf4llm.to_markdown(ruta_pdf, page_chunks=True)
+            try:
+                page_chunks = pymupdf4llm.to_markdown(ruta_pdf, page_chunks=True)
 
-                    _textos_paginas = [p.get('text', '') for p in page_chunks[:10]]
-                    texto_base_doc = _preparar_texto_base_doc(_textos_paginas)
-                    idioma_doc = _detectar_idioma(texto_base_doc)
+                _textos_paginas = [p.get('text', '') for p in page_chunks[:10]]
+                texto_base_doc = _preparar_texto_base_doc(_textos_paginas)
+                idioma_doc = _detectar_idioma(texto_base_doc)
 
-                    for page_info in page_chunks:
-                        i = page_info['metadata']['page']
-                        texto = page_info['text']
+                for page_info in page_chunks:
+                    i = page_info['metadata']['page']
+                    texto = page_info['text']
 
-                        if not texto or len(texto) < MIN_CHUNK_LENGTH:
-                            continue
+                    if not texto or len(texto) < MIN_CHUNK_LENGTH:
+                        continue
 
-                        chunks = dividir_en_chunks(texto)
+                    chunks = dividir_en_chunks(texto)
 
-                        for chunk_idx, chunk_info in enumerate(chunks):
-                            chunk_text = chunk_info['text'] if isinstance(chunk_info, dict) else chunk_info
-                            chunk_header = chunk_info.get('header', '') if isinstance(chunk_info, dict) else ''
+                    for chunk_idx, chunk_info in enumerate(chunks):
+                        chunk_text = chunk_info['text'] if isinstance(chunk_info, dict) else chunk_info
+                        chunk_header = chunk_info.get('header', '') if isinstance(chunk_info, dict) else ''
 
-                            id_doc = f"{archivo}_pag{i}_chunk{chunk_idx}"
+                        id_doc = f"{archivo}_pag{i}_chunk{chunk_idx}"
 
-                            metadata = {
-                                "source": archivo,
-                                "page": i,
-                                "chunk": chunk_idx,
-                                "total_chunks_in_page": len(chunks),
-                                "format": "markdown",
-                                "section_header": chunk_header
-                            }
+                        metadata = {
+                            "source": archivo,
+                            "page": i,
+                            "chunk": chunk_idx,
+                            "total_chunks_in_page": len(chunks),
+                            "format": "markdown",
+                            "section_header": chunk_header
+                        }
 
-                            if USAR_CONTEXTUAL_RETRIEVAL:
-                                contexto_sit = generar_contexto_situacional(chunk_text, texto_base_doc, idioma_doc)
-                                chunk_text_con_contexto = (contexto_sit + chunk_text).strip()
-                            else:
-                                chunk_text_con_contexto = chunk_text
+                        if USAR_CONTEXTUAL_RETRIEVAL:
+                            contexto_sit = generar_contexto_situacional(chunk_text, texto_base_doc, idioma_doc)
+                            chunk_text_con_contexto = (contexto_sit + chunk_text).strip()
+                        else:
+                            chunk_text_con_contexto = chunk_text
 
-                            if _indexar_chunk(id_doc, chunk_text_con_contexto, chunk_text_con_contexto, metadata, collection):
-                                total_chunks += 1
+                        if _indexar_chunk(id_doc, chunk_text_con_contexto, chunk_text_con_contexto, metadata, collection):
+                            total_chunks += 1
 
-                except Exception as e:
-                    logging.error(f"Error with pymupdf4llm on {archivo}: {e}, using pypdf fallback")
-                    usar_pypdf_fallback = True
+            except Exception as e:
+                logging.error(f"Error with pymupdf4llm on {archivo}: {e}, using pypdf fallback")
+                usar_pypdf_fallback = True
 
-            if not PYMUPDF_AVAILABLE or usar_pypdf_fallback:
+            if usar_pypdf_fallback:
                 reader = PdfReader(ruta_pdf)
 
                 _textos_paginas = [(p.extract_text() or "") for p in reader.pages[:10]]

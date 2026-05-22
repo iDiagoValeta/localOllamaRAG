@@ -249,9 +249,6 @@ def busqueda_lexica_bm25(
     query_tokens = _tokenizar_bm25(pregunta)
     metricas['terminos_query'] = len(query_tokens)
 
-    if not BM25_AVAILABLE:
-        ui.debug("BM25 unavailable (rank-bm25 not installed)")
-        return [], metricas
     if not query_tokens:
         return [], metricas
 

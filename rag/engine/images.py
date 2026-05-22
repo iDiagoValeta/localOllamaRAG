@@ -133,9 +133,6 @@ def extraer_imagenes_pdf(
         same page; empty string if not found).
         Pages with no qualifying images are omitted from the dict.
     """
-    if not FITZ_DISPONIBLE:
-        return {}
-
     imagenes_por_pagina: Dict[int, List[Dict[str, Any]]] = {}
 
     try:

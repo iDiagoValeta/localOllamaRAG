@@ -306,9 +306,9 @@ def busqueda_lexica_bm25(
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]
 ```
 
-Activa si `USAR_BUSQUEDA_HIBRIDA = True`. Requiere `rank-bm25` (flag
-`BM25_AVAILABLE`); si no está instalado, devuelve lista vacía y el pipeline opera
-solo con la vía semántica.
+Activa si `USAR_BUSQUEDA_HIBRIDA = True`. `rank-bm25` es una dependencia
+obligatoria del entorno; `BM25_AVAILABLE` se conserva como constante pública de
+compatibilidad y vale `True` tras importar correctamente `rag.chat_pdfs`.
 
 Implementa recuperación dispersa clásica **Okapi BM25** (Robertson & Zaragoza,
 2009): puntúa cada fragmento por frecuencia de término, rareza del término en la
@@ -372,7 +372,8 @@ def rerank_resultados(
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]
 ```
 
-Activa si `USAR_RERANKER = True` (auto-detectado según disponibilidad de `sentence-transformers`).
+Activa si `USAR_RERANKER = True`. `sentence-transformers` es una dependencia
+obligatoria del entorno; si falta, la carga de `rag.chat_pdfs` falla al inicio.
 
 **Tier configurable** (controlado por `RERANKER_QUALITY`):
 

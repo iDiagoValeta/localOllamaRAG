@@ -108,8 +108,9 @@ caracteres salvo que contengan dígitos (conserva identificadores/métricas como
 #### Ahora — una función
 
 **`busqueda_lexica_bm25(pregunta, collection, top_n=N_RESULTADOS_KEYWORD)`**
-- Requiere `rank-bm25` (`BM25_AVAILABLE`); si falta, devuelve `[]` y el pipeline
-  opera solo con la vía semántica.
+- Requiere `rank-bm25` como dependencia obligatoria del entorno;
+  `BM25_AVAILABLE` se conserva como constante pública de compatibilidad y vale
+  `True` si `rag.chat_pdfs` ha importado correctamente.
 - `query_tokens = _tokenizar_bm25(pregunta)`; si no hay tokens, devuelve `[]`.
 - Escaneo de **toda la colección** en lotes de 100; tokeniza cada chunk con
   `_tokenizar_bm25`.
@@ -174,7 +175,7 @@ ha cambiado**. Solo cambia el segundo sumando (`score_keyword`).
 | `N_RESULTADOS_KEYWORD` | máximo de resultados **por variante** de keyword (`limit` de `collection.get`) | **top-N total** de fragmentos BM25 devueltos |
 | `BM25_K1` | — | **1.5** (nuevo) |
 | `BM25_B` | — | **0.75** (nuevo) |
-| `BM25_AVAILABLE` | — | nuevo flag de disponibilidad de `rank-bm25` |
+| `BM25_AVAILABLE` | — | constante pública de compatibilidad; `rank-bm25` ya es dependencia obligatoria |
 
 ---
 
