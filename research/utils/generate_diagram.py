@@ -66,7 +66,7 @@ flowchart TD
     subgraph RET["  Hybrid Retrieval Pipeline  "]
         direction TB
         D1["① Query Decomposition\\noptional · OLLAMA_CHAT_MODEL"]
-        D2["② Semantic + Keyword + Exhaustive Search\\nChromaDB · top-80 + top-40 + critical terms"]
+        D2["② Semantic + BM25 Lexical Search\\nChromaDB vectors + BM25 top-40"]
         D3["③ RRF Fusion + Cross-Encoder\\n55% semantic · 45% lexical"]
         D4["④ Context Expansion + Cleanup\\nadjacent chunks · artifact removal"]
         D5["⑤ RECOMP Synthesis\\noptional · OLLAMA_RECOMP_MODEL"]
@@ -91,7 +91,7 @@ flowchart TD
     EMB -->|"store vectors"| DB
 
     API -->|"user question"| RET
-    D2 <-->|"vector + lexical lookup"| DB
+    D2 <-->|"vector lookup + BM25 corpus scan"| DB
     D5 -->|"compressed context"| GEN
     D4 -. "fallback: raw chunks" .-> GEN
     GEN -->|"answer + sources"| API

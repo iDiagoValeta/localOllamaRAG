@@ -206,7 +206,7 @@ def realizar_busqueda_hibrida(
         kw_total = metricas_keywords.get('resultados_totales', 0)
         logging.info(
             f"Full pipeline: Semantic({sem_unicos}) + "
-            f"Keywords({kw_total}) -> "
+            f"BM25({kw_total}) -> "
             f"Fusion({metricas_totales['candidatos_fusion']}) -> "
             f"Reranking({metricas_totales['resultados_finales']})"
         )

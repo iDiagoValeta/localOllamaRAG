@@ -74,7 +74,7 @@ rag/
     ├── images.py         — Extracción OCR de imágenes PDF
     ├── retrieval.py      — Orquestación de búsqueda híbrida
     ├── reranking.py      — Query decomposition + Cross-Encoder
-    ├── lexical.py        — Búsqueda por keywords
+    ├── lexical.py        — Búsqueda léxica BM25
     ├── context.py        — Construcción y optimización del contexto
     ├── generation.py     — Generación de respuestas + evaluación silenciosa
     ├── history.py        — Persistencia del historial de chat
