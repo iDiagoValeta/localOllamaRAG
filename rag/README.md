@@ -289,7 +289,7 @@ Para cada query (original + sub-queries):
 4. Acumula en un diccionario de candidatos:
 
 ```python
-score_semantic[doc_id] += 1.0 / (rank + RRF_K)   # RRF_K = 20 por defecto
+score_semantic[doc_id] += 1.0 / (rank + RRF_K)   # RRF_K = 60 por defecto (Cormack et al., 2009)
 ```
 
 ---
@@ -671,7 +671,7 @@ Ollama.
 | `TOP_K_AFTER_RERANK` | 15 / `RAG_TOP_K_AFTER_RERANK` | Fragmentos tras reranking |
 | `TOP_K_FINAL` | 8 / `RAG_TOP_K_FINAL` | Fragmentos enviados al LLM |
 | `N_TOP_PARA_EXPANSION` | 3 / `RAG_N_TOP_PARA_EXPANSION` | Fragmentos que reciben expansión de vecinos |
-| `RRF_K` | 20 / `RAG_RRF_K` | Factor de amortiguamiento RRF |
+| `RRF_K` | 60 / `RAG_RRF_K` | Factor de amortiguamiento RRF (valor canónico de Cormack et al., 2009) |
 | `PESO_SEMANTICO_RRF` | 0.55 / `RAG_PESO_SEMANTICO_RRF` | Peso de la contribución semántica RRF |
 | `PESO_BM25_RRF` | 0.45 / `RAG_PESO_BM25_RRF` | Peso de la contribución BM25 RRF |
 | `BM25_K1` | 1.5 / `RAG_BM25_K1` | Saturación de frecuencia de término BM25 |

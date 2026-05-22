@@ -125,6 +125,7 @@ from sentence_transformers import CrossEncoder
 
 # Public compatibility constants. The imports above are mandatory and fail at
 # startup when the Python environment is incomplete.
+
 PYMUPDF_AVAILABLE = True
 FITZ_DISPONIBLE = True
 RERANKER_AVAILABLE = True
@@ -150,28 +151,6 @@ if hasattr(sys.stderr, "reconfigure"):
         pass
 
 # 3.2 Environment readers
-
-
-def _leer_env_bool(nombre_variable: str, default: bool) -> bool:
-    """Parse a boolean environment variable with tolerant string values.
-
-    Args:
-        nombre_variable: Environment variable name to inspect.
-        default: Fallback value when the variable is undefined or empty.
-
-    Returns:
-        Parsed boolean value.
-    """
-    valor = os.getenv(nombre_variable)
-    if valor is None:
-        return default
-
-    valor_normalizado = valor.strip().lower()
-    if valor_normalizado in {"1", "true", "yes", "y", "on", "si", "sí"}:
-        return True
-    if valor_normalizado in {"0", "false", "no", "n", "off"}:
-        return False
-    return default
 
 
 def _leer_env_int(nombre_variable: str, default: int) -> int:
@@ -246,7 +225,7 @@ USAR_BUSQUEDA_HIBRIDA = True
 USAR_RERANKER = True
 EXPANDIR_CONTEXTO = True
 USAR_OPTIMIZACION_CONTEXTO = True
-USAR_RECOMP_SYNTHESIS = _leer_env_bool("USAR_RECOMP_SYNTHESIS", True)
+USAR_RECOMP_SYNTHESIS = True
 USAR_EMBEDDINGS_IMAGEN = True
 EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK = False
 LOGGING_METRICAS = True
@@ -387,7 +366,7 @@ RERANKER_MODEL_QUALITY = os.getenv("RERANKER_QUALITY", "quality")
 UMBRAL_RELEVANCIA = _leer_env_float("RAG_UMBRAL_RELEVANCIA", 0.50)
 UMBRAL_SCORE_RERANKER = _leer_env_float("RAG_UMBRAL_SCORE_RERANKER", 0.65)
 
-RRF_K = _leer_env_int("RAG_RRF_K", 20)
+RRF_K = _leer_env_int("RAG_RRF_K", 60)
 BM25_K1 = _leer_env_float("RAG_BM25_K1", 1.5)
 BM25_B = _leer_env_float("RAG_BM25_B", 0.75)
 PESO_SEMANTICO_RRF = _leer_env_float("RAG_PESO_SEMANTICO_RRF", 0.55)
@@ -468,7 +447,7 @@ Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; o
 * **OPTIONAL:**
     * **Context Optimization** (`USAR_OPTIMIZACION_CONTEXTO`): Cleans PDF artifacts (headers, footers, noise) before sending to the LLM.
     * **Neighbor Expansion** (`EXPANDIR_CONTEXTO`): Retrieves adjacent chunks to provide continuous context.
-    * **RECOMP Synthesis** (`USAR_RECOMP_SYNTHESIS`): Uses `MODELO_RECOMP`, configured through `OLLAMA_RECOMP_MODEL` and separate from `MODELO_RAG`, to summarize/synthesize the context instead of feeding raw chunks (default: True, env-overridable).
+    * **RECOMP Synthesis** (`USAR_RECOMP_SYNTHESIS`): Uses `MODELO_RECOMP`, configured through `OLLAMA_RECOMP_MODEL` and separate from `MODELO_RAG`, to summarize/synthesize the context instead of feeding raw chunks (default: True).
 
 ---
 

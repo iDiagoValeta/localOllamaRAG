@@ -25,6 +25,12 @@ superseded**; their logic now lives in `_lib/` or as subcommands of the three CL
 > and [`ANALISIS_METRICAS_ENTRENAMIENTO.md`](../evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md)
 > (§12 BERTScore↔RAGAS cross-check).
 
+> **Note — pipeline divergence.** Those definitive metrics were produced with the
+> pre-BM25 lexical pipeline (`$contains` keyword + exhaustive search) and
+> `RRF_K = 20`. Production now uses Okapi BM25 fused with RRF at the canonical
+> `RRF_K = 60`. The BM25 re-inference plan and the full parameter defense /
+> citation map live in [`RANKING_Y_PARAMETROS.md`](RANKING_Y_PARAMETROS.md) §5.
+
 ---
 
 ## 1. Indexing
@@ -175,7 +181,7 @@ $env:OLLAMA_REQUEST_TIMEOUT     = "900"
 # explicitly when running a sensitivity analysis.
 $env:RAG_BM25_K1                = "1.5"
 $env:RAG_BM25_B                 = "0.75"
-$env:RAG_RRF_K                  = "20"
+$env:RAG_RRF_K                  = "60"
 $env:RAG_PESO_SEMANTICO_RRF     = "0.55"
 $env:RAG_PESO_BM25_RRF          = "0.45"
 $env:RAG_UMBRAL_SCORE_RERANKER  = "0.65"

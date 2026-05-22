@@ -6,6 +6,7 @@ Everything needed to reproduce the TFG: [RAGAS](https://docs.ragas.io/) evaluati
 
 > Detailed references live in sub-docs:
 > - Evaluation + reinference protocol → [`docs/EVALUACIONES_PIPELINE.md`](docs/EVALUACIONES_PIPELINE.md)
+> - Ranking / BM25 / RRF + parameter defense + citation map → [`docs/RANKING_Y_PARAMETROS.md`](docs/RANKING_Y_PARAMETROS.md)
 > - Gemma-3 post-mortem → [`docs/GEMMA3_CONVERSION_ISSUE.md`](docs/GEMMA3_CONVERSION_ISSUE.md)
 > - Documentation audit → [`docs/DOCS_AUDIT.md`](docs/DOCS_AUDIT.md)
 > - Directory map → "Layout" section of [`CLAUDE.md`](../CLAUDE.md) and this README
