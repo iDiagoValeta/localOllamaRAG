@@ -37,7 +37,7 @@ MonkeyGrab lets you ask questions about your PDF documents in natural language. 
 |---|---|
 | **Local-first** | All indexing, retrieval and generation runs on your hardware. No API keys required for the core pipeline. |
 | **Any model** | Works with any instruction-tuned model in [Ollama](https://ollama.com/) — `llama3.2`, `mistral`, `gemma4`, `qwen3`, etc. |
-| **Hybrid retrieval** | Semantic search + keyword search fused with RRF, followed by optional [cross-encoder reranking](https://www.sbert.net/). |
+| **Hybrid retrieval** | Semantic search + BM25 lexical search fused with RRF, followed by optional [cross-encoder reranking](https://www.sbert.net/). |
 | **Multilingual UI** | Spanish, English and Valencian out of the box. The CLI uses `MONKEYGRAB_LANG`; the web UI has an `ES / EN / VAL` selector. |
 | **Two interfaces** | [Rich](https://rich.readthedocs.io/en/stable/)-based terminal CLI and a [Flask](https://flask.palletsprojects.com/) + [React](https://react.dev/) web UI with streaming responses and inline PDF viewer. |
 | **Image-aware** | Optionally describes raster images in PDFs with a vision model via [pymupdf4llm](https://pymupdf.readthedocs.io/en/latest/pymupdf4llm/), making visual content retrievable. |
@@ -185,8 +185,7 @@ These constants live in `rag/chat_pdfs.py`. Edit them directly to toggle pipelin
 |------|---------|--------|
 | `USAR_CONTEXTUAL_RETRIEVAL` | `True` | Enrich chunks with LLM context at indexing time |
 | `USAR_LLM_QUERY_DECOMPOSITION` | `True` | Decompose query into sub-queries |
-| `USAR_BUSQUEDA_HIBRIDA` | `True` | Add keyword search alongside semantic search |
-| `USAR_BUSQUEDA_EXHAUSTIVA` | `True` | Full-collection scan for critical multi-word terms |
+| `USAR_BUSQUEDA_HIBRIDA` | `True` | Add Okapi BM25 lexical search alongside semantic search |
 | `USAR_RERANKER` | auto | [Cross-encoder reranking](https://www.sbert.net/) — enabled when `sentence-transformers` is installed |
 | `USAR_RECOMP_SYNTHESIS` | `True` | RECOMP context compression before generation |
 | `EXPANDIR_CONTEXTO` | `True` | Include adjacent chunks around top results |

@@ -34,8 +34,8 @@ PDF corpus
                        │ collection ChromaDB
     ┌──────────────────▼──────────────────────────────┐
     │  ETAPA 2: RECUPERACIÓN HÍBRIDA                  │
-    │  query decomposition → semántica + keywords     │
-    │  + exhaustive scan → RRF fusion                 │
+    │  query decomposition → semántica + BM25         │
+    │  → RRF fusion                                   │
     └──────────────────┬──────────────────────────────┘
                        │ candidatos con scores
     ┌──────────────────▼──────────────────────────────┐
@@ -263,7 +263,7 @@ def realizar_busqueda_hibrida(
 ) -> Tuple[List[Dict[str, Any]], float, Dict[str, Any]]
 ```
 
-Devuelve `(fragmentos_ordenados, tiempo_total, stats)`. Internamente ejecuta los pasos A–E en orden.
+Devuelve `(fragmentos_ordenados, tiempo_total, stats)`. Internamente ejecuta los pasos A–D en orden.
 
 ---
 
@@ -294,70 +294,55 @@ score_semantic[doc_id] += 1.0 / (rank + RRF_K)   # RRF_K = 20
 
 ---
 
-### 3.4 C) Búsqueda por keywords: `busqueda_por_keywords()`
+### 3.4 C) Búsqueda léxica BM25: `busqueda_lexica_bm25()`
 
 **Archivo**: `rag/engine/lexical.py`
 
 ```python
-def busqueda_por_keywords(
+def busqueda_lexica_bm25(
     pregunta: str,
     collection: chromadb.Collection,
-    n_results: int = N_RESULTADOS_KEYWORD,   # 40
-) -> Tuple[List[Dict[str, Any]], Dict[str, int]]
+    top_n: int = N_RESULTADOS_KEYWORD,   # 40
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]
 ```
 
-Activa si `USAR_BUSQUEDA_HIBRIDA = True`.
+Activa si `USAR_BUSQUEDA_HIBRIDA = True`. Requiere `rank-bm25` (flag
+`BM25_AVAILABLE`); si no está instalado, devuelve lista vacía y el pipeline opera
+solo con la vía semántica.
 
-#### Extracción de keywords: `extraer_keywords()`
+Implementa recuperación dispersa clásica **Okapi BM25** (Robertson & Zaragoza,
+2009): puntúa cada fragmento por frecuencia de término, rareza del término en la
+colección (IDF) y normalización por longitud, produciendo un **ranking de
+relevancia real** en lugar de un filtro de subcadena. Sustituye a la antigua
+búsqueda por `$contains` y a la búsqueda exhaustiva, que eran redundantes.
 
-Extrae por tipo en orden de prioridad:
-1. **Acrónimos**: `\b[A-Z]{2,}\b`
-2. **Términos parentetizados**: `\((.+?)\)`
-3. **Bigramas**: pares de tokens consecutivos de más de 3 caracteres
-4. **Términos técnicos**: mayúsculas, dígitos o guiones internos
+#### Tokenización: `_tokenizar_bm25()`
 
-Aplica filtrado de stopwords multiidioma (es/ca/en) y deduplicación case-insensitive. Elimina unigramas que ya están cubiertos por bigramas.
+Tokenizador **único** para corpus y query (requisito de BM25): minúsculas, split
+por límites no alfanuméricos (Unicode, conserva acentos), descarta `STOPWORDS`
+multiidioma (es/ca/en) y tokens de menos de 3 caracteres salvo que contengan
+dígitos (se conservan identificadores y métricas).
 
 #### Búsqueda
 
-Para cada variante de keyword:
+El índice BM25 se **reconstruye por consulta**: se escanea toda la colección en
+batches, se tokeniza el corpus, se construye `BM25Okapi(corpus, k1=BM25_K1,
+b=BM25_B)` (`BM25_K1 = 1.5`, `BM25_B = 0.75`) y se puntúa la query con
+`get_scores()`. Se devuelven los `top_n` fragmentos con score positivo,
+ordenados de mayor a menor. La fusión RRF usa ese **rango real**:
+
 ```python
-collection.get(where_document={"$contains": keyword})
-score_keyword[doc_id] += 1.0 / (rank + RRF_K)
+score_keyword[doc_id] += 1.0 / (rank + RRF_K)   # rank = posición por score BM25
 ```
+
+> `extraer_keywords()` se mantiene para métricas/depuración y para la
+> decomposición de query, pero ya no dirige la recuperación léxica.
 
 ---
 
-### 3.5 D) Búsqueda exhaustiva: `busqueda_exhaustiva_texto()`
+### 3.5 D) Fusión RRF final
 
-**Archivo**: `rag/engine/lexical.py`
-
-```python
-def busqueda_exhaustiva_texto(
-    terminos_criticos: List[str],
-    collection: chromadb.Collection,
-    max_results: int = 20,
-) -> Tuple[List[Dict[str, Any]], Dict[str, int]]
-```
-
-Activa si `USAR_BUSQUEDA_EXHAUSTIVA = True`.
-
-Filtra la lista de keywords para obtener **términos críticos** (`_filtrar_terminos_criticos()`):
-- Expresiones multipalabra.
-- Términos capitalizados o acrónimos.
-- Excluye una blacklist de términos genéricos (`paper`, `method`, `model`, etc.).
-
-Escanea **toda la colección** en batches y cuenta ocurrencias exactas de cada término. El score se añade directamente:
-
-```python
-fragmento['score_keyword'] += 0.3 * num_matches
-```
-
----
-
-### 3.6 E) Fusión RRF final
-
-Una vez recogidos todos los candidatos de las tres vías:
+Una vez recogidos los candidatos de ambas vías (semántica + BM25):
 
 ```python
 score_final = score_semantic * 0.55 + score_keyword * 0.45
@@ -693,8 +678,7 @@ Ollama.
 |------|---------|----------------------|
 | `USAR_CONTEXTUAL_RETRIEVAL` | `True` | Enriquece cada chunk con contexto situacional en indexación |
 | `USAR_LLM_QUERY_DECOMPOSITION` | `True` | Genera 3 sub-queries para recuperación multi-aspecto |
-| `USAR_BUSQUEDA_HIBRIDA` | `True` | Añade búsqueda por keywords (lexical) |
-| `USAR_BUSQUEDA_EXHAUSTIVA` | `True` | Escanea toda la colección por términos críticos |
+| `USAR_BUSQUEDA_HIBRIDA` | `True` | Añade búsqueda léxica Okapi BM25 (rank-bm25) fusionada por RRF |
 | `USAR_RERANKER` | auto | Aplica Cross-Encoder tras fusión RRF |
 | `EXPANDIR_CONTEXTO` | `True` | Añade chunks adyacentes a los fragmentos top |
 | `USAR_OPTIMIZACION_CONTEXTO` | `True` | Limpia artefactos PDF del contexto |
@@ -758,47 +742,41 @@ Consulta: `"¿Qué componentes tiene una arquitectura Transformer?"`
    ChromaDB.query() → RRF con k=20
    Candidatos acumulados con score_semantic
 
-3. BÚSQUEDA POR KEYWORDS
-   Keywords extraídas: ["Transformer", "atención", "encoder", "decoder",
-                        "self-attention", "feed-forward", "multi-head"]
-   ChromaDB.get(where_document={"$contains": keyword}) por variante
-   RRF acumulado en score_keyword
+3. BÚSQUEDA LÉXICA BM25  (USAR_BUSQUEDA_HIBRIDA=True)
+   Tokeniza toda la colección y la query con _tokenizar_bm25()
+   BM25Okapi(corpus, k1=1.5, b=0.75).get_scores(query_tokens)
+   Top-N fragmentos por score BM25; RRF acumulado en score_keyword
 
-4. BÚSQUEDA EXHAUSTIVA
-   Términos críticos: ["Transformer", "self-attention", "multi-head attention"]
-   Scaneo completo de colección en batches
-   score_keyword += 0.3 * num_matches
-
-5. FUSIÓN RRF
+4. FUSIÓN RRF
    score_final = score_semantic × 0.55 + score_keyword × 0.45
    Filtro: score_final >= 0.50
    Resultado: ~50-80 candidatos ordenados
 
-6. RERANKING  (USAR_RERANKER=True)
+5. RERANKING  (USAR_RERANKER=True)
    Entrada: top 200 candidatos por score_final
    CrossEncoder.rank(pairs=[(pregunta, texto_chunk)])
    Umbral: score_reranker >= 0.65
    Salida: top 15 fragmentos con score_reranker
 
-7. EXPANSIÓN DE VECINOS  (EXPANDIR_CONTEXTO=True)
+6. EXPANSIÓN DE VECINOS  (EXPANDIR_CONTEXTO=True)
    Para los 3 fragmentos con mayor score: recupera chunks adyacentes
    Añade vecinos al conjunto de fragmentos finales
 
-8. CONSTRUCCIÓN DE CONTEXTO
+7. CONSTRUCCIÓN DE CONTEXTO
    USAR_RECOMP_SYNTHESIS=True → síntesis con MODELO_RECOMP:
      "## Facts relevant to the question
       - El Transformer consta de un codificador y un decodificador...
       - El mecanismo de atención multi-head..."
    USAR_OPTIMIZACION_CONTEXTO=True → limpieza de artefactos PDF
 
-9. GENERACIÓN
+8. GENERACIÓN
    Mensaje usuario: pregunta + <context>síntesis</context>
    System prompt: SYSTEM_PROMPT_RAG (si modelo no tiene baked)
    Ollama streaming: temperature=0.15, num_ctx=16384
    Tokens emitidos en tiempo real al terminal/web
 
-10. DEBUG
-    Archivo: rag/debug_rag/YYYYMMDD_HHMMSS_que_componentes_tiene.txt
-    Contenido: flags, sub-queries, keywords, scores por fragmento,
-               contexto enviado, respuesta completa
+9. DEBUG
+   Archivo: rag/debug_rag/YYYYMMDD_HHMMSS_que_componentes_tiene.txt
+   Contenido: flags, sub-queries, keywords, scores por fragmento,
+              contexto enviado, respuesta completa
 ```

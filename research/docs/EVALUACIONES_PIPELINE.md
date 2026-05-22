@@ -66,7 +66,7 @@ python research\evaluation\infer.py single --corpus es
 # Default final suite (2 variants: baseline_all_on + all_off)
 python research\evaluation\infer.py compare --corpus ca --label my_eval_ca_final --reindex
 
-# Legacy full ablation suite (9 variants)
+# Legacy full ablation suite (8 variants)
 python research\evaluation\infer.py compare --corpus ca --suite ablation --label my_eval_ca_ablation --reindex
 
 # List variants
@@ -85,8 +85,7 @@ ChromaDB collection; `--reindex` only affects the first.
 | --- | --- |
 | `baseline_all_on` | All optional stages enabled |
 | `no_query_decomposition` | Disables `USAR_LLM_QUERY_DECOMPOSITION` |
-| `no_lexical_search` | Disables `USAR_BUSQUEDA_HIBRIDA` |
-| `no_exhaustive_search` | Disables `USAR_BUSQUEDA_EXHAUSTIVA` |
+| `no_lexical_search` | Disables `USAR_BUSQUEDA_HIBRIDA` (BM25) |
 | `no_reranker` | Disables `USAR_RERANKER` |
 | `no_context_expansion` | Disables `EXPANDIR_CONTEXTO` |
 | `no_context_optimization` | Disables `USAR_OPTIMIZACION_CONTEXTO` |
