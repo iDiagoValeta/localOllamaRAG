@@ -37,7 +37,7 @@ interface PipelineSettings {
   contextualRetrieval: boolean;
   queryDecomposition: boolean;
   hybridSearch: boolean;
-  exhaustiveSearch: boolean;
+  imageIndexing: boolean;
   reranker: boolean;
   expandContext: boolean;
   optimizeContext: boolean;
@@ -59,8 +59,6 @@ type Lang = 'es' | 'en' | 'ca';
 const STRINGS = {
   es: {
     tabDocs: 'Documentos', tabPipeline: 'Pipeline RAG',
-    uploading: 'Añadiendo…', addPdf: 'Añadir PDF',
-    addPdfHint: 'Usa los ajustes actuales del pipeline',
     corpusLabel: 'Corpus (PDFs / base vectorial)',
     corpusEs: 'Castellano — rag/docs/es',
     corpusCa: 'Català / valencià — rag/docs/ca',
@@ -74,9 +72,9 @@ const STRINGS = {
     section1: '1. Indexación',
     labelContextual: 'Recuperación contextual', descContextual: 'Enriquece fragmentos con LLM',
     section2: '2. Recuperación',
-    labelHybrid: 'Búsqueda híbrida', descHybrid: 'Semántica + palabras clave',
+    labelHybrid: 'Búsqueda híbrida', descHybrid: 'Semántica + BM25',
     labelQueryDecomp: 'Descomposición de consultas', descQueryDecomp: 'Subconsultas con LLM auxiliar',
-    labelExhaustive: 'Búsqueda exhaustiva', descExhaustive: 'Escaneo profundo (lento)',
+    labelImageIndex: 'Indexado de imágenes', descImageIndex: 'Descripciones con visión',
     section3: '3. Ranking y contexto',
     labelReranker: 'Reordenador cross-encoder', descReranker: 'Reordenamiento de precisión',
     labelExpandContext: 'Expandir contexto', descExpandContext: 'Añade fragmentos adyacentes',
@@ -96,9 +94,6 @@ const STRINGS = {
     autoRefresh: 'La página se actualizará automáticamente al terminar.',
     retry: 'Reintentar', connErrorTitle: 'Error de conexión',
     connecting: 'Conectando con MonkeyGrab…',
-    addedMsg: '✓ **{names}** añadido con los ajustes actuales ({total} fragmentos).',
-    uploadError: '✗ Error al subir: {error}',
-    uploadConnError: '✗ Error de conexión al subir el archivo.',
     addingMsg: '⟳ Añadiendo {n} PDF(s) y re-indexando…',
     reindexingMsg: '⟳ Re-indexando con ajustes actuales…',
     reindexDone: '✓ Re-indexación completada: {total} fragmentos, {docs} documentos.',
@@ -121,8 +116,6 @@ const STRINGS = {
   },
   en: {
     tabDocs: 'Documents', tabPipeline: 'RAG Pipeline',
-    uploading: 'Adding…', addPdf: 'Add PDF',
-    addPdfHint: 'Uses current pipeline settings',
     corpusLabel: 'Corpus (PDFs / vector DB)',
     corpusEs: 'Spanish — rag/docs/es',
     corpusCa: 'Catalan — rag/docs/ca',
@@ -136,9 +129,9 @@ const STRINGS = {
     section1: '1. Indexing',
     labelContextual: 'Contextual Retrieval', descContextual: 'Enrich chunks with LLM',
     section2: '2. Retrieval',
-    labelHybrid: 'Hybrid Search', descHybrid: 'Semantic + Keywords',
+    labelHybrid: 'Hybrid Search', descHybrid: 'Semantic + BM25',
     labelQueryDecomp: 'Query Decomposition', descQueryDecomp: 'Sub-queries via auxiliary LLM',
-    labelExhaustive: 'Exhaustive Search', descExhaustive: 'Deep scan (slow)',
+    labelImageIndex: 'Image indexing', descImageIndex: 'Vision captions',
     section3: '3. Ranking & Context',
     labelReranker: 'Cross-Encoder Reranker', descReranker: 'Precision reordering',
     labelExpandContext: 'Expand Context', descExpandContext: 'Add adjacent chunks',
@@ -158,9 +151,6 @@ const STRINGS = {
     autoRefresh: 'The page will refresh automatically when done.',
     retry: 'Retry', connErrorTitle: 'Connection error',
     connecting: 'Connecting to MonkeyGrab…',
-    addedMsg: '✓ **{names}** added with current settings ({total} fragments).',
-    uploadError: '✗ Upload error: {error}',
-    uploadConnError: '✗ Connection error while uploading.',
     addingMsg: '⟳ Adding {n} PDF(s) and re-indexing…',
     reindexingMsg: '⟳ Re-indexing with current settings…',
     reindexDone: '✓ Re-indexing complete: {total} fragments, {docs} documents.',
@@ -183,8 +173,6 @@ const STRINGS = {
   },
   ca: {
     tabDocs: 'Documents', tabPipeline: 'Pipeline RAG',
-    uploading: 'Afegint…', addPdf: 'Afegir PDF',
-    addPdfHint: 'Usa els ajustos actuals del pipeline',
     corpusLabel: 'Corpus (PDFs / base vectorial)',
     corpusEs: 'Castellà — rag/docs/es',
     corpusCa: 'Català / valencià — rag/docs/ca',
@@ -198,9 +186,9 @@ const STRINGS = {
     section1: '1. Indexació',
     labelContextual: 'Recuperació contextual', descContextual: 'Enriqueix fragments amb LLM',
     section2: '2. Recuperació',
-    labelHybrid: 'Cerca híbrida', descHybrid: 'Semàntica + paraules clau',
+    labelHybrid: 'Cerca híbrida', descHybrid: 'Semàntica + BM25',
     labelQueryDecomp: 'Descomposició de consultes', descQueryDecomp: 'Sub-consultes amb LLM auxiliar',
-    labelExhaustive: 'Cerca exhaustiva', descExhaustive: 'Escaneig profund (lent)',
+    labelImageIndex: 'Indexat d\'imatges', descImageIndex: 'Descripcions amb visió',
     section3: '3. Rànquing i context',
     labelReranker: 'Reordenador cross-encoder', descReranker: 'Reordenament de precisió',
     labelExpandContext: 'Expandir context', descExpandContext: 'Afig fragments adjacents',
@@ -220,9 +208,6 @@ const STRINGS = {
     autoRefresh: "La pàgina s'actualitzarà automàticament en acabar.",
     retry: 'Reintentar', connErrorTitle: 'Error de connexió',
     connecting: 'Connectant amb MonkeyGrab…',
-    addedMsg: '✓ **{names}** afegit amb els ajustos actuals ({total} fragments).',
-    uploadError: '✗ Error en pujar: {error}',
-    uploadConnError: '✗ Error de connexió en pujar el fitxer.',
     addingMsg: '⟳ Afegint {n} PDF(s) i re-indexant…',
     reindexingMsg: '⟳ Re-indexant amb ajustos actuals…',
     reindexDone: '✓ Re-indexació completada: {total} fragments, {docs} documents.',
@@ -341,13 +326,6 @@ const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settings),
     }).then(r => r.json()),
-
-  upload: (file: File, addOnly = false) => {
-    const form = new FormData();
-    form.append('file', file);
-    const url = addOnly ? `${API_BASE}/upload?add_only=1` : `${API_BASE}/upload`;
-    return fetch(url, { method: 'POST', body: form }).then(r => r.json());
-  },
 
   deleteDoc: (filename: string) =>
     fetch(`${API_BASE}/docs/${encodeURIComponent(filename)}`, { method: 'DELETE' }).then(r => r.json()),
@@ -623,7 +601,6 @@ export default function App() {
   const [isIndexing, setIsIndexing] = useState(false);
   const [indexingProgress, setIndexingProgress] = useState<IndexingProgress | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   const [isReindexing, setIsReindexing] = useState(false);
   const [deletingDoc, setDeletingDoc] = useState<string | null>(null);
   const [pendingReindexFiles, setPendingReindexFiles] = useState<File[]>([]);
@@ -639,7 +616,7 @@ export default function App() {
     contextualRetrieval: true,
     queryDecomposition: true,
     hybridSearch: true,
-    exhaustiveSearch: false,
+    imageIndexing: true,
     reranker: true,
     expandContext: true,
     optimizeContext: true,
@@ -648,7 +625,6 @@ export default function App() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const reindexFileInputRef = useRef<HTMLInputElement>(null);
   const [retryTrigger, setRetryTrigger] = useState(0);
   const [indexingError, setIndexingError] = useState<string | null>(null);
@@ -750,47 +726,6 @@ export default function App() {
       throw new Error(status.message || status.error || T.indexingFailed);
     }
   }, [lang]);
-
-  // ---- Add PDF (add-only, sin reindexar) ----
-  const handleAddPdf = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsUploading(true);
-
-    try {
-      const result = await api.upload(file, true);
-      if (result.ok) {
-        setDocuments(result.documents || []);
-        setTotalFragments(result.total_fragments || 0);
-        const names = result.files?.length ? result.files.join(', ') : result.filename || '';
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'system',
-          content: fill(T.addedMsg, { names, total: result.total_fragments }),
-          mode,
-        }]);
-      } else {
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'system',
-          content: fill(T.uploadError, { error: result.error }),
-          mode,
-          isError: true,
-        }]);
-      }
-    } catch {
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        role: 'system',
-        content: T.uploadConnError,
-        mode,
-        isError: true,
-      }]);
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  }, [mode, lang]);
 
   // ---- Reindex (full, con ajustes del pipeline) ----
   const handleReindex = useCallback(async () => {
@@ -1177,14 +1112,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Hidden file inputs */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".pdf"
-        className="hidden"
-        onChange={handleAddPdf}
-      />
+      {/* Hidden file input */}
       <input
         ref={reindexFileInputRef}
         type="file"
@@ -1246,7 +1174,7 @@ export default function App() {
                   <div
                     role="radiogroup"
                     aria-label={T.corpusLabel}
-                    className={`rounded-2xl border border-white/10 bg-black/30 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${isUploading || isReindexing || isLoading ? 'opacity-50' : ''}`}
+                    className={`rounded-2xl border border-white/10 bg-black/30 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${isReindexing || isLoading ? 'opacity-50' : ''}`}
                   >
                     <div className="grid grid-cols-3 gap-1.5">
                       {[
@@ -1267,7 +1195,7 @@ export default function App() {
                               : 'border-transparent bg-white/[0.03] text-zinc-500 hover:border-white/10 hover:bg-white/[0.06] hover:text-zinc-300'
                               }`}
                             onClick={() => handleCorpusChange(option.preset)}
-                            disabled={isUploading || isReindexing || isLoading}
+                            disabled={isReindexing || isLoading}
                           >
                             <span className="flex items-center justify-between gap-1">
                               <span className="truncate text-xs font-bold tracking-wide">{option.label}</span>
@@ -1282,23 +1210,6 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-
-                {/* Add PDF button (add-only, sin reindexar) */}
-                <button
-                  className="w-full py-4 px-4 rounded-2xl border border-dashed border-white/20 text-zinc-400 hover:text-white hover:border-orange-500/50 hover:bg-orange-500/5 transition-all flex flex-col items-center justify-center gap-2 text-sm group disabled:opacity-50"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading}
-                >
-                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-orange-500/10 transition-colors">
-                    {isUploading ? (
-                      <Loader2 className="w-5 h-5 animate-spin text-orange-400" />
-                    ) : (
-                      <FileUp className="w-5 h-5 group-hover:text-orange-400" />
-                    )}
-                  </div>
-                  <span className="font-medium">{isUploading ? T.uploading : T.addPdf}</span>
-                  <span className="text-[10px] text-zinc-600">{T.addPdfHint}</span>
-                </button>
 
                 {/* Documents list */}
                 <div className="space-y-3">
@@ -1385,6 +1296,7 @@ export default function App() {
                   {openSections.indexacion && (
                     <div className="p-2 pt-0 space-y-1 bg-white/[0.02]">
                       <Toggle label={T.labelContextual} checked={settings.contextualRetrieval} onChange={() => toggleSetting('contextualRetrieval')} desc={T.descContextual} />
+                      <Toggle label={T.labelImageIndex} checked={settings.imageIndexing} onChange={() => toggleSetting('imageIndexing')} desc={T.descImageIndex} />
                     </div>
                   )}
                 </div>
@@ -1403,7 +1315,6 @@ export default function App() {
                     <div className="p-2 pt-0 space-y-1 bg-white/[0.02]">
                       <Toggle label={T.labelHybrid} checked={settings.hybridSearch} onChange={() => toggleSetting('hybridSearch')} desc={T.descHybrid} />
                       <Toggle label={T.labelQueryDecomp} checked={settings.queryDecomposition} onChange={() => toggleSetting('queryDecomposition')} desc={T.descQueryDecomp} />
-                      <Toggle label={T.labelExhaustive} checked={settings.exhaustiveSearch} onChange={() => toggleSetting('exhaustiveSearch')} desc={T.descExhaustive} />
                     </div>
                   )}
                 </div>
