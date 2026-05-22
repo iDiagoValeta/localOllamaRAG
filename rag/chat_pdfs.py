@@ -207,6 +207,22 @@ def _leer_env_int(nombre_variable: str, default: int) -> int:
         return default
 
 
+def _leer_env_float(nombre_variable: str, default: float) -> float:
+    """Parse a float environment variable with a safe fallback.
+
+    Args:
+        nombre_variable: Environment variable name to inspect.
+        default: Fallback value when the variable is undefined or invalid.
+
+    Returns:
+        Parsed float value, or ``default``.
+    """
+    try:
+        return float(os.getenv(nombre_variable, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
     """Extract the base model name by stripping the tag suffix.
 
@@ -349,34 +365,36 @@ else:
     _EMBED_PREFIX_DESC = "no prefixes (native)"
 
 CONTEXTUAL_DOC_CHARS = _leer_env_int("CONTEXTUAL_DOC_CHARS", 24000)  # document sample chars for contextual retrieval
-CHUNK_SIZE = 2000          # raised from 1500: keeps full subsections (e.g. 3.2.3) in one chunk
-CHUNK_OVERLAP = 400        # raised from 350: ~20% overlap, proportional to new chunk size
-MIN_CHUNK_LENGTH = 150     # raised from 80: discards very short artefact chunks (copyright, author lists)
-MAX_IMAGENES_POR_PAGINA = 5
-MIN_IMAGEN_SIZE_PX = 100
-CAPTION_MARGIN_PX = 80          # px below image bbox to search for figure caption text
+CHUNK_SIZE = _leer_env_int("RAG_CHUNK_SIZE", 2000)          # raised from 1500: keeps full subsections (e.g. 3.2.3) in one chunk
+CHUNK_OVERLAP = _leer_env_int("RAG_CHUNK_OVERLAP", 400)     # raised from 350: ~20% overlap, proportional to new chunk size
+MIN_CHUNK_LENGTH = _leer_env_int("RAG_MIN_CHUNK_LENGTH", 150)  # raised from 80: discards very short artefact chunks
+MAX_IMAGENES_POR_PAGINA = _leer_env_int("RAG_MAX_IMAGES_PER_PAGE", 5)
+MIN_IMAGEN_SIZE_PX = _leer_env_int("RAG_MIN_IMAGE_SIZE_PX", 100)
+CAPTION_MARGIN_PX = _leer_env_int("RAG_CAPTION_MARGIN_PX", 80)  # px below image bbox to search for figure caption text
 _IMAGEN_CHUNK_OFFSET = 10_000
 
-N_RESULTADOS_SEMANTICOS = 80
-N_RESULTADOS_KEYWORD = 40
-TOP_K_RERANK_CANDIDATES = 200
-TOP_K_AFTER_RERANK = 15
-TOP_K_FINAL = 8              # raised from 6: more fragments reach RECOMP, reducing split-list failures
-N_TOP_PARA_EXPANSION = 3
+N_RESULTADOS_SEMANTICOS = _leer_env_int("RAG_N_RESULTADOS_SEMANTICOS", 80)
+N_RESULTADOS_KEYWORD = _leer_env_int("RAG_N_RESULTADOS_KEYWORD", 40)
+TOP_K_RERANK_CANDIDATES = _leer_env_int("RAG_TOP_K_RERANK_CANDIDATES", 200)
+TOP_K_AFTER_RERANK = _leer_env_int("RAG_TOP_K_AFTER_RERANK", 15)
+TOP_K_FINAL = _leer_env_int("RAG_TOP_K_FINAL", 8)  # raised from 6: more fragments reach RECOMP, reducing split-list failures
+N_TOP_PARA_EXPANSION = _leer_env_int("RAG_N_TOP_PARA_EXPANSION", 3)
 
 RERANKER_MODEL_QUALITY = os.getenv("RERANKER_QUALITY", "quality")
 # Relevance gate on the *top* fused score. After Cross-Encoder reranking, ``score_final``
 # is replaced by the reranker score (same order as ``UMBRAL_SCORE_RERANKER``). With
 # ``USAR_RERANKER`` off, ``score_final`` stays RRF-based (much smaller scale); callers
 # must not compare that to this threshold — see CLI/web/eval paths.
-UMBRAL_RELEVANCIA = 0.50
-UMBRAL_SCORE_RERANKER = 0.65  # raised from 0.55 (probe 2026-05-14): noise band 0.40-0.60, 0.65 is the post-noise plateau across es/ca/en
+UMBRAL_RELEVANCIA = _leer_env_float("RAG_UMBRAL_RELEVANCIA", 0.50)
+UMBRAL_SCORE_RERANKER = _leer_env_float("RAG_UMBRAL_SCORE_RERANKER", 0.65)  # raised from 0.55 (probe 2026-05-14): noise band 0.40-0.60, 0.65 is the post-noise plateau across es/ca/en
 
-RRF_K = 20                    # reciprocal rank fusion damping factor (was hardcoded 60)
-BM25_K1 = 1.5                  # Okapi BM25 term-frequency saturation (Robertson & Zaragoza 2009)
-BM25_B = 0.75                 # Okapi BM25 document-length normalization
+RRF_K = _leer_env_int("RAG_RRF_K", 20)                 # reciprocal rank fusion damping factor
+BM25_K1 = _leer_env_float("RAG_BM25_K1", 1.5)          # Okapi BM25 term-frequency saturation
+BM25_B = _leer_env_float("RAG_BM25_B", 0.75)           # Okapi BM25 document-length normalization
+PESO_SEMANTICO_RRF = _leer_env_float("RAG_PESO_SEMANTICO_RRF", 0.55)
+PESO_BM25_RRF = _leer_env_float("RAG_PESO_BM25_RRF", 0.45)
 
-MIN_LONGITUD_PREGUNTA_RAG = 10
+MIN_LONGITUD_PREGUNTA_RAG = _leer_env_int("RAG_MIN_LONGITUD_PREGUNTA", 10)
 MAX_CONTEXTO_CHARS = _leer_env_int("MAX_CONTEXTO_CHARS", 24000)  # max retrieved-context chars before generation
 
 

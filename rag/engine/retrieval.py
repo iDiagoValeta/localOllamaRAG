@@ -171,7 +171,10 @@ def realizar_busqueda_hibrida(
             }
 
     for frag in fragmentos_data.values():
-        frag['score_final'] = (frag['score_semantic'] * 0.55 + frag['score_keyword'] * 0.45)
+        frag['score_final'] = (
+            frag['score_semantic'] * PESO_SEMANTICO_RRF
+            + frag['score_keyword'] * PESO_BM25_RRF
+        )
 
     fragmentos_ranked = sorted(
         fragmentos_data.values(),
