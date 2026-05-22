@@ -155,7 +155,7 @@ if hasattr(sys.stderr, "reconfigure"):
 # The same pattern applies to chat, embeddings, contextual retrieval, RECOMP,
 # and OCR through their corresponding OLLAMA_* environment variables.
 
-MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "phi4-finetuned:latest")
+MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "gemma4:e4b")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e4b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b")
