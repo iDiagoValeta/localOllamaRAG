@@ -162,7 +162,7 @@ def sondear_pregunta(pregunta: str, ground_truth: str | None, collection) -> dic
         "sub_queries": metricas.get("sub_queries", []),
         "queries_semanticas": metricas.get("queries_semanticas", []),
         "keywords": metricas.get("keywords", []),
-        "terminos_criticos": metricas.get("terminos_criticos", []),
+        "bm25": metricas.get("fase_keywords", {}),
         "candidatos": candidatos_ordenados,
         "umbral_cuts": cuts,
         "stats_reranker": stats,

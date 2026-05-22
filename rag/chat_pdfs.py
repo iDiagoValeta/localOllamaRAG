@@ -7,12 +7,11 @@ queries over indexed PDFs with hybrid retrieval and source-backed answers).
 
 Pipeline stages (each togglable via flags):
     1. Indexing        chunking + embeddings + contextual retrieval (opt.)
-    2. Retrieval       semantic + query decomposition (opt.) + keywords
-    3. Deep scan       exhaustive search by critical terms
-    4. Ranking         RRF fusion + Cross-Encoder reranking (opt.)
-    5. Context         neighbor expansion + optimization
-    6. Generation      RECOMP synthesis (opt.) + streaming
-    7. Observability   metrics and debug dumps
+    2. Retrieval       semantic + query decomposition (opt.) + BM25 lexical
+    3. Ranking         RRF fusion + Cross-Encoder reranking (opt.)
+    4. Context         neighbor expansion + optimization
+    5. Generation      RECOMP synthesis (opt.) + streaming
+    6. Observability   metrics and debug dumps
 
 How to run (interactive CLI):
     From the repository root (recommended, matches docs and imports):
@@ -61,7 +60,7 @@ How to run (interactive CLI):
 #  SPLIT IMPLEMENTATION (rag/engine/)
 #  +-- history.py             CHAT history persistence
 #  +-- chunking.py            Markdown chunking and neighbor IDs
-#  +-- lexical.py             keywords, stopwords and exhaustive text search
+#  +-- lexical.py             keywords, stopwords and BM25 lexical search
 #  +-- reranking.py           query decomposition and CrossEncoder reranking
 #  +-- retrieval.py           hybrid retrieval orchestration
 #  +-- context.py             context cleanup, formatting and RECOMP synthesis
@@ -133,6 +132,13 @@ try:
     RERANKER_AVAILABLE = True
 except ImportError:
     RERANKER_AVAILABLE = False
+
+try:
+    from rank_bm25 import BM25Okapi
+    BM25_AVAILABLE = True
+except ImportError:
+    BM25Okapi = None
+    BM25_AVAILABLE = False
 
 
 # ─────────────────────────────────────────────
@@ -227,7 +233,6 @@ OLLAMA_REQUEST_TIMEOUT = _leer_env_int("OLLAMA_REQUEST_TIMEOUT", 900)
 USAR_CONTEXTUAL_RETRIEVAL = True
 USAR_LLM_QUERY_DECOMPOSITION = True
 USAR_BUSQUEDA_HIBRIDA = True
-USAR_BUSQUEDA_EXHAUSTIVA = True
 USAR_RERANKER = RERANKER_AVAILABLE
 EXPANDIR_CONTEXTO = True
 USAR_OPTIMIZACION_CONTEXTO = True
@@ -240,7 +245,6 @@ GUARDAR_DEBUG_RAG = True
 PIPELINE_RUNTIME_FLAGS = (
     "USAR_LLM_QUERY_DECOMPOSITION",
     "USAR_BUSQUEDA_HIBRIDA",
-    "USAR_BUSQUEDA_EXHAUSTIVA",
     "USAR_RERANKER",
     "EXPANDIR_CONTEXTO",
     "USAR_OPTIMIZACION_CONTEXTO",
@@ -369,6 +373,8 @@ UMBRAL_RELEVANCIA = 0.50
 UMBRAL_SCORE_RERANKER = 0.65  # raised from 0.55 (probe 2026-05-14): noise band 0.40-0.60, 0.65 is the post-noise plateau across es/ca/en
 
 RRF_K = 20                    # reciprocal rank fusion damping factor (was hardcoded 60)
+BM25_K1 = 1.5                  # Okapi BM25 term-frequency saturation (Robertson & Zaragoza 2009)
+BM25_B = 0.75                 # Okapi BM25 document-length normalization
 
 MIN_LONGITUD_PREGUNTA_RAG = 10
 MAX_CONTEXTO_CHARS = _leer_env_int("MAX_CONTEXTO_CHARS", 24000)  # max retrieved-context chars before generation
@@ -431,8 +437,7 @@ Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; o
     * **Semantic Search:** Vector distance lookup using `MODELO_EMBEDDING`; always performed.
 * **OPTIONAL (execution order):**
     * **Query Decomposition** (`USAR_LLM_QUERY_DECOMPOSITION`): Uses `MODELO_CHAT` configured through `OLLAMA_CHAT_MODEL` to generate sub-queries before semantic search; activates for long questions (>60 chars).
-    * **Hybrid Search** (`USAR_BUSQUEDA_HIBRIDA`): Adds keyword/lexical search.
-    * **Exhaustive Search** (`USAR_BUSQUEDA_EXHAUSTIVA`): Deep scan for critical terms (computationally expensive).
+    * **Hybrid Search** (`USAR_BUSQUEDA_HIBRIDA`): Adds Okapi BM25 lexical search (Robertson & Zaragoza 2009) over all chunks, fused with the semantic ranking via RRF.
 
 #### 3. RANKING & REFINEMENT
 * **OPTIONAL:**
@@ -497,8 +502,8 @@ from rag.engine.lexical import (
     TERMINOS_EXPANSION,
     GENERIC_TERMS_BLACKLIST,
     extraer_keywords,
-    busqueda_por_keywords,
-    busqueda_exhaustiva_texto,
+    _tokenizar_bm25,
+    busqueda_lexica_bm25,
 )
 from rag.engine.reranking import (
     _detectar_dispositivo_reranker,
@@ -506,7 +511,6 @@ from rag.engine.reranking import (
     rerank_resultados,
     generar_queries_con_llm,
     _validar_coherencia_query,
-    _filtrar_terminos_criticos,
 )
 from rag.engine.retrieval import realizar_busqueda_hibrida
 from rag.engine.context import (

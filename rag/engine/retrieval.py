@@ -39,9 +39,8 @@ def realizar_busqueda_hibrida(
 ) -> Tuple[List[Dict[str, Any]], float, Dict[str, Any]]:
     """Orchestrate the full hybrid retrieval pipeline.
 
-    Combines multi-query semantic search, keyword search, exhaustive
-    deep scan, RRF fusion, and optional Cross-Encoder reranking into
-    a single ranked result set.
+    Combines multi-query semantic search, BM25 lexical search, RRF fusion,
+    and optional Cross-Encoder reranking into a single ranked result set.
 
     Args:
         pregunta: User query.
@@ -55,7 +54,6 @@ def realizar_busqueda_hibrida(
     metricas_totales = {
         'fase_semantica': {},
         'fase_keywords': {},
-        'fase_exhaustiva': {},
         'fase_reranking': {},
         'candidatos_fusion': 0,
         'resultados_finales': 0
@@ -145,11 +143,8 @@ def realizar_busqueda_hibrida(
     results_keyword = []
     metricas_keywords = {}
     if USAR_BUSQUEDA_HIBRIDA:
-        ui.debug("keyword search...")
-        keywords = extraer_keywords(pregunta)
-        if keywords:
-            ui.debug(f"detected: {', '.join(keywords[:8])}")
-        results_keyword, metricas_keywords = busqueda_por_keywords(pregunta, collection)
+        ui.debug("BM25 lexical search...")
+        results_keyword, metricas_keywords = busqueda_lexica_bm25(pregunta, collection)
         metricas_totales['fase_keywords'] = metricas_keywords
 
     ui.debug("fusing results...")
@@ -161,8 +156,8 @@ def realizar_busqueda_hibrida(
 
         if chunk_id in fragmentos_data:
             fragmentos_data[chunk_id]['score_keyword'] += 1.0 / (idx + RRF_K)
-            if result['keyword_match'] not in fragmentos_data[chunk_id]['matches']:
-                fragmentos_data[chunk_id]['matches'].append(result['keyword_match'])
+            if 'BM25' not in fragmentos_data[chunk_id]['matches']:
+                fragmentos_data[chunk_id]['matches'].append('BM25')
         else:
             fragmentos_data[chunk_id] = {
                 'doc': result['doc'],
@@ -171,47 +166,12 @@ def realizar_busqueda_hibrida(
                 'id': chunk_id,
                 'score_semantic': 0.0,
                 'score_keyword': 1.0 / (idx + RRF_K),
-                'matches': [result['keyword_match']],
+                'matches': ['BM25'],
                 'query_matches': []
             }
 
     for frag in fragmentos_data.values():
         frag['score_final'] = (frag['score_semantic'] * 0.55 + frag['score_keyword'] * 0.45)
-
-    terminos_criticos = _filtrar_terminos_criticos(
-        [k for k in keywords_expandidas[:12] if len(k) > 3]
-    )
-
-    metricas_exhaustiva = {}
-    if USAR_BUSQUEDA_EXHAUSTIVA and terminos_criticos:
-        ui.debug(f"deep search: {', '.join(terminos_criticos[:6])}")
-        resultados_exhaustivos, metricas_exhaustiva = busqueda_exhaustiva_texto(
-            terminos_criticos, collection, max_results=30
-        )
-        metricas_totales['fase_exhaustiva'] = metricas_exhaustiva
-
-        for idx, result in enumerate(resultados_exhaustivos):
-            chunk_id = result['id']
-
-            if chunk_id in fragmentos_data:
-                fragmentos_data[chunk_id]['score_keyword'] += 0.3 * result['num_matches']
-                fragmentos_data[chunk_id]['matches'].extend(
-                    m for m in result['matches'] if m not in fragmentos_data[chunk_id]['matches']
-                )
-            else:
-                fragmentos_data[chunk_id] = {
-                    'doc': result['doc'],
-                    'metadata': result['metadata'],
-                    'distancia': float('inf'),
-                    'id': chunk_id,
-                    'score_semantic': 0.0,
-                    'score_keyword': 0.3 * result['num_matches'],
-                    'matches': result['matches'],
-                    'query_matches': []
-                }
-
-        for frag in fragmentos_data.values():
-            frag['score_final'] = (frag['score_semantic'] * 0.55 + frag['score_keyword'] * 0.45)
 
     fragmentos_ranked = sorted(
         fragmentos_data.values(),
@@ -240,7 +200,6 @@ def realizar_busqueda_hibrida(
     metricas_totales['sub_queries'] = llm_queries
     metricas_totales['queries_semanticas'] = queries
     metricas_totales['keywords'] = list(keywords_expandidas)
-    metricas_totales['terminos_criticos'] = terminos_criticos
 
     if LOGGING_METRICAS:
         sem_unicos = metricas_totales['fase_semantica'].get('fragmentos_unicos', 0)

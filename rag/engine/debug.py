@@ -70,9 +70,9 @@ def guardar_debug_rag(
             f.write(f"  DEBUG RAG - {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write("=" * 80 + "\n\n")
 
-            if metricas and (metricas.get('sub_queries') or metricas.get('queries_semanticas') or metricas.get('keywords') or metricas.get('terminos_criticos') or metricas.get('fase_semantica') or metricas.get('fase_keywords') or metricas.get('fase_exhaustiva') or metricas.get('fase_reranking')):
+            if metricas and (metricas.get('sub_queries') or metricas.get('queries_semanticas') or metricas.get('keywords') or metricas.get('fase_semantica') or metricas.get('fase_keywords') or metricas.get('fase_reranking')):
                 f.write("─" * 80 + "\n")
-                f.write("  RETRIEVAL PIPELINE (sub-queries, keywords, terms, metrics)\n")
+                f.write("  RETRIEVAL PIPELINE (sub-queries, keywords, BM25, metrics)\n")
                 f.write("─" * 80 + "\n")
                 sub_q = metricas.get('sub_queries', [])
                 if sub_q:
@@ -89,12 +89,9 @@ def guardar_debug_rag(
                     f.write(f"\nExtracted keywords ({len(keywords)}):\n  {', '.join(keywords[:30])}\n")
                     if len(keywords) > 30:
                         f.write(f"  ... and {len(keywords) - 30} more\n")
-                terminos = metricas.get('terminos_criticos', [])
-                if terminos:
-                    f.write(f"\nCritical terms (exhaustive search):\n  {', '.join(terminos)}\n")
                 fase_kw = metricas.get('fase_keywords', {})
                 if fase_kw:
-                    f.write(f"\nKeyword metrics: {fase_kw.get('keywords_encontradas', 0)}/{fase_kw.get('keywords_totales', 0)} found, {fase_kw.get('resultados_totales', 0)} results\n")
+                    f.write(f"\nBM25 metrics: {fase_kw.get('documentos_indexados', 0)} docs indexed, {fase_kw.get('terminos_query', 0)} query terms, {fase_kw.get('resultados_totales', 0)} results (top score {fase_kw.get('mejor_score', 0.0):.2f})\n")
                 f.write(f"\nFull metrics:\n{json.dumps(metricas, indent=2, ensure_ascii=False, default=str)}\n\n")
 
             if motivo_interrupcion:
@@ -112,8 +109,7 @@ def guardar_debug_rag(
             f.write(f"RAG Model: {_inferir_descripcion_modelo(MODELO_RAG)}\n")
             f.write(f"Contextual Retrieval (Indexing): {'YES' if USAR_CONTEXTUAL_RETRIEVAL else 'NO'}\n")
             f.write(f"Query Decomposition: {'YES' if USAR_LLM_QUERY_DECOMPOSITION else 'NO'}\n")
-            f.write(f"Hybrid Search (keywords): {'YES' if USAR_BUSQUEDA_HIBRIDA else 'NO'}\n")
-            f.write(f"Exhaustive Search: {'YES' if USAR_BUSQUEDA_EXHAUSTIVA else 'NO'}\n")
+            f.write(f"Hybrid Search (BM25): {'YES' if USAR_BUSQUEDA_HIBRIDA else 'NO'}\n")
             f.write(f"Reranker: {'YES' if USAR_RERANKER else 'NO'}\n")
             f.write(f"Expand Context: {'YES' if EXPANDIR_CONTEXTO else 'NO'}\n")
             f.write(f"Optimize Context: {'YES' if USAR_OPTIMIZACION_CONTEXTO else 'NO'}\n")
@@ -166,7 +162,7 @@ def guardar_debug_rag(
                 f.write(f"Final score: {score}  |  Reranker score: {score_rr}\n")
                 matches = frag.get('matches', [])
                 if matches:
-                    f.write(f"Matched keywords: {', '.join(matches)}\n")
+                    f.write(f"Lexical match: {', '.join(matches)}\n")
                 query_matches = frag.get('query_matches', [])
                 if query_matches:
                     f.write(f"Matched query(s): {query_matches}\n")

@@ -586,7 +586,6 @@ class MonkeyGrabCLI:
             'busqueda': ('pipeline.search.hybrid' if rag.USAR_BUSQUEDA_HIBRIDA
                          else 'pipeline.search.semantic'),
             'hybrid': rag.USAR_BUSQUEDA_HIBRIDA,
-            'exhaustive': rag.USAR_BUSQUEDA_EXHAUSTIVA,
             'contextual': rag.USAR_CONTEXTUAL_RETRIEVAL,
             'recomp': rag.USAR_RECOMP_SYNTHESIS,
             'images': rag.USAR_EMBEDDINGS_IMAGEN,

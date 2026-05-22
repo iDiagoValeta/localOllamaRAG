@@ -642,7 +642,6 @@ class Display:
         flags.add_column(no_wrap=True)
         flag_items = [
             ("hybrid", info.get("hybrid")),
-            ("exhaustive", info.get("exhaustive")),
             ("rerank", info.get("reranker") == "on"),
             ("contextual", info.get("contextual")),
             ("recomp", info.get("recomp")),
@@ -706,7 +705,6 @@ class Display:
             )
         flags = (
             f"hybrid={self._state_word(info.get('hybrid'))} "
-            f"exhaustive={self._state_word(info.get('exhaustive'))} "
             f"rerank={self._state_word(info.get('reranker') == 'on')} "
             f"contextual={self._state_word(info.get('contextual'))} "
             f"recomp={self._state_word(info.get('recomp'))} "
@@ -1305,7 +1303,6 @@ class Display:
                 f"{n}={self._state_word(v)}"
                 for n, v in [
                     ("hybrid", info.get("hybrid")),
-                    ("exhaustive", info.get("exhaustive")),
                     ("rerank", info.get("reranker") == "on"),
                     ("contextual", info.get("contextual")),
                     ("recomp", info.get("recomp")),
@@ -1392,7 +1389,6 @@ class Display:
         # --- Flags compact row ---
         flag_items = [
             ("hybrid", info.get("hybrid")),
-            ("exhaustive", info.get("exhaustive")),
             ("rerank", info.get("reranker") == "on"),
             ("contextual", info.get("contextual")),
             ("recomp", info.get("recomp")),

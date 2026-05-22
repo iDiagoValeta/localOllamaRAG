@@ -190,122 +190,75 @@ def extraer_keywords(texto: str) -> List[str]:
     return resultado
 
 
-def busqueda_por_keywords(
+_BM25_TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
+
+
+def _tokenizar_bm25(texto: str) -> List[str]:
+    """Tokenize text for BM25, shared by corpus and query.
+
+    Lowercases, splits on non-alphanumeric boundaries, drops stopwords and
+    tokens shorter than 3 characters unless they contain a digit (identifiers
+    and metrics such as "q4" are kept). Using the same tokenizer for the
+    corpus and the query is required for BM25 term matching to be consistent.
+
+    Args:
+        texto: Raw text to tokenize.
+
+    Returns:
+        List of normalized tokens.
+    """
+    tokens = []
+    for token in _BM25_TOKEN_RE.findall(texto.lower()):
+        if token in STOPWORDS:
+            continue
+        if len(token) < 3 and not any(c.isdigit() for c in token):
+            continue
+        tokens.append(token)
+    return tokens
+
+
+def busqueda_lexica_bm25(
     pregunta: str,
     collection: chromadb.Collection,
-    n_results: int = N_RESULTADOS_KEYWORD
-) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
-    """Search by keyword containment using ChromaDB ``where_document``.
+    top_n: int = N_RESULTADOS_KEYWORD
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Lexical search via Okapi BM25 over the whole chunk collection.
 
-    Iterates over extracted keywords (with case variants and hyphen
-    alternatives) and collects matching chunks via ``collection.get()``.
+    Implements classic sparse retrieval (Robertson & Zaragoza, 2009): every
+    chunk is scored by term frequency, inverse document frequency and length
+    normalization, yielding a real relevance ranking instead of a substring
+    filter. The BM25 index is rebuilt per query by scanning the collection in
+    batches.
 
     Args:
-        pregunta: User query to extract keywords from.
+        pregunta: User query.
         collection: ChromaDB collection to search.
-        n_results: Maximum results per keyword variant.
+        top_n: Maximum number of ranked chunks to return.
 
     Returns:
-        Tuple of (matched chunks, metrics dict).
+        Tuple of (chunks ranked by BM25 score, metrics dict).
     """
-    keywords = extraer_keywords(pregunta)
-
     metricas = {
-        'keywords_totales': len(keywords),
-        'keywords_encontradas': 0,
+        'disponible': BM25_AVAILABLE,
+        'documentos_indexados': 0,
+        'terminos_query': 0,
         'resultados_totales': 0,
-        'errores': 0
+        'mejor_score': 0.0,
     }
 
-    if not keywords:
+    query_tokens = _tokenizar_bm25(pregunta)
+    metricas['terminos_query'] = len(query_tokens)
+
+    if not BM25_AVAILABLE:
+        ui.debug("BM25 unavailable (rank-bm25 not installed)")
+        return [], metricas
+    if not query_tokens:
         return [], metricas
 
-    resultados_keyword = []
-    keywords_encontradas = set()
-    ids_vistos = set()
-
-    for keyword_base in keywords[:20]:
-        variantes = list({
-            keyword_base,
-            keyword_base.lower(),
-            keyword_base.capitalize(),
-        })
-        if '-' in keyword_base:
-            variantes.append(keyword_base.replace('-', ' '))
-            variantes.append(keyword_base.replace('-', ' ').lower())
-
-        for keyword in variantes:
-            if len(keyword) < 3:
-                continue
-
-            try:
-                results = collection.get(
-                    where_document={"$contains": keyword},
-                    include=['documents', 'metadatas'],
-                    limit=n_results
-                )
-
-                if results['documents']:
-                    for doc, meta, doc_id in zip(
-                        results['documents'],
-                        results['metadatas'],
-                        results['ids']
-                    ):
-                        if doc_id not in ids_vistos:
-                            ids_vistos.add(doc_id)
-                            resultados_keyword.append({
-                                'doc': doc,
-                                'metadata': meta,
-                                'distancia': 0.5,
-                                'keyword_match': keyword_base,
-                                'id': doc_id
-                            })
-                            keywords_encontradas.add(keyword_base)
-            except Exception as e:
-                metricas['errores'] += 1
-                logging.warning(f"Error searching keyword '{keyword}': {e}")
-
-    metricas['keywords_encontradas'] = len(keywords_encontradas)
-    metricas['resultados_totales'] = len(resultados_keyword)
-
-    if keywords_encontradas:
-        ui.debug(f"keywords: {', '.join(list(keywords_encontradas)[:10])}")
-    else:
-        ui.debug("no direct keyword matches")
-
-    if LOGGING_METRICAS:
-        logging.info(f"Keyword search: {metricas['keywords_encontradas']}/{metricas['keywords_totales']} found, {metricas['resultados_totales']} results")
-
-    return resultados_keyword, metricas
-
-
-def busqueda_exhaustiva_texto(
-    terminos_criticos: List[str],
-    collection: chromadb.Collection,
-    max_results: int = 20
-) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
-    """Batch-scan all documents for critical terms.
-
-    Iterates over the entire collection in batches and returns chunks
-    containing the specified terms, sorted by match count.
-
-    Args:
-        terminos_criticos: Domain-specific terms to search for.
-        collection: ChromaDB collection to scan.
-        max_results: Maximum number of results to return.
-
-    Returns:
-        Tuple of (matched chunks sorted by match count, metrics dict).
-    """
-    resultados = []
     total_docs = collection.count()
+    corpus_tokens: List[List[str]] = []
+    corpus_entries: List[Dict[str, Any]] = []
     batch_size = 100
-
-    metricas = {
-        'documentos_escaneados': 0,
-        'documentos_con_matches': 0,
-        'errores': 0
-    }
 
     for offset in range(0, total_docs, batch_size):
         try:
@@ -314,41 +267,56 @@ def busqueda_exhaustiva_texto(
                 offset=offset,
                 include=['documents', 'metadatas']
             )
-
-            metricas['documentos_escaneados'] += len(batch['documents'])
-
-            for doc, meta, doc_id in zip(
-                batch['documents'],
-                batch['metadatas'],
-                batch['ids']
-            ):
-                doc_lower = doc.lower()
-                matches_encontrados = []
-
-                for termino in terminos_criticos:
-                    termino_lower = termino.lower()
-                    if termino_lower in doc_lower:
-                        matches_encontrados.append(termino)
-
-                if matches_encontrados:
-                    metricas['documentos_con_matches'] += 1
-                    resultados.append({
-                        'doc': doc,
-                        'metadata': meta,
-                        'id': doc_id,
-                        'matches': matches_encontrados,
-                        'num_matches': len(matches_encontrados)
-                    })
         except Exception as e:
-            metricas['errores'] += 1
-            logging.warning(f"Error in exhaustive search (offset {offset}): {e}")
+            logging.warning(f"Error loading BM25 batch (offset {offset}): {e}")
+            continue
 
-    resultados.sort(key=lambda x: x['num_matches'], reverse=True)
+        for doc, meta, doc_id in zip(batch['documents'], batch['metadatas'], batch['ids']):
+            corpus_tokens.append(_tokenizar_bm25(doc))
+            corpus_entries.append({'doc': doc, 'metadata': meta, 'id': doc_id})
+
+    metricas['documentos_indexados'] = len(corpus_tokens)
+
+    if not corpus_tokens:
+        return [], metricas
+
+    bm25 = BM25Okapi(corpus_tokens, k1=BM25_K1, b=BM25_B)
+    scores = bm25.get_scores(query_tokens)
+
+    ranked_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+
+    resultados = []
+    for i in ranked_idx:
+        score = float(scores[i])
+        if score <= 0:
+            break
+        entry = corpus_entries[i]
+        resultados.append({
+            'doc': entry['doc'],
+            'metadata': entry['metadata'],
+            'distancia': 0.5,
+            'id': entry['id'],
+            'bm25_score': score,
+        })
+        if len(resultados) >= top_n:
+            break
+
+    metricas['resultados_totales'] = len(resultados)
+    metricas['mejor_score'] = resultados[0]['bm25_score'] if resultados else 0.0
+
+    if resultados:
+        ui.debug(f"BM25: {len(resultados)} chunks (top score {metricas['mejor_score']:.2f})")
+    else:
+        ui.debug("BM25: no positive matches")
 
     if LOGGING_METRICAS:
-        logging.info(f"Exhaustive search: {metricas['documentos_con_matches']} docs with matches out of {metricas['documentos_escaneados']} scanned")
+        logging.info(
+            f"BM25 search: {metricas['documentos_indexados']} docs indexed, "
+            f"{metricas['terminos_query']} query terms, "
+            f"{metricas['resultados_totales']} results"
+        )
 
-    return resultados[:max_results], metricas
+    return resultados, metricas
 
 
 # ─────────────────────────────────────────────

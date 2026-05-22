@@ -22,7 +22,6 @@ from typing import Any
 BASELINE_PIPELINE_FLAGS = {
     "USAR_LLM_QUERY_DECOMPOSITION": True,
     "USAR_BUSQUEDA_HIBRIDA": True,
-    "USAR_BUSQUEDA_EXHAUSTIVA": True,
     "USAR_RERANKER": True,
     "EXPANDIR_CONTEXTO": True,
     "USAR_OPTIMIZACION_CONTEXTO": True,
@@ -42,13 +41,8 @@ ABLATION_VARIANTS = [
     },
     {
         "name": "no_lexical_search",
-        "description": "Disable keyword/lexical Chroma search.",
+        "description": "Disable BM25 lexical search.",
         "flags": {**BASELINE_PIPELINE_FLAGS, "USAR_BUSQUEDA_HIBRIDA": False},
-    },
-    {
-        "name": "no_exhaustive_search",
-        "description": "Disable exhaustive full-collection text scan.",
-        "flags": {**BASELINE_PIPELINE_FLAGS, "USAR_BUSQUEDA_EXHAUSTIVA": False},
     },
     {
         "name": "no_reranker",

@@ -272,35 +272,6 @@ def _validar_coherencia_query(query: str) -> bool:
     return True
 
 
-def _filtrar_terminos_criticos(terminos: List[str]) -> List[str]:
-    """Keep only high-discrimination domain-specific terms for exhaustive search.
-
-    Filters out generic blacklisted single words and retains multi-word
-    terms, capitalized terms, and acronyms.
-
-    Args:
-        terminos: Candidate critical terms.
-
-    Returns:
-        Filtered list of domain-specific terms.
-    """
-    filtered = []
-    for term in terminos:
-        words = term.lower().split()
-
-        if len(words) == 1 and term.lower() in GENERIC_TERMS_BLACKLIST:
-            continue
-
-        if len(words) >= 2:
-            filtered.append(term)
-            continue
-
-        if term[0].isupper() or term.isupper():
-            filtered.append(term)
-
-    return filtered
-
-
 # ─────────────────────────────────────────────
 
 
