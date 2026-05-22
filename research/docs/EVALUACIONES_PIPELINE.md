@@ -152,8 +152,8 @@ All settings are **environment variables** read by `chat_pdfs.py` at import.
 Set them in the PowerShell session before invoking `infer.py`:
 
 ```powershell
-# OLLAMA_RAG_MODEL need not be exported: chat_pdfs.py:158 already defaults to
-# "phi4-finetuned:latest". The rest follow module defaults unless forced.
+# Model variables are exported here to make the run explicit and reproducible;
+# they need not match the module defaults in rag/chat_pdfs.py.
 
 $env:OLLAMA_CHAT_MODEL       = "gemma4:e4b"               # sub-queries
 $env:OLLAMA_EMBED_MODEL      = "embeddinggemma:latest"
@@ -169,12 +169,22 @@ $env:OLLAMA_QUERY_NUM_CTX       = "8192"
 $env:OLLAMA_RECOMP_NUM_CTX      = "8192"
 $env:OLLAMA_CONTEXTUAL_NUM_CTX  = "32768"
 $env:OLLAMA_OCR_NUM_CTX         = "8192"
-$env:OLLAMA_REQUEST_TIMEOUT     = "900s"
+$env:OLLAMA_REQUEST_TIMEOUT     = "900"
+
+# Retrieval/ranking defaults. Leave unset for the documented baseline, or set
+# explicitly when running a sensitivity analysis.
+$env:RAG_BM25_K1                = "1.5"
+$env:RAG_BM25_B                 = "0.75"
+$env:RAG_RRF_K                  = "20"
+$env:RAG_PESO_SEMANTICO_RRF     = "0.55"
+$env:RAG_PESO_BM25_RRF          = "0.45"
+$env:RAG_UMBRAL_SCORE_RERANKER  = "0.65"
 ```
 
-`UMBRAL_SCORE_RERANKER` is **not** env-overridable; it is a module constant in
-`rag/chat_pdfs.py`. **Closed decision (2026-05-14): raised 0.55 → 0.65**,
-informed by the reranker score probe (`research/evaluation/probe_reranker_scores.py`):
+`UMBRAL_SCORE_RERANKER` is env-overridable as `RAG_UMBRAL_SCORE_RERANKER`, but
+the documented baseline keeps **0.65**. **Closed default decision
+(2026-05-14): raised 0.55 → 0.65**, informed by the reranker score probe
+(`research/evaluation/probe_reranker_scores.py`):
 0.70 collapsed CA-Q3 to a single candidate (multi-evidence risk); 0.65 keeps the
 post-noise plateau across the three corpora (ES 30 candidates, CA 15,
 EN-RagBench 34 over 8 questions). Rationale: precision > recall in context — the

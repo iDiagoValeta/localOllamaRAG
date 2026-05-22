@@ -37,7 +37,7 @@ pregunta
    └── D) Búsqueda EXHAUSTIVA (scan total)   → lista 3  (0.3 · nº términos)
                        │
                        ▼
-        E) Fusión: score_final = 0.55·sem + 0.45·kw
+        E) Fusión: score_final = PESO_SEMANTICO_RRF·sem + PESO_BM25_RRF·kw
 ```
 
 ### Ahora
@@ -50,7 +50,7 @@ pregunta
    └── C) Búsqueda LÉXICA BM25               → lista 2  (RRF por rango BM25)
                        │
                        ▼
-        D) Fusión: score_final = 0.55·sem + 0.45·kw
+        D) Fusión: score_final = PESO_SEMANTICO_RRF·sem + PESO_BM25_RRF·kw
 ```
 
 ---
@@ -154,7 +154,7 @@ score(D,Q) = Σ_t∈Q  IDF(t) · [ f(t,D)·(k1+1) ] / [ f(t,D) + k1·(1 − b + 
 | | Antes | Ahora |
 |---|---|---|
 | Listas fusionadas | 3 (semántica, keywords, exhaustiva) | 2 (semántica, BM25) |
-| Fórmula | `score_final = 0.55·score_semantic + 0.45·score_keyword` | **idéntica** |
+| Fórmula | `score_final = PESO_SEMANTICO_RRF·score_semantic + PESO_BM25_RRF·score_keyword` | **idéntica** |
 | `RRF_K` | 20 | 20 (sin cambios) |
 | Umbral de paso | `UMBRAL_RELEVANCIA = 0.50` | sin cambios |
 
@@ -170,7 +170,7 @@ ha cambiado**. Solo cambia el segundo sumando (`score_keyword`).
 | `USAR_BUSQUEDA_HIBRIDA` | activa keyword `$contains` | activa **BM25** |
 | `USAR_BUSQUEDA_EXHAUSTIVA` | activa la exhaustiva | **eliminado** por completo (de `chat_pdfs.py`, `PIPELINE_RUNTIME_FLAGS` y de la capa de evaluación) |
 | `RRF_K` | 20 | 20 |
-| Pesos fusión | 0.55 / 0.45 | 0.55 / 0.45 |
+| Pesos fusión | 0.55 / 0.45 | 0.55 / 0.45 por defecto (`RAG_PESO_SEMANTICO_RRF`, `RAG_PESO_BM25_RRF`) |
 | `N_RESULTADOS_KEYWORD` | máximo de resultados **por variante** de keyword (`limit` de `collection.get`) | **top-N total** de fragmentos BM25 devueltos |
 | `BM25_K1` | — | **1.5** (nuevo) |
 | `BM25_B` | — | **0.75** (nuevo) |
@@ -317,13 +317,14 @@ score(D,Q) = Σ_{t∈Q}  IDF(t) · [ f(t,D)·(k1+1) ] / [ f(t,D) + k1·(1 − b 
 score_keyword(d)  += 1 / (rank_BM25(d)      + RRF_K)
 score_semantic(d) += 1 / (rank_semantico(d) + RRF_K)        # acumulado sobre las variantes de query
 ```
-con `RRF_K = 20`. El `bm25_score` crudo solo ordena y filtra (`> 0`); en la mezcla
+con `RRF_K = 20` por defecto. El `bm25_score` crudo solo ordena y filtra (`> 0`); en la mezcla
 entra su **rango**, no su valor.
 
 **(c) Puntuación final fusionada:**
 ```
-score_final(d) = 0.55 · score_semantic(d) + 0.45 · score_keyword(d)
+score_final(d) = PESO_SEMANTICO_RRF · score_semantic(d) + PESO_BM25_RRF · score_keyword(d)
 ```
+Defaults actuales: `PESO_SEMANTICO_RRF = 0.55`, `PESO_BM25_RRF = 0.45`.
 
 ---
 
@@ -376,7 +377,7 @@ distancia en `score_semantic`. Resultado: **69 fragmentos únicos**
    (`fase_keywords`: `disponible=true, documentos_indexados=69, terminos_query=24,
    resultados_totales=40, mejor_score=40.718`).
 
-**Paso 6 — Fusión.** `score_final = 0.55·score_semantic + 0.45·score_keyword` sobre los
+**Paso 6 — Fusión.** `score_final = PESO_SEMANTICO_RRF·score_semantic + PESO_BM25_RRF·score_keyword` sobre los
 **69 candidatos** (`candidatos_fusion = 69`), ordenados de mayor a menor.
 
 **Paso 7 — Reranking** (`USAR_RERANKER`, CrossEncoder tier `quality`, `cuda`): 69

@@ -285,11 +285,11 @@ Para cada query (original + sub-queries):
 
 1. Prefija el texto con `EMBED_PREFIX_QUERY` (auto-configurado en `chat_pdfs.py` según `MODELO_EMBEDDING`; vacío si el modelo no requiere prefijo).
 2. Calcula embeddings vía Ollama (`MODELO_EMBEDDING`).
-3. Consulta ChromaDB: `collection.query(n_results=N_RESULTADOS_SEMANTICOS)` donde `N_RESULTADOS_SEMANTICOS = 80`.
+3. Consulta ChromaDB: `collection.query(n_results=N_RESULTADOS_SEMANTICOS)` donde `N_RESULTADOS_SEMANTICOS = 80` por defecto (`RAG_N_RESULTADOS_SEMANTICOS`).
 4. Acumula en un diccionario de candidatos:
 
 ```python
-score_semantic[doc_id] += 1.0 / (rank + RRF_K)   # RRF_K = 20
+score_semantic[doc_id] += 1.0 / (rank + RRF_K)   # RRF_K = 20 por defecto
 ```
 
 ---
@@ -302,7 +302,7 @@ score_semantic[doc_id] += 1.0 / (rank + RRF_K)   # RRF_K = 20
 def busqueda_lexica_bm25(
     pregunta: str,
     collection: chromadb.Collection,
-    top_n: int = N_RESULTADOS_KEYWORD,   # 40
+    top_n: int = N_RESULTADOS_KEYWORD,   # 40 por defecto
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]
 ```
 
@@ -327,7 +327,7 @@ dígitos (se conservan identificadores y métricas).
 
 El índice BM25 se **reconstruye por consulta**: se escanea toda la colección en
 batches, se tokeniza el corpus, se construye `BM25Okapi(corpus, k1=BM25_K1,
-b=BM25_B)` (`BM25_K1 = 1.5`, `BM25_B = 0.75`) y se puntúa la query con
+b=BM25_B)` (`BM25_K1 = 1.5`, `BM25_B = 0.75` por defecto) y se puntúa la query con
 `get_scores()`. Se devuelven los `top_n` fragmentos con score positivo,
 ordenados de mayor a menor. La fusión RRF usa ese **rango real**:
 
@@ -345,10 +345,16 @@ score_keyword[doc_id] += 1.0 / (rank + RRF_K)   # rank = posición por score BM2
 Una vez recogidos los candidatos de ambas vías (semántica + BM25):
 
 ```python
-score_final = score_semantic * 0.55 + score_keyword * 0.45
+score_final = (
+    score_semantic * PESO_SEMANTICO_RRF
+    + score_keyword * PESO_BM25_RRF
+)
 ```
 
-Los candidatos se ordenan descendentemente por `score_final`. El umbral mínimo para pasar a la siguiente etapa es `UMBRAL_RELEVANCIA = 0.50`.
+Los candidatos se ordenan descendentemente por `score_final`. Por defecto
+`PESO_SEMANTICO_RRF = 0.55` y `PESO_BM25_RRF = 0.45`. Si el reranker está
+activo, `score_final` se sustituye después por `score_reranker`; los umbrales
+posteriores se aplican sobre esa escala de reranker, no sobre la escala RRF pura.
 
 ---
 
@@ -644,7 +650,7 @@ Ollama.
 | `OLLAMA_NUM_CTX` | 8192 | General |
 | `OLLAMA_RAG_NUM_CTX` | 16384 | `MODELO_RAG` |
 | `OLLAMA_AUX_NUM_CTX` | 8192 | Modelos auxiliares |
-| `OLLAMA_QUERY_NUM_CTX` | 8192 | `MODELO_CHAT` (query decomposition) |
+| `OLLAMA_QUERY_NUM_CTX` | 2048 | `MODELO_CHAT` (query decomposition) |
 | `OLLAMA_CONTEXTUAL_NUM_CTX` | 32768 | `MODELO_CONTEXTUAL` |
 | `OLLAMA_RECOMP_NUM_CTX` | 8192 | `MODELO_RECOMP` |
 | `OLLAMA_OCR_NUM_CTX` | 8192 | `MODELO_OCR` |
@@ -652,25 +658,30 @@ Ollama.
 
 ### Parámetros de chunking y retrieval
 
-| Constante | Valor | Descripción |
-|-----------|-------|-------------|
-| `CHUNK_SIZE` | 2000 | Tamaño máximo de chunk (chars) |
-| `CHUNK_OVERLAP` | 400 | Solapamiento entre chunks (~20%) |
-| `MIN_CHUNK_LENGTH` | 150 | Descarta chunks demasiado cortos |
-| `CONTEXTUAL_DOC_CHARS` | 24000 | Muestra para contexto situacional |
-| `N_RESULTADOS_SEMANTICOS` | 80 | Resultados por query semántica |
-| `N_RESULTADOS_KEYWORD` | 40 | Resultados por búsqueda keyword |
-| `TOP_K_RERANK_CANDIDATES` | 200 | Candidatos que entran al reranker |
-| `TOP_K_AFTER_RERANK` | 15 | Fragmentos tras reranking |
-| `TOP_K_FINAL` | 8 | Fragmentos enviados al LLM |
-| `N_TOP_PARA_EXPANSION` | 3 | Fragmentos que reciben expansión de vecinos |
-| `RRF_K` | 20 | Factor de amortiguamiento RRF |
-| `UMBRAL_RELEVANCIA` | 0.50 | Score RRF mínimo para pasar |
-| `UMBRAL_SCORE_RERANKER` | 0.65 | Score Cross-Encoder mínimo (subido desde 0.55 tras sonda 2026-05-14) |
-| `MAX_CONTEXTO_CHARS` | 24000 | Máximo de chars de contexto al LLM |
-| `MIN_LONGITUD_PREGUNTA_RAG` | 10 | Mínimo de caracteres para activar el pipeline RAG |
-| `MAX_IMAGENES_POR_PAGINA` | 5 | Máximo de imágenes extraídas por página PDF |
-| `CAPTION_MARGIN_PX` | 80 | Píxeles debajo de la imagen donde se busca el caption |
+| Constante | Default / env | Descripción |
+|-----------|---------------|-------------|
+| `CHUNK_SIZE` | 2000 / `RAG_CHUNK_SIZE` | Tamaño máximo de chunk (chars) |
+| `CHUNK_OVERLAP` | 400 / `RAG_CHUNK_OVERLAP` | Solapamiento entre chunks (~20%) |
+| `MIN_CHUNK_LENGTH` | 150 / `RAG_MIN_CHUNK_LENGTH` | Descarta chunks demasiado cortos |
+| `CONTEXTUAL_DOC_CHARS` | 24000 / `CONTEXTUAL_DOC_CHARS` | Muestra para contexto situacional |
+| `N_RESULTADOS_SEMANTICOS` | 80 / `RAG_N_RESULTADOS_SEMANTICOS` | Resultados por query semántica |
+| `N_RESULTADOS_KEYWORD` | 40 / `RAG_N_RESULTADOS_KEYWORD` | Resultados por búsqueda BM25 |
+| `TOP_K_RERANK_CANDIDATES` | 200 / `RAG_TOP_K_RERANK_CANDIDATES` | Candidatos que entran al reranker |
+| `TOP_K_AFTER_RERANK` | 15 / `RAG_TOP_K_AFTER_RERANK` | Fragmentos tras reranking |
+| `TOP_K_FINAL` | 8 / `RAG_TOP_K_FINAL` | Fragmentos enviados al LLM |
+| `N_TOP_PARA_EXPANSION` | 3 / `RAG_N_TOP_PARA_EXPANSION` | Fragmentos que reciben expansión de vecinos |
+| `RRF_K` | 20 / `RAG_RRF_K` | Factor de amortiguamiento RRF |
+| `PESO_SEMANTICO_RRF` | 0.55 / `RAG_PESO_SEMANTICO_RRF` | Peso de la contribución semántica RRF |
+| `PESO_BM25_RRF` | 0.45 / `RAG_PESO_BM25_RRF` | Peso de la contribución BM25 RRF |
+| `BM25_K1` | 1.5 / `RAG_BM25_K1` | Saturación de frecuencia de término BM25 |
+| `BM25_B` | 0.75 / `RAG_BM25_B` | Normalización por longitud BM25 |
+| `UMBRAL_RELEVANCIA` | 0.50 / `RAG_UMBRAL_RELEVANCIA` | Puerta de relevancia sobre score de reranker cuando el reranker está activo |
+| `UMBRAL_SCORE_RERANKER` | 0.65 / `RAG_UMBRAL_SCORE_RERANKER` | Score Cross-Encoder mínimo (subido desde 0.55 tras sonda 2026-05-14) |
+| `MAX_CONTEXTO_CHARS` | 24000 / `MAX_CONTEXTO_CHARS` | Máximo de chars de contexto al LLM |
+| `MIN_LONGITUD_PREGUNTA_RAG` | 10 / `RAG_MIN_LONGITUD_PREGUNTA` | Mínimo de caracteres para activar el pipeline RAG |
+| `MAX_IMAGENES_POR_PAGINA` | 5 / `RAG_MAX_IMAGES_PER_PAGE` | Máximo de imágenes extraídas por página PDF |
+| `MIN_IMAGEN_SIZE_PX` | 100 / `RAG_MIN_IMAGE_SIZE_PX` | Tamaño mínimo de imagen extraída |
+| `CAPTION_MARGIN_PX` | 80 / `RAG_CAPTION_MARGIN_PX` | Píxeles debajo de la imagen donde se busca el caption |
 
 ### Flags booleanos del pipeline
 
@@ -739,7 +750,7 @@ Consulta: `"¿Qué componentes tiene una arquitectura Transformer?"`
 
 2. BÚSQUEDA SEMÁNTICA  (4 queries × 80 resultados)
    Embeddings vía MODELO_EMBEDDING con prefix "search_query: "
-   ChromaDB.query() → RRF con k=20
+   ChromaDB.query() → RRF con k=20 por defecto
    Candidatos acumulados con score_semantic
 
 3. BÚSQUEDA LÉXICA BM25  (USAR_BUSQUEDA_HIBRIDA=True)
@@ -748,14 +759,14 @@ Consulta: `"¿Qué componentes tiene una arquitectura Transformer?"`
    Top-N fragmentos por score BM25; RRF acumulado en score_keyword
 
 4. FUSIÓN RRF
-   score_final = score_semantic × 0.55 + score_keyword × 0.45
-   Filtro: score_final >= 0.50
+   score_final = score_semantic × PESO_SEMANTICO_RRF + score_keyword × PESO_BM25_RRF
+   Pesos por defecto: 0.55 semántica, 0.45 BM25
    Resultado: ~50-80 candidatos ordenados
 
 5. RERANKING  (USAR_RERANKER=True)
    Entrada: top 200 candidatos por score_final
    CrossEncoder.rank(pairs=[(pregunta, texto_chunk)])
-   Umbral: score_reranker >= 0.65
+   Umbral por defecto: score_reranker >= 0.65
    Salida: top 15 fragmentos con score_reranker
 
 6. EXPANSIÓN DE VECINOS  (EXPANDIR_CONTEXTO=True)
