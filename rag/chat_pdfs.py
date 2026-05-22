@@ -437,7 +437,7 @@ Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; o
     * **Semantic Search:** Vector distance lookup using `MODELO_EMBEDDING`; always performed.
 * **OPTIONAL (execution order):**
     * **Query Decomposition** (`USAR_LLM_QUERY_DECOMPOSITION`): Uses `MODELO_CHAT` configured through `OLLAMA_CHAT_MODEL` to generate sub-queries before semantic search; activates for long questions (>60 chars).
-    * **Hybrid Search** (`USAR_BUSQUEDA_HIBRIDA`): Adds Okapi BM25 lexical search (Robertson & Zaragoza 2009) over all chunks, fused with the semantic ranking via RRF. Do not describe the removed keyword `$contains` search or exhaustive scan as active stages.
+    * **Hybrid Search** (`USAR_BUSQUEDA_HIBRIDA`): Adds Okapi BM25 lexical search (Robertson & Zaragoza 2009) over the indexed chunks, then fuses the BM25 ranking with semantic retrieval using Reciprocal Rank Fusion (RRF).
 
 #### 3. RANKING & REFINEMENT
 * **OPTIONAL:**
