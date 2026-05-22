@@ -879,6 +879,67 @@ def api_reindex():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/api/upload", methods=["POST"])
+def api_upload():
+    """Upload PDF(s) and index them.
+
+    When add_only=1: add without full re-indexing, using current settings.
+    """
+    add_only = request.args.get("add_only", "").lower() in ("1", "true", "yes")
+    files = request.files.getlist("file") or (
+        request.files.get("file") and [request.files["file"]] or []
+    )
+    if not files:
+        return jsonify({"ok": False, "error": "No se envió ningún archivo"}), 400
+
+    saved = []
+    for f in files:
+        if not f or not f.filename or not f.filename.lower().endswith(".pdf"):
+            continue
+        filename = secure_filename(f.filename)
+        dest = os.path.join(rag_engine.CARPETA_DOCS, filename)
+        os.makedirs(rag_engine.CARPETA_DOCS, exist_ok=True)
+        f.save(dest)
+        saved.append(filename)
+
+    if not saved:
+        return jsonify({"ok": False, "error": "Ningún PDF válido"}), 400
+
+    try:
+        coll = _get_collection()
+        if add_only:
+            rag_engine.indexar_documentos(
+                rag_engine.CARPETA_DOCS, coll, solo_archivos=saved
+            )
+            total = coll.count()
+        else:
+            _reset_db()
+            _state["indexing_failed"] = False
+            _state["indexing_error"] = None
+            _state["indexing_done_empty"] = False
+            _ensure_indexed()
+            return jsonify({
+                "ok": True,
+                "indexing": True,
+                "message": "PDF guardado. Re-indexación iniciada.",
+                "files": saved,
+                "total_fragments": 0,
+                "documents": [],
+                "progress": _state["indexing_progress"],
+            }), 202
+        docs = rag_engine.obtener_documentos_indexados(coll)
+        return jsonify({
+            "ok": True,
+            "filename": saved[0] if len(saved) == 1 else None,
+            "files": saved,
+            "total_fragments": total,
+            "documents": docs,
+            "document_details": _collection_document_details(coll),
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 _SETTINGS_MAP = {
     "contextualRetrieval": "USAR_CONTEXTUAL_RETRIEVAL",
     "queryDecomposition": "USAR_LLM_QUERY_DECOMPOSITION",

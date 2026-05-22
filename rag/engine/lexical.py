@@ -29,7 +29,7 @@ def _sync_runtime_globals() -> None:
 
 
 _sync_runtime_globals()
-# SECTION 7: KEYWORD AND LEXICAL SEARCH
+# SECTION 7: KEYWORD EXTRACTION AND BM25 LEXICAL SEARCH
 # ─────────────────────────────────────────────
 
 
@@ -277,7 +277,7 @@ def busqueda_lexica_bm25(
 
     metricas['documentos_indexados'] = len(corpus_tokens)
 
-    if not corpus_tokens:
+    if not corpus_tokens or not any(corpus_tokens):
         return [], metricas
 
     bm25 = BM25Okapi(corpus_tokens, k1=BM25_K1, b=BM25_B)
