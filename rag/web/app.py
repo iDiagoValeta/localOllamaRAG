@@ -27,7 +27,7 @@ Dependencies:
 #
 #  BACKEND
 #  +-- 2. COLLECTION MANAGEMENT   ChromaDB init, reindex, DB invalidation
-#  +-- 3. STREAMING HELPERS       _chat_stream, _rag_stream, _format_sources
+#  +-- 3. STREAMING HELPERS       _chat_stream, _format_sources
 #
 #  API
 #  +-- 4. API ROUTES              all Flask @app.route endpoints (incl. ``/api/corpus``)
@@ -249,43 +249,6 @@ def _chat_stream(pregunta: str) -> Generator[str, None, None]:
         stream=True,
         think=False,
         options={"temperature": 0.7, "top_p": 0.9, "num_ctx": 8192},
-    )
-
-    for chunk in stream:
-        content = chunk.get("message", {}).get("content", "") or chunk.get("content", "")
-        if content:
-            yield content
-
-
-def _rag_stream(mensaje_usuario: str) -> Generator[str, None, None]:
-    """Generate tokens from RAG mode via streaming.
-
-    Args:
-        mensaje_usuario: Full user message including context.
-
-    Yields:
-        Token strings as they are produced by the model.
-    """
-    import ollama
-
-    rag_messages = []
-    if rag_engine._modelo_necesita_system_prompt(rag_engine.MODELO_RAG):
-        rag_messages.append({"role": "system", "content": rag_engine.SYSTEM_PROMPT_RAG})
-    rag_messages.append({"role": "user", "content": mensaje_usuario})
-
-    stream = ollama.chat(
-        model=rag_engine.MODELO_RAG,
-        messages=rag_messages,
-        stream=True,
-        think=False,
-        options={
-            "temperature": 0.15,
-            "top_p": 0.85,
-            "repeat_penalty": 1.15,
-            "repeat_last_n": 64,
-            "num_predict": -1,
-            "num_ctx": rag_engine.OLLAMA_RAG_NUM_CTX,
-        },
     )
 
     for chunk in stream:
@@ -575,7 +538,7 @@ def api_rag():
         }), 400
 
     coll = _get_collection()
-    fragmentos_ranked, mejor_score, metricas = rag_engine.realizar_busqueda_hibrida(
+    fragmentos_ranked, _, metricas = rag_engine.realizar_busqueda_hibrida(
         pregunta, coll
     )
 
@@ -586,90 +549,29 @@ def api_rag():
             "message": "No se encontró información relevante en los documentos.",
         }), 200
 
-    # UMBRAL_RELEVANCIA applies to reranker-scale scores, not RRF-only fusion.
-    if rag_engine.USAR_RERANKER and mejor_score < rag_engine.UMBRAL_RELEVANCIA:
+    fragmentos_finales, metricas_contexto = rag_engine.preparar_fragmentos_para_generacion(
+        fragmentos_ranked,
+        coll,
+    )
+    metricas = {**metricas, "fase_contexto": metricas_contexto}
+    if not fragmentos_finales:
         return jsonify({
             "ok": False,
-            "error": "out_of_scope",
-            "message": "Pregunta fuera del ámbito de los documentos indexados.",
+            "error": "no_results",
+            "message": "No se encontró información relevante.",
         }), 200
-
-    if rag_engine.USAR_RERANKER:
-        fragmentos_filtrados = [
-            f
-            for f in fragmentos_ranked
-            if f.get("score_reranker", f.get("score_final", 0))
-            >= rag_engine.UMBRAL_SCORE_RERANKER
-        ]
-        if not fragmentos_filtrados:
-            return jsonify({
-                "ok": False,
-                "error": "no_results",
-                "message": "No se encontró información relevante.",
-            }), 200
-        fragmentos_ranked = fragmentos_filtrados
-
-    fragmentos_finales = fragmentos_ranked[: rag_engine.TOP_K_FINAL]
-    ids_usados = {f["id"] for f in fragmentos_finales}
-
-    if (
-        rag_engine.EXPANDIR_CONTEXTO
-        and fragmentos_finales
-        and "chunk" in fragmentos_finales[0]["metadata"]
-    ):
-        for frag in fragmentos_finales[: rag_engine.N_TOP_PARA_EXPANSION]:
-            ids_vecinos = rag_engine.expandir_con_chunks_adyacentes(
-                frag["id"], frag["metadata"], n_vecinos=1
-            )
-            if ids_vecinos:
-                try:
-                    vecinos = coll.get(
-                        ids=ids_vecinos, include=["documents", "metadatas"]
-                    )
-                    for v_doc, v_meta in zip(
-                        vecinos["documents"], vecinos["metadatas"]
-                    ):
-                        v_id = f"{v_meta['source']}_pag{v_meta['page']}_chunk{v_meta.get('chunk', 0)}"
-                        if v_id not in ids_usados:
-                            fragmentos_finales.append({
-                                "doc": v_doc,
-                                "metadata": v_meta,
-                                "distancia": float("inf"),
-                                "score_final": 0.0,
-                                "id": v_id,
-                            })
-                            ids_usados.add(v_id)
-                except Exception:
-                    pass
-
-    contexto_total = sum(len(f["doc"]) for f in fragmentos_finales)
-    if contexto_total > rag_engine.MAX_CONTEXTO_CHARS:
-        fragmentos_truncados = []
-        chars_acum = 0
-        for f in fragmentos_finales:
-            if chars_acum + len(f["doc"]) > rag_engine.MAX_CONTEXTO_CHARS:
-                break
-            fragmentos_truncados.append(f)
-            chars_acum += len(f["doc"])
-        fragmentos_finales = fragmentos_truncados
 
     sources = _format_sources(fragmentos_finales)
 
-    # Build context and user message (shared by streaming and non-streaming)
-    if rag_engine.USAR_RECOMP_SYNTHESIS:
-        contexto_str = rag_engine.sintetizar_contexto_recomp(
-            fragmentos_finales, query_usuario=pregunta
-        )
-    else:
-        contexto_str = rag_engine.construir_contexto_para_modelo(fragmentos_finales)
-
-    mensaje_usuario = f"{pregunta}\n\n<context>{contexto_str}</context>"
+    mensaje_usuario = rag_engine._preparar_mensaje_usuario_rag(
+        pregunta, fragmentos_finales
+    )
 
     if stream:
         def generate():
             raw = ""
             try:
-                for token in _rag_stream(mensaje_usuario):
+                for token in rag_engine.generar_tokens_respuesta(mensaje_usuario):
                     raw += token
                     yield _sse_event("token", {"token": token})
                 try:
@@ -703,7 +605,7 @@ def api_rag():
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
-    respuesta = rag_engine.generar_respuesta_silenciosa(pregunta, fragmentos_finales)
+    respuesta = rag_engine._generar_respuesta_stream(mensaje_usuario)
     rag_engine.guardar_debug_rag(
         pregunta,
         mensaje_usuario,

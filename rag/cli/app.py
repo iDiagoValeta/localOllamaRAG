@@ -311,17 +311,15 @@ class MonkeyGrabCLI:
 
         timer = QueryTimer()
         fragmentos_finales: List[Dict[str, Any]] = []
-        best_score: Optional[float] = None
 
         try:
             ui.pipeline_start()
             ui.pipeline_phase(ui._s("phase.search"), ui._s("phase.search.detail"))
 
-            fragmentos_ranked, mejor_score, metricas = (
+            fragmentos_ranked, _, metricas = (
                 self.rag.realizar_busqueda_hibrida(pregunta, self.collection)
             )
             timer.mark("búsqueda")
-            best_score = mejor_score
 
             if not fragmentos_ranked:
                 ui.pipeline_stop()
@@ -334,63 +332,36 @@ class MonkeyGrabCLI:
                 )
                 return
 
-            # UMBRAL_RELEVANCIA applies to reranker-scale scores, not RRF-only fusion.
-            if self.rag.USAR_RERANKER and mejor_score < self.rag.UMBRAL_RELEVANCIA:
-                ui.pipeline_stop()
-                ui.out_of_scope(mejor_score, self.rag.UMBRAL_RELEVANCIA)
-                self.rag.guardar_debug_rag(
-                    pregunta,
-                    fragmentos=fragmentos_ranked,
-                    motivo_interrupcion=f"Score insuficiente: {mejor_score:.4f}",
-                    metricas={**metricas, "mejor_score": mejor_score},
-                )
-                return
-
             if self.rag.USAR_RERANKER:
                 ui.pipeline_phase(
                     ui._s("phase.rerank"),
                     ui._s("phase.rerank.detail", n=len(fragmentos_ranked)),
                 )
-                fragmentos_filtrados = [
-                    f for f in fragmentos_ranked
-                    if f.get('score_reranker', f.get('score_final', 0))
-                       >= self.rag.UMBRAL_SCORE_RERANKER
-                ]
                 timer.mark("rerank")
-                if not fragmentos_filtrados:
-                    ui.pipeline_stop()
-                    ui.no_results()
-                    self.rag.guardar_debug_rag(
-                        pregunta,
-                        fragmentos=fragmentos_ranked,
-                        motivo_interrupcion="Reranker filtró todos los candidatos.",
-                        metricas={**metricas, "umbral_reranker": self.rag.UMBRAL_SCORE_RERANKER},
-                    )
-                    return
-                fragmentos_ranked = fragmentos_filtrados
-
-            fragmentos_finales = fragmentos_ranked[:self.rag.TOP_K_FINAL]
-            ids_usados = {f['id'] for f in fragmentos_finales}
-
-            if (self.rag.EXPANDIR_CONTEXTO and fragmentos_finales
-                    and 'chunk' in fragmentos_finales[0]['metadata']):
+            fragmentos_finales, metricas_contexto = (
+                self.rag.preparar_fragmentos_para_generacion(
+                    fragmentos_ranked,
+                    self.collection,
+                )
+            )
+            metricas = {**metricas, "fase_contexto": metricas_contexto}
+            if metricas_contexto.get("fragmentos_expandidos", 0) > 0:
                 ui.pipeline_phase(
                     ui._s("phase.expand"),
                     ui._s("phase.expand.detail", n=self.rag.N_TOP_PARA_EXPANSION),
                 )
-                self._expand_context(fragmentos_finales, ids_usados)
                 timer.mark("expansión")
 
-            contexto_total = sum(len(f['doc']) for f in fragmentos_finales)
-            if contexto_total > self.rag.MAX_CONTEXTO_CHARS:
-                fragmentos_truncados = []
-                chars_acum = 0
-                for f in fragmentos_finales:
-                    if chars_acum + len(f['doc']) > self.rag.MAX_CONTEXTO_CHARS:
-                        break
-                    fragmentos_truncados.append(f)
-                    chars_acum += len(f['doc'])
-                fragmentos_finales = fragmentos_truncados
+            if not fragmentos_finales:
+                ui.pipeline_stop()
+                ui.no_results()
+                self.rag.guardar_debug_rag(
+                    pregunta,
+                    fragmentos=fragmentos_ranked,
+                    motivo_interrupcion="Ningún candidato superó el filtro de relevancia.",
+                    metricas={**metricas, "umbral_reranker": self.rag.UMBRAL_SCORE_RERANKER},
+                )
+                return
 
             if self.rag.USAR_RECOMP_SYNTHESIS:
                 ui.pipeline_phase(
@@ -434,48 +405,6 @@ class MonkeyGrabCLI:
             ui.render_response(respuesta)
         ui.response_footer_rag(fragmentos_finales, timer)
         self.session.tick_rag(timer.total, self.rag.MODELO_RAG)
-
-    def _expand_context(self, fragmentos: list, ids_usados: set) -> None:
-        """Expand context by retrieving adjacent chunks from the collection.
-
-        For each top fragment, fetches neighboring chunks and appends them to
-        the fragment list if they haven't been included yet.
-
-        Args:
-            fragmentos: List of selected fragments (modified in place).
-            ids_usados: Set of already-used fragment IDs (modified in place).
-        """
-        chunks_adicionales = []
-
-        for frag in fragmentos[:self.rag.N_TOP_PARA_EXPANSION]:
-            ids_vecinos = self.rag.expandir_con_chunks_adyacentes(
-                frag['id'], frag['metadata'], n_vecinos=1
-            )
-            if ids_vecinos:
-                try:
-                    vecinos = self.collection.get(
-                        ids=ids_vecinos,
-                        include=['documents', 'metadatas']
-                    )
-                    for v_doc, v_meta in zip(
-                        vecinos['documents'], vecinos['metadatas']
-                    ):
-                        v_id = (f"{v_meta['source']}_pag{v_meta['page']}"
-                                f"_chunk{v_meta.get('chunk', 0)}")
-                        if v_id not in ids_usados:
-                            chunks_adicionales.append({
-                                'doc': v_doc,
-                                'metadata': v_meta,
-                                'distancia': float('inf'),
-                                'score_final': 0.0,
-                                'id': v_id,
-                            })
-                            ids_usados.add(v_id)
-                except Exception:
-                    pass
-
-        if chunks_adicionales:
-            fragmentos.extend(chunks_adicionales)
 
     # ─────────────────────────────────────────────
     # SECTION 6: COMMAND HANDLERS
