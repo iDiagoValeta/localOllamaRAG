@@ -316,6 +316,9 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
     textos_preparados = []
     for f in fragmentos:
         cuerpo = _texto_fuente_fragmento(f.get("doc", "") or "")
+        if USAR_OPTIMIZACION_CONTEXTO:
+            cuerpo = optimizar_texto_contexto(cuerpo)
+            cuerpo = _marcar_fragmento_incompleto(cuerpo)
         content = cuerpo.replace("\n", " ").strip()
         content = re.sub(r'\s*\[\s*\d+(?:\s*,\s*\d+)*\s*\]', '', content)  # strip citation markers [38, 2, 9]
         if content:

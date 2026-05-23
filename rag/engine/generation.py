@@ -81,10 +81,9 @@ def _preparar_mensaje_usuario_rag(pregunta: str, fragmentos: List[Dict[str, Any]
     return f"{pregunta}\n\n<context>{contexto_str}</context>"
 
 
-def _generar_respuesta_stream(mensaje_usuario: str, on_token=None) -> str:
-    """Stream the generator response, optionally forwarding tokens to a callback."""
+def generar_tokens_respuesta(mensaje_usuario: str):
+    """Yield RAG generator tokens using the canonical generation settings."""
     system = SYSTEM_PROMPT_RAG if _modelo_necesita_system_prompt(MODELO_RAG) else None
-    respuesta_completa = ""
     for chunk in _ollama_generate_stream(
         model=MODELO_RAG,
         prompt=mensaje_usuario,
@@ -100,10 +99,143 @@ def _generar_respuesta_stream(mensaje_usuario: str, on_token=None) -> str:
     ):
         content = chunk.get("response", "")
         if content:
-            respuesta_completa += content
-            if on_token is not None:
-                on_token(content)
+            yield content
+
+
+def _generar_respuesta_stream(mensaje_usuario: str, on_token=None) -> str:
+    """Stream the generator response, optionally forwarding tokens to a callback."""
+    respuesta_completa = ""
+    for content in generar_tokens_respuesta(mensaje_usuario):
+        respuesta_completa += content
+        if on_token is not None:
+            on_token(content)
     return respuesta_completa
+
+
+def _score_relevancia_fragmento(fragmento: Dict[str, Any]) -> float:
+    """Return the active relevance score for post-reranker filtering."""
+    try:
+        return float(fragmento.get("score_reranker", fragmento.get("score_final", 0)) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _filtrar_por_umbral_reranker(
+    fragmentos_ranked: List[Dict[str, Any]],
+    permitir_fallback_bajo_score: bool = False,
+) -> Tuple[List[Dict[str, Any]], bool]:
+    """Apply the single reranker relevance threshold."""
+    if not USAR_RERANKER:
+        return list(fragmentos_ranked), False
+
+    fragmentos_filtrados = [
+        f for f in fragmentos_ranked
+        if _score_relevancia_fragmento(f) >= UMBRAL_SCORE_RERANKER
+    ]
+    if fragmentos_filtrados or not permitir_fallback_bajo_score:
+        return fragmentos_filtrados, False
+    return list(fragmentos_ranked), True
+
+
+def _fragmento_expandible(fragmento: Dict[str, Any]) -> bool:
+    """Return True when neighbor expansion makes sense for this fragment."""
+    metadata = fragmento.get("metadata", {})
+    if metadata.get("format") == "image":
+        return False
+    return "chunk" in metadata and metadata.get("total_chunks_in_page") is not None
+
+
+def _expandir_fragmentos_contexto(
+    fragmentos: List[Dict[str, Any]],
+    collection: chromadb.Collection,
+) -> Tuple[List[Dict[str, Any]], int]:
+    """Append adjacent chunks for the top selected text fragments."""
+    if not EXPANDIR_CONTEXTO or not fragmentos:
+        return fragmentos, 0
+
+    fragmentos_expandidos = list(fragmentos)
+    ids_usados = {f.get("id") for f in fragmentos_expandidos}
+    chunks_adicionales = []
+
+    for frag in fragmentos_expandidos[:N_TOP_PARA_EXPANSION]:
+        if not _fragmento_expandible(frag):
+            continue
+        ids_vecinos = expandir_con_chunks_adyacentes(
+            frag["id"], frag["metadata"], n_vecinos=1
+        )
+        if not ids_vecinos:
+            continue
+        try:
+            vecinos = collection.get(ids=ids_vecinos, include=["documents", "metadatas"])
+            for v_doc, v_meta in zip(vecinos["documents"], vecinos["metadatas"]):
+                v_id = (
+                    f"{v_meta['source']}_pag{v_meta['page']}"
+                    f"_chunk{v_meta.get('chunk', 0)}"
+                )
+                if v_id not in ids_usados:
+                    chunks_adicionales.append({
+                        "doc": v_doc,
+                        "metadata": v_meta,
+                        "distancia": float("inf"),
+                        "score_final": 0.0,
+                        "id": v_id,
+                    })
+                    ids_usados.add(v_id)
+        except Exception:
+            pass
+
+    if chunks_adicionales:
+        fragmentos_expandidos.extend(chunks_adicionales)
+    return fragmentos_expandidos, len(chunks_adicionales)
+
+
+def _limitar_fragmentos_por_chars(
+    fragmentos: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], int]:
+    """Apply the retrieved-evidence character budget before context synthesis."""
+    contexto_total = sum(len(f["doc"]) for f in fragmentos)
+    if contexto_total <= MAX_CONTEXTO_CHARS:
+        return fragmentos, 0
+
+    fragmentos_truncados = []
+    chars_acum = 0
+    for f in fragmentos:
+        if chars_acum + len(f["doc"]) > MAX_CONTEXTO_CHARS:
+            break
+        fragmentos_truncados.append(f)
+        chars_acum += len(f["doc"])
+    return fragmentos_truncados, len(fragmentos) - len(fragmentos_truncados)
+
+
+def preparar_fragmentos_para_generacion(
+    fragmentos_ranked: List[Dict[str, Any]],
+    collection: chromadb.Collection,
+    permitir_fallback_bajo_score: bool = False,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Convert ranked retrieval candidates into the final generator evidence."""
+    candidatos, fallback_bajo_score = _filtrar_por_umbral_reranker(
+        fragmentos_ranked,
+        permitir_fallback_bajo_score=permitir_fallback_bajo_score,
+    )
+    fragmentos_base = list(candidatos[:TOP_K_FINAL])
+    fragmentos_expandidos, n_expandidos = _expandir_fragmentos_contexto(
+        fragmentos_base, collection
+    )
+    fragmentos_finales, n_descartados_chars = _limitar_fragmentos_por_chars(
+        fragmentos_expandidos
+    )
+
+    metricas = {
+        "candidatos_entrada": len(fragmentos_ranked),
+        "candidatos_relevantes": len(candidatos),
+        "fallback_bajo_score": fallback_bajo_score,
+        "fragmentos_base": len(fragmentos_base),
+        "fragmentos_expandidos": n_expandidos,
+        "fragmentos_descartados_por_chars": n_descartados_chars,
+        "fragmentos_finales": len(fragmentos_finales),
+        "max_contexto_chars": MAX_CONTEXTO_CHARS,
+    }
+    return fragmentos_finales, metricas
 
 
 def generar_respuesta(
@@ -171,53 +303,16 @@ def evaluar_pregunta_rag(
     if len(pregunta.strip()) < MIN_LONGITUD_PREGUNTA_RAG:
         return ("", [])
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-        fragmentos_ranked, mejor_score, _ = realizar_busqueda_hibrida(pregunta, collection)
+        fragmentos_ranked, _, _ = realizar_busqueda_hibrida(pregunta, collection)
         if not fragmentos_ranked:
             return ("", [])
-        # UMBRAL_RELEVANCIA is calibrated for reranker-scale scores, not RRF fusion scores.
-        if (
-            USAR_RERANKER
-            and mejor_score < UMBRAL_RELEVANCIA
-            and not EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK
-        ):
+        fragmentos_finales, _ = preparar_fragmentos_para_generacion(
+            fragmentos_ranked,
+            collection,
+            permitir_fallback_bajo_score=EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK,
+        )
+        if not fragmentos_finales:
             return ("", [])
-        if USAR_RERANKER:
-            fragmentos_filtrados = [
-                f for f in fragmentos_ranked
-                if f.get('score_reranker', f.get('score_final', 0)) >= UMBRAL_SCORE_RERANKER
-            ]
-            if fragmentos_filtrados:
-                fragmentos_ranked = fragmentos_filtrados
-            elif not EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK:
-                return ("", [])
-        fragmentos_finales = fragmentos_ranked[:TOP_K_FINAL]
-        ids_usados = {f['id'] for f in fragmentos_finales}
-        if EXPANDIR_CONTEXTO and fragmentos_finales and 'chunk' in fragmentos_finales[0]['metadata']:
-            for frag in list(fragmentos_finales):  # snapshot: don't expand neighbors of neighbors
-                ids_vecinos = expandir_con_chunks_adyacentes(frag['id'], frag['metadata'], n_vecinos=1)
-                if ids_vecinos:
-                    try:
-                        vecinos = collection.get(ids=ids_vecinos, include=['documents', 'metadatas'])
-                        for v_doc, v_meta in zip(vecinos['documents'], vecinos['metadatas']):
-                            v_id = f"{v_meta['source']}_pag{v_meta['page']}_chunk{v_meta.get('chunk', 0)}"
-                            if v_id not in ids_usados:
-                                fragmentos_finales.append({
-                                    'doc': v_doc, 'metadata': v_meta, 'distancia': float('inf'),
-                                    'score_final': 0.0, 'id': v_id
-                                })
-                                ids_usados.add(v_id)
-                    except Exception:
-                        pass
-        contexto_total = sum(len(f['doc']) for f in fragmentos_finales)
-        if contexto_total > MAX_CONTEXTO_CHARS:
-            fragmentos_truncados = []
-            chars_acum = 0
-            for f in fragmentos_finales:
-                if chars_acum + len(f['doc']) > MAX_CONTEXTO_CHARS:
-                    break
-                fragmentos_truncados.append(f)
-                chars_acum += len(f['doc'])
-            fragmentos_finales = fragmentos_truncados
         respuesta = generar_respuesta_silenciosa(pregunta, fragmentos_finales)
         contexts = [f['doc'] for f in fragmentos_finales]
         return (respuesta, contexts)
