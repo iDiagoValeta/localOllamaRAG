@@ -111,7 +111,6 @@ const STRINGS = {
     indexingFailed: 'La indexación no pudo completarse.',
     historyCleared: 'Historial limpiado.',
     appFooter: 'RAG local con Ollama',
-    outOfScope: 'La pregunta está fuera del ámbito de los documentos indexados.',
     noResults: 'No se encontró información relevante en los documentos.',
   },
   en: {
@@ -168,7 +167,6 @@ const STRINGS = {
     indexingFailed: 'Indexing could not be completed.',
     historyCleared: 'History cleared.',
     appFooter: 'Local RAG with Ollama',
-    outOfScope: 'The query is outside the scope of the indexed documents.',
     noResults: 'No relevant information found in the documents.',
   },
   ca: {
@@ -225,7 +223,6 @@ const STRINGS = {
     indexingFailed: "La indexació no s'ha pogut completar.",
     historyCleared: 'Historial netejat.',
     appFooter: 'RAG local amb Ollama',
-    outOfScope: "La pregunta està fora de l'àmbit dels documents indexats.",
     noResults: "No s'ha trobat informació rellevant als documents.",
   },
 } as const;
@@ -340,7 +337,7 @@ async function streamSSE(
   onToken: (token: string) => void,
   onDone: (sources: Citation[] | null) => void,
   onError: (msg: string) => void,
-  fb?: { unknown?: string; queryError?: string; modelError?: string; closed?: string; out_of_scope?: string; no_results?: string },
+  fb?: { unknown?: string; queryError?: string; modelError?: string; closed?: string; no_results?: string },
 ) {
   const contentType = response.headers.get('content-type') || '';
 
@@ -939,7 +936,7 @@ export default function App() {
             )
           );
         },
-        { unknown: T.unknownError, queryError: T.queryError, modelError: T.modelError, closed: T.connClosed, out_of_scope: T.outOfScope, no_results: T.noResults },
+        { unknown: T.unknownError, queryError: T.queryError, modelError: T.modelError, closed: T.connClosed, no_results: T.noResults },
       );
     } catch {
       setMessages(prev =>

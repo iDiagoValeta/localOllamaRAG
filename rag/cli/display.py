@@ -33,7 +33,7 @@ three backends.
 #  +-- 11. Input (prompt, autocompletion, persistent history)
 #  +-- 12. Response streaming
 #  +-- 13. Stats / Docs / Topics
-#  +-- 14. Edge-case messages (no_pdfs, out_of_scope, ...)
+#  +-- 14. Edge-case messages (no_pdfs, question_too_short, ...)
 #
 #  ENTRY
 #  +-- 15. ui singleton
@@ -1644,19 +1644,6 @@ class Display:
                 expand=False,
             )
         )
-
-    def out_of_scope(self, score: float, threshold: float) -> None:
-        scope_title = self._s("out_of_scope.title")
-        scope_msg = self._s("out_of_scope.msg", score=score, threshold=threshold)
-        scope_tip = self._s("out_of_scope.tip")
-        if self.backend != "rich":
-            self._rule(scope_title, color=Palette.WARNING)
-            self.warning(scope_msg)
-            self._print_line(f"     {self._ansi(scope_tip, Palette.DIM.ansi)}")
-            self._rule(color=Palette.DIM)
-            return
-        self.warning(scope_msg)
-        self.console.print(f"     [dim]{scope_tip}[/]")
 
     def question_too_short(self) -> None:
         msg = self._s("question_too_short")
