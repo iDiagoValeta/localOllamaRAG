@@ -14,6 +14,7 @@
 > - `research/README.md` → experimental workspace map; details live in sub-docs.
 > - `research/docs/EVALUACIONES_PIPELINE.md` → TFG evaluation + reinference protocol (English).
 > - `research/docs/RANKING_Y_PARAMETROS.md` → ranking/BM25/RRF reference + parameter defense + citation map (Spanish).
+> - `rag/engine/ENGINE_MAP.md` → engine module map: purpose, functions and dependency graph of every file under `rag/engine/`.
 > - `research/docs/GEMMA3_CONVERSION_ISSUE.md` → Gemma-3 conversion failure post-mortem (English).
 > - Analysis reports under `research/evaluation/runs/ragas/comparisons/ANALISIS_*.md`.
 > - Model cards in `research/models/gguf/<model>/README.md` → self-contained, HF Hub.
@@ -22,7 +23,8 @@
 |---|---|---|---|---|
 | `CLAUDE.md` / `AGENTS.md` | Operating rules + layout (public symbols, flags, git) | Agents / author | 2026-05-19 | High |
 | `README.md` | Product install and usage (CLI + Web + sparse checkout) | End user | 2026-05-19 | Medium |
-| `rag/README.md` | RAG pipeline technical reference | Developer | 2026-05-14 | High |
+| `rag/README.md` | RAG pipeline technical reference | Developer | 2026-05-23 | High |
+| `rag/engine/ENGINE_MAP.md` | Engine module map: purposes, functions, dependency graph | Developer | 2026-05-23 | High |
 | `rag/web/frontend/README.md` | React frontend `npm` commands | Frontend dev | 2026-05-14 | Low |
 | `research/README.md` | TFG experimental workspace map | Tutor / author | 2026-05-19 | Medium |
 | `research/docs/EVALUACIONES_PIPELINE.md` | TFG evaluation + reinference protocol (English) | Tutor / author | 2026-05-23 | High |
