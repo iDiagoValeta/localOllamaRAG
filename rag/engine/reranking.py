@@ -97,7 +97,7 @@ def obtener_modelo_reranker():
 def rerank_resultados(
     pregunta: str,
     documentos_recuperados: List[Dict[str, Any]],
-    top_k: int = TOP_K_AFTER_RERANK
+    top_k: int = TOP_K_FINAL
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Reorder candidates using a Cross-Encoder for finer relevance scoring.
 

@@ -182,7 +182,7 @@ def realizar_busqueda_hibrida(
         fragmentos_ranked, metricas_rerank = rerank_resultados(
             pregunta,
             candidatos_rerank,
-            top_k=TOP_K_AFTER_RERANK
+            top_k=TOP_K_FINAL
         )
         metricas_totales['fase_reranking'] = metricas_rerank
         ui.debug(f"top {len(fragmentos_ranked)} after reranking")
