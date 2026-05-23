@@ -408,6 +408,31 @@ Activa si `EXPANDIR_CONTEXTO = True`. Para los `N_TOP_PARA_EXPANSION` (3) fragme
 
 ---
 
+### 4.3 Preparación final de evidencia: `preparar_fragmentos_para_generacion()`
+
+**Archivo**: `rag/engine/generation.py`
+
+```python
+def preparar_fragmentos_para_generacion(
+    fragmentos_ranked: List[Dict[str, Any]],
+    collection: chromadb.Collection,
+    permitir_fallback_bajo_score: bool = False,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]
+```
+
+Función canónica que convierte los candidatos ordenados por el reranker en la evidencia definitiva que recibe el generador. Es el único punto del sistema donde se aplican el filtro de umbral, el corte top-K, la expansión de vecinos y el límite de caracteres. CLI, web y evaluación RAGAS la comparten para garantizar comportamiento idéntico.
+
+**Flujo interno**:
+
+1. `_filtrar_por_umbral_reranker()`: si `USAR_RERANKER = True`, descarta fragmentos con `score_reranker < UMBRAL_SCORE_RERANKER` (0.65). Si `permitir_fallback_bajo_score = True` y ningún fragmento supera el umbral, devuelve todos los candidatos como fallback de evaluación.
+2. Corte `[:TOP_K_FINAL]`: retiene los primeros `TOP_K_FINAL` (8) candidatos relevantes.
+3. `_expandir_fragmentos_contexto()`: añade chunks adyacentes a los primeros `N_TOP_PARA_EXPANSION` (3) fragmentos textuales, si `EXPANDIR_CONTEXTO = True`.
+4. `_limitar_fragmentos_por_chars()`: descarta los fragmentos que ya no caben dentro del presupuesto `MAX_CONTEXTO_CHARS` (24000 chars).
+
+Retorna `(fragmentos_finales, metricas)` donde `metricas` contiene conteos de cada etapa (`candidatos_entrada`, `candidatos_relevantes`, `fragmentos_base`, `fragmentos_expandidos`, `fragmentos_descartados_por_chars`, `fragmentos_finales`).
+
+---
+
 ## 5. Etapa 4 — Construcción del contexto
 
 ### 5.1 Optimización de texto: `optimizar_texto_contexto()`
@@ -521,7 +546,7 @@ def generar_respuesta(
 
 ---
 
-### 6.2 Streaming: `_ollama_generate_stream()` / `_generacion_chat_stream()`
+### 6.2 Streaming: `_ollama_generate_stream()` / `generar_tokens_respuesta()`
 
 **Archivo**: `rag/engine/generation.py`
 
