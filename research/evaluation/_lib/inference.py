@@ -125,21 +125,19 @@ def diagnosticar_fallo_generacion(
         return "excepcion"
     if not contexts:
         try:
-            fragmentos_ranked, mejor_score, _ = rag_runtime.realizar_busqueda_hibrida(pregunta, collection)
+            fragmentos_ranked, _, _ = rag_runtime.realizar_busqueda_hibrida(pregunta, collection)
             if not fragmentos_ranked:
                 return "sin_contexto"
             fallback_ragbench = bool(
                 getattr(rag_runtime, "EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK", False)
             )
-            if rag_runtime.USAR_RERANKER and mejor_score < rag_runtime.UMBRAL_RELEVANCIA and not fallback_ragbench:
+            fragmentos_finales, _ = rag_runtime.preparar_fragmentos_para_generacion(
+                fragmentos_ranked,
+                collection,
+                permitir_fallback_bajo_score=fallback_ragbench,
+            )
+            if not fragmentos_finales and rag_runtime.USAR_RERANKER and not fallback_ragbench:
                 return "filtrada_por_reranker"
-            if rag_runtime.USAR_RERANKER:
-                fragmentos_filtrados = [
-                    f for f in fragmentos_ranked
-                    if f.get("score_reranker", f.get("score_final", 0)) >= rag_runtime.UMBRAL_SCORE_RERANKER
-                ]
-                if not fragmentos_filtrados and not fallback_ragbench:
-                    return "filtrada_por_reranker"
         except Exception:
             return "sin_contexto"
         return "sin_contexto"

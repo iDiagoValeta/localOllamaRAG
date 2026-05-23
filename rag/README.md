@@ -263,7 +263,7 @@ def realizar_busqueda_hibrida(
 ) -> Tuple[List[Dict[str, Any]], float, Dict[str, Any]]
 ```
 
-Devuelve `(fragmentos_ordenados, tiempo_total, stats)`. Internamente ejecuta los pasos A–D en orden.
+Devuelve `(fragmentos_ordenados, mejor_score, stats)`. Internamente ejecuta los pasos A–D en orden.
 
 ---
 
@@ -353,8 +353,8 @@ score_final = (
 
 Los candidatos se ordenan descendentemente por `score_final`. Por defecto
 `PESO_SEMANTICO_RRF = 0.55` y `PESO_BM25_RRF = 0.45`. Si el reranker está
-activo, `score_final` se sustituye después por `score_reranker`; los umbrales
-posteriores se aplican sobre esa escala de reranker, no sobre la escala RRF pura.
+activo, `score_final` se sustituye después por `score_reranker`; el filtro final
+de relevancia se aplica sobre esa escala de reranker, no sobre la escala RRF pura.
 
 ---
 
@@ -368,7 +368,7 @@ posteriores se aplican sobre esa escala de reranker, no sobre la escala RRF pura
 def rerank_resultados(
     pregunta: str,
     documentos_recuperados: List[Dict[str, Any]],
-    top_k: int = TOP_K_AFTER_RERANK,   # 15
+    top_k: int = TOP_K_FINAL,          # 8
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]
 ```
 
@@ -388,13 +388,13 @@ obligatoria del entorno; si falta, la carga de `rag.chat_pdfs` falla al inicio.
 2. Construye pares `(pregunta, texto_cuerpo)` para los `TOP_K_RERANK_CANDIDATES` (200) mejores candidatos por `score_final`.
 3. Ejecuta `CrossEncoder.rank()` en CPU (FP32) o CUDA (FP16, auto-detectado).
 4. Sustituye `score_final` por `score_reranker` (rango [0, 1]).
-5. Filtra por `UMBRAL_SCORE_RERANKER = 0.65` y retiene el top `TOP_K_AFTER_RERANK` (15).
+5. Retiene el top `TOP_K_FINAL` (8); el filtro de relevancia se aplica una sola vez en la fase final de preparación de contexto.
 
 ---
 
 ### 4.2 Expansión de vecinos: `expandir_con_chunks_adyacentes()`
 
-**Archivo**: `rag/engine/retrieval.py`
+**Archivo**: `rag/engine/chunking.py`
 
 ```python
 def expandir_con_chunks_adyacentes(
@@ -404,7 +404,7 @@ def expandir_con_chunks_adyacentes(
 ) -> List[str]
 ```
 
-Activa si `EXPANDIR_CONTEXTO = True`. Para los `N_TOP_PARA_EXPANSION` (3) fragmentos con mayor score, construye los IDs de los chunks adyacentes (misma página, página anterior, página siguiente) y los recupera de ChromaDB si existen. Esto repara la continuidad de párrafos truncados en los límites de chunk.
+Activa si `EXPANDIR_CONTEXTO = True`. Para los `N_TOP_PARA_EXPANSION` (3) fragmentos textuales con mayor score dentro del top final, construye los IDs de los chunks adyacentes (misma página, página anterior, página siguiente) y los recupera de ChromaDB si existen. Los chunks de imagen no se expanden con vecinos textuales.
 
 ---
 
@@ -453,7 +453,7 @@ Ordena los fragmentos por `(source, page, chunk)` y genera el bloque de contexto
 [excerpt ends mid-sentence]   ← solo si no termina con .?!:")]
 ```
 
-El total de caracteres se limita a `MAX_CONTEXTO_CHARS = 24000`; si se supera, los fragmentos de menor score se truncan.
+La evidencia recuperada se limita a `MAX_CONTEXTO_CHARS = 24000` antes de construir el contexto final o enviarla a RECOMP; si se supera, se descartan los fragmentos que ya no caben manteniendo el orden de relevancia.
 
 ---
 
@@ -569,7 +569,7 @@ def evaluar_pregunta_rag(
 Camino exclusivo para las evaluaciones RAGAS. Ejecuta el pipeline completo pero:
 - No imprime nada en terminal.
 - No genera debug dumps.
-- Aplica `UMBRAL_RELEVANCIA` y `UMBRAL_SCORE_RERANKER` normalmente.
+- Usa la misma preparación final de fragmentos que CLI y web: filtro único `UMBRAL_SCORE_RERANKER`, top `TOP_K_FINAL`, expansión y límite de caracteres.
 - Si `EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK = True`, relaja el umbral de reranker cuando no hay fragmentos con score suficiente.
 
 Retorna `(respuesta, lista_de_contextos_utilizados)`.
@@ -668,7 +668,6 @@ Ollama.
 | `N_RESULTADOS_SEMANTICOS` | 80 / `RAG_N_RESULTADOS_SEMANTICOS` | Resultados por query semántica |
 | `N_RESULTADOS_KEYWORD` | 40 / `RAG_N_RESULTADOS_KEYWORD` | Resultados por búsqueda BM25 |
 | `TOP_K_RERANK_CANDIDATES` | 200 / `RAG_TOP_K_RERANK_CANDIDATES` | Candidatos que entran al reranker |
-| `TOP_K_AFTER_RERANK` | 15 / `RAG_TOP_K_AFTER_RERANK` | Fragmentos tras reranking |
 | `TOP_K_FINAL` | 8 / `RAG_TOP_K_FINAL` | Fragmentos enviados al LLM |
 | `N_TOP_PARA_EXPANSION` | 3 / `RAG_N_TOP_PARA_EXPANSION` | Fragmentos que reciben expansión de vecinos |
 | `RRF_K` | 60 / `RAG_RRF_K` | Factor de amortiguamiento RRF (valor canónico de Cormack et al., 2009) |
@@ -676,9 +675,8 @@ Ollama.
 | `PESO_BM25_RRF` | 0.45 / `RAG_PESO_BM25_RRF` | Peso de la contribución BM25 RRF |
 | `BM25_K1` | 1.5 / `RAG_BM25_K1` | Saturación de frecuencia de término BM25 |
 | `BM25_B` | 0.75 / `RAG_BM25_B` | Normalización por longitud BM25 |
-| `UMBRAL_RELEVANCIA` | 0.50 / `RAG_UMBRAL_RELEVANCIA` | Puerta de relevancia sobre score de reranker cuando el reranker está activo |
 | `UMBRAL_SCORE_RERANKER` | 0.65 / `RAG_UMBRAL_SCORE_RERANKER` | Score Cross-Encoder mínimo (subido desde 0.55 tras sonda 2026-05-14) |
-| `MAX_CONTEXTO_CHARS` | 24000 / `MAX_CONTEXTO_CHARS` | Máximo de chars de contexto al LLM |
+| `MAX_CONTEXTO_CHARS` | 24000 / `MAX_CONTEXTO_CHARS` | Máximo de chars de evidencia recuperada antes de contexto/RECOMP |
 | `MIN_LONGITUD_PREGUNTA_RAG` | 10 / `RAG_MIN_LONGITUD_PREGUNTA` | Mínimo de caracteres para activar el pipeline RAG |
 | `MAX_IMAGENES_POR_PAGINA` | 5 / `RAG_MAX_IMAGES_PER_PAGE` | Máximo de imágenes extraídas por página PDF |
 | `MIN_IMAGEN_SIZE_PX` | 100 / `RAG_MIN_IMAGE_SIZE_PX` | Tamaño mínimo de imagen extraída |
@@ -708,12 +706,12 @@ Cada fragmento indexado lleva los siguientes metadatos:
 
 ```python
 {
-    "source":               "paper.pdf",        # nombre del archivo PDF
+    "source":               "paper.pdf",         # nombre del archivo PDF
     "page":                 3,                   # página (0-indexed)
     "chunk":                1,                   # índice del chunk en la página
-    "total_chunks_in_page": 5,                  # total de chunks en esa página
+    "total_chunks_in_page": 5,                   # total de chunks en esa página
     "format":               "markdown",          # "markdown" | "plain_text" | "image"
-    "section_header":       "## Metodología",   # header Markdown más cercano
+    "section_header":       "## Metodología",    # header Markdown más cercano
     # Solo para chunks de imagen:
     "image_width":          800,
     "image_height":         600,
@@ -751,7 +749,7 @@ Consulta: `"¿Qué componentes tiene una arquitectura Transformer?"`
 
 2. BÚSQUEDA SEMÁNTICA  (4 queries × 80 resultados)
    Embeddings vía MODELO_EMBEDDING con prefix "search_query: "
-   ChromaDB.query() → RRF con k=20 por defecto
+   ChromaDB.query() → RRF con k=60 por defecto
    Candidatos acumulados con score_semantic
 
 3. BÚSQUEDA LÉXICA BM25  (USAR_BUSQUEDA_HIBRIDA=True)
@@ -767,27 +765,31 @@ Consulta: `"¿Qué componentes tiene una arquitectura Transformer?"`
 5. RERANKING  (USAR_RERANKER=True)
    Entrada: top 200 candidatos por score_final
    CrossEncoder.rank(pairs=[(pregunta, texto_chunk)])
-   Umbral por defecto: score_reranker >= 0.65
-   Salida: top 15 fragmentos con score_reranker
+   Salida: top 8 fragmentos con score_reranker
 
-6. EXPANSIÓN DE VECINOS  (EXPANDIR_CONTEXTO=True)
+6. PREPARACIÓN FINAL DE FRAGMENTOS
+   Filtro único por defecto: score_reranker >= 0.65
+   Conserva TOP_K_FINAL=8 fragmentos base
+   Aplica expansión y límite MAX_CONTEXTO_CHARS desde una función compartida
+
+7. EXPANSIÓN DE VECINOS  (EXPANDIR_CONTEXTO=True)
    Para los 3 fragmentos con mayor score: recupera chunks adyacentes
    Añade vecinos al conjunto de fragmentos finales
 
-7. CONSTRUCCIÓN DE CONTEXTO
+8. CONSTRUCCIÓN DE CONTEXTO
    USAR_RECOMP_SYNTHESIS=True → síntesis con MODELO_RECOMP:
      "## Facts relevant to the question
       - El Transformer consta de un codificador y un decodificador...
       - El mecanismo de atención multi-head..."
    USAR_OPTIMIZACION_CONTEXTO=True → limpieza de artefactos PDF
 
-8. GENERACIÓN
+9. GENERACIÓN
    Mensaje usuario: pregunta + <context>síntesis</context>
    System prompt: SYSTEM_PROMPT_RAG (si modelo no tiene baked)
    Ollama streaming: temperature=0.15, num_ctx=16384
    Tokens emitidos en tiempo real al terminal/web
 
-9. DEBUG
+10. DEBUG
    Archivo: rag/debug_rag/YYYYMMDD_HHMMSS_que_componentes_tiene.txt
    Contenido: flags, sub-queries, keywords, scores por fragmento,
               contexto enviado, respuesta completa

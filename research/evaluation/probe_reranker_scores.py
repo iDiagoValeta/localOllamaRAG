@@ -20,7 +20,7 @@ Goal:
     For each sampled question, run the hybrid retrieval pipeline with the
     reranker DISABLED (to capture all post-RRF candidates), then score those
     candidates with the Cross-Encoder manually so the full reranker-score
-    distribution is exposed (not only the top-K kept by TOP_K_AFTER_RERANK).
+    distribution is exposed (not only the final top-K kept for generation).
     Output is a single JSON per corpus under rag/debug_rag/, suitable for
     threshold calibration (UMBRAL_SCORE_RERANKER closed at 0.65 — see
     research/docs/EVALUACIONES_PIPELINE.md §2.7).

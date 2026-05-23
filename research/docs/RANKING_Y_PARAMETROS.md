@@ -125,7 +125,6 @@ reproducibilidad."* No describirlos como "parámetros de RRF".
 | Parámetro | Default | Env var | Naturaleza |
 |---|---:|---|---|
 | `UMBRAL_SCORE_RERANKER` | 0.65 | `RAG_UMBRAL_SCORE_RERANKER` | Filtro mínimo del Cross-Encoder |
-| `UMBRAL_RELEVANCIA` | 0.50 | `RAG_UMBRAL_RELEVANCIA` | Puerta de relevancia sobre escala reranker |
 
 `UMBRAL_SCORE_RERANKER = 0.65` es el valor mejor calibrado del grupo: tiene
 protocolo de sonda (`research/evaluation/probe_reranker_scores.py`) y decisión
@@ -133,10 +132,6 @@ documentada (subido de `0.55` → `0.65` el 2026-05-14 tras observar una banda d
 ruido `0.40–0.60`; `0.70` colapsaba CA-Q3 a un único candidato). Nogueira & Cho
 (2019) no prescriben umbral —producen un ranking—, así que `0.65` se presenta
 como **decisión calibrada**, no como valor de paper.
-
-`UMBRAL_RELEVANCIA = 0.50` **no** se aplica al RRF puro. El código solo lo usa
-cuando `USAR_RERANKER` está activo, porque entonces `score_final` ya ha sido
-sustituido por `score_reranker`. No describirlo como "umbral RRF".
 
 El comportamiento de **devolver contexto vacío cuando ningún candidato supera el
 umbral** es exactamente la *selective augmentation* de **RECOMP (2310.04408)**:
@@ -154,10 +149,9 @@ mantenidos constantes entre variantes.
 | `N_RESULTADOS_SEMANTICOS` | 80 | Recall por query antes de fusión |
 | `N_RESULTADOS_KEYWORD` | 40 | Top-N de BM25 antes de fusión |
 | `TOP_K_RERANK_CANDIDATES` | 200 | Límite de coste del Cross-Encoder |
-| `TOP_K_AFTER_RERANK` | 15 | Retención post-reranker |
 | `TOP_K_FINAL` | 8 | Fragmentos base al generador |
 | `N_TOP_PARA_EXPANSION` | 3 | Vecinos para continuidad textual |
-| `MAX_CONTEXTO_CHARS` | 24000 | Presupuesto de entrada al LLM |
+| `MAX_CONTEXTO_CHARS` | 24000 | Presupuesto de evidencia antes de RECOMP/generación |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | 2000 / 400 | Granularidad de chunks (solapamiento ~20%) |
 
 ---
