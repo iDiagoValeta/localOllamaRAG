@@ -37,30 +37,6 @@
 | `research/models/gguf/qwen-3/CONVERSION.md` | LoRA → GGUF → Ollama merge checklist | Author | 2026-05-14 | Low |
 | `research/models/gguf/qwen-3/README.md` | Qwen3-14B RAG fine-tuned model card | HF Hub / tutor | 2026-05-14 | Medium |
 
-## Deletion history
-
-**2026-05-23 (ranking/parameters consolidation)**
-
-- `research/docs/BM25_MIGRATION.md`, `research/docs/REINFERENCIA_BM25.md` and
-  `research/docs/PIPELINE_PARAMETERS_DEFENSE.md` — merged into the single
-  `research/docs/RANKING_Y_PARAMETROS.md` (BM25 migration detail + reinference
-  commands + parameter defense + paper→stage citation map), updated for the new
-  canonical `RRF_K = 60` (Cormack et al., 2009). Originals removed.
-
-**2026-05-14**
-
-- `research/docs/palabras.md` — TFG administrative form, out of repo scope.
-- `research/docs/investigacionMetricas.md` — already captured in the thesis.
-- `research/docs/splits.md` — already captured in the thesis.
-
-**2026-05-19 (documentation consolidation)**
-
-- `research/docs/PROJECT_LAYOUT.md` — redundant with the "Layout" section of `CLAUDE.md`/`AGENTS.md`; removed.
-- `research/docs/USER_SPARSE_CHECKOUT.md` — content moved into the root `README.md` ("Lighter clone"); removed.
-- `research/docs/REINFERENCIA_FINAL.md` — essentials (definitive labels, generator `phi4-finetuned:latest`, env config, reranker-threshold 0.65 decision, truncation resilience) consolidated into `EVALUACIONES_PIPELINE.md`; removed.
-- `research/conversion/GEMMA3_CONVERSION_ISSUE.md` — rewritten in English (problems only, no unblock options) and moved to `research/docs/GEMMA3_CONVERSION_ISSUE.md`.
-- `research/docs/EVALUACIONES_PIPELINE.md` — translated to English and merged with the reinference essentials above.
-
 ## How to use this index
 
 When you change code (signatures in `rag/chat_pdfs.py`, CLIs in
