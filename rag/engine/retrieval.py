@@ -70,16 +70,6 @@ def realizar_busqueda_hibrida(
 
     queries = [pregunta]
 
-    _KEEP_SHORT = {"to", "of", "in", "on", "by", "for", "as", "is", "are", "was",
-                    "and", "or", "the", "its", "how", "not", "no", "what", "does"}
-    palabras_clave_pregunta = [
-        p for p in pregunta.split()
-        if len(p) > 4 or p.lower().strip('"?,()') in _KEEP_SHORT
-    ]
-    query_corta = ' '.join(palabras_clave_pregunta[:20]).strip()
-    if query_corta and query_corta != pregunta:
-        queries.append(query_corta)
-
     keywords_expandidas = extraer_keywords(pregunta)
 
     if llm_queries:
