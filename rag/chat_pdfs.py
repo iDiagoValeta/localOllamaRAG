@@ -199,7 +199,7 @@ def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
 
 # 3.3 Model roles and Ollama runtime
 
-MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "gemma4:e4b")
+MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "phi4-finetuned:latest")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e4b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b")
