@@ -358,12 +358,10 @@ _IMAGEN_CHUNK_OFFSET = 10_000
 N_RESULTADOS_SEMANTICOS = _leer_env_int("RAG_N_RESULTADOS_SEMANTICOS", 80)
 N_RESULTADOS_KEYWORD = _leer_env_int("RAG_N_RESULTADOS_KEYWORD", 40)
 TOP_K_RERANK_CANDIDATES = _leer_env_int("RAG_TOP_K_RERANK_CANDIDATES", 200)
-TOP_K_AFTER_RERANK = _leer_env_int("RAG_TOP_K_AFTER_RERANK", 15)
 TOP_K_FINAL = _leer_env_int("RAG_TOP_K_FINAL", 8)
 N_TOP_PARA_EXPANSION = _leer_env_int("RAG_N_TOP_PARA_EXPANSION", 3)
 
 RERANKER_MODEL_QUALITY = os.getenv("RERANKER_QUALITY", "quality")
-UMBRAL_RELEVANCIA = _leer_env_float("RAG_UMBRAL_RELEVANCIA", 0.50)
 UMBRAL_SCORE_RERANKER = _leer_env_float("RAG_UMBRAL_SCORE_RERANKER", 0.65)
 
 RRF_K = _leer_env_int("RAG_RRF_K", 60)
@@ -527,7 +525,9 @@ from rag.engine.generation import (
     OLLAMA_BASE_URL,
     _ollama_generate_stream,
     _preparar_mensaje_usuario_rag,
+    generar_tokens_respuesta,
     _generar_respuesta_stream,
+    preparar_fragmentos_para_generacion,
     generar_respuesta,
     generar_respuesta_silenciosa,
     evaluar_pregunta_rag,
