@@ -1,52 +1,47 @@
 # Documentation inventory and audit
 
 > Single index of all repository documentation. Each row states purpose,
-> audience and the last date it was verified against the code. Update it after
-> any change to the corresponding doc.
+> audience and the date the doc was last verified against the code. Update it
+> when the corresponding doc changes.
 >
 > **What is documented where** (to avoid drift between docs):
 >
-> - `CLAUDE.md` / `AGENTS.md` → operating rules for agents (public symbols,
->   forbidden flags, git policy) and the repository layout tree.
 > - `README.md` (root) → product install and usage (CLI + Web), including the
 >   lighter sparse-checkout clone.
 > - `rag/README.md` → RAG pipeline technical reference (modules, signatures, parameters).
-> - `research/README.md` → experimental workspace map; details live in sub-docs.
-> - `research/docs/EVALUACIONES_PIPELINE.md` → TFG evaluation + reinference protocol (English).
-> - `research/docs/RANKING_Y_PARAMETROS.md` → ranking/BM25/RRF reference + parameter defense + citation map (Spanish).
 > - `rag/engine/ENGINE_MAP.md` → engine module map: purpose, functions and dependency graph of every file under `rag/engine/`.
-> - `research/docs/GEMMA3_CONVERSION_ISSUE.md` → Gemma-3 conversion failure post-mortem (English).
+> - `research/README.md` → experimental workspace map; details live in sub-docs.
+> - `research/docs/EVALUACIONES_PIPELINE.md` → TFG evaluation + reinference protocol.
+> - `research/docs/GEMMA3_CONVERSION_ISSUE.md` → Gemma-3 conversion failure post-mortem.
 > - Analysis reports under `research/evaluation/runs/ragas/comparisons/ANALISIS_*.md`.
-> - Model cards in `research/models/gguf/<model>/README.md` → self-contained, HF Hub.
+> - Model cards in `research/models/gguf/<model>/README.md` → self-contained, published on the HF Hub.
 
-| Doc | Purpose | Audience | Last verified | Drift risk |
-|---|---|---|---|---|
-| `CLAUDE.md` / `AGENTS.md` | Operating rules + layout (public symbols, flags, git) | Agents / author | 2026-05-19 | High |
-| `README.md` | Product install and usage (CLI + Web + sparse checkout) | End user | 2026-05-19 | Medium |
-| `rag/README.md` | RAG pipeline technical reference | Developer | 2026-05-23 | High |
-| `rag/engine/ENGINE_MAP.md` | Engine module map: purposes, functions, dependency graph | Developer | 2026-05-23 | High |
-| `rag/web/frontend/README.md` | React frontend `npm` commands | Frontend dev | 2026-05-14 | Low |
-| `research/README.md` | TFG experimental workspace map | Tutor / author | 2026-05-19 | Medium |
-| `research/docs/EVALUACIONES_PIPELINE.md` | TFG evaluation + reinference protocol (English) | Tutor / author | 2026-05-23 | High |
-| `research/docs/RANKING_Y_PARAMETROS.md` | Ranking/BM25/RRF reference + parameter defense + citation map | Tutor / author | 2026-05-23 | High |
-| `research/docs/GEMMA3_CONVERSION_ISSUE.md` | Gemma-3 conversion failure post-mortem (English, problems only) | Author / tutor | 2026-05-19 | Low (frozen) |
-| `research/docs/DOCS_AUDIT.md` | This index | Author | 2026-05-23 | — |
-| `research/evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md` | Definitive RAGAS report (AWS Bedrock judge) | Tutor / author | 2026-05-19 | High |
-| `research/evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md` | Token F1 / ROUGE-L / BERTScore + §12 RAGAS cross-check | Tutor / author | 2026-05-19 | High |
-| `research/models/gguf/gemma-3/README.md` | Gemma-3 final state (abandoned) | HF Hub / tutor | 2026-05-14 | Low |
-| `research/models/gguf/phi-4/CONVERSION.md` | LoRA → GGUF → Ollama merge checklist | Author | 2026-05-14 | Low |
-| `research/models/gguf/phi-4/README.md` | Phi-4 RAG fine-tuned model card | HF Hub / tutor | 2026-05-14 | Medium |
-| `research/models/gguf/qwen-3/CONVERSION.md` | LoRA → GGUF → Ollama merge checklist | Author | 2026-05-14 | Low |
-| `research/models/gguf/qwen-3/README.md` | Qwen3-14B RAG fine-tuned model card | HF Hub / tutor | 2026-05-14 | Medium |
+| Doc | Purpose | Audience | Language | Last verified | Drift risk |
+|---|---|---|---|---|---|
+| `README.md` | Product install and usage (CLI + Web + sparse checkout) | End user | English | 2026-05-24 | Medium |
+| `rag/README.md` | RAG pipeline technical reference | Developer | English | 2026-05-24 | High |
+| `rag/engine/ENGINE_MAP.md` | Engine module map: purposes, functions, dependency graph | Developer | English | 2026-05-24 | High |
+| `rag/web/frontend/README.md` | React frontend `npm` commands | Frontend dev | English | 2026-05-24 | Low |
+| `research/README.md` | TFG experimental workspace map | Tutor / author | English | 2026-05-24 | Medium |
+| `research/docs/EVALUACIONES_PIPELINE.md` | TFG evaluation + reinference protocol | Tutor / author | English | 2026-05-24 | High |
+| `research/docs/GEMMA3_CONVERSION_ISSUE.md` | Gemma-3 conversion failure post-mortem (problems only) | Author / tutor | English | 2026-05-24 | Low (frozen) |
+| `research/docs/DOCS_AUDIT.md` | This index | Author | English | 2026-05-24 | — |
+| `research/evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md` | Definitive RAGAS report (AWS Bedrock judge) | Tutor / author | English | 2026-05-24 | High |
+| `research/evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md` | Token F1 / ROUGE-L / BERTScore + §12 RAGAS cross-check | Tutor / author | English | 2026-05-24 | High |
+| `research/models/gguf/gemma-3/README.md` | Gemma-3 final state (abandoned) | HF Hub / tutor | English | 2026-05-24 | Low |
+| `research/models/gguf/phi-4/CONVERSION.md` | LoRA → GGUF → Ollama merge checklist | Author | English | 2026-05-24 | Low |
+| `research/models/gguf/phi-4/README.md` | Phi-4 RAG fine-tuned model card | HF Hub / tutor | English | 2026-05-24 | Medium |
+| `research/models/gguf/qwen-3/CONVERSION.md` | LoRA → GGUF → Ollama merge checklist | Author | English | 2026-05-24 | Low |
+| `research/models/gguf/qwen-3/README.md` | Qwen3-14B RAG fine-tuned model card | HF Hub / tutor | English | 2026-05-24 | Medium |
 
 ## How to use this index
 
-When you change code (signatures in `rag/chat_pdfs.py`, CLIs in
+When code changes (signatures in `rag/chat_pdfs.py`, CLIs in
 `research/evaluation/*.py`, metrics in `training-output/`), check the **Drift
 risk** column:
 
 - **High** → the doc almost certainly needs updating.
-- **Medium** → review commands/paths touched by your change.
+- **Medium** → review the commands/paths touched by the change.
 - **Low** → unlikely, but a quick glance is cheap.
 
 Update the **Last verified** column when done.

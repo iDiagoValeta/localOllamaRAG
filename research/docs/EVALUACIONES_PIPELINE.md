@@ -25,11 +25,17 @@ superseded**; their logic now lives in `_lib/` or as subcommands of the three CL
 > and [`ANALISIS_METRICAS_ENTRENAMIENTO.md`](../evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md)
 > (§12 BERTScore↔RAGAS cross-check).
 
-> **Note — pipeline divergence.** Those definitive metrics were produced with the
-> pre-BM25 lexical pipeline (`$contains` keyword + exhaustive search) and
-> `RRF_K = 20`. Production now uses Okapi BM25 fused with RRF at the canonical
-> `RRF_K = 60`. The BM25 re-inference plan and the full parameter defense /
-> citation map live in [`RANKING_Y_PARAMETROS.md`](RANKING_Y_PARAMETROS.md) §5.
+> **Note — pipeline divergence.** Those definitive metrics were produced with
+> the pre-BM25 lexical pipeline (`$contains` keyword + exhaustive search) and
+> `RRF_K = 20`. Production now uses Okapi BM25 (`rank-bm25`, `k1 = 1.5`,
+> `b = 0.75`) fused with RRF at the canonical `RRF_K = 60` (Cormack et al.,
+> 2009), weighted `PESO_SEMANTICO_RRF = 0.55` / `PESO_BM25_RRF = 0.45`. To
+> regenerate the affected variants, run `infer.py compare --variants
+> baseline_all_on` on each corpus with a fresh `--label`; `all_off` is
+> identical before and after because it disables BM25. BM25 operates over the
+> already-indexed chunks (no `--reindex` needed for ES/CA/RagBench dev). The
+> resulting checkpoints land in
+> `research/evaluation/runs/ragas/comparisons/<label>/`.
 
 ---
 

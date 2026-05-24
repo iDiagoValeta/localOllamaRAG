@@ -1,29 +1,29 @@
-# Gemma-3-12B RAG fine-tuned — estado: **no disponible en Ollama**
+# Gemma-3-12B RAG fine-tuned — status: **not available in Ollama**
 
-LoRA rank 32 sobre [`google/gemma-3-12b-it`](https://huggingface.co/google/gemma-3-12b-it) usando el mismo corpus que [Qwen3-14B](../qwen-3/README.md) y [Phi-4](../phi-4/README.md) (Neural-Bridge RAG + Dolly filtrado + Aina EN/ES/CA, rank 32).
+LoRA rank 32 over [`google/gemma-3-12b-it`](https://huggingface.co/google/gemma-3-12b-it) using the same corpus as [Qwen3-14B](../qwen-3/README.md) and [Phi-4](../phi-4/README.md) (Neural-Bridge RAG + filtered Dolly + Aina EN/ES/CA, rank 32).
 
-## Por qué no se publica
+## Why it is not published
 
-El adaptador entrenó correctamente y los pesos mergeados existen en
-`research/models/merged-model/gemma-3/`, pero **ninguno de los flujos de
-conversión a GGUF importable en Ollama** (rama base de llama.cpp, rama
-`gemma3-improvements`, conversión manual del tokenizer) produce un binario
-que mantenga la generación de caracteres no-ASCII (acentos, ñ, ç). Todas
-las muestras se truncan justo antes del primer byte multibyte.
+The adapter trained correctly and the merged weights exist in
+`research/models/merged-model/gemma-3/`, but **none of the GGUF conversion
+paths importable into Ollama** (base branch of llama.cpp, the
+`gemma3-improvements` branch, manual tokenizer conversion) produce a binary
+that preserves generation of non-ASCII characters (accents, ñ, ç). Every
+sample is truncated right before the first multi-byte byte.
 
-Detalles técnicos, intentos y diagnóstico:
+Technical details, attempts and diagnosis:
 [`../../../docs/GEMMA3_CONVERSION_ISSUE.md`](../../../docs/GEMMA3_CONVERSION_ISSUE.md).
 
-## Qué se conserva en el repo
+## What is kept in the repo
 
-- `Modelfile` — referencia, **no es importable** tal cual: el `.gguf` referenciado por `FROM` no se publica.
-- Adaptador LoRA crudo: `research/training-output/gemma-3/` (pesos gitignored, métricas y `evaluation_comparison.json` versionados).
+- `Modelfile` — reference only; **not importable** as is, because the `.gguf` referenced by `FROM` is not published.
+- Raw LoRA adapter: `research/training-output/gemma-3/` (weights gitignored, metrics and `evaluation_comparison.json` versioned).
 
-Para reproducir el entrenamiento (no la conversión):
+To reproduce the training (not the conversion):
 
 ```bash
 python research/training/train_gemma3.py
 python research/conversion/merge_lora.py --model gemma-3
 ```
 
-A partir de aquí, la conversión a GGUF queda **fuera del alcance del TFG**.
+From this point on, the GGUF conversion is **out of scope for the TFG**.

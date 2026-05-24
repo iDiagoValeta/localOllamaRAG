@@ -1,93 +1,93 @@
-# Pipeline RAG — Documentación Técnica
+# RAG pipeline — Technical reference
 
-MonkeyGrab implementa un pipeline RAG (Retrieval-Augmented Generation) completamente local sobre Ollama + ChromaDB. Este documento describe cada etapa del pipeline, las funciones que la implementan y los parámetros que la controlan.
-
----
-
-## Índice
-
-1. [Arquitectura general](#1-arquitectura-general)
-2. [Etapa 1 — Indexación](#2-etapa-1--indexación)
-3. [Etapa 2 — Recuperación híbrida](#3-etapa-2--recuperación-híbrida)
-4. [Etapa 3 — Reranking y expansión de contexto](#4-etapa-3--reranking-y-expansión-de-contexto)
-5. [Etapa 4 — Construcción del contexto](#5-etapa-4--construcción-del-contexto)
-6. [Etapa 5 — Generación](#6-etapa-5--generación)
-7. [Módulos transversales](#7-módulos-transversales)
-8. [Configuración global y flags](#8-configuración-global-y-flags)
-9. [Apéndice A — Metadatos ChromaDB](#apéndice-a--metadatos-chromadb)
-10. [Apéndice B — Sincronización runtime](#apéndice-b--sincronización-runtime)
-11. [Apéndice C — Flujo completo de ejemplo](#apéndice-c--flujo-completo-de-ejemplo)
+MonkeyGrab implements a fully local RAG (Retrieval-Augmented Generation) pipeline on top of Ollama + ChromaDB. This document describes every stage of the pipeline, the functions that implement it, and the parameters that control it.
 
 ---
 
-## 1. Arquitectura general
+## Contents
+
+1. [Overall architecture](#1-overall-architecture)
+2. [Stage 1 — Indexing](#2-stage-1--indexing)
+3. [Stage 2 — Hybrid retrieval](#3-stage-2--hybrid-retrieval)
+4. [Stage 3 — Reranking and context expansion](#4-stage-3--reranking-and-context-expansion)
+5. [Stage 4 — Context assembly](#5-stage-4--context-assembly)
+6. [Stage 5 — Generation](#6-stage-5--generation)
+7. [Cross-cutting modules](#7-cross-cutting-modules)
+8. [Global configuration and flags](#8-global-configuration-and-flags)
+9. [Appendix A — ChromaDB metadata](#appendix-a--chromadb-metadata)
+10. [Appendix B — Runtime synchronization](#appendix-b--runtime-synchronization)
+11. [Appendix C — Full example flow](#appendix-c--full-example-flow)
+
+---
+
+## 1. Overall architecture
 
 ```
 PDF corpus
     │
     ▼
 ┌─────────────────────────────────────────────────────┐
-│  ETAPA 1: INDEXACIÓN                                │
+│  STAGE 1: INDEXING                                  │
 │  chunking → contextual enrichment → embeddings      │
-│  → ChromaDB  (+ OCR de imágenes, opcional)          │
+│  → ChromaDB  (+ image OCR, optional)                │
 └──────────────────────┬──────────────────────────────┘
-                       │ collection ChromaDB
+                       │ ChromaDB collection
     ┌──────────────────▼──────────────────────────────┐
-    │  ETAPA 2: RECUPERACIÓN HÍBRIDA                  │
-    │  query decomposition → semántica + BM25         │
+    │  STAGE 2: HYBRID RETRIEVAL                      │
+    │  query decomposition → semantic + BM25          │
     │  → RRF fusion                                   │
     └──────────────────┬──────────────────────────────┘
-                       │ candidatos con scores
+                       │ candidates with scores
     ┌──────────────────▼──────────────────────────────┐
-    │  ETAPA 3: RERANKING + EXPANSIÓN                 │
+    │  STAGE 3: RERANKING + EXPANSION                 │
     │  Cross-Encoder → top-K → neighbor expansion     │
     └──────────────────┬──────────────────────────────┘
-                       │ fragmentos finales
+                       │ final fragments
     ┌──────────────────▼──────────────────────────────┐
-    │  ETAPA 4: CONSTRUCCIÓN DE CONTEXTO              │
-    │  optimización PDF → RECOMP synthesis (opt)      │
+    │  STAGE 4: CONTEXT ASSEMBLY                      │
+    │  PDF optimization → RECOMP synthesis (opt.)     │
     └──────────────────┬──────────────────────────────┘
-                       │ contexto listo
+                       │ context ready
     ┌──────────────────▼──────────────────────────────┐
-    │  ETAPA 5: GENERACIÓN                            │
-    │  Ollama streaming → respuesta + debug dump      │
+    │  STAGE 5: GENERATION                            │
+    │  Ollama streaming → answer + debug dump         │
     └─────────────────────────────────────────────────┘
 ```
 
-### Modos de operación
+### Operating modes
 
-| Modo | Descripción |
+| Mode | Description |
 |------|-------------|
-| **CHAT** | Conversación libre con historial persistente (no usa documentos) |
-| **RAG**  | Consultas documentales: ejecuta el pipeline completo de 5 etapas |
+| **CHAT** | Free conversation with persistent history (no documents used) |
+| **RAG**  | Document queries: runs the full 5-stage pipeline |
 
-### Estructura de módulos
+### Module layout
 
 ```
 rag/
-├── chat_pdfs.py          — Fachada pública + toda la configuración global
+├── chat_pdfs.py          — Public facade + all global configuration
 └── engine/
-    ├── runtime.py        — Sincronización de globals entre módulos
-    ├── indexing.py       — Orquestación de indexación
-    ├── chunking.py       — División en fragmentos
-    ├── contextual.py     — Contextual retrieval + detección de idioma
-    ├── images.py         — Extracción OCR de imágenes PDF
-    ├── retrieval.py      — Orquestación de búsqueda híbrida
+    ├── runtime.py        — Global synchronization across modules
+    ├── indexing.py       — Indexing orchestration
+    ├── chunking.py       — Fragment splitting
+    ├── contextual.py     — Contextual retrieval + language detection
+    ├── images.py         — PDF image OCR extraction
+    ├── retrieval.py      — Hybrid retrieval orchestration
     ├── reranking.py      — Query decomposition + Cross-Encoder
-    ├── lexical.py        — Búsqueda léxica BM25
-    ├── context.py        — Construcción y optimización del contexto
-    ├── generation.py     — Generación de respuestas + evaluación silenciosa
-    ├── history.py        — Persistencia del historial de chat
-    └── debug.py          — Volcado de interacciones RAG
+    ├── lexical.py        — BM25 lexical search
+    ├── context.py        — Context assembly and optimization
+    ├── generation.py     — Answer generation + silent evaluation
+    ├── history.py        — Chat history persistence
+    └── debug.py          — RAG interaction dumps
 ```
 
 ---
 
-## 2. Etapa 1 — Indexación
+## 2. Stage 1 — Indexing
 
-### 2.1 Función principal: `indexar_documentos()`
+### 2.1 Main function: `indexar_documentos()`
 
-**Archivo**: `rag/engine/indexing.py`
+**File**: `rag/engine/indexing.py`
 
 ```python
 def indexar_documentos(
@@ -99,32 +99,32 @@ def indexar_documentos(
 ) -> int
 ```
 
-Por cada PDF encontrado en `carpeta`:
+For each PDF found in `carpeta`:
 
-1. Extrae texto con `pymupdf4llm` (Markdown); si falla, fallback a `pypdf`.
-2. Detecta idioma del documento (`_detectar_idioma`).
-3. Divide el texto en chunks (`dividir_en_chunks`).
-4. Opcionalmente enriquece cada chunk con contexto situacional (`generar_contexto_situacional`) si `USAR_CONTEXTUAL_RETRIEVAL = True`.
-5. Calcula embeddings vía Ollama (`MODELO_EMBEDDING`) prefijando el texto con `EMBED_PREFIX_DOC`.
-6. Almacena en ChromaDB con metadatos de página, chunk e índice.
-7. Opcionalmente extrae imágenes y las indexa como chunks especiales (`USAR_EMBEDDINGS_IMAGEN`).
+1. Extract text with `pymupdf4llm` (Markdown); on failure, fall back to `pypdf`.
+2. Detect the document language (`_detectar_idioma`).
+3. Split the text into chunks (`dividir_en_chunks`).
+4. Optionally enrich each chunk with situational context (`generar_contexto_situacional`) if `USAR_CONTEXTUAL_RETRIEVAL = True`.
+5. Compute embeddings via Ollama (`MODELO_EMBEDDING`), prefixing the text with `EMBED_PREFIX_DOC`.
+6. Store in ChromaDB with page, chunk and index metadata.
+7. Optionally extract images and index them as special chunks (`USAR_EMBEDDINGS_IMAGEN`).
 
-**Parámetros de configuración relevantes** (definidos en `rag/chat_pdfs.py`):
+**Relevant configuration parameters** (defined in `rag/chat_pdfs.py`):
 
-| Constante | Valor | Descripción |
-|-----------|-------|-------------|
-| `CHUNK_SIZE` | 2000 | Tamaño máximo de un chunk en caracteres |
-| `CHUNK_OVERLAP` | 400 | Solapamiento entre chunks consecutivos (~20%) |
-| `MIN_CHUNK_LENGTH` | 150 | Descarta artefactos más cortos |
-| `CONTEXTUAL_DOC_CHARS` | 24000 | Muestra del documento para generar el contexto situacional |
-| `EMBED_PREFIX_DOC` | `"search_document: "` o `""` | Prefijo de documento para el modelo de embeddings activo; auto-configurado en `chat_pdfs.py` según `MODELO_EMBEDDING`; vacío si el modelo no lo requiere |
-| `progress_callback` | `None` | Callable opcional `(info: dict) → None`; recibe `{"file", "file_index", "total_files"}` en cada PDF procesado; usado por la web para mostrar progreso en tiempo real |
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `CHUNK_SIZE` | 2000 | Maximum chunk size in characters |
+| `CHUNK_OVERLAP` | 400 | Overlap between consecutive chunks (~20%) |
+| `MIN_CHUNK_LENGTH` | 150 | Discards artifacts shorter than this |
+| `CONTEXTUAL_DOC_CHARS` | 24000 | Document sample passed to situational context generation |
+| `EMBED_PREFIX_DOC` | `"search_document: "` or `""` | Document prefix for the active embedding model; auto-configured in `chat_pdfs.py` based on `MODELO_EMBEDDING`; empty when the model does not require it |
+| `progress_callback` | `None` | Optional callable `(info: dict) → None`; receives `{"file", "file_index", "total_files"}` per processed PDF; used by the web UI to show real-time progress |
 
 ---
 
 ### 2.2 Chunking: `dividir_en_chunks()`
 
-**Archivo**: `rag/engine/chunking.py`
+**File**: `rag/engine/chunking.py`
 
 ```python
 def dividir_en_chunks(
@@ -134,26 +134,26 @@ def dividir_en_chunks(
 ) -> List[Dict[str, str]]
 ```
 
-**Estrategia recursiva** con separadores jerárquicos:
+**Recursive strategy** with hierarchical separators:
 
 ```
 \n\n  →  \n  →  ". "  →  ", "  →  " "
 ```
 
-Para cada chunk resultante:
-- Preserva el header Markdown (`# …`) más cercano previo al fragmento.
-- Solapamiento: toma los últimos `overlap` caracteres del chunk anterior y los antepone al siguiente.
-- Filtra fragmentos con longitud < `MIN_CHUNK_LENGTH`.
-- Limpia markup de presentación: tachado, asteriscos de énfasis, backticks.
-- Colapsa `\n{3,}` a `\n\n`.
+For each resulting chunk:
+- Preserves the nearest Markdown header (`# …`) appearing before the fragment.
+- Overlap: takes the last `overlap` characters of the previous chunk and prepends them to the next one.
+- Discards fragments shorter than `MIN_CHUNK_LENGTH`.
+- Strips presentational markup: strikethrough, emphasis asterisks, backticks.
+- Collapses `\n{3,}` to `\n\n`.
 
-Retorna `[{"text": "...", "header": "..."}]`.
+Returns `[{"text": "...", "header": "..."}]`.
 
 ---
 
 ### 2.3 Contextual retrieval: `generar_contexto_situacional()`
 
-**Archivo**: `rag/engine/contextual.py`
+**File**: `rag/engine/contextual.py`
 
 ```python
 def generar_contexto_situacional(
@@ -163,52 +163,52 @@ def generar_contexto_situacional(
 ) -> str
 ```
 
-Controlado por el flag `USAR_CONTEXTUAL_RETRIEVAL`. Cuando está activo, antes de indexar un chunk se llama a `MODELO_CONTEXTUAL` (contexto de `OLLAMA_CONTEXTUAL_NUM_CTX` = 32768 tokens) con el prompt:
+Controlled by `USAR_CONTEXTUAL_RETRIEVAL`. When active, before indexing a chunk it calls `MODELO_CONTEXTUAL` (with `OLLAMA_CONTEXTUAL_NUM_CTX` = 32768 tokens of context) using the prompt:
 
 ```
-System: "Escribe exactamente 2-3 frases sobre cómo este fragmento
-         encaja en el documento global."
+System: "Write exactly 2-3 sentences about how this fragment
+         fits into the global document."
 User:   <document>{texto_base[:CONTEXTUAL_DOC_CHARS]}</document>
         <excerpt>{chunk_text}</excerpt>
 ```
 
-La salida se antepone al texto del chunk usando el separador literal `\\n\\n` (6 bytes, no un salto de línea real), lo que permite distinguir contexto situacional de cuerpo de chunk al recuperar sin ambigüedad con los saltos naturales del PDF.
+The output is prepended to the chunk text using the literal separator `\\n\\n` (6 bytes, not a real newline), which lets the retriever distinguish situational context from chunk body unambiguously, without conflicting with the natural line breaks of the PDF.
 
-El texto indexado final tiene la forma:
+The final indexed text has the shape:
 
 ```
-<2-3 frases situacionales>\\n\\n<cuerpo del chunk>
+<2-3 situational sentences>\\n\\n<chunk body>
 ```
 
-**Parámetros**:
+**Parameters**:
 
-| Constante | Valor |
-|-----------|-------|
+| Constant | Value |
+|----------|-------|
 | `MODELO_CONTEXTUAL` | Configurable via `OLLAMA_CONTEXTUAL_MODEL` |
 | `OLLAMA_CONTEXTUAL_NUM_CTX` | 32768 |
 | `CONTEXTUAL_DOC_CHARS` | 24000 |
 
 ---
 
-### 2.4 Detección de idioma: `_detectar_idioma()`
+### 2.4 Language detection: `_detectar_idioma()`
 
-**Archivo**: `rag/engine/contextual.py`
+**File**: `rag/engine/contextual.py`
 
 ```python
 def _detectar_idioma(texto: str) -> str  # → 'Spanish' | 'Catalan' | 'English'
 ```
 
-Cuenta tokens indicativos de cada idioma (conjunciones, artículos, preposiciones específicas) y devuelve el idioma con mayor puntuación. El resultado se propaga a `generar_contexto_situacional` para que el LLM responda en el idioma del documento.
+Counts tokens indicative of each language (conjunctions, articles, language-specific prepositions) and returns the language with the highest score. The result is forwarded to `generar_contexto_situacional` so the LLM replies in the document's language.
 
 ---
 
-### 2.5 OCR de imágenes: `extraer_imagenes_pdf()` + `describir_imagen_con_llm()`
+### 2.5 Image OCR: `extraer_imagenes_pdf()` + `describir_imagen_con_llm()`
 
-**Archivo**: `rag/engine/images.py`
+**File**: `rag/engine/images.py`
 
-Controlado por `USAR_EMBEDDINGS_IMAGEN`.
+Controlled by `USAR_EMBEDDINGS_IMAGEN`.
 
-#### Extracción
+#### Extraction
 
 ```python
 def extraer_imagenes_pdf(
@@ -218,12 +218,12 @@ def extraer_imagenes_pdf(
 ) -> Dict[int, List[Dict[str, Any]]]
 ```
 
-Usa PyMuPDF (`fitz`) para iterar páginas y extraer imágenes como bytes PNG/JPEG. Filtra:
-- Imágenes más pequeñas que `MIN_IMAGEN_SIZE_PX` (100 px) en cualquier dimensión.
-- Más de `MAX_IMAGENES_POR_PAGINA` (5) por página.
-- Detecta caption buscando texto en los `CAPTION_MARGIN_PX` (80 px) inmediatamente bajo la imagen.
+Uses PyMuPDF (`fitz`) to iterate pages and extract images as PNG/JPEG bytes. Filters:
+- Images smaller than `MIN_IMAGEN_SIZE_PX` (100 px) in either dimension.
+- More than `MAX_IMAGENES_POR_PAGINA` (5) per page.
+- Detects captions by looking for text within `CAPTION_MARGIN_PX` (80 px) immediately below the image.
 
-#### Descripción con OCR
+#### OCR description
 
 ```python
 def describir_imagen_con_llm(
@@ -233,28 +233,28 @@ def describir_imagen_con_llm(
 ) -> str
 ```
 
-Envía la imagen (base64) a `MODELO_OCR` con un prompt estructurado que guía la descripción según el tipo visual:
-- **Diagrama**: bloques, entradas/salidas, flujo de datos.
-- **Tabla**: estructura de filas y columnas, valores clave.
-- **Gráfico**: ejes, leyendas, tendencias.
+Sends the image (base64) to `MODELO_OCR` with a structured prompt that adapts the description to the visual type:
+- **Diagram**: blocks, inputs/outputs, data flow.
+- **Table**: row/column structure, key values.
+- **Chart**: axes, legends, trends.
 
-Las descripciones degeneradas se descartan mediante tres filtros:
+Degenerate descriptions are dropped by three filters:
 
-| Función | Qué detecta |
-|---------|-------------|
-| `_es_descripcion_spam()` | Léxico repetitivo (<35% palabras únicas) o >20% tokens "no"/"text" |
-| `_es_prompt_echo()` | El modelo repite fragmentos del propio prompt |
-| `_es_solo_caption()` | >85% de solapamiento con el caption sin información adicional |
+| Function | What it detects |
+|----------|-----------------|
+| `_es_descripcion_spam()` | Repetitive vocabulary (<35% unique words) or >20% "no"/"text" tokens |
+| `_es_prompt_echo()` | The model echoes fragments of the prompt itself |
+| `_es_solo_caption()` | >85% overlap with the caption without adding new information |
 
-Las imágenes válidas se indexan como chunks con `format = "image"` y un `chunk_id` desplazado en `_IMAGEN_CHUNK_OFFSET` (10 000) para no colisionar con chunks de texto.
+Valid images are indexed as chunks with `format = "image"` and a `chunk_id` shifted by `_IMAGEN_CHUNK_OFFSET` (10 000) so they do not collide with text chunks.
 
 ---
 
-## 3. Etapa 2 — Recuperación híbrida
+## 3. Stage 2 — Hybrid retrieval
 
-### 3.1 Orquestador: `realizar_busqueda_hibrida()`
+### 3.1 Orchestrator: `realizar_busqueda_hibrida()`
 
-**Archivo**: `rag/engine/retrieval.py`
+**File**: `rag/engine/retrieval.py`
 
 ```python
 def realizar_busqueda_hibrida(
@@ -263,86 +263,88 @@ def realizar_busqueda_hibrida(
 ) -> Tuple[List[Dict[str, Any]], float, Dict[str, Any]]
 ```
 
-Devuelve `(fragmentos_ordenados, mejor_score, stats)`. Internamente ejecuta los pasos A–D en orden.
+Returns `(ranked_fragments, best_score, stats)`. Internally it runs steps A–D in order.
 
 ---
 
 ### 3.2 A) Query decomposition: `generar_queries_con_llm()`
 
-**Archivo**: `rag/engine/reranking.py`
+**File**: `rag/engine/reranking.py`
 
 ```python
 def generar_queries_con_llm(pregunta: str) -> List[str]
 ```
 
-Activa si `USAR_LLM_QUERY_DECOMPOSITION = True` **y** `len(pregunta) > 60`. Llama a `MODELO_CHAT` con `think=False` para generar **3 sub-queries** que cubren aspectos distintos de la pregunta original, en el mismo idioma. Las sub-queries se añaden a la lista de queries que entran en el paso semántico.
+Active if `USAR_LLM_QUERY_DECOMPOSITION = True` **and** `len(pregunta) > 60`. Calls `MODELO_CHAT` with `think=False` to generate **3 sub-queries** that cover different aspects of the original question, in the same language. The sub-queries are added to the query list that feeds the semantic step.
 
 ---
 
-### 3.3 B) Búsqueda semántica + RRF
+### 3.3 B) Semantic search + RRF
 
-Para cada query (original + sub-queries):
+For each query (original + sub-queries):
 
-1. Prefija el texto con `EMBED_PREFIX_QUERY` (auto-configurado en `chat_pdfs.py` según `MODELO_EMBEDDING`; vacío si el modelo no requiere prefijo).
-2. Calcula embeddings vía Ollama (`MODELO_EMBEDDING`).
-3. Consulta ChromaDB: `collection.query(n_results=N_RESULTADOS_SEMANTICOS)` donde `N_RESULTADOS_SEMANTICOS = 80` por defecto (`RAG_N_RESULTADOS_SEMANTICOS`).
-4. Acumula en un diccionario de candidatos:
+1. Prefix the text with `EMBED_PREFIX_QUERY` (auto-configured in `chat_pdfs.py` based on `MODELO_EMBEDDING`; empty when the model needs no prefix).
+2. Compute embeddings via Ollama (`MODELO_EMBEDDING`).
+3. Query ChromaDB: `collection.query(n_results=N_RESULTADOS_SEMANTICOS)`, with `N_RESULTADOS_SEMANTICOS = 80` by default (`RAG_N_RESULTADOS_SEMANTICOS`).
+4. Accumulate in a candidate dictionary:
 
 ```python
-score_semantic[doc_id] += 1.0 / (rank + RRF_K)   # RRF_K = 60 por defecto (Cormack et al., 2009)
+score_semantic[doc_id] += 1.0 / (rank + RRF_K)   # RRF_K = 60 by default (Cormack et al., 2009)
 ```
 
 ---
 
-### 3.4 C) Búsqueda léxica BM25: `busqueda_lexica_bm25()`
+### 3.4 C) BM25 lexical search: `busqueda_lexica_bm25()`
 
-**Archivo**: `rag/engine/lexical.py`
+**File**: `rag/engine/lexical.py`
 
 ```python
 def busqueda_lexica_bm25(
     pregunta: str,
     collection: chromadb.Collection,
-    top_n: int = N_RESULTADOS_KEYWORD,   # 40 por defecto
+    top_n: int = N_RESULTADOS_KEYWORD,   # 40 by default
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]
 ```
 
-Activa si `USAR_BUSQUEDA_HIBRIDA = True`. `rank-bm25` es una dependencia
-obligatoria del entorno; `BM25_AVAILABLE` se conserva como constante pública de
-compatibilidad y vale `True` tras importar correctamente `rag.chat_pdfs`.
+Active if `USAR_BUSQUEDA_HIBRIDA = True`. `rank-bm25` is a mandatory
+dependency of the environment; `BM25_AVAILABLE` is kept as a public
+compatibility constant and is `True` once `rag.chat_pdfs` has imported
+correctly.
 
-Implementa recuperación dispersa clásica **Okapi BM25** (Robertson & Zaragoza,
-2009): puntúa cada fragmento por frecuencia de término, rareza del término en la
-colección (IDF) y normalización por longitud, produciendo un **ranking de
-relevancia real** en lugar de un filtro de subcadena. Sustituye a la antigua
-búsqueda por `$contains` y a la búsqueda exhaustiva, que eran redundantes.
+Implements classic sparse retrieval **Okapi BM25** (Robertson & Zaragoza,
+2009): each fragment is scored by term frequency, term rarity in the
+collection (IDF), and length normalization, producing a **real relevance
+ranking** rather than a substring filter. It replaces the previous
+`$contains` search and the exhaustive search, which were redundant.
 
-#### Tokenización: `_tokenizar_bm25()`
+#### Tokenization: `_tokenizar_bm25()`
 
-Tokenizador **único** para corpus y query (requisito de BM25): minúsculas, split
-por límites no alfanuméricos (Unicode, conserva acentos), descarta `STOPWORDS`
-multiidioma (es/ca/en) y tokens de menos de 3 caracteres salvo que contengan
-dígitos (se conservan identificadores y métricas).
+A **single** tokenizer for both corpus and query (BM25 matching requirement):
+lowercase, split on non-alphanumeric boundaries (Unicode, preserves
+accents), drop multilingual `STOPWORDS` (es/ca/en) and tokens shorter than
+3 characters unless they contain digits (identifiers and metrics are kept).
 
-#### Búsqueda
+#### Search
 
-El índice BM25 se **reconstruye por consulta**: se escanea toda la colección en
-batches, se tokeniza el corpus, se construye `BM25Okapi(corpus, k1=BM25_K1,
-b=BM25_B)` (`BM25_K1 = 1.5`, `BM25_B = 0.75` por defecto) y se puntúa la query con
-`get_scores()`. Se devuelven los `top_n` fragmentos con score positivo,
-ordenados de mayor a menor. La fusión RRF usa ese **rango real**:
+The BM25 index is **rebuilt per query**: the whole collection is scanned
+in batches, the corpus is tokenized, `BM25Okapi(corpus, k1=BM25_K1,
+b=BM25_B)` (`BM25_K1 = 1.5`, `BM25_B = 0.75` by default) is built, and the
+query is scored with `get_scores()`. The `top_n` fragments with positive
+score are returned, sorted high-to-low. The RRF fusion uses that
+**actual rank**:
 
 ```python
-score_keyword[doc_id] += 1.0 / (rank + RRF_K)   # rank = posición por score BM25
+score_keyword[doc_id] += 1.0 / (rank + RRF_K)   # rank = position by BM25 score
 ```
 
-> `extraer_keywords()` se mantiene para métricas/depuración y para la
-> decomposición de query, pero ya no dirige la recuperación léxica.
+> `extraer_keywords()` is kept for metrics/debugging and for query
+> decomposition, but no longer drives lexical retrieval.
 
 ---
 
-### 3.5 D) Fusión RRF final
+### 3.5 D) Final RRF fusion
 
-Una vez recogidos los candidatos de ambas vías (semántica + BM25):
+Once both lists (semantic + BM25) have collected their candidates:
 
 ```python
 score_final = (
@@ -351,18 +353,19 @@ score_final = (
 )
 ```
 
-Los candidatos se ordenan descendentemente por `score_final`. Por defecto
-`PESO_SEMANTICO_RRF = 0.55` y `PESO_BM25_RRF = 0.45`. Si el reranker está
-activo, `score_final` se sustituye después por `score_reranker`; el filtro final
-de relevancia se aplica sobre esa escala de reranker, no sobre la escala RRF pura.
+Candidates are sorted by `score_final` in descending order. Defaults are
+`PESO_SEMANTICO_RRF = 0.55` and `PESO_BM25_RRF = 0.45`. If the reranker is
+active, `score_final` is then replaced by `score_reranker`; the final
+relevance filter is applied over the reranker scale, not over the raw RRF
+scale.
 
 ---
 
-## 4. Etapa 3 — Reranking y expansión de contexto
+## 4. Stage 3 — Reranking and context expansion
 
 ### 4.1 Reranking: `rerank_resultados()`
 
-**Archivo**: `rag/engine/reranking.py`
+**File**: `rag/engine/reranking.py`
 
 ```python
 def rerank_resultados(
@@ -372,29 +375,29 @@ def rerank_resultados(
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]
 ```
 
-Activa si `USAR_RERANKER = True`. `sentence-transformers` es una dependencia
-obligatoria del entorno; si falta, la carga de `rag.chat_pdfs` falla al inicio.
+Active if `USAR_RERANKER = True`. `sentence-transformers` is a mandatory
+dependency; loading `rag.chat_pdfs` fails at startup if it is missing.
 
-**Tier configurable** (controlado por `RERANKER_QUALITY`):
+**Configurable tier** (controlled by `RERANKER_QUALITY`):
 
-| Calidad | Uso previsto |
+| Quality | Intended use |
 |---------|--------------|
-| `"quality"` | Mayor precision, mas coste |
-| `"fast"` | Menor latencia, menor coste |
+| `"quality"` | Higher precision, higher cost |
+| `"fast"` | Lower latency, lower cost |
 
-**Flujo**:
+**Flow**:
 
-1. Para cada fragmento, extrae el cuerpo de texto limpio: si el texto contiene `\\n\\n` (separador contextual), toma la parte posterior al separador.
-2. Construye pares `(pregunta, texto_cuerpo)` para los `TOP_K_RERANK_CANDIDATES` (200) mejores candidatos por `score_final`.
-3. Ejecuta `CrossEncoder.rank()` en CPU (FP32) o CUDA (FP16, auto-detectado).
-4. Sustituye `score_final` por `score_reranker` (rango [0, 1]).
-5. Retiene el top `TOP_K_FINAL` (8); el filtro de relevancia se aplica una sola vez en la fase final de preparación de contexto.
+1. For each fragment, extract the clean text body: if the text contains `\\n\\n` (contextual separator), take the portion after the separator.
+2. Build `(pregunta, texto_cuerpo)` pairs for the `TOP_K_RERANK_CANDIDATES` (200) best candidates by `score_final`.
+3. Run `CrossEncoder.rank()` on CPU (FP32) or CUDA (FP16, auto-detected).
+4. Replace `score_final` with `score_reranker` (range [0, 1]).
+5. Keep the top `TOP_K_FINAL` (8); the relevance filter is applied once in the final context-preparation stage.
 
 ---
 
-### 4.2 Expansión de vecinos: `expandir_con_chunks_adyacentes()`
+### 4.2 Neighbor expansion: `expandir_con_chunks_adyacentes()`
 
-**Archivo**: `rag/engine/chunking.py`
+**File**: `rag/engine/chunking.py`
 
 ```python
 def expandir_con_chunks_adyacentes(
@@ -404,13 +407,13 @@ def expandir_con_chunks_adyacentes(
 ) -> List[str]
 ```
 
-Activa si `EXPANDIR_CONTEXTO = True`. Para los `N_TOP_PARA_EXPANSION` (3) fragmentos textuales con mayor score dentro del top final, construye los IDs de los chunks adyacentes (misma página, página anterior, página siguiente) y los recupera de ChromaDB si existen. Los chunks de imagen no se expanden con vecinos textuales.
+Active if `EXPANDIR_CONTEXTO = True`. For the `N_TOP_PARA_EXPANSION` (3) textual fragments with the highest score in the final top, the IDs of the adjacent chunks (same page, previous page, next page) are built and fetched from ChromaDB when they exist. Image chunks are not expanded with text neighbors.
 
 ---
 
-### 4.3 Preparación final de evidencia: `preparar_fragmentos_para_generacion()`
+### 4.3 Final evidence preparation: `preparar_fragmentos_para_generacion()`
 
-**Archivo**: `rag/engine/generation.py`
+**File**: `rag/engine/generation.py`
 
 ```python
 def preparar_fragmentos_para_generacion(
@@ -420,71 +423,71 @@ def preparar_fragmentos_para_generacion(
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]
 ```
 
-Función canónica que convierte los candidatos ordenados por el reranker en la evidencia definitiva que recibe el generador. Es el único punto del sistema donde se aplican el filtro de umbral, el corte top-K, la expansión de vecinos y el límite de caracteres. CLI, web y evaluación RAGAS la comparten para garantizar comportamiento idéntico.
+Canonical function that turns the reranker-ordered candidates into the final evidence the generator receives. It is the single point of the system where the threshold filter, top-K cut, neighbor expansion and character limit are applied. CLI, web UI and RAGAS evaluation all share it to guarantee identical behavior.
 
-**Flujo interno**:
+**Internal flow**:
 
-1. `_filtrar_por_umbral_reranker()`: si `USAR_RERANKER = True`, descarta fragmentos con `score_reranker < UMBRAL_SCORE_RERANKER` (0.65). Si `permitir_fallback_bajo_score = True` y ningún fragmento supera el umbral, devuelve todos los candidatos como fallback de evaluación.
-2. Corte `[:TOP_K_FINAL]`: retiene los primeros `TOP_K_FINAL` (8) candidatos relevantes.
-3. `_expandir_fragmentos_contexto()`: añade chunks adyacentes a los primeros `N_TOP_PARA_EXPANSION` (3) fragmentos textuales, si `EXPANDIR_CONTEXTO = True`.
-4. `_limitar_fragmentos_por_chars()`: descarta los fragmentos que ya no caben dentro del presupuesto `MAX_CONTEXTO_CHARS` (24000 chars).
+1. `_filtrar_por_umbral_reranker()`: if `USAR_RERANKER = True`, drops fragments with `score_reranker < UMBRAL_SCORE_RERANKER` (0.65). If `permitir_fallback_bajo_score = True` and no fragment passes the threshold, returns all candidates as an evaluation fallback.
+2. `[:TOP_K_FINAL]` cut: keeps the first `TOP_K_FINAL` (8) relevant candidates.
+3. `_expandir_fragmentos_contexto()`: adds adjacent chunks for the first `N_TOP_PARA_EXPANSION` (3) textual fragments, if `EXPANDIR_CONTEXTO = True`.
+4. `_limitar_fragmentos_por_chars()`: discards fragments that no longer fit within the `MAX_CONTEXTO_CHARS` (24000 chars) budget.
 
-Retorna `(fragmentos_finales, metricas)` donde `metricas` contiene conteos de cada etapa (`candidatos_entrada`, `candidatos_relevantes`, `fragmentos_base`, `fragmentos_expandidos`, `fragmentos_descartados_por_chars`, `fragmentos_finales`).
+Returns `(fragmentos_finales, metricas)`, where `metricas` contains counts for each stage (`candidatos_entrada`, `candidatos_relevantes`, `fragmentos_base`, `fragmentos_expandidos`, `fragmentos_descartados_por_chars`, `fragmentos_finales`).
 
 ---
 
-## 5. Etapa 4 — Construcción del contexto
+## 5. Stage 4 — Context assembly
 
-### 5.1 Optimización de texto: `optimizar_texto_contexto()`
+### 5.1 Text optimization: `optimizar_texto_contexto()`
 
-**Archivo**: `rag/engine/context.py`
+**File**: `rag/engine/context.py`
 
 ```python
 def optimizar_texto_contexto(texto: str) -> str
 ```
 
-Activa si `USAR_OPTIMIZACION_CONTEXTO = True`. Elimina artefactos comunes en extracciones PDF que consumen tokens sin aportar información:
-- Headers Markdown (`^#{1,6}\s+`)
-- Patrones de footer (autor/fecha)
-- Múltiples espacios consecutivos
-- Espacios trailing por línea
-- Párrafos huérfanos de un solo dígito (números de página)
-- Triples saltos de línea o más → doble salto
+Active if `USAR_OPTIMIZACION_CONTEXTO = True`. Strips common PDF-extraction artifacts that consume tokens without contributing information:
+- Markdown headers (`^#{1,6}\s+`)
+- Footer patterns (author/date)
+- Multiple consecutive spaces
+- Trailing whitespace per line
+- Orphan single-digit paragraphs (page numbers)
+- Three or more line breaks → double line break
 
-El módulo registra el ahorro: `"Optimized context: 12000 -> 8500 chars (29.2%)"`.
+The module logs the savings: `"Optimized context: 12000 -> 8500 chars (29.2%)"`.
 
-La función auxiliar `_es_continuacion_parrafo()` detecta párrafos quebrados por la extracción del PDF aplicando heurísticas (¿la línea anterior termina en `.?!`? ¿la línea actual empieza en minúscula?) y `_reunir_parrafos()` los reconstituye.
+The helper `_es_continuacion_parrafo()` detects paragraphs broken by PDF extraction using heuristics (does the previous line end in `.?!`? does the current line start lowercase?) and `_reunir_parrafos()` rejoins them.
 
 ---
 
-### 5.2 Ensamblaje del contexto: `construir_contexto_para_modelo()`
+### 5.2 Context assembly: `construir_contexto_para_modelo()`
 
-**Archivo**: `rag/engine/context.py`
+**File**: `rag/engine/context.py`
 
 ```python
 def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str
 ```
 
-Ordena los fragmentos por `(source, page, chunk)` y genera el bloque de contexto con el siguiente formato por fragmento:
+Sorts the fragments by `(source, page, chunk)` and produces the context block with the following per-fragment format:
 
 ```
 --- [Fragment N] ---
 [Fragment Context]
-<contexto situacional, si existe>
+<situational context, if present>
 
 [Source Text]
-<cuerpo del fragmento, optimizado>
+<fragment body, optimized>
 
-[excerpt ends mid-sentence]   ← solo si no termina con .?!:")]
+[excerpt ends mid-sentence]   ← only if it does not end with .?!:")]
 ```
 
-La evidencia recuperada se limita a `MAX_CONTEXTO_CHARS = 24000` antes de construir el contexto final o enviarla a RECOMP; si se supera, se descartan los fragmentos que ya no caben manteniendo el orden de relevancia.
+Retrieved evidence is capped at `MAX_CONTEXTO_CHARS = 24000` before the final context is built or sent to RECOMP; when exceeded, the fragments that no longer fit are dropped while keeping the relevance order.
 
 ---
 
-### 5.3 Síntesis RECOMP: `sintetizar_contexto_recomp()`
+### 5.3 RECOMP synthesis: `sintetizar_contexto_recomp()`
 
-**Archivo**: `rag/engine/context.py`
+**File**: `rag/engine/context.py`
 
 ```python
 def sintetizar_contexto_recomp(
@@ -493,41 +496,41 @@ def sintetizar_contexto_recomp(
 ) -> str
 ```
 
-Activa si `USAR_RECOMP_SYNTHESIS = True`. En lugar de los chunks en bruto, envía los fragmentos a `MODELO_RECOMP` con el prompt:
+Active if `USAR_RECOMP_SYNTHESIS = True`. Instead of the raw chunks, the fragments are sent to `MODELO_RECOMP` with the prompt:
 
 ```
 System:
-  "Comprimes fragmentos en un briefing para un modelo downstream.
-   SOLO información de los fragmentos. Sin conocimiento externo.
-   Si la pregunta pide lista/conteo, ENUMERA TODOS los ítems."
+  "You compress fragments into a briefing for a downstream model.
+   ONLY information from the fragments. No external knowledge.
+   If the question requires a list/count, ENUMERATE ALL items."
 
 User:
   ## User question
-  <pregunta>
+  <question>
 
   ## Evidence excerpts
-  <fragmentos>
+  <fragments>
 
   Produce: ## Facts relevant to the question
-  - (hecho 1)
-  - (hecho 2)
+  - (fact 1)
+  - (fact 2)
   ...
 ```
 
-**Condiciones de fallback a raw chunks** (se descarta la síntesis si):
-- Salida < 20 caracteres.
-- La salida no contiene el encabezado `## Facts relevant to the question`.
-- Error de comunicación con Ollama.
+**Fallback conditions to raw chunks** (synthesis is discarded if):
+- Output < 20 characters.
+- Output does not contain the `## Facts relevant to the question` header.
+- Communication error with Ollama.
 
-Antes de retornar, aplica `_strip_ollama_think_blocks()` para eliminar bloques `<think>…</think>` que algunos modelos de razonamiento emiten.
+Before returning, `_strip_ollama_think_blocks()` is applied to remove `<think>…</think>` blocks emitted by some reasoning models.
 
 ---
 
-## 6. Etapa 5 — Generación
+## 6. Stage 5 — Generation
 
-### 6.1 Función principal: `generar_respuesta()`
+### 6.1 Main function: `generar_respuesta()`
 
-**Archivo**: `rag/engine/generation.py`
+**File**: `rag/engine/generation.py`
 
 ```python
 def generar_respuesta(
@@ -538,17 +541,17 @@ def generar_respuesta(
 ) -> str
 ```
 
-**Flujo**:
+**Flow**:
 
-1. `_preparar_mensaje_usuario_rag()`: construye el mensaje de usuario final intercalando la pregunta y el contexto dentro de etiquetas `<context>…</context>`.
-2. `_generar_respuesta_stream()`: llama a Ollama con streaming y emite tokens al caller vía `on_token`.
-3. `guardar_debug_rag()`: vuelca el dump completo de la interacción.
+1. `_preparar_mensaje_usuario_rag()`: builds the final user message, interleaving the question and the context inside `<context>…</context>` tags.
+2. `_generar_respuesta_stream()`: calls Ollama with streaming and emits tokens to the caller via `on_token`.
+3. `guardar_debug_rag()`: dumps the full interaction trace.
 
 ---
 
 ### 6.2 Streaming: `_ollama_generate_stream()` / `generar_tokens_respuesta()`
 
-**Archivo**: `rag/engine/generation.py`
+**File**: `rag/engine/generation.py`
 
 ```python
 def _ollama_generate_stream(
@@ -556,10 +559,10 @@ def _ollama_generate_stream(
     prompt: str,
     options: dict,
     system: Optional[str] = None,
-)  # yields str (JSON lines de /api/generate)
+)  # yields str (JSON lines from /api/generate)
 ```
 
-**Opciones de generación en modo RAG**:
+**RAG generation options**:
 
 ```python
 {
@@ -572,17 +575,17 @@ def _ollama_generate_stream(
 }
 ```
 
-Adicionalmente el payload fuerza `think=False` para que los modelos con razonamiento (Qwen3, Gemma 4) no consuman `num_predict` en una traza interna antes de emitir la respuesta.
+In addition, the payload forces `think=False` so reasoning models (Qwen3, Gemma 4) do not consume `num_predict` on an internal trace before emitting the answer.
 
-Si el nombre del modelo contiene `"finetuned"`, el system prompt está horneado en el Modelfile y **no** se envía vía API. En caso contrario se envía `SYSTEM_PROMPT_RAG` explícitamente.
+If the model name contains `"finetuned"`, the system prompt is baked into the Modelfile and is **not** sent via API. Otherwise `SYSTEM_PROMPT_RAG` is sent explicitly.
 
-El timeout total de Ollama es `OLLAMA_REQUEST_TIMEOUT = 900` segundos (15 minutos).
+The total Ollama timeout is `OLLAMA_REQUEST_TIMEOUT = 900` seconds (15 minutes).
 
 ---
 
-### 6.3 Evaluación silenciosa: `evaluar_pregunta_rag()`
+### 6.3 Silent evaluation: `evaluar_pregunta_rag()`
 
-**Archivo**: `rag/engine/generation.py`
+**File**: `rag/engine/generation.py`
 
 ```python
 def evaluar_pregunta_rag(
@@ -591,25 +594,25 @@ def evaluar_pregunta_rag(
 ) -> Tuple[str, List[str]]
 ```
 
-Camino exclusivo para las evaluaciones RAGAS. Ejecuta el pipeline completo pero:
-- No imprime nada en terminal.
-- No genera debug dumps.
-- Usa la misma preparación final de fragmentos que CLI y web: filtro único `UMBRAL_SCORE_RERANKER`, top `TOP_K_FINAL`, expansión y límite de caracteres.
-- Si `EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK = True`, relaja el umbral de reranker cuando no hay fragmentos con score suficiente.
+Exclusive path for RAGAS evaluations. Runs the full pipeline but:
+- Prints nothing to the terminal.
+- Generates no debug dumps.
+- Uses the same final fragment preparation as CLI and web UI: single `UMBRAL_SCORE_RERANKER` filter, top `TOP_K_FINAL`, expansion and character limit.
+- If `EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK = True`, relaxes the reranker threshold when no fragment has a sufficient score.
 
-Retorna `(respuesta, lista_de_contextos_utilizados)`.
-
----
-
-## 7. Módulos transversales
-
-Estos módulos no forman parte de una etapa concreta del pipeline pero son consumidos por varias etapas.
+Returns `(answer, list_of_used_contexts)`.
 
 ---
 
-### 7.1 Historial de conversación: `history.py`
+## 7. Cross-cutting modules
 
-**Archivo**: `rag/engine/history.py`
+These modules are not part of any single pipeline stage but are consumed by several stages.
+
+---
+
+### 7.1 Conversation history: `history.py`
+
+**File**: `rag/engine/history.py`
 
 ```python
 def cargar_historial() -> List[Dict[str, str]]
@@ -617,17 +620,17 @@ def guardar_historial(historial: List[Dict[str, str]]) -> None
 def limpiar_historial(historial: List[Dict[str, str]]) -> None
 ```
 
-- `cargar_historial` lee `HISTORIAL_PATH` (JSON); retorna `[]` si no existe o está corrupto.
-- `guardar_historial` persiste la lista truncada a los últimos `MAX_HISTORIAL_MENSAJES = 40` mensajes.
-- `limpiar_historial` vacía la lista in-place y persiste el estado vacío.
+- `cargar_historial` reads `HISTORIAL_PATH` (JSON); returns `[]` if missing or corrupt.
+- `guardar_historial` persists the list truncated to the last `MAX_HISTORIAL_MENSAJES = 40` messages.
+- `limpiar_historial` empties the list in-place and persists the empty state.
 
-Los mensajes siguen el formato `{"role": "user"|"assistant", "content": "..."}`.
+Messages follow the format `{"role": "user"|"assistant", "content": "..."}`.
 
 ---
 
-### 7.2 Debug de interacciones RAG: `debug.py`
+### 7.2 RAG interaction debug: `debug.py`
 
-**Archivo**: `rag/engine/debug.py`
+**File**: `rag/engine/debug.py`
 
 ```python
 def guardar_debug_rag(
@@ -640,182 +643,182 @@ def guardar_debug_rag(
 ) -> None
 ```
 
-Condicionado a `GUARDAR_DEBUG_RAG = True`. Escribe un fichero de texto en `CARPETA_DEBUG_RAG` (por defecto `rag/debug_rag/`) con naming `TIMESTAMP_SLUG.txt`. El volcado incluye:
+Gated by `GUARDAR_DEBUG_RAG = True`. Writes a text file under `CARPETA_DEBUG_RAG` (default `rag/debug_rag/`) with naming `TIMESTAMP_SLUG.txt`. The dump includes:
 
-- Sub-queries generadas, keywords extraídas y términos críticos.
-- Flags del pipeline activos en el momento de la llamada.
-- System prompt, contexto inyectado y mensaje de usuario completo.
-- Respuesta del modelo y scores de cada fragmento (`score_final`, `score_reranker`).
+- Generated sub-queries, extracted keywords and critical terms.
+- Pipeline flags active at call time.
+- System prompt, injected context and full user message.
+- Model answer and per-fragment scores (`score_final`, `score_reranker`).
 
 ---
 
-## 8. Configuración global y flags
+## 8. Global configuration and flags
 
-Toda la configuración se centraliza en `rag/chat_pdfs.py`. Los valores se leen desde variables de entorno con defaults embebidos.
+All configuration is centralized in `rag/chat_pdfs.py`. Values are read from environment variables with embedded defaults.
 
-### Modelos Ollama
+### Ollama models
 
-El pipeline se describe por roles configurables. Cada rol se resuelve desde una
-variable de entorno y puede apuntar a cualquier modelo compatible disponible en
+The pipeline is described by configurable roles. Each role is resolved from
+an environment variable and can point to any compatible model available in
 Ollama.
 
-| Constante | Variable configurable | Rol |
-|-----------|-----------------------|-----|
-| `MODELO_RAG` | `OLLAMA_RAG_MODEL` | Generación de respuestas RAG |
-| `MODELO_CHAT` | `OLLAMA_CHAT_MODEL` | Modo CHAT + query decomposition |
-| `MODELO_EMBEDDING` | `OLLAMA_EMBED_MODEL` | Embeddings de documentos y queries |
-| `MODELO_CONTEXTUAL` | `OLLAMA_CONTEXTUAL_MODEL` | Generación de contexto situacional |
-| `MODELO_RECOMP` | `OLLAMA_RECOMP_MODEL` | Síntesis RECOMP |
-| `MODELO_OCR` | `OLLAMA_OCR_MODEL` | Descripción de imágenes |
-| `RERANKER_MODEL_QUALITY` | `RERANKER_QUALITY` | Tier del reranker local: `"quality"` carga `BAAI/bge-reranker-v2-m3`; `"fast"` carga `cross-encoder/ms-marco-MiniLM-L-6-v2` |
+| Constant | Configurable variable | Role |
+|----------|-----------------------|------|
+| `MODELO_RAG` | `OLLAMA_RAG_MODEL` | RAG answer generation |
+| `MODELO_CHAT` | `OLLAMA_CHAT_MODEL` | CHAT mode + query decomposition |
+| `MODELO_EMBEDDING` | `OLLAMA_EMBED_MODEL` | Document and query embeddings |
+| `MODELO_CONTEXTUAL` | `OLLAMA_CONTEXTUAL_MODEL` | Situational context generation |
+| `MODELO_RECOMP` | `OLLAMA_RECOMP_MODEL` | RECOMP synthesis |
+| `MODELO_OCR` | `OLLAMA_OCR_MODEL` | Image description |
+| `RERANKER_MODEL_QUALITY` | `RERANKER_QUALITY` | Local reranker tier: `"quality"` loads `BAAI/bge-reranker-v2-m3`; `"fast"` loads `cross-encoder/ms-marco-MiniLM-L-6-v2` |
 
 ### Context windows
 
-| Constante | Valor | Modelo que la usa |
-|-----------|-------|-------------------|
+| Constant | Value | Consumer |
+|----------|-------|----------|
 | `OLLAMA_NUM_CTX` | 8192 | General |
 | `OLLAMA_RAG_NUM_CTX` | 16384 | `MODELO_RAG` |
-| `OLLAMA_AUX_NUM_CTX` | 8192 | Modelos auxiliares |
+| `OLLAMA_AUX_NUM_CTX` | 8192 | Auxiliary models |
 | `OLLAMA_QUERY_NUM_CTX` | 2048 | `MODELO_CHAT` (query decomposition) |
 | `OLLAMA_CONTEXTUAL_NUM_CTX` | 32768 | `MODELO_CONTEXTUAL` |
 | `OLLAMA_RECOMP_NUM_CTX` | 8192 | `MODELO_RECOMP` |
 | `OLLAMA_OCR_NUM_CTX` | 8192 | `MODELO_OCR` |
-| `OLLAMA_REQUEST_TIMEOUT` | 900 | Todos |
+| `OLLAMA_REQUEST_TIMEOUT` | 900 | All |
 
-### Parámetros de chunking y retrieval
+### Chunking and retrieval parameters
 
-| Constante | Default / env | Descripción |
-|-----------|---------------|-------------|
-| `CHUNK_SIZE` | 2000 / `RAG_CHUNK_SIZE` | Tamaño máximo de chunk (chars) |
-| `CHUNK_OVERLAP` | 400 / `RAG_CHUNK_OVERLAP` | Solapamiento entre chunks (~20%) |
-| `MIN_CHUNK_LENGTH` | 150 / `RAG_MIN_CHUNK_LENGTH` | Descarta chunks demasiado cortos |
-| `CONTEXTUAL_DOC_CHARS` | 24000 / `CONTEXTUAL_DOC_CHARS` | Muestra para contexto situacional |
-| `N_RESULTADOS_SEMANTICOS` | 80 / `RAG_N_RESULTADOS_SEMANTICOS` | Resultados por query semántica |
-| `N_RESULTADOS_KEYWORD` | 40 / `RAG_N_RESULTADOS_KEYWORD` | Resultados por búsqueda BM25 |
-| `TOP_K_RERANK_CANDIDATES` | 200 / `RAG_TOP_K_RERANK_CANDIDATES` | Candidatos que entran al reranker |
-| `TOP_K_FINAL` | 8 / `RAG_TOP_K_FINAL` | Fragmentos enviados al LLM |
-| `N_TOP_PARA_EXPANSION` | 3 / `RAG_N_TOP_PARA_EXPANSION` | Fragmentos que reciben expansión de vecinos |
-| `RRF_K` | 60 / `RAG_RRF_K` | Factor de amortiguamiento RRF (valor canónico de Cormack et al., 2009) |
-| `PESO_SEMANTICO_RRF` | 0.55 / `RAG_PESO_SEMANTICO_RRF` | Peso de la contribución semántica RRF |
-| `PESO_BM25_RRF` | 0.45 / `RAG_PESO_BM25_RRF` | Peso de la contribución BM25 RRF |
-| `BM25_K1` | 1.5 / `RAG_BM25_K1` | Saturación de frecuencia de término BM25 |
-| `BM25_B` | 0.75 / `RAG_BM25_B` | Normalización por longitud BM25 |
-| `UMBRAL_SCORE_RERANKER` | 0.65 / `RAG_UMBRAL_SCORE_RERANKER` | Score Cross-Encoder mínimo (subido desde 0.55 tras sonda 2026-05-14) |
-| `MAX_CONTEXTO_CHARS` | 24000 / `MAX_CONTEXTO_CHARS` | Máximo de chars de evidencia recuperada antes de contexto/RECOMP |
-| `MIN_LONGITUD_PREGUNTA_RAG` | 10 / `RAG_MIN_LONGITUD_PREGUNTA` | Mínimo de caracteres para activar el pipeline RAG |
-| `MAX_IMAGENES_POR_PAGINA` | 5 / `RAG_MAX_IMAGES_PER_PAGE` | Máximo de imágenes extraídas por página PDF |
-| `MIN_IMAGEN_SIZE_PX` | 100 / `RAG_MIN_IMAGE_SIZE_PX` | Tamaño mínimo de imagen extraída |
-| `CAPTION_MARGIN_PX` | 80 / `RAG_CAPTION_MARGIN_PX` | Píxeles debajo de la imagen donde se busca el caption |
+| Constant | Default / env | Description |
+|----------|---------------|-------------|
+| `CHUNK_SIZE` | 2000 / `RAG_CHUNK_SIZE` | Maximum chunk size (chars) |
+| `CHUNK_OVERLAP` | 400 / `RAG_CHUNK_OVERLAP` | Overlap between chunks (~20%) |
+| `MIN_CHUNK_LENGTH` | 150 / `RAG_MIN_CHUNK_LENGTH` | Discards excessively short chunks |
+| `CONTEXTUAL_DOC_CHARS` | 24000 / `CONTEXTUAL_DOC_CHARS` | Sample passed to situational context |
+| `N_RESULTADOS_SEMANTICOS` | 80 / `RAG_N_RESULTADOS_SEMANTICOS` | Results per semantic query |
+| `N_RESULTADOS_KEYWORD` | 40 / `RAG_N_RESULTADOS_KEYWORD` | Results per BM25 search |
+| `TOP_K_RERANK_CANDIDATES` | 200 / `RAG_TOP_K_RERANK_CANDIDATES` | Candidates fed to the reranker |
+| `TOP_K_FINAL` | 8 / `RAG_TOP_K_FINAL` | Fragments sent to the LLM |
+| `N_TOP_PARA_EXPANSION` | 3 / `RAG_N_TOP_PARA_EXPANSION` | Fragments that receive neighbor expansion |
+| `RRF_K` | 60 / `RAG_RRF_K` | RRF damping factor (canonical value from Cormack et al., 2009) |
+| `PESO_SEMANTICO_RRF` | 0.55 / `RAG_PESO_SEMANTICO_RRF` | Weight of the semantic contribution in RRF |
+| `PESO_BM25_RRF` | 0.45 / `RAG_PESO_BM25_RRF` | Weight of the BM25 contribution in RRF |
+| `BM25_K1` | 1.5 / `RAG_BM25_K1` | BM25 term-frequency saturation |
+| `BM25_B` | 0.75 / `RAG_BM25_B` | BM25 length normalization |
+| `UMBRAL_SCORE_RERANKER` | 0.65 / `RAG_UMBRAL_SCORE_RERANKER` | Minimum Cross-Encoder score (raised from 0.55 after the 2026-05-14 probe) |
+| `MAX_CONTEXTO_CHARS` | 24000 / `MAX_CONTEXTO_CHARS` | Max chars of retrieved evidence before context/RECOMP |
+| `MIN_LONGITUD_PREGUNTA_RAG` | 10 / `RAG_MIN_LONGITUD_PREGUNTA` | Minimum question length that activates the RAG pipeline |
+| `MAX_IMAGENES_POR_PAGINA` | 5 / `RAG_MAX_IMAGES_PER_PAGE` | Max images extracted per PDF page |
+| `MIN_IMAGEN_SIZE_PX` | 100 / `RAG_MIN_IMAGE_SIZE_PX` | Minimum extracted-image size |
+| `CAPTION_MARGIN_PX` | 80 / `RAG_CAPTION_MARGIN_PX` | Pixels below the image searched for the caption |
 
-### Flags booleanos del pipeline
+### Boolean pipeline flags
 
-| Flag | Default | Efecto cuando `True` |
-|------|---------|----------------------|
-| `USAR_CONTEXTUAL_RETRIEVAL` | `True` | Enriquece cada chunk con contexto situacional en indexación |
-| `USAR_LLM_QUERY_DECOMPOSITION` | `True` | Genera 3 sub-queries para recuperación multi-aspecto |
-| `USAR_BUSQUEDA_HIBRIDA` | `True` | Añade búsqueda léxica Okapi BM25 (rank-bm25) fusionada por RRF |
-| `USAR_RERANKER` | auto | Aplica Cross-Encoder tras fusión RRF |
-| `EXPANDIR_CONTEXTO` | `True` | Añade chunks adyacentes a los fragmentos top |
-| `USAR_OPTIMIZACION_CONTEXTO` | `True` | Limpia artefactos PDF del contexto |
-| `USAR_RECOMP_SYNTHESIS` | `True` | Sintetiza el contexto antes de enviar al LLM |
-| `USAR_EMBEDDINGS_IMAGEN` | `True` | Indexa imágenes de los PDFs con OCR |
-| `EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK` | `False` | Relaja umbral reranker en evaluaciones |
-| `LOGGING_METRICAS` | `True` | Imprime métricas de cada etapa |
-| `GUARDAR_DEBUG_RAG` | `True` | Guarda dump de cada interacción RAG |
+| Flag | Default | Effect when `True` |
+|------|---------|--------------------|
+| `USAR_CONTEXTUAL_RETRIEVAL` | `True` | Enriches each chunk with situational context at indexing time |
+| `USAR_LLM_QUERY_DECOMPOSITION` | `True` | Generates 3 sub-queries for multi-aspect retrieval |
+| `USAR_BUSQUEDA_HIBRIDA` | `True` | Adds Okapi BM25 lexical search (rank-bm25) fused with RRF |
+| `USAR_RERANKER` | auto | Applies the Cross-Encoder after RRF fusion |
+| `EXPANDIR_CONTEXTO` | `True` | Adds adjacent chunks to the top fragments |
+| `USAR_OPTIMIZACION_CONTEXTO` | `True` | Strips PDF artifacts from the context |
+| `USAR_RECOMP_SYNTHESIS` | `True` | Synthesizes the context before sending it to the LLM |
+| `USAR_EMBEDDINGS_IMAGEN` | `True` | Indexes PDF images via OCR |
+| `EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK` | `False` | Relaxes the reranker threshold in evaluations |
+| `LOGGING_METRICAS` | `True` | Prints per-stage metrics |
+| `GUARDAR_DEBUG_RAG` | `True` | Saves a dump of every RAG interaction |
 
 ---
 
-## Apéndice A — Metadatos ChromaDB
+## Appendix A — ChromaDB metadata
 
-Cada fragmento indexado lleva los siguientes metadatos:
+Each indexed fragment carries the following metadata:
 
 ```python
 {
-    "source":               "paper.pdf",         # nombre del archivo PDF
-    "page":                 3,                   # página (0-indexed)
-    "chunk":                1,                   # índice del chunk en la página
-    "total_chunks_in_page": 5,                   # total de chunks en esa página
+    "source":               "paper.pdf",         # PDF file name
+    "page":                 3,                   # page (0-indexed)
+    "chunk":                1,                   # chunk index in the page
+    "total_chunks_in_page": 5,                   # total chunks in that page
     "format":               "markdown",          # "markdown" | "plain_text" | "image"
-    "section_header":       "## Metodología",    # header Markdown más cercano
-    # Solo para chunks de imagen:
+    "section_header":       "## Methodology",    # nearest Markdown header
+    # Image chunks only:
     "image_width":          800,
     "image_height":         600,
 }
 ```
 
-Los IDs de chunks de imagen se calculan como `chunk_num + _IMAGEN_CHUNK_OFFSET` (10 000) para evitar colisiones con los chunks de texto.
+Image chunk IDs are computed as `chunk_num + _IMAGEN_CHUNK_OFFSET` (10 000) to avoid collisions with text chunks.
 
 ---
 
-## Apéndice B — Sincronización runtime
+## Appendix B — Runtime synchronization
 
-**Archivo**: `rag/engine/runtime.py`
+**File**: `rag/engine/runtime.py`
 
 ```python
 def sync_runtime_globals(namespace: MutableMapping[str, Any]) -> None
 ```
 
-Todos los módulos de `rag/engine/` llaman a esta función al inicio de cada función pública para copiar los valores actuales de `rag/chat_pdfs.py` en su propio espacio de nombres. Esto permite que los toggles aplicados vía CLI o API web (que modifican variables en `chat_pdfs`) se propaguen inmediatamente sin reiniciar el proceso.
+Every module in `rag/engine/` calls this function at the start of each public function to copy the current values from `rag/chat_pdfs.py` into its own namespace. This propagates toggles applied through the CLI or the web API (which mutate variables in `chat_pdfs`) immediately, without restarting the process.
 
-`_RUNTIME_NAMES` contiene ~150 nombres: modelos, flags, constantes numéricas, prefijos de embedding y referencias a funciones auxiliares compartidas.
+`_RUNTIME_NAMES` contains ~150 names: models, flags, numeric constants, embedding prefixes and references to shared helper functions.
 
 ---
 
-## Apéndice C — Flujo completo de ejemplo
+## Appendix C — Full example flow
 
-Consulta: `"¿Qué componentes tiene una arquitectura Transformer?"`
+Query: `"What components does a Transformer architecture have?"`
 
 ```
 1. QUERY DECOMPOSITION  (len > 60, USAR_LLM_QUERY_DECOMPOSITION=True)
-   Sub-queries generadas:
-     a) "Componentes principales del modelo Transformer"
-     b) "Mecanismo de atención multi-head en Transformer"
-     c) "Codificador y decodificador en la arquitectura Transformer"
+   Generated sub-queries:
+     a) "Main components of the Transformer model"
+     b) "Multi-head attention mechanism in Transformers"
+     c) "Encoder and decoder in the Transformer architecture"
 
-2. BÚSQUEDA SEMÁNTICA  (4 queries × 80 resultados)
-   Embeddings vía MODELO_EMBEDDING con prefix "search_query: "
-   ChromaDB.query() → RRF con k=60 por defecto
-   Candidatos acumulados con score_semantic
+2. SEMANTIC SEARCH  (4 queries × 80 results)
+   Embeddings via MODELO_EMBEDDING with prefix "search_query: "
+   ChromaDB.query() → RRF with k=60 by default
+   Candidates accumulated with score_semantic
 
-3. BÚSQUEDA LÉXICA BM25  (USAR_BUSQUEDA_HIBRIDA=True)
-   Tokeniza toda la colección y la query con _tokenizar_bm25()
+3. BM25 LEXICAL SEARCH  (USAR_BUSQUEDA_HIBRIDA=True)
+   Tokenize the full collection and the query with _tokenizar_bm25()
    BM25Okapi(corpus, k1=1.5, b=0.75).get_scores(query_tokens)
-   Top-N fragmentos por score BM25; RRF acumulado en score_keyword
+   Top-N fragments by BM25 score; RRF accumulated in score_keyword
 
-4. FUSIÓN RRF
+4. RRF FUSION
    score_final = score_semantic × PESO_SEMANTICO_RRF + score_keyword × PESO_BM25_RRF
-   Pesos por defecto: 0.55 semántica, 0.45 BM25
-   Resultado: ~50-80 candidatos ordenados
+   Default weights: 0.55 semantic, 0.45 BM25
+   Result: ~50-80 ordered candidates
 
 5. RERANKING  (USAR_RERANKER=True)
-   Entrada: top 200 candidatos por score_final
+   Input: top 200 candidates by score_final
    CrossEncoder.rank(pairs=[(pregunta, texto_chunk)])
-   Salida: top 8 fragmentos con score_reranker
+   Output: top 8 fragments with score_reranker
 
-6. PREPARACIÓN FINAL DE FRAGMENTOS
-   Filtro único por defecto: score_reranker >= 0.65
-   Conserva TOP_K_FINAL=8 fragmentos base
-   Aplica expansión y límite MAX_CONTEXTO_CHARS desde una función compartida
+6. FINAL FRAGMENT PREPARATION
+   Single default filter: score_reranker >= 0.65
+   Keeps TOP_K_FINAL=8 base fragments
+   Applies expansion and MAX_CONTEXTO_CHARS limit from a shared function
 
-7. EXPANSIÓN DE VECINOS  (EXPANDIR_CONTEXTO=True)
-   Para los 3 fragmentos con mayor score: recupera chunks adyacentes
-   Añade vecinos al conjunto de fragmentos finales
+7. NEIGHBOR EXPANSION  (EXPANDIR_CONTEXTO=True)
+   For the 3 highest-scoring fragments: fetch adjacent chunks
+   Add neighbors to the final fragment set
 
-8. CONSTRUCCIÓN DE CONTEXTO
-   USAR_RECOMP_SYNTHESIS=True → síntesis con MODELO_RECOMP:
+8. CONTEXT ASSEMBLY
+   USAR_RECOMP_SYNTHESIS=True → synthesis with MODELO_RECOMP:
      "## Facts relevant to the question
-      - El Transformer consta de un codificador y un decodificador...
-      - El mecanismo de atención multi-head..."
-   USAR_OPTIMIZACION_CONTEXTO=True → limpieza de artefactos PDF
+      - The Transformer consists of an encoder and a decoder...
+      - The multi-head attention mechanism..."
+   USAR_OPTIMIZACION_CONTEXTO=True → PDF artifact cleanup
 
-9. GENERACIÓN
-   Mensaje usuario: pregunta + <context>síntesis</context>
-   System prompt: SYSTEM_PROMPT_RAG (si modelo no tiene baked)
+9. GENERATION
+   User message: question + <context>synthesis</context>
+   System prompt: SYSTEM_PROMPT_RAG (if the model does not have it baked in)
    Ollama streaming: temperature=0.15, num_ctx=16384
-   Tokens emitidos en tiempo real al terminal/web
+   Tokens emitted in real time to the terminal/web UI
 
 10. DEBUG
-   Archivo: rag/debug_rag/YYYYMMDD_HHMMSS_que_componentes_tiene.txt
-   Contenido: flags, sub-queries, keywords, scores por fragmento,
-              contexto enviado, respuesta completa
+   File: rag/debug_rag/YYYYMMDD_HHMMSS_what_components.txt
+   Contents: flags, sub-queries, keywords, per-fragment scores,
+             injected context, full answer
 ```

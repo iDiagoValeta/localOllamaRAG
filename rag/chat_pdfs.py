@@ -35,7 +35,7 @@ How to run (interactive CLI):
     Prerequisites: Ollama running; PDFs under ``rag/docs/es/`` unless ``DOCS_FOLDER``
     points elsewhere. Model names via ``OLLAMA_RAG_MODEL``, ``OLLAMA_EMBED_MODEL``,
     ``OLLAMA_OCR_MODEL`` (image indexing), etc., as documented in the project README
-    / ``CLAUDE.md``.
+    and in ``rag/README.md``.
 """
 
 # ─────────────────────────────────────────────

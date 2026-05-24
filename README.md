@@ -92,8 +92,8 @@ of `research/`, use Git sparse checkout after cloning:
 ```bash
 git clone --filter=blob:none --sparse https://github.com/iDiagoValeta/localOllamaRAG
 cd localOllamaRAG
-git sparse-checkout set rag README.md CLAUDE.md pytest.ini       # core only
-git sparse-checkout set rag README.md CLAUDE.md pytest.ini rag/docs/es  # + default ES PDFs
+git sparse-checkout set rag README.md pytest.ini                 # core only
+git sparse-checkout set rag README.md pytest.ini rag/docs/es     # + default ES PDFs
 ```
 
 PowerShell (Git 2.25+) uses the same `git sparse-checkout set …` commands.
