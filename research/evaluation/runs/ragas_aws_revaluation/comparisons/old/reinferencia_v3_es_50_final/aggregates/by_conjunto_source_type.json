@@ -1,0 +1,38 @@
+{
+  "dataset_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\research\\evaluation\\datasets\\local\\dataset_eval_es.json",
+  "group_by": "source_type",
+  "variants": [
+    {
+      "variant": "baseline_all_on",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\research\\evaluation\\runs\\ragas_aws_revaluation\\comparisons\\reinferencia_v3_es_50_final\\baseline_all_on\\debug.json",
+      "by_conjunto": {
+        "wikipedia": {
+          "n": 50,
+          "mean_scores": {
+            "Context Precision": 0.9351515150760379,
+            "Context Recall": 0.97,
+            "Factual Correctness": 0.7571741747377242,
+            "Faithfulness": 0.9286282051282052,
+            "Response Relevancy": 0.7342106629225426
+          }
+        }
+      }
+    },
+    {
+      "variant": "all_off",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\research\\evaluation\\runs\\ragas_aws_revaluation\\comparisons\\reinferencia_v3_es_50_final\\all_off\\debug.json",
+      "by_conjunto": {
+        "wikipedia": {
+          "n": 50,
+          "mean_scores": {
+            "Context Precision": 0.700769841212772,
+            "Context Recall": 0.95,
+            "Factual Correctness": 0.7419629414222045,
+            "Faithfulness": 0.9303333333333333,
+            "Response Relevancy": 0.686788224193714
+          }
+        }
+      }
+    }
+  ]
+}

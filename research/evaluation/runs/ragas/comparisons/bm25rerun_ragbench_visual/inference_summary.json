@@ -1,0 +1,48 @@
+{
+  "dataset_path": "C:\\Users\\ignacio.diag045\\repos\\localOllamaRAG\\research\\evaluation\\datasets\\ragbench\\visual\\dataset_ragbench_visual_image_table_25p_5q.json",
+  "eval_corpus": "en",
+  "suite": "final",
+  "baseline_variant": "baseline_all_on",
+  "selected_variants": [
+    "baseline_all_on",
+    "all_off"
+  ],
+  "scores_dir": "C:\\Users\\ignacio.diag045\\repos\\localOllamaRAG\\research\\evaluation\\runs\\ragas\\comparisons\\bm25rerun_ragbench_visual\\scores",
+  "debug_dir": "C:\\Users\\ignacio.diag045\\repos\\localOllamaRAG\\research\\evaluation\\runs\\ragas\\comparisons\\bm25rerun_ragbench_visual\\debug",
+  "checkpoints_dir": "C:\\Users\\ignacio.diag045\\repos\\localOllamaRAG\\research\\evaluation\\runs\\ragas\\comparisons\\bm25rerun_ragbench_visual\\checkpoints",
+  "generated_at": "2026-05-25 17:05:36",
+  "runs": [
+    {
+      "variant": "baseline_all_on",
+      "variant_description": "All inference-time optional stages enabled.",
+      "requested_pipeline_flags": {
+        "USAR_LLM_QUERY_DECOMPOSITION": true,
+        "USAR_BUSQUEDA_HIBRIDA": true,
+        "USAR_RERANKER": true,
+        "EXPANDIR_CONTEXTO": true,
+        "USAR_OPTIMIZACION_CONTEXTO": true,
+        "USAR_RECOMP_SYNTHESIS": true
+      },
+      "checkpoint_path": "C:\\Users\\ignacio.diag045\\repos\\localOllamaRAG\\research\\evaluation\\runs\\ragas\\comparisons\\bm25rerun_ragbench_visual\\checkpoints\\baseline_all_on.json",
+      "questions_count": 125,
+      "indexed_fragments": 2184,
+      "pipeline_seconds": 4950.984428882599
+    },
+    {
+      "variant": "all_off",
+      "variant_description": "All optional inference-time stages disabled (semantic-only floor).",
+      "requested_pipeline_flags": {
+        "USAR_LLM_QUERY_DECOMPOSITION": false,
+        "USAR_BUSQUEDA_HIBRIDA": false,
+        "USAR_RERANKER": false,
+        "EXPANDIR_CONTEXTO": false,
+        "USAR_OPTIMIZACION_CONTEXTO": false,
+        "USAR_RECOMP_SYNTHESIS": false
+      },
+      "checkpoint_path": "C:\\Users\\ignacio.diag045\\repos\\localOllamaRAG\\research\\evaluation\\runs\\ragas\\comparisons\\bm25rerun_ragbench_visual\\checkpoints\\all_off.json",
+      "questions_count": 125,
+      "indexed_fragments": 2184,
+      "pipeline_seconds": 1184.9232430458069
+    }
+  ]
+}

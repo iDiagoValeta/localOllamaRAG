@@ -1,0 +1,22 @@
+{
+  "dataset_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\research\\evaluation\\datasets\\ragbench\\en_eval\\dataset_ragbench_en_eval_text_40p_5q_eval.json",
+  "group_by": "source_type",
+  "variants": [
+    {
+      "variant": "baseline_all_on",
+      "source_file": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\research\\evaluation\\runs\\ragas_aws_revaluation\\comparisons\\reinferencia_v2_en_ragbench_eval_40p\\baseline_all_on\\debug.json",
+      "by_conjunto": {
+        "unknown": {
+          "n": 200,
+          "mean_scores": {
+            "Context Precision": 0.8618559094185828,
+            "Context Recall": 0.9433333333333332,
+            "Factual Correctness": 0.5640213169912396,
+            "Faithfulness": 0.9305230263157895,
+            "Response Relevancy": 0.7996181137632569
+          }
+        }
+      }
+    }
+  ]
+}

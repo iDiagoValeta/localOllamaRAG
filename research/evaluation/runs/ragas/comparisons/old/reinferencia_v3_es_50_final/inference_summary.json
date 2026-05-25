@@ -1,0 +1,50 @@
+{
+  "dataset_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\research\\evaluation\\datasets\\local\\dataset_eval_es.json",
+  "eval_corpus": "es",
+  "suite": "final",
+  "baseline_variant": "baseline_all_on",
+  "selected_variants": [
+    "baseline_all_on",
+    "all_off"
+  ],
+  "scores_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\research\\evaluation\\runs\\ragas\\comparisons\\reinferencia_v3_es_50_final\\scores",
+  "debug_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\research\\evaluation\\runs\\ragas\\comparisons\\reinferencia_v3_es_50_final\\debug",
+  "checkpoints_dir": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\research\\evaluation\\runs\\ragas\\comparisons\\reinferencia_v3_es_50_final\\checkpoints",
+  "generated_at": "2026-05-18 12:01:28",
+  "runs": [
+    {
+      "variant": "baseline_all_on",
+      "variant_description": "All inference-time optional stages enabled.",
+      "requested_pipeline_flags": {
+        "USAR_LLM_QUERY_DECOMPOSITION": true,
+        "USAR_BUSQUEDA_HIBRIDA": true,
+        "USAR_BUSQUEDA_EXHAUSTIVA": true,
+        "USAR_RERANKER": true,
+        "EXPANDIR_CONTEXTO": true,
+        "USAR_OPTIMIZACION_CONTEXTO": true,
+        "USAR_RECOMP_SYNTHESIS": true
+      },
+      "checkpoint_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\research\\evaluation\\runs\\ragas\\comparisons\\reinferencia_v3_es_50_final\\checkpoints\\baseline_all_on.json",
+      "questions_count": 50,
+      "indexed_fragments": 259,
+      "pipeline_seconds": 2044.7910635471344
+    },
+    {
+      "variant": "all_off",
+      "variant_description": "All optional inference-time stages disabled (semantic-only floor).",
+      "requested_pipeline_flags": {
+        "USAR_LLM_QUERY_DECOMPOSITION": false,
+        "USAR_BUSQUEDA_HIBRIDA": false,
+        "USAR_BUSQUEDA_EXHAUSTIVA": false,
+        "USAR_RERANKER": false,
+        "EXPANDIR_CONTEXTO": false,
+        "USAR_OPTIMIZACION_CONTEXTO": false,
+        "USAR_RECOMP_SYNTHESIS": false
+      },
+      "checkpoint_path": "C:\\Users\\nadiv\\repos\\localOllamaRAG\\research\\evaluation\\runs\\ragas\\comparisons\\reinferencia_v3_es_50_final\\checkpoints\\all_off.json",
+      "questions_count": 50,
+      "indexed_fragments": 259,
+      "pipeline_seconds": 1200.105527639389
+    }
+  ]
+}
