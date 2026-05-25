@@ -1,7 +1,7 @@
-# RAG pipeline evaluation protocol (TFG)
+# RAG pipeline evaluation protocol
 
-This guide describes the RAGAS evaluation protocol used in the TFG and the exact
-commands to reproduce it. The flow has **three phases**, backed by three CLIs in
+This guide describes the RAGAS evaluation protocol and the exact commands to
+reproduce it. The flow has **three phases**, backed by three CLIs in
 `research/evaluation/` plus the shared `_lib/` package:
 
 1. **`index.py`** — index the corpus into ChromaDB.
@@ -13,29 +13,19 @@ Legacy scripts (`run_eval.py`, `eval_ragas_*_from_checkpoints.py`,
 `judge_benchmark.py`, `aggregate_comparison_by_conjunto.py`) **have been
 superseded**; their logic now lives in `_lib/` or as subcommands of the three CLIs.
 
-> **Definitive run — completed 2026-05-19.** Generator `phi4-finetuned:latest`;
-> RAGAS judge AWS Bedrock `eu.anthropic.claude-haiku-4-5-20251001-v1:0` +
+> **Definitive run — completed 2026-05-25.** Generator `phi4-finetuned:latest`;
+> pipeline: Okapi BM25 (`rank-bm25`, `k1 = 1.5`, `b = 0.75`) fused with RRF
+> (`RRF_K = 60`, Cormack et al., 2009), weighted `PESO_SEMANTICO_RRF = 0.55` /
+> `PESO_BM25_RRF = 0.45`; RAGAS judge AWS Bedrock
+> `eu.anthropic.claude-haiku-4-5-20251001-v1:0` +
 > `amazon.titan-embed-text-v2:0` (`eu-north-1`, workers=8, batch=8). Definitive
-> labels: `reinferencia_v3_es_50_final`, `reinferencia_v3_ca_50_final_ca`,
-> `reinferencia_v3_en_ragbench_dev_50_final` (paired `baseline_all_on` +
-> `all_off`), `reinferencia_v2_en_ragbench_eval_40p` (200q, `baseline_all_on`
-> only), `reinferencia_v2_en_ragbench_visual_image_table_25p` (125q,
+> labels: `bm25rerun_es`, `bm25rerun_ca_ca`, `bm25rerun_ragbench_dev` (paired
+> `baseline_all_on` + `all_off`), `bm25rerun_ragbench_eval` (200q,
+> `baseline_all_on` only), `bm25rerun_ragbench_visual` (125q,
 > `baseline_all_on` only). Full analysis:
 > [`../evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md`](../evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md)
 > and [`ANALISIS_METRICAS_ENTRENAMIENTO.md`](../evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md)
-> (§12 BERTScore↔RAGAS cross-check).
-
-> **Note — pipeline divergence.** Those definitive metrics were produced with
-> the pre-BM25 lexical pipeline (`$contains` keyword + exhaustive search) and
-> `RRF_K = 20`. Production now uses Okapi BM25 (`rank-bm25`, `k1 = 1.5`,
-> `b = 0.75`) fused with RRF at the canonical `RRF_K = 60` (Cormack et al.,
-> 2009), weighted `PESO_SEMANTICO_RRF = 0.55` / `PESO_BM25_RRF = 0.45`. To
-> regenerate the affected variants, run `infer.py compare --variants
-> baseline_all_on` on each corpus with a fresh `--label`; `all_off` is
-> identical before and after because it disables BM25. BM25 operates over the
-> already-indexed chunks (no `--reindex` needed for ES/CA/RagBench dev). The
-> resulting checkpoints land in
-> `research/evaluation/runs/ragas/comparisons/<label>/`.
+> (§6 BERTScore↔RAGAS cross-check).
 
 ---
 
@@ -282,7 +272,7 @@ the judge's internal justifications for traceability.
 
 ```powershell
 python research\evaluation\training_metrics.py `
-  --checkpoint-dir research\evaluation\runs\ragas\comparisons\reinferencia_v2_en_ragbench_eval_40p\checkpoints
+  --checkpoint-dir research\evaluation\runs\ragas\comparisons\bm25rerun_es\checkpoints
 ```
 
 By default it writes `training_metrics/<variant>.csv`,
@@ -339,7 +329,7 @@ and the aggregate always reflects the cumulative total.
 
 ---
 
-## 5. TFG protocol (main table per language)
+## 5. Evaluation protocol (main table per language)
 
 Canonical commands:
 

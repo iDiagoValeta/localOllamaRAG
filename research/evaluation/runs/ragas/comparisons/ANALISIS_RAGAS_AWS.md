@@ -1,8 +1,7 @@
 # RAGAS analysis (LLM judge, AWS Bedrock) - BM25 rerun
 
-> Supporting document for the TFG report (MonkeyGrab - local RAG over PDFs).
 > Complements [`ANALISIS_METRICAS_ENTRENAMIENTO.md`](ANALISIS_METRICAS_ENTRENAMIENTO.md)
-> with the semantic RAGAS evaluation of the final BM25 reinference checkpoints.
+> with the semantic RAGAS evaluation of the final BM25 inference checkpoints.
 
 - **Date**: 2026-05-25
 - **Script**: `research/evaluation/evaluate.py`
@@ -27,7 +26,7 @@
 5. [Single-variant RagBench eval and visual results](#5-single-variant-ragbench-eval-and-visual-results)
 6. [Relation to lexical and embedding metrics](#6-relation-to-lexical-and-embedding-metrics)
 7. [Limitations](#7-limitations)
-8. [Conclusion for the TFG defense](#8-conclusion-for-the-tfg-defense)
+8. [Conclusion](#8-conclusion)
 9. [Reproducibility](#9-reproducibility)
 
 ---
@@ -187,7 +186,7 @@ The two metric families agree on direction. RAGAS is especially useful because i
 
 ---
 
-## 8. Conclusion for the TFG defense
+## 8. Conclusion
 
 The BM25 RAGAS pass confirms the core conclusion of the lexical and embedding evaluation: the complete inference pipeline is better than the semantic-only baseline.
 

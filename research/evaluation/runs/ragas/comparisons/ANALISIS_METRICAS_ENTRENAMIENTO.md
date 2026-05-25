@@ -1,7 +1,6 @@
 # Lexical and embedding metric analysis (BM25 rerun)
 
-> Supporting document for the TFG report (MonkeyGrab - local RAG over PDFs).
-> Collects the Token F1 (TF1), ROUGE-L and BERTScore results produced by `research/evaluation/training_metrics.py` for the final BM25 rerun checkpoints.
+> Collects the Token F1 (TF1), ROUGE-L and BERTScore results produced by `research/evaluation/training_metrics.py` for the final BM25 inference checkpoints.
 
 - **Date**: 2026-05-25
 - **Script**: `research/evaluation/training_metrics.py`

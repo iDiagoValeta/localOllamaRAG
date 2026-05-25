@@ -83,7 +83,7 @@ RAGAS outputs → `research/evaluation/runs/ragas_<provider>_revaluation/`.
 
 Training-style metrics: `python research/evaluation/training_metrics.py --checkpoint-dir <comparisons/label/checkpoints>`.
 
-> **Definitive run (2026-05-19)** — generator `phi4-finetuned:latest`, RAGAS judge AWS Bedrock. Results and analysis: [`runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md`](evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md) and [`ANALISIS_METRICAS_ENTRENAMIENTO.md`](evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md) (§12 BERTScore↔RAGAS cross-check).
+> **Definitive run (2026-05-25)** — generator `phi4-finetuned:latest`, Okapi BM25 hybrid retrieval, RAGAS judge AWS Bedrock. Labels: `bm25rerun_{es,ca_ca,ragbench_dev,ragbench_eval,ragbench_visual}`. Results and analysis: [`runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md`](evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md) and [`ANALISIS_METRICAS_ENTRENAMIENTO.md`](evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md) (§6 BERTScore↔RAGAS cross-check).
 
 Providers, environment variables (`GOOGLE_API_KEY`, `NVIDIA_API_KEY`, `AWS_BEARER_TOKEN_BEDROCK`), default judge models, aggregation options (`--aggregate-group-by`, `--aggregate-etiquetas-es`) and the RagBench flow details: see [`docs/EVALUACIONES_PIPELINE.md`](docs/EVALUACIONES_PIPELINE.md).
 
@@ -153,4 +153,3 @@ PDFs live under `rag/docs/en_ragbench_*` so `DOCS_FOLDER` and the manifests need
 
 ---
 
-*TFG — Computer Engineering degree, ETSINF, Universitat Politècnica de València. Author: Ignacio Diago Valeta. Tutor: Adrià Giménez Pastor. 2025–2026.*
