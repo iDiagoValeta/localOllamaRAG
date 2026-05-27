@@ -26,4 +26,4 @@ python research/training/train_gemma3.py
 python research/conversion/merge_lora.py --model gemma-3
 ```
 
-From this point on, the GGUF conversion is **out of scope for the TFG**.
+From this point on, the GGUF conversion is **out of scope**.

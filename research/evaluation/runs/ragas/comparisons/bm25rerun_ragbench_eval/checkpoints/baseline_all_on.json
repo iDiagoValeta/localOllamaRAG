@@ -4113,7 +4113,7 @@
     }
   ],
   "updated_at": "2026-05-25 14:53:34",
-  "modelo_rag": "gemma4:e4b",
+  "modelo_rag": "phi4-finetuned:latest",
   "modelo_chat": "gemma4:e4b",
   "modelo_embedding": "embeddinggemma:latest",
   "modelo_recomp": "gemma4:e4b"

@@ -1,7 +1,6 @@
 # Lexical and embedding metric analysis (BM25 rerun)
 
-> Supporting document for the TFG report (MonkeyGrab - local RAG over PDFs).
-> Collects the Token F1 (TF1), ROUGE-L and BERTScore results produced by `research/evaluation/training_metrics.py` for the final BM25 rerun checkpoints.
+> Collects the Token F1 (TF1), ROUGE-L and BERTScore results produced by `research/evaluation/training_metrics.py` for the final BM25 inference checkpoints.
 
 - **Date**: 2026-05-25
 - **Script**: `research/evaluation/training_metrics.py`
@@ -12,7 +11,7 @@
 - **Per-sample CSV**: `<run>/training_metrics/<variant>.csv`
 - **Previous pre-BM25 artifacts**: archived under `old/` together with their checkpoints, summaries and analysis reports.
 
-> **RAGAS status**: pending for this BM25 rerun. The previous RAGAS report was archived with the old artifacts and should not be mixed with the new metrics until the new RAGAS pass is executed.
+> **RAGAS status**: completed for this BM25 rerun. The semantic judge report lives in [`ANALISIS_RAGAS_AWS.md`](ANALISIS_RAGAS_AWS.md); previous pre-BM25 RAGAS artifacts remain archived under `old/`.
 
 > **Project convention**: Delta (pp) = `baseline_all_on - all_off` in percentage points. Delta rel (%) = `(baseline_all_on - all_off) / all_off * 100` when the `all_off` value is positive.
 
@@ -124,7 +123,7 @@ The paired analysis compares the same question across `baseline_all_on` and `all
 1. The complete pipeline improves Token F1, ROUGE-L and BERTScore F1 on all five paired sets.
 2. The largest absolute gains are on RagBench eval (+13.15 pp BERTScore F1) and RagBench dev (+8.95 pp), where the advanced retrieval/synthesis path has more room to help.
 3. The visual set remains the hardest absolute benchmark, but the full pipeline still improves BERTScore F1 by +4.03 pp and improves most paired questions.
-4. RAGAS is still needed to estimate semantic correctness without the known length/reference-format bias of lexical and embedding metrics.
+4. The RAGAS pass confirms that the improvement is semantically meaningful and mostly driven by better retrieval quality, especially `context_precision`.
 
 ---
 
@@ -209,7 +208,7 @@ Statistics over the per-sample CSVs. Means, medians, min and max are percentages
 1. **The BM25 rerun preserves the main conclusion**: the complete pipeline beats the semantic-only floor consistently across local ES, local CA, RagBench dev, RagBench eval and RagBench visual.
 2. **The gains are not limited to one metric family**: Token F1, ROUGE-L and BERTScore F1 move in the same direction for every set.
 3. **RagBench still needs careful explanation**: short extractive references versus explanatory RAG answers depress precision-based metrics, especially BERTScore precision. Negative rescaled BERTScore values are expected and should not be described as computation errors.
-4. **The next missing piece is RAGAS**: these metrics establish direction and consistency; the pending RAGAS pass should provide the semantic correctness and faithfulness cross-check for the BM25 run.
+4. **RAGAS closes the loop**: the AWS judge confirms the same direction semantically, with global RAGAS gains on ES, CA and RagBench dev and strong `baseline_all_on` validation on RagBench eval/visual.
 
 ---
 
@@ -231,3 +230,4 @@ Generated artifacts:
 - `<run>/training_metrics/<variant>.csv` - per-question metrics with `question`, `ground_truth`, `answer`, `status` and `reason`.
 - `<run>/training_metrics/comparison_training_metrics.csv` - per-run aggregate.
 - `training_metrics_comparison_all.csv` - global BM25 rerun summary.
+- [`ANALISIS_RAGAS_AWS.md`](ANALISIS_RAGAS_AWS.md) - semantic RAGAS analysis for the BM25 rerun.

@@ -1,7 +1,7 @@
 # Gemma-3 fine-tuned → Ollama conversion: failure post-mortem
 
 > **Final status (2026-05-14): abandoned.** The fine-tuned Gemma-3 model is **not
-> included** in the TFG's final evaluation. The LoRA adapter is trained and the
+> included** in the final evaluation. The LoRA adapter is trained and the
 > merged weights are kept, but no conversion path produced a GGUF importable into
 > Ollama without breaking non-ASCII token generation (accents / ñ) or crashing
 > the Ollama runtime. This document records **what went wrong** as a technical
