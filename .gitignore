@@ -85,6 +85,8 @@ Thumbs.db
 historial_chat.json
 .env
 
+.reasonix/
+
 research/evaluation/chunks_*.txt
 research/evaluation/tmp/**
 research/evaluation/**/pytest_*/

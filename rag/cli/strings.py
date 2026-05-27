@@ -176,8 +176,9 @@ _ES: dict = {
     "docs.col.doc":             "Documento",
     "docs.col.pages":           "Págs.",
     "docs.col.frags":           "Frag.",
+    "docs.col.pct":             "% Corpus",
     "docs.col.types":           "Tipos",
-    "docs.inline.meta":         "(págs: {pages}, frag: {frags}, tipos: {types})",
+    "docs.inline.meta":         "(págs: {pages}, frag: {frags}, %: {pct}, tipos: {types})",
     "docs.none":                "No hay documentos indexados.",
 
     # Topics table
@@ -185,8 +186,9 @@ _ES: dict = {
     "topics.col.doc":           "Documento",
     "topics.col.pages":         "Págs.",
     "topics.col.frags":         "Frag.",
+    "topics.col.chunks":        "Chunks",
     "topics.col.terms":         "Términos frecuentes",
-    "topics.inline.meta":       "(págs: {pages}, frag: {frags})",
+    "topics.inline.meta":       "(págs: {pages}, frag: {frags}, chunks: {chunks})",
     "topics.tip":               "Escribe una pregunta concreta o usa /docs para revisar el corpus.",
 
     # Edge cases
@@ -371,8 +373,9 @@ _EN: dict = {
     "docs.col.doc":             "Document",
     "docs.col.pages":           "Pages",
     "docs.col.frags":           "Frags.",
+    "docs.col.pct":             "% Corpus",
     "docs.col.types":           "Types",
-    "docs.inline.meta":         "(pages: {pages}, frags: {frags}, types: {types})",
+    "docs.inline.meta":         "(pages: {pages}, frags: {frags}, %: {pct}, types: {types})",
     "docs.none":                "No documents indexed.",
 
     # Topics table
@@ -380,8 +383,9 @@ _EN: dict = {
     "topics.col.doc":           "Document",
     "topics.col.pages":         "Pages",
     "topics.col.frags":         "Frags.",
+    "topics.col.chunks":        "Chunks",
     "topics.col.terms":         "Frequent terms",
-    "topics.inline.meta":       "(pages: {pages}, frags: {frags})",
+    "topics.inline.meta":       "(pages: {pages}, frags: {frags}, chunks: {chunks})",
     "topics.tip":               "Ask a specific question or use /docs to browse the corpus.",
 
     # Edge cases
@@ -566,8 +570,9 @@ _CA: dict = {
     "docs.col.doc":             "Document",
     "docs.col.pages":           "Pàgs.",
     "docs.col.frags":           "Frag.",
+    "docs.col.pct":             "% Corpus",
     "docs.col.types":           "Tipus",
-    "docs.inline.meta":         "(pàgs: {pages}, frag: {frags}, tipus: {types})",
+    "docs.inline.meta":         "(pàgs: {pages}, frag: {frags}, %: {pct}, tipus: {types})",
     "docs.none":                "No hi ha documents indexats.",
 
     # Topics table
@@ -575,8 +580,9 @@ _CA: dict = {
     "topics.col.doc":           "Document",
     "topics.col.pages":         "Pàgs.",
     "topics.col.frags":         "Frag.",
+    "topics.col.chunks":        "Chunks",
     "topics.col.terms":         "Termes freqüents",
-    "topics.inline.meta":       "(pàgs: {pages}, frag: {frags})",
+    "topics.inline.meta":       "(pàgs: {pages}, frag: {frags}, chunks: {chunks})",
     "topics.tip":               "Escriu una pregunta concreta o usa /docs per revisar el corpus.",
 
     # Edge cases

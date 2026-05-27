@@ -426,9 +426,9 @@ class MonkeyGrabCLI:
         return False
 
     def _cmd_stats(self) -> bool:
-        docs = self.rag.obtener_documentos_indexados(self.collection)
+        docs = self._get_document_summaries()
         info = self._runtime_info(len(self._list_pdf_files()), self.collection.count())
-        ui.stats_dashboard(self.collection.count(), docs, info)
+        ui.stats_dashboard(self.collection.count(), docs, info, self.session)
         return False
 
     def _cmd_help(self) -> bool:
@@ -567,13 +567,16 @@ class MonkeyGrabCLI:
             if meta.get('format'):
                 entry['formats_set'].add(meta['format'])
 
+        total_fragments = sum(e['fragments'] for e in summaries.values())
         result = []
         for source in sorted(summaries):
             entry = summaries[source]
+            pct = (entry['fragments'] / total_fragments * 100) if total_fragments > 0 else 0
             result.append({
                 'name': entry['name'],
                 'pages': len(entry['pages_set']) if entry['pages_set'] else '-',
                 'fragments': entry['fragments'],
+                'pct_corpus': f"{pct:.1f}%",
                 'formats': ', '.join(sorted(entry['formats_set'])) or '-',
             })
         return result
@@ -589,33 +592,41 @@ class MonkeyGrabCLI:
         docs_data = []
         for doc_summary in docs:
             doc_name = doc_summary['name']
+            n_frags = doc_summary.get('fragments', 0)
             doc_info = {
                 'name': doc_name,
                 'pages': doc_summary.get('pages'),
-                'fragments': doc_summary.get('fragments'),
+                'fragments': n_frags,
             }
             try:
+                # Fetch all chunks for this document to get accurate term frequencies
+                fetch_limit = max(n_frags, 100) if isinstance(n_frags, int) and n_frags > 0 else 500
                 all_data = self.collection.get(
                     where={"source": doc_name},
                     include=['documents', 'metadatas'],
-                    limit=100,
+                    limit=fetch_limit,
                 )
                 documents = all_data.get('documents') or []
+                analizados = len(documents)
+                doc_info['analizados'] = analizados
                 if documents:
-                    texto = " ".join(documents[:20])
+                    texto = " ".join(documents)
                     palabras = texto.split()
                     significativas = [
                         p.strip('.,;:()[]{}"\'-').lower()
                         for p in palabras
-                        if (len(p) > 5
+                        if (len(p) > 3
                             and p.strip('.,;:()[]{}"\'-').lower()
                             not in self.rag.STOPWORDS)
                     ]
                     frecuencias = Counter(significativas)
                     top = [w for w, _ in frecuencias.most_common(10)]
                     doc_info['terms'] = ', '.join(top) if top else None
+                else:
+                    doc_info['analizados'] = 0
             except Exception as e:
                 doc_info['terms'] = f"error: {e}"
+                doc_info['analizados'] = 0
 
             docs_data.append(doc_info)
 

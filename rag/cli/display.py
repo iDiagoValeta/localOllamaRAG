@@ -218,7 +218,7 @@ def _safe_pages(pages: Iterable[Any]) -> str:
     shown = ", ".join(str(v + 1) for v in values[:12])
     if len(values) > 12:
         shown += f" +{len(values) - 12}"
-    return shown
+    return f"pp. {shown}"
 
 
 def _format_duration(seconds: float) -> str:
@@ -355,7 +355,7 @@ class Display:
     # light rounded panels, tight padding, airy tables — no heavy boxes.
     PANEL_BOX = box.ROUNDED
     PANEL_PADDING = (0, 1)
-    TABLE_BOX = box.SIMPLE
+    TABLE_BOX = box.MINIMAL
     # Below this width side-by-side panels stack vertically instead of truncating.
     NARROW_WIDTH = 90
 
@@ -552,55 +552,8 @@ class Display:
             pad_edge=False,
         )
 
-    # ─────────────────────────────────────────────
-    # SECTION 8: BRANDING
-    # ─────────────────────────────────────────────
-
-    def logo(self) -> None:
-        subtitle = self._s("brand.subtitle")
-        academic = self._s("brand.academic")
-        if self.backend == "rich":
-            title = Text()
-            title.append("Monkey", style="brand")
-            title.append("Grab", style="brand.dim")
-            title.append("  ·  ", style="dim")
-            title.append(subtitle, style="muted")
-            self.console.rule(title, style="brand.dim")
-            self.console.print(f"  [dim]{academic}[/]", highlight=False)
-            return
-        self._rule(f"MonkeyGrab · {subtitle}", "═", Palette.BRAND)
-        self._print_line(f"  {self._ansi(academic, Palette.DIM.ansi)}")
-
-    def init_panel(self, info: Dict[str, Any]) -> None:
-        mode = info.get("mode", "chat")
-        mode_style = "mode.rag" if mode == "rag" else "mode.chat"
-
-        if self.backend != "rich":
-            self._init_panel_ansi(info, mode)
-            return
-
-        corpus = Table.grid(padding=(0, 2))
-        corpus.add_column(style="dim", no_wrap=True)
-        corpus.add_column(style="text")
-        corpus.add_row(self._s("corpus.pdfs"), str(info.get("total_documentos", 0)))
-        corpus.add_row(self._s("corpus.fragments"), str(info.get("total_fragmentos", 0)))
-        corpus.add_row(self._s("corpus.folder"), str(info.get("docs_folder", "-")))
-        corpus.add_row(self._s("corpus.collection"), str(info.get("collection_name", "-")))
-
-        details = Table.grid(padding=(0, 2))
-        details.add_column(style="dim", no_wrap=True)
-        details.add_column(style="muted")
-        details.add_row(self._s("pipeline.extractor"), self._s(str(info.get("extractor", "-"))))
-        details.add_row(self._s("pipeline.search"), self._s(str(info.get("busqueda", "-"))))
-        rr = "off"
-        if info.get("reranker") == "on":
-            rr = f"{info.get('reranker_model', '-')}, {info.get('reranker_device', '-')}"
-        details.add_row(self._s("pipeline.reranker"), rr)
-        details.add_row(
-            self._s("pipeline.chunks"),
-            f"{info.get('chunk_size', '-')}c, {self._s('pipeline.overlap')} {info.get('chunk_overlap', '-')}c",
-        )
-
+    def _models_table(self, info: Dict[str, Any]) -> Table:
+        """Build the reusable models table from runtime info."""
         models = self._themed_table(header=True)
         models.add_column(self._s("models.role"), style="dim", width=12, no_wrap=True)
         models.add_column(self._s("models.model"), style="text", overflow="ellipsis")
@@ -635,11 +588,10 @@ class Display:
                 _model_tag(model) or "-",
                 Text(str(use), style=use_style),
             )
+        return models
 
-        flags = Table.grid(padding=(0, 2))
-        flags.add_column(no_wrap=True)
-        flags.add_column(no_wrap=True)
-        flags.add_column(no_wrap=True)
+    def _build_flags(self, info: Dict[str, Any]) -> Text:
+        """Build a compact flags line with checkmarks."""
         flag_items = [
             ("hybrid", info.get("hybrid")),
             ("rerank", info.get("reranker") == "on"),
@@ -648,127 +600,95 @@ class Display:
             ("images", info.get("images")),
             ("expand", info.get("expand")),
         ]
-        cells: List[Text] = []
-        for name, enabled in flag_items:
-            cell = Text()
-            cell.append(name, style="dim")
-            cell.append("=")
-            cell.append_text(_state_label(enabled, self._s("state.on"), self._s("state.off")))
-            cells.append(cell)
-        for idx in range(0, len(cells), 3):
-            flags.add_row(*cells[idx : idx + 3])
+        text = Text()
+        text.append(f"  {self._s('pipeline.flags')}: ", style="dim")
+        for i, (name, enabled) in enumerate(flag_items):
+            if i > 0:
+                text.append("  ")
+            if enabled:
+                text.append("✓ ", style="success")
+                text.append(name, style="muted")
+            else:
+                text.append("✗ ", style="off")
+                text.append(name, style="dim")
+        return text
 
-        corpus_title = self._s("init.corpus_title")
-        pipeline_title = self._s("init.pipeline_title")
-        top = self._two_panels(
-            self._panel(corpus, title=f"[info]{corpus_title}[/]"),
-            self._panel(details, title=f"[info]{pipeline_title}[/]"),
+    # ─────────────────────────────────────────────
+    # SECTION 8: BRANDING
+    # ─────────────────────────────────────────────
+
+    def logo(self) -> None:
+        """Minimal brand header — just the name, no decorative rule."""
+        if self.backend == "rich":
+            self.console.print()
+            self.console.print("  [brand]MonkeyGrab[/]  [dim]local PDF RAG[/]")
+            self.console.print()
+            return
+        self._print_line()
+        self._print_line(
+            f"  {self._ansi('MonkeyGrab', Palette.BRAND.ansi, ANSI_BOLD)}"
+            f"  {self._ansi('local PDF RAG', Palette.DIM.ansi)}"
         )
+        self._print_line()
 
-        header = Text()
-        header.append(f"{self._s('init.mode_prefix')} ", style="dim")
-        header.append(mode, style=mode_style)
-        header.append("  ·  ", style="dim")
-        header.append(self._s("init.use_help"), style="dim")
+    def init_panel(self, info: Dict[str, Any]) -> None:
+        """Compact startup info — no box, just clean inline text."""
+        mode = info.get("mode", "chat")
+        n_pdfs = info.get("total_documentos", 0)
+        n_frags = info.get("total_fragmentos", 0)
+        mode_style = "mode.rag" if mode == "rag" else "mode.chat"
+        mode_label = self._s("mode.rag.label") if mode == "rag" else self._s("mode.chat.label")
+
+        if self.backend != "rich":
+            self._init_panel_ansi(info, mode)
+            return
+
+        self.console.print(
+            f"  [dim]{n_pdfs} PDFs  ·  {n_frags} fragments[/]"
+            f"  [{mode_style}]{mode_label.lower()} mode[/]"
+        )
+        self.console.print(f"  [dim]{self._s('init.use_help')}[/]")
         self.console.print()
-        self.console.print(header)
-        self.console.print(top)
-        self.console.print(models)
-        # Flags as a compact inline row — no panel, no border
-        self.console.print(flags)
-        self.console.print()
+
+    def _typewriter_panel(self, panel: Panel, delay: float = 0.008) -> None:
+        """Kept for API compatibility; renders immediately (no animation)."""
+        self.console.print(panel)
 
     def _init_panel_ansi(self, info: Dict[str, Any], mode: str) -> None:
+        """ANSI fallback: compact startup info."""
         mode_color = self._mode_color(mode)
+        n_pdfs = info.get("total_documentos", 0)
+        n_frags = info.get("total_fragmentos", 0)
+        mode_label = self._s("mode.rag.label") if mode == "rag" else self._s("mode.chat.label")
         self._print_line(
-            f"{self._ansi(self._s('init.mode_prefix') + ':', Palette.DIM.ansi)} "
-            f"{self._ansi(mode, mode_color.ansi, ANSI_BOLD)}"
-            f"{self._ansi('  |  ' + self._s('init.use_help'), Palette.DIM.ansi)}"
+            f"  {self._ansi(str(n_pdfs), Palette.TEXT.ansi, ANSI_BOLD)}"
+            f" {self._ansi('PDFs', Palette.DIM.ansi)}"
+            f"  {self._ansi('·', Palette.DIM.ansi)}"
+            f"  {self._ansi(str(n_frags), Palette.TEXT.ansi, ANSI_BOLD)}"
+            f" {self._ansi('fragments', Palette.DIM.ansi)}"
+            f"  {self._ansi(mode_label.lower() + ' mode', mode_color.ansi, ANSI_BOLD)}"
         )
-        self._rule(color=Palette.DIM)
-        rr = "off"
-        if info.get("reranker") == "on":
-            rr = f"{info.get('reranker_model', '-')}, {info.get('reranker_device', '-')}"
-        rows = [
-            (self._s("corpus.pdfs"), info.get("total_documentos", 0)),
-            (self._s("corpus.fragments"), info.get("total_fragmentos", 0)),
-            (self._s("corpus.folder"), info.get("docs_folder", "-")),
-            (self._s("corpus.collection"), info.get("collection_name", "-")),
-            (self._s("pipeline.extractor"), self._s(str(info.get("extractor", "-")))),
-            (self._s("pipeline.search"), self._s(str(info.get("busqueda", "-")))),
-            (self._s("pipeline.reranker"), rr),
-        ]
-        for key, value in rows:
-            self._print_line(
-                f"  {self._ansi(f'{key}:', Palette.DIM.ansi)} "
-                f"{self._ansi(str(value), Palette.TEXT.ansi)}"
-            )
-        flags = (
-            f"hybrid={self._state_word(info.get('hybrid'))} "
-            f"rerank={self._state_word(info.get('reranker') == 'on')} "
-            f"contextual={self._state_word(info.get('contextual'))} "
-            f"recomp={self._state_word(info.get('recomp'))} "
-            f"images={self._state_word(info.get('images'))} "
-            f"expand={self._state_word(info.get('expand'))}"
-        )
-        self._print_line(
-            f"  {self._ansi(self._s('pipeline.flags') + ':', Palette.DIM.ansi)} {self._ansi(flags, Palette.MUTED.ansi)}"
-        )
-        self._rule(color=Palette.DIM)
+        self._print_line(f"  {self._ansi(self._s('init.use_help'), Palette.DIM.ansi)}")
         self._print_line()
 
     def welcome(self) -> None:
         if self.backend != "rich":
             self._print_line()
-            self._rule(self._s("help.modes_title"), color=Palette.INFO)
-            self._print_line(
-                f"  {self._ansi(self._s('mode.chat.label'), Palette.CHAT.ansi, ANSI_BOLD)} "
-                f"{self._ansi(self._s('mode.chat.desc'), Palette.MUTED.ansi)}"
-            )
-            self._print_line(
-                f"  {self._ansi(self._s('mode.rag.label'), Palette.RAG.ansi, ANSI_BOLD)}  "
-                f"{self._ansi(self._s('mode.rag.desc'), Palette.MUTED.ansi)}"
-            )
-            self._print_line()
-            self._rule(self._s("help.commands_title"), color=Palette.BRAND)
             for cmd, desc_key in primary_commands(self._lang):
                 self._print_line(
-                    f"  {self._ansi(f'{cmd:<12}', Palette.BRAND.ansi, ANSI_BOLD)} "
-                    f"{self._ansi(self._s(desc_key), Palette.TEXT.ansi)}"
+                    f"  {self._ansi(f'{cmd:<10}', Palette.BRAND.ansi, ANSI_BOLD)}"
+                    f" {self._ansi(self._s(desc_key), Palette.MUTED.ansi)}"
                 )
-            self._print_line(
-                f"  {self._ansi(self._s('help.shortcuts_title') + ':', Palette.DIM.ansi)} "
-                f"{self._ansi(self._s('help.shortcuts.inline'), Palette.MUTED.ansi)}"
-            )
-            self._rule(color=Palette.DIM)
+            self._print_line()
+            self._print_line(f"  {self._ansi(self._s('help.shortcuts.inline'), Palette.DIM.ansi)}")
             self._print_line()
             return
 
         self.console.print()
-        modes = Table.grid(padding=(0, 2))
-        modes.add_column(no_wrap=True)
-        modes.add_column(style="muted")
-        modes.add_row(f"[mode.chat]{self._s('mode.chat.label')}[/]", self._s("mode.chat.desc"))
-        modes.add_row(f"[mode.rag]{self._s('mode.rag.label')}[/]", self._s("mode.rag.desc"))
-
-        commands = self._themed_table(title=self._s("help.commands_title"), header=False)
-        commands.add_column(self._s("help.command_col"), style="brand", width=12, no_wrap=True)
-        commands.add_column(self._s("help.desc_col"), style="muted")
         for cmd, desc_key in primary_commands(self._lang):
-            commands.add_row(cmd, self._s(desc_key))
-
-        shortcuts = Table.grid(padding=(0, 2))
-        shortcuts.add_column(style="dim", no_wrap=True)
-        shortcuts.add_column(style="muted")
-        shortcuts.add_row("↑ / ↓", self._s("help.shortcut.arrows"))
-        shortcuts.add_row("Tab", self._s("help.shortcut.tab"))
-        shortcuts.add_row("Ctrl-C / Ctrl-D", self._s("help.shortcut.ctrlc"))
-
-        modes_title = self._s("help.modes_title")
-        shortcuts_title = self._s("help.shortcuts_title")
-        self.console.print(self._panel(modes, title=f"[info]{modes_title}[/]"))
-        self.console.print(commands)
-        self.console.print(self._panel(shortcuts, title=f"[info]{shortcuts_title}[/]"))
+            self.console.print(f"  [brand]{cmd:<10}[/] [muted]{self._s(desc_key)}[/]")
+        self.console.print()
+        self.console.print(f"  [dim]{self._s('help.shortcuts.inline')}[/]")
         self.console.print()
 
     # ─────────────────────────────────────────────
@@ -943,44 +863,33 @@ class Display:
     # ─────────────────────────────────────────────
 
     def prompt(self, mode: str, model: str = "") -> str:
-        model_short = _short_model(model, max_len=22, keep_tag=False)
-        return f"monkeygrab {mode} {model_short} ▸ "
+        mode_label = "rag" if mode == "rag" else "chat"
+        return f"{mode_label} > "
 
     def _ansi_prompt(self, mode: str, model: str = "") -> str:
-        model_short = _short_model(model, max_len=22, keep_tag=False)
         mode_color = self._mode_color(mode)
+        mode_label = "rag" if mode == "rag" else "chat"
         return (
-            f"{Palette.BRAND.ansi}{ANSI_BOLD}monkeygrab{ANSI_RESET} "
-            f"{mode_color.ansi}{ANSI_BOLD}{mode}{ANSI_RESET} "
-            f"{Palette.DIM.ansi}{model_short}{ANSI_RESET} "
-            f"{mode_color.ansi}{ANSI_BOLD}▸ {ANSI_RESET}"
+            f"{mode_color.ansi}{ANSI_BOLD}{mode_label}{ANSI_RESET}"
+            f"{Palette.DIM.ansi} > {ANSI_RESET}"
         )
 
     def read_input(self, mode: str, model: str = "") -> str:
         self.pipeline_stop()
-        # Keep toolbar state in sync so the bottom bar reflects the current mode
         self._toolbar_mode = mode
         self._toolbar_model = _short_model(model, max_len=22, keep_tag=False)
         if self.backend == "prompt_toolkit":
             return self._read_input_ptk(mode, model)
         if self.backend == "plain":
             return input(self.prompt(mode, model))
-        # Rich: prefer PTK session if available (for history + completion),
-        # otherwise fall back to Rich's own input which lacks those features.
         self.console.file.flush()
         if self._ptk_session is not None:
             return self._read_input_ptk(mode, model)
         mode_style = "mode.rag" if mode == "rag" else "mode.chat"
-        model_short = _short_model(
-            model, max_len=max(18, min(34, self._term_width() - 28))
-        )
+        mode_label = "rag" if mode == "rag" else "chat"
         prompt_text = Text()
-        prompt_text.append("monkeygrab", style="brand")
-        prompt_text.append(" ")
-        prompt_text.append(mode, style=mode_style)
-        prompt_text.append(" ")
-        prompt_text.append(model_short, style="dim")
-        prompt_text.append(" ▸ ", style=mode_style)
+        prompt_text.append(mode_label, style=f"{mode_style} bold")
+        prompt_text.append(" > ", style="dim")
         return self.console.input(prompt_text)
 
     def _read_input_ptk(self, mode: str, model: str) -> str:
@@ -1023,16 +932,11 @@ class Display:
         return consumed_space
 
     def response_header(self, mode: str, model: str = "") -> None:
-        model_short = _short_model(model, max_len=36)
-        label = self._s("response.header.rag") if mode == "rag" else self._s("response.header.chat")
+        """Blank line before a response — no decorative rule."""
         if self.backend != "rich":
-            self._print_line()
-            self._rule(f"{label} · {model_short}", color=self._mode_color(mode))
             self._print_line()
             return
         self.console.print()
-        style = "mode.rag" if mode == "rag" else "mode.chat"
-        self.console.rule(f"[{style}]{label}[/] [dim]{model_short}[/]", style=style)
 
     def stream_token(self, token: str) -> None:
         if self.backend != "rich":
@@ -1097,16 +1001,17 @@ class Display:
             for doc, pages in sorted(sources_map.items()):
                 self._print_line(
                     f"  {self._ansi(_short_model(doc, max_len=56, keep_tag=True), Palette.TEXT.ansi)} "
-                    f"{self._ansi(f'(pp. {_safe_pages(pages)})', Palette.MUTED.ansi)}"
+                    f"{self._ansi(f'({_safe_pages(pages)})', Palette.MUTED.ansi)}"
                 )
             return
 
-        table = self._themed_table(header=False, box_style=None)
+        table = self._themed_table(header=False)
         table.add_column(self._s("sources.col.doc"), style="muted", overflow="fold")
         table.add_column(self._s("sources.col.pages"), style="dim", no_wrap=True)
         for doc, pages in sorted(sources_map.items()):
             table.add_row(_short_model(doc, max_len=56, keep_tag=True), _safe_pages(pages))
-        self.console.print(self._panel(table, title=f"[dim]{src_title}[/]"))
+        self.console.rule(f"[dim]{src_title}[/]", style="dim")
+        self.console.print(table)
 
     def response_footer(self, sources: Optional[int] = None) -> None:
         if self.backend != "rich":
@@ -1117,14 +1022,12 @@ class Display:
                     f"  {self._ansi('·', Palette.DIM.ansi)} "
                     f"{self._ansi(src_text, Palette.DIM.ansi)}"
                 )
-            self._rule(color=Palette.DIM)
             self._print_line()
             return
         if sources is not None:
             tag = (self._s("sources.footer.cited", n=sources)
                    if sources else self._s("sources.footer.none"))
             self.console.print(f"  [dim]· {tag}[/]")
-        self.console.rule(style="dim")
         self.console.print()
 
     def response_footer_rag(
@@ -1132,21 +1035,11 @@ class Display:
         fragments: List[Dict[str, Any]],
         timer: "QueryTimer",
     ) -> None:
-        """Unified post-RAG footer combining sources, scores, and timings.
-
-        Replaces the three-call pattern ``sources_panel + query_summary +
-        response_footer`` with a single compact panel whose title carries the
-        timing summary and whose rows list each source with its relevance score.
-
-        Args:
-            fragments: Final list of retrieved fragments (with metadata and scores).
-            timer: QueryTimer instance after generation has completed.
-        """
+        """Compact post-RAG footer: timing + source lines."""
         if not fragments:
             self.response_footer()
             return
 
-        # Aggregate: best score and page set per source document
         sources_map: Dict[str, Dict[str, Any]] = {}
         for frag in fragments:
             meta = frag.get("metadata", {}) or {}
@@ -1157,61 +1050,30 @@ class Display:
             entry["pages"].add(page)
             entry["score"] = max(entry["score"], float(score))
 
-        n_sources = len(sources_map)
         n_frags = len(fragments)
         total_dur = _format_duration(timer.total)
-        phases = timer.phase_durations()
-        phase_parts = [
-            f"{name} {_format_duration(dur)}"
-            for name, dur in phases
-            if dur >= 0.05
-        ]
 
-        src_title = self._s("sources.title", n=n_sources)
         if self.backend != "rich":
-            timing = "  ·  ".join([f"total {total_dur}"] + phase_parts + [f"{n_frags} frag."])
-            self._print_line(
-                f"  {self._ansi('·', Palette.INFO.ansi)} "
-                f"{self._ansi(timing, Palette.DIM.ansi)}"
-            )
-            self._rule(src_title, color=Palette.DIM)
+            self._print_line()
+            timing = f"· {total_dur}  ·  {n_frags} frags"
+            self._print_line(f"  {self._ansi(timing, Palette.DIM.ansi)}")
             for doc, data in sorted(sources_map.items()):
-                score_val = data["score"]
-                pages_str = f"pp. {_safe_pages(data['pages'])}"
+                pages_str = _safe_pages(data["pages"])
+                short_doc = _short_model(doc, max_len=44, keep_tag=True)
                 self._print_line(
-                    f"  {self._ansi(_short_model(doc, max_len=48, keep_tag=True), Palette.TEXT.ansi)} "
-                    f"{self._ansi(pages_str, Palette.MUTED.ansi)} "
-                    f"{self._ansi(f'{score_val:.2f}', Palette.DIM.ansi)}"
+                    f"  {self._ansi('↳', Palette.DIM.ansi)}"
+                    f" {self._ansi(short_doc, Palette.MUTED.ansi)}"
+                    f" {self._ansi(pages_str, Palette.DIM.ansi)}"
                 )
-            self._rule(color=Palette.DIM)
             self._print_line()
             return
 
-        # Build panel title with timings
-        timing_str = "  ·  ".join([total_dur] + phase_parts + [f"{n_frags} frag."])
-        panel_title = f"[dim]{src_title}  ·  {timing_str}[/]"
-
-        table = self._themed_table(header=False, box_style=None)
-        table.add_column(self._s("sources.col.doc"), style="muted", overflow="fold")
-        table.add_column(self._s("sources.col.pages"), style="dim", no_wrap=True)
-        table.add_column(self._s("sources.col.score"), no_wrap=True, justify="right")
-
+        self.console.print()
+        self.console.print(f"  [dim]· {total_dur}  ·  {n_frags} frags[/]")
         for doc, data in sorted(sources_map.items()):
-            score_val = data["score"]
-            if score_val >= 0.70:
-                score_style = "success"
-            elif score_val >= 0.50:
-                score_style = "warning"
-            else:
-                score_style = "off"
-            table.add_row(
-                _short_model(doc, max_len=48, keep_tag=True),
-                _safe_pages(data["pages"]),
-                Text(f"{score_val:.2f}", style=score_style),
-            )
-
-        self.console.print(self._panel(table, title=panel_title))
-        self.console.rule(style="dim")
+            pages_str = _safe_pages(data["pages"])
+            short_doc = _short_model(doc, max_len=44, keep_tag=True)
+            self.console.print(f"  [dim]↳[/] [muted]{short_doc}[/] [dim]{pages_str}[/]")
         self.console.print()
 
     # ─────────────────────────────────────────────
@@ -1260,160 +1122,104 @@ class Display:
         total_fragments: int,
         docs: List[Any],
         info: Optional[Dict[str, Any]] = None,
+        session: Optional[Any] = None,
     ) -> None:
         """Consolidated stats dashboard replacing the separate stats_table + init_panel combo.
 
-        Shows corpus metrics, pipeline configuration, active models, and flags
-        in a single non-redundant view triggered by the ``/stats`` command.
+        Shows corpus metrics, pipeline configuration, active models, flags,
+        and session statistics in a single non-redundant view triggered by
+        the ``/stats`` command.
 
         Args:
             total_fragments: Total chunk count in the vector DB.
             docs: List of indexed document names or summary dicts.
             info: Runtime metadata dict from ``_runtime_info``.
+            session: Optional SessionStats for live session metrics.
         """
         info = info or {}
+        n_docs = len(docs)
+        if docs and isinstance(docs[0], dict):
+            n_docs = sum(1 for d in docs if d.get("fragments", 0) > 0)
 
         if self.backend != "rich":
-            # Non-rich: compact list of all relevant stats
-            self._print_line()
-            self._rule(self._s("stats.dashboard.title"), color=Palette.INFO)
             rr_ansi = (
-                f"{info.get('reranker_model', '-')}, {info.get('reranker_device', '-')}"
+                f"on  ({info.get('reranker_device', '')})"
                 if info.get("reranker") == "on" else "off"
             )
-            rows = [
-                (self._s("corpus.pdfs"), info.get("total_documentos", len(docs))),
-                (self._s("corpus.docs"), len(docs)),
-                (self._s("corpus.fragments"), total_fragments),
-                (self._s("corpus.folder"), info.get("docs_folder", "-")),
-                (self._s("corpus.vector_db"), info.get("path_db", "-")),
-                (self._s("corpus.collection"), info.get("collection_name", "-")),
-                (self._s("pipeline.extractor"), self._s(str(info.get("extractor", "-")))),
-                (self._s("pipeline.search"), self._s(str(info.get("busqueda", "-")))),
-                (self._s("pipeline.reranker"), rr_ansi),
-                (self._s("pipeline.chunks"),
-                 f"{info.get('chunk_size', '-')}c, {self._s('pipeline.overlap')} {info.get('chunk_overlap', '-')}c"),
-            ]
-            for key, value in rows:
-                self._print_line(
-                    f"  {self._ansi(f'{key}:', Palette.DIM.ansi)} "
-                    f"{self._ansi(str(value), Palette.TEXT.ansi)}"
-                )
-            flags_str = "  ".join(
-                f"{n}={self._state_word(v)}"
-                for n, v in [
-                    ("hybrid", info.get("hybrid")),
-                    ("rerank", info.get("reranker") == "on"),
-                    ("contextual", info.get("contextual")),
-                    ("recomp", info.get("recomp")),
-                    ("images", info.get("images")),
-                    ("expand", info.get("expand")),
-                ]
+            self._print_line()
+            self._print_line(
+                f"  {self._ansi(str(info.get('total_documentos', n_docs)), Palette.TEXT.ansi, ANSI_BOLD)}"
+                f" {self._ansi('PDFs', Palette.DIM.ansi)}"
+                f"  {self._ansi('·', Palette.DIM.ansi)}"
+                f"  {self._ansi(str(total_fragments), Palette.TEXT.ansi, ANSI_BOLD)}"
+                f" {self._ansi('fragments', Palette.DIM.ansi)}"
+                f"  {self._ansi('·', Palette.DIM.ansi)}"
+                f"  {self._ansi(info.get('collection_name', '-'), Palette.MUTED.ansi)}"
             )
             self._print_line(
-                f"  {self._ansi(self._s('pipeline.flags') + ':', Palette.DIM.ansi)} "
-                f"{self._ansi(flags_str, Palette.MUTED.ansi)}"
+                f"  {self._ansi(info.get('docs_folder', '-'), Palette.DIM.ansi)}"
+                f"  {self._ansi('·', Palette.DIM.ansi)}"
+                f"  {self._ansi(info.get('path_db', '-'), Palette.DIM.ansi)}"
             )
-            self._rule(color=Palette.DIM)
             self._print_line()
+            chunk_info = f"{info.get('chunk_size', '-')}c / {info.get('chunk_overlap', '-')}c"
+            self._print_line(
+                f"  {self._ansi(self._s(str(info.get('busqueda', '-'))), Palette.MUTED.ansi)}"
+                f"  {self._ansi('·', Palette.DIM.ansi)}"
+                f"  {self._ansi('reranker ' + rr_ansi, Palette.MUTED.ansi)}"
+                f"  {self._ansi('·', Palette.DIM.ansi)}"
+                f"  {self._ansi(chunk_info, Palette.DIM.ansi)}"
+            )
+            flag_parts = []
+            for name, enabled in [
+                ("hybrid", info.get("hybrid")),
+                ("rerank", info.get("reranker") == "on"),
+                ("contextual", info.get("contextual")),
+                ("recomp", info.get("recomp")),
+                ("images", info.get("images")),
+                ("expand", info.get("expand")),
+            ]:
+                mark = self._ansi("✓", Palette.SUCCESS.ansi) if enabled else self._ansi("✗", Palette.DIM.ansi)
+                flag_parts.append(f"{mark} {name}")
+            self._print_line(f"  {'  '.join(flag_parts)}")
+            if session is not None and session.total_queries > 0:
+                self._session_summary(session)
+            else:
+                self._print_line()
             return
 
-        dashboard_title = self._s("stats.dashboard.title")
-        corpus_title = self._s("init.corpus_title")
-        pipeline_title = self._s("init.pipeline_title")
-
-        self.console.print()
-        self.console.rule(f"[info]{dashboard_title}[/]", style="dim")
         self.console.print()
 
-        # --- Corpus panel (with base vectorial) ---
-        corpus = Table.grid(padding=(0, 2))
-        corpus.add_column(style="dim", no_wrap=True)
-        corpus.add_column(style="text")
-        corpus.add_row(self._s("corpus.pdfs"), str(info.get("total_documentos", len(docs))))
-        corpus.add_row(self._s("corpus.docs"), str(len(docs)))
-        corpus.add_row(self._s("corpus.fragments"), str(total_fragments))
-        corpus.add_row(self._s("corpus.folder"), str(info.get("docs_folder", "-")))
-        corpus.add_row(self._s("corpus.vector_db"), str(info.get("path_db", "-")))
-        corpus.add_row(self._s("corpus.collection"), str(info.get("collection_name", "-")))
-
-        # --- Pipeline panel ---
-        details = Table.grid(padding=(0, 2))
-        details.add_column(style="dim", no_wrap=True)
-        details.add_column(style="muted")
-        details.add_row(self._s("pipeline.extractor"), self._s(str(info.get("extractor", "-"))))
-        details.add_row(self._s("pipeline.search"), self._s(str(info.get("busqueda", "-"))))
-        rr = "off"
-        if info.get("reranker") == "on":
-            rr = f"{info.get('reranker_model', '-')}, {info.get('reranker_device', '-')}"
-        details.add_row(self._s("pipeline.reranker"), rr)
-        details.add_row(
-            self._s("pipeline.chunks"),
-            f"{info.get('chunk_size', '-')}c, {self._s('pipeline.overlap')} {info.get('chunk_overlap', '-')}c",
+        # --- Corpus ---
+        self.console.print(
+            f"  [text]{info.get('total_documentos', n_docs)}[/] [dim]PDFs[/]"
+            f"  [dim]·[/]  [text]{total_fragments}[/] [dim]fragments[/]"
+            f"  [dim]·[/]  [dim]{info.get('collection_name', '-')}[/]"
         )
-
-        top = self._two_panels(
-            self._panel(corpus, title=f"[info]{corpus_title}[/]"),
-            self._panel(details, title=f"[info]{pipeline_title}[/]"),
+        self.console.print(
+            f"  [dim]{info.get('docs_folder', '-')}  ·  {info.get('path_db', '-')}[/]"
         )
-        self.console.print(top)
-
-        # --- Models table (same as init_panel) ---
-        models = self._themed_table(header=True)
-        models.add_column(self._s("models.role"), style="dim", width=12, no_wrap=True)
-        models.add_column(self._s("models.model"), style="text", overflow="ellipsis")
-        models.add_column(self._s("models.tag"), style="muted", width=12, overflow="ellipsis")
-        models.add_column(self._s("models.use"), style="muted", width=12, no_wrap=True)
-        model_width = 44 if self._term_width() >= 110 else 28
-        model_rows = [
-            (self._s("role.rag"), info.get("modelo_rag", ""), self._s("model.use.rag")),
-            (self._s("role.chat"), info.get("modelo_chat", ""), self._s("model.use.chat")),
-            (self._s("role.embed"), info.get("modelo_embedding", ""), self._s("model.use.embed")),
-            (self._s("role.contextual"), info.get("modelo_contextual", ""),
-             self._s("model.use.contextual") if info.get("contextual") else "off"),
-            (self._s("role.recomp"), info.get("modelo_recomp", ""),
-             self._s("model.use.recomp") if info.get("recomp") else "off"),
-            (self._s("role.ocr"), info.get("modelo_ocr", ""),
-             self._s("model.use.ocr") if info.get("images") else "off"),
-        ]
-        for role, model, use in model_rows:
-            use_style = "off" if use == "off" else "muted"
-            models.add_row(
-                role,
-                _short_model(model, max_len=model_width, keep_tag=False),
-                _model_tag(model) or "-",
-                Text(str(use), style=use_style),
-            )
-        self.console.print(models)
-
-        # --- Flags compact row ---
-        flag_items = [
-            ("hybrid", info.get("hybrid")),
-            ("rerank", info.get("reranker") == "on"),
-            ("contextual", info.get("contextual")),
-            ("recomp", info.get("recomp")),
-            ("images", info.get("images")),
-            ("expand", info.get("expand")),
-        ]
-        flags = Table.grid(padding=(0, 2))
-        flags.add_column(no_wrap=True)
-        flags.add_column(no_wrap=True)
-        flags.add_column(no_wrap=True)
-        cells: List[Text] = []
-        for name, enabled in flag_items:
-            cell = Text()
-            cell.append(name, style="dim")
-            cell.append("=")
-            cell.append_text(_state_label(enabled, self._s("state.on"), self._s("state.off")))
-            cells.append(cell)
-        for idx in range(0, len(cells), 3):
-            row_cells = cells[idx: idx + 3]
-            # Pad to 3 columns so add_row always gets the same arity
-            while len(row_cells) < 3:
-                row_cells.append(Text(""))
-            flags.add_row(*row_cells)
-        self.console.print(flags)
         self.console.print()
+
+        # --- Pipeline ---
+        rr = (f"reranker on  ({info.get('reranker_device', '')})"
+              if info.get("reranker") == "on" else "reranker off")
+        self.console.print(
+            f"  [dim]{self._s(str(info.get('busqueda', '-')))}[/]"
+            f"  [dim]·[/]  [dim]{rr}[/]"
+            f"  [dim]·[/]  [dim]{info.get('chunk_size', '-')}c / {info.get('chunk_overlap', '-')}c overlap[/]"
+        )
+        self.console.print(self._build_flags(info))
+        self.console.print()
+
+        # --- Models ---
+        self.console.print(self._models_table(info))
+
+        # --- Session ---
+        if session is not None and session.total_queries > 0:
+            self._session_summary(session)
+        else:
+            self.console.print()
 
     def docs_table(self, docs: List[Any]) -> None:
         if not docs:
@@ -1428,6 +1234,7 @@ class Display:
                         "docs.inline.meta",
                         pages=item.get("pages", "-"),
                         frags=item.get("fragments", "-"),
+                        pct=item.get("pct_corpus", "-"),
                         types=item.get("formats", "-"),
                     )
                     self._print_line(
@@ -1449,6 +1256,7 @@ class Display:
         table.add_column(self._s("docs.col.doc"), style="text", overflow="fold")
         table.add_column(self._s("docs.col.pages"), style="muted", justify="right", no_wrap=True)
         table.add_column(self._s("docs.col.frags"), style="muted", justify="right", no_wrap=True)
+        table.add_column(self._s("docs.col.pct"), style="info", justify="right", no_wrap=True)
         table.add_column(self._s("docs.col.types"), style="dim", no_wrap=True)
         for idx, item in enumerate(docs, 1):
             if isinstance(item, dict):
@@ -1457,10 +1265,11 @@ class Display:
                     item.get("name", "-"),
                     str(item.get("pages", "-")),
                     str(item.get("fragments", "-")),
+                    item.get("pct_corpus", "-"),
                     item.get("formats", "-"),
                 )
             else:
-                table.add_row(str(idx), str(item), "-", "-", "-")
+                table.add_row(str(idx), str(item), "-", "-", "-", "-")
         self.console.print()
         self.console.print(table)
         self.console.print()
@@ -1475,10 +1284,12 @@ class Display:
             self._print_line()
             self._rule(self._s("topics.title"), color=Palette.INFO)
             for doc_info in docs_data:
+                analizados = doc_info.get("analizados")
                 descr = self._s(
                     "topics.inline.meta",
                     pages=doc_info.get("pages", "-"),
                     frags=doc_info.get("fragments", "-"),
+                    chunks=analizados if analizados is not None else "-",
                 )
                 self._print_line(
                     f"  {self._ansi(doc_info.get('name', '-'), Palette.TEXT.ansi)} "
@@ -1496,12 +1307,16 @@ class Display:
         table.add_column(self._s("topics.col.doc"), style="text", overflow="fold")
         table.add_column(self._s("topics.col.pages"), style="muted", justify="right", no_wrap=True)
         table.add_column(self._s("topics.col.frags"), style="muted", justify="right", no_wrap=True)
+        table.add_column(self._s("topics.col.chunks"), style="dim", justify="right", no_wrap=True)
         table.add_column(self._s("topics.col.terms"), style="dim", overflow="fold")
         for doc_info in docs_data:
+            analizados = doc_info.get("analizados")
+            chunks_str = str(analizados) if analizados is not None else "-"
             table.add_row(
                 doc_info.get("name", "-"),
                 str(doc_info.get("pages", "-")),
                 str(doc_info.get("fragments", "-")),
+                chunks_str,
                 doc_info.get("terms") or "-",
             )
         self.console.print()
@@ -1514,29 +1329,24 @@ class Display:
     # ─────────────────────────────────────────────
 
     def mode_change(self, mode: str, model: str = "") -> None:
-        # Keep toolbar state in sync when the user switches modes explicitly
         self._toolbar_mode = mode
         self._toolbar_model = _short_model(model, max_len=22, keep_tag=False)
-        purpose = self._s("mode.rag.purpose") if mode == "rag" else self._s("mode.chat.purpose")
-        mode_word = self._s("mode.rag.label").lower() if mode == "rag" else self._s("mode.chat.label").lower()
-        mode_prefix = self._s("mode.switch.prefix")
+        mode_label = self._s("mode.rag.label") if mode == "rag" else self._s("mode.chat.label")
         if self.backend != "rich":
             color = self._mode_color(mode)
             self._print_line(
-                f"  {self._ansi('→', color.ansi, ANSI_BOLD)} "
-                f"{self._ansi(f'{mode_prefix} {mode_word}', color.ansi, ANSI_BOLD)} "
-                f"{self._ansi(f'· {purpose} · {_short_model(model, 36)}', Palette.DIM.ansi)}"
+                f"\n  {self._ansi('→', color.ansi, ANSI_BOLD)}"
+                f" {self._ansi(mode_label.lower() + ' mode', color.ansi)}"
             )
             return
         style = "mode.rag" if mode == "rag" else "mode.chat"
-        self.console.print(
-            f"  [{style}]→ {mode_prefix} {mode_word}[/] [dim]{purpose} · {_short_model(model, 36)}[/]"
-        )
+        self.console.print(f"\n  [{style}]→ {mode_label.lower()} mode[/]")
 
     def history_loaded(self, n: int) -> None:
         self.info(self._s("history.loaded", n=n))
 
     def history_cleared(self) -> None:
+        self.console.clear()
         self.success(self._s("history.cleared"))
 
     def unknown_command(self, cmd: str, suggestions: Optional[List[str]] = None) -> None:
@@ -1571,47 +1381,43 @@ class Display:
         self.warning(self._s("reindex.restart"))
 
     def farewell(self, stats: Optional[SessionStats] = None) -> None:
-        if stats is not None and stats.total_queries > 0:
-            self._session_summary(stats)
         farewell_msg = self._s("farewell.msg")
+        suffix = ""
+        if stats is not None and stats.total_queries > 0:
+            suffix = (
+                f"  ·  {stats.total_queries} queries"
+                f"  ·  {_format_duration(stats.duration)}"
+            )
         if self.backend != "rich":
             self._print_line()
-            self._rule(color=Palette.DIM)
-            self._print_line(f"  {self._ansi(farewell_msg, Palette.DIM.ansi)}")
+            self._print_line(f"  {self._ansi(farewell_msg + suffix, Palette.DIM.ansi)}")
             self._print_line()
             return
         self.console.print()
-        self.console.print(f"  [dim]{farewell_msg}[/]")
+        self.console.print(f"  [dim]{farewell_msg}{suffix}[/]")
         self.console.print()
 
     def _session_summary(self, stats: SessionStats) -> None:
+        """Compact session stats for /stats and farewell."""
         models = ", ".join(sorted(_short_model(m, max_len=24) for m in stats.models_used)) or "-"
-        rows = [
-            (self._s("farewell.duration"), _format_duration(stats.duration)),
-            (self._s("farewell.rag_queries"), f"{stats.rag_queries} · {_format_duration(stats.rag_time)}"),
-            (self._s("farewell.chat_queries"), f"{stats.chat_queries} · {_format_duration(stats.chat_time)}"),
-            (self._s("farewell.models"), models),
-        ]
-        summary_title = self._s("farewell.title")
+        total = stats.total_queries
+        dur = _format_duration(stats.duration)
         if self.backend != "rich":
             self._print_line()
-            self._rule(summary_title, color=Palette.INFO)
-            for key, value in rows:
-                self._print_line(
-                    f"  {self._ansi(f'{key}:', Palette.DIM.ansi)} "
-                    f"{self._ansi(str(value), Palette.TEXT.ansi)}"
-                )
-            self._rule(color=Palette.DIM)
+            self._print_line(
+                f"  {self._ansi(self._s('farewell.title') + ':', Palette.DIM.ansi)}"
+                f" {self._ansi(f'{total} queries  ·  {dur}', Palette.TEXT.ansi)}"
+            )
+            if models != "-":
+                self._print_line(f"  {self._ansi(models, Palette.MUTED.ansi)}")
+            self._print_line()
             return
-        table = Table.grid(padding=(0, 2))
-        table.add_column(style="dim", no_wrap=True)
-        table.add_column(style="text")
-        for key, value in rows:
-            table.add_row(key, str(value))
-        self.console.print()
         self.console.print(
-            self._panel(table, title=f"[info]{summary_title}[/]", expand=False)
+            f"\n  [dim]{self._s('farewell.title')}:[/] {total} queries  [dim]·[/]  {dur}"
         )
+        if models != "-":
+            self.console.print(f"  [muted]{models}[/]")
+        self.console.print()
 
     def no_results(self) -> None:
         if self.backend != "rich":
