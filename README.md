@@ -66,11 +66,11 @@ Both front-ends share the same local RAG engine. The web UI sends each query thr
 
 **Web interface — querying a local document corpus**
 
-https://github.com/user-attachments/assets/e62d6f0a-bdfb-4887-9bfe-429cdbd54e68
+https://github.com/user-attachments/assets/224d002b-6eb9-43de-9a74-8125fdc6d6d1
 
 **CLI — querying a local document corpus**
 
-https://github.com/user-attachments/assets/714f3347-f3b2-407e-a45f-0d7f85de7833
+https://github.com/user-attachments/assets/a27b6fef-52c1-4d4a-846e-7c4cd36863fa
 
 **LaTeX rendering — math formulas rendered natively in the web UI**
 
