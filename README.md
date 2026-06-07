@@ -48,7 +48,17 @@ MonkeyGrab lets you ask questions about your PDF documents in natural language. 
 
 PDFs are indexed once into a [ChromaDB](https://www.trychroma.com/) vector store. Each query then passes through a configurable multi-stage retrieval pipeline before reaching the generator — all running locally via [Ollama](https://ollama.com/).
 
-<img width="2491" height="1140" alt="rag_pipeline" src="https://github.com/user-attachments/assets/73fe7cd0-e2c2-462b-9724-d43d05adbc51" />
+<p align="center">
+  <img src="research/docs/rag_pipeline.excalidraw.svg" alt="RAG retrieval pipeline" width="900" />
+</p>
+
+### Interaction flow
+
+Both front-ends share the same local RAG engine. The web UI sends each query through the [Flask](https://flask.palletsprojects.com/) backend, while the CLI calls the engine directly; from there the path is identical — the engine retrieves relevant fragments from [ChromaDB](https://www.trychroma.com/), sends the question with that context to a local [Ollama](https://ollama.com/) model, and streams the generated answer back to the user. In the web UI, cited sources open in the integrated PDF viewer.
+
+<p align="center">
+  <img src="assets/userInteraction.svg" alt="User interaction flow across the web and CLI interfaces" width="900" />
+</p>
 
 ---
 
