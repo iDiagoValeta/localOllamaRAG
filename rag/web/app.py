@@ -42,6 +42,7 @@ import os
 import sys
 import json
 import time
+import getpass
 import threading
 from collections import Counter
 from typing import Generator
@@ -103,10 +104,15 @@ def _infer_corpus_preset() -> str | None:
 
 
 def _init_paths_payload() -> dict:
-    """Paths exposed to the web UI for corpus / vector-db selection."""
+    """Paths and local identity exposed to the web UI (corpus selection + greeting)."""
+    try:
+        user = getpass.getuser()
+    except Exception:
+        user = ""
     return {
         "docs_folder": os.path.abspath(rag_engine.CARPETA_DOCS),
         "corpus_preset": _infer_corpus_preset(),
+        "user": user,
     }
 
 

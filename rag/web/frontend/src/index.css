@@ -3,20 +3,125 @@
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "Cascadia Code", Consolas, monospace;
-  --color-accent: #FF6321;
-  --color-accent-hover: #E5581E;
+
+  /* Softer, warmer orange ramp — overrides Tailwind's default orange app-wide
+     so every `orange-*` utility (and the accent) reads less electric. */
+  --color-orange-300: #F6B98F;
+  --color-orange-400: #F0A472;
+  --color-orange-500: #E68C52;
+  --color-orange-600: #D7763E;
+  --color-accent: #F0A472;
+  --color-accent-hover: #E68C52;
+
+  /* Smoother motion everywhere: gentler easing + slightly longer default. */
+  --default-transition-duration: 240ms;
+  --default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 body {
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background-color: #050505;
+  /* Soft near-black base with a faint warm tint instead of pure #050505 */
+  background-color: #0b0a10;
   color: #ffffff;
+  overflow: hidden;
+}
+
+/* ── Animated "lava lamp" background ─────────────────────────────────────────
+   Fixed full-screen layer behind #root. Soft, low-opacity colour blobs drift
+   slowly and are heavily blurred, so they read as ambient gradients through
+   the translucent glass panels rather than as distinct shapes. */
+.lava-lamp {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(120% 120% at 50% 0%, #120f1d 0%, #0b0a10 55%, #070609 100%);
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+  height: 100vh;
+}
+
+.lava-lamp .blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  opacity: 0.6;
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+
+.lava-lamp .blob-1 {
+  width: 46vw;
+  height: 46vw;
+  left: -6vw;
+  top: -8vh;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 122, 69, 0.85), rgba(255, 99, 33, 0) 70%);
+  animation: lava-drift-1 26s ease-in-out infinite;
+}
+
+.lava-lamp .blob-2 {
+  width: 40vw;
+  height: 40vw;
+  right: -8vw;
+  top: 4vh;
+  background: radial-gradient(circle at 50% 50%, rgba(124, 92, 255, 0.7), rgba(124, 92, 255, 0) 70%);
+  animation: lava-drift-2 32s ease-in-out infinite;
+}
+
+.lava-lamp .blob-3 {
+  width: 48vw;
+  height: 48vw;
+  left: 12vw;
+  bottom: -18vh;
+  background: radial-gradient(circle at 50% 50%, rgba(45, 212, 191, 0.55), rgba(45, 212, 191, 0) 70%);
+  animation: lava-drift-3 30s ease-in-out infinite;
+}
+
+.lava-lamp .blob-4 {
+  width: 34vw;
+  height: 34vw;
+  right: 6vw;
+  bottom: -10vh;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 94, 138, 0.6), rgba(255, 94, 138, 0) 70%);
+  animation: lava-drift-4 36s ease-in-out infinite;
+}
+
+@keyframes lava-drift-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(8vw, 12vh) scale(1.15); }
+  66% { transform: translate(4vw, -6vh) scale(0.92); }
+}
+@keyframes lava-drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-10vw, 14vh) scale(0.9); }
+  66% { transform: translate(-4vw, 6vh) scale(1.18); }
+}
+@keyframes lava-drift-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(10vw, -12vh) scale(1.12); }
+  66% { transform: translate(-6vw, -4vh) scale(0.95); }
+}
+@keyframes lava-drift-4 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-8vw, -10vh) scale(1.1); }
+  66% { transform: translate(6vw, 4vh) scale(0.9); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lava-lamp .blob { animation: none; }
 }
 
 .glass-panel {
-  background: rgba(25, 25, 25, 0.6);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(20, 18, 26, 0.55);
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -80,7 +185,7 @@ body {
 }
 
 .markdown-content code {
-  border-radius: 0.35rem;
+  border-radius: 0.5rem;
   background: rgba(0, 0, 0, 0.38);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: #fed7aa;
@@ -91,7 +196,7 @@ body {
 
 .markdown-content pre {
   overflow-x: auto;
-  border-radius: 0.5rem;
+  border-radius: 0.9rem;
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.08);
   padding: 0.9rem;

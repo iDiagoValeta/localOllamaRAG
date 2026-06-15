@@ -627,11 +627,28 @@ export default function App() {
   const [indexingError, setIndexingError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
-  const [pdfViewer, setPdfViewer] = useState<{ doc: string; page: number } | null>(null);
+  const [pdfViewer, setPdfViewer] = useState<{ doc: string; page: number; mode: 'full' | 'split' } | null>(null);
+  const [userName, setUserName] = useState('');
 
-  const openPdf = useCallback((doc: string, page = 1) => {
-    setPdfViewer({ doc, page });
-  }, []);
+  // Remembers whether the sidebar was open before a split view collapsed it.
+  const sidebarBeforePdfRef = useRef(true);
+
+  // mode 'full' = viewer replaces the chat (opened from the sidebar);
+  // mode 'split' = viewer sits left of the chat (opened from a source citation).
+  // Split needs the width, so it collapses the sidebar (docs / pipeline) and the
+  // close handler restores it if it was open.
+  const openPdf = useCallback((doc: string, page = 1, mode: 'full' | 'split' = 'full') => {
+    if (mode === 'split') {
+      sidebarBeforePdfRef.current = isSidebarOpen;
+      setIsSidebarOpen(false);
+    }
+    setPdfViewer({ doc, page, mode });
+  }, [isSidebarOpen]);
+
+  const closePdf = useCallback(() => {
+    if (pdfViewer?.mode === 'split' && sidebarBeforePdfRef.current) setIsSidebarOpen(true);
+    setPdfViewer(null);
+  }, [pdfViewer]);
 
   // ---- Scroll to bottom ----
   const scrollToBottom = useCallback(() => {
@@ -660,6 +677,7 @@ export default function App() {
           setDocuments(initData.documents || []);
           setTotalFragments(initData.total_fragments || 0);
           setCorpusPreset(presetFromInit(initData));
+          setUserName(initData.user || '');
           setIsInitialized(true);
 
           setMessages([]);
@@ -1016,7 +1034,7 @@ export default function App() {
   if (isIndexing) {
     const showRetry = indexingError && /falló|fallido|failed|refused|no se pudo/i.test(indexingError);
     return (
-      <div className="flex h-screen items-center justify-center bg-[#050505] text-zinc-300 p-4">
+      <div className="flex h-screen items-center justify-center bg-transparent text-zinc-300 p-4">
         <div className="glass-panel rounded-3xl p-10 max-w-md text-center space-y-4">
           <Loader2 className="w-12 h-12 text-orange-500 animate-spin mx-auto" />
           <h2 className="text-xl font-semibold text-white">
@@ -1064,7 +1082,7 @@ export default function App() {
   // ---- Connection error screen ----
   if (initError) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#050505] text-zinc-300 p-4">
+      <div className="flex h-screen items-center justify-center bg-transparent text-zinc-300 p-4">
         <div className="glass-panel rounded-3xl p-10 max-w-md text-center space-y-4">
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto" />
           <h2 className="text-xl font-semibold text-white">{T.connErrorTitle}</h2>
@@ -1083,7 +1101,7 @@ export default function App() {
   // ---- Loading screen ----
   if (!isInitialized) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#050505] text-zinc-300">
+      <div className="flex h-screen items-center justify-center bg-transparent text-zinc-300">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
           <p className="text-zinc-500 text-sm">{T.connecting}</p>
@@ -1094,7 +1112,7 @@ export default function App() {
 
   // ---- Main UI ----
   return (
-    <div className="flex h-screen bg-[#050505] text-zinc-300 font-sans overflow-hidden selection:bg-orange-500/30 p-2 md:p-4 gap-4">
+    <div className="flex h-screen bg-transparent text-zinc-300 font-sans overflow-hidden selection:bg-orange-500/30 p-2 md:p-4 gap-4">
 
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
@@ -1121,13 +1139,13 @@ export default function App() {
 
       {/* Sidebar */}
       <motion.aside
-        className={`fixed md:relative z-50 h-[calc(100vh-16px)] md:h-full w-[320px] glass-panel rounded-xl flex flex-col transition-transform duration-300 ease-in-out shadow-2xl ${isSidebarOpen ? 'translate-x-2 md:translate-x-0' : '-translate-x-[120%] md:translate-x-0 md:w-0 md:opacity-0 md:overflow-hidden md:ml-[-16px]'}`}
+        className={`fixed md:relative z-50 h-[calc(100vh-16px)] md:h-full w-[320px] glass-panel rounded-3xl flex flex-col transition-transform duration-300 ease-in-out shadow-2xl ${isSidebarOpen ? 'translate-x-2 md:translate-x-0' : '-translate-x-[120%] md:translate-x-0 md:w-0 md:opacity-0 md:overflow-hidden md:ml-[-16px]'}`}
       >
         {/* Sidebar Header */}
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="MonkeyGrab" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
-            <h1 className="font-semibold text-orange-400 text-lg tracking-tight">MonkeyGrab</h1>
+            <img src="/logo-light.png" alt="MonkeyGrab" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+            <h1 className="flex font-extrabold text-lg tracking-tight"><ShimmerText text="MonkeyGrab" /></h1>
           </div>
           <button className="md:hidden text-zinc-500 hover:text-white transition-colors bg-white/5 p-2 rounded-full" onClick={() => setIsSidebarOpen(false)}>
             <X className="w-4 h-4" />
@@ -1393,7 +1411,7 @@ export default function App() {
         </div>
 
         {/* Sidebar Footer */}
-        <div className="p-5 border-t border-white/5 text-xs text-zinc-500 flex items-center justify-between bg-black/20 rounded-b-xl">
+        <div className="p-5 border-t border-white/5 text-xs text-zinc-500 flex items-center justify-between bg-black/20 rounded-b-3xl">
           <span className="font-mono text-[10px] tracking-wider">{fill(T.fragments, { n: totalFragments })}</span>
           <div className="flex items-center gap-2 bg-white/5 px-2.5 py-1 rounded-full border border-white/10">
             <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
@@ -1403,7 +1421,22 @@ export default function App() {
       </motion.aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 relative glass-panel rounded-xl overflow-hidden shadow-2xl">
+      <main className="flex-1 flex min-w-0 relative glass-panel rounded-3xl overflow-hidden shadow-2xl">
+        {/* PDF pane — 'full' replaces the chat (opened from the sidebar);
+            'split' sits to the left of the chat (opened from a source citation). */}
+        {pdfViewer && (
+          <div className={`min-w-0 ${pdfViewer.mode === 'full' ? 'flex-1' : 'w-1/2 border-r border-white/10'}`}>
+            <PdfPane
+              doc={pdfViewer.doc}
+              page={pdfViewer.page}
+              onClose={closePdf}
+            />
+          </div>
+        )}
+
+        {/* Chat column — hidden while a full-screen PDF is open */}
+        {pdfViewer?.mode !== 'full' && (
+        <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Header */}
         <header className="h-20 border-b border-white/5 flex items-center justify-between px-6 bg-black/20 z-10">
           <div className="flex items-center gap-4">
@@ -1447,6 +1480,24 @@ export default function App() {
         {/* Chat Area */}
         <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar scroll-smooth relative">
           <div className="max-w-3xl mx-auto space-y-10 pb-20 relative z-10">
+            <AnimatePresence>
+              {messages.length === 0 && !isLoading && (
+                <motion.div
+                  key="greeting"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8, transition: { duration: 0.3 } }}
+                  className="pointer-events-none select-none absolute inset-x-0 top-[30vh] flex flex-col items-center justify-center px-6 text-center"
+                >
+                  <h2 className="flex flex-wrap justify-center text-4xl md:text-5xl font-extrabold tracking-tight">
+                    <ShimmerText text={userName ? `${GREETING[lang]}, ${userName}` : GREETING[lang]} />
+                  </h2>
+                  <p className="mt-4 text-sm text-zinc-400">
+                    {mode === 'rag' ? T.placeholderRag : T.placeholderChat}
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
             {messages.map((msg) => (
               <motion.div
                 initial={{ opacity: 0, y: 20, scale: 0.95 }}
@@ -1456,7 +1507,7 @@ export default function App() {
               >
                 {/* System messages */}
                 {msg.role === 'system' ? (
-                  <div className={`flex max-w-[85%] items-start gap-2 px-4 py-2.5 rounded-lg text-xs font-medium ${msg.isError ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-white/5 text-zinc-400 border border-white/5'}`}>
+                  <div className={`flex max-w-[85%] items-start gap-2 px-4 py-2.5 rounded-2xl text-xs font-medium ${msg.isError ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-white/5 text-zinc-400 border border-white/5'}`}>
                     {msg.isError
                       ? <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                       : <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 text-green-400" />
@@ -1468,9 +1519,6 @@ export default function App() {
                     <div className={`flex flex-col gap-2 max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                       {/* Meta label + copy */}
                       <div className="flex items-center gap-2 px-2 group/meta">
-                        <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                          {msg.role === 'user' ? T.youLabel : 'MonkeyGrab'}
-                        </span>
                         {msg.role === 'assistant' && (
                           <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase tracking-widest font-bold ${msg.mode === 'rag' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' : 'bg-white/10 text-zinc-400 border border-white/5'}`}>
                             {msg.mode}
@@ -1490,12 +1538,12 @@ export default function App() {
                       </div>
 
                       {/* Message bubble */}
-                      <div className={`p-5 text-[15px] leading-relaxed shadow-lg backdrop-blur-md ${
+                      <div className={`text-[15px] leading-relaxed ${
                         msg.role === 'user'
-                          ? 'bg-white/10 text-zinc-200 border border-white/10 rounded-xl rounded-tr-md font-medium'
+                          ? 'text-white font-medium text-right'
                           : msg.isError
-                            ? 'bg-red-500/10 text-red-300 border border-red-500/20 rounded-xl rounded-tl-md'
-                            : 'bg-white/5 text-zinc-200 border border-white/10 rounded-xl rounded-tl-md'
+                            ? 'text-red-300'
+                            : 'text-zinc-100'
                       }`}>
                         {msg.content ? (
                           <MarkdownContent text={msg.content} />
@@ -1514,14 +1562,14 @@ export default function App() {
                             {msg.citations.map((cite, i) => (
                               <button
                                 key={i}
-                                className="inline-flex max-w-full items-center gap-2 px-3 py-1.5 rounded-lg bg-black/40 border border-white/5 text-xs text-zinc-300 hover:bg-white/10 hover:border-orange-500/30 hover:text-orange-300 transition-all group cursor-pointer"
-                                onClick={() => openPdf(cite.document, cite.best_page ?? cite.pages[0] ?? 1)}
+                                className="inline-flex max-w-full items-center gap-2 px-3 py-1.5 rounded-full bg-black/40 border border-white/5 text-xs text-zinc-300 hover:bg-white/10 hover:border-orange-500/30 hover:text-orange-300 transition-all group cursor-pointer"
+                                onClick={() => openPdf(cite.document, cite.best_page ?? cite.pages[0] ?? 1, 'split')}
                                 title={T.viewPdf}
                               >
                                 <FileText className="w-3.5 h-3.5 text-orange-400/70 group-hover:text-orange-400" />
                                 <span className="font-medium truncate min-w-0">{cite.document}</span>
                                 <span className="text-zinc-600">|</span>
-                                <span className="text-zinc-400 shrink-0">p. {cite.pages.join(', ')}</span>
+                                <span className="text-zinc-400 shrink-0">p. {cite.best_page ?? cite.pages[0]}</span>
                               </button>
                             ))}
                           </div>
@@ -1543,19 +1591,10 @@ export default function App() {
           </div>
         </div>
 
-        {/* PDF Viewer Modal */}
-        {pdfViewer && (
-          <PdfViewerModal
-            doc={pdfViewer.doc}
-            page={pdfViewer.page}
-            onClose={() => setPdfViewer(null)}
-          />
-        )}
-
         {/* Input Area */}
-        <div className="p-6 bg-gradient-to-t from-[#050505] via-[#050505]/90 to-transparent absolute bottom-0 left-0 right-0 z-20">
+        <div className="p-6 bg-gradient-to-t from-[#0b0a10] via-[#0b0a10]/85 to-transparent absolute bottom-0 left-0 right-0 z-20">
           <div className="max-w-3xl mx-auto relative">
-            <div className="relative flex items-end gap-3 bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl p-2.5 shadow-2xl focus-within:border-orange-500/50 focus-within:ring-4 focus-within:ring-orange-500/10 transition-all">
+            <div className="relative flex items-end gap-3 bg-black/50 backdrop-blur-xl border border-white/10 rounded-2xl p-2.5 shadow-2xl focus-within:border-orange-500/50 focus-within:ring-4 focus-within:ring-orange-500/10 transition-all">
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -1585,10 +1624,12 @@ export default function App() {
               </button>
             </div>
             <div className="text-center mt-4 text-[11px] font-medium text-zinc-600 tracking-wide">
-              MonkeyGrab · {T.appFooter} · {mode === 'rag' ? T.footerMode : T.footerModeChat}
+              {T.appFooter} · {mode === 'rag' ? T.footerMode : T.footerModeChat}
             </div>
           </div>
         </div>
+        </div>
+        )}
       </main>
     </div>
   );
@@ -1598,8 +1639,31 @@ export default function App() {
 // PDF Viewer Modal
 // =============================================================================
 
-function PdfViewerModal({ doc, page, onClose }: { doc: string; page: number; onClose: () => void }) {
-  const src = `/api/pdf/${encodeURIComponent(doc)}#page=${page}`;
+const GREETING: Record<Lang, string> = { es: 'Hola', en: 'Hi', ca: 'Hola' };
+
+/** Letters cycle white → accent → white (staggered): a colour shimmer, no motion.
+    Render inside a flex container that sets the font size and weight. */
+function ShimmerText({ text }: { text: string }) {
+  return (
+    <>
+      {Array.from(text).map((ch, i) => (
+        <motion.span
+          key={i}
+          className="inline-block"
+          style={{ whiteSpace: 'pre' }}
+          animate={{ color: ['#ffffff', '#F0A472', '#ffffff'] }}
+          transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut', delay: i * 0.12 }}
+        >
+          {ch}
+        </motion.span>
+      ))}
+    </>
+  );
+}
+
+function PdfPane({ doc, page, onClose }: { doc: string; page: number; onClose: () => void }) {
+  // toolbar=0 hides the browser's built-in PDF bar (which repeats the file name).
+  const src = `/api/pdf/${encodeURIComponent(doc)}#page=${page}&toolbar=0`;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -1608,18 +1672,15 @@ function PdfViewerModal({ doc, page, onClose }: { doc: string; page: number; onC
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/95 backdrop-blur-sm">
-      <div className="flex items-center justify-between px-4 py-3 bg-[#0a0a0a] border-b border-white/10 flex-shrink-0">
+    <div className="flex flex-col w-full h-full bg-[#0d0c12]">
+      <div className="h-20 flex items-center justify-between px-5 bg-white/[0.03] border-b border-white/5 flex-shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <FileText className="w-4 h-4 text-orange-400 flex-shrink-0" />
           <span className="text-sm font-medium text-zinc-200 truncate">{doc}</span>
-          {page > 1 && (
-            <span className="text-xs text-zinc-500 flex-shrink-0 ml-1">— p. {page}</span>
-          )}
         </div>
         <button
           onClick={onClose}
-          className="p-2 rounded-lg text-zinc-500 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
+          className="p-2 rounded-full text-zinc-500 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
           title="Cerrar (Esc)"
         >
           <X className="w-5 h-5" />
