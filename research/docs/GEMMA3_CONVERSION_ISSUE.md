@@ -1,5 +1,6 @@
 # Gemma-3 fine-tuned → Ollama conversion: failure post-mortem
 
+> [!CAUTION]
 > **Final status (2026-05-14): abandoned.** The fine-tuned Gemma-3 model is **not
 > included** in the final evaluation. The LoRA adapter is trained and the
 > merged weights are kept, but no conversion path produced a GGUF importable into

@@ -8,11 +8,19 @@ reproduce it. The flow has **three phases**, backed by three CLIs in
 2. **`infer.py`** — generate RAG answers and persist checkpoints (no RAGAS).
 3. **`evaluate.py`** — run RAGAS from a checkpoint with `--provider google|aws|nvidia` and aggregate results by dataset subset.
 
+```mermaid
+flowchart LR
+    A["index.py<br/>corpus → ChromaDB"] --> B["infer.py<br/>answers + checkpoints<br/>(no RAGAS)"] --> C["evaluate.py<br/>RAGAS · google / aws / nvidia<br/>+ per-subset aggregation"]
+    classDef ph fill:#1f6feb,stroke:#0b3d91,color:#fff;
+    class A,B,C ph;
+```
+
 Legacy scripts (`run_eval.py`, `eval_ragas_*_from_checkpoints.py`,
 `run_ragbench_visual_inference.py`, `evaluate_ragas_bertscore.py`,
 `judge_benchmark.py`, `aggregate_comparison_by_conjunto.py`) **have been
 superseded**; their logic now lives in `_lib/` or as subcommands of the three CLIs.
 
+> [!IMPORTANT]
 > **Definitive run — completed 2026-05-25.** Generator `phi4-finetuned:latest`;
 > pipeline: Okapi BM25 (`rank-bm25`, `k1 = 1.5`, `b = 0.75`) fused with RRF
 > (`RRF_K = 60`, Cormack et al., 2009), weighted `PESO_SEMANTICO_RRF = 0.55` /
@@ -192,6 +200,7 @@ post-noise plateau across the three corpora (ES 30 candidates, CA 15,
 EN-RagBench 34 over 8 questions). Rationale: precision > recall in context — the
 RAGAS judge penalizes irrelevant chunks.
 
+> [!NOTE]
 > **Resilience to truncated/empty answers (verified 2026-05-14).** On resume,
 > `_lib/inference.py` applies two detection layers before computing pending work:
 > (1) **empty answers** — `indices_respuestas_vacias` (`checkpoints.py`) returns

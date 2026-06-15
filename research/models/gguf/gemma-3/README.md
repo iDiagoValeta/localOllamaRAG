@@ -1,5 +1,14 @@
 # Gemma-3-12B RAG fine-tuned — status: **not available in Ollama**
 
+<p align="center">
+  <img src="https://img.shields.io/badge/status-not%20importable%20into%20Ollama-d73a49" alt="status">
+  <a href="https://huggingface.co/google/gemma-3-12b-it"><img src="https://img.shields.io/badge/base-Gemma--3--12B-1f6feb" alt="base model"></a>
+  <img src="https://img.shields.io/badge/LoRA-r%3D32-2ea44f" alt="LoRA r=32">
+</p>
+
+> [!WARNING]
+> This fine-tune is **not importable into Ollama**. The LoRA adapter trained correctly, but no GGUF conversion path preserves non-ASCII generation (accents, ñ, ç). It is excluded from production and from the final evaluation.
+
 LoRA rank 32 over [`google/gemma-3-12b-it`](https://huggingface.co/google/gemma-3-12b-it) using the same corpus as [Qwen3-14B](../qwen-3/README.md) and [Phi-4](../phi-4/README.md) (Neural-Bridge RAG + filtered Dolly + Aina EN/ES/CA, rank 32).
 
 ## Why it is not published

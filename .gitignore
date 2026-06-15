@@ -84,6 +84,7 @@ Thumbs.db
 
 historial_chat.json
 .env
+!.env.example
 
 .reasonix/
 

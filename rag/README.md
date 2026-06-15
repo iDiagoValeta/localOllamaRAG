@@ -2,6 +2,9 @@
 
 MonkeyGrab implements a fully local RAG (Retrieval-Augmented Generation) pipeline on top of Ollama + ChromaDB. This document describes every stage of the pipeline, the functions that implement it, and the parameters that control it.
 
+> [!TIP]
+> Looking to **install and run** MonkeyGrab? See the [user-facing README](../README.md). This document is the engine reference for contributors.
+
 ---
 
 ## Contents
@@ -22,36 +25,48 @@ MonkeyGrab implements a fully local RAG (Retrieval-Augmented Generation) pipelin
 
 ## 1. Overall architecture
 
-```
-PDF corpus
-    │
-    ▼
-┌─────────────────────────────────────────────────────┐
-│  STAGE 1: INDEXING                                  │
-│  chunking → contextual enrichment → embeddings      │
-│  → ChromaDB  (+ image OCR, optional)                │
-└──────────────────────┬──────────────────────────────┘
-                       │ ChromaDB collection
-    ┌──────────────────▼──────────────────────────────┐
-    │  STAGE 2: HYBRID RETRIEVAL                      │
-    │  query decomposition → semantic + BM25          │
-    │  → RRF fusion                                   │
-    └──────────────────┬──────────────────────────────┘
-                       │ candidates with scores
-    ┌──────────────────▼──────────────────────────────┐
-    │  STAGE 3: RERANKING + EXPANSION                 │
-    │  Cross-Encoder → top-K → neighbor expansion     │
-    └──────────────────┬──────────────────────────────┘
-                       │ final fragments
-    ┌──────────────────▼──────────────────────────────┐
-    │  STAGE 4: CONTEXT ASSEMBLY                      │
-    │  PDF optimization → RECOMP synthesis (opt.)     │
-    └──────────────────┬──────────────────────────────┘
-                       │ context ready
-    ┌──────────────────▼──────────────────────────────┐
-    │  STAGE 5: GENERATION                            │
-    │  Ollama streaming → answer + debug dump         │
-    └─────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    PDF([PDF corpus]) --> s1a
+
+    subgraph S1["Stage 1 · Indexing"]
+        direction TB
+        s1a[Chunking] --> s1b[Contextual enrichment] --> s1c[Embeddings]
+        s1e[/"Image OCR · optional"/] -.-> s1d[("ChromaDB")]
+        s1c --> s1d
+    end
+
+    subgraph S2["Stage 2 · Hybrid retrieval"]
+        direction TB
+        s2a["Query decomposition · optional"] --> s2b[Semantic search] & s2c["BM25 lexical"]
+        s2b --> s2d{{"RRF fusion"}}
+        s2c --> s2d
+    end
+
+    subgraph S3["Stage 3 · Reranking + expansion"]
+        direction TB
+        s3a[Cross-Encoder rerank] --> s3b["Top-K cut"] --> s3c[Neighbor expansion]
+    end
+
+    subgraph S4["Stage 4 · Context assembly"]
+        direction TB
+        s4a[PDF optimization] --> s4b["RECOMP synthesis · optional"]
+    end
+
+    subgraph S5["Stage 5 · Generation"]
+        direction TB
+        s5a[Ollama streaming] --> s5b[Answer + debug dump]
+    end
+
+    s1d -->|collection| s2a
+    s2d -->|scored candidates| s3a
+    s3c -->|final fragments| s4a
+    s4b -->|context ready| s5a
+
+    classDef store fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#000;
+    classDef opt fill:#f3e5f5,stroke:#6a1b9a,color:#000;
+    class s1d store;
+    class s1e,s2a,s4b opt;
 ```
 
 ### Operating modes
@@ -337,6 +352,7 @@ score are returned, sorted high-to-low. The RRF fusion uses that
 score_keyword[doc_id] += 1.0 / (rank + RRF_K)   # rank = position by BM25 score
 ```
 
+> [!NOTE]
 > `extraer_keywords()` is kept for metrics/debugging and for query
 > decomposition, but no longer drives lexical retrieval.
 
@@ -655,6 +671,9 @@ Gated by `GUARDAR_DEBUG_RAG = True`. Writes a text file under `CARPETA_DEBUG_RAG
 ## 8. Global configuration and flags
 
 All configuration is centralized in `rag/chat_pdfs.py`. Values are read from environment variables with embedded defaults.
+
+> [!TIP]
+> Every variable below is also listed with its default in [`.env.example`](../.env.example). Copy it to `.env` at the project root to override defaults without editing code.
 
 ### Ollama models
 

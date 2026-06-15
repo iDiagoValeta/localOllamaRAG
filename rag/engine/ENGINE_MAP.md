@@ -402,6 +402,9 @@ Functions:
 
 ## Responsibilities that should not be mixed
 
+> [!IMPORTANT]
+> These module boundaries are intentional — respect them when extending the engine.
+
 - `retrieval.py` must retrieve and order candidates, not decide the final context.
 - `generation.py` must centralize the final cut, expansion, character limit and generation.
 - `context.py` must format or synthesize context, not perform searches.

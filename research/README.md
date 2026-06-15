@@ -1,9 +1,18 @@
 # MonkeyGrab — Research workspace
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Layer-Research%20%2F%20TFG-8E44AD?style=flat-square" alt="Research / TFG">
+  <a href="https://docs.ragas.io/"><img src="https://img.shields.io/badge/Evaluation-RAGAS-1f6feb?style=flat-square" alt="RAGAS"></a>
+  <a href="https://arxiv.org/abs/2106.09685"><img src="https://img.shields.io/badge/Fine--tuning-LoRA%20r%3D32-2ea44f?style=flat-square" alt="LoRA r=32"></a>
+  <a href="https://huggingface.co/nadiva1243"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models-FFD21E?style=flat-square" alt="Hugging Face models"></a>
+</p>
+
 Everything needed to reproduce the TFG: [RAGAS](https://docs.ragas.io/) evaluation, RAGBench benchmark, [LoRA](https://arxiv.org/abs/2106.09685) fine-tuning, GGUF conversion and Hugging Face upload.
 
-**Not required** to use the product (`python rag/chat_pdfs.py` / `python rag/web/app.py`).
+> [!NOTE]
+> This layer is **not required** to use the product (`python rag/chat_pdfs.py` / `python rag/web/app.py`).
 
+> [!TIP]
 > Detailed references live in sub-docs:
 > - Evaluation + reinference protocol → [`docs/EVALUACIONES_PIPELINE.md`](docs/EVALUACIONES_PIPELINE.md)
 > - Gemma-3 post-mortem → [`docs/GEMMA3_CONVERSION_ISSUE.md`](docs/GEMMA3_CONVERSION_ISSUE.md)
@@ -60,6 +69,14 @@ pip install langchain-openai openai                   # extra: NVIDIA provider
 
 Three steps, three CLIs (`research/evaluation/`):
 
+```mermaid
+flowchart LR
+    A["index.py<br/>build ChromaDB"] --> B["infer.py<br/>generate answers<br/>+ checkpoints"] --> C["evaluate.py<br/>RAGAS scoring"]
+    C --> D[("runs/ragas_&lt;provider&gt;_<br/>revaluation/")]
+    classDef step fill:#1f6feb,stroke:#0b3d91,color:#fff;
+    class A,B,C step;
+```
+
 ```bash
 # 1. Index
 python research/evaluation/index.py --corpus es        # es | ca | en | ragbench-eval
@@ -83,6 +100,7 @@ RAGAS outputs → `research/evaluation/runs/ragas_<provider>_revaluation/`.
 
 Training-style metrics: `python research/evaluation/training_metrics.py --checkpoint-dir <comparisons/label/checkpoints>`.
 
+> [!IMPORTANT]
 > **Definitive run (2026-05-25)** — generator `phi4-finetuned:latest`, Okapi BM25 hybrid retrieval, RAGAS judge AWS Bedrock. Labels: `bm25rerun_{es,ca_ca,ragbench_dev,ragbench_eval,ragbench_visual}`. Results and analysis: [`runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md`](evaluation/runs/ragas/comparisons/ANALISIS_RAGAS_AWS.md) and [`ANALISIS_METRICAS_ENTRENAMIENTO.md`](evaluation/runs/ragas/comparisons/ANALISIS_METRICAS_ENTRENAMIENTO.md) (§6 BERTScore↔RAGAS cross-check).
 
 Providers, environment variables (`GOOGLE_API_KEY`, `NVIDIA_API_KEY`, `AWS_BEARER_TOKEN_BEDROCK`), default judge models, aggregation options (`--aggregate-group-by`, `--aggregate-etiquetas-es`) and the RagBench flow details: see [`docs/EVALUACIONES_PIPELINE.md`](docs/EVALUACIONES_PIPELINE.md).

@@ -19,6 +19,15 @@ pipeline_tag: text-generation
 
 # Qwen3-14B RAG (LoRA fine-tuned) — Q4_K_M GGUF
 
+<p align="center">
+  <a href="https://huggingface.co/Qwen/Qwen3-14B"><img src="https://img.shields.io/badge/base-Qwen3--14B-1f6feb" alt="base model"></a>
+  <img src="https://img.shields.io/badge/LoRA-r%3D32-2ea44f" alt="LoRA r=32">
+  <img src="https://img.shields.io/badge/quant-Q4__K__M-e65100" alt="Q4_K_M">
+  <img src="https://img.shields.io/badge/langs-EN%20%7C%20ES%20%7C%20CA-5c6bc0" alt="languages">
+  <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT">
+  <a href="https://github.com/iDiagoValeta/localOllamaRAG"><img src="https://img.shields.io/badge/code-MonkeyGrab-24292e?logo=github" alt="source code"></a>
+</p>
+
 Quantized **GGUF** build of **[Qwen/Qwen3-14B](https://huggingface.co/Qwen/Qwen3-14B)** with a **LoRA** adapter merged in, fine-tuned for **retrieval-augmented question answering**. The model answers **only from supplied document context** in **English, Spanish, or Catalan**, using the same RAG-oriented system prompt as **MonkeyGrab**, a local, fully private RAG stack developed for a **Bachelor's thesis (TFG) at the Universitat Politècnica de València (UPV)**.
 
 ## Source code, thesis, and contact

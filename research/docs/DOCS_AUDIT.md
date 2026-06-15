@@ -1,5 +1,6 @@
 # Documentation inventory and audit
 
+> [!NOTE]
 > Single index of all repository documentation. Each row states purpose,
 > audience and the date the doc was last verified against the code. Update it
 > when the corresponding doc changes.

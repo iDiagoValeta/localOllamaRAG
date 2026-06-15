@@ -108,6 +108,18 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 
+# Load configuration from a ``.env`` file at the project root, if present.
+# ``override=False`` keeps the process environment authoritative over the file,
+# matching the precedence documented in the README. ``python-dotenv`` is an
+# optional convenience: when absent, variables must be exported in the shell.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(os.path.join(_project_root, ".env"), override=False)
+except ImportError:
+    pass
+
+
 from rag.cli.display import ui
 
 
