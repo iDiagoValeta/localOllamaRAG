@@ -152,7 +152,11 @@ def indexar_documentos(
                 idioma_doc = _detectar_idioma(texto_base_doc)
 
                 for page_info in page_chunks:
-                    i = page_info['metadata']['page']
+                    # pymupdf4llm reports page numbers 1-based; normalize to the
+                    # 0-based convention used by the pypdf fallback and image
+                    # extraction. Downstream (citations, debug, viewer) adds +1 to
+                    # recover the physical sheet number.
+                    i = page_info['metadata']['page'] - 1
                     texto = page_info['text']
 
                     if not texto or len(texto) < MIN_CHUNK_LENGTH:
