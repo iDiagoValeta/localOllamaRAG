@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo-circular.png" alt="MonkeyGrab Logo" width="180" />
+  <img src="assets/logo-light-circular.png" alt="MonkeyGrab Logo" width="180" />
 </p>
 
 <h1 align="center">MonkeyGrab</h1>
