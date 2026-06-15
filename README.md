@@ -10,12 +10,16 @@
 </p>
 
 <p align="center">
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"></a>
-  <a href="https://ollama.com/"><img src="https://img.shields.io/badge/Ollama-Local%20LLM-000000?style=for-the-badge" alt="Ollama"></a>
-  <a href="https://www.trychroma.com/"><img src="https://img.shields.io/badge/ChromaDB-Vector%20Store-FF6B35?style=for-the-badge" alt="ChromaDB"></a>
-  <img src="https://img.shields.io/badge/RAG-Hybrid-28A745?style=for-the-badge" alt="RAG">
-  <img src="https://img.shields.io/badge/Languages-ES%20%7C%20CA%20%7C%20EN-5C6BC0?style=for-the-badge" alt="Multilingual">
-  <img src="https://img.shields.io/badge/Privacy-100%25%20Local-orange?style=for-the-badge" alt="Local">
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"></a>
+  <a href="https://ollama.com/"><img src="https://img.shields.io/badge/Ollama-Local%20LLM-000000?style=flat-square&logo=ollama&logoColor=white" alt="Ollama"></a>
+  <a href="https://www.trychroma.com/"><img src="https://img.shields.io/badge/ChromaDB-Vector%20store-4B32C3?style=flat-square" alt="ChromaDB"></a>
+  <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React"></a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Retrieval-Hybrid%20(BM25%20%2B%20vector)-2EA44F?style=flat-square" alt="Hybrid retrieval">
+  <img src="https://img.shields.io/badge/Languages-ES%20%7C%20CA%20%7C%20EN-5C6BC0?style=flat-square" alt="Multilingual">
+  <img src="https://img.shields.io/badge/Privacy-100%25%20local-FF8C00?style=flat-square" alt="Local">
 </p>
 
 <p align="center">
