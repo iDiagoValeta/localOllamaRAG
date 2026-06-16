@@ -29,7 +29,7 @@ three backends.
 #  +-- 7. Primitives (lines, rules, themed tables)
 #  +-- 8. Branding (logo, init_panel, welcome, farewell)
 #  +-- 9. Status messages (success/warning/error/info/debug)
-#  +-- 10. Pipeline feedback (phases, query_summary)
+#  +-- 10. Pipeline feedback (phases)
 #  +-- 11. Input (prompt, autocompletion, persistent history)
 #  +-- 12. Response streaming
 #  +-- 13. Stats / Docs / Topics
@@ -55,7 +55,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple
 
 from rich import box
-from rich.console import Console, Group
+from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.status import Status
@@ -166,14 +166,6 @@ ANSI_DIM = "\033[2m"
 BackendName = Literal["rich", "prompt_toolkit", "plain"]
 
 
-def _coerce_bool(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return False
-    return str(value).strip().lower() in {"1", "true", "yes", "on", "si", "sí"}
-
-
 def _short_model(model: str, max_len: int = 34, keep_tag: bool = False) -> str:
     if not model:
         return "no configurado"
@@ -200,15 +192,6 @@ def _model_tag(model: str) -> str:
     if not model or ":" not in model:
         return ""
     return model.split(":", 1)[1]
-
-
-def _state_label(enabled: Any, on_label: str = "on", off_label: str = "off") -> Text:
-    text = Text()
-    if _coerce_bool(enabled):
-        text.append(on_label, style="success")
-    else:
-        text.append(off_label, style="off")
-    return text
 
 
 def _safe_pages(pages: Iterable[Any]) -> str:
@@ -452,9 +435,6 @@ class Display:
         from rag.cli.strings import s as _str
         return _str(key, lang=self._lang, **kwargs)
 
-    def _state_word(self, enabled: Any) -> str:
-        return self._s("state.on") if _coerce_bool(enabled) else self._s("state.off")
-
     # ─────────────────────────────────────────────
     # SECTION 7: PRIMITIVES
     # ─────────────────────────────────────────────
@@ -524,16 +504,6 @@ class Display:
             padding=self.PANEL_PADDING,
             expand=expand,
         )
-
-    def _two_panels(self, left: Panel, right: Panel) -> Any:
-        """Lay two panels side by side, stacking them on narrow terminals."""
-        if self._term_width() < self.NARROW_WIDTH:
-            return Group(left, right)
-        grid = Table.grid(expand=True)
-        grid.add_column(ratio=1)
-        grid.add_column(ratio=2)
-        grid.add_row(left, right)
-        return grid
 
     def _themed_table(
         self,
@@ -649,10 +619,6 @@ class Display:
         )
         self.console.print(f"  [dim]{self._s('init.use_help')}[/]")
         self.console.print()
-
-    def _typewriter_panel(self, panel: Panel, delay: float = 0.008) -> None:
-        """Kept for API compatibility; renders immediately (no animation)."""
-        self.console.print(panel)
 
     def _init_panel_ansi(self, info: Dict[str, Any], mode: str) -> None:
         """ANSI fallback: compact startup info."""
@@ -818,46 +784,6 @@ class Display:
             self._status.stop()
             self._status = None
 
-    def query_summary(
-        self,
-        timer: QueryTimer,
-        *,
-        n_fragmentos: int,
-        best_score: Optional[float] = None,
-    ) -> None:
-        """Compact one-liner with query timings and retrieval metrics."""
-        phases = timer.phase_durations()
-        if self.backend != "rich":
-            bits = [f"total {_format_duration(timer.total)}"]
-            for name, dur in phases:
-                if dur >= 0.05:
-                    bits.append(f"{name} {_format_duration(dur)}")
-            bits.append(f"{n_fragmentos} frag.")
-            if best_score is not None:
-                bits.append(f"score {best_score:.2f}")
-            line = " · ".join(bits)
-            self._print_line(
-                f"  {self._ansi('·', Palette.INFO.ansi)} {self._ansi(line, Palette.DIM.ansi)}"
-            )
-            return
-
-        text = Text()
-        text.append("·  ", style="info")
-        text.append("total ", style="dim")
-        text.append(_format_duration(timer.total), style="muted")
-        for name, dur in phases:
-            if dur < 0.05:
-                continue
-            text.append("  ·  ", style="dim")
-            text.append(f"{name} ", style="dim")
-            text.append(_format_duration(dur), style="muted")
-        text.append("  ·  ", style="dim")
-        text.append(f"{n_fragmentos} frag.", style="muted")
-        if best_score is not None:
-            text.append("  ·  ", style="dim")
-            text.append(f"score {best_score:.2f}", style="muted")
-        self.console.print(text)
-
     # ─────────────────────────────────────────────
     # SECTION 11: INPUT
     # ─────────────────────────────────────────────
@@ -980,39 +906,6 @@ class Display:
         self.console.print(Markdown(text), width=min(self._term_width() - 4, 100))
         self.console.print()
 
-    def render_markdown(self, text: str) -> None:
-        self.render_response(text)
-
-    def sources_panel(self, fragments: List[Dict[str, Any]]) -> None:
-        if not fragments:
-            return
-        sources_map: Dict[str, set] = {}
-        for frag in fragments:
-            meta = frag.get("metadata", {})
-            doc = meta.get("source", "?")
-            page = meta.get("page", None)
-            sources_map.setdefault(doc, set()).add(page)
-
-        n_src = len(sources_map)
-        src_title = self._s("sources.title", n=n_src)
-        if self.backend != "rich":
-            self._print_line()
-            self._rule(src_title, color=Palette.BRAND)
-            for doc, pages in sorted(sources_map.items()):
-                self._print_line(
-                    f"  {self._ansi(_short_model(doc, max_len=56, keep_tag=True), Palette.TEXT.ansi)} "
-                    f"{self._ansi(f'({_safe_pages(pages)})', Palette.MUTED.ansi)}"
-                )
-            return
-
-        table = self._themed_table(header=False)
-        table.add_column(self._s("sources.col.doc"), style="muted", overflow="fold")
-        table.add_column(self._s("sources.col.pages"), style="dim", no_wrap=True)
-        for doc, pages in sorted(sources_map.items()):
-            table.add_row(_short_model(doc, max_len=56, keep_tag=True), _safe_pages(pages))
-        self.console.rule(f"[dim]{src_title}[/]", style="dim")
-        self.console.print(table)
-
     def response_footer(self, sources: Optional[int] = None) -> None:
         if self.backend != "rich":
             if sources is not None:
@@ -1080,43 +973,6 @@ class Display:
     # SECTION 13: STATS / DOCS / TOPICS
     # ─────────────────────────────────────────────
 
-    def stats_table(
-        self,
-        total_fragments: int,
-        docs: List[str],
-        info: Optional[Dict[str, Any]] = None,
-    ) -> None:
-        info = info or {}
-        rows = [
-            (self._s("corpus.pdfs"), info.get("total_documentos", len(docs))),
-            (self._s("corpus.docs_indexed"), len(docs)),
-            (self._s("corpus.fragments"), total_fragments),
-            (self._s("corpus.folder"), info.get("docs_folder", "-")),
-            (self._s("corpus.vector_db"), info.get("path_db", "-")),
-            (self._s("corpus.collection"), info.get("collection_name", "-")),
-        ]
-
-        if self.backend != "rich":
-            self._print_line()
-            self._rule(self._s("stats.title"), color=Palette.INFO)
-            for key, value in rows:
-                self._print_line(
-                    f"  {self._ansi(f'{key}:', Palette.DIM.ansi)} "
-                    f"{self._ansi(str(value), Palette.TEXT.ansi)}"
-                )
-            self._rule(color=Palette.DIM)
-            self._print_line()
-            return
-
-        table = self._themed_table(title=self._s("stats.title"))
-        table.add_column(self._s("stats.metric_col"), style="dim", no_wrap=True)
-        table.add_column(self._s("stats.value_col"), style="text", overflow="fold")
-        for key, value in rows:
-            table.add_row(key, str(value))
-        self.console.print()
-        self.console.print(table)
-        self.console.print()
-
     def stats_dashboard(
         self,
         total_fragments: int,
@@ -1124,7 +980,7 @@ class Display:
         info: Optional[Dict[str, Any]] = None,
         session: Optional[Any] = None,
     ) -> None:
-        """Consolidated stats dashboard replacing the separate stats_table + init_panel combo.
+        """Consolidated stats dashboard for the ``/stats`` command.
 
         Shows corpus metrics, pipeline configuration, active models, flags,
         and session statistics in a single non-redundant view triggered by
