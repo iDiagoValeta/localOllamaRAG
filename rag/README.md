@@ -769,17 +769,15 @@ Image chunk IDs are computed as `chunk_num + _IMAGEN_CHUNK_OFFSET` (10 000) to a
 
 ---
 
-## Appendix B — Runtime synchronization
+## Appendix B — Runtime configuration access
 
 **File**: `rag/engine/runtime.py`
 
 ```python
-def sync_runtime_globals(namespace: MutableMapping[str, Any]) -> None
+def get_runtime() -> ModuleType
 ```
 
-Every module in `rag/engine/` calls this function at the start of each public function to copy the current values from `rag/chat_pdfs.py` into its own namespace. This propagates toggles applied through the CLI or the web API (which mutate variables in `chat_pdfs`) immediately, without restarting the process.
-
-`_RUNTIME_NAMES` contains ~150 names: models, flags, numeric constants, embedding prefixes and references to shared helper functions.
+Every module in `rag/engine/` binds `cfg = get_runtime()` once at import and then reads configuration lazily as `cfg.NAME` (e.g. `cfg.USAR_RERANKER`, `cfg.MODELO_RAG`). Because `cfg` is a live reference to `rag/chat_pdfs.py`, toggles applied through the CLI or the web API (which mutate variables in `chat_pdfs`) take effect immediately, without restarting the process. Engine functions also reach sibling re-exported pipeline functions through `cfg`, so monkeypatching `chat_pdfs.X` in tests still affects internal call sites.
 
 ---
 

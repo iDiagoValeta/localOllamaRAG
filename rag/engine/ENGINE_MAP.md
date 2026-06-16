@@ -23,10 +23,13 @@ The engine is organized into five blocks:
 - Package: `__init__.py`.
 
 One architectural decision is important: configuration still lives in
-`rag/chat_pdfs.py`. Every engine module imports `sync_runtime_globals()` from
-`runtime.py` and refreshes its globals before running its public functions, so
-that toggles applied from the web UI, the CLI, tests and evaluation still
-affect the engine even though the implementation has been split.
+`rag/chat_pdfs.py`. Every engine module binds `cfg = get_runtime()` once at
+import (from `runtime.py`) and then reads configuration lazily as `cfg.NAME`,
+so that toggles applied from the web UI, the CLI, tests and evaluation take
+effect immediately even though the implementation has been split. Engine
+functions also call sibling re-exported pipeline functions through `cfg`
+(e.g. `cfg.generar_respuesta_silenciosa`), so monkeypatching `chat_pdfs.X`
+still reaches internal call sites.
 
 ## Functional graph
 
@@ -34,7 +37,7 @@ affect the engine even though the implementation has been split.
 flowchart TD
     chat["rag/chat_pdfs.py<br/>Public facade, configuration, prompts and CLI entry point"]
 
-    runtime["runtime.py<br/>Runtime configuration synchronization"]
+    runtime["runtime.py<br/>Live reference to chat_pdfs config (cfg)"]
     history["history.py<br/>CHAT history"]
     chunking["chunking.py<br/>Chunk splitting and expansion"]
     lexical["lexical.py<br/>Keywords and BM25"]
@@ -59,17 +62,17 @@ flowchart TD
     chat --> images
     chat --> indexing
 
-    history -. syncs .-> runtime
-    chunking -. syncs .-> runtime
-    lexical -. syncs .-> runtime
-    reranking -. syncs .-> runtime
-    retrieval -. syncs .-> runtime
-    context -. syncs .-> runtime
-    generation -. syncs .-> runtime
-    debug -. syncs .-> runtime
-    contextual -. syncs .-> runtime
-    images -. syncs .-> runtime
-    indexing -. syncs .-> runtime
+    history -. cfg .-> runtime
+    chunking -. cfg .-> runtime
+    lexical -. cfg .-> runtime
+    reranking -. cfg .-> runtime
+    retrieval -. cfg .-> runtime
+    context -. cfg .-> runtime
+    generation -. cfg .-> runtime
+    debug -. cfg .-> runtime
+    contextual -. cfg .-> runtime
+    images -. cfg .-> runtime
+    indexing -. cfg .-> runtime
 
     indexing --> chunking
     indexing --> contextual
@@ -116,10 +119,10 @@ For inter-file calls, CodeGraph resolves these relationships directly:
 - `generation.py` calls `_modelo_necesita_system_prompt()` in `chat_pdfs.py`.
 - `retrieval.py` calls `lexical.py` for keywords and BM25.
 - `retrieval.py` calls `reranking.py` for query decomposition, validation and reranking.
-- Several modules call `runtime.py` to sync globals.
+- Every module calls `runtime.get_runtime()` once to bind `cfg`.
 
 Some calls are not always represented as complete edges by CodeGraph because
-they are resolved through dynamic name synchronization from `chat_pdfs.py`.
+they are resolved lazily through `cfg.NAME` lookups against `chat_pdfs.py`.
 That is why the functional graph above was also cross-checked against the AST
 of the current code. The most relevant case is `indexing.py`, which at runtime
 calls `dividir_en_chunks`, `generar_contexto_situacional`,
@@ -206,18 +209,16 @@ logic or public functions.
 
 ### `rag/engine/runtime.py`
 
-General purpose: keep the engine modules in sync with the live configuration
-of `rag/chat_pdfs.py`.
+General purpose: expose a live reference to the module that owns the
+configuration of `rag/chat_pdfs.py` so engine modules can read it lazily.
 
 Relevant data:
 
 - `_RUNTIME_MODULE`: name of the main runtime module, `rag.chat_pdfs`.
-- `_RUNTIME_NAMES`: set of constants, models, flags, imports and functions copied into each helper module's namespace.
 
 Functions:
 
-- `get_runtime()`: gets the runtime module. If `chat_pdfs.py` runs as a direct script, detects `__main__` by the presence of `MODELO_RAG`.
-- `sync_runtime_globals(namespace)`: copies into the given `namespace` every name available in the runtime.
+- `get_runtime()`: returns the runtime module. If `chat_pdfs.py` runs as a direct script, detects `__main__` by the presence of `MODELO_RAG`.
 
 ### `rag/engine/history.py`
 
@@ -225,11 +226,9 @@ General purpose: persistence of the CHAT mode history.
 
 Functions:
 
-- `_sync_runtime_globals()`: refreshes constants such as `HISTORIAL_PATH` and `MAX_HISTORIAL_MENSAJES`.
 - `cargar_historial()`: loads the history from JSON; accepts either a list format or a dict with a `chat` key.
 - `guardar_historial(historial)`: saves the history truncated to the configured maximum.
 - `limpiar_historial(historial)`: empties the list in memory and persists the empty state.
-- `_with_runtime_sync(func)`: internal wrapper that syncs globals before each public call.
 
 ### `rag/engine/chunking.py`
 
@@ -238,12 +237,9 @@ compute adjacent neighbors for context expansion.
 
 Functions:
 
-- `_sync_runtime_globals()`: refreshes constants such as `CHUNK_SIZE`, `CHUNK_OVERLAP` and `MIN_CHUNK_LENGTH`.
-- `extraer_header_markdown(texto)`: returns the last Markdown header found.
-- `dividir_en_chunks(texto, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP)`: strips simple marks, detects sections, splits by natural separators and applies overlap.
+- `dividir_en_chunks(texto)`: strips simple marks, detects sections, splits by natural separators and applies overlap (reads `cfg.CHUNK_SIZE`, `cfg.CHUNK_OVERLAP`, `cfg.MIN_CHUNK_LENGTH`).
 - `_split_recursivo(text, max_size, depth=0)`: internal function of `dividir_en_chunks()` that splits text by a separator hierarchy.
 - `expandir_con_chunks_adyacentes(chunk_id, metadata, n_vecinos=1)`: builds previous/next chunk IDs, including page boundaries.
-- `_with_runtime_sync(func)`: internal sync wrapper.
 
 ### `rag/engine/lexical.py`
 
@@ -252,18 +248,17 @@ General purpose: lexical search complementary to the semantic one.
 Relevant data:
 
 - `STOPWORDS`: stopwords in Spanish, English and Valencian/Catalan.
-- `TERMINOS_EXPANSION`: dictionary reserved for manual term expansion.
 - `GENERIC_TERMS_BLACKLIST`: generic terms that do not contribute specificity.
 - `_BM25_TOKEN_RE`: BM25 tokenization regex.
+- `_bm25_index_cache`: module-level cache of the tokenized corpus and `BM25Okapi` index, keyed by `(collection, count)`.
 
 Functions:
 
-- `_sync_runtime_globals()`: refreshes BM25 configuration and flags.
-- `extraer_keywords(texto)`: extracts acronyms, parenthesized terms, bigrams, technical tokens and deduplicated keywords.
+- `extraer_keywords(texto)`: extracts acronyms, parenthesized terms, technical tokens and deduplicated keywords (query fallback + metrics).
 - `_es_keyword_valida(kw)`: internal function that discards keywords that are too long or contain question marks.
 - `_tokenizar_bm25(texto)`: tokenizes corpus and query consistently for BM25.
-- `busqueda_lexica_bm25(pregunta, collection, top_n=N_RESULTADOS_KEYWORD)`: rebuilds a BM25 index over ChromaDB and returns chunks with positive score.
-- `_with_runtime_sync(func)`: internal sync wrapper.
+- `_obtener_indice_bm25(collection)` / `_construir_indice_bm25(collection)`: build and cache the BM25 index, invalidating on `(collection, count)` changes.
+- `busqueda_lexica_bm25(pregunta, collection)`: queries the cached BM25 index over ChromaDB and returns chunks with positive score.
 
 ### `rag/engine/reranking.py`
 
@@ -276,13 +271,11 @@ Relevant data:
 
 Functions:
 
-- `_sync_runtime_globals()`: refreshes reranking flags and models.
 - `_detectar_dispositivo_reranker()`: returns `cuda` if PyTorch detects a GPU; otherwise `cpu`.
 - `obtener_modelo_reranker()`: loads the Cross-Encoder according to `RERANKER_MODEL_QUALITY` and reuses it.
-- `rerank_resultados(pregunta, documentos_recuperados, top_k=TOP_K_FINAL)`: scores candidates with the Cross-Encoder, copies `score_reranker` and returns the `top_k`.
+- `rerank_resultados(pregunta, documentos_recuperados, top_k=None)`: scores candidates with the Cross-Encoder, copies `score_reranker` and returns the `top_k`.
 - `generar_queries_con_llm(pregunta)`: generates up to 3 auxiliary queries with `MODELO_CHAT`.
 - `_validar_coherencia_query(query)`: rejects incoherent bag-of-words queries.
-- `_with_runtime_sync(func)`: internal sync wrapper.
 
 ### `rag/engine/retrieval.py`
 
@@ -290,9 +283,7 @@ General purpose: orchestrate hybrid retrieval.
 
 Functions:
 
-- `_sync_runtime_globals()`: refreshes models, RRF weights, flags and retrieval limits.
 - `realizar_busqueda_hibrida(pregunta, collection)`: runs query decomposition, semantic search, keyword extraction, BM25, RRF fusion and optional reranking.
-- `_with_runtime_sync(func)`: internal sync wrapper.
 
 Main output:
 
@@ -311,7 +302,6 @@ Relevant data:
 
 Functions:
 
-- `_sync_runtime_globals()`: refreshes flags, RECOMP models and context limits.
 - `_es_continuacion_parrafo(linea_previa, linea_actual)`: heuristic to join lines split by PDF extraction.
 - `_reunir_parrafos(texto)`: rebuilds broken paragraphs.
 - `optimizar_texto_contexto(texto)`: removes PDF noise, headers, orphan page numbers, repeated whitespace and artifacts.
@@ -321,7 +311,6 @@ Functions:
 - `_normalizar_salida_recomp(texto)`: ensures the expected Markdown header if the output looks like a list of facts.
 - `construir_contexto_para_modelo(fragmentos)`: orders and formats raw chunks for `<context>`.
 - `sintetizar_contexto_recomp(fragmentos, query_usuario="")`: compresses evidence with `MODELO_RECOMP` and falls back to raw context on failure.
-- `_with_runtime_sync(func)`: internal sync wrapper.
 
 ### `rag/engine/generation.py`
 
@@ -330,7 +319,6 @@ which evidence enters the model, builds the prompt and calls Ollama.
 
 Functions:
 
-- `_sync_runtime_globals()`: refreshes models, flags, prompts and limits.
 - `_ollama_generate_stream(model, prompt, options, system=None)`: streams `/api/generate` from Ollama with `think=False`.
 - `_preparar_mensaje_usuario_rag(pregunta, fragmentos)`: builds `pregunta + <context>...</context>`.
 - `generar_tokens_respuesta(mensaje_usuario)`: yields tokens with the canonical parameters of `MODELO_RAG`.
@@ -344,7 +332,6 @@ Functions:
 - `generar_respuesta(pregunta, fragmentos, metricas=None, on_token=None)`: generates an answer and saves the debug dump.
 - `generar_respuesta_silenciosa(pregunta, fragmentos, metricas=None)`: generates without printing or saving debug.
 - `evaluar_pregunta_rag(pregunta, collection)`: full silent flow for evaluation.
-- `_with_runtime_sync(func)`: internal sync wrapper.
 
 ### `rag/engine/debug.py`
 
@@ -353,9 +340,7 @@ debugging.
 
 Functions:
 
-- `_sync_runtime_globals()`: refreshes paths, flags and prompts.
 - `guardar_debug_rag(pregunta, mensaje_usuario="", respuesta="", fragmentos=None, motivo_interrupcion=None, metricas=None)`: writes configuration, question, prompt, answer, fragments and metrics into `debug_rag/`.
-- `_with_runtime_sync(func)`: internal sync wrapper.
 
 ### `rag/engine/contextual.py`
 
@@ -364,10 +349,8 @@ later retrieval.
 
 Functions:
 
-- `_sync_runtime_globals()`: refreshes models and contextual retrieval flags.
 - `_detectar_idioma(texto)`: simple heuristic to distinguish Spanish, Catalan/Valencian and English.
 - `generar_contexto_situacional(chunk_text, texto_base, idioma_doc="")`: asks an LLM for 2-3 sentences on how the chunk fits into the document.
-- `_with_runtime_sync(func)`: internal sync wrapper.
 
 ### `rag/engine/images.py`
 
@@ -379,13 +362,11 @@ Relevant data:
 
 Functions:
 
-- `_sync_runtime_globals()`: refreshes flags, OCR models and image parameters.
 - `_es_descripcion_spam(texto)`: detects degenerate outputs by low lexical diversity or "no text" repetition.
 - `_es_prompt_echo(descripcion)`: detects whether the description contains the prompt.
 - `_es_solo_caption(descripcion, caption)`: detects whether the output only repeats the caption.
 - `extraer_imagenes_pdf(ruta_pdf, max_por_pagina=MAX_IMAGENES_POR_PAGINA, min_size_px=MIN_IMAGEN_SIZE_PX)`: extracts valid raster images with PyMuPDF and nearby captions.
 - `describir_imagen_con_llm(image_bytes, caption="", idioma_doc="English")`: sends the image to Ollama, filters bad outputs and returns a text description.
-- `_with_runtime_sync(func)`: internal sync wrapper.
 
 ### `rag/engine/indexing.py`
 
@@ -393,12 +374,10 @@ General purpose: create or update the ChromaDB index from PDF documents.
 
 Functions:
 
-- `_sync_runtime_globals()`: refreshes models, flags, paths and indexing parameters.
 - `indexar_documentos(carpeta, collection, solo_archivos=None, silent=False, progress_callback=None)`: processes PDFs, builds chunks, embeddings and metadata, and inserts them into ChromaDB.
 - `_indexar_chunk(id_doc, chunk_text, chunk_doc_text, metadata, collection_ref)`: internal function of `indexar_documentos()` that computes the embedding and retries with truncation on length errors.
 - `_preparar_texto_base_doc(textos_paginas)`: internal function of `indexar_documentos()` that builds the document sample used by contextual retrieval.
 - `obtener_documentos_indexados(collection)`: returns the unique `source` values present in ChromaDB.
-- `_with_runtime_sync(func)`: internal sync wrapper.
 
 ## Responsibilities that should not be mixed
 
@@ -409,7 +388,7 @@ Functions:
 - `generation.py` must centralize the final cut, expansion, character limit and generation.
 - `context.py` must format or synthesize context, not perform searches.
 - `indexing.py` must prepare the document base, not answer questions.
-- `runtime.py` must remain the only sync bridge with `chat_pdfs.py`.
+- `runtime.py` must remain the only bridge to `chat_pdfs.py`; engine modules read config via `cfg` and never duplicate it.
 
 Keeping these boundaries avoids duplicate cuts, double-applied filters or
 divergent behavior between the CLI, the web UI and evaluation.
