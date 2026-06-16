@@ -368,11 +368,12 @@ def serve_assets(filename):
     return send_from_directory(assets_dir, filename)
 
 
+@app.route("/logo-light.png")
 @app.route("/logo.png")
 @app.route("/logo.jpg")
 def serve_logo():
-    """Serve the MonkeyGrab logo."""
-    for name in ("logo.jpg", "logo.png"):
+    """Serve the MonkeyGrab logo (Vite copies ``public/`` into ``dist/`` root)."""
+    for name in ("logo-light.png", "logo.jpg", "logo.png"):
         path = os.path.join(_react_dist, name)
         if os.path.isfile(path):
             return send_from_directory(_react_dist, name)
