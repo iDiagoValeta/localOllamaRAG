@@ -1,34 +1,20 @@
 """Auxiliary implementation module for rag.chat_pdfs.
 
 This module keeps business logic split out of the public facade. Runtime
-configuration remains owned by rag.chat_pdfs and is synchronized before each
-function call so web/API toggles and test monkeypatches keep working.
+configuration stays owned by rag.chat_pdfs and is read lazily through ``cfg``
+(a live reference to that module), so web/API toggles and test monkeypatches
+are observed without any per-call synchronization.
 """
 
 import base64
-import contextlib
-import io
-import json
 import logging
-import os
-import re
-import requests
-from collections import Counter
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
-import chromadb
 import ollama
-from pypdf import PdfReader
 
-from rag.cli.display import ui
-from rag.engine.runtime import sync_runtime_globals
+from rag.engine.runtime import get_runtime
 
-
-def _sync_runtime_globals() -> None:
-    sync_runtime_globals(globals())
-
-
-_sync_runtime_globals()
+cfg = get_runtime()
 # --- 11.2 Image extraction ---
 
 
@@ -109,8 +95,8 @@ def _es_solo_caption(descripcion: str, caption: str) -> bool:
 
 def extraer_imagenes_pdf(
     ruta_pdf: str,
-    max_por_pagina: int = MAX_IMAGENES_POR_PAGINA,
-    min_size_px: int = MIN_IMAGEN_SIZE_PX,
+    max_por_pagina: int = cfg.MAX_IMAGENES_POR_PAGINA,
+    min_size_px: int = cfg.MIN_IMAGEN_SIZE_PX,
 ) -> Dict[int, List[Dict[str, Any]]]:
     """Extract all raster images from a PDF, grouped by zero-based page number.
 
@@ -136,7 +122,7 @@ def extraer_imagenes_pdf(
     imagenes_por_pagina: Dict[int, List[Dict[str, Any]]] = {}
 
     try:
-        doc = fitz.open(ruta_pdf)
+        doc = cfg.fitz.open(ruta_pdf)
 
         for num_pag in range(len(doc)):
             page = doc[num_pag]
@@ -161,11 +147,11 @@ def extraer_imagenes_pdf(
                         img_rects = page.get_image_rects(xref)
                         if img_rects:
                             img_rect = img_rects[0]
-                            below_rect = fitz.Rect(
+                            below_rect = cfg.fitz.Rect(
                                 img_rect.x0,
                                 img_rect.y1,
                                 img_rect.x1,
-                                img_rect.y1 + CAPTION_MARGIN_PX,
+                                img_rect.y1 + cfg.CAPTION_MARGIN_PX,
                             )
                             candidate = page.get_text("text", clip=below_rect).strip()
                             # Normalize: collapse newlines and extra spaces
@@ -238,7 +224,7 @@ def describir_imagen_con_llm(
         Non-empty description string on success, or ``""`` on failure,
         degenerate output, or when image embeddings are disabled.
     """
-    if not USAR_EMBEDDINGS_IMAGEN:
+    if not cfg.USAR_EMBEDDINGS_IMAGEN:
         return ""
 
     try:
@@ -251,7 +237,7 @@ def describir_imagen_con_llm(
         )
 
         response = ollama.chat(
-            model=MODELO_OCR,
+            model=cfg.MODELO_OCR,
             messages=[{
                 "role": "user",
                 "content": (
@@ -271,42 +257,25 @@ def describir_imagen_con_llm(
                 "images": [image_b64],
             }],
             think=False,
-            options={"temperature": 0.1, "num_predict": 2000, "num_ctx": OLLAMA_OCR_NUM_CTX},
+            options={"temperature": 0.1, "num_predict": 2000, "num_ctx": cfg.OLLAMA_OCR_NUM_CTX},
         )
         descripcion = response["message"]["content"].strip()
 
         if _es_descripcion_spam(descripcion):
-            logging.warning(f"Discarding degenerate OCR output (spam) from {MODELO_OCR}")
+            logging.warning(f"Discarding degenerate OCR output (spam) from {cfg.MODELO_OCR}")
             return ""
         if _es_prompt_echo(descripcion):
-            logging.warning(f"Discarding prompt echo from {MODELO_OCR}")
+            logging.warning(f"Discarding prompt echo from {cfg.MODELO_OCR}")
             return ""
         if caption and _es_solo_caption(descripcion, caption):
-            logging.warning(f"Discarding description that merely echoes the caption from {MODELO_OCR}")
+            logging.warning(f"Discarding description that merely echoes the caption from {cfg.MODELO_OCR}")
             return ""
         return descripcion if len(descripcion) > 10 else ""
 
     except Exception as e:
-        logging.warning(f"Error describing image with {MODELO_OCR}: {e}")
+        logging.warning(f"Error describing image with {cfg.MODELO_OCR}: {e}")
         return ""
 
 
 
-def _with_runtime_sync(func):
-    def wrapper(*args, **kwargs):
-        _sync_runtime_globals()
-        return func(*args, **kwargs)
-    wrapper.__name__ = func.__name__
-    wrapper.__doc__ = func.__doc__
-    wrapper.__module__ = func.__module__
-    return wrapper
-
-
-for _name, _obj in list(globals().items()):
-    if callable(_obj) and getattr(_obj, "__module__", None) == __name__ and _name not in {
-        "_sync_runtime_globals", "_with_runtime_sync"
-    }:
-        globals()[_name] = _with_runtime_sync(_obj)
-
-_sync_runtime_globals()
 

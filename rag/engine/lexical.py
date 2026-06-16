@@ -1,34 +1,21 @@
 """Auxiliary implementation module for rag.chat_pdfs.
 
 This module keeps business logic split out of the public facade. Runtime
-configuration remains owned by rag.chat_pdfs and is synchronized before each
-function call so web/API toggles and test monkeypatches keep working.
+configuration stays owned by rag.chat_pdfs and is read lazily through ``cfg``
+(a live reference to that module), so web/API toggles and test monkeypatches
+are observed without any per-call synchronization.
 """
 
-import base64
-import contextlib
-import io
-import json
 import logging
-import os
 import re
-import requests
-from collections import Counter
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import chromadb
-import ollama
-from pypdf import PdfReader
 
 from rag.cli.display import ui
-from rag.engine.runtime import sync_runtime_globals
+from rag.engine.runtime import get_runtime
 
-
-def _sync_runtime_globals() -> None:
-    sync_runtime_globals(globals())
-
-
-_sync_runtime_globals()
+cfg = get_runtime()
 # SECTION 7: KEYWORD EXTRACTION AND BM25 LEXICAL SEARCH
 # ─────────────────────────────────────────────
 
@@ -78,8 +65,6 @@ STOPWORDS = {
 }
 
 
-TERMINOS_EXPANSION = {}
-
 GENERIC_TERMS_BLACKLIST = {
     "paper", "according", "specific", "specifically", "terms", "allows",
     "allow", "achieve", "system", "model", "approach", "method", "results",
@@ -92,101 +77,61 @@ GENERIC_TERMS_BLACKLIST = {
 
 
 def extraer_keywords(texto: str) -> List[str]:
-    """Extract acronyms, bigrams, parenthesized terms, and technical tokens.
+    """Extract acronyms, technical tokens and content words from a query.
 
-    Filters stopwords, deduplicates case-insensitively, and removes
-    single-word tokens already covered by multi-word n-grams.
+    BM25 drives lexical retrieval now; this only feeds a fallback retrieval
+    query (when no LLM sub-queries exist) and the debug metrics. Output is
+    ordered most-specific first (acronyms and technical tokens before plain
+    words) and deduplicated case-insensitively, so the caller can take the
+    leading keywords.
 
     Args:
         texto: Input text (typically a user query).
 
     Returns:
-        Deduplicated list of keywords sorted by specificity.
+        Deduplicated list of keywords, most specific first.
     """
+    _STRIP = '¿?.,;:()[]{}"\'-'
     keywords = set()
 
-    siglas = re.findall(r'\b[A-ZÁÉÍÓÚÑ]{2,}\b', texto)
-    keywords.update(s for s in siglas if len(s) >= 2)
-
-    parentesis = re.findall(r'\(([^)]+)\)', texto)
-    for term in parentesis:
-        term_clean = term.strip()
-        if len(term_clean) > 2 and term_clean.lower() not in STOPWORDS:
-            for sub in term_clean.split(','):
-                sub_clean = sub.strip()
-                if len(sub_clean) > 2 and sub_clean.lower() not in STOPWORDS and len(sub_clean) <= 50:
-                    keywords.add(sub_clean)
-            if len(term_clean) <= 50:
-                keywords.add(term_clean)
+    # Acronyms (ALL-CAPS tokens) are high-signal; preserve their casing.
+    keywords.update(re.findall(r'\b[A-ZÁÉÍÓÚÑ]{2,}\b', texto))
 
     palabras = texto.split()
-    for i in range(len(palabras) - 1):
-        p1 = palabras[i].strip('¿?.,;:()[]{}"\'-')
-        p2 = palabras[i + 1].strip('¿?.,;:()[]{}"\'-')
 
-        if (len(p1) > 3 and len(p2) > 3 and
-            p1.lower() not in STOPWORDS and p2.lower() not in STOPWORDS):
-            bigrama = f"{p1} {p2}"
-            keywords.add(bigrama.lower())
+    # Technical tokens: internal capitals (CamelCase), digits, or hyphens.
+    terminos_tecnicos = [
+        clean
+        for palabra in palabras
+        if len((clean := palabra.strip(_STRIP))) > 1
+        and (any(c.isupper() for c in palabra[1:])
+             or any(c.isdigit() for c in palabra)
+             or '-' in palabra)
+    ]
+    keywords.update(terminos_tecnicos)
+    keywords.update(t.lower() for t in terminos_tecnicos)
 
+    # Plain content words.
     for palabra in palabras:
-        clean = palabra.strip('¿?.,;:()[]{}"\'-')
-        if len(clean) > 3 and clean.lower() not in STOPWORDS:   # lowered from 4 to 3
+        clean = palabra.strip(_STRIP)
+        if len(clean) > 3 and clean.lower() not in STOPWORDS:
             keywords.add(clean.lower())
 
-    terminos_tecnicos = [
-        palabra.strip('¿?.,;:()[]{}"\'-')
-        for palabra in palabras
-        if (any(c.isupper() for c in palabra[1:]) or
-           any(c.isdigit() for c in palabra) or
-           '-' in palabra) and
-        len(palabra.strip('¿?.,;:()[]{}"\'-')) > 1
-    ]
-    keywords.update(t.lower() for t in terminos_tecnicos)
-    keywords.update(terminos_tecnicos)
+    def _valida(kw: str) -> bool:
+        return (len(kw) <= 50 and '?' not in kw
+                and not kw.startswith('¿')
+                and kw.lower() not in GENERIC_TERMS_BLACKLIST)
 
-    keywords_expandidas = set(keywords)
-    for kw in list(keywords):
-        kw_lower = kw.lower()
-        if kw_lower in TERMINOS_EXPANSION:
-            keywords_expandidas.update(TERMINOS_EXPANSION[kw_lower])
+    candidatas = sorted(
+        (k for k in keywords if _valida(k)),
+        key=lambda x: (0 if (x.isupper() or any(c.isupper() for c in x[1:]) or '-' in x) else 1, len(x)),
+    )
 
-
-    def _es_keyword_valida(kw: str) -> bool:
-        if len(kw) > 50:
-            return False
-        if kw.strip().startswith('¿') or '?' in kw:
-            return False
-        return True
-
-    keywords_filtradas = {k for k in keywords_expandidas if _es_keyword_valida(k)}
-
-    seen_lower = set()
-    deduped = []
-    for kw in sorted(keywords_filtradas,
-                     key=lambda x: (
-                         0 if (x.isupper() or any(c.isupper() for c in x[1:]) or '-' in x) else 1,
-                         len(x)
-                     )):
-        kw_lower = kw.lower()
-        if kw_lower not in seen_lower:
-            seen_lower.add(kw_lower)
-            deduped.append(kw)
-
-    ngrams = [kw for kw in deduped if len(kw.split()) >= 2]
-    ngram_words = set()
-    for ng in ngrams:
-        for word in ng.lower().split():
-            ngram_words.add(word)
-
-    resultado = []
-    for kw in deduped:
-        if len(kw.split()) == 1 and kw.lower() in ngram_words:
-            continue
-        if len(kw.split()) == 1 and kw.lower() in GENERIC_TERMS_BLACKLIST:
-            continue
-        resultado.append(kw)
-
+    seen, resultado = set(), []
+    for kw in candidatas:
+        if kw.lower() not in seen:
+            seen.add(kw.lower())
+            resultado.append(kw)
     return resultado
 
 
@@ -217,44 +162,24 @@ def _tokenizar_bm25(texto: str) -> List[str]:
     return tokens
 
 
-def busqueda_lexica_bm25(
-    pregunta: str,
+# ponytail: cache the tokenized corpus + BM25 index so we don't rescan and
+# re-tokenize the whole collection on every query (it only changes on reindex).
+# Ceiling: the cache key is (collection name, chunk count, k1, b), so in-place
+# edits that keep the same chunk count won't refresh the index; upgrade path =
+# version/hash the collection.
+_bm25_index_cache: Dict[str, Any] = {"key": None, "bm25": None, "entries": None}
+
+
+def _construir_indice_bm25(
     collection: chromadb.Collection,
-    top_n: int = N_RESULTADOS_KEYWORD
-) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """Lexical search via Okapi BM25 over the whole chunk collection.
+) -> Tuple[Any, List[Dict[str, Any]]]:
+    """Scan and tokenize the whole collection, returning (BM25 index, entries).
 
-    Implements classic sparse retrieval (Robertson & Zaragoza, 2009): every
-    chunk is scored by term frequency, inverse document frequency and length
-    normalization, yielding a real relevance ranking instead of a substring
-    filter. The BM25 index is rebuilt per query by scanning the collection in
-    batches.
-
-    Args:
-        pregunta: User query.
-        collection: ChromaDB collection to search.
-        top_n: Maximum number of ranked chunks to return.
-
-    Returns:
-        Tuple of (chunks ranked by BM25 score, metrics dict).
+    Returns ``(None, entries)`` when the corpus has no usable tokens.
     """
-    metricas = {
-        'disponible': BM25_AVAILABLE,
-        'documentos_indexados': 0,
-        'terminos_query': 0,
-        'resultados_totales': 0,
-        'mejor_score': 0.0,
-    }
-
-    query_tokens = _tokenizar_bm25(pregunta)
-    metricas['terminos_query'] = len(query_tokens)
-
-    if not query_tokens:
-        return [], metricas
-
-    total_docs = collection.count()
     corpus_tokens: List[List[str]] = []
     corpus_entries: List[Dict[str, Any]] = []
+    total_docs = collection.count()
     batch_size = 100
 
     for offset in range(0, total_docs, batch_size):
@@ -272,12 +197,67 @@ def busqueda_lexica_bm25(
             corpus_tokens.append(_tokenizar_bm25(doc))
             corpus_entries.append({'doc': doc, 'metadata': meta, 'id': doc_id})
 
-    metricas['documentos_indexados'] = len(corpus_tokens)
-
     if not corpus_tokens or not any(corpus_tokens):
+        return None, corpus_entries
+
+    return cfg.BM25Okapi(corpus_tokens, k1=cfg.BM25_K1, b=cfg.BM25_B), corpus_entries
+
+
+def _obtener_indice_bm25(
+    collection: chromadb.Collection,
+) -> Tuple[Any, List[Dict[str, Any]]]:
+    """Return a cached BM25 index for the collection, rebuilding only on change."""
+    # Real collections have a stable name; fall back to object identity so
+    # distinct unnamed collections (e.g. test fakes) never share a cache entry.
+    coll_key = getattr(collection, "name", None) or id(collection)
+    key = (coll_key, collection.count(), cfg.BM25_K1, cfg.BM25_B)
+    if _bm25_index_cache["key"] != key:
+        bm25, entries = _construir_indice_bm25(collection)
+        _bm25_index_cache.update(key=key, bm25=bm25, entries=entries)
+    return _bm25_index_cache["bm25"], _bm25_index_cache["entries"]
+
+
+def busqueda_lexica_bm25(
+    pregunta: str,
+    collection: chromadb.Collection,
+    top_n: int = cfg.N_RESULTADOS_KEYWORD
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Lexical search via Okapi BM25 over the whole chunk collection.
+
+    Implements classic sparse retrieval (Robertson & Zaragoza, 2009): every
+    chunk is scored by term frequency, inverse document frequency and length
+    normalization, yielding a real relevance ranking instead of a substring
+    filter. The tokenized corpus and BM25 index are cached per collection (see
+    ``_obtener_indice_bm25``) and only rebuilt when the collection changes.
+
+    Args:
+        pregunta: User query.
+        collection: ChromaDB collection to search.
+        top_n: Maximum number of ranked chunks to return.
+
+    Returns:
+        Tuple of (chunks ranked by BM25 score, metrics dict).
+    """
+    metricas = {
+        'disponible': cfg.BM25_AVAILABLE,
+        'documentos_indexados': 0,
+        'terminos_query': 0,
+        'resultados_totales': 0,
+        'mejor_score': 0.0,
+    }
+
+    query_tokens = _tokenizar_bm25(pregunta)
+    metricas['terminos_query'] = len(query_tokens)
+
+    if not query_tokens:
         return [], metricas
 
-    bm25 = BM25Okapi(corpus_tokens, k1=BM25_K1, b=BM25_B)
+    bm25, corpus_entries = _obtener_indice_bm25(collection)
+    metricas['documentos_indexados'] = len(corpus_entries)
+
+    if bm25 is None:
+        return [], metricas
+
     scores = bm25.get_scores(query_tokens)
 
     ranked_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
@@ -306,7 +286,7 @@ def busqueda_lexica_bm25(
     else:
         ui.debug("BM25: no positive matches")
 
-    if LOGGING_METRICAS:
+    if cfg.LOGGING_METRICAS:
         logging.info(
             f"BM25 search: {metricas['documentos_indexados']} docs indexed, "
             f"{metricas['terminos_query']} query terms, "
@@ -316,25 +296,5 @@ def busqueda_lexica_bm25(
     return resultados, metricas
 
 
-# ─────────────────────────────────────────────
 
-
-
-def _with_runtime_sync(func):
-    def wrapper(*args, **kwargs):
-        _sync_runtime_globals()
-        return func(*args, **kwargs)
-    wrapper.__name__ = func.__name__
-    wrapper.__doc__ = func.__doc__
-    wrapper.__module__ = func.__module__
-    return wrapper
-
-
-for _name, _obj in list(globals().items()):
-    if callable(_obj) and getattr(_obj, "__module__", None) == __name__ and _name not in {
-        "_sync_runtime_globals", "_with_runtime_sync"
-    }:
-        globals()[_name] = _with_runtime_sync(_obj)
-
-_sync_runtime_globals()
 

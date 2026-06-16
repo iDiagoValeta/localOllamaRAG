@@ -1,34 +1,23 @@
 """Auxiliary implementation module for rag.chat_pdfs.
 
 This module keeps business logic split out of the public facade. Runtime
-configuration remains owned by rag.chat_pdfs and is synchronized before each
-function call so web/API toggles and test monkeypatches keep working.
+configuration stays owned by rag.chat_pdfs and is read lazily through ``cfg``
+(a live reference to that module), so web/API toggles and test monkeypatches
+are observed without any per-call synchronization.
 """
 
-import base64
 import contextlib
 import io
-import json
 import logging
-import os
-import re
-import requests
 from collections import Counter
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
-import chromadb
 import ollama
-from pypdf import PdfReader
 
 from rag.cli.display import ui
-from rag.engine.runtime import sync_runtime_globals
+from rag.engine.runtime import get_runtime
 
-
-def _sync_runtime_globals() -> None:
-    sync_runtime_globals(globals())
-
-
-_sync_runtime_globals()
+cfg = get_runtime()
 # SECTION 8: SEMANTIC RERANKING
 # ─────────────────────────────────────────────
 
@@ -62,12 +51,12 @@ def obtener_modelo_reranker():
     """
     global _reranker_model
 
-    if not USAR_RERANKER:
+    if not cfg.USAR_RERANKER:
         return None
 
     if _reranker_model is None:
         try:
-            if RERANKER_MODEL_QUALITY == "quality":
+            if cfg.RERANKER_MODEL_QUALITY == "quality":
                 modelo_nombre = "BAAI/bge-reranker-v2-m3"
             else:
                 modelo_nombre = "cross-encoder/ms-marco-MiniLM-L-6-v2"
@@ -78,9 +67,8 @@ def obtener_modelo_reranker():
             ui.debug(f"device: {device.upper()}" + (" (FP16)" if device == "cuda" else ""))
 
             model_kwargs = {"torch_dtype": "float16"} if device == "cuda" else {}
-            import io, contextlib
             with contextlib.redirect_stderr(io.StringIO()):
-                _reranker_model = CrossEncoder(
+                _reranker_model = cfg.CrossEncoder(
                     modelo_nombre,
                     device=device,
                     model_kwargs=model_kwargs,
@@ -97,7 +85,7 @@ def obtener_modelo_reranker():
 def rerank_resultados(
     pregunta: str,
     documentos_recuperados: List[Dict[str, Any]],
-    top_k: int = TOP_K_FINAL
+    top_k: int = cfg.TOP_K_FINAL
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Reorder candidates using a Cross-Encoder for finer relevance scoring.
 
@@ -113,15 +101,15 @@ def rerank_resultados(
         'candidatos_entrada': len(documentos_recuperados),
         'resultados_salida': 0,
         'tiempo_reranking': 0,
-        'modelo_usado': RERANKER_MODEL_QUALITY,
+        'modelo_usado': cfg.RERANKER_MODEL_QUALITY,
         'dispositivo': _detectar_dispositivo_reranker()
     }
 
-    if not USAR_RERANKER or not documentos_recuperados:
+    if not cfg.USAR_RERANKER or not documentos_recuperados:
         metricas['resultados_salida'] = len(documentos_recuperados)
         return documentos_recuperados, metricas
 
-    reranker = obtener_modelo_reranker()
+    reranker = cfg.obtener_modelo_reranker()
     if reranker is None:
         metricas['resultados_salida'] = len(documentos_recuperados)
         return documentos_recuperados, metricas
@@ -138,7 +126,6 @@ def rerank_resultados(
                 texto = partes[-1]
             textos_documentos.append(texto)
 
-        import io, contextlib
         with contextlib.redirect_stderr(io.StringIO()):
             ranks = reranker.rank(
                 pregunta,
@@ -160,7 +147,7 @@ def rerank_resultados(
         metricas['tiempo_reranking'] = time.time() - inicio
         metricas['resultados_salida'] = len(documentos_reordenados)
 
-        if LOGGING_METRICAS:
+        if cfg.LOGGING_METRICAS:
             dev = metricas['dispositivo'].upper()
             logging.info(f"Reranking ({dev}): {metricas['candidatos_entrada']} -> {metricas['resultados_salida']} in {metricas['tiempo_reranking']:.2f}s")
 
@@ -204,14 +191,14 @@ def generar_queries_con_llm(pregunta: str) -> List[str]:
         )
 
         response = ollama.generate(
-            model=MODELO_CHAT,
+            model=cfg.MODELO_CHAT,
             prompt=prompt,
             think=False,
             keep_alive=0,
             options={
                 "temperature": 0.5,
                 "num_predict": 400,
-                "num_ctx": OLLAMA_QUERY_NUM_CTX,
+                "num_ctx": cfg.OLLAMA_QUERY_NUM_CTX,
                 "stop": ["\n\n\n"],
             },
         )
@@ -225,7 +212,7 @@ def generar_queries_con_llm(pregunta: str) -> List[str]:
         return queries[:3]
 
     except Exception as e:
-        logging.warning(f"Error generating queries with LLM ({MODELO_CHAT}): {e}")
+        logging.warning(f"Error generating queries with LLM ({cfg.MODELO_CHAT}): {e}")
         return []
 
 
@@ -272,25 +259,5 @@ def _validar_coherencia_query(query: str) -> bool:
     return True
 
 
-# ─────────────────────────────────────────────
 
-
-
-def _with_runtime_sync(func):
-    def wrapper(*args, **kwargs):
-        _sync_runtime_globals()
-        return func(*args, **kwargs)
-    wrapper.__name__ = func.__name__
-    wrapper.__doc__ = func.__doc__
-    wrapper.__module__ = func.__module__
-    return wrapper
-
-
-for _name, _obj in list(globals().items()):
-    if callable(_obj) and getattr(_obj, "__module__", None) == __name__ and _name not in {
-        "_sync_runtime_globals", "_with_runtime_sync"
-    }:
-        globals()[_name] = _with_runtime_sync(_obj)
-
-_sync_runtime_globals()
 

@@ -1,34 +1,23 @@
 """Auxiliary implementation module for rag.chat_pdfs.
 
 This module keeps business logic split out of the public facade. Runtime
-configuration remains owned by rag.chat_pdfs and is synchronized before each
-function call so web/API toggles and test monkeypatches keep working.
+configuration stays owned by rag.chat_pdfs and is read lazily through ``cfg``
+(a live reference to that module), so web/API toggles and test monkeypatches
+are observed without any per-call synchronization.
 """
 
-import base64
-import contextlib
-import io
-import json
 import logging
 import os
-import re
-import requests
-from collections import Counter
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import chromadb
 import ollama
 from pypdf import PdfReader
 
 from rag.cli.display import ui
-from rag.engine.runtime import sync_runtime_globals
+from rag.engine.runtime import get_runtime
 
-
-def _sync_runtime_globals() -> None:
-    sync_runtime_globals(globals())
-
-
-_sync_runtime_globals()
+cfg = get_runtime()
 # --- 11.3 Indexing ---
 
 
@@ -75,10 +64,10 @@ def indexar_documentos(
     def _indexar_chunk(id_doc: str, chunk_text: str, chunk_doc_text: str,
                        metadata: Dict, collection_ref: chromadb.Collection) -> bool:
         """Embed a chunk and add it to ChromaDB. Retries with truncation on length errors."""
-        text_to_embed = f"{EMBED_PREFIX_DOC}{chunk_text}"
+        text_to_embed = f"{cfg.EMBED_PREFIX_DOC}{chunk_text}"
 
         try:
-            response = ollama.embeddings(model=MODELO_EMBEDDING, prompt=text_to_embed)
+            response = ollama.embeddings(model=cfg.MODELO_EMBEDDING, prompt=text_to_embed)
             embedding = response["embedding"]
 
             collection_ref.add(
@@ -91,9 +80,9 @@ def indexar_documentos(
         except Exception as e:
             if "context length" in str(e).lower() or "500" in str(e):
                 logging.warning(f"Long chunk at {id_doc}, truncating to 1000 chars")
-                text_to_embed = f"{EMBED_PREFIX_DOC}{chunk_text[:1000]}"
+                text_to_embed = f"{cfg.EMBED_PREFIX_DOC}{chunk_text[:1000]}"
                 try:
-                    response = ollama.embeddings(model=MODELO_EMBEDDING, prompt=text_to_embed)
+                    response = ollama.embeddings(model=cfg.MODELO_EMBEDDING, prompt=text_to_embed)
                     collection_ref.add(
                         ids=[id_doc],
                         embeddings=[response["embedding"]],
@@ -115,14 +104,14 @@ def indexar_documentos(
         for texto in textos_paginas:
             if not texto:
                 continue
-            restante = CONTEXTUAL_DOC_CHARS - caracteres
+            restante = cfg.CONTEXTUAL_DOC_CHARS - caracteres
             if restante <= 0:
                 break
             parte = texto[:restante]
             partes.append(parte)
             caracteres += len(parte)
 
-        return "\n\n".join(partes)[:CONTEXTUAL_DOC_CHARS]
+        return "\n\n".join(partes)[:cfg.CONTEXTUAL_DOC_CHARS]
 
     for idx, archivo in enumerate(archivos_pdf):
         if progress_callback:
@@ -138,18 +127,18 @@ def indexar_documentos(
             ruta_pdf = os.path.join(carpeta, archivo)
 
             imagenes_pdf: Dict[int, List[Dict[str, Any]]] = {}
-            if USAR_EMBEDDINGS_IMAGEN:
-                imagenes_pdf = extraer_imagenes_pdf(ruta_pdf)
+            if cfg.USAR_EMBEDDINGS_IMAGEN:
+                imagenes_pdf = cfg.extraer_imagenes_pdf(ruta_pdf)
                 n_imgs_total = sum(len(v) for v in imagenes_pdf.values())
                 if n_imgs_total > 0 and not silent:
                     ui.debug(f"  {n_imgs_total} images found across {len(imagenes_pdf)} page(s)")
 
             try:
-                page_chunks = pymupdf4llm.to_markdown(ruta_pdf, page_chunks=True)
+                page_chunks = cfg.pymupdf4llm.to_markdown(ruta_pdf, page_chunks=True)
 
                 _textos_paginas = [p.get('text', '') for p in page_chunks[:10]]
                 texto_base_doc = _preparar_texto_base_doc(_textos_paginas)
-                idioma_doc = _detectar_idioma(texto_base_doc)
+                idioma_doc = cfg._detectar_idioma(texto_base_doc)
 
                 for page_info in page_chunks:
                     # pymupdf4llm reports page numbers 1-based; normalize to the
@@ -159,10 +148,10 @@ def indexar_documentos(
                     i = page_info['metadata']['page'] - 1
                     texto = page_info['text']
 
-                    if not texto or len(texto) < MIN_CHUNK_LENGTH:
+                    if not texto or len(texto) < cfg.MIN_CHUNK_LENGTH:
                         continue
 
-                    chunks = dividir_en_chunks(texto)
+                    chunks = cfg.dividir_en_chunks(texto)
 
                     for chunk_idx, chunk_info in enumerate(chunks):
                         chunk_text = chunk_info['text'] if isinstance(chunk_info, dict) else chunk_info
@@ -179,8 +168,8 @@ def indexar_documentos(
                             "section_header": chunk_header
                         }
 
-                        if USAR_CONTEXTUAL_RETRIEVAL:
-                            contexto_sit = generar_contexto_situacional(chunk_text, texto_base_doc, idioma_doc)
+                        if cfg.USAR_CONTEXTUAL_RETRIEVAL:
+                            contexto_sit = cfg.generar_contexto_situacional(chunk_text, texto_base_doc, idioma_doc)
                             chunk_text_con_contexto = (contexto_sit + chunk_text).strip()
                         else:
                             chunk_text_con_contexto = chunk_text
@@ -197,15 +186,15 @@ def indexar_documentos(
 
                 _textos_paginas = [(p.extract_text() or "") for p in reader.pages[:10]]
                 texto_base_doc = _preparar_texto_base_doc(_textos_paginas)
-                idioma_doc = _detectar_idioma(texto_base_doc)
+                idioma_doc = cfg._detectar_idioma(texto_base_doc)
 
                 for i, page in enumerate(reader.pages):
                     texto = page.extract_text()
 
-                    if not texto or len(texto) < MIN_CHUNK_LENGTH:
+                    if not texto or len(texto) < cfg.MIN_CHUNK_LENGTH:
                         continue
 
-                    chunks = dividir_en_chunks(texto)
+                    chunks = cfg.dividir_en_chunks(texto)
 
                     for chunk_idx, chunk_info in enumerate(chunks):
                         chunk_text = chunk_info['text'] if isinstance(chunk_info, dict) else chunk_info
@@ -222,8 +211,8 @@ def indexar_documentos(
                             "section_header": chunk_header
                         }
 
-                        if USAR_CONTEXTUAL_RETRIEVAL:
-                            contexto_sit = generar_contexto_situacional(chunk_text, texto_base_doc, idioma_doc)
+                        if cfg.USAR_CONTEXTUAL_RETRIEVAL:
+                            contexto_sit = cfg.generar_contexto_situacional(chunk_text, texto_base_doc, idioma_doc)
                             chunk_text_con_contexto = (contexto_sit + chunk_text).strip()
                         else:
                             chunk_text_con_contexto = chunk_text
@@ -237,14 +226,14 @@ def indexar_documentos(
                 for num_pag, pagina_imagenes in imagenes_pdf.items():
                     for img_idx, img_info in enumerate(pagina_imagenes):
                         caption = img_info.get("caption", "")
-                        descripcion = describir_imagen_con_llm(img_info["image_bytes"], caption=caption, idioma_doc=idioma_doc)
+                        descripcion = cfg.describir_imagen_con_llm(img_info["image_bytes"], caption=caption, idioma_doc=idioma_doc)
                         if not descripcion:
                             continue
 
-                        contexto_img = generar_contexto_situacional(descripcion, texto_base_doc, idioma_doc)
+                        contexto_img = cfg.generar_contexto_situacional(descripcion, texto_base_doc, idioma_doc)
                         descripcion_enriquecida = (contexto_img + descripcion).strip()
 
-                        img_chunk_idx = _IMAGEN_CHUNK_OFFSET + img_idx
+                        img_chunk_idx = cfg._IMAGEN_CHUNK_OFFSET + img_idx
                         id_img = f"{archivo}_pag{num_pag}_chunk{img_chunk_idx}"
 
                         metadata_img: Dict[str, Any] = {
@@ -290,25 +279,5 @@ def obtener_documentos_indexados(collection: chromadb.Collection) -> List[str]:
         return []
 
 
-# ─────────────────────────────────────────────
 
-
-
-def _with_runtime_sync(func):
-    def wrapper(*args, **kwargs):
-        _sync_runtime_globals()
-        return func(*args, **kwargs)
-    wrapper.__name__ = func.__name__
-    wrapper.__doc__ = func.__doc__
-    wrapper.__module__ = func.__module__
-    return wrapper
-
-
-for _name, _obj in list(globals().items()):
-    if callable(_obj) and getattr(_obj, "__module__", None) == __name__ and _name not in {
-        "_sync_runtime_globals", "_with_runtime_sync"
-    }:
-        globals()[_name] = _with_runtime_sync(_obj)
-
-_sync_runtime_globals()
 

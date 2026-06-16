@@ -1,34 +1,23 @@
 """Auxiliary implementation module for rag.chat_pdfs.
 
 This module keeps business logic split out of the public facade. Runtime
-configuration remains owned by rag.chat_pdfs and is synchronized before each
-function call so web/API toggles and test monkeypatches keep working.
+configuration stays owned by rag.chat_pdfs and is read lazily through ``cfg``
+(a live reference to that module), so web/API toggles and test monkeypatches
+are observed without any per-call synchronization.
 """
 
-import base64
 import contextlib
 import io
 import json
 import logging
-import os
-import re
 import requests
-from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
 import chromadb
-import ollama
-from pypdf import PdfReader
 
-from rag.cli.display import ui
-from rag.engine.runtime import sync_runtime_globals
+from rag.engine.runtime import get_runtime
 
-
-def _sync_runtime_globals() -> None:
-    sync_runtime_globals(globals())
-
-
-_sync_runtime_globals()
+cfg = get_runtime()
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 
@@ -61,7 +50,7 @@ def _ollama_generate_stream(model: str, prompt: str, options: dict, system: Opti
         f"{OLLAMA_BASE_URL}/api/generate",
         json=payload,
         stream=True,
-        timeout=OLLAMA_REQUEST_TIMEOUT,
+        timeout=cfg.OLLAMA_REQUEST_TIMEOUT,
     ) as resp:
         resp.raise_for_status()
         for line in resp.iter_lines():
@@ -74,18 +63,18 @@ def _ollama_generate_stream(model: str, prompt: str, options: dict, system: Opti
 
 def _preparar_mensaje_usuario_rag(pregunta: str, fragmentos: List[Dict[str, Any]]) -> str:
     """Build the user message sent to the generator: question + <context>."""
-    if USAR_RECOMP_SYNTHESIS:
-        contexto_str = sintetizar_contexto_recomp(fragmentos, query_usuario=pregunta)
+    if cfg.USAR_RECOMP_SYNTHESIS:
+        contexto_str = cfg.sintetizar_contexto_recomp(fragmentos, query_usuario=pregunta)
     else:
-        contexto_str = construir_contexto_para_modelo(fragmentos)
+        contexto_str = cfg.construir_contexto_para_modelo(fragmentos)
     return f"{pregunta}\n\n<context>{contexto_str}</context>"
 
 
 def generar_tokens_respuesta(mensaje_usuario: str):
     """Yield RAG generator tokens using the canonical generation settings."""
-    system = SYSTEM_PROMPT_RAG if _modelo_necesita_system_prompt(MODELO_RAG) else None
-    for chunk in _ollama_generate_stream(
-        model=MODELO_RAG,
+    system = cfg.SYSTEM_PROMPT_RAG if cfg._modelo_necesita_system_prompt(cfg.MODELO_RAG) else None
+    for chunk in cfg._ollama_generate_stream(
+        model=cfg.MODELO_RAG,
         prompt=mensaje_usuario,
         options={
             "temperature": 0.15,
@@ -93,7 +82,7 @@ def generar_tokens_respuesta(mensaje_usuario: str):
             "repeat_penalty": 1.15,
             "repeat_last_n": 64,
             "num_predict": -1,
-            "num_ctx": OLLAMA_RAG_NUM_CTX,
+            "num_ctx": cfg.OLLAMA_RAG_NUM_CTX,
         },
         system=system,
     ):
@@ -105,7 +94,7 @@ def generar_tokens_respuesta(mensaje_usuario: str):
 def _generar_respuesta_stream(mensaje_usuario: str, on_token=None) -> str:
     """Stream the generator response, optionally forwarding tokens to a callback."""
     respuesta_completa = ""
-    for content in generar_tokens_respuesta(mensaje_usuario):
+    for content in cfg.generar_tokens_respuesta(mensaje_usuario):
         respuesta_completa += content
         if on_token is not None:
             on_token(content)
@@ -125,12 +114,12 @@ def _filtrar_por_umbral_reranker(
     permitir_fallback_bajo_score: bool = False,
 ) -> Tuple[List[Dict[str, Any]], bool]:
     """Apply the single reranker relevance threshold."""
-    if not USAR_RERANKER:
+    if not cfg.USAR_RERANKER:
         return list(fragmentos_ranked), False
 
     fragmentos_filtrados = [
         f for f in fragmentos_ranked
-        if _score_relevancia_fragmento(f) >= UMBRAL_SCORE_RERANKER
+        if _score_relevancia_fragmento(f) >= cfg.UMBRAL_SCORE_RERANKER
     ]
     if fragmentos_filtrados or not permitir_fallback_bajo_score:
         return fragmentos_filtrados, False
@@ -150,17 +139,17 @@ def _expandir_fragmentos_contexto(
     collection: chromadb.Collection,
 ) -> Tuple[List[Dict[str, Any]], int]:
     """Append adjacent chunks for the top selected text fragments."""
-    if not EXPANDIR_CONTEXTO or not fragmentos:
+    if not cfg.EXPANDIR_CONTEXTO or not fragmentos:
         return fragmentos, 0
 
     fragmentos_expandidos = list(fragmentos)
     ids_usados = {f.get("id") for f in fragmentos_expandidos}
     chunks_adicionales = []
 
-    for frag in fragmentos_expandidos[:N_TOP_PARA_EXPANSION]:
+    for frag in fragmentos_expandidos[:cfg.N_TOP_PARA_EXPANSION]:
         if not _fragmento_expandible(frag):
             continue
-        ids_vecinos = expandir_con_chunks_adyacentes(
+        ids_vecinos = cfg.expandir_con_chunks_adyacentes(
             frag["id"], frag["metadata"], n_vecinos=1
         )
         if not ids_vecinos:
@@ -194,13 +183,13 @@ def _limitar_fragmentos_por_chars(
 ) -> Tuple[List[Dict[str, Any]], int]:
     """Apply the retrieved-evidence character budget before context synthesis."""
     contexto_total = sum(len(f["doc"]) for f in fragmentos)
-    if contexto_total <= MAX_CONTEXTO_CHARS:
+    if contexto_total <= cfg.MAX_CONTEXTO_CHARS:
         return fragmentos, 0
 
     fragmentos_truncados = []
     chars_acum = 0
     for f in fragmentos:
-        if chars_acum + len(f["doc"]) > MAX_CONTEXTO_CHARS:
+        if chars_acum + len(f["doc"]) > cfg.MAX_CONTEXTO_CHARS:
             break
         fragmentos_truncados.append(f)
         chars_acum += len(f["doc"])
@@ -217,7 +206,7 @@ def preparar_fragmentos_para_generacion(
         fragmentos_ranked,
         permitir_fallback_bajo_score=permitir_fallback_bajo_score,
     )
-    fragmentos_base = list(candidatos[:TOP_K_FINAL])
+    fragmentos_base = list(candidatos[:cfg.TOP_K_FINAL])
     fragmentos_expandidos, n_expandidos = _expandir_fragmentos_contexto(
         fragmentos_base, collection
     )
@@ -233,7 +222,7 @@ def preparar_fragmentos_para_generacion(
         "fragmentos_expandidos": n_expandidos,
         "fragmentos_descartados_por_chars": n_descartados_chars,
         "fragmentos_finales": len(fragmentos_finales),
-        "max_contexto_chars": MAX_CONTEXTO_CHARS,
+        "max_contexto_chars": cfg.MAX_CONTEXTO_CHARS,
     }
     return fragmentos_finales, metricas
 
@@ -259,9 +248,9 @@ def generar_respuesta(
     Returns:
         Complete response text.
     """
-    mensaje_usuario = _preparar_mensaje_usuario_rag(pregunta, fragmentos)
-    respuesta_completa = _generar_respuesta_stream(mensaje_usuario, on_token=on_token)
-    guardar_debug_rag(pregunta, mensaje_usuario, respuesta_completa, fragmentos, metricas=metricas)
+    mensaje_usuario = cfg._preparar_mensaje_usuario_rag(pregunta, fragmentos)
+    respuesta_completa = cfg._generar_respuesta_stream(mensaje_usuario, on_token=on_token)
+    cfg.guardar_debug_rag(pregunta, mensaje_usuario, respuesta_completa, fragmentos, metricas=metricas)
     return respuesta_completa
 
 
@@ -278,8 +267,8 @@ def generar_respuesta_silenciosa(pregunta: str, fragmentos: List[Dict[str, Any]]
     Returns:
         Complete response text.
     """
-    mensaje_usuario = _preparar_mensaje_usuario_rag(pregunta, fragmentos)
-    return _generar_respuesta_stream(mensaje_usuario)
+    mensaje_usuario = cfg._preparar_mensaje_usuario_rag(pregunta, fragmentos)
+    return cfg._generar_respuesta_stream(mensaje_usuario)
 
 
 def evaluar_pregunta_rag(
@@ -298,45 +287,23 @@ def evaluar_pregunta_rag(
     Returns:
         Tuple of (response text, list of context strings).
     """
-    import io
-    import contextlib
-    if len(pregunta.strip()) < MIN_LONGITUD_PREGUNTA_RAG:
+    if len(pregunta.strip()) < cfg.MIN_LONGITUD_PREGUNTA_RAG:
         return ("", [])
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-        fragmentos_ranked, _, _ = realizar_busqueda_hibrida(pregunta, collection)
+        fragmentos_ranked, _, _ = cfg.realizar_busqueda_hibrida(pregunta, collection)
         if not fragmentos_ranked:
             return ("", [])
-        fragmentos_finales, _ = preparar_fragmentos_para_generacion(
+        fragmentos_finales, _ = cfg.preparar_fragmentos_para_generacion(
             fragmentos_ranked,
             collection,
-            permitir_fallback_bajo_score=EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK,
+            permitir_fallback_bajo_score=cfg.EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK,
         )
         if not fragmentos_finales:
             return ("", [])
-        respuesta = generar_respuesta_silenciosa(pregunta, fragmentos_finales)
+        respuesta = cfg.generar_respuesta_silenciosa(pregunta, fragmentos_finales)
         contexts = [f['doc'] for f in fragmentos_finales]
         return (respuesta, contexts)
 
 
-# ─────────────────────────────────────────────
 
-
-
-def _with_runtime_sync(func):
-    def wrapper(*args, **kwargs):
-        _sync_runtime_globals()
-        return func(*args, **kwargs)
-    wrapper.__name__ = func.__name__
-    wrapper.__doc__ = func.__doc__
-    wrapper.__module__ = func.__module__
-    return wrapper
-
-
-for _name, _obj in list(globals().items()):
-    if callable(_obj) and getattr(_obj, "__module__", None) == __name__ and _name not in {
-        "_sync_runtime_globals", "_with_runtime_sync"
-    }:
-        globals()[_name] = _with_runtime_sync(_obj)
-
-_sync_runtime_globals()
 

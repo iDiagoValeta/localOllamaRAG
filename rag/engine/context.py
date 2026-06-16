@@ -1,34 +1,19 @@
 """Auxiliary implementation module for rag.chat_pdfs.
 
 This module keeps business logic split out of the public facade. Runtime
-configuration remains owned by rag.chat_pdfs and is synchronized before each
-function call so web/API toggles and test monkeypatches keep working.
+configuration stays owned by rag.chat_pdfs and is read lazily through ``cfg``
+(a live reference to that module), so web/API toggles and test monkeypatches
+are observed without any per-call synchronization.
 """
 
-import base64
-import contextlib
-import io
-import json
 import logging
-import os
 import re
 import requests
-from collections import Counter
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
-import chromadb
-import ollama
-from pypdf import PdfReader
+from rag.engine.runtime import get_runtime
 
-from rag.cli.display import ui
-from rag.engine.runtime import sync_runtime_globals
-
-
-def _sync_runtime_globals() -> None:
-    sync_runtime_globals(globals())
-
-
-_sync_runtime_globals()
+cfg = get_runtime()
 # SECTION 10: CONTEXT AND GENERATION
 # ─────────────────────────────────────────────
 
@@ -174,7 +159,7 @@ def optimizar_texto_contexto(texto: str) -> str:
 
 
 def _marcar_fragmento_incompleto(texto: str) -> str:
-    """Append ``[incomplete fragment]`` if text lacks closing punctuation.
+    """Append ``[excerpt ends mid-sentence]`` if text lacks closing punctuation.
 
     Args:
         texto: Fragment text to inspect.
@@ -244,7 +229,7 @@ def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
         ...
         [Source Text]
         ...
-        [incomplete fragment]         <- only if the chunk is truncated
+        [excerpt ends mid-sentence]   <- only if the chunk is truncated
 
     Fragments are separated by double newlines. PDF text optimization
     is applied when ``USAR_OPTIMIZACION_CONTEXTO`` is enabled.
@@ -265,7 +250,7 @@ def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
 
     fragmentos_formateados = []
     for i, frag in enumerate(fragmentos_ordenados, 1):
-        texto = optimizar_texto_contexto(frag['doc']) if USAR_OPTIMIZACION_CONTEXTO else frag['doc']
+        texto = optimizar_texto_contexto(frag['doc']) if cfg.USAR_OPTIMIZACION_CONTEXTO else frag['doc']
         if not texto:
             continue
 
@@ -281,7 +266,7 @@ def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
     resultado = "\n\n".join(fragmentos_formateados)
 
     chars_optimizado = len(resultado)
-    if chars_original > 0 and LOGGING_METRICAS:
+    if chars_original > 0 and cfg.LOGGING_METRICAS:
         ahorro = chars_original - chars_optimizado
         pct = (ahorro / chars_original) * 100 if ahorro > 0 else 0
         logging.info(
@@ -310,13 +295,13 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
     Returns:
         Synthesized context string or raw formatted context on fallback.
     """
-    if not USAR_RECOMP_SYNTHESIS or not fragmentos:
-        return construir_contexto_para_modelo(fragmentos)
+    if not cfg.USAR_RECOMP_SYNTHESIS or not fragmentos:
+        return cfg.construir_contexto_para_modelo(fragmentos)
 
     textos_preparados = []
     for f in fragmentos:
         cuerpo = _texto_fuente_fragmento(f.get("doc", "") or "")
-        if USAR_OPTIMIZACION_CONTEXTO:
+        if cfg.USAR_OPTIMIZACION_CONTEXTO:
             cuerpo = optimizar_texto_contexto(cuerpo)
             cuerpo = _marcar_fragmento_incompleto(cuerpo)
         content = cuerpo.replace("\n", " ").strip()
@@ -327,7 +312,7 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
 
     contexto_raw = "\n\n".join(textos_preparados)
     if not contexto_raw.strip():
-        return construir_contexto_para_modelo(fragmentos)
+        return cfg.construir_contexto_para_modelo(fragmentos)
 
     q = (query_usuario or "").strip()
     bloque_pregunta = (
@@ -375,7 +360,7 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
 
     try:
         payload = {
-            "model": MODELO_RECOMP,
+            "model": cfg.MODELO_RECOMP,
             "keep_alive": 0,
             "messages": [
                 {"role": "system", "content": system_prompt},
@@ -388,10 +373,10 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
                 "num_predict": 1500,
                 "top_p": 0.9,
                 "repeat_penalty": 1.15,
-                "num_ctx": OLLAMA_RECOMP_NUM_CTX,
+                "num_ctx": cfg.OLLAMA_RECOMP_NUM_CTX,
             },
         }
-        resp = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=OLLAMA_REQUEST_TIMEOUT)
+        resp = requests.post(f"{cfg.OLLAMA_BASE_URL}/api/chat", json=payload, timeout=cfg.OLLAMA_REQUEST_TIMEOUT)
         resp.raise_for_status()
         raw = resp.json().get("message", {}).get("content", "")
 
@@ -402,40 +387,23 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
             logging.info(
                 "RECOMP: falling back to raw chunks (synthesis too short after "
                 "stripping think blocks; check %s / OLLAMA_RECOMP_MODEL)",
-                MODELO_RECOMP,
+                cfg.MODELO_RECOMP,
             )
-            return construir_contexto_para_modelo(fragmentos)
+            return cfg.construir_contexto_para_modelo(fragmentos)
 
         if _RECOMP_FACTS_HEADER.lower() not in sintesis.lower():
             logging.info(
                 "RECOMP: falling back to raw chunks (missing '%s' in model output)",
                 _RECOMP_FACTS_HEADER,
             )
-            return construir_contexto_para_modelo(fragmentos)
+            return cfg.construir_contexto_para_modelo(fragmentos)
 
         return sintesis
 
     except Exception as e:
-        logging.warning(f"Critical error in RECOMP synthesis ({MODELO_RECOMP}): {e}")
-        return construir_contexto_para_modelo(fragmentos)
+        logging.warning(f"Critical error in RECOMP synthesis ({cfg.MODELO_RECOMP}): {e}")
+        return cfg.construir_contexto_para_modelo(fragmentos)
 
 
 
-def _with_runtime_sync(func):
-    def wrapper(*args, **kwargs):
-        _sync_runtime_globals()
-        return func(*args, **kwargs)
-    wrapper.__name__ = func.__name__
-    wrapper.__doc__ = func.__doc__
-    wrapper.__module__ = func.__module__
-    return wrapper
-
-
-for _name, _obj in list(globals().items()):
-    if callable(_obj) and getattr(_obj, "__module__", None) == __name__ and _name not in {
-        "_sync_runtime_globals", "_with_runtime_sync"
-    }:
-        globals()[_name] = _with_runtime_sync(_obj)
-
-_sync_runtime_globals()
 

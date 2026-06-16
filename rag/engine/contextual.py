@@ -1,34 +1,18 @@
 """Auxiliary implementation module for rag.chat_pdfs.
 
 This module keeps business logic split out of the public facade. Runtime
-configuration remains owned by rag.chat_pdfs and is synchronized before each
-function call so web/API toggles and test monkeypatches keep working.
+configuration stays owned by rag.chat_pdfs and is read lazily through ``cfg``
+(a live reference to that module), so web/API toggles and test monkeypatches
+are observed without any per-call synchronization.
 """
 
-import base64
-import contextlib
-import io
-import json
 import logging
-import os
-import re
-import requests
-from collections import Counter
-from typing import Any, Dict, List, Optional, Tuple
 
-import chromadb
 import ollama
-from pypdf import PdfReader
 
-from rag.cli.display import ui
-from rag.engine.runtime import sync_runtime_globals
+from rag.engine.runtime import get_runtime
 
-
-def _sync_runtime_globals() -> None:
-    sync_runtime_globals(globals())
-
-
-_sync_runtime_globals()
+cfg = get_runtime()
 # SECTION 11: INDEXING AND COLLECTION MANAGEMENT
 # ─────────────────────────────────────────────
 
@@ -91,7 +75,7 @@ def generar_contexto_situacional(
         Situational context string (with trailing ``\\n\\n``), or empty
         string if disabled or on failure.
     """
-    if not USAR_CONTEXTUAL_RETRIEVAL:
+    if not cfg.USAR_CONTEXTUAL_RETRIEVAL:
         return ""
 
     idioma = idioma_doc or _detectar_idioma(texto_base)
@@ -114,13 +98,13 @@ def generar_contexto_situacional(
 
     try:
         response = ollama.chat(
-            model=MODELO_CONTEXTUAL,
+            model=cfg.MODELO_CONTEXTUAL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user",   "content": user_prompt}
             ],
             think=False,
-            options={"temperature": 0.1, "num_predict": 250, "num_ctx": OLLAMA_CONTEXTUAL_NUM_CTX},
+            options={"temperature": 0.1, "num_predict": 250, "num_ctx": cfg.OLLAMA_CONTEXTUAL_NUM_CTX},
         )
         contexto = response['message']['content'].strip()
         if contexto:
@@ -131,21 +115,4 @@ def generar_contexto_situacional(
 
 
 
-def _with_runtime_sync(func):
-    def wrapper(*args, **kwargs):
-        _sync_runtime_globals()
-        return func(*args, **kwargs)
-    wrapper.__name__ = func.__name__
-    wrapper.__doc__ = func.__doc__
-    wrapper.__module__ = func.__module__
-    return wrapper
-
-
-for _name, _obj in list(globals().items()):
-    if callable(_obj) and getattr(_obj, "__module__", None) == __name__ and _name not in {
-        "_sync_runtime_globals", "_with_runtime_sync"
-    }:
-        globals()[_name] = _with_runtime_sync(_obj)
-
-_sync_runtime_globals()
 

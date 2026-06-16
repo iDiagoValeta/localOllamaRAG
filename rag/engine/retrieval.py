@@ -1,34 +1,21 @@
 """Auxiliary implementation module for rag.chat_pdfs.
 
 This module keeps business logic split out of the public facade. Runtime
-configuration remains owned by rag.chat_pdfs and is synchronized before each
-function call so web/API toggles and test monkeypatches keep working.
+configuration stays owned by rag.chat_pdfs and is read lazily through ``cfg``
+(a live reference to that module), so web/API toggles and test monkeypatches
+are observed without any per-call synchronization.
 """
 
-import base64
-import contextlib
-import io
-import json
 import logging
-import os
-import re
-import requests
-from collections import Counter
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import chromadb
 import ollama
-from pypdf import PdfReader
 
 from rag.cli.display import ui
-from rag.engine.runtime import sync_runtime_globals
+from rag.engine.runtime import get_runtime
 
-
-def _sync_runtime_globals() -> None:
-    sync_runtime_globals(globals())
-
-
-_sync_runtime_globals()
+cfg = get_runtime()
 # SECTION 9: HYBRID RETRIEVAL PIPELINE
 # ─────────────────────────────────────────────
 
@@ -60,9 +47,9 @@ def realizar_busqueda_hibrida(
     }
 
     llm_queries = []
-    if USAR_LLM_QUERY_DECOMPOSITION and len(pregunta) > 60:
+    if cfg.USAR_LLM_QUERY_DECOMPOSITION and len(pregunta) > 60:
         ui.debug("decomposing query...")
-        llm_queries = generar_queries_con_llm(pregunta)
+        llm_queries = cfg.generar_queries_con_llm(pregunta)
         if llm_queries:
             ui.debug(f"{len(llm_queries)} sub-queries generated")
 
@@ -70,15 +57,15 @@ def realizar_busqueda_hibrida(
 
     queries = [pregunta]
 
-    keywords_expandidas = extraer_keywords(pregunta)
+    keywords_expandidas = cfg.extraer_keywords(pregunta)
 
     if llm_queries:
         fallback_q = llm_queries[0]
-        if _validar_coherencia_query(fallback_q) and fallback_q not in queries:
+        if cfg._validar_coherencia_query(fallback_q) and fallback_q not in queries:
             queries.append(fallback_q)
     elif keywords_expandidas:
         query_kw = ' '.join(keywords_expandidas[:6]).strip()
-        if query_kw and _validar_coherencia_query(query_kw) and query_kw not in queries:
+        if query_kw and cfg._validar_coherencia_query(query_kw) and query_kw not in queries:
             queries.append(query_kw)
 
     for lq in llm_queries:
@@ -90,12 +77,12 @@ def realizar_busqueda_hibrida(
     all_semantic_results = {}
 
     for q_idx, query in enumerate(queries):
-        query_con_prefijo = f"{EMBED_PREFIX_QUERY}{query}"
-        response_emb = ollama.embeddings(model=MODELO_EMBEDDING, prompt=query_con_prefijo)
+        query_con_prefijo = f"{cfg.EMBED_PREFIX_QUERY}{query}"
+        response_emb = ollama.embeddings(model=cfg.MODELO_EMBEDDING, prompt=query_con_prefijo)
 
         results_semantic = collection.query(
             query_embeddings=[response_emb["embedding"]],
-            n_results=N_RESULTADOS_SEMANTICOS,
+            n_results=cfg.N_RESULTADOS_SEMANTICOS,
             include=['documents', 'distances', 'metadatas']
         )
 
@@ -118,7 +105,7 @@ def realizar_busqueda_hibrida(
                     'query_matches': []
                 }
 
-            all_semantic_results[chunk_id]['score_semantic'] += 1.0 / (idx + RRF_K)
+            all_semantic_results[chunk_id]['score_semantic'] += 1.0 / (idx + cfg.RRF_K)
             all_semantic_results[chunk_id]['query_matches'].append(q_idx + 1)
             if distancia < all_semantic_results[chunk_id]['distancia']:
                 all_semantic_results[chunk_id]['distancia'] = distancia
@@ -132,9 +119,9 @@ def realizar_busqueda_hibrida(
 
     results_keyword = []
     metricas_keywords = {}
-    if USAR_BUSQUEDA_HIBRIDA:
+    if cfg.USAR_BUSQUEDA_HIBRIDA:
         ui.debug("BM25 lexical search...")
-        results_keyword, metricas_keywords = busqueda_lexica_bm25(pregunta, collection)
+        results_keyword, metricas_keywords = cfg.busqueda_lexica_bm25(pregunta, collection)
         metricas_totales['fase_keywords'] = metricas_keywords
 
     ui.debug("fusing results...")
@@ -145,7 +132,7 @@ def realizar_busqueda_hibrida(
         chunk_id = result['id']
 
         if chunk_id in fragmentos_data:
-            fragmentos_data[chunk_id]['score_keyword'] += 1.0 / (idx + RRF_K)
+            fragmentos_data[chunk_id]['score_keyword'] += 1.0 / (idx + cfg.RRF_K)
             if 'BM25' not in fragmentos_data[chunk_id]['matches']:
                 fragmentos_data[chunk_id]['matches'].append('BM25')
         else:
@@ -155,15 +142,15 @@ def realizar_busqueda_hibrida(
                 'distancia': result['distancia'],
                 'id': chunk_id,
                 'score_semantic': 0.0,
-                'score_keyword': 1.0 / (idx + RRF_K),
+                'score_keyword': 1.0 / (idx + cfg.RRF_K),
                 'matches': ['BM25'],
                 'query_matches': []
             }
 
     for frag in fragmentos_data.values():
         frag['score_final'] = (
-            frag['score_semantic'] * PESO_SEMANTICO_RRF
-            + frag['score_keyword'] * PESO_BM25_RRF
+            frag['score_semantic'] * cfg.PESO_SEMANTICO_RRF
+            + frag['score_keyword'] * cfg.PESO_BM25_RRF
         )
 
     fragmentos_ranked = sorted(
@@ -174,15 +161,15 @@ def realizar_busqueda_hibrida(
 
     metricas_totales['candidatos_fusion'] = len(fragmentos_ranked)
 
-    if USAR_RERANKER and fragmentos_ranked:
-        n_candidatos = min(TOP_K_RERANK_CANDIDATES, len(fragmentos_ranked))
+    if cfg.USAR_RERANKER and fragmentos_ranked:
+        n_candidatos = min(cfg.TOP_K_RERANK_CANDIDATES, len(fragmentos_ranked))
         ui.debug(f"reranking top {n_candidatos} candidates...")
 
-        candidatos_rerank = fragmentos_ranked[:TOP_K_RERANK_CANDIDATES]
-        fragmentos_ranked, metricas_rerank = rerank_resultados(
+        candidatos_rerank = fragmentos_ranked[:cfg.TOP_K_RERANK_CANDIDATES]
+        fragmentos_ranked, metricas_rerank = cfg.rerank_resultados(
             pregunta,
             candidatos_rerank,
-            top_k=TOP_K_FINAL
+            top_k=cfg.TOP_K_FINAL
         )
         metricas_totales['fase_reranking'] = metricas_rerank
         ui.debug(f"top {len(fragmentos_ranked)} after reranking")
@@ -194,7 +181,7 @@ def realizar_busqueda_hibrida(
     metricas_totales['queries_semanticas'] = queries
     metricas_totales['keywords'] = list(keywords_expandidas)
 
-    if LOGGING_METRICAS:
+    if cfg.LOGGING_METRICAS:
         sem_unicos = metricas_totales['fase_semantica'].get('fragmentos_unicos', 0)
         kw_total = metricas_keywords.get('resultados_totales', 0)
         logging.info(
@@ -207,25 +194,5 @@ def realizar_busqueda_hibrida(
     return fragmentos_ranked, mejor_score, metricas_totales
 
 
-# ─────────────────────────────────────────────
 
-
-
-def _with_runtime_sync(func):
-    def wrapper(*args, **kwargs):
-        _sync_runtime_globals()
-        return func(*args, **kwargs)
-    wrapper.__name__ = func.__name__
-    wrapper.__doc__ = func.__doc__
-    wrapper.__module__ = func.__module__
-    return wrapper
-
-
-for _name, _obj in list(globals().items()):
-    if callable(_obj) and getattr(_obj, "__module__", None) == __name__ and _name not in {
-        "_sync_runtime_globals", "_with_runtime_sync"
-    }:
-        globals()[_name] = _with_runtime_sync(_obj)
-
-_sync_runtime_globals()
 

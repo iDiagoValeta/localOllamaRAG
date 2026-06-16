@@ -504,10 +504,9 @@ def _modelo_necesita_system_prompt(nombre_modelo: str) -> bool:
 # existing callers can continue to use rag.chat_pdfs as the public runtime API.
 
 from rag.engine.history import cargar_historial, guardar_historial, limpiar_historial
-from rag.engine.chunking import extraer_header_markdown, dividir_en_chunks, expandir_con_chunks_adyacentes
+from rag.engine.chunking import dividir_en_chunks, expandir_con_chunks_adyacentes
 from rag.engine.lexical import (
     STOPWORDS,
-    TERMINOS_EXPANSION,
     GENERIC_TERMS_BLACKLIST,
     extraer_keywords,
     _tokenizar_bm25,

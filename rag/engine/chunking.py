@@ -1,55 +1,25 @@
 """Auxiliary implementation module for rag.chat_pdfs.
 
 This module keeps business logic split out of the public facade. Runtime
-configuration remains owned by rag.chat_pdfs and is synchronized before each
-function call so web/API toggles and test monkeypatches keep working.
+configuration stays owned by rag.chat_pdfs and is read lazily through ``cfg``
+(a live reference to that module), so web/API toggles and test monkeypatches
+are observed without any per-call synchronization.
 """
 
-import base64
-import contextlib
-import io
-import json
-import logging
-import os
 import re
-import requests
-from collections import Counter
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
-import chromadb
-import ollama
-from pypdf import PdfReader
+from rag.engine.runtime import get_runtime
 
-from rag.cli.display import ui
-from rag.engine.runtime import sync_runtime_globals
-
-
-def _sync_runtime_globals() -> None:
-    sync_runtime_globals(globals())
-
-
-_sync_runtime_globals()
+cfg = get_runtime()
 # SECTION 6: PREPROCESSING AND CHUNKING
 # ─────────────────────────────────────────────
 
 
-def extraer_header_markdown(texto: str) -> str:
-    """Extract the last Markdown header (``# ...``) from the text.
-
-    Args:
-        texto: Raw text that may contain Markdown headers.
-
-    Returns:
-        The last header string found, or empty string if none.
-    """
-    headers = re.findall(r'^(#{1,4}\s+.+)$', texto, re.MULTILINE)
-    return headers[-1].strip() if headers else ""
-
-
 def dividir_en_chunks(
     texto: str,
-    chunk_size: int = CHUNK_SIZE,
-    overlap: int = CHUNK_OVERLAP
+    chunk_size: int = cfg.CHUNK_SIZE,
+    overlap: int = cfg.CHUNK_OVERLAP
 ) -> List[Dict[str, str]]:
     """Split text into chunks by Markdown sections with overlap.
 
@@ -153,7 +123,7 @@ def dividir_en_chunks(
         header_prefix = f"{header}\n" if header else ""
         espacio_contenido = chunk_size - len(header_prefix)
 
-        if espacio_contenido < MIN_CHUNK_LENGTH:
+        if espacio_contenido < cfg.MIN_CHUNK_LENGTH:
             espacio_contenido = chunk_size
             header_prefix = ""
 
@@ -161,11 +131,11 @@ def dividir_en_chunks(
 
         for parte in partes:
             texto_chunk = (header_prefix + parte).strip()
-            if len(texto_chunk) >= MIN_CHUNK_LENGTH:
+            if len(texto_chunk) >= cfg.MIN_CHUNK_LENGTH:
                 fragmentos_raw.append({"text": texto_chunk, "header": header})
 
     if not fragmentos_raw:
-        if len(texto.strip()) >= MIN_CHUNK_LENGTH:
+        if len(texto.strip()) >= cfg.MIN_CHUNK_LENGTH:
             return [{"text": texto.strip()[:chunk_size], "header": ""}]
         return []
 
@@ -235,25 +205,5 @@ def expandir_con_chunks_adyacentes(
     return ids_adyacentes
 
 
-# ─────────────────────────────────────────────
 
-
-
-def _with_runtime_sync(func):
-    def wrapper(*args, **kwargs):
-        _sync_runtime_globals()
-        return func(*args, **kwargs)
-    wrapper.__name__ = func.__name__
-    wrapper.__doc__ = func.__doc__
-    wrapper.__module__ = func.__module__
-    return wrapper
-
-
-for _name, _obj in list(globals().items()):
-    if callable(_obj) and getattr(_obj, "__module__", None) == __name__ and _name not in {
-        "_sync_runtime_globals", "_with_runtime_sync"
-    }:
-        globals()[_name] = _with_runtime_sync(_obj)
-
-_sync_runtime_globals()
 

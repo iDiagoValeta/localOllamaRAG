@@ -1,34 +1,22 @@
 """Auxiliary implementation module for rag.chat_pdfs.
 
 This module keeps business logic split out of the public facade. Runtime
-configuration remains owned by rag.chat_pdfs and is synchronized before each
-function call so web/API toggles and test monkeypatches keep working.
+configuration stays owned by rag.chat_pdfs and is read lazily through ``cfg``
+(a live reference to that module), so web/API toggles and test monkeypatches
+are observed without any per-call synchronization.
 """
 
-import base64
-import contextlib
-import io
 import json
 import logging
 import os
 import re
-import requests
-from collections import Counter
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-import chromadb
-import ollama
-from pypdf import PdfReader
+from rag.engine.runtime import get_runtime
 
-from rag.cli.display import ui
-from rag.engine.runtime import sync_runtime_globals
+cfg = get_runtime()
 
 
-def _sync_runtime_globals() -> None:
-    sync_runtime_globals(globals())
-
-
-_sync_runtime_globals()
 def guardar_debug_rag(
     pregunta: str,
     mensaje_usuario: str = "",
@@ -53,17 +41,17 @@ def guardar_debug_rag(
     """
     fragmentos = fragmentos or []
 
-    if not GUARDAR_DEBUG_RAG:
+    if not cfg.GUARDAR_DEBUG_RAG:
         return
 
     try:
-        os.makedirs(CARPETA_DEBUG_RAG, exist_ok=True)
+        os.makedirs(cfg.CARPETA_DEBUG_RAG, exist_ok=True)
 
         import time
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         slug = re.sub(r'[^\w\s]', '', pregunta)[:40].strip().replace(' ', '_')
         nombre_archivo = f"{timestamp}_{slug}.txt"
-        ruta = os.path.join(CARPETA_DEBUG_RAG, nombre_archivo)
+        ruta = os.path.join(cfg.CARPETA_DEBUG_RAG, nombre_archivo)
 
         with open(ruta, 'w', encoding='utf-8') as f:
             f.write("=" * 80 + "\n")
@@ -106,14 +94,14 @@ def guardar_debug_rag(
             f.write("─" * 80 + "\n")
             f.write("  PIPELINE CONFIGURATION\n")
             f.write("─" * 80 + "\n")
-            f.write(f"RAG Model: {_inferir_descripcion_modelo(MODELO_RAG)}\n")
-            f.write(f"Contextual Retrieval (Indexing): {'YES' if USAR_CONTEXTUAL_RETRIEVAL else 'NO'}\n")
-            f.write(f"Query Decomposition: {'YES' if USAR_LLM_QUERY_DECOMPOSITION else 'NO'}\n")
-            f.write(f"Hybrid Search (BM25): {'YES' if USAR_BUSQUEDA_HIBRIDA else 'NO'}\n")
-            f.write(f"Reranker: {'YES' if USAR_RERANKER else 'NO'}\n")
-            f.write(f"Expand Context: {'YES' if EXPANDIR_CONTEXTO else 'NO'}\n")
-            f.write(f"Optimize Context: {'YES' if USAR_OPTIMIZACION_CONTEXTO else 'NO'}\n")
-            f.write(f"RECOMP Synthesis: {'YES' if USAR_RECOMP_SYNTHESIS else 'NO'}\n\n")
+            f.write(f"RAG Model: {cfg._inferir_descripcion_modelo(cfg.MODELO_RAG)}\n")
+            f.write(f"Contextual Retrieval (Indexing): {'YES' if cfg.USAR_CONTEXTUAL_RETRIEVAL else 'NO'}\n")
+            f.write(f"Query Decomposition: {'YES' if cfg.USAR_LLM_QUERY_DECOMPOSITION else 'NO'}\n")
+            f.write(f"Hybrid Search (BM25): {'YES' if cfg.USAR_BUSQUEDA_HIBRIDA else 'NO'}\n")
+            f.write(f"Reranker: {'YES' if cfg.USAR_RERANKER else 'NO'}\n")
+            f.write(f"Expand Context: {'YES' if cfg.EXPANDIR_CONTEXTO else 'NO'}\n")
+            f.write(f"Optimize Context: {'YES' if cfg.USAR_OPTIMIZACION_CONTEXTO else 'NO'}\n")
+            f.write(f"RECOMP Synthesis: {'YES' if cfg.USAR_RECOMP_SYNTHESIS else 'NO'}\n\n")
 
             f.write("─" * 80 + "\n")
             f.write("  ORIGINAL QUESTION\n")
@@ -123,8 +111,8 @@ def guardar_debug_rag(
             f.write("─" * 80 + "\n")
             f.write("  SYSTEM PROMPT\n")
             f.write("─" * 80 + "\n")
-            if _modelo_necesita_system_prompt(MODELO_RAG):
-                f.write(f"{SYSTEM_PROMPT_RAG}\n\n")
+            if cfg._modelo_necesita_system_prompt(cfg.MODELO_RAG):
+                f.write(f"{cfg.SYSTEM_PROMPT_RAG}\n\n")
             else:
                 f.write("(baked into Modelfile — not sent via API)\n\n")
 
@@ -132,7 +120,7 @@ def guardar_debug_rag(
             contexto_enviado = context_match.group(1).strip() if context_match else "(empty)"
 
             f.write("─" * 80 + "\n")
-            if USAR_RECOMP_SYNTHESIS:
+            if cfg.USAR_RECOMP_SYNTHESIS:
                 f.write("  RECOMP SYNTHESIS SENT TO FINAL MODEL (instead of raw chunks)\n")
             else:
                 f.write("  RAW CONTEXT SENT TO FINAL MODEL\n")
@@ -182,21 +170,4 @@ def guardar_debug_rag(
 
 
 
-def _with_runtime_sync(func):
-    def wrapper(*args, **kwargs):
-        _sync_runtime_globals()
-        return func(*args, **kwargs)
-    wrapper.__name__ = func.__name__
-    wrapper.__doc__ = func.__doc__
-    wrapper.__module__ = func.__module__
-    return wrapper
-
-
-for _name, _obj in list(globals().items()):
-    if callable(_obj) and getattr(_obj, "__module__", None) == __name__ and _name not in {
-        "_sync_runtime_globals", "_with_runtime_sync"
-    }:
-        globals()[_name] = _with_runtime_sync(_obj)
-
-_sync_runtime_globals()
 
