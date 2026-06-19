@@ -1540,7 +1540,7 @@ export default function App() {
                       {/* Message bubble */}
                       <div className={`text-[15px] leading-relaxed ${
                         msg.role === 'user'
-                          ? 'text-white font-medium text-right'
+                          ? 'text-white font-medium text-left'
                           : msg.isError
                             ? 'text-red-300'
                             : 'text-zinc-100'
