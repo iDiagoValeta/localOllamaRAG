@@ -75,16 +75,21 @@ def realizar_busqueda_hibrida(
     ui.debug(f"{len(queries)} query variant(s)")
 
     all_semantic_results = {}
+    embedding_dim = 0
+    resultados_por_query: List[int] = []
 
     for q_idx, query in enumerate(queries):
         query_con_prefijo = f"{cfg.EMBED_PREFIX_QUERY}{query}"
         response_emb = ollama.embeddings(model=cfg.MODELO_EMBEDDING, prompt=query_con_prefijo)
+        if not embedding_dim:
+            embedding_dim = len(response_emb["embedding"])
 
         results_semantic = collection.query(
             query_embeddings=[response_emb["embedding"]],
             n_results=cfg.N_RESULTADOS_SEMANTICOS,
             include=['documents', 'distances', 'metadatas']
         )
+        resultados_por_query.append(len(results_semantic['documents'][0]))
 
         for idx, (doc, distancia, metadata) in enumerate(zip(
             results_semantic['documents'][0],
@@ -110,9 +115,17 @@ def realizar_busqueda_hibrida(
             if distancia < all_semantic_results[chunk_id]['distancia']:
                 all_semantic_results[chunk_id]['distancia'] = distancia
 
+    distancias = [v['distancia'] for v in all_semantic_results.values()]
     metricas_totales['fase_semantica'] = {
         'queries_generadas': len(queries),
-        'fragmentos_unicos': len(all_semantic_results)
+        'fragmentos_unicos': len(all_semantic_results),
+        'modelo_embedding': cfg.MODELO_EMBEDDING,
+        'dimension_embedding': embedding_dim,
+        'n_resultados_por_query': cfg.N_RESULTADOS_SEMANTICOS,
+        'resultados_por_query': resultados_por_query,
+        'distancia_l2_min': min(distancias) if distancias else 0.0,
+        'distancia_l2_max': max(distancias) if distancias else 0.0,
+        'distancia_l2_media': sum(distancias) / len(distancias) if distancias else 0.0,
     }
 
     ui.debug(f"{len(all_semantic_results)} unique fragments")
@@ -160,6 +173,18 @@ def realizar_busqueda_hibrida(
     )
 
     metricas_totales['candidatos_fusion'] = len(fragmentos_ranked)
+    solo_semantica = sum(1 for f in fragmentos_data.values() if f['score_semantic'] > 0 and f['score_keyword'] == 0)
+    solo_lexica = sum(1 for f in fragmentos_data.values() if f['score_keyword'] > 0 and f['score_semantic'] == 0)
+    ambas_ramas = sum(1 for f in fragmentos_data.values() if f['score_semantic'] > 0 and f['score_keyword'] > 0)
+    metricas_totales['fase_fusion'] = {
+        'peso_semantico': cfg.PESO_SEMANTICO_RRF,
+        'peso_lexico': cfg.PESO_BM25_RRF,
+        'rrf_k': cfg.RRF_K,
+        'candidatos_totales': len(fragmentos_ranked),
+        'solo_semantica': solo_semantica,
+        'solo_lexica': solo_lexica,
+        'ambas_ramas': ambas_ramas,
+    }
 
     if cfg.USAR_RERANKER and fragmentos_ranked:
         n_candidatos = min(cfg.TOP_K_RERANK_CANDIDATES, len(fragmentos_ranked))

@@ -70,8 +70,19 @@ def _preparar_mensaje_usuario_rag(pregunta: str, fragmentos: List[Dict[str, Any]
     return f"{pregunta}\n\n<context>{contexto_str}</context>"
 
 
-def generar_tokens_respuesta(mensaje_usuario: str):
-    """Yield RAG generator tokens using the canonical generation settings."""
+_GEN_STATS_KEYS = (
+    "model", "done_reason", "total_duration", "load_duration",
+    "prompt_eval_count", "prompt_eval_duration", "eval_count", "eval_duration",
+)
+
+
+def generar_tokens_respuesta(mensaje_usuario: str, stats: Optional[Dict[str, Any]] = None):
+    """Yield RAG generator tokens using the canonical generation settings.
+
+    When ``stats`` is provided, the timing and token-count fields of the final
+    Ollama ``done`` chunk are copied into it so the debug dump can report
+    prompt/eval token counts and decoding speed.
+    """
     system = cfg.SYSTEM_PROMPT_RAG if cfg._modelo_necesita_system_prompt(cfg.MODELO_RAG) else None
     for chunk in cfg._ollama_generate_stream(
         model=cfg.MODELO_RAG,
@@ -89,12 +100,16 @@ def generar_tokens_respuesta(mensaje_usuario: str):
         content = chunk.get("response", "")
         if content:
             yield content
+        if stats is not None and chunk.get("done"):
+            for k in _GEN_STATS_KEYS:
+                if k in chunk:
+                    stats[k] = chunk[k]
 
 
-def _generar_respuesta_stream(mensaje_usuario: str, on_token=None) -> str:
+def _generar_respuesta_stream(mensaje_usuario: str, on_token=None, stats: Optional[Dict[str, Any]] = None) -> str:
     """Stream the generator response, optionally forwarding tokens to a callback."""
     respuesta_completa = ""
-    for content in cfg.generar_tokens_respuesta(mensaje_usuario):
+    for content in cfg.generar_tokens_respuesta(mensaje_usuario, stats=stats):
         respuesta_completa += content
         if on_token is not None:
             on_token(content)
@@ -248,8 +263,22 @@ def generar_respuesta(
     Returns:
         Complete response text.
     """
+    import time
     mensaje_usuario = cfg._preparar_mensaje_usuario_rag(pregunta, fragmentos)
-    respuesta_completa = cfg._generar_respuesta_stream(mensaje_usuario, on_token=on_token)
+    gen_stats: Dict[str, Any] = {}
+    inicio = time.time()
+    respuesta_completa = cfg._generar_respuesta_stream(
+        mensaje_usuario, on_token=on_token, stats=gen_stats
+    )
+    if metricas is not None:
+        fase_gen = dict(gen_stats)
+        fase_gen["wall_time_s"] = time.time() - inicio
+        fase_gen["respuesta_chars"] = len(respuesta_completa)
+        eval_count = gen_stats.get("eval_count")
+        eval_duration = gen_stats.get("eval_duration")
+        if eval_count and eval_duration:
+            fase_gen["tokens_por_segundo"] = eval_count / (eval_duration / 1e9)
+        metricas = {**metricas, "fase_generacion": fase_gen}
     cfg.guardar_debug_rag(pregunta, mensaje_usuario, respuesta_completa, fragmentos, metricas=metricas)
     return respuesta_completa
 
