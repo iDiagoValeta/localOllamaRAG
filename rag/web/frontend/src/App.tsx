@@ -4,7 +4,8 @@ import {
   Database,
   Search, Layers, FileUp, Menu, X,
   RefreshCw, Loader2, AlertCircle, CheckCircle2, Trash2,
-  ChevronDown, ChevronRight, Copy, Check, Languages, Eye
+  ChevronDown, ChevronRight, Copy, Check, Languages, Eye,
+  Plus, Server, Power
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import katex from 'katex';
@@ -50,6 +51,30 @@ interface IndexingProgress {
   total_files: number;
 }
 
+interface OllamaModel {
+  name: string;
+  size?: number;
+  family?: string;
+  parameter_size?: string;
+  capabilities?: string[];
+  embedding?: boolean;
+  vision?: boolean;
+}
+
+type ModelRole = 'rag' | 'chat' | 'embedding' | 'contextual' | 'recomp' | 'ocr';
+type ModelRoles = Record<ModelRole, string>;
+
+interface VectorStore {
+  name: string;
+  label: string;
+  builtin: boolean;
+  docs_folder: string;
+  pdf_count: number;
+  indexed: boolean;
+  active: boolean;
+  fragments: number | null;
+}
+
 // =============================================================================
 // i18n
 // =============================================================================
@@ -59,11 +84,7 @@ type Lang = 'es' | 'en' | 'ca';
 const STRINGS = {
   es: {
     tabDocs: 'Documentos', tabPipeline: 'Pipeline RAG',
-    corpusLabel: 'Corpus (PDFs / base vectorial)',
-    corpusEs: 'Castellano — rag/docs/es',
-    corpusCa: 'Català / valencià — rag/docs/ca',
-    corpusEn: 'English — rag/docs/en',
-    corpusError: 'No se pudo cambiar el corpus.',
+    corpusError: 'No se pudo cambiar el almacén.',
     corpusConflict: 'Hay indexación en curso; espera un momento.',
     corpusConnError: '✗ Error de conexión al cambiar el corpus.',
     collection: 'Colección ({n} docs)', noDocs: 'No hay documentos indexados',
@@ -112,14 +133,41 @@ const STRINGS = {
     historyCleared: 'Historial limpiado.',
     appFooter: 'RAG local con Ollama',
     noResults: 'No se encontró información relevante en los documentos.',
+    tabModels: 'Modelos',
+    storesLabel: 'Almacén vectorial',
+    newStorePlaceholder: 'nombre-del-almacén',
+    createStore: 'Crear almacén nuevo',
+    storeCreateError: 'No se pudo crear el almacén.',
+    storeExists: 'Ya existe un almacén con ese nombre.',
+    storeInvalidName: 'Nombre inválido (usa letras, números, - o _).',
+    storeNotIndexed: 'sin indexar',
+    deleteStore: 'Eliminar almacén',
+    confirmDeleteStore: '¿Eliminar el almacén "{name}"? Se borrarán sus PDFs y su base vectorial.',
+    storeDeleteError: '✗ Error al eliminar el almacén: {error}',
+    storeEmptyHint: 'Almacén vacío. Sube PDFs y reindexa para activarlo.',
+    modelsRoles: 'Roles de modelo',
+    ollamaTitle: 'Servidor Ollama',
+    ollamaOnline: 'En ejecución',
+    ollamaOffline: 'Detenido',
+    ollamaStartBtn: 'Arrancar Ollama',
+    ollamaStarting: 'Arrancando…',
+    ollamaStartFailed: 'No se pudo arrancar Ollama.',
+    ollamaNotFound: 'No se encontró el ejecutable de Ollama en el PATH.',
+    refreshModels: 'Actualizar lista',
+    noModels: 'No hay modelos instalados. Descárgalos con «ollama pull».',
+    roleRag: 'Generador RAG', descRoleRag: 'Respuesta final en modo documento',
+    roleChat: 'Chat / subconsultas', descRoleChat: 'Conversación y descomposición de consultas',
+    roleEmbedding: 'Embeddings', descRoleEmbedding: 'Vectoriza documentos y consultas',
+    roleContextual: 'Recuperación contextual', descRoleContextual: 'Enriquece fragmentos al indexar',
+    roleRecomp: 'Síntesis RECOMP', descRoleRecomp: 'Resume el contexto antes de generar',
+    roleOcr: 'Visión / OCR', descRoleOcr: 'Describe imágenes de los PDFs',
+    embedChangeWarning: 'Cambiar el modelo de embeddings cambia la base vectorial: hará falta reindexar.',
+    modelSaveError: 'No se pudo cambiar el modelo.',
+    capEmbedding: 'embeddings', capVision: 'visión',
   },
   en: {
     tabDocs: 'Documents', tabPipeline: 'RAG Pipeline',
-    corpusLabel: 'Corpus (PDFs / vector DB)',
-    corpusEs: 'Spanish — rag/docs/es',
-    corpusCa: 'Catalan — rag/docs/ca',
-    corpusEn: 'English — rag/docs/en',
-    corpusError: 'Could not switch corpus.',
+    corpusError: 'Could not switch store.',
     corpusConflict: 'Indexing in progress; please wait.',
     corpusConnError: '✗ Connection error while switching corpus.',
     collection: 'Collection ({n} docs)', noDocs: 'No documents indexed',
@@ -168,14 +216,41 @@ const STRINGS = {
     historyCleared: 'History cleared.',
     appFooter: 'Local RAG with Ollama',
     noResults: 'No relevant information found in the documents.',
+    tabModels: 'Models',
+    storesLabel: 'Vector store',
+    newStorePlaceholder: 'store-name',
+    createStore: 'Create new store',
+    storeCreateError: 'Could not create the store.',
+    storeExists: 'A store with that name already exists.',
+    storeInvalidName: 'Invalid name (use letters, numbers, - or _).',
+    storeNotIndexed: 'not indexed',
+    deleteStore: 'Delete store',
+    confirmDeleteStore: 'Delete store "{name}"? Its PDFs and vector DB will be removed.',
+    storeDeleteError: '✗ Error deleting store: {error}',
+    storeEmptyHint: 'Empty store. Upload PDFs and re-index to activate it.',
+    modelsRoles: 'Model roles',
+    ollamaTitle: 'Ollama server',
+    ollamaOnline: 'Running',
+    ollamaOffline: 'Stopped',
+    ollamaStartBtn: 'Start Ollama',
+    ollamaStarting: 'Starting…',
+    ollamaStartFailed: 'Could not start Ollama.',
+    ollamaNotFound: 'Ollama executable not found on PATH.',
+    refreshModels: 'Refresh list',
+    noModels: 'No models installed. Pull some with “ollama pull”.',
+    roleRag: 'RAG generator', descRoleRag: 'Final answer in document mode',
+    roleChat: 'Chat / sub-queries', descRoleChat: 'Conversation and query decomposition',
+    roleEmbedding: 'Embeddings', descRoleEmbedding: 'Vectorizes documents and queries',
+    roleContextual: 'Contextual retrieval', descRoleContextual: 'Enriches chunks at indexing',
+    roleRecomp: 'RECOMP synthesis', descRoleRecomp: 'Summarizes context before generation',
+    roleOcr: 'Vision / OCR', descRoleOcr: 'Describes images inside PDFs',
+    embedChangeWarning: 'Changing the embedding model changes the vector store: re-indexing is required.',
+    modelSaveError: 'Could not change the model.',
+    capEmbedding: 'embedding', capVision: 'vision',
   },
   ca: {
     tabDocs: 'Documents', tabPipeline: 'Pipeline RAG',
-    corpusLabel: 'Corpus (PDFs / base vectorial)',
-    corpusEs: 'Castellà — rag/docs/es',
-    corpusCa: 'Català / valencià — rag/docs/ca',
-    corpusEn: 'Anglès — rag/docs/en',
-    corpusError: 'No s\'ha pogut canviar el corpus.',
+    corpusError: 'No s\'ha pogut canviar el magatzem.',
     corpusConflict: 'Hi ha indexació en curs; espera un moment.',
     corpusConnError: '✗ Error de connexió en canviar el corpus.',
     collection: "Col·lecció ({n} docs)", noDocs: 'No hi ha documents indexats',
@@ -224,6 +299,37 @@ const STRINGS = {
     historyCleared: 'Historial netejat.',
     appFooter: 'RAG local amb Ollama',
     noResults: "No s'ha trobat informació rellevant als documents.",
+    tabModels: 'Models',
+    storesLabel: 'Magatzem vectorial',
+    newStorePlaceholder: 'nom-del-magatzem',
+    createStore: 'Crear magatzem nou',
+    storeCreateError: "No s'ha pogut crear el magatzem.",
+    storeExists: 'Ja existeix un magatzem amb eixe nom.',
+    storeInvalidName: 'Nom no vàlid (usa lletres, números, - o _).',
+    storeNotIndexed: 'sense indexar',
+    deleteStore: 'Eliminar magatzem',
+    confirmDeleteStore: 'Eliminar el magatzem "{name}"? S\'esborraran els seus PDFs i la seua base vectorial.',
+    storeDeleteError: "✗ Error en eliminar el magatzem: {error}",
+    storeEmptyHint: 'Magatzem buit. Puja PDFs i reindexa per a activar-lo.',
+    modelsRoles: 'Rols de model',
+    ollamaTitle: 'Servidor Ollama',
+    ollamaOnline: 'En execució',
+    ollamaOffline: 'Aturat',
+    ollamaStartBtn: 'Arrancar Ollama',
+    ollamaStarting: 'Arrancant…',
+    ollamaStartFailed: "No s'ha pogut arrancar Ollama.",
+    ollamaNotFound: "No s'ha trobat l'executable d'Ollama al PATH.",
+    refreshModels: 'Actualitzar llista',
+    noModels: 'No hi ha models instal·lats. Descarrega\'n amb «ollama pull».',
+    roleRag: 'Generador RAG', descRoleRag: 'Resposta final en mode document',
+    roleChat: 'Xat / subconsultes', descRoleChat: 'Conversa i descomposició de consultes',
+    roleEmbedding: 'Embeddings', descRoleEmbedding: 'Vectoritza documents i consultes',
+    roleContextual: 'Recuperació contextual', descRoleContextual: 'Enriqueix fragments en indexar',
+    roleRecomp: 'Síntesi RECOMP', descRoleRecomp: 'Resumeix el context abans de generar',
+    roleOcr: 'Visió / OCR', descRoleOcr: 'Descriu imatges dels PDFs',
+    embedChangeWarning: 'Canviar el model d\'embeddings canvia la base vectorial: caldrà reindexar.',
+    modelSaveError: 'No s\'ha pogut canviar el model.',
+    capEmbedding: 'embeddings', capVision: 'visió',
   },
 } as const;
 
@@ -239,22 +345,6 @@ function normalizeLang(value: string | null): Lang {
 
 function fill(tpl: string, vars: Record<string, string | number>): string {
   return tpl.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
-}
-
-type CorpusPreset = 'es' | 'ca' | 'en';
-
-/** Align UI with backend ``docs_folder`` / ``corpus_preset`` (defaults to ES). */
-function presetFromInit(initData: { corpus_preset?: string | null; docs_folder?: string }): CorpusPreset {
-  const p = initData.corpus_preset;
-  if (p === 'es' || p === 'ca' || p === 'en') return p;
-  const folder = initData.docs_folder;
-  if (folder) {
-    const norm = folder.replace(/\\/g, '/').replace(/\/+$/, '');
-    const parts = norm.split('/').filter(Boolean);
-    const base = parts[parts.length - 1] ?? '';
-    if (base === 'es' || base === 'ca' || base === 'en') return base;
-  }
-  return 'es';
 }
 
 // =============================================================================
@@ -301,11 +391,43 @@ const api = {
   clear: () =>
     fetch(`${API_BASE}/clear`, { method: 'POST' }).then(r => r.json()),
 
-  setCorpus: (preset: CorpusPreset) =>
-    fetch(`${API_BASE}/corpus`, {
+  listStores: () =>
+    fetch(`${API_BASE}/stores`).then(r => r.json()),
+
+  createStore: (name: string) =>
+    fetch(`${API_BASE}/stores`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ preset }),
+      body: JSON.stringify({ name }),
+    }).then(r => r.json()),
+
+  selectStore: (name: string) =>
+    fetch(`${API_BASE}/stores/select`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    }).then(r => r.json()),
+
+  deleteStore: (name: string) =>
+    fetch(`${API_BASE}/stores/${encodeURIComponent(name)}`, { method: 'DELETE' }).then(r => r.json()),
+
+  ollamaStatus: () =>
+    fetch(`${API_BASE}/ollama`).then(r => r.json()),
+
+  startOllama: () =>
+    fetch(`${API_BASE}/ollama/start`, { method: 'POST' }).then(r => r.json()),
+
+  ollamaModels: () =>
+    fetch(`${API_BASE}/ollama/models`).then(r => r.json()),
+
+  getModels: () =>
+    fetch(`${API_BASE}/models`).then(r => r.json()),
+
+  setModels: (roles: Partial<ModelRoles>) =>
+    fetch(`${API_BASE}/models`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(roles),
     }).then(r => r.json()),
 
   reindex: (files?: File[]) => {
@@ -591,7 +713,7 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState<'docs' | 'settings'>('docs');
+  const [activeTab, setActiveTab] = useState<'docs' | 'models' | 'settings'>('docs');
   const [documents, setDocuments] = useState<string[]>([]);
   const [totalFragments, setTotalFragments] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -601,7 +723,17 @@ export default function App() {
   const [isReindexing, setIsReindexing] = useState(false);
   const [deletingDoc, setDeletingDoc] = useState<string | null>(null);
   const [pendingReindexFiles, setPendingReindexFiles] = useState<File[]>([]);
-  const [corpusPreset, setCorpusPreset] = useState<CorpusPreset>('es');
+  const [stores, setStores] = useState<VectorStore[]>([]);
+  const [activeStore, setActiveStore] = useState<string>('es');
+  const [newStoreName, setNewStoreName] = useState('');
+  const [storeBusy, setStoreBusy] = useState(false);
+  const [storeError, setStoreError] = useState<string | null>(null);
+  const [ollamaStatus, setOllamaStatus] = useState<{ running: boolean; version: string | null }>({ running: true, version: null });
+  const [ollamaStarting, setOllamaStarting] = useState(false);
+  const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
+  const [modelRoles, setModelRoles] = useState<ModelRoles | null>(null);
+  const [savingRole, setSavingRole] = useState<ModelRole | null>(null);
+  const [modelError, setModelError] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     indexacion: false,
     recuperacion: false,
@@ -676,7 +808,7 @@ export default function App() {
           setMode(initData.mode || 'rag');
           setDocuments(initData.documents || []);
           setTotalFragments(initData.total_fragments || 0);
-          setCorpusPreset(presetFromInit(initData));
+          setActiveStore(initData.active_store || 'es');
           setUserName(initData.user || '');
           setIsInitialized(true);
 
@@ -843,28 +975,48 @@ export default function App() {
     }
   }, [mode, deletingDoc, lang]);
 
-  const handleCorpusChange = useCallback(async (next: CorpusPreset) => {
-    if (next === corpusPreset) return;
-    const prev = corpusPreset;
-    const S = STRINGS[lang];
-    setCorpusPreset(next);
+  // ---- Control panel loaders (stores / model roles / Ollama) ----
+  const loadStores = useCallback(async () => {
+    const res = await api.listStores().catch(() => null);
+    if (res?.ok) {
+      setStores(res.stores || []);
+      setActiveStore(res.active || 'es');
+    }
+  }, []);
+
+  const loadModelRoles = useCallback(async () => {
+    const res = await api.getModels().catch(() => null);
+    if (res?.ok) setModelRoles(res.roles);
+  }, []);
+
+  const refreshOllama = useCallback(async () => {
+    const st = await api.ollamaStatus().catch(() => null);
+    if (st?.ok) {
+      setOllamaStatus({ running: st.running, version: st.version });
+      if (st.running) {
+        const m = await api.ollamaModels().catch(() => null);
+        if (m?.ok) setOllamaModels(m.models || []);
+      } else {
+        setOllamaModels([]);
+      }
+    }
+  }, []);
+
+  // ---- Switch active vector store ----
+  const handleStoreSelect = useCallback(async (name: string) => {
+    if (name === activeStore || storeBusy) return;
+    const prev = activeStore;
+    setStoreError(null);
+    setActiveStore(name);
+    setStoreBusy(true);
     try {
-      const res = await api.setCorpus(next);
+      const res = await api.selectStore(name);
       if (!res.ok) {
-        setCorpusPreset(prev);
-        const err =
-          res.error === 'indexing_in_progress'
-            ? S.corpusConflict
-            : `${S.corpusError} (${String(res.error ?? '')})`;
-        setMessages(p => [...p, {
-          id: Date.now().toString(),
-          role: 'system',
-          content: err,
-          mode,
-          isError: true,
-        }]);
+        setActiveStore(prev);
+        setStoreError(res.error === 'indexing_in_progress' ? T.corpusConflict : T.corpusError);
         return;
       }
+      setStores(res.stores || []);
       if (res.indexing) {
         setIndexingError(null);
         setIndexingProgress(null);
@@ -875,16 +1027,135 @@ export default function App() {
       setDocuments(res.documents || []);
       setTotalFragments(res.total_fragments || 0);
     } catch {
-      setCorpusPreset(prev);
-      setMessages(p => [...p, {
-        id: Date.now().toString(),
-        role: 'system',
-        content: S.corpusConnError,
-        mode,
-        isError: true,
-      }]);
+      setActiveStore(prev);
+      setStoreError(T.corpusConnError);
+    } finally {
+      setStoreBusy(false);
     }
-  }, [corpusPreset, mode, lang]);
+  }, [activeStore, storeBusy, lang]);
+
+  // ---- Create a new vector store ----
+  const handleStoreCreate = useCallback(async () => {
+    const name = newStoreName.trim();
+    if (!name || storeBusy) return;
+    setStoreError(null);
+    setStoreBusy(true);
+    try {
+      const res = await api.createStore(name);
+      if (!res.ok) {
+        setStoreError(
+          res.error === 'already_exists' ? T.storeExists
+            : res.error === 'invalid_name' ? T.storeInvalidName
+              : res.error === 'indexing_in_progress' ? T.corpusConflict
+                : T.storeCreateError,
+        );
+        return;
+      }
+      setNewStoreName('');
+      setStores(res.stores || []);
+      setActiveStore(res.active || name);
+      setDocuments([]);
+      setTotalFragments(0);
+    } catch {
+      setStoreError(T.storeCreateError);
+    } finally {
+      setStoreBusy(false);
+    }
+  }, [newStoreName, storeBusy, lang]);
+
+  // ---- Delete a user-created store ----
+  const handleStoreDelete = useCallback(async (name: string) => {
+    if (storeBusy) return;
+    if (!window.confirm(fill(T.confirmDeleteStore, { name }))) return;
+    setStoreError(null);
+    setStoreBusy(true);
+    try {
+      const res = await api.deleteStore(name);
+      if (res.ok) {
+        setStores(res.stores || []);
+        setActiveStore(res.active || 'es');
+        const d = await api.docs().catch(() => null);
+        if (d?.ok) {
+          setDocuments(d.documents || []);
+          setTotalFragments(d.total_fragments || 0);
+        }
+      } else {
+        setMessages(p => [...p, {
+          id: Date.now().toString(),
+          role: 'system',
+          content: fill(T.storeDeleteError, { error: res.error }),
+          mode,
+          isError: true,
+        }]);
+      }
+    } catch {
+      setStoreError(T.corpusConnError);
+    } finally {
+      setStoreBusy(false);
+    }
+  }, [storeBusy, mode, lang]);
+
+  // ---- Reassign a model role ----
+  const handleRoleChange = useCallback(async (role: ModelRole, value: string) => {
+    if (!modelRoles || value === modelRoles[role] || savingRole) return;
+    const prev = modelRoles;
+    setModelError(null);
+    setSavingRole(role);
+    setModelRoles({ ...modelRoles, [role]: value });
+    try {
+      const res = await api.setModels({ [role]: value } as Partial<ModelRoles>);
+      if (!res.ok) {
+        setModelRoles(prev);
+        setModelError(res.error === 'indexing_in_progress' ? T.corpusConflict : T.modelSaveError);
+        return;
+      }
+      setModelRoles(res.roles);
+      if (res.embedding_changed) {
+        if (res.stores) setStores(res.stores);
+        if (res.indexing) {
+          setIndexingError(null);
+          setIndexingProgress(null);
+          setIsIndexing(true);
+          setRetryTrigger(t => t + 1);
+        } else {
+          setTotalFragments(res.total_fragments || 0);
+          const d = await api.docs().catch(() => null);
+          if (d?.ok) setDocuments(d.documents || []);
+        }
+      }
+    } catch {
+      setModelRoles(prev);
+      setModelError(T.modelSaveError);
+    } finally {
+      setSavingRole(null);
+    }
+  }, [modelRoles, savingRole, lang]);
+
+  // ---- Start the local Ollama server ----
+  const handleStartOllama = useCallback(async () => {
+    if (ollamaStarting) return;
+    setOllamaStarting(true);
+    try {
+      const res = await api.startOllama();
+      setOllamaStatus({ running: !!res.running, version: res.version || null });
+      if (res.running) {
+        const m = await api.ollamaModels().catch(() => null);
+        if (m?.ok) setOllamaModels(m.models || []);
+      }
+    } catch {
+      /* keep stopped */
+    } finally {
+      setOllamaStarting(false);
+    }
+  }, [ollamaStarting]);
+
+  // ---- Load control panel (stores / model roles / Ollama) once ready ----
+  useEffect(() => {
+    if (!isInitialized) return;
+    loadStores();
+    loadModelRoles();
+    refreshOllama();
+  }, [isInitialized, loadStores, loadModelRoles, refreshOllama]);
 
   // ---- Send message (streaming) ----
   const handleSend = useCallback(async () => {
@@ -1011,7 +1282,7 @@ export default function App() {
         setMode(result.mode || 'rag');
         setDocuments(result.documents || []);
         setTotalFragments(result.total_fragments || 0);
-        setCorpusPreset(presetFromInit(result));
+        setActiveStore(result.active_store || 'es');
         setIndexingError(null);
         setIndexingProgress(null);
         setIsInitialized(true);
@@ -1162,6 +1433,12 @@ export default function App() {
               {T.tabDocs}
             </button>
             <button
+              className={`flex-1 py-2 text-xs font-semibold rounded-full transition-all ${activeTab === 'models' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+              onClick={() => setActiveTab('models')}
+            >
+              {T.tabModels}
+            </button>
+            <button
               className={`flex-1 py-2 text-xs font-semibold rounded-full transition-all ${activeTab === 'settings' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
               onClick={() => setActiveTab('settings')}
             >
@@ -1184,46 +1461,72 @@ export default function App() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 pl-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
                     <Database className="h-3 w-3 text-orange-400/70" />
-                    {T.corpusLabel}
+                    {T.storesLabel}
                   </div>
-                  <div
-                    role="radiogroup"
-                    aria-label={T.corpusLabel}
-                    className={`rounded-2xl border border-white/10 bg-black/30 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${isReindexing || isLoading ? 'opacity-50' : ''}`}
-                  >
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {[
-                        { preset: 'es' as CorpusPreset, label: 'ES', detail: 'rag/docs/es', title: T.corpusEs },
-                        { preset: 'ca' as CorpusPreset, label: 'VAL', detail: 'rag/docs/ca', title: T.corpusCa },
-                        { preset: 'en' as CorpusPreset, label: 'EN', detail: 'rag/docs/en', title: T.corpusEn },
-                      ].map(option => {
-                        const isActive = corpusPreset === option.preset;
-                        return (
+                  <div className={`rounded-2xl border border-white/10 bg-black/30 p-1.5 space-y-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${storeBusy || isReindexing || isLoading ? 'opacity-50' : ''}`}>
+                    {stores.map(store => {
+                      const isActive = store.name === activeStore;
+                      return (
+                        <div
+                          key={store.name}
+                          className={`group flex items-center gap-2 rounded-xl border px-2.5 py-2 transition-all ${isActive
+                            ? 'border-orange-500/50 bg-orange-500/15 shadow-[0_0_18px_rgba(242,125,38,0.16)]'
+                            : 'border-transparent bg-white/[0.03] hover:border-white/10 hover:bg-white/[0.06]'
+                            }`}
+                        >
                           <button
-                            key={option.preset}
                             type="button"
-                            role="radio"
-                            aria-checked={isActive}
-                            title={option.title}
-                            className={`min-w-0 rounded-xl border px-2.5 py-2 text-left transition-all focus:outline-none focus:ring-2 focus:ring-orange-500/40 disabled:cursor-not-allowed ${isActive
-                              ? 'border-orange-500/50 bg-orange-500/15 text-white shadow-[0_0_18px_rgba(242,125,38,0.16)]'
-                              : 'border-transparent bg-white/[0.03] text-zinc-500 hover:border-white/10 hover:bg-white/[0.06] hover:text-zinc-300'
-                              }`}
-                            onClick={() => handleCorpusChange(option.preset)}
-                            disabled={isReindexing || isLoading}
+                            className="min-w-0 flex-1 text-left focus:outline-none disabled:cursor-not-allowed"
+                            onClick={() => handleStoreSelect(store.name)}
+                            disabled={storeBusy || isReindexing || isLoading}
                           >
-                            <span className="flex items-center justify-between gap-1">
-                              <span className="truncate text-xs font-bold tracking-wide">{option.label}</span>
+                            <span className="flex items-center gap-1.5">
+                              <span className={`truncate text-xs font-bold tracking-wide ${isActive ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-200'}`}>{store.label}</span>
+                              {store.builtin && <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[8px] font-bold text-zinc-400">{store.name.toUpperCase()}</span>}
                               {isActive && <Check className="h-3 w-3 flex-shrink-0 text-orange-300" />}
                             </span>
-                            <span className={`mt-1 block truncate font-mono text-[9px] ${isActive ? 'text-orange-200/80' : 'text-zinc-600'}`}>
-                              {option.detail}
+                            <span className={`mt-0.5 block truncate font-mono text-[9px] ${isActive ? 'text-orange-200/80' : 'text-zinc-600'}`}>
+                              {store.indexed
+                                ? fill(T.fragments, { n: store.fragments ?? '·' })
+                                : `${store.pdf_count} PDF · ${T.storeNotIndexed}`}
                             </span>
                           </button>
-                        );
-                      })}
+                          {!store.builtin && (
+                            <button
+                              type="button"
+                              className="flex-shrink-0 rounded-full p-1.5 text-zinc-600 hover:bg-red-500/10 hover:text-red-400 transition-all disabled:opacity-40"
+                              onClick={() => handleStoreDelete(store.name)}
+                              disabled={storeBusy}
+                              title={T.deleteStore}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <input
+                        type="text"
+                        value={newStoreName}
+                        onChange={e => setNewStoreName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleStoreCreate(); }}
+                        placeholder={T.newStorePlaceholder}
+                        className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/40 px-2.5 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                        disabled={storeBusy}
+                      />
+                      <button
+                        type="button"
+                        className="flex-shrink-0 rounded-xl border border-orange-500/30 bg-orange-500/15 p-2 text-orange-400 hover:bg-orange-500/25 transition-all disabled:opacity-40"
+                        onClick={handleStoreCreate}
+                        disabled={storeBusy || !newStoreName.trim()}
+                        title={T.createStore}
+                      >
+                        {storeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                      </button>
                     </div>
                   </div>
+                  {storeError && <p className="pl-2 text-[11px] text-red-400">{storeError}</p>}
                 </div>
 
                 {/* Documents list */}
@@ -1265,6 +1568,100 @@ export default function App() {
                       ))
                     )}
                   </div>
+                </div>
+              </motion.div>
+            ) : activeTab === 'models' ? (
+              <motion.div
+                key="models"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="space-y-4 pb-6"
+              >
+                {/* Ollama server status */}
+                <div className={`rounded-2xl border p-3 ${ollamaStatus.running ? 'border-white/10 bg-black/30' : 'border-amber-500/30 bg-amber-500/10'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Server className={`h-4 w-4 flex-shrink-0 ${ollamaStatus.running ? 'text-green-400' : 'text-amber-400'}`} />
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-zinc-200">{T.ollamaTitle}</div>
+                        <div className="truncate text-[10px] text-zinc-500">
+                          {ollamaStatus.running
+                            ? `${T.ollamaOnline}${ollamaStatus.version ? ` · v${ollamaStatus.version}` : ''}`
+                            : T.ollamaOffline}
+                        </div>
+                      </div>
+                    </div>
+                    {ollamaStatus.running ? (
+                      <button
+                        type="button"
+                        className="flex-shrink-0 rounded-full p-2 text-zinc-500 transition-all hover:bg-white/5 hover:text-orange-400"
+                        onClick={refreshOllama}
+                        title={T.refreshModels}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="flex flex-shrink-0 items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-[11px] font-semibold text-amber-300 transition-all hover:bg-amber-500/25 disabled:opacity-50"
+                        onClick={handleStartOllama}
+                        disabled={ollamaStarting}
+                      >
+                        {ollamaStarting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
+                        {ollamaStarting ? T.ollamaStarting : T.ollamaStartBtn}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {modelError && (
+                  <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">{modelError}</div>
+                )}
+
+                {/* Model role selectors */}
+                <div className="space-y-1.5">
+                  <div className="pl-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">{T.modelsRoles}</div>
+                  {ollamaStatus.running && ollamaModels.length === 0 ? (
+                    <p className="px-1 py-3 text-xs text-zinc-600">{T.noModels}</p>
+                  ) : (
+                    ([
+                      { role: 'rag' as ModelRole, label: T.roleRag, desc: T.descRoleRag },
+                      { role: 'chat' as ModelRole, label: T.roleChat, desc: T.descRoleChat },
+                      { role: 'embedding' as ModelRole, label: T.roleEmbedding, desc: T.descRoleEmbedding },
+                      { role: 'contextual' as ModelRole, label: T.roleContextual, desc: T.descRoleContextual },
+                      { role: 'recomp' as ModelRole, label: T.roleRecomp, desc: T.descRoleRecomp },
+                      { role: 'ocr' as ModelRole, label: T.roleOcr, desc: T.descRoleOcr },
+                    ]).map(({ role, label, desc }) => {
+                      const current = modelRoles?.[role] ?? '';
+                      const names = ollamaModels.map(m => m.name);
+                      const options = current && !names.includes(current) ? [current, ...names] : names;
+                      return (
+                        <div key={role} className="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+                          <div className="mb-1 flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold text-zinc-200">{label}</span>
+                            {savingRole === role && <Loader2 className="h-3 w-3 animate-spin text-orange-400" />}
+                          </div>
+                          <p className="mb-2 text-[10px] leading-snug text-zinc-500">{desc}</p>
+                          <select
+                            value={current}
+                            onChange={e => handleRoleChange(role, e.target.value)}
+                            disabled={!ollamaStatus.running || savingRole !== null}
+                            className="w-full rounded-lg border border-white/10 bg-black/50 px-2.5 py-2 text-xs text-zinc-200 focus:border-orange-500/50 focus:outline-none disabled:opacity-50"
+                          >
+                            {options.map(name => {
+                              const m = ollamaModels.find(x => x.name === name);
+                              const tags = m ? [m.embedding && T.capEmbedding, m.vision && T.capVision].filter(Boolean).join(', ') : '';
+                              return <option key={name} value={name}>{name}{tags ? ` (${tags})` : ''}</option>;
+                            })}
+                          </select>
+                          {role === 'embedding' && (
+                            <p className="mt-1.5 text-[10px] leading-snug text-amber-400/80">{T.embedChangeWarning}</p>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </motion.div>
             ) : (
@@ -1413,10 +1810,15 @@ export default function App() {
         {/* Sidebar Footer */}
         <div className="p-5 border-t border-white/5 text-xs text-zinc-500 flex items-center justify-between bg-black/20 rounded-b-3xl">
           <span className="font-mono text-[10px] tracking-wider">{fill(T.fragments, { n: totalFragments })}</span>
-          <div className="flex items-center gap-2 bg-white/5 px-2.5 py-1 rounded-full border border-white/10">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
+          <button
+            type="button"
+            onClick={() => { setActiveTab('models'); if (!ollamaStatus.running) handleStartOllama(); }}
+            className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 transition-colors hover:bg-white/10"
+            title={ollamaStatus.running ? T.ollamaOnline : T.ollamaStartBtn}
+          >
+            <div className={`h-1.5 w-1.5 rounded-full ${ollamaStatus.running ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]' : 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]'}`} />
             <span className="font-medium text-zinc-300">{T.ollamaStatus}</span>
-          </div>
+          </button>
         </div>
       </motion.aside>
 

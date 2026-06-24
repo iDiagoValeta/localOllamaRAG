@@ -28,9 +28,11 @@ Dependencies:
 #  BACKEND
 #  +-- 2. COLLECTION MANAGEMENT   ChromaDB init, reindex, DB invalidation
 #  +-- 3. STREAMING HELPERS       _chat_stream, _format_sources
+#  +-- 3b. OLLAMA / MODELS / STORES   runtime helpers for the control panel
 #
 #  API
 #  +-- 4. API ROUTES              all Flask @app.route endpoints (incl. ``/api/corpus``)
+#  +-- 4b. CONTROL PANEL ROUTES   /api/ollama*, /api/models, /api/stores*
 #
 #  ENTRY
 #  +-- 5. ENTRY POINT             main()
@@ -39,16 +41,20 @@ Dependencies:
 
 import gc
 import os
+import re
 import sys
 import json
 import time
+import shutil
 import getpass
+import subprocess
 import threading
 from collections import Counter
-from typing import Generator
+from typing import Generator, Optional
 from werkzeug.utils import secure_filename
 
 import chromadb
+import requests
 from flask import Flask, request, jsonify, Response, stream_with_context, send_from_directory
 from flask_cors import CORS
 
@@ -96,6 +102,23 @@ _indexing_lock = threading.RLock()
 
 _CORPUS_PRESET_IDS = frozenset({"es", "ca", "en"})
 
+# Vector-store layout: built-in corpora live directly under rag/docs/; user
+# stores created from the web UI live under rag/docs/stores/ (gitignored).
+_DOCS_ROOT = os.path.join(_project_root, "rag", "docs")
+_STORES_ROOT = os.path.join(_DOCS_ROOT, "stores")
+_BUILTIN_STORES = {
+    "es": "Castellano",
+    "ca": "Català / Valencià",
+    "en": "English",
+}
+_STORE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{1,40}$")
+_RESERVED_STORE_NAMES = set(_BUILTIN_STORES) | {"stores"}
+
+# Ollama runtime control. The ollama client honours OLLAMA_HOST itself; we use
+# the same value for the version/start probes exposed to the control panel.
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
+_model_caps_cache: dict = {}  # digest -> capabilities list
+
 
 def _infer_corpus_preset() -> str | None:
     """Return ``es``/``ca``/``en`` when ``CARPETA_DOCS`` basename matches a preset tree."""
@@ -112,6 +135,7 @@ def _init_paths_payload() -> dict:
     return {
         "docs_folder": os.path.abspath(rag_engine.CARPETA_DOCS),
         "corpus_preset": _infer_corpus_preset(),
+        "active_store": os.path.basename(os.path.abspath(rag_engine.CARPETA_DOCS)),
         "user": user,
     }
 
@@ -337,6 +361,161 @@ def _collection_document_details(coll) -> list:
             "formats": sorted(info["formats"]),
         })
     return normalized
+
+
+# ─────────────────────────────────────────────
+# SECTION 3b: OLLAMA / MODELS / STORES HELPERS
+# ─────────────────────────────────────────────
+
+def _ollama_version() -> Optional[str]:
+    """Return the running Ollama version string, or ``None`` if unreachable."""
+    try:
+        r = requests.get(f"{OLLAMA_HOST}/api/version", timeout=2)
+        if r.ok:
+            return r.json().get("version")
+    except requests.RequestException:
+        return None
+    return None
+
+
+def _ollama_capabilities(name: str) -> list:
+    """Best-effort capability list (``embedding``/``vision``/...) for a model."""
+    try:
+        r = requests.post(f"{OLLAMA_HOST}/api/show", json={"model": name}, timeout=5)
+        if r.ok:
+            return r.json().get("capabilities") or []
+    except requests.RequestException:
+        pass
+    return []
+
+
+def _ollama_models() -> list:
+    """List installed Ollama models with size, family and capabilities.
+
+    Capabilities come from ``/api/show`` and are cached by digest so repeated
+    panel refreshes stay cheap.
+    """
+    r = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=5)
+    r.raise_for_status()
+    models = []
+    for m in r.json().get("models", []):
+        name = m.get("name")
+        if not name:
+            continue
+        digest = m.get("digest") or name
+        details = m.get("details") or {}
+        caps = _model_caps_cache.get(digest)
+        if caps is None:
+            caps = _ollama_capabilities(name)
+            _model_caps_cache[digest] = caps
+        models.append({
+            "name": name,
+            "size": m.get("size"),
+            "family": details.get("family"),
+            "parameter_size": details.get("parameter_size"),
+            "capabilities": caps,
+            "embedding": "embedding" in caps,
+            "vision": "vision" in caps,
+        })
+    models.sort(key=lambda x: x["name"].lower())
+    return models
+
+
+def _start_ollama_process() -> Optional[str]:
+    """Launch ``ollama serve`` detached and poll until ready (~12s). Returns version or None."""
+    exe = shutil.which("ollama")
+    if not exe:
+        return None
+    creationflags = 0
+    if os.name == "nt":
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+    subprocess.Popen(
+        [exe, "serve"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=creationflags,
+    )
+    for _ in range(24):
+        time.sleep(0.5)
+        version = _ollama_version()
+        if version:
+            return version
+    return None
+
+
+def _store_pdf_count(folder: str) -> int:
+    """Count PDF files directly inside a store folder."""
+    try:
+        return sum(1 for f in os.listdir(folder) if f.lower().endswith(".pdf"))
+    except OSError:
+        return 0
+
+
+def _store_entry(name: str, label: str, builtin: bool, folder: str) -> dict:
+    """Build the JSON descriptor for one vector store."""
+    path_db, _ = rag_engine._derivar_paths_db(folder, rag_engine.MODELO_EMBEDDING)
+    active = os.path.abspath(folder) == os.path.abspath(rag_engine.CARPETA_DOCS)
+    indexed = os.path.isdir(path_db) and bool(os.listdir(path_db))
+    entry = {
+        "name": name,
+        "label": label,
+        "builtin": builtin,
+        "docs_folder": os.path.abspath(folder),
+        "pdf_count": _store_pdf_count(folder),
+        "indexed": indexed,
+        "active": active,
+        "fragments": None,
+    }
+    if active:
+        try:
+            entry["fragments"] = _get_collection().count()
+        except Exception:
+            pass
+    return entry
+
+
+def _all_stores() -> list:
+    """List built-in corpora plus user-created stores under rag/docs/stores/."""
+    stores = []
+    for sid, label in _BUILTIN_STORES.items():
+        folder = os.path.join(_DOCS_ROOT, sid)
+        if os.path.isdir(folder):
+            stores.append(_store_entry(sid, label, True, folder))
+    if os.path.isdir(_STORES_ROOT):
+        for name in sorted(os.listdir(_STORES_ROOT)):
+            folder = os.path.join(_STORES_ROOT, name)
+            if os.path.isdir(folder):
+                stores.append(_store_entry(name, name, False, folder))
+    return stores
+
+
+def _resolve_store_folder(name: str) -> Optional[str]:
+    """Return the absolute docs folder for a store name, or ``None`` if missing."""
+    if name in _BUILTIN_STORES:
+        folder = os.path.join(_DOCS_ROOT, name)
+        return folder if os.path.isdir(folder) else None
+    if _STORE_NAME_RE.match(name or ""):
+        folder = os.path.join(_STORES_ROOT, name)
+        return folder if os.path.isdir(folder) else None
+    return None
+
+
+def _active_store_name() -> str:
+    """Basename of the active docs folder (the store identifier)."""
+    return os.path.basename(os.path.abspath(rag_engine.CARPETA_DOCS))
+
+
+def _switch_store_folder(folder: str) -> None:
+    """Point the engine at a docs folder and reset all collection/indexing state."""
+    with _indexing_lock:
+        rag_engine.set_docs_folder_runtime(folder)
+        _state["collection"] = None
+        _state["indexing"] = False
+        _state["indexing_failed"] = False
+        _state["indexing_error"] = None
+        _state["indexing_done_empty"] = False
+        _state["indexing_progress"] = None
+    gc.collect()
 
 
 # ─────────────────────────────────────────────
@@ -885,6 +1064,185 @@ def api_settings_post():
             setattr(rag_engine, engine_var, val)
             updated[fe_key] = val
     return jsonify({"ok": True, "settings": updated})
+
+
+# ─────────────────────────────────────────────
+# SECTION 4b: CONTROL PANEL ROUTES
+# ─────────────────────────────────────────────
+
+
+@app.route("/api/ollama", methods=["GET"])
+def api_ollama_status():
+    """Report whether the local Ollama server is reachable."""
+    version = _ollama_version()
+    return jsonify({"ok": True, "running": version is not None, "version": version, "host": OLLAMA_HOST})
+
+
+@app.route("/api/ollama/start", methods=["POST"])
+def api_ollama_start():
+    """Start ``ollama serve`` if it is not already running."""
+    version = _ollama_version()
+    if version is not None:
+        return jsonify({"ok": True, "running": True, "version": version})
+    if shutil.which("ollama") is None:
+        return jsonify({"ok": False, "running": False, "error": "ollama_not_found"}), 404
+    try:
+        version = _start_ollama_process()
+    except Exception as e:
+        return jsonify({"ok": False, "running": False, "error": str(e)}), 500
+    return jsonify({"ok": version is not None, "running": version is not None, "version": version})
+
+
+@app.route("/api/ollama/models", methods=["GET"])
+def api_ollama_models():
+    """List installed Ollama models for the role selectors."""
+    if _ollama_version() is None:
+        return jsonify({"ok": False, "error": "ollama_not_running", "models": []}), 200
+    try:
+        return jsonify({"ok": True, "models": _ollama_models()})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "models": []}), 500
+
+
+@app.route("/api/models", methods=["GET"])
+def api_models_get():
+    """Return the current model assigned to each pipeline role."""
+    return jsonify({"ok": True, "roles": rag_engine.get_model_roles()})
+
+
+@app.route("/api/models", methods=["POST"])
+def api_models_post():
+    """Reassign pipeline model roles at runtime.
+
+    Changing the embedding model re-derives the vector-store path; the collection
+    is dropped so the next access rebinds, and re-indexing starts if needed.
+    """
+    if _state["indexing"]:
+        return jsonify({"ok": False, "error": "indexing_in_progress"}), 409
+    data = request.get_json() or {}
+    overrides = {
+        k: v for k, v in data.items()
+        if k in rag_engine.MODEL_ROLE_VARS and isinstance(v, str) and v.strip()
+    }
+    if not overrides:
+        return jsonify({"ok": False, "error": "no_valid_roles"}), 400
+
+    prev_embed = rag_engine.MODELO_EMBEDDING
+    try:
+        roles = rag_engine.set_model_roles_runtime(overrides)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+    embedding_changed = rag_engine.MODELO_EMBEDDING != prev_embed
+    resp = {"ok": True, "roles": roles, "embedding_changed": embedding_changed}
+    if embedding_changed:
+        with _indexing_lock:
+            _state["collection"] = None
+            _state["indexing"] = False
+            _state["indexing_failed"] = False
+            _state["indexing_error"] = None
+            _state["indexing_done_empty"] = False
+            _state["indexing_progress"] = None
+        gc.collect()
+        coll = _get_collection()
+        total = coll.count()
+        if total == 0:
+            _ensure_indexed()
+        resp["total_fragments"] = total
+        resp["indexing"] = _state["indexing"]
+        resp["stores"] = _all_stores()
+    return jsonify(resp)
+
+
+@app.route("/api/stores", methods=["GET"])
+def api_stores_list():
+    """List all vector stores (built-in corpora + user-created)."""
+    return jsonify({
+        "ok": True,
+        "stores": _all_stores(),
+        "active": _active_store_name(),
+        "embedding": rag_engine.MODELO_EMBEDDING,
+    })
+
+
+@app.route("/api/stores", methods=["POST"])
+def api_stores_create():
+    """Create a new empty vector store and select it.
+
+    The caller then uploads PDFs and re-indexes against the new store.
+    """
+    if _state["indexing"]:
+        return jsonify({"ok": False, "error": "indexing_in_progress"}), 409
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    if name in _RESERVED_STORE_NAMES or not _STORE_NAME_RE.match(name):
+        return jsonify({"ok": False, "error": "invalid_name"}), 400
+    folder = os.path.join(_STORES_ROOT, name)
+    if os.path.isdir(folder):
+        return jsonify({"ok": False, "error": "already_exists"}), 409
+    os.makedirs(folder, exist_ok=True)
+    _switch_store_folder(folder)
+    return jsonify({
+        "ok": True,
+        "active": name,
+        "stores": _all_stores(),
+        "total_fragments": 0,
+        "documents": [],
+        **_init_paths_payload(),
+    }), 201
+
+
+@app.route("/api/stores/select", methods=["POST"])
+def api_stores_select():
+    """Switch the active vector store (built-in or user-created)."""
+    if _state["indexing"]:
+        return jsonify({"ok": False, "error": "indexing_in_progress"}), 409
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    folder = _resolve_store_folder(name)
+    if not folder:
+        return jsonify({"ok": False, "error": "unknown_store"}), 404
+    _switch_store_folder(folder)
+    coll = _get_collection()
+    total = coll.count()
+    if total == 0:
+        _ensure_indexed()
+    docs = rag_engine.obtener_documentos_indexados(coll) if total > 0 else []
+    return jsonify({
+        "ok": True,
+        "active": name,
+        "indexing": _state["indexing"],
+        "total_fragments": total,
+        "documents": docs,
+        "document_details": _collection_document_details(coll) if total > 0 else [],
+        "stores": _all_stores(),
+        **_init_paths_payload(),
+    })
+
+
+@app.route("/api/stores/<name>", methods=["DELETE"])
+def api_stores_delete(name):
+    """Delete a user-created store (folder + its vector DB). Built-ins are protected."""
+    if _state["indexing"]:
+        return jsonify({"ok": False, "error": "indexing_in_progress"}), 409
+    if name in _BUILTIN_STORES:
+        return jsonify({"ok": False, "error": "cannot_delete_builtin"}), 400
+    folder = _resolve_store_folder(name)
+    if not folder or os.path.dirname(os.path.abspath(folder)) != os.path.abspath(_STORES_ROOT):
+        return jsonify({"ok": False, "error": "unknown_store"}), 404
+
+    path_db, _ = rag_engine._derivar_paths_db(folder, rag_engine.MODELO_EMBEDDING)
+    if os.path.abspath(folder) == os.path.abspath(rag_engine.CARPETA_DOCS):
+        _switch_store_folder(os.path.join(_DOCS_ROOT, "es"))
+    _state["collection"] = None
+    gc.collect()
+    try:
+        shutil.rmtree(folder, ignore_errors=True)
+        if os.path.isdir(path_db):
+            shutil.rmtree(path_db, ignore_errors=True)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    return jsonify({"ok": True, "active": _active_store_name(), "stores": _all_stores()})
 
 
 # ─────────────────────────────────────────────

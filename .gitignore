@@ -67,6 +67,10 @@ venv/
 
 rag/vector_db/**
 
+# User-created vector stores (PDFs uploaded via the web control panel).
+# Built-in corpora (rag/docs/{es,ca,en,...}) stay versioned per §7.
+rag/docs/stores/
+
 repeticion
 
 rag/debug_rag/

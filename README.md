@@ -248,9 +248,11 @@ These constants live in `rag/chat_pdfs.py`. Edit them directly to toggle pipelin
 
 ### Web interface
 
-Open `http://localhost:5000`. Supports document upload, streaming responses, pipeline settings and an `ES / EN / VAL` language selector through the UI. The selected web language is stored in the browser.
+Open `http://localhost:5000`. The sidebar is a full control panel — **Documents**, **Models** and **RAG Pipeline** tabs — plus document upload, streaming responses and an `ES / EN / VAL` language selector. The selected web language is stored in the browser.
 
-**Corpus selector** — the sidebar exposes an `ES / VAL / EN` switch that swaps the active PDF folder (`rag/docs/es | ca | en`) and its associated ChromaDB collection at runtime. Triggers indexing automatically if the target collection is empty. Backed by `POST /api/corpus` and `set_docs_folder_runtime()` in `rag/chat_pdfs.py`.
+**Vector stores** (Documents tab) — pick any store from the list (built-in corpora `ES / VAL / EN` plus your own), or type a name and create a new one. Creating a store makes a fresh PDF folder under `rag/docs/stores/<name>` (gitignored); upload PDFs and re-index to fill it. Switching stores swaps the active PDF folder and its ChromaDB collection at runtime, indexing automatically when the target collection is empty. User-created stores can be deleted from the same list (folder + vector DB). Backed by `GET/POST /api/stores`, `POST /api/stores/select`, `DELETE /api/stores/<name>`.
+
+**Models** (Models tab) — Ollama is detected automatically: the panel shows whether the server is running (with a one-click **Start Ollama** button if not) and lists every installed model, tagged by capability (`embedding` / `vision`). Assign a model to each pipeline role — RAG generator, chat / sub-queries, embeddings, contextual retrieval, RECOMP synthesis and vision / OCR — and the change takes effect on the next query without a restart. Changing the **embeddings** model re-derives the vector store path, so a re-index is required. Backed by `GET /api/ollama`, `POST /api/ollama/start`, `GET /api/ollama/models`, `GET/POST /api/models`, and `get_model_roles()` / `set_model_roles_runtime()` in `rag/chat_pdfs.py`.
 
 **Inline PDF viewer** — click the eye icon next to any document in the sidebar, or click any source citation in a RAG response, to open the PDF directly in the browser. Citations open at the page of the highest-scoring retrieved fragment for that document.
 

@@ -779,6 +779,16 @@ def get_runtime() -> ModuleType
 
 Every module in `rag/engine/` binds `cfg = get_runtime()` once at import and then reads configuration lazily as `cfg.NAME` (e.g. `cfg.USAR_RERANKER`, `cfg.MODELO_RAG`). Because `cfg` is a live reference to `rag/chat_pdfs.py`, toggles applied through the CLI or the web API (which mutate variables in `chat_pdfs`) take effect immediately, without restarting the process. Engine functions also reach sibling re-exported pipeline functions through `cfg`, so monkeypatching `chat_pdfs.X` in tests still affects internal call sites.
 
+### Runtime model-role switching
+
+```python
+MODEL_ROLE_VARS: dict[str, str]                          # role key -> MODELO_* variable name
+def get_model_roles() -> dict[str, str]
+def set_model_roles_runtime(overrides: dict[str, str]) -> dict[str, str]
+```
+
+`set_model_roles_runtime()` reassigns the model bound to any pipeline role (`rag`, `chat`, `embedding`, `contextual`, `recomp`, `ocr`) for the current process; the web control panel (`POST /api/models`) uses it. Because the engine reads `cfg.MODELO_*` lazily, the new model is used on the next call. Changing `embedding` also re-derives `PATH_DB`, `COLLECTION_NAME` and the embedding prefixes through `_derivar_paths_db()` / `_derivar_prefijos_embedding()` (the same helpers used at import and by `set_docs_folder_runtime()`), because the vector store path is namespaced by the embedding model — callers must rebind the Chroma collection and re-index afterwards.
+
 ---
 
 ## Appendix C — Full example flow

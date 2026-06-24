@@ -54,6 +54,7 @@ How to run (interactive CLI):
 #  |      +-- 3.6 Embedding prefixes
 #  |      +-- 3.7 Indexing, retrieval and ranking parameters
 #  |      +-- 3.8 Logging and process environment
+#  |      +-- 3.9 Model role runtime switching
 #  |
 #  PUBLIC FACADE
 #  +-- 4. System prompts      CHAT (identity + language); RAG prompt baked into Modelfile
@@ -298,11 +299,29 @@ def set_pipeline_flags(overrides: Dict[str, bool]) -> Dict[str, bool]:
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "es"))
 
-_carpeta_nombre = os.path.basename(os.path.abspath(CARPETA_DOCS))
-_embed_slug = MODELO_EMBEDDING.split(":")[0].replace("/", "_")
 
-PATH_DB = os.path.join(BASE_DIR, "vector_db", f"{_carpeta_nombre}_{_embed_slug}")
-COLLECTION_NAME = f"docs_{_carpeta_nombre}"
+def _derivar_paths_db(carpeta: str, modelo_embedding: str) -> tuple[str, str]:
+    """Derive ``(PATH_DB, COLLECTION_NAME)`` from a docs folder and embedding model.
+
+    The embedding slug is part of the DB path so vector stores built with
+    different embedding models never collide on disk.
+
+    Args:
+        carpeta: PDF directory (absolute or relative).
+        modelo_embedding: Ollama embedding model name; the tag is stripped for the slug.
+
+    Returns:
+        Tuple ``(path_db, collection_name)``.
+    """
+    nombre = os.path.basename(os.path.abspath(carpeta))
+    slug = modelo_embedding.split(":")[0].replace("/", "_")
+    return (
+        os.path.join(BASE_DIR, "vector_db", f"{nombre}_{slug}"),
+        f"docs_{nombre}",
+    )
+
+
+PATH_DB, COLLECTION_NAME = _derivar_paths_db(CARPETA_DOCS, MODELO_EMBEDDING)
 
 _DEFAULT_CARPETA_DOCS = CARPETA_DOCS
 _DEFAULT_PATH_DB = PATH_DB
@@ -328,12 +347,8 @@ def set_docs_folder_runtime(carpeta: str | None) -> tuple[str, str, str]:
         PATH_DB = _DEFAULT_PATH_DB
         COLLECTION_NAME = _DEFAULT_COLLECTION_NAME
     else:
-        abs_carp = os.path.abspath(carpeta)
-        cn = os.path.basename(abs_carp)
-        slug = MODELO_EMBEDDING.split(":")[0].replace("/", "_")
-        CARPETA_DOCS = abs_carp
-        PATH_DB = os.path.join(BASE_DIR, "vector_db", f"{cn}_{slug}")
-        COLLECTION_NAME = f"docs_{cn}"
+        CARPETA_DOCS = os.path.abspath(carpeta)
+        PATH_DB, COLLECTION_NAME = _derivar_paths_db(CARPETA_DOCS, MODELO_EMBEDDING)
     return previous
 
 
@@ -345,15 +360,25 @@ CARPETA_DEBUG_RAG = os.path.join(BASE_DIR, "debug_rag")
 
 # 3.6 Embedding prefixes
 
-_embed_name_lower = MODELO_EMBEDDING.lower().split(":")[0]
-if "nomic" in _embed_name_lower:
-    EMBED_PREFIX_QUERY = "search_query: "
-    EMBED_PREFIX_DOC = "search_document: "
-    _EMBED_PREFIX_DESC = "nomic prefixes (query/doc)"
-else:
-    EMBED_PREFIX_QUERY = ""
-    EMBED_PREFIX_DOC = ""
-    _EMBED_PREFIX_DESC = "no prefixes (native)"
+def _derivar_prefijos_embedding(modelo_embedding: str) -> tuple[str, str]:
+    """Return ``(query_prefix, doc_prefix)`` task prefixes for an embedding model.
+
+    Nomic embedding models expect ``search_query:`` / ``search_document:``
+    prefixes; other models embed the text unmodified.
+
+    Args:
+        modelo_embedding: Ollama embedding model name.
+
+    Returns:
+        Tuple ``(query_prefix, doc_prefix)``.
+    """
+    nombre = modelo_embedding.lower().split(":")[0]
+    if "nomic" in nombre:
+        return "search_query: ", "search_document: "
+    return "", ""
+
+
+EMBED_PREFIX_QUERY, EMBED_PREFIX_DOC = _derivar_prefijos_embedding(MODELO_EMBEDDING)
 
 
 # 3.7 Indexing, retrieval and ranking parameters
@@ -404,6 +429,72 @@ warnings.filterwarnings("ignore", message=".*huggingface.*")
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
+
+
+# 3.9 Model role runtime switching
+
+# Maps the public role keys used by the web UI / API to the module-level model
+# variables. Engine modules read these lazily through ``cfg``, so reassigning
+# them takes effect on the next pipeline call without a restart.
+MODEL_ROLE_VARS = {
+    "rag": "MODELO_RAG",
+    "chat": "MODELO_CHAT",
+    "embedding": "MODELO_EMBEDDING",
+    "contextual": "MODELO_CONTEXTUAL",
+    "recomp": "MODELO_RECOMP",
+    "ocr": "MODELO_OCR",
+}
+
+
+def get_model_roles() -> Dict[str, str]:
+    """Return the Ollama model currently assigned to each pipeline role."""
+    return {role: globals()[var] for role, var in MODEL_ROLE_VARS.items()}
+
+
+def set_model_roles_runtime(overrides: Dict[str, str]) -> Dict[str, str]:
+    """Reassign pipeline model roles for the current process.
+
+    Changing the ``embedding`` role also recomputes ``PATH_DB``,
+    ``COLLECTION_NAME`` and the embedding task prefixes, because the vector store
+    path is namespaced by the embedding model. Callers must rebind any cached
+    Chroma collection afterwards and re-index, since embeddings from different
+    models are not comparable.
+
+    Args:
+        overrides: Mapping of role keys (see ``MODEL_ROLE_VARS``) to Ollama model
+            names. Empty values are ignored; unknown keys raise ``ValueError``.
+
+    Returns:
+        The full role -> model mapping after applying the overrides.
+
+    Raises:
+        ValueError: If ``overrides`` contains an unsupported role key.
+    """
+    invalid = sorted(set(overrides) - set(MODEL_ROLE_VARS))
+    if invalid:
+        valid = ", ".join(MODEL_ROLE_VARS)
+        raise ValueError(f"Unsupported model role(s): {', '.join(invalid)}. Valid: {valid}")
+
+    global MODELO_RAG, MODELO_CHAT, MODELO_EMBEDDING, MODELO_CONTEXTUAL
+    global MODELO_RECOMP, MODELO_OCR, MODELO_DESC
+    global PATH_DB, COLLECTION_NAME, EMBED_PREFIX_QUERY, EMBED_PREFIX_DOC
+
+    embedding_changed = False
+    for role, modelo in overrides.items():
+        modelo = (modelo or "").strip()
+        if not modelo:
+            continue
+        globals()[MODEL_ROLE_VARS[role]] = modelo
+        if role == "embedding":
+            embedding_changed = True
+
+    if (overrides.get("rag") or "").strip():
+        MODELO_DESC = _inferir_descripcion_modelo(MODELO_RAG)
+    if embedding_changed:
+        PATH_DB, COLLECTION_NAME = _derivar_paths_db(CARPETA_DOCS, MODELO_EMBEDDING)
+        EMBED_PREFIX_QUERY, EMBED_PREFIX_DOC = _derivar_prefijos_embedding(MODELO_EMBEDDING)
+
+    return get_model_roles()
 
 
 # ─────────────────────────────────────────────
