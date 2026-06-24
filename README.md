@@ -258,6 +258,25 @@ Open `http://localhost:5000`. The sidebar is a full control panel — **Document
 
 For development with hot-reload: run `npm run dev` inside `rag/web/frontend/` ([Vite](https://vitejs.dev/) on :3000 proxies to [Flask](https://flask.palletsprojects.com/) on :5000).
 
+### Desktop app (`.exe`)
+
+The same UI can be packaged as a standalone Windows desktop app — a native window
+(no browser, no terminal) that bundles Python and the RAG engine, so the target
+machine needs no Python install:
+
+```bash
+pip install pyinstaller pywebview
+python packaging/build_exe.py     # → dist/MonkeyGrab/MonkeyGrab.exe
+```
+
+> [!IMPORTANT]
+> **Ollama is not bundled.** The LLM runs locally, so every machine still needs
+> [Ollama](https://ollama.com/) installed with the models pulled — the app
+> detects it, offers a one-click start, and lets you assign models per role.
+> Writable data (vector DBs, your stores, history) goes to `%LOCALAPPDATA%\MonkeyGrab`.
+
+Full build/distribution notes: [`packaging/README.md`](packaging/README.md).
+
 ---
 
 ## Known limitations

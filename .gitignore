@@ -79,6 +79,12 @@ rag/web/frontend/node_modules/
 rag/web/frontend/dist/
 rag/web/zip/
 
+# PyInstaller desktop-app build output (multi-GB bundle; never committed).
+/build/
+/dist/
+packaging/build/
+packaging/dist/
+
 .idea/
 .vscode/
 *.swp
@@ -87,6 +93,9 @@ rag/web/zip/
 Thumbs.db
 
 historial_chat.json
+rag/settings.json
+rag/monkeygrab_boot.log
+rag/monkeygrab_server.port
 .env
 !.env.example
 

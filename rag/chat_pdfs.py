@@ -297,6 +297,13 @@ def set_pipeline_flags(overrides: Dict[str, bool]) -> Dict[str, bool]:
 # 3.5 Paths and persistence
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Writable data root. Defaults to the package dir for source/dev runs (paths stay
+# identical to before), but the packaged desktop app points it at a per-user
+# location via ``MONKEYGRAB_DATA_DIR`` (e.g. ``%LOCALAPPDATA%/MonkeyGrab``) so the
+# vector DBs, history and debug dumps live outside the read-only application bundle.
+DATA_DIR = os.path.abspath(os.getenv("MONKEYGRAB_DATA_DIR", BASE_DIR))
+
 CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "es"))
 
 
@@ -304,7 +311,8 @@ def _derivar_paths_db(carpeta: str, modelo_embedding: str) -> tuple[str, str]:
     """Derive ``(PATH_DB, COLLECTION_NAME)`` from a docs folder and embedding model.
 
     The embedding slug is part of the DB path so vector stores built with
-    different embedding models never collide on disk.
+    different embedding models never collide on disk. The DB lives under
+    ``DATA_DIR`` so packaged builds write to a user-writable location.
 
     Args:
         carpeta: PDF directory (absolute or relative).
@@ -316,7 +324,7 @@ def _derivar_paths_db(carpeta: str, modelo_embedding: str) -> tuple[str, str]:
     nombre = os.path.basename(os.path.abspath(carpeta))
     slug = modelo_embedding.split(":")[0].replace("/", "_")
     return (
-        os.path.join(BASE_DIR, "vector_db", f"{nombre}_{slug}"),
+        os.path.join(DATA_DIR, "vector_db", f"{nombre}_{slug}"),
         f"docs_{nombre}",
     )
 
@@ -352,10 +360,10 @@ def set_docs_folder_runtime(carpeta: str | None) -> tuple[str, str, str]:
     return previous
 
 
-HISTORIAL_PATH = os.path.join(BASE_DIR, "historial_chat.json")
+HISTORIAL_PATH = os.path.join(DATA_DIR, "historial_chat.json")
 MAX_HISTORIAL_MENSAJES = 40
 
-CARPETA_DEBUG_RAG = os.path.join(BASE_DIR, "debug_rag")
+CARPETA_DEBUG_RAG = os.path.join(DATA_DIR, "debug_rag")
 
 
 # 3.6 Embedding prefixes

@@ -102,10 +102,11 @@ _indexing_lock = threading.RLock()
 
 _CORPUS_PRESET_IDS = frozenset({"es", "ca", "en"})
 
-# Vector-store layout: built-in corpora live directly under rag/docs/; user
-# stores created from the web UI live under rag/docs/stores/ (gitignored).
+# Vector-store layout: built-in corpora ship with the app under rag/docs/; user
+# stores created from the web UI live under DATA_DIR/docs/stores/ (writable
+# per-user location in packaged builds; rag/docs/stores/ — gitignored — in dev).
 _DOCS_ROOT = os.path.join(_project_root, "rag", "docs")
-_STORES_ROOT = os.path.join(_DOCS_ROOT, "stores")
+_STORES_ROOT = os.path.join(rag_engine.DATA_DIR, "docs", "stores")
 _BUILTIN_STORES = {
     "es": "Castellano",
     "ca": "Català / Valencià",
@@ -118,6 +119,10 @@ _RESERVED_STORE_NAMES = set(_BUILTIN_STORES) | {"stores"}
 # the same value for the version/start probes exposed to the control panel.
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
 _model_caps_cache: dict = {}  # digest -> capabilities list
+
+# Persisted UI choices (model roles, active store, pipeline flags) so the desktop
+# app remembers them across restarts. Lives in the writable data dir.
+_SETTINGS_FILE = os.path.join(rag_engine.DATA_DIR, "settings.json")
 
 
 def _infer_corpus_preset() -> str | None:
@@ -518,6 +523,80 @@ def _switch_store_folder(folder: str) -> None:
     gc.collect()
 
 
+def _save_persisted_settings() -> None:
+    """Persist model roles, active store and pipeline flags to the data dir.
+
+    Best-effort: lets the desktop app reopen with the user's last choices instead
+    of the startup defaults.
+    """
+    try:
+        data = {
+            "roles": rag_engine.get_model_roles(),
+            "active_store": _active_store_name(),
+            "flags": {var: bool(getattr(rag_engine, var, False)) for var in _SETTINGS_MAP.values()},
+        }
+        os.makedirs(os.path.dirname(_SETTINGS_FILE), exist_ok=True)
+        with open(_SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def _load_persisted_settings() -> None:
+    """Apply persisted settings at startup: model roles, then store, then flags.
+
+    Roles are applied before the store so an embedding-model change re-derives the
+    DB path before the store re-derives it again for its own folder. Missing or
+    invalid entries are skipped; the engine defaults stand when nothing is saved.
+    """
+    try:
+        # utf-8-sig tolerates a BOM if the file was hand-edited with a Windows tool.
+        with open(_SETTINGS_FILE, "r", encoding="utf-8-sig") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return
+
+    roles = data.get("roles") or {}
+    valid = {
+        k: v for k, v in roles.items()
+        if k in rag_engine.MODEL_ROLE_VARS and isinstance(v, str) and v.strip()
+    }
+    if valid:
+        try:
+            rag_engine.set_model_roles_runtime(valid)
+        except Exception:
+            pass
+
+    store = data.get("active_store")
+    if store and store != _active_store_name():
+        folder = _resolve_store_folder(store)
+        if folder:
+            try:
+                rag_engine.set_docs_folder_runtime(folder)
+            except Exception:
+                pass
+
+    for var, val in (data.get("flags") or {}).items():
+        if var in _SETTINGS_MAP.values():
+            setattr(rag_engine, var, bool(val))
+
+
+def _ollama_error_payload(exc: Exception) -> dict:
+    """Friendly JSON error for an Ollama/generation failure (avoids a raw 500 page)."""
+    text = str(exc).lower()
+    if isinstance(exc, ConnectionError) or "ollama" in text or "connect" in text:
+        return {
+            "ok": False,
+            "error": "ollama_unavailable",
+            "message": "No se pudo conectar con Ollama. Comprueba que está en ejecución (pestaña Modelos).",
+        }
+    return {
+        "ok": False,
+        "error": "generation_error",
+        "message": f"Error al procesar la consulta: {exc}",
+    }
+
+
 # ─────────────────────────────────────────────
 # SECTION 4: API ROUTES
 # ─────────────────────────────────────────────
@@ -724,34 +803,38 @@ def api_rag():
         }), 400
 
     coll = _get_collection()
-    fragmentos_ranked, _, metricas = rag_engine.realizar_busqueda_hibrida(
-        pregunta, coll
-    )
+    try:
+        fragmentos_ranked, _, metricas = rag_engine.realizar_busqueda_hibrida(
+            pregunta, coll
+        )
 
-    if not fragmentos_ranked:
-        return jsonify({
-            "ok": False,
-            "error": "no_results",
-            "message": "No se encontró información relevante en los documentos.",
-        }), 200
+        if not fragmentos_ranked:
+            return jsonify({
+                "ok": False,
+                "error": "no_results",
+                "message": "No se encontró información relevante en los documentos.",
+            }), 200
 
-    fragmentos_finales, metricas_contexto = rag_engine.preparar_fragmentos_para_generacion(
-        fragmentos_ranked,
-        coll,
-    )
-    metricas = {**metricas, "fase_contexto": metricas_contexto}
-    if not fragmentos_finales:
-        return jsonify({
-            "ok": False,
-            "error": "no_results",
-            "message": "No se encontró información relevante.",
-        }), 200
+        fragmentos_finales, metricas_contexto = rag_engine.preparar_fragmentos_para_generacion(
+            fragmentos_ranked,
+            coll,
+        )
+        metricas = {**metricas, "fase_contexto": metricas_contexto}
+        if not fragmentos_finales:
+            return jsonify({
+                "ok": False,
+                "error": "no_results",
+                "message": "No se encontró información relevante.",
+            }), 200
 
-    sources = _format_sources(fragmentos_finales)
+        sources = _format_sources(fragmentos_finales)
 
-    mensaje_usuario = rag_engine._preparar_mensaje_usuario_rag(
-        pregunta, fragmentos_finales
-    )
+        mensaje_usuario = rag_engine._preparar_mensaje_usuario_rag(
+            pregunta, fragmentos_finales
+        )
+    except Exception as e:
+        # Retrieval / context prep failed (commonly Ollama down for embeddings).
+        return jsonify(_ollama_error_payload(e)), 200
 
     if stream:
         def generate():
@@ -1063,6 +1146,7 @@ def api_settings_post():
                 continue
             setattr(rag_engine, engine_var, val)
             updated[fe_key] = val
+    _save_persisted_settings()
     return jsonify({"ok": True, "settings": updated})
 
 
@@ -1134,6 +1218,7 @@ def api_models_post():
         return jsonify({"ok": False, "error": str(e)}), 400
 
     embedding_changed = rag_engine.MODELO_EMBEDDING != prev_embed
+    _save_persisted_settings()
     resp = {"ok": True, "roles": roles, "embedding_changed": embedding_changed}
     if embedding_changed:
         with _indexing_lock:
@@ -1182,6 +1267,7 @@ def api_stores_create():
         return jsonify({"ok": False, "error": "already_exists"}), 409
     os.makedirs(folder, exist_ok=True)
     _switch_store_folder(folder)
+    _save_persisted_settings()
     return jsonify({
         "ok": True,
         "active": name,
@@ -1203,6 +1289,7 @@ def api_stores_select():
     if not folder:
         return jsonify({"ok": False, "error": "unknown_store"}), 404
     _switch_store_folder(folder)
+    _save_persisted_settings()
     coll = _get_collection()
     total = coll.count()
     if total == 0:
@@ -1242,7 +1329,12 @@ def api_stores_delete(name):
             shutil.rmtree(path_db, ignore_errors=True)
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+    _save_persisted_settings()
     return jsonify({"ok": True, "active": _active_store_name(), "stores": _all_stores()})
+
+
+# Apply any persisted UI choices (model roles / store / flags) before serving.
+_load_persisted_settings()
 
 
 # ─────────────────────────────────────────────

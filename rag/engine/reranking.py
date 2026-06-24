@@ -9,6 +9,7 @@ are observed without any per-call synchronization.
 import contextlib
 import io
 import logging
+import os
 from collections import Counter
 from typing import Any, Dict, List, Tuple
 
@@ -26,11 +27,19 @@ _reranker_model = None
 
 
 def _detectar_dispositivo_reranker() -> str:
-    """Detect the best available device for the reranker.
+    """Detect the device for the reranker.
+
+    Honors the ``RERANKER_DEVICE`` env override (``"cpu"`` / ``"cuda"``); the
+    packaged desktop app sets ``"cpu"`` so the limited VRAM stays free for the
+    LLM. Without the override, returns ``"cuda"`` when a CUDA GPU is available,
+    otherwise ``"cpu"``.
 
     Returns:
-        ``"cuda"`` if a CUDA GPU is available, otherwise ``"cpu"``.
+        ``"cuda"`` or ``"cpu"``.
     """
+    override = os.getenv("RERANKER_DEVICE", "").strip().lower()
+    if override in ("cpu", "cuda"):
+        return override
     try:
         import torch
         if torch.cuda.is_available():
