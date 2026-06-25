@@ -24,15 +24,17 @@ cfg = get_runtime()
 
 
 _reranker_model = None
+_reranker_device = None  # device the singleton actually loaded on ("cuda"/"cpu")
 
 
 def _detectar_dispositivo_reranker() -> str:
-    """Detect the device for the reranker.
+    """Detect the preferred device for the reranker.
 
-    Honors the ``RERANKER_DEVICE`` env override (``"cpu"`` / ``"cuda"``); the
-    packaged desktop app sets ``"cpu"`` so the limited VRAM stays free for the
-    LLM. Without the override, returns ``"cuda"`` when a CUDA GPU is available,
-    otherwise ``"cpu"``.
+    Honors the ``RERANKER_DEVICE`` env override (``"cpu"`` / ``"cuda"``). Without
+    the override, returns ``"cuda"`` when a CUDA GPU is available, otherwise
+    ``"cpu"``. The desktop app no longer pins this to CPU: every stage runs on
+    the GPU by default and ``obtener_modelo_reranker`` falls back to CPU if the
+    GPU load fails (limited VRAM, driver issues).
 
     Returns:
         ``"cuda"`` or ``"cpu"``.
@@ -49,44 +51,57 @@ def _detectar_dispositivo_reranker() -> str:
     return "cpu"
 
 
+def _cargar_crossencoder(modelo_nombre: str, device: str):
+    """Load a ``CrossEncoder`` on ``device`` (FP16 on CUDA). Raises on failure."""
+    model_kwargs = {"torch_dtype": "float16"} if device == "cuda" else {}
+    with contextlib.redirect_stderr(io.StringIO()):
+        return cfg.CrossEncoder(modelo_nombre, device=device, model_kwargs=model_kwargs)
+
+
 def obtener_modelo_reranker():
     """Return the Cross-Encoder singleton, loading it lazily on first call.
 
-    Uses FP16 on CUDA when a GPU is available. The model variant is
-    controlled by ``RERANKER_MODEL_QUALITY`` (``"quality"`` or fast).
+    Loads on the GPU by default (FP16 on CUDA). If the GPU load fails -- common
+    on limited VRAM or with a missing/incompatible driver -- it falls back to
+    CPU instead of disabling the reranker. The model variant is controlled by
+    ``RERANKER_MODEL_QUALITY`` (``"quality"`` or fast).
 
     Returns:
-        The loaded ``CrossEncoder`` instance, or ``None`` on failure.
+        The loaded ``CrossEncoder`` instance, or ``None`` if both devices fail.
     """
-    global _reranker_model
+    global _reranker_model, _reranker_device
 
     if not cfg.USAR_RERANKER:
         return None
 
     if _reranker_model is None:
+        if cfg.RERANKER_MODEL_QUALITY == "quality":
+            modelo_nombre = "BAAI/bge-reranker-v2-m3"
+        else:
+            modelo_nombre = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+        device = _detectar_dispositivo_reranker()
+        ui.debug(f"Loading reranker: {modelo_nombre}")
+        ui.debug(f"device: {device.upper()}" + (" (FP16)" if device == "cuda" else ""))
+
         try:
-            if cfg.RERANKER_MODEL_QUALITY == "quality":
-                modelo_nombre = "BAAI/bge-reranker-v2-m3"
-            else:
-                modelo_nombre = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-
-            device = _detectar_dispositivo_reranker()
-
-            ui.debug(f"Loading reranker: {modelo_nombre}")
-            ui.debug(f"device: {device.upper()}" + (" (FP16)" if device == "cuda" else ""))
-
-            model_kwargs = {"torch_dtype": "float16"} if device == "cuda" else {}
-            with contextlib.redirect_stderr(io.StringIO()):
-                _reranker_model = cfg.CrossEncoder(
-                    modelo_nombre,
-                    device=device,
-                    model_kwargs=model_kwargs,
-                )
-
+            _reranker_model = _cargar_crossencoder(modelo_nombre, device)
+            _reranker_device = device
             ui.debug(f"reranker loaded on {device.upper()}")
         except Exception as e:
-            logging.error(f"Error loading reranker model: {e}")
-            return None
+            if device == "cuda":
+                logging.warning(f"Reranker GPU load failed ({e}); falling back to CPU")
+                ui.debug("reranker GPU load failed; falling back to CPU")
+                try:
+                    _reranker_model = _cargar_crossencoder(modelo_nombre, "cpu")
+                    _reranker_device = "cpu"
+                    ui.debug("reranker loaded on CPU (fallback)")
+                except Exception as e2:
+                    logging.error(f"Error loading reranker model on CPU: {e2}")
+                    return None
+            else:
+                logging.error(f"Error loading reranker model: {e}")
+                return None
 
     return _reranker_model
 
@@ -122,6 +137,10 @@ def rerank_resultados(
     if reranker is None:
         metricas['resultados_salida'] = len(documentos_recuperados)
         return documentos_recuperados, metricas
+
+    # Reflect the device the model actually loaded on (CPU if the GPU load fell back).
+    if _reranker_device:
+        metricas['dispositivo'] = _reranker_device
 
     try:
         import time

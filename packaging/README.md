@@ -10,8 +10,9 @@ machine needs **no Python**.
 > **Ollama is not bundled.** A local RAG runs the LLM on the machine, and the
 > models are multi-GB and hardware-specific — they cannot live inside the `.exe`.
 > Every machine that runs MonkeyGrab needs **Ollama installed** with the desired
-> models pulled (`ollama pull …`). The app detects Ollama, offers to start it, and
-> lets you assign models per role from the **Models** tab.
+> models pulled (`ollama pull …`). The app starts Ollama automatically at launch if
+> it is installed but not running, and lets you assign models per role from the
+> **Models** tab.
 
 ## Build
 

@@ -115,6 +115,11 @@ _BUILTIN_STORES = {
 _STORE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{1,40}$")
 _RESERVED_STORE_NAMES = set(_BUILTIN_STORES) | {"stores"}
 
+# Built-in corpora the user removed from the panel. They ship inside the bundle
+# (read-only) so they can't be deleted from disk; instead we drop their vector
+# index and hide them from the list. Restorable via POST /api/stores/restore.
+_hidden_stores: set = set()
+
 # Ollama runtime control. The ollama client honours OLLAMA_HOST itself; we use
 # the same value for the version/start probes exposed to the control panel.
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
@@ -448,6 +453,21 @@ def _start_ollama_process() -> Optional[str]:
     return None
 
 
+def start_ollama_if_needed() -> None:
+    """Start Ollama in the background if it is installed but not already running.
+
+    Non-blocking: launches ``ollama serve`` on a daemon thread so app startup is
+    never delayed by the Ollama boot. A no-op when Ollama is already reachable or
+    not installed. Called at desktop/web launch so the UI works without the user
+    starting the server by hand.
+    """
+    if _ollama_version() is not None:
+        return
+    if shutil.which("ollama") is None:
+        return
+    threading.Thread(target=_start_ollama_process, daemon=True, name="ollama-autostart").start()
+
+
 def _store_pdf_count(folder: str) -> int:
     """Count PDF files directly inside a store folder."""
     try:
@@ -483,6 +503,8 @@ def _all_stores() -> list:
     """List built-in corpora plus user-created stores under rag/docs/stores/."""
     stores = []
     for sid, label in _BUILTIN_STORES.items():
+        if sid in _hidden_stores:
+            continue
         folder = os.path.join(_DOCS_ROOT, sid)
         if os.path.isdir(folder):
             stores.append(_store_entry(sid, label, True, folder))
@@ -523,6 +545,69 @@ def _switch_store_folder(folder: str) -> None:
     gc.collect()
 
 
+def _first_available_store_folder(exclude: str = "") -> str:
+    """Pick a sensible store to fall back to when the active one is deleted.
+
+    Prefers a visible built-in corpus, then any user store, finally the default
+    ``es`` corpus. Skips ``exclude`` and any hidden built-in.
+    """
+    for sid in _BUILTIN_STORES:
+        if sid == exclude or sid in _hidden_stores:
+            continue
+        folder = os.path.join(_DOCS_ROOT, sid)
+        if os.path.isdir(folder):
+            return folder
+    if os.path.isdir(_STORES_ROOT):
+        for nm in sorted(os.listdir(_STORES_ROOT)):
+            if nm == exclude:
+                continue
+            folder = os.path.join(_STORES_ROOT, nm)
+            if os.path.isdir(folder):
+                return folder
+    return os.path.join(_DOCS_ROOT, "es")
+
+
+def _release_chroma_cache() -> None:
+    """Best-effort release of ChromaDB's cached clients so file handles free up.
+
+    On Windows ``chroma.sqlite3`` stays locked while a client is cached, which
+    blocks deleting the store's DB folder; clearing the cache lets the retry loop
+    in ``_remove_dir_with_retry`` succeed. Version-tolerant and silent on failure.
+    """
+    try:
+        from chromadb.api.shared_system_client import SharedSystemClient
+        SharedSystemClient.clear_system_cache()
+    except Exception:
+        try:
+            from chromadb.api.client import SharedSystemClient
+            SharedSystemClient.clear_system_cache()
+        except Exception:
+            pass
+    gc.collect()
+
+
+def _remove_dir_with_retry(path: str) -> Optional[str]:
+    """Remove a directory tree, retrying to ride out transient Windows file locks.
+
+    Returns ``None`` on success (or if the path is already absent), else the last
+    error string when the directory still exists after all attempts.
+    """
+    if not os.path.isdir(path):
+        return None
+    last = None
+    for attempt in range(5):
+        try:
+            shutil.rmtree(path)
+            return None
+        except FileNotFoundError:
+            return None
+        except Exception as e:
+            last = str(e)
+            _release_chroma_cache()
+            time.sleep(0.4 * (attempt + 1))
+    return None if not os.path.isdir(path) else (last or "delete_failed")
+
+
 def _save_persisted_settings() -> None:
     """Persist model roles, active store and pipeline flags to the data dir.
 
@@ -534,6 +619,7 @@ def _save_persisted_settings() -> None:
             "roles": rag_engine.get_model_roles(),
             "active_store": _active_store_name(),
             "flags": {var: bool(getattr(rag_engine, var, False)) for var in _SETTINGS_MAP.values()},
+            "hidden_stores": sorted(_hidden_stores),
         }
         os.makedirs(os.path.dirname(_SETTINGS_FILE), exist_ok=True)
         with open(_SETTINGS_FILE, "w", encoding="utf-8") as f:
@@ -555,6 +641,11 @@ def _load_persisted_settings() -> None:
             data = json.load(f)
     except (OSError, ValueError):
         return
+
+    hidden = data.get("hidden_stores")
+    if isinstance(hidden, list):
+        _hidden_stores.clear()
+        _hidden_stores.update(h for h in hidden if h in _BUILTIN_STORES)
 
     roles = data.get("roles") or {}
     valid = {
@@ -1247,6 +1338,7 @@ def api_stores_list():
         "stores": _all_stores(),
         "active": _active_store_name(),
         "embedding": rag_engine.MODELO_EMBEDDING,
+        "hidden": sorted(_hidden_stores),
     })
 
 
@@ -1309,28 +1401,63 @@ def api_stores_select():
 
 @app.route("/api/stores/<name>", methods=["DELETE"])
 def api_stores_delete(name):
-    """Delete a user-created store (folder + its vector DB). Built-ins are protected."""
+    """Remove a vector store.
+
+    User stores are deleted from disk (docs folder + vector DB). Built-in corpora
+    ship read-only inside the bundle, so they are instead hidden from the panel
+    and their vector index is dropped; restore them with POST /api/stores/restore.
+    """
     if _state["indexing"]:
         return jsonify({"ok": False, "error": "indexing_in_progress"}), 409
-    if name in _BUILTIN_STORES:
-        return jsonify({"ok": False, "error": "cannot_delete_builtin"}), 400
-    folder = _resolve_store_folder(name)
-    if not folder or os.path.dirname(os.path.abspath(folder)) != os.path.abspath(_STORES_ROOT):
-        return jsonify({"ok": False, "error": "unknown_store"}), 404
+
+    builtin = name in _BUILTIN_STORES
+    if builtin:
+        folder = os.path.join(_DOCS_ROOT, name)
+    else:
+        folder = _resolve_store_folder(name)
+        if not folder or os.path.dirname(os.path.abspath(folder)) != os.path.abspath(_STORES_ROOT):
+            return jsonify({"ok": False, "error": "unknown_store"}), 404
 
     path_db, _ = rag_engine._derivar_paths_db(folder, rag_engine.MODELO_EMBEDDING)
-    if os.path.abspath(folder) == os.path.abspath(rag_engine.CARPETA_DOCS):
-        _switch_store_folder(os.path.join(_DOCS_ROOT, "es"))
+    was_active = os.path.abspath(folder) == os.path.abspath(rag_engine.CARPETA_DOCS)
+
+    if builtin:
+        _hidden_stores.add(name)
+    # Release the active collection before touching files so Windows can unlock
+    # chroma.sqlite3; switching also rebinds the engine to a surviving store.
+    if was_active:
+        _switch_store_folder(_first_available_store_folder(exclude=name))
     _state["collection"] = None
-    gc.collect()
-    try:
-        shutil.rmtree(folder, ignore_errors=True)
-        if os.path.isdir(path_db):
-            shutil.rmtree(path_db, ignore_errors=True)
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+    _release_chroma_cache()
+
+    # Drop the vector DB (both store kinds). For user stores also remove the docs
+    # folder; if that fails the store would reappear, so surface a real error.
+    _remove_dir_with_retry(path_db)
+    if not builtin:
+        folder_err = _remove_dir_with_retry(folder)
+        if folder_err:
+            return jsonify({"ok": False, "error": folder_err}), 500
+
     _save_persisted_settings()
-    return jsonify({"ok": True, "active": _active_store_name(), "stores": _all_stores()})
+    return jsonify({
+        "ok": True,
+        "active": _active_store_name(),
+        "stores": _all_stores(),
+        "hidden": sorted(_hidden_stores),
+    })
+
+
+@app.route("/api/stores/restore", methods=["POST"])
+def api_stores_restore():
+    """Un-hide every built-in corpus previously removed from the panel."""
+    _hidden_stores.clear()
+    _save_persisted_settings()
+    return jsonify({
+        "ok": True,
+        "active": _active_store_name(),
+        "stores": _all_stores(),
+        "hidden": [],
+    })
 
 
 # Apply any persisted UI choices (model roles / store / flags) before serving.
@@ -1345,6 +1472,7 @@ def main():
     port = int(os.getenv("MONKEYGRAB_PORT", "5000"))
     host = os.getenv("MONKEYGRAB_HOST", "127.0.0.1")
     has_react = os.path.isfile(os.path.join(_react_dist, "index.html"))
+    start_ollama_if_needed()
     print(f"\n  MonkeyGrab Web — http://{host}:{port}")
     if has_react:
         print(f"  Frontend React: {_react_dist}")

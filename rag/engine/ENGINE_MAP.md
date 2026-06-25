@@ -268,11 +268,13 @@ auxiliary sub-queries for long questions.
 Relevant data:
 
 - `_reranker_model`: lazy Cross-Encoder singleton.
+- `_reranker_device`: device the singleton actually loaded on (`cuda`/`cpu`), after any fallback.
 
 Functions:
 
-- `_detectar_dispositivo_reranker()`: returns `cuda` if PyTorch detects a GPU; otherwise `cpu`.
-- `obtener_modelo_reranker()`: loads the Cross-Encoder according to `RERANKER_MODEL_QUALITY` and reuses it.
+- `_detectar_dispositivo_reranker()`: returns `cuda` if PyTorch detects a GPU (or the `RERANKER_DEVICE` override); otherwise `cpu`.
+- `_cargar_crossencoder(modelo_nombre, device)`: loads a `CrossEncoder` on `device` (FP16 on CUDA).
+- `obtener_modelo_reranker()`: loads the Cross-Encoder according to `RERANKER_MODEL_QUALITY` and reuses it; falls back from GPU to CPU if the GPU load fails.
 - `rerank_resultados(pregunta, documentos_recuperados, top_k=None)`: scores candidates with the Cross-Encoder, copies `score_reranker` and returns the `top_k`.
 - `generar_queries_con_llm(pregunta)`: generates up to 3 auxiliary queries with `MODELO_CHAT`.
 - `_validar_coherencia_query(query)`: rejects incoherent bag-of-words queries.

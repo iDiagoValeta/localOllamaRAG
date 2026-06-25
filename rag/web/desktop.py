@@ -17,6 +17,8 @@ Behavior:
     * Any boot failure is written to ``<data_dir>/monkeygrab_boot.log`` (and shown
       in the window) so packaged builds are diagnosable without a console.
     * Closing the window shuts the server down and exits the process.
+    * If Ollama is installed but not running, it is started automatically in the
+      background at boot (no-op when already running or not installed).
 
 Environment:
     * ``MONKEYGRAB_NO_WINDOW=1`` -- run the server only (no GUI); useful for
@@ -110,7 +112,7 @@ LOADING_HTML = """
     justify-content:center}
   .box{text-align:center}
   .ring{width:46px;height:46px;margin:0 auto 18px;border-radius:50%;
-    border:3px solid rgba(242,125,38,.25);border-top-color:#f27d26;
+    border:3px solid rgba(240,164,114,.25);border-top-color:#F0A472;
     animation:spin 1s linear infinite}
   h1{font-size:20px;font-weight:800;letter-spacing:-.01em;margin:0 0 6px}
   p{font-size:13px;color:#a1a1aa;margin:0}
@@ -220,6 +222,13 @@ def _boot(window, port: int) -> None:
     """
     try:
         globals()["_SERVER"] = _start_server(port)
+        # Bring up Ollama in the background if it is installed but not running, so
+        # the UI is usable without the user starting the server by hand.
+        try:
+            from rag.web.app import start_ollama_if_needed
+            start_ollama_if_needed()
+        except Exception:
+            pass
         _wait_until_ready(port)
         window.load_url(f"http://{HOST}:{port}/")
     except Exception as e:  # surface the failure in the window + a log file
@@ -266,10 +275,9 @@ def _run_headless(port: int) -> None:
 
 def main() -> None:
     """Launch the desktop window (or a headless server) and run until closed."""
-    # On modest GPUs the LLM needs all the VRAM; keep the reranker on CPU in the
-    # packaged app (overridable via the env var). Source runs keep auto-detection.
-    if getattr(sys, "frozen", False):
-        os.environ.setdefault("RERANKER_DEVICE", "cpu")
+    # Every pipeline stage (reranker included) runs on the GPU by default; the
+    # reranker falls back to CPU on its own when the GPU load fails. Set
+    # RERANKER_DEVICE=cpu in the environment to force CPU.
     _ensure_std_streams()
     _ensure_data_dir()
     port = _resolve_port()

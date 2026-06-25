@@ -115,9 +115,6 @@ const STRINGS = {
     autoRefresh: 'La página se actualizará automáticamente al terminar.',
     retry: 'Reintentar', connErrorTitle: 'Error de conexión',
     connecting: 'Conectando con MonkeyGrab…',
-    addingMsg: '⟳ Añadiendo {n} PDF(s) y re-indexando…',
-    reindexingMsg: '⟳ Re-indexando con ajustes actuales…',
-    reindexDone: '✓ Re-indexación completada: {total} fragmentos, {docs} documentos.',
     reindexError: '✗ Error: {error}', reindexConnError: '✗ Error de conexión.',
     confirmDelete: '¿Eliminar "{name}"? Se borrará del índice y del disco.',
     docDeleted: '✓ Documento **{name}** eliminado.',
@@ -130,7 +127,6 @@ const STRINGS = {
     noServer: 'No se pudo conectar con el servidor. ¿Está Flask ejecutándose?',
     retryError: 'Error al reintentar',
     indexingFailed: 'La indexación no pudo completarse.',
-    historyCleared: 'Historial limpiado.',
     appFooter: 'RAG local con Ollama',
     noResults: 'No se encontró información relevante en los documentos.',
     tabModels: 'Modelos',
@@ -142,7 +138,10 @@ const STRINGS = {
     storeInvalidName: 'Nombre inválido (usa letras, números, - o _).',
     storeNotIndexed: 'sin indexar',
     deleteStore: 'Eliminar almacén',
+    hideStore: 'Quitar del panel',
     confirmDeleteStore: '¿Eliminar el almacén "{name}"? Se borrarán sus PDFs y su base vectorial.',
+    confirmHideStore: '¿Quitar el corpus integrado "{name}" del panel? Se eliminará su índice vectorial; podrás restaurarlo más tarde.',
+    restoreStores: 'Restaurar corpus integrados',
     storeDeleteError: '✗ Error al eliminar el almacén: {error}',
     storeEmptyHint: 'Almacén vacío. Sube PDFs y reindexa para activarlo.',
     modelsRoles: 'Roles de modelo',
@@ -198,9 +197,6 @@ const STRINGS = {
     autoRefresh: 'The page will refresh automatically when done.',
     retry: 'Retry', connErrorTitle: 'Connection error',
     connecting: 'Connecting to MonkeyGrab…',
-    addingMsg: '⟳ Adding {n} PDF(s) and re-indexing…',
-    reindexingMsg: '⟳ Re-indexing with current settings…',
-    reindexDone: '✓ Re-indexing complete: {total} fragments, {docs} documents.',
     reindexError: '✗ Error: {error}', reindexConnError: '✗ Connection error.',
     confirmDelete: 'Delete "{name}"? It will be removed from the index and disk.',
     docDeleted: '✓ Document **{name}** deleted.',
@@ -213,7 +209,6 @@ const STRINGS = {
     noServer: 'Could not connect to the server. Is Flask running?',
     retryError: 'Retry failed',
     indexingFailed: 'Indexing could not be completed.',
-    historyCleared: 'History cleared.',
     appFooter: 'Local RAG with Ollama',
     noResults: 'No relevant information found in the documents.',
     tabModels: 'Models',
@@ -225,7 +220,10 @@ const STRINGS = {
     storeInvalidName: 'Invalid name (use letters, numbers, - or _).',
     storeNotIndexed: 'not indexed',
     deleteStore: 'Delete store',
+    hideStore: 'Remove from panel',
     confirmDeleteStore: 'Delete store "{name}"? Its PDFs and vector DB will be removed.',
+    confirmHideStore: 'Remove the built-in corpus "{name}" from the panel? Its vector index will be deleted; you can restore it later.',
+    restoreStores: 'Restore built-in corpora',
     storeDeleteError: '✗ Error deleting store: {error}',
     storeEmptyHint: 'Empty store. Upload PDFs and re-index to activate it.',
     modelsRoles: 'Model roles',
@@ -281,9 +279,6 @@ const STRINGS = {
     autoRefresh: "La pàgina s'actualitzarà automàticament en acabar.",
     retry: 'Reintentar', connErrorTitle: 'Error de connexió',
     connecting: 'Connectant amb MonkeyGrab…',
-    addingMsg: '⟳ Afegint {n} PDF(s) i re-indexant…',
-    reindexingMsg: '⟳ Re-indexant amb ajustos actuals…',
-    reindexDone: '✓ Re-indexació completada: {total} fragments, {docs} documents.',
     reindexError: '✗ Error: {error}', reindexConnError: '✗ Error de connexió.',
     confirmDelete: 'Eliminar "{name}"? S\'esborrarà de l\'índex i del disc.',
     docDeleted: '✓ Document **{name}** eliminat.',
@@ -296,7 +291,6 @@ const STRINGS = {
     noServer: "No s'ha pogut connectar amb el servidor. Està Flask executant-se?",
     retryError: 'Error en reintentar',
     indexingFailed: "La indexació no s'ha pogut completar.",
-    historyCleared: 'Historial netejat.',
     appFooter: 'RAG local amb Ollama',
     noResults: "No s'ha trobat informació rellevant als documents.",
     tabModels: 'Models',
@@ -308,7 +302,10 @@ const STRINGS = {
     storeInvalidName: 'Nom no vàlid (usa lletres, números, - o _).',
     storeNotIndexed: 'sense indexar',
     deleteStore: 'Eliminar magatzem',
+    hideStore: 'Llevar del tauler',
     confirmDeleteStore: 'Eliminar el magatzem "{name}"? S\'esborraran els seus PDFs i la seua base vectorial.',
+    confirmHideStore: 'Voleu llevar el corpus integrat "{name}" del tauler? S\'eliminarà el seu índex vectorial; podreu restaurar-lo més tard.',
+    restoreStores: 'Restaurar corpus integrats',
     storeDeleteError: "✗ Error en eliminar el magatzem: {error}",
     storeEmptyHint: 'Magatzem buit. Puja PDFs i reindexa per a activar-lo.',
     modelsRoles: 'Rols de model',
@@ -352,7 +349,6 @@ function fill(tpl: string, vars: Record<string, string | number>): string {
 // =============================================================================
 
 const API_BASE = '/api';
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const api = {
   init: () =>
@@ -410,6 +406,9 @@ const api = {
 
   deleteStore: (name: string) =>
     fetch(`${API_BASE}/stores/${encodeURIComponent(name)}`, { method: 'DELETE' }).then(r => r.json()),
+
+  restoreStores: () =>
+    fetch(`${API_BASE}/stores/restore`, { method: 'POST' }).then(r => r.json()),
 
   ollamaStatus: () =>
     fetch(`${API_BASE}/ollama`).then(r => r.json()),
@@ -724,6 +723,7 @@ export default function App() {
   const [deletingDoc, setDeletingDoc] = useState<string | null>(null);
   const [pendingReindexFiles, setPendingReindexFiles] = useState<File[]>([]);
   const [stores, setStores] = useState<VectorStore[]>([]);
+  const [hiddenStores, setHiddenStores] = useState<string[]>([]);
   const [activeStore, setActiveStore] = useState<string>('es');
   const [newStoreName, setNewStoreName] = useState('');
   const [storeBusy, setStoreBusy] = useState(false);
@@ -819,7 +819,7 @@ export default function App() {
           setIsIndexing(true);
           setIndexingError(initData.error || null);
           if (initData.progress) setIndexingProgress(initData.progress);
-          setTimeout(() => { if (!cancelled) init(); }, 5000);
+          setTimeout(() => { if (!cancelled) init(); }, 2000);
         }
 
         try {
@@ -860,82 +860,35 @@ export default function App() {
     }
   }, [settings, lang]);
 
-  const waitForIndexingToFinish = useCallback(async () => {
-    for (;;) {
-      await sleep(1500);
-      const status = await api.init();
-      if (status.ok) return status;
-      if (status.indexing) {
-        setIndexingProgress(status.progress || null);
-        setIndexingError(status.error || null);
-        continue;
-      }
-      throw new Error(status.message || status.error || T.indexingFailed);
-    }
-  }, [lang]);
-
-  // ---- Reindex (full, con ajustes del pipeline) ----
+  // ---- Reindex (full, with current pipeline settings) ----
+  // Hands off to the full-screen blocking indexing UI (no chat system messages);
+  // the init poller refreshes the document list + fragment count on completion.
   const handleReindex = useCallback(async () => {
     if (isReindexing) return;
     setIsReindexing(true);
+    setSettingsError(null);
     const fileList = [...pendingReindexFiles];
     setPendingReindexFiles([]);
-    setMessages(prev => [...prev, {
-      id: Date.now().toString(),
-      role: 'system',
-      content: fileList.length ? fill(T.addingMsg, { n: fileList.length }) : T.reindexingMsg,
-      mode,
-    }]);
-
     try {
       const result = await api.reindex(fileList.length ? fileList : undefined);
       if (result.ok && result.indexing) {
         setIndexingError(null);
         setIndexingProgress(result.progress || null);
-
-        const finalStatus = await waitForIndexingToFinish();
-        setMode(finalStatus.mode || mode);
-        setTotalFragments(finalStatus.total_fragments || 0);
-        setDocuments(finalStatus.documents || []);
-        setIndexingProgress(null);
-
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'system',
-          content: fill(T.reindexDone, { total: finalStatus.total_fragments || 0, docs: (finalStatus.documents || []).length }),
-          mode,
-        }]);
+        setIsIndexing(true);
+        setRetryTrigger(t => t + 1);
       } else if (result.ok) {
         setTotalFragments(result.total_fragments || 0);
         setDocuments(result.documents || []);
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'system',
-          content: fill(T.reindexDone, { total: result.total_fragments || 0, docs: (result.documents || []).length }),
-          mode,
-        }]);
       } else {
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'system',
-          content: fill(T.reindexError, { error: result.error }),
-          mode,
-          isError: true,
-        }]);
+        setSettingsError(fill(T.reindexError, { error: result.error }));
       }
     } catch {
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        role: 'system',
-        content: T.reindexConnError,
-        mode,
-        isError: true,
-      }]);
+      setSettingsError(T.reindexConnError);
     } finally {
       setIsReindexing(false);
       if (reindexFileInputRef.current) reindexFileInputRef.current.value = '';
     }
-  }, [mode, isReindexing, pendingReindexFiles, waitForIndexingToFinish, lang]);
+  }, [isReindexing, pendingReindexFiles, lang]);
 
   // ---- Delete document ----
   const handleDeleteDoc = useCallback(async (docName: string) => {
@@ -980,6 +933,7 @@ export default function App() {
     const res = await api.listStores().catch(() => null);
     if (res?.ok) {
       setStores(res.stores || []);
+      setHiddenStores(res.hidden || []);
       setActiveStore(res.active || 'es');
     }
   }, []);
@@ -1063,16 +1017,18 @@ export default function App() {
     }
   }, [newStoreName, storeBusy, lang]);
 
-  // ---- Delete a user-created store ----
-  const handleStoreDelete = useCallback(async (name: string) => {
+  // ---- Delete a store (user store: removed; built-in: hidden + index dropped) ----
+  const handleStoreDelete = useCallback(async (store: VectorStore) => {
     if (storeBusy) return;
-    if (!window.confirm(fill(T.confirmDeleteStore, { name }))) return;
+    const prompt = store.builtin ? T.confirmHideStore : T.confirmDeleteStore;
+    if (!window.confirm(fill(prompt, { name: store.label }))) return;
     setStoreError(null);
     setStoreBusy(true);
     try {
-      const res = await api.deleteStore(name);
+      const res = await api.deleteStore(store.name);
       if (res.ok) {
         setStores(res.stores || []);
+        setHiddenStores(res.hidden || []);
         setActiveStore(res.active || 'es');
         const d = await api.docs().catch(() => null);
         if (d?.ok) {
@@ -1094,6 +1050,25 @@ export default function App() {
       setStoreBusy(false);
     }
   }, [storeBusy, mode, lang]);
+
+  // ---- Restore all hidden built-in corpora ----
+  const handleStoreRestore = useCallback(async () => {
+    if (storeBusy) return;
+    setStoreError(null);
+    setStoreBusy(true);
+    try {
+      const res = await api.restoreStores();
+      if (res?.ok) {
+        setStores(res.stores || []);
+        setHiddenStores(res.hidden || []);
+        setActiveStore(res.active || activeStore);
+      }
+    } catch {
+      setStoreError(T.corpusConnError);
+    } finally {
+      setStoreBusy(false);
+    }
+  }, [storeBusy, activeStore, lang]);
 
   // ---- Reassign a model role ----
   const handleRoleChange = useCallback(async (role: ModelRole, value: string) => {
@@ -1150,11 +1125,22 @@ export default function App() {
   }, [ollamaStarting]);
 
   // ---- Load control panel (stores / model roles / Ollama) once ready ----
+  // The backend auto-starts Ollama at boot; if it is still down when the UI
+  // loads, kick off a (server-blocking, idempotent) start so it comes up without
+  // the user having to do it by hand.
   useEffect(() => {
     if (!isInitialized) return;
     loadStores();
     loadModelRoles();
-    refreshOllama();
+    (async () => {
+      const st = await api.ollamaStatus().catch(() => null);
+      if (st?.ok && !st.running) {
+        handleStartOllama();
+      } else {
+        refreshOllama();
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInitialized, loadStores, loadModelRoles, refreshOllama]);
 
   // ---- Send message (streaming) ----
@@ -1253,15 +1239,12 @@ export default function App() {
   }, []);
 
   // ---- Clear history ----
+  // Reset to an empty thread so the "Hola, <user>" greeting reappears; no
+  // "history cleared" system message is shown.
   const handleClear = useCallback(async () => {
     await api.clear().catch(() => {});
-    setMessages([{
-      id: 'cleared',
-      role: 'system',
-      content: T.historyCleared,
-      mode,
-    }]);
-  }, [mode, lang]);
+    setMessages([]);
+  }, []);
 
   // ---- Textarea auto-resize ----
   useEffect(() => {
@@ -1470,7 +1453,7 @@ export default function App() {
                         <div
                           key={store.name}
                           className={`group flex items-center gap-2 rounded-xl border px-2.5 py-2 transition-all ${isActive
-                            ? 'border-orange-500/50 bg-orange-500/15 shadow-[0_0_18px_rgba(242,125,38,0.16)]'
+                            ? 'border-orange-500/50 bg-orange-500/15 shadow-[0_0_18px_rgba(230,140,82,0.16)]'
                             : 'border-transparent bg-white/[0.03] hover:border-white/10 hover:bg-white/[0.06]'
                             }`}
                         >
@@ -1491,17 +1474,15 @@ export default function App() {
                                 : `${store.pdf_count} PDF · ${T.storeNotIndexed}`}
                             </span>
                           </button>
-                          {!store.builtin && (
-                            <button
-                              type="button"
-                              className="flex-shrink-0 rounded-full p-1.5 text-zinc-600 hover:bg-red-500/10 hover:text-red-400 transition-all disabled:opacity-40"
-                              onClick={() => handleStoreDelete(store.name)}
-                              disabled={storeBusy}
-                              title={T.deleteStore}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            className="flex-shrink-0 rounded-full p-1.5 text-zinc-600 hover:bg-red-500/10 hover:text-red-400 transition-all disabled:opacity-40"
+                            onClick={() => handleStoreDelete(store)}
+                            disabled={storeBusy}
+                            title={store.builtin ? T.hideStore : T.deleteStore}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       );
                     })}
@@ -1525,6 +1506,17 @@ export default function App() {
                         {storeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                       </button>
                     </div>
+                    {hiddenStores.length > 0 && (
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[10px] font-semibold text-zinc-400 transition-all hover:border-white/20 hover:text-zinc-200 disabled:opacity-40"
+                        onClick={handleStoreRestore}
+                        disabled={storeBusy}
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        {T.restoreStores} ({hiddenStores.length})
+                      </button>
+                    )}
                   </div>
                   {storeError && <p className="pl-2 text-[11px] text-red-400">{storeError}</p>}
                 </div>
@@ -1643,18 +1635,15 @@ export default function App() {
                             {savingRole === role && <Loader2 className="h-3 w-3 animate-spin text-orange-400" />}
                           </div>
                           <p className="mb-2 text-[10px] leading-snug text-zinc-500">{desc}</p>
-                          <select
+                          <ModelSelect
                             value={current}
-                            onChange={e => handleRoleChange(role, e.target.value)}
+                            options={options}
+                            models={ollamaModels}
                             disabled={!ollamaStatus.running || savingRole !== null}
-                            className="w-full rounded-lg border border-white/10 bg-black/50 px-2.5 py-2 text-xs text-zinc-200 focus:border-orange-500/50 focus:outline-none disabled:opacity-50"
-                          >
-                            {options.map(name => {
-                              const m = ollamaModels.find(x => x.name === name);
-                              const tags = m ? [m.embedding && T.capEmbedding, m.vision && T.capVision].filter(Boolean).join(', ') : '';
-                              return <option key={name} value={name}>{name}{tags ? ` (${tags})` : ''}</option>;
-                            })}
-                          </select>
+                            onChange={v => handleRoleChange(role, v)}
+                            capEmbedding={T.capEmbedding}
+                            capVision={T.capVision}
+                          />
                           {role === 'embedding' && (
                             <p className="mt-1.5 text-[10px] leading-snug text-amber-400/80">{T.embedChangeWarning}</p>
                           )}
@@ -1858,7 +1847,7 @@ export default function App() {
                 CHAT
               </button>
               <button
-                className={`px-5 py-2 text-xs font-bold tracking-wide rounded-full transition-all flex items-center gap-2 ${mode === 'rag' ? 'bg-orange-500 text-black shadow-[0_0_15px_rgba(242,125,38,0.3)]' : 'text-zinc-500 hover:text-zinc-300'}`}
+                className={`px-5 py-2 text-xs font-bold tracking-wide rounded-full transition-all flex items-center gap-2 ${mode === 'rag' ? 'bg-orange-500 text-black shadow-[0_0_15px_rgba(230,140,82,0.3)]' : 'text-zinc-500 hover:text-zinc-300'}`}
                 onClick={() => handleModeChange('rag')}
               >
                 <Database className="w-4 h-4" />
@@ -2016,7 +2005,7 @@ export default function App() {
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || isLoading}
-                className="p-3.5 bg-orange-500 text-black rounded-full hover:bg-orange-400 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:bg-white/10 disabled:text-zinc-500 disabled:hover:scale-100 transition-all shadow-[0_0_20px_rgba(242,125,38,0.3)] disabled:shadow-none flex-shrink-0"
+                className="p-3.5 bg-orange-500 text-black rounded-full hover:bg-orange-400 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:bg-white/10 disabled:text-zinc-500 disabled:hover:scale-100 transition-all shadow-[0_0_20px_rgba(230,140,82,0.3)] disabled:shadow-none flex-shrink-0"
               >
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -2064,14 +2053,19 @@ function ShimmerText({ text }: { text: string }) {
 }
 
 function PdfPane({ doc, page, onClose }: { doc: string; page: number; onClose: () => void }) {
+  const base = `/api/pdf/${encodeURIComponent(doc)}`;
   // toolbar=0 hides the browser's built-in PDF bar (which repeats the file name).
-  const src = `/api/pdf/${encodeURIComponent(doc)}#page=${page}&toolbar=0`;
+  const src = `${base}#page=${page}&toolbar=0`;
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Reset the loading overlay whenever the target document/page changes.
+  useEffect(() => { setLoaded(false); }, [src]);
 
   return (
     <div className="flex flex-col w-full h-full bg-[#0d0c12]">
@@ -2080,19 +2074,40 @@ function PdfPane({ doc, page, onClose }: { doc: string; page: number; onClose: (
           <FileText className="w-4 h-4 text-orange-400 flex-shrink-0" />
           <span className="text-sm font-medium text-zinc-200 truncate">{doc}</span>
         </div>
-        <button
-          onClick={onClose}
-          className="p-2 rounded-full text-zinc-500 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
-          title="Cerrar (Esc)"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Fallback: open in the system browser if the embedded viewer stays blank. */}
+          <a
+            href={base}
+            target="_blank"
+            rel="noreferrer"
+            className="p-2 rounded-full text-zinc-500 hover:text-orange-400 hover:bg-white/10 transition-all"
+            title="Abrir en el navegador"
+          >
+            <Eye className="w-5 h-5" />
+          </a>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-full text-zinc-500 hover:text-white hover:bg-white/10 transition-all"
+            title="Cerrar (Esc)"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
       </div>
-      <iframe
-        src={src}
-        className="flex-1 w-full border-none bg-zinc-900"
-        title={doc}
-      />
+      <div className="relative flex-1 min-h-0">
+        {!loaded && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0d0c12]">
+            <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+          </div>
+        )}
+        <iframe
+          key={src}
+          src={src}
+          onLoad={() => setLoaded(true)}
+          className="w-full h-full border-none bg-zinc-900"
+          title={doc}
+        />
+      </div>
     </div>
   );
 }
@@ -2114,7 +2129,7 @@ function Toggle({ label, checked, onChange, desc }: { label: string; checked: bo
         <span className="block text-sm text-zinc-200 font-medium group-hover:text-white transition-colors">{label}</span>
         <span className="block text-[11px] text-zinc-500 leading-snug mt-1">{desc}</span>
       </span>
-      <span className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center justify-center rounded-full transition-colors duration-300 ease-in-out ${checked ? 'bg-orange-500 shadow-[0_0_10px_rgba(242,125,38,0.4)]' : 'bg-white/10'}`}>
+      <span className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center justify-center rounded-full transition-colors duration-300 ease-in-out ${checked ? 'bg-orange-500 shadow-[0_0_10px_rgba(230,140,82,0.4)]' : 'bg-white/10'}`}>
         <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition duration-300 ease-in-out ${checked ? 'translate-x-2.5' : '-translate-x-2.5'}`} />
       </span>
     </button>
@@ -2131,7 +2146,7 @@ function LanguageToggle({ lang, setLang }: { lang: Lang; setLang: (lang: Lang) =
           type="button"
           className={`rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide transition-all ${
             lang === option.code
-              ? 'bg-orange-500 text-black shadow-[0_0_12px_rgba(242,125,38,0.25)]'
+              ? 'bg-orange-500 text-black shadow-[0_0_12px_rgba(230,140,82,0.25)]'
               : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
           }`}
           onClick={() => setLang(option.code)}
@@ -2140,6 +2155,93 @@ function LanguageToggle({ lang, setLang }: { lang: Lang; setLang: (lang: Lang) =
           {option.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+// Styled replacement for the native <select> used to pick a model per role.
+// Matches the app's glass/dark theme (rounded-xl input, orange focus ring,
+// animated panel) instead of the OS-default dropdown.
+function ModelSelect({
+  value, options, models, disabled, onChange, capEmbedding, capVision,
+}: {
+  value: string;
+  options: string[];
+  models: OllamaModel[];
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  capEmbedding: string;
+  capVision: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const tagsFor = (name: string) => {
+    const m = models.find(x => x.name === name);
+    return m ? [m.embedding && capEmbedding, m.vision && capVision].filter(Boolean).join(', ') : '';
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen(o => !o)}
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/40 px-2.5 py-2 text-xs text-zinc-200 transition-colors hover:border-white/20 focus:border-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500/20 disabled:opacity-50"
+      >
+        <span className="truncate">
+          {value || '—'}
+          {tagsFor(value) && <span className="text-zinc-500"> · {tagsFor(value)}</span>}
+        </span>
+        <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 text-zinc-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.ul
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15 }}
+            className="custom-scrollbar absolute z-50 mt-1.5 max-h-56 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#15131c]/95 p-1 shadow-xl backdrop-blur-xl"
+          >
+            {options.map(name => {
+              const tags = tagsFor(name);
+              const selected = name === value;
+              return (
+                <li key={name}>
+                  <button
+                    type="button"
+                    onClick={() => { onChange(name); setOpen(false); }}
+                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
+                      selected ? 'bg-orange-500/15 text-orange-200' : 'text-zinc-300 hover:bg-white/5'
+                    }`}
+                  >
+                    <span className="truncate">
+                      {name}
+                      {tags && <span className="text-zinc-500"> · {tags}</span>}
+                    </span>
+                    {selected && <Check className="h-3.5 w-3.5 flex-shrink-0 text-orange-300" />}
+                  </button>
+                </li>
+              );
+            })}
+          </motion.ul>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
