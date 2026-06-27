@@ -32,7 +32,7 @@ How to run (interactive CLI):
     functions and constants from here. Start the UI with ``python rag/web/app.py``
     from the repository root.
 
-    Prerequisites: Ollama running; PDFs under ``rag/docs/es/`` unless ``DOCS_FOLDER``
+    Prerequisites: Ollama running; PDFs under ``rag/docs/en/`` unless ``DOCS_FOLDER``
     points elsewhere. Model names via ``OLLAMA_RAG_MODEL``, ``OLLAMA_EMBED_MODEL``,
     ``OLLAMA_OCR_MODEL`` (image indexing), etc., as documented in the project README
     and in ``rag/README.md``.
@@ -304,7 +304,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # vector DBs, history and debug dumps live outside the read-only application bundle.
 DATA_DIR = os.path.abspath(os.getenv("MONKEYGRAB_DATA_DIR", BASE_DIR))
 
-CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "es"))
+CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "en"))
 
 
 def _derivar_paths_db(carpeta: str, modelo_embedding: str) -> tuple[str, str]:

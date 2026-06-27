@@ -109,7 +109,7 @@ of `research/`, use Git sparse checkout after cloning:
 git clone --filter=blob:none --sparse https://github.com/iDiagoValeta/localOllamaRAG
 cd localOllamaRAG
 git sparse-checkout set rag README.md pytest.ini                 # core only
-git sparse-checkout set rag README.md pytest.ini rag/docs/es     # + default ES PDFs
+git sparse-checkout set rag README.md pytest.ini rag/docs/en     # + default EN PDFs
 ```
 
 PowerShell (Git 2.25+) uses the same `git sparse-checkout set …` commands.
@@ -137,7 +137,7 @@ ollama pull <OLLAMA_OCR_MODEL>      # vision model for PDF images (optional)
 
 ### Run
 
-Drop your PDFs into `rag/docs/es/` and start:
+Drop your PDFs into `rag/docs/en/` and start:
 
 ```bash
 # CLI (Spanish UI by default)
@@ -198,7 +198,7 @@ exported in your shell still takes precedence over it.
 | `OLLAMA_REQUEST_TIMEOUT` | HTTP timeout in seconds for long Ollama generation calls |
 | `MAX_CONTEXTO_CHARS` | Maximum retrieved-context characters sent to the answer/RECOMP stage (default: `24000`) |
 | `CONTEXTUAL_DOC_CHARS` | Maximum document-level characters sent to contextual retrieval while indexing each chunk (default: `24000`) |
-| `DOCS_FOLDER` | PDF folder to index (default: `rag/docs/es/`) |
+| `DOCS_FOLDER` | PDF folder to index (default: `rag/docs/en/`) |
 | `RERANKER_QUALITY` | Cross-encoder tier: `quality` or `fast` |
 | `MONKEYGRAB_LANG` | CLI language: `es` (default), `en` or `ca` |
 
@@ -250,7 +250,7 @@ These constants live in `rag/chat_pdfs.py`. Edit them directly to toggle pipelin
 
 Open `http://localhost:5000`. The sidebar is a full control panel — **Documents**, **Models** and **RAG Pipeline** tabs — plus document upload, streaming responses and an `ES / EN / VAL` language selector. The selected web language is stored in the browser.
 
-**Vector stores** (Documents tab) — pick any store from the list (built-in corpora `ES / VAL / EN` plus your own), or type a name and create a new one. Creating a store makes a fresh PDF folder under `rag/docs/stores/<name>` (gitignored); upload PDFs and re-index to fill it. Switching stores swaps the active PDF folder and its ChromaDB collection at runtime, indexing automatically when the target collection is empty. Any store can be removed from the list: user-created stores are deleted entirely (folder + vector DB), while built-in corpora — which ship read-only inside the bundle — are hidden and have their vector index dropped, restorable with **Restore built-in corpora**. Backed by `GET/POST /api/stores`, `POST /api/stores/select`, `DELETE /api/stores/<name>`, `POST /api/stores/restore`.
+**Vector stores** (Documents tab) — three fixed language stores: **English** (default), **Castellano** and **Valencià**, each bound to `rag/docs/{en,es,ca}/`. They always exist (a store can be empty) and cannot be created, deleted, hidden or renamed. Pick one to switch the active PDF folder and its ChromaDB collection at runtime, indexing automatically when the target collection is empty; upload PDFs and re-index to fill a store, or remove individual documents. The active store is remembered across restarts. Backed by `GET /api/stores` and `POST /api/stores/select`.
 
 **Models** (Models tab) — Ollama is started automatically at launch if it is installed but not running; the panel shows whether the server is up (with a one-click **Start Ollama** button as a fallback) and lists every installed model, tagged by capability (`embedding` / `vision`). Assign a model to each pipeline role — RAG generator, chat / sub-queries, embeddings, contextual retrieval, RECOMP synthesis and vision / OCR — and the change takes effect on the next query without a restart. Changing the **embeddings** model re-derives the vector store path, so a re-index is required. Backed by `GET /api/ollama`, `POST /api/ollama/start`, `GET /api/ollama/models`, `GET/POST /api/models`, and `get_model_roles()` / `set_model_roles_runtime()` in `rag/chat_pdfs.py`.
 
@@ -273,7 +273,7 @@ python packaging/build_exe.py     # → dist/MonkeyGrab/MonkeyGrab.exe
 > **Ollama is not bundled.** The LLM runs locally, so every machine still needs
 > [Ollama](https://ollama.com/) installed with the models pulled — the app
 > detects it, offers a one-click start, and lets you assign models per role.
-> Writable data (vector DBs, your stores, history) goes to `%LOCALAPPDATA%\MonkeyGrab`.
+> Writable data (vector DBs, history) goes to `%LOCALAPPDATA%\MonkeyGrab`.
 
 Full build/distribution notes: [`packaging/README.md`](packaging/README.md).
 
