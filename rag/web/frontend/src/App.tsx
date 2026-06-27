@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Send, FileText, MessageSquare,
-  Database,
+  Send, FileText, Chroma, Ollama,
   Search, Layers, FileUp, Menu, X,
   RefreshCw, Loader2, AlertCircle, CheckCircle2, Trash2,
   ChevronDown, ChevronRight, Copy, Check, Languages, Eye,
-  Plus, Server, Power
-} from 'lucide-react';
+  Power, Sun, Moon
+} from './lib/icons';
+import { getStoredTheme, setTheme, type Theme } from './lib/theme';
 import { motion, AnimatePresence } from 'motion/react';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
@@ -67,7 +67,6 @@ type ModelRoles = Record<ModelRole, string>;
 interface VectorStore {
   name: string;
   label: string;
-  builtin: boolean;
   docs_folder: string;
   pdf_count: number;
   indexed: boolean;
@@ -106,6 +105,7 @@ const STRINGS = {
     addPdfs: 'Añadir PDFs', remove: 'Quitar', reindexBtn: 'Reindexar',
     fragments: '{n} fragmentos', ollamaStatus: 'Ollama Local',
     clearChat: 'Limpiar chat', youLabel: 'Tú',
+    themeLight: 'Modo claro', themeDark: 'Modo oscuro', close: 'Cerrar',
     sources: '{n} fuentes', copyMsg: 'Copiar mensaje',
     placeholderRag: 'Pregunta sobre tus documentos…', placeholderChat: 'Escribe un mensaje…',
     footerMode: 'Modo documento', footerModeChat: 'Modo conversación',
@@ -127,22 +127,10 @@ const STRINGS = {
     noServer: 'No se pudo conectar con el servidor. ¿Está Flask ejecutándose?',
     retryError: 'Error al reintentar',
     indexingFailed: 'La indexación no pudo completarse.',
-    appFooter: 'RAG local con Ollama',
     noResults: 'No se encontró información relevante en los documentos.',
     tabModels: 'Modelos',
     storesLabel: 'Almacén vectorial',
-    newStorePlaceholder: 'nombre-del-almacén',
-    createStore: 'Crear almacén nuevo',
-    storeCreateError: 'No se pudo crear el almacén.',
-    storeExists: 'Ya existe un almacén con ese nombre.',
-    storeInvalidName: 'Nombre inválido (usa letras, números, - o _).',
     storeNotIndexed: 'sin indexar',
-    deleteStore: 'Eliminar almacén',
-    hideStore: 'Quitar del panel',
-    confirmDeleteStore: '¿Eliminar el almacén "{name}"? Se borrarán sus PDFs y su base vectorial.',
-    confirmHideStore: '¿Quitar el corpus integrado "{name}" del panel? Se eliminará su índice vectorial; podrás restaurarlo más tarde.',
-    restoreStores: 'Restaurar corpus integrados',
-    storeDeleteError: '✗ Error al eliminar el almacén: {error}',
     storeEmptyHint: 'Almacén vacío. Sube PDFs y reindexa para activarlo.',
     modelsRoles: 'Roles de modelo',
     ollamaTitle: 'Servidor Ollama',
@@ -155,14 +143,12 @@ const STRINGS = {
     refreshModels: 'Actualizar lista',
     noModels: 'No hay modelos instalados. Descárgalos con «ollama pull».',
     roleRag: 'Generador RAG', descRoleRag: 'Respuesta final en modo documento',
-    roleChat: 'Chat / subconsultas', descRoleChat: 'Conversación y descomposición de consultas',
+    roleChat: 'Subconsultas', descRoleChat: 'Conversación y descomposición de consultas',
     roleEmbedding: 'Embeddings', descRoleEmbedding: 'Vectoriza documentos y consultas',
     roleContextual: 'Recuperación contextual', descRoleContextual: 'Enriquece fragmentos al indexar',
     roleRecomp: 'Síntesis RECOMP', descRoleRecomp: 'Resume el contexto antes de generar',
     roleOcr: 'Visión / OCR', descRoleOcr: 'Describe imágenes de los PDFs',
-    embedChangeWarning: 'Cambiar el modelo de embeddings cambia la base vectorial: hará falta reindexar.',
     modelSaveError: 'No se pudo cambiar el modelo.',
-    capEmbedding: 'embeddings', capVision: 'visión',
   },
   en: {
     tabDocs: 'Documents', tabPipeline: 'RAG Pipeline',
@@ -188,6 +174,7 @@ const STRINGS = {
     addPdfs: 'Add PDFs', remove: 'Remove', reindexBtn: 'Re-index',
     fragments: '{n} fragments', ollamaStatus: 'Ollama Local',
     clearChat: 'Clear chat', youLabel: 'You',
+    themeLight: 'Light mode', themeDark: 'Dark mode', close: 'Close',
     sources: '{n} sources', copyMsg: 'Copy message',
     placeholderRag: 'Ask about your documents…', placeholderChat: 'Type a message…',
     footerMode: 'Document mode', footerModeChat: 'Conversation mode',
@@ -209,22 +196,10 @@ const STRINGS = {
     noServer: 'Could not connect to the server. Is Flask running?',
     retryError: 'Retry failed',
     indexingFailed: 'Indexing could not be completed.',
-    appFooter: 'Local RAG with Ollama',
     noResults: 'No relevant information found in the documents.',
     tabModels: 'Models',
     storesLabel: 'Vector store',
-    newStorePlaceholder: 'store-name',
-    createStore: 'Create new store',
-    storeCreateError: 'Could not create the store.',
-    storeExists: 'A store with that name already exists.',
-    storeInvalidName: 'Invalid name (use letters, numbers, - or _).',
     storeNotIndexed: 'not indexed',
-    deleteStore: 'Delete store',
-    hideStore: 'Remove from panel',
-    confirmDeleteStore: 'Delete store "{name}"? Its PDFs and vector DB will be removed.',
-    confirmHideStore: 'Remove the built-in corpus "{name}" from the panel? Its vector index will be deleted; you can restore it later.',
-    restoreStores: 'Restore built-in corpora',
-    storeDeleteError: '✗ Error deleting store: {error}',
     storeEmptyHint: 'Empty store. Upload PDFs and re-index to activate it.',
     modelsRoles: 'Model roles',
     ollamaTitle: 'Ollama server',
@@ -237,14 +212,12 @@ const STRINGS = {
     refreshModels: 'Refresh list',
     noModels: 'No models installed. Pull some with “ollama pull”.',
     roleRag: 'RAG generator', descRoleRag: 'Final answer in document mode',
-    roleChat: 'Chat / sub-queries', descRoleChat: 'Conversation and query decomposition',
+    roleChat: 'Sub-queries', descRoleChat: 'Conversation and query decomposition',
     roleEmbedding: 'Embeddings', descRoleEmbedding: 'Vectorizes documents and queries',
     roleContextual: 'Contextual retrieval', descRoleContextual: 'Enriches chunks at indexing',
     roleRecomp: 'RECOMP synthesis', descRoleRecomp: 'Summarizes context before generation',
     roleOcr: 'Vision / OCR', descRoleOcr: 'Describes images inside PDFs',
-    embedChangeWarning: 'Changing the embedding model changes the vector store: re-indexing is required.',
     modelSaveError: 'Could not change the model.',
-    capEmbedding: 'embedding', capVision: 'vision',
   },
   ca: {
     tabDocs: 'Documents', tabPipeline: 'Pipeline RAG',
@@ -270,6 +243,7 @@ const STRINGS = {
     addPdfs: 'Afegir PDFs', remove: 'Llevar', reindexBtn: 'Re-indexar',
     fragments: '{n} fragments', ollamaStatus: 'Ollama Local',
     clearChat: 'Netejar xat', youLabel: 'Tu',
+    themeLight: 'Mode clar', themeDark: 'Mode fosc', close: 'Tancar',
     sources: '{n} fonts', copyMsg: 'Copiar missatge',
     placeholderRag: 'Pregunta sobre els teus documents…', placeholderChat: 'Escriu un missatge…',
     footerMode: 'Mode document', footerModeChat: 'Mode conversa',
@@ -291,22 +265,10 @@ const STRINGS = {
     noServer: "No s'ha pogut connectar amb el servidor. Està Flask executant-se?",
     retryError: 'Error en reintentar',
     indexingFailed: "La indexació no s'ha pogut completar.",
-    appFooter: 'RAG local amb Ollama',
     noResults: "No s'ha trobat informació rellevant als documents.",
     tabModels: 'Models',
     storesLabel: 'Magatzem vectorial',
-    newStorePlaceholder: 'nom-del-magatzem',
-    createStore: 'Crear magatzem nou',
-    storeCreateError: "No s'ha pogut crear el magatzem.",
-    storeExists: 'Ja existeix un magatzem amb eixe nom.',
-    storeInvalidName: 'Nom no vàlid (usa lletres, números, - o _).',
     storeNotIndexed: 'sense indexar',
-    deleteStore: 'Eliminar magatzem',
-    hideStore: 'Llevar del tauler',
-    confirmDeleteStore: 'Eliminar el magatzem "{name}"? S\'esborraran els seus PDFs i la seua base vectorial.',
-    confirmHideStore: 'Voleu llevar el corpus integrat "{name}" del tauler? S\'eliminarà el seu índex vectorial; podreu restaurar-lo més tard.',
-    restoreStores: 'Restaurar corpus integrats',
-    storeDeleteError: "✗ Error en eliminar el magatzem: {error}",
     storeEmptyHint: 'Magatzem buit. Puja PDFs i reindexa per a activar-lo.',
     modelsRoles: 'Rols de model',
     ollamaTitle: 'Servidor Ollama',
@@ -319,14 +281,12 @@ const STRINGS = {
     refreshModels: 'Actualitzar llista',
     noModels: 'No hi ha models instal·lats. Descarrega\'n amb «ollama pull».',
     roleRag: 'Generador RAG', descRoleRag: 'Resposta final en mode document',
-    roleChat: 'Xat / subconsultes', descRoleChat: 'Conversa i descomposició de consultes',
+    roleChat: 'Subconsultes', descRoleChat: 'Conversa i descomposició de consultes',
     roleEmbedding: 'Embeddings', descRoleEmbedding: 'Vectoritza documents i consultes',
     roleContextual: 'Recuperació contextual', descRoleContextual: 'Enriqueix fragments en indexar',
     roleRecomp: 'Síntesi RECOMP', descRoleRecomp: 'Resumeix el context abans de generar',
     roleOcr: 'Visió / OCR', descRoleOcr: 'Descriu imatges dels PDFs',
-    embedChangeWarning: 'Canviar el model d\'embeddings canvia la base vectorial: caldrà reindexar.',
     modelSaveError: 'No s\'ha pogut canviar el model.',
-    capEmbedding: 'embeddings', capVision: 'visió',
   },
 } as const;
 
@@ -390,25 +350,12 @@ const api = {
   listStores: () =>
     fetch(`${API_BASE}/stores`).then(r => r.json()),
 
-  createStore: (name: string) =>
-    fetch(`${API_BASE}/stores`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    }).then(r => r.json()),
-
   selectStore: (name: string) =>
     fetch(`${API_BASE}/stores/select`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     }).then(r => r.json()),
-
-  deleteStore: (name: string) =>
-    fetch(`${API_BASE}/stores/${encodeURIComponent(name)}`, { method: 'DELETE' }).then(r => r.json()),
-
-  restoreStores: () =>
-    fetch(`${API_BASE}/stores/restore`, { method: 'POST' }).then(r => r.json()),
 
   ollamaStatus: () =>
     fetch(`${API_BASE}/ollama`).then(r => r.json()),
@@ -722,10 +669,16 @@ export default function App() {
   const [isReindexing, setIsReindexing] = useState(false);
   const [deletingDoc, setDeletingDoc] = useState<string | null>(null);
   const [pendingReindexFiles, setPendingReindexFiles] = useState<File[]>([]);
+  const [theme, setThemeState] = useState<Theme>(getStoredTheme);
+  const toggleTheme = useCallback(() => {
+    setThemeState(prev => {
+      const next: Theme = prev === 'dark' ? 'light' : 'dark';
+      setTheme(next);
+      return next;
+    });
+  }, []);
   const [stores, setStores] = useState<VectorStore[]>([]);
-  const [hiddenStores, setHiddenStores] = useState<string[]>([]);
-  const [activeStore, setActiveStore] = useState<string>('es');
-  const [newStoreName, setNewStoreName] = useState('');
+  const [activeStore, setActiveStore] = useState<string>('en');
   const [storeBusy, setStoreBusy] = useState(false);
   const [storeError, setStoreError] = useState<string | null>(null);
   const [ollamaStatus, setOllamaStatus] = useState<{ running: boolean; version: string | null }>({ running: true, version: null });
@@ -760,6 +713,14 @@ export default function App() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [pdfViewer, setPdfViewer] = useState<{ doc: string; page: number; mode: 'full' | 'split' } | null>(null);
+  // Full-area overlay panels (Models / Pipeline) shown in the main column, like
+  // the PDF viewer. Opening one closes any open PDF; closing returns to chat.
+  const [mainPanel, setMainPanel] = useState<'models' | 'pipeline' | null>(null);
+  const openMainPanel = useCallback((panel: 'models' | 'pipeline') => {
+    setPdfViewer(null);
+    setMainPanel(panel);
+    if (window.innerWidth < 768) setIsSidebarOpen(false);
+  }, []);
   const [userName, setUserName] = useState('');
 
   // Remembers whether the sidebar was open before a split view collapsed it.
@@ -808,7 +769,7 @@ export default function App() {
           setMode(initData.mode || 'rag');
           setDocuments(initData.documents || []);
           setTotalFragments(initData.total_fragments || 0);
-          setActiveStore(initData.active_store || 'es');
+          setActiveStore(initData.active_store || 'en');
           setUserName(initData.user || '');
           setIsInitialized(true);
 
@@ -933,8 +894,7 @@ export default function App() {
     const res = await api.listStores().catch(() => null);
     if (res?.ok) {
       setStores(res.stores || []);
-      setHiddenStores(res.hidden || []);
-      setActiveStore(res.active || 'es');
+      setActiveStore(res.active || 'en');
     }
   }, []);
 
@@ -987,88 +947,6 @@ export default function App() {
       setStoreBusy(false);
     }
   }, [activeStore, storeBusy, lang]);
-
-  // ---- Create a new vector store ----
-  const handleStoreCreate = useCallback(async () => {
-    const name = newStoreName.trim();
-    if (!name || storeBusy) return;
-    setStoreError(null);
-    setStoreBusy(true);
-    try {
-      const res = await api.createStore(name);
-      if (!res.ok) {
-        setStoreError(
-          res.error === 'already_exists' ? T.storeExists
-            : res.error === 'invalid_name' ? T.storeInvalidName
-              : res.error === 'indexing_in_progress' ? T.corpusConflict
-                : T.storeCreateError,
-        );
-        return;
-      }
-      setNewStoreName('');
-      setStores(res.stores || []);
-      setActiveStore(res.active || name);
-      setDocuments([]);
-      setTotalFragments(0);
-    } catch {
-      setStoreError(T.storeCreateError);
-    } finally {
-      setStoreBusy(false);
-    }
-  }, [newStoreName, storeBusy, lang]);
-
-  // ---- Delete a store (user store: removed; built-in: hidden + index dropped) ----
-  const handleStoreDelete = useCallback(async (store: VectorStore) => {
-    if (storeBusy) return;
-    const prompt = store.builtin ? T.confirmHideStore : T.confirmDeleteStore;
-    if (!window.confirm(fill(prompt, { name: store.label }))) return;
-    setStoreError(null);
-    setStoreBusy(true);
-    try {
-      const res = await api.deleteStore(store.name);
-      if (res.ok) {
-        setStores(res.stores || []);
-        setHiddenStores(res.hidden || []);
-        setActiveStore(res.active || 'es');
-        const d = await api.docs().catch(() => null);
-        if (d?.ok) {
-          setDocuments(d.documents || []);
-          setTotalFragments(d.total_fragments || 0);
-        }
-      } else {
-        setMessages(p => [...p, {
-          id: Date.now().toString(),
-          role: 'system',
-          content: fill(T.storeDeleteError, { error: res.error }),
-          mode,
-          isError: true,
-        }]);
-      }
-    } catch {
-      setStoreError(T.corpusConnError);
-    } finally {
-      setStoreBusy(false);
-    }
-  }, [storeBusy, mode, lang]);
-
-  // ---- Restore all hidden built-in corpora ----
-  const handleStoreRestore = useCallback(async () => {
-    if (storeBusy) return;
-    setStoreError(null);
-    setStoreBusy(true);
-    try {
-      const res = await api.restoreStores();
-      if (res?.ok) {
-        setStores(res.stores || []);
-        setHiddenStores(res.hidden || []);
-        setActiveStore(res.active || activeStore);
-      }
-    } catch {
-      setStoreError(T.corpusConnError);
-    } finally {
-      setStoreBusy(false);
-    }
-  }, [storeBusy, activeStore, lang]);
 
   // ---- Reassign a model role ----
   const handleRoleChange = useCallback(async (role: ModelRole, value: string) => {
@@ -1265,7 +1143,7 @@ export default function App() {
         setMode(result.mode || 'rag');
         setDocuments(result.documents || []);
         setTotalFragments(result.total_fragments || 0);
-        setActiveStore(result.active_store || 'es');
+        setActiveStore(result.active_store || 'en');
         setIndexingError(null);
         setIndexingProgress(null);
         setIsInitialized(true);
@@ -1322,7 +1200,7 @@ export default function App() {
           )}
           {showRetry && (
             <button
-              className="px-6 py-2 bg-orange-500 text-black rounded-full font-semibold hover:bg-orange-400 transition-colors"
+              className="px-6 py-2 bg-[var(--accent)] text-[var(--accent-contrast)] font-semibold hover:bg-[var(--accent-hover)] transition-colors"
               onClick={handleRetry}
             >
               {T.retry}
@@ -1342,7 +1220,7 @@ export default function App() {
           <h2 className="text-xl font-semibold text-white">{T.connErrorTitle}</h2>
           <p className="text-zinc-400 text-sm">{initError}</p>
           <button
-            className="px-6 py-2 bg-orange-500 text-black rounded-full font-semibold hover:bg-orange-400 transition-colors"
+            className="px-6 py-2 bg-[var(--accent)] text-[var(--accent-contrast)] font-semibold hover:bg-[var(--accent-hover)] transition-colors"
             onClick={handleRetry}
           >
             {T.retry}
@@ -1363,6 +1241,213 @@ export default function App() {
       </div>
     );
   }
+
+  // ---- Overlay panels (rendered full-area in the main column) ----
+  const renderModelsPanel = () => (
+    <div className="mx-auto w-full max-w-4xl space-y-4">
+      {/* Ollama server status */}
+      <div className={`border p-3 ${ollamaStatus.running ? 'border-[var(--border)] bg-[var(--surface)]' : 'border-amber-500/30 bg-amber-500/10'}`}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${ollamaStatus.running ? 'bg-green-500' : 'bg-red-500'}`} />
+            <div className="min-w-0">
+              <div className="t-h3 text-[var(--text)]">{T.ollamaTitle}</div>
+              <div className="truncate t-body-sm text-[var(--text-muted)]">
+                {ollamaStatus.running ? T.ollamaOnline : T.ollamaOffline}
+              </div>
+            </div>
+          </div>
+          {ollamaStatus.running ? (
+            <button
+              type="button"
+              className="flex-shrink-0 p-2 text-[var(--text-muted)] transition-all hover:bg-[var(--surface-2)] hover:text-[var(--accent)]"
+              onClick={refreshOllama}
+              title={T.refreshModels}
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="flex flex-shrink-0 items-center gap-1.5 border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-[11px] font-semibold text-amber-500 transition-all hover:bg-amber-500/25 disabled:opacity-50"
+              onClick={handleStartOllama}
+              disabled={ollamaStarting}
+            >
+              {ollamaStarting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
+              {ollamaStarting ? T.ollamaStarting : T.ollamaStartBtn}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {modelError && (
+        <div className="border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">{modelError}</div>
+      )}
+
+      {/* Model role selectors — two columns in the wide overlay */}
+      <div className="space-y-2">
+        <div className="t-label text-[var(--text-muted)] pl-1">{T.modelsRoles}</div>
+        {ollamaStatus.running && ollamaModels.length === 0 ? (
+          <p className="px-1 py-3 text-xs text-[var(--text-muted)]">{T.noModels}</p>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {([
+              { role: 'rag' as ModelRole, label: T.roleRag, desc: T.descRoleRag },
+              { role: 'chat' as ModelRole, label: T.roleChat, desc: T.descRoleChat },
+              { role: 'embedding' as ModelRole, label: T.roleEmbedding, desc: T.descRoleEmbedding },
+              { role: 'contextual' as ModelRole, label: T.roleContextual, desc: T.descRoleContextual },
+              { role: 'recomp' as ModelRole, label: T.roleRecomp, desc: T.descRoleRecomp },
+              { role: 'ocr' as ModelRole, label: T.roleOcr, desc: T.descRoleOcr },
+            ]).map(({ role, label, desc }) => {
+              const current = modelRoles?.[role] ?? '';
+              const names = ollamaModels.map(m => m.name);
+              const options = current && !names.includes(current) ? [current, ...names] : names;
+              return (
+                <div key={role} className="border border-[var(--border)] bg-[var(--surface)] p-2.5">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="t-h3 text-[var(--text)]">{label}</span>
+                    {savingRole === role && <Loader2 className="h-3 w-3 animate-spin text-[var(--accent)]" />}
+                  </div>
+                  <p className="mb-2 t-body-sm text-[var(--text-muted)]">{desc}</p>
+                  <ModelSelect
+                    value={current}
+                    options={options}
+                    disabled={!ollamaStatus.running || savingRole !== null}
+                    onChange={v => handleRoleChange(role, v)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderPipelinePanel = () => (
+    <div className="mx-auto w-full max-w-2xl space-y-2">
+      {(settingsError || isReindexing) && (
+        <div className={`border px-3 py-2 text-xs ${settingsError ? 'border-red-500/20 bg-red-500/10 text-red-400' : 'border-[var(--accent)]/30 bg-[var(--accent)]/10 text-[var(--accent)]'}`}>
+          {settingsError ? (
+            <span>{settingsError}</span>
+          ) : indexingProgress ? (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-3">
+                <span className="truncate">{fill(T.indexingFile, { file: indexingProgress.file })}</span>
+                <span className="font-mono text-[10px] text-[var(--accent)]">{indexingProgress.file_index}/{indexingProgress.total_files}</span>
+              </div>
+              <div className="h-1.5 bg-[var(--surface-2)] overflow-hidden">
+                <div
+                  className="h-full bg-[var(--accent)] transition-all duration-500"
+                  style={{ width: `${Math.max(5, (indexingProgress.file_index / indexingProgress.total_files) * 100)}%` }}
+                />
+              </div>
+            </div>
+          ) : (
+            <span>{T.reindexingStatus}</span>
+          )}
+        </div>
+      )}
+
+      {/* 1. Indexación */}
+      <div className="border border-[var(--border)] overflow-hidden">
+        <button
+          className="w-full flex items-center gap-2 px-3 py-2.5 t-label text-[var(--accent)] bg-[var(--surface)] hover:bg-[var(--surface-2)] transition-colors"
+          onClick={() => setOpenSections(s => ({ ...s, indexacion: !s.indexacion }))}
+        >
+          {openSections.indexacion ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          {T.section1}
+        </button>
+        {openSections.indexacion && (
+          <div className="p-2 pt-0 space-y-1 bg-[var(--surface)]">
+            <Toggle label={T.labelContextual} checked={settings.contextualRetrieval} onChange={() => toggleSetting('contextualRetrieval')} desc={T.descContextual} />
+            <Toggle label={T.labelImageIndex} checked={settings.imageIndexing} onChange={() => toggleSetting('imageIndexing')} desc={T.descImageIndex} />
+          </div>
+        )}
+      </div>
+
+      {/* 2. Recuperación */}
+      <div className="border border-[var(--border)] overflow-hidden">
+        <button
+          className="w-full flex items-center gap-2 px-3 py-2.5 t-label text-[var(--accent)] bg-[var(--surface)] hover:bg-[var(--surface-2)] transition-colors"
+          onClick={() => setOpenSections(s => ({ ...s, recuperacion: !s.recuperacion }))}
+        >
+          {openSections.recuperacion ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          {T.section2}
+        </button>
+        {openSections.recuperacion && (
+          <div className="p-2 pt-0 space-y-1 bg-[var(--surface)]">
+            <Toggle label={T.labelHybrid} checked={settings.hybridSearch} onChange={() => toggleSetting('hybridSearch')} desc={T.descHybrid} />
+            <Toggle label={T.labelQueryDecomp} checked={settings.queryDecomposition} onChange={() => toggleSetting('queryDecomposition')} desc={T.descQueryDecomp} />
+          </div>
+        )}
+      </div>
+
+      {/* 3. Ranking & Contexto */}
+      <div className="border border-[var(--border)] overflow-hidden">
+        <button
+          className="w-full flex items-center gap-2 px-3 py-2.5 t-label text-[var(--accent)] bg-[var(--surface)] hover:bg-[var(--surface-2)] transition-colors"
+          onClick={() => setOpenSections(s => ({ ...s, ranking: !s.ranking }))}
+        >
+          {openSections.ranking ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          {T.section3}
+        </button>
+        {openSections.ranking && (
+          <div className="p-2 pt-0 space-y-1 bg-[var(--surface)]">
+            <Toggle label={T.labelReranker} checked={settings.reranker} onChange={() => toggleSetting('reranker')} desc={T.descReranker} />
+            <Toggle label={T.labelExpandContext} checked={settings.expandContext} onChange={() => toggleSetting('expandContext')} desc={T.descExpandContext} />
+            <Toggle label={T.labelOptimizeContext} checked={settings.optimizeContext} onChange={() => toggleSetting('optimizeContext')} desc={T.descOptimizeContext} />
+            <Toggle label={T.labelRecomp} checked={settings.recompSynthesis} onChange={() => toggleSetting('recompSynthesis')} desc={T.descRecomp} />
+          </div>
+        )}
+      </div>
+
+      {/* 4. Reindexación */}
+      <div className="border border-[var(--accent)]/25 overflow-hidden">
+        <button
+          className="w-full flex items-center gap-2 px-3 py-2.5 t-label text-[var(--accent)] bg-[var(--accent)]/5 hover:bg-[var(--accent)]/10 transition-colors"
+          onClick={() => setOpenSections(s => ({ ...s, reindexacion: !s.reindexacion }))}
+        >
+          {openSections.reindexacion ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          {T.section4}
+        </button>
+        {openSections.reindexacion && (
+          <div className="p-3 pt-0 space-y-3 bg-[var(--accent)]/5">
+            <p className="text-xs text-[var(--text-muted)]">{T.reindexHint}</p>
+            <div className="flex gap-2">
+              <button
+                className="flex-1 py-3 px-4 border border-dashed border-[var(--border-strong)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 transition-all flex flex-col items-center justify-center gap-1 text-sm group disabled:opacity-50"
+                onClick={() => reindexFileInputRef.current?.click()}
+                disabled={isReindexing}
+              >
+                <FileUp className="w-5 h-5 group-hover:text-[var(--accent)]" />
+                <span className="font-medium">
+                  {pendingReindexFiles.length ? `${pendingReindexFiles.length} PDF(s)` : T.addPdfs}
+                </span>
+              </button>
+              {pendingReindexFiles.length > 0 && (
+                <button
+                  className="px-3 text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  onClick={() => { setPendingReindexFiles([]); if (reindexFileInputRef.current) reindexFileInputRef.current.value = ''; }}
+                  title={T.remove}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+            <button
+              className="w-full py-3 px-4 bg-[var(--accent)] text-[var(--accent-contrast)] hover:bg-[var(--accent-hover)] transition-all flex items-center justify-center gap-2 text-sm font-semibold disabled:opacity-50"
+              onClick={handleReindex}
+              disabled={isReindexing}
+            >
+              {isReindexing ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
+              {T.reindexBtn}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   // ---- Main UI ----
   return (
@@ -1398,7 +1483,7 @@ export default function App() {
         {/* Sidebar Header */}
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/logo-light.png" alt="MonkeyGrab" className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+            <img src={theme === 'dark' ? '/logo-dark.png' : '/logo-light.png'} alt="MonkeyGrab" className="w-9 h-9 object-cover flex-shrink-0" />
             <h1 className="flex font-extrabold text-lg tracking-tight"><ShimmerText text="MonkeyGrab" /></h1>
           </div>
           <button className="md:hidden text-zinc-500 hover:text-white transition-colors bg-white/5 p-2 rounded-full" onClick={() => setIsSidebarOpen(false)}>
@@ -1406,24 +1491,25 @@ export default function App() {
           </button>
         </div>
 
-        {/* Sidebar Tabs */}
+        {/* Sidebar Tabs — Documents stays in the sidebar; Models & Pipeline
+            open a full-area overlay in the main column. */}
         <div className="flex px-6 mb-2">
-          <div className="flex w-full bg-black/40 rounded-full p-1 border border-white/5">
+          <div className="flex w-full bg-[var(--surface)] p-1 border border-[var(--border)]">
             <button
-              className={`flex-1 py-2 text-xs font-semibold rounded-full transition-all ${activeTab === 'docs' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
-              onClick={() => setActiveTab('docs')}
+              className={`flex-1 py-2 text-xs font-semibold transition-all ${mainPanel === null ? 'bg-[var(--surface-2)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+              onClick={() => { setMainPanel(null); setActiveTab('docs'); }}
             >
               {T.tabDocs}
             </button>
             <button
-              className={`flex-1 py-2 text-xs font-semibold rounded-full transition-all ${activeTab === 'models' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
-              onClick={() => setActiveTab('models')}
+              className={`flex-1 py-2 text-xs font-semibold transition-all ${mainPanel === 'models' ? 'bg-[var(--surface-2)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+              onClick={() => openMainPanel('models')}
             >
               {T.tabModels}
             </button>
             <button
-              className={`flex-1 py-2 text-xs font-semibold rounded-full transition-all ${activeTab === 'settings' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
-              onClick={() => setActiveTab('settings')}
+              className={`flex-1 py-2 text-xs font-semibold transition-all ${mainPanel === 'pipeline' ? 'bg-[var(--surface-2)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+              onClick={() => openMainPanel('pipeline')}
             >
               {T.tabPipeline}
             </button>
@@ -1443,80 +1529,39 @@ export default function App() {
               >
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 pl-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                    <Database className="h-3 w-3 text-orange-400/70" />
+                    <Chroma className="h-3 w-3" />
                     {T.storesLabel}
                   </div>
                   <div className={`rounded-2xl border border-white/10 bg-black/30 p-1.5 space-y-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${storeBusy || isReindexing || isLoading ? 'opacity-50' : ''}`}>
                     {stores.map(store => {
                       const isActive = store.name === activeStore;
                       return (
-                        <div
+                        <button
                           key={store.name}
-                          className={`group flex items-center gap-2 rounded-xl border px-2.5 py-2 transition-all ${isActive
+                          type="button"
+                          className={`group flex w-full items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-all focus:outline-none disabled:cursor-not-allowed ${isActive
                             ? 'border-orange-500/50 bg-orange-500/15 shadow-[0_0_18px_rgba(230,140,82,0.16)]'
                             : 'border-transparent bg-white/[0.03] hover:border-white/10 hover:bg-white/[0.06]'
                             }`}
+                          onClick={() => handleStoreSelect(store.name)}
+                          disabled={storeBusy || isReindexing || isLoading}
                         >
-                          <button
-                            type="button"
-                            className="min-w-0 flex-1 text-left focus:outline-none disabled:cursor-not-allowed"
-                            onClick={() => handleStoreSelect(store.name)}
-                            disabled={storeBusy || isReindexing || isLoading}
-                          >
+                          <span className="flex min-w-0 flex-1 flex-col">
                             <span className="flex items-center gap-1.5">
                               <span className={`truncate text-xs font-bold tracking-wide ${isActive ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-200'}`}>{store.label}</span>
-                              {store.builtin && <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[8px] font-bold text-zinc-400">{store.name.toUpperCase()}</span>}
-                              {isActive && <Check className="h-3 w-3 flex-shrink-0 text-orange-300" />}
+                              {isActive && <Check className="h-3 w-3 flex-shrink-0 text-[var(--accent)]" />}
                             </span>
-                            <span className={`mt-0.5 block truncate font-mono text-[9px] ${isActive ? 'text-orange-200/80' : 'text-zinc-600'}`}>
-                              {store.indexed
-                                ? fill(T.fragments, { n: store.fragments ?? '·' })
-                                : `${store.pdf_count} PDF · ${T.storeNotIndexed}`}
+                            <span className={`mt-0.5 block truncate font-mono text-[9px] ${isActive ? 'text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}>
+                              {!store.indexed
+                                ? `${store.pdf_count} PDF · ${T.storeNotIndexed}`
+                                : store.fragments != null
+                                  ? fill(T.fragments, { n: store.fragments })
+                                  : `${store.pdf_count} PDF`}
                             </span>
-                          </button>
-                          <button
-                            type="button"
-                            className="flex-shrink-0 rounded-full p-1.5 text-zinc-600 hover:bg-red-500/10 hover:text-red-400 transition-all disabled:opacity-40"
-                            onClick={() => handleStoreDelete(store)}
-                            disabled={storeBusy}
-                            title={store.builtin ? T.hideStore : T.deleteStore}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
+                          </span>
+                        </button>
                       );
                     })}
-                    <div className="flex items-center gap-1.5 pt-1">
-                      <input
-                        type="text"
-                        value={newStoreName}
-                        onChange={e => setNewStoreName(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleStoreCreate(); }}
-                        placeholder={T.newStorePlaceholder}
-                        className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/40 px-2.5 py-2 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                        disabled={storeBusy}
-                      />
-                      <button
-                        type="button"
-                        className="flex-shrink-0 rounded-xl border border-orange-500/30 bg-orange-500/15 p-2 text-orange-400 hover:bg-orange-500/25 transition-all disabled:opacity-40"
-                        onClick={handleStoreCreate}
-                        disabled={storeBusy || !newStoreName.trim()}
-                        title={T.createStore}
-                      >
-                        {storeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                      </button>
-                    </div>
-                    {hiddenStores.length > 0 && (
-                      <button
-                        type="button"
-                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[10px] font-semibold text-zinc-400 transition-all hover:border-white/20 hover:text-zinc-200 disabled:opacity-40"
-                        onClick={handleStoreRestore}
-                        disabled={storeBusy}
-                      >
-                        <RefreshCw className="h-3 w-3" />
-                        {T.restoreStores} ({hiddenStores.length})
-                      </button>
-                    )}
                   </div>
                   {storeError && <p className="pl-2 text-[11px] text-red-400">{storeError}</p>}
                 </div>
@@ -1534,7 +1579,7 @@ export default function App() {
                       documents.map((doc, i) => (
                         <div key={i} className="group flex items-center gap-3 p-3.5 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all">
                           <div className="w-8 h-8 rounded-full bg-black/30 flex items-center justify-center flex-shrink-0">
-                            <FileText className="w-4 h-4 text-orange-400/80" />
+                            <FileText className="w-4 h-4 text-[var(--accent)]" />
                           </div>
                           <span className="text-sm text-zinc-300 group-hover:text-white truncate font-medium flex-1 min-w-0">{doc}</span>
                           <button
@@ -1562,252 +1607,8 @@ export default function App() {
                   </div>
                 </div>
               </motion.div>
-            ) : activeTab === 'models' ? (
-              <motion.div
-                key="models"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="space-y-4 pb-6"
-              >
-                {/* Ollama server status */}
-                <div className={`rounded-2xl border p-3 ${ollamaStatus.running ? 'border-white/10 bg-black/30' : 'border-amber-500/30 bg-amber-500/10'}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Server className={`h-4 w-4 flex-shrink-0 ${ollamaStatus.running ? 'text-green-400' : 'text-amber-400'}`} />
-                      <div className="min-w-0">
-                        <div className="text-xs font-semibold text-zinc-200">{T.ollamaTitle}</div>
-                        <div className="truncate text-[10px] text-zinc-500">
-                          {ollamaStatus.running
-                            ? `${T.ollamaOnline}${ollamaStatus.version ? ` · v${ollamaStatus.version}` : ''}`
-                            : T.ollamaOffline}
-                        </div>
-                      </div>
-                    </div>
-                    {ollamaStatus.running ? (
-                      <button
-                        type="button"
-                        className="flex-shrink-0 rounded-full p-2 text-zinc-500 transition-all hover:bg-white/5 hover:text-orange-400"
-                        onClick={refreshOllama}
-                        title={T.refreshModels}
-                      >
-                        <RefreshCw className="h-4 w-4" />
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="flex flex-shrink-0 items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-[11px] font-semibold text-amber-300 transition-all hover:bg-amber-500/25 disabled:opacity-50"
-                        onClick={handleStartOllama}
-                        disabled={ollamaStarting}
-                      >
-                        {ollamaStarting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
-                        {ollamaStarting ? T.ollamaStarting : T.ollamaStartBtn}
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {modelError && (
-                  <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-300">{modelError}</div>
-                )}
-
-                {/* Model role selectors */}
-                <div className="space-y-1.5">
-                  <div className="pl-1 text-[10px] font-bold uppercase tracking-widest text-zinc-500">{T.modelsRoles}</div>
-                  {ollamaStatus.running && ollamaModels.length === 0 ? (
-                    <p className="px-1 py-3 text-xs text-zinc-600">{T.noModels}</p>
-                  ) : (
-                    ([
-                      { role: 'rag' as ModelRole, label: T.roleRag, desc: T.descRoleRag },
-                      { role: 'chat' as ModelRole, label: T.roleChat, desc: T.descRoleChat },
-                      { role: 'embedding' as ModelRole, label: T.roleEmbedding, desc: T.descRoleEmbedding },
-                      { role: 'contextual' as ModelRole, label: T.roleContextual, desc: T.descRoleContextual },
-                      { role: 'recomp' as ModelRole, label: T.roleRecomp, desc: T.descRoleRecomp },
-                      { role: 'ocr' as ModelRole, label: T.roleOcr, desc: T.descRoleOcr },
-                    ]).map(({ role, label, desc }) => {
-                      const current = modelRoles?.[role] ?? '';
-                      const names = ollamaModels.map(m => m.name);
-                      const options = current && !names.includes(current) ? [current, ...names] : names;
-                      return (
-                        <div key={role} className="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
-                          <div className="mb-1 flex items-center justify-between gap-2">
-                            <span className="text-xs font-semibold text-zinc-200">{label}</span>
-                            {savingRole === role && <Loader2 className="h-3 w-3 animate-spin text-orange-400" />}
-                          </div>
-                          <p className="mb-2 text-[10px] leading-snug text-zinc-500">{desc}</p>
-                          <ModelSelect
-                            value={current}
-                            options={options}
-                            models={ollamaModels}
-                            disabled={!ollamaStatus.running || savingRole !== null}
-                            onChange={v => handleRoleChange(role, v)}
-                            capEmbedding={T.capEmbedding}
-                            capVision={T.capVision}
-                          />
-                          {role === 'embedding' && (
-                            <p className="mt-1.5 text-[10px] leading-snug text-amber-400/80">{T.embedChangeWarning}</p>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="settings"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="space-y-2 pb-6"
-              >
-                {(settingsError || isReindexing) && (
-                  <div className={`rounded-lg border px-3 py-2 text-xs ${settingsError ? 'border-red-500/20 bg-red-500/10 text-red-300' : 'border-orange-500/25 bg-orange-500/10 text-orange-200'}`}>
-                    {settingsError ? (
-                      <span>{settingsError}</span>
-                    ) : indexingProgress ? (
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="truncate">{fill(T.indexingFile, { file: indexingProgress.file })}</span>
-                          <span className="font-mono text-[10px] text-orange-300">{indexingProgress.file_index}/{indexingProgress.total_files}</span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-black/30 overflow-hidden">
-                          <div
-                            className="h-full bg-orange-400 transition-all duration-500"
-                            style={{ width: `${Math.max(5, (indexingProgress.file_index / indexingProgress.total_files) * 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <span>{T.reindexingStatus}</span>
-                    )}
-                  </div>
-                )}
-
-                {/* 1. Indexación */}
-                <div className="rounded-xl border border-white/5 overflow-hidden">
-                  <button
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold text-orange-400 uppercase tracking-widest bg-white/[0.02] hover:bg-white/5 transition-colors"
-                    onClick={() => setOpenSections(s => ({ ...s, indexacion: !s.indexacion }))}
-                  >
-                    {openSections.indexacion ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                    <span className="w-4 h-[1px] bg-orange-400/50" />
-                    {T.section1}
-                  </button>
-                  {openSections.indexacion && (
-                    <div className="p-2 pt-0 space-y-1 bg-white/[0.02]">
-                      <Toggle label={T.labelContextual} checked={settings.contextualRetrieval} onChange={() => toggleSetting('contextualRetrieval')} desc={T.descContextual} />
-                      <Toggle label={T.labelImageIndex} checked={settings.imageIndexing} onChange={() => toggleSetting('imageIndexing')} desc={T.descImageIndex} />
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. Recuperación */}
-                <div className="rounded-xl border border-white/5 overflow-hidden">
-                  <button
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold text-orange-400 uppercase tracking-widest bg-white/[0.02] hover:bg-white/5 transition-colors"
-                    onClick={() => setOpenSections(s => ({ ...s, recuperacion: !s.recuperacion }))}
-                  >
-                    {openSections.recuperacion ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                    <span className="w-4 h-[1px] bg-orange-400/50" />
-                    {T.section2}
-                  </button>
-                  {openSections.recuperacion && (
-                    <div className="p-2 pt-0 space-y-1 bg-white/[0.02]">
-                      <Toggle label={T.labelHybrid} checked={settings.hybridSearch} onChange={() => toggleSetting('hybridSearch')} desc={T.descHybrid} />
-                      <Toggle label={T.labelQueryDecomp} checked={settings.queryDecomposition} onChange={() => toggleSetting('queryDecomposition')} desc={T.descQueryDecomp} />
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. Ranking & Contexto */}
-                <div className="rounded-xl border border-white/5 overflow-hidden">
-                  <button
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold text-orange-400 uppercase tracking-widest bg-white/[0.02] hover:bg-white/5 transition-colors"
-                    onClick={() => setOpenSections(s => ({ ...s, ranking: !s.ranking }))}
-                  >
-                    {openSections.ranking ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                    <span className="w-4 h-[1px] bg-orange-400/50" />
-                    {T.section3}
-                  </button>
-                  {openSections.ranking && (
-                    <div className="p-2 pt-0 space-y-1 bg-white/[0.02]">
-                      <Toggle label={T.labelReranker} checked={settings.reranker} onChange={() => toggleSetting('reranker')} desc={T.descReranker} />
-                      <Toggle label={T.labelExpandContext} checked={settings.expandContext} onChange={() => toggleSetting('expandContext')} desc={T.descExpandContext} />
-                      <Toggle label={T.labelOptimizeContext} checked={settings.optimizeContext} onChange={() => toggleSetting('optimizeContext')} desc={T.descOptimizeContext} />
-                      <Toggle label={T.labelRecomp} checked={settings.recompSynthesis} onChange={() => toggleSetting('recompSynthesis')} desc={T.descRecomp} />
-                    </div>
-                  )}
-                </div>
-
-                {/* 4. Reindexación */}
-                <div className="rounded-xl border border-orange-500/20 overflow-hidden">
-                  <button
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-[10px] font-bold text-orange-400 uppercase tracking-widest bg-orange-500/5 hover:bg-orange-500/10 transition-colors"
-                    onClick={() => setOpenSections(s => ({ ...s, reindexacion: !s.reindexacion }))}
-                  >
-                    {openSections.reindexacion ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                    <span className="w-4 h-[1px] bg-orange-400/50" />
-                    {T.section4}
-                  </button>
-                  {openSections.reindexacion && (
-                    <div className="p-3 pt-0 space-y-3 bg-orange-500/5">
-                      <p className="text-xs text-zinc-500">
-                        {T.reindexHint}
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          className="flex-1 py-3 px-4 rounded-2xl border border-dashed border-white/20 text-zinc-400 hover:text-white hover:border-orange-500/50 hover:bg-orange-500/5 transition-all flex flex-col items-center justify-center gap-1 text-sm group disabled:opacity-50"
-                          onClick={() => reindexFileInputRef.current?.click()}
-                          disabled={isReindexing}
-                        >
-                          <FileUp className="w-5 h-5 group-hover:text-orange-400" />
-                          <span className="font-medium">
-                            {pendingReindexFiles.length ? `${pendingReindexFiles.length} PDF(s)` : T.addPdfs}
-                          </span>
-                        </button>
-                        {pendingReindexFiles.length > 0 && (
-                          <button
-                            className="px-3 rounded-2xl text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                            onClick={() => { setPendingReindexFiles([]); if (reindexFileInputRef.current) reindexFileInputRef.current.value = ''; }}
-                            title={T.remove}
-                          >
-                            <X className="w-5 h-5" />
-                          </button>
-                        )}
-                      </div>
-                      <button
-                        className="w-full py-3 px-4 rounded-2xl bg-orange-500/20 border border-orange-500/40 text-orange-400 hover:bg-orange-500/30 transition-all flex items-center justify-center gap-2 text-sm font-semibold disabled:opacity-50"
-                        onClick={handleReindex}
-                        disabled={isReindexing}
-                      >
-                        {isReindexing ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          <RefreshCw className="w-5 h-5" />
-                        )}
-                        {T.reindexBtn}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
+            ) : null}
           </AnimatePresence>
-        </div>
-
-        {/* Sidebar Footer */}
-        <div className="p-5 border-t border-white/5 text-xs text-zinc-500 flex items-center justify-between bg-black/20 rounded-b-3xl">
-          <span className="font-mono text-[10px] tracking-wider">{fill(T.fragments, { n: totalFragments })}</span>
-          <button
-            type="button"
-            onClick={() => { setActiveTab('models'); if (!ollamaStatus.running) handleStartOllama(); }}
-            className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 transition-colors hover:bg-white/10"
-            title={ollamaStatus.running ? T.ollamaOnline : T.ollamaStartBtn}
-          >
-            <div className={`h-1.5 w-1.5 rounded-full ${ollamaStatus.running ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]' : 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.8)]'}`} />
-            <span className="font-medium text-zinc-300">{T.ollamaStatus}</span>
-          </button>
         </div>
       </motion.aside>
 
@@ -1825,45 +1626,81 @@ export default function App() {
           </div>
         )}
 
-        {/* Chat column — hidden while a full-screen PDF is open */}
-        {pdfViewer?.mode !== 'full' && (
+        {/* Models / Pipeline overlay — occupies the full main area, like the PDF viewer */}
+        {mainPanel && pdfViewer?.mode !== 'full' && (
+          <div className="flex-1 flex flex-col min-w-0 relative">
+            <header className="h-20 border-b border-[var(--border)] flex items-center justify-between gap-3 px-6 bg-[var(--surface)] z-10">
+              <div className="flex items-center gap-2 min-w-0">
+                {mainPanel === 'models'
+                  ? <Ollama className="w-5 h-5 flex-shrink-0 text-[var(--text)]" />
+                  : <Chroma className="w-5 h-5 flex-shrink-0" />}
+                <h2 className="t-h2 text-[var(--text)] truncate">{mainPanel === 'models' ? T.tabModels : T.tabPipeline}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMainPanel(null)}
+                className="p-2 text-[var(--text-muted)] hover:text-[var(--text)] bg-[var(--surface)] hover:bg-[var(--surface-2)] border border-[var(--border)] transition-colors flex-shrink-0"
+                title={T.close}
+                aria-label={T.close}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </header>
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
+              {mainPanel === 'models' ? renderModelsPanel() : renderPipelinePanel()}
+            </div>
+          </div>
+        )}
+
+        {/* Chat column — hidden while a full-screen PDF or a panel is open */}
+        {pdfViewer?.mode !== 'full' && !mainPanel && (
         <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Header */}
-        <header className="h-20 border-b border-white/5 flex items-center justify-between px-6 bg-black/20 z-10">
-          <div className="flex items-center gap-4">
+        <header className="h-20 border-b border-[var(--border)] flex items-center justify-between gap-3 px-4 bg-[var(--surface)] z-10">
+          <div className="flex items-center gap-3 min-w-0">
             <button
-              className="p-2.5 -ml-2 text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-colors"
+              className="p-2.5 text-[var(--text-muted)] hover:text-[var(--text)] bg-[var(--surface)] hover:bg-[var(--surface-2)] border border-[var(--border)] transition-colors flex-shrink-0"
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             >
               <Menu className="w-5 h-5" />
             </button>
 
-            <div className="flex bg-black/40 rounded-full p-1 border border-white/5">
+            <div className="flex bg-[var(--surface)] p-1 border border-[var(--border)] flex-shrink-0">
               <button
-                className={`px-5 py-2 text-xs font-bold tracking-wide rounded-full transition-all flex items-center gap-2 ${mode === 'chat' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide transition-all flex items-center gap-2 ${mode === 'chat' ? 'bg-[var(--surface-2)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
                 onClick={() => handleModeChange('chat')}
               >
-                <MessageSquare className="w-4 h-4" />
+                <Ollama className="w-4 h-4 text-[var(--text)]" />
                 CHAT
               </button>
               <button
-                className={`px-5 py-2 text-xs font-bold tracking-wide rounded-full transition-all flex items-center gap-2 ${mode === 'rag' ? 'bg-orange-500 text-black shadow-[0_0_15px_rgba(230,140,82,0.3)]' : 'text-zinc-500 hover:text-zinc-300'}`}
+                className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide transition-all flex items-center gap-2 ${mode === 'rag' ? 'bg-[var(--accent)] text-[var(--accent-contrast)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
                 onClick={() => handleModeChange('rag')}
               >
-                <Database className="w-4 h-4" />
+                <Chroma className="w-4 h-4" />
                 RAG
               </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <LanguageToggle lang={lang} setLang={setLang} />
-            {/* Clear button */}
+          <div className="flex items-center gap-2 flex-shrink-0">
             <button
-              className="text-xs text-zinc-500 hover:text-orange-400 transition-colors px-3 py-1.5 rounded-full hover:bg-white/5 border border-transparent hover:border-white/10"
-              onClick={handleClear}
+              type="button"
+              onClick={toggleTheme}
+              className="p-2 text-[var(--text-muted)] hover:text-[var(--text)] bg-[var(--surface)] hover:bg-[var(--surface-2)] border border-[var(--border)] transition-colors"
+              title={theme === 'dark' ? T.themeLight : T.themeDark}
+              aria-label={theme === 'dark' ? T.themeLight : T.themeDark}
             >
-              {T.clearChat}
+              {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+            <LanguageToggle lang={lang} setLang={setLang} />
+            <button
+              className="p-2 text-[var(--text-muted)] hover:text-[var(--accent)] bg-[var(--surface)] hover:bg-[var(--surface-2)] border border-[var(--border)] transition-colors"
+              onClick={handleClear}
+              title={T.clearChat}
+              aria-label={T.clearChat}
+            >
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
         </header>
@@ -1883,9 +1720,6 @@ export default function App() {
                   <h2 className="flex flex-wrap justify-center text-4xl md:text-5xl font-extrabold tracking-tight">
                     <ShimmerText text={userName ? `${GREETING[lang]}, ${userName}` : GREETING[lang]} />
                   </h2>
-                  <p className="mt-4 text-sm text-zinc-400">
-                    {mode === 'rag' ? T.placeholderRag : T.placeholderChat}
-                  </p>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1931,10 +1765,10 @@ export default function App() {
                       {/* Message bubble */}
                       <div className={`text-[15px] leading-relaxed ${
                         msg.role === 'user'
-                          ? 'text-white font-medium text-left'
+                          ? 'text-[var(--text)] font-medium text-left'
                           : msg.isError
-                            ? 'text-red-300'
-                            : 'text-zinc-100'
+                            ? 'text-red-400'
+                            : 'text-[var(--text)]'
                       }`}>
                         {msg.content ? (
                           <MarkdownContent text={msg.content} />
@@ -1953,11 +1787,11 @@ export default function App() {
                             {msg.citations.map((cite, i) => (
                               <button
                                 key={i}
-                                className="inline-flex max-w-full items-center gap-2 px-3 py-1.5 rounded-full bg-black/40 border border-white/5 text-xs text-zinc-300 hover:bg-white/10 hover:border-orange-500/30 hover:text-orange-300 transition-all group cursor-pointer"
+                                className="inline-flex max-w-full items-center gap-2 px-3 py-1.5 rounded-full bg-black/40 border border-white/5 text-xs text-zinc-300 hover:bg-white/10 hover:border-orange-500/30 hover:text-[var(--accent)] transition-all group cursor-pointer"
                                 onClick={() => openPdf(cite.document, cite.best_page ?? cite.pages[0] ?? 1, 'split')}
                                 title={T.viewPdf}
                               >
-                                <FileText className="w-3.5 h-3.5 text-orange-400/70 group-hover:text-orange-400" />
+                                <FileText className="w-3.5 h-3.5 text-[var(--accent)] group-hover:text-orange-400" />
                                 <span className="font-medium truncate min-w-0">{cite.document}</span>
                                 <span className="text-zinc-600">|</span>
                                 <span className="text-zinc-400 shrink-0">p. {cite.best_page ?? cite.pages[0]}</span>
@@ -1983,9 +1817,12 @@ export default function App() {
         </div>
 
         {/* Input Area */}
-        <div className="p-6 bg-gradient-to-t from-[#0b0a10] via-[#0b0a10]/85 to-transparent absolute bottom-0 left-0 right-0 z-20">
+        <div
+          className="p-6 absolute bottom-0 left-0 right-0 z-20"
+          style={{ background: 'linear-gradient(to top, var(--bg), color-mix(in srgb, var(--bg) 88%, transparent) 55%, transparent)' }}
+        >
           <div className="max-w-3xl mx-auto relative">
-            <div className="relative flex items-end gap-3 bg-black/50 backdrop-blur-xl border border-white/10 rounded-2xl p-2.5 shadow-2xl focus-within:border-orange-500/50 focus-within:ring-4 focus-within:ring-orange-500/10 transition-all">
+            <div className="glass-panel relative flex items-end gap-3 p-2.5 focus-within:border-[var(--accent)] transition-all">
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -1997,7 +1834,7 @@ export default function App() {
                   }
                 }}
                 placeholder={mode === 'rag' ? T.placeholderRag : T.placeholderChat}
-                className="flex-1 max-h-48 min-h-[52px] bg-transparent border-none focus:ring-0 focus:outline-none resize-none py-3.5 px-4 text-[15px] text-white placeholder:text-zinc-500 custom-scrollbar font-medium"
+                className="flex-1 max-h-48 min-h-[52px] bg-transparent border-none focus:ring-0 focus:outline-none resize-none py-3.5 px-4 text-[15px] text-[var(--text)] placeholder:text-[var(--text-faint)] custom-scrollbar font-medium"
                 rows={1}
                 disabled={isLoading}
               />
@@ -2005,7 +1842,7 @@ export default function App() {
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || isLoading}
-                className="p-3.5 bg-orange-500 text-black rounded-full hover:bg-orange-400 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:bg-white/10 disabled:text-zinc-500 disabled:hover:scale-100 transition-all shadow-[0_0_20px_rgba(230,140,82,0.3)] disabled:shadow-none flex-shrink-0"
+                className="p-3.5 bg-[var(--accent)] text-[var(--accent-contrast)] hover:bg-[var(--accent-hover)] active:scale-95 disabled:opacity-40 disabled:bg-[var(--surface-2)] disabled:text-[var(--text-faint)] transition-all flex-shrink-0"
               >
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -2013,9 +1850,6 @@ export default function App() {
                   <Send className="w-5 h-5 ml-0.5" />
                 )}
               </button>
-            </div>
-            <div className="text-center mt-4 text-[11px] font-medium text-zinc-600 tracking-wide">
-              {T.appFooter} · {mode === 'rag' ? T.footerMode : T.footerModeChat}
             </div>
           </div>
         </div>
@@ -2038,15 +1872,13 @@ function ShimmerText({ text }: { text: string }) {
   return (
     <>
       {Array.from(text).map((ch, i) => (
-        <motion.span
+        <span
           key={i}
-          className="inline-block"
-          style={{ whiteSpace: 'pre' }}
-          animate={{ color: ['#ffffff', '#F0A472', '#ffffff'] }}
-          transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut', delay: i * 0.12 }}
+          className="shimmer-char"
+          style={{ animationDelay: `${i * 0.12}s` }}
         >
           {ch}
-        </motion.span>
+        </span>
       ))}
     </>
   );
@@ -2138,16 +1970,16 @@ function Toggle({ label, checked, onChange, desc }: { label: string; checked: bo
 
 function LanguageToggle({ lang, setLang }: { lang: Lang; setLang: (lang: Lang) => void }) {
   return (
-    <div className="flex items-center gap-1 rounded-full border border-white/10 bg-black/30 p-1">
-      <Languages className="ml-2 h-3.5 w-3.5 text-zinc-500" />
+    <div className="flex items-center gap-1 border border-[var(--border)] bg-[var(--surface)] p-1">
+      <Languages className="ml-1.5 h-3.5 w-3.5 text-[var(--text-faint)]" />
       {LANG_OPTIONS.map(option => (
         <button
           key={option.code}
           type="button"
-          className={`rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide transition-all ${
+          className={`w-9 text-center px-1 py-1 text-[10px] font-bold tracking-wide transition-all ${
             lang === option.code
-              ? 'bg-orange-500 text-black shadow-[0_0_12px_rgba(230,140,82,0.25)]'
-              : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
+              ? 'bg-[var(--accent)] text-[var(--accent-contrast)]'
+              : 'text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]'
           }`}
           onClick={() => setLang(option.code)}
           aria-pressed={lang === option.code}
@@ -2163,15 +1995,12 @@ function LanguageToggle({ lang, setLang }: { lang: Lang; setLang: (lang: Lang) =
 // Matches the app's glass/dark theme (rounded-xl input, orange focus ring,
 // animated panel) instead of the OS-default dropdown.
 function ModelSelect({
-  value, options, models, disabled, onChange, capEmbedding, capVision,
+  value, options, disabled, onChange,
 }: {
   value: string;
   options: string[];
-  models: OllamaModel[];
   disabled?: boolean;
   onChange: (value: string) => void;
-  capEmbedding: string;
-  capVision: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -2190,11 +2019,6 @@ function ModelSelect({
     };
   }, [open]);
 
-  const tagsFor = (name: string) => {
-    const m = models.find(x => x.name === name);
-    return m ? [m.embedding && capEmbedding, m.vision && capVision].filter(Boolean).join(', ') : '';
-  };
-
   return (
     <div ref={ref} className="relative">
       <button
@@ -2203,10 +2027,7 @@ function ModelSelect({
         onClick={() => setOpen(o => !o)}
         className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/40 px-2.5 py-2 text-xs text-zinc-200 transition-colors hover:border-white/20 focus:border-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500/20 disabled:opacity-50"
       >
-        <span className="truncate">
-          {value || '—'}
-          {tagsFor(value) && <span className="text-zinc-500"> · {tagsFor(value)}</span>}
-        </span>
+        <span className="truncate">{value || '—'}</span>
         <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 text-zinc-500 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       <AnimatePresence>
@@ -2219,7 +2040,6 @@ function ModelSelect({
             className="custom-scrollbar absolute z-50 mt-1.5 max-h-56 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#15131c]/95 p-1 shadow-xl backdrop-blur-xl"
           >
             {options.map(name => {
-              const tags = tagsFor(name);
               const selected = name === value;
               return (
                 <li key={name}>
@@ -2227,14 +2047,11 @@ function ModelSelect({
                     type="button"
                     onClick={() => { onChange(name); setOpen(false); }}
                     className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
-                      selected ? 'bg-orange-500/15 text-orange-200' : 'text-zinc-300 hover:bg-white/5'
+                      selected ? 'bg-orange-500/15 text-[var(--accent)]' : 'text-zinc-300 hover:bg-white/5'
                     }`}
                   >
-                    <span className="truncate">
-                      {name}
-                      {tags && <span className="text-zinc-500"> · {tags}</span>}
-                    </span>
-                    {selected && <Check className="h-3.5 w-3.5 flex-shrink-0 text-orange-300" />}
+                    <span className="truncate">{name}</span>
+                    {selected && <Check className="h-3.5 w-3.5 flex-shrink-0 text-[var(--accent)]" />}
                   </button>
                 </li>
               );

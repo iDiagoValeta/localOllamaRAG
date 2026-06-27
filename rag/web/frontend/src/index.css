@@ -1,31 +1,90 @@
 @import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 
 @theme {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Code", Consolas, monospace;
+  /* Typography — Geist (self-hosted via Fontsource, works offline). */
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, "Cascadia Code", Consolas, monospace;
 
-  /* Softer, warmer orange ramp — overrides Tailwind's default orange app-wide
-     so every `orange-*` utility (and the accent) reads less electric. */
-  --color-orange-300: #F6B98F;
-  --color-orange-400: #F0A472;
-  --color-orange-500: #E68C52;
-  --color-orange-600: #D7763E;
-  --color-accent: #F0A472;
-  --color-accent-hover: #E68C52;
+  /* Burnt, dark orange ramp — single accent colour app-wide (less electric). */
+  --color-orange-300: #EBA06B;
+  --color-orange-400: #D9813F;
+  --color-orange-500: #C2410C;
+  --color-orange-600: #9A3412;
+  --color-accent: #C2410C;
+  --color-accent-hover: #D9813F;
+
+  /* Square forms everywhere: collapse Tailwind's box radii to 0 so every
+     rounded-{sm..3xl} utility renders square without touching each component.
+     radius-full is kept for genuine circles (spinners, status dots). */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-full: 0px;
 
   /* Smoother motion everywhere: gentler easing + slightly longer default. */
-  --default-transition-duration: 240ms;
+  --default-transition-duration: 200ms;
   --default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-body {
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  /* Soft near-black base with a faint warm tint instead of pure #050505 */
-  background-color: #0b0a10;
-  color: #ffffff;
-  overflow: hidden;
+/* ── Theme tokens ────────────────────────────────────────────────────────────
+   Semantic colours, dark by default. `html.light` flips them. Components read
+   these via var(...) / arbitrary Tailwind values so both themes share markup. */
+:root {
+  --bg: #0a0a0b;
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-2: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --text: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --text-faint: #71717a;
+  --accent: #C2410C;
+  --accent-hover: #D9813F;
+  --accent-contrast: #ffffff;
+  --glass-bg: rgba(18, 18, 20, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.08);
 }
+
+html.light {
+  --bg: #faf9f7;
+  --surface: rgba(0, 0, 0, 0.025);
+  --surface-2: rgba(0, 0, 0, 0.05);
+  --border: rgba(0, 0, 0, 0.12);
+  --border-strong: rgba(0, 0, 0, 0.20);
+  --text: #18181b;
+  --text-muted: #52525b;
+  --text-faint: #71717a;
+  --accent: #B43A0B;
+  --accent-hover: #9A3412;
+  --accent-contrast: #ffffff;
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-border: rgba(0, 0, 0, 0.10);
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.011em;
+}
+
+/* ── Typographic scale ───────────────────────────────────────────────────────
+   One fixed standard for the whole app. Apply via these classes. */
+.t-display { font-size: 1.75rem; line-height: 1.1; font-weight: 600; letter-spacing: -0.02em; }
+.t-h2      { font-size: 1.125rem; line-height: 1.25; font-weight: 600; letter-spacing: -0.015em; }
+.t-h3      { font-size: 0.9375rem; line-height: 1.3; font-weight: 600; }
+.t-body    { font-size: 0.875rem; line-height: 1.5; font-weight: 400; }
+.t-body-sm { font-size: 0.8125rem; line-height: 1.45; font-weight: 400; }
+.t-label   { font-size: 0.6875rem; line-height: 1; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; }
+.t-mono    { font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.4; }
 
 /* ── Animated "lava lamp" background ─────────────────────────────────────────
    Fixed full-screen layer behind #root. Soft, low-opacity colour blobs drift
@@ -37,7 +96,8 @@ body {
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  background: radial-gradient(120% 120% at 50% 0%, #120f1d 0%, #0b0a10 55%, #070609 100%);
+  /* Flat monochrome background — pure black/white per theme, no gradient. */
+  background: var(--bg);
 }
 
 #root {
@@ -46,22 +106,20 @@ body {
   height: 100vh;
 }
 
+/* Ambient blobs removed for a flat monochrome background. */
 .lava-lamp .blob {
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(80px);
-  opacity: 0.6;
-  mix-blend-mode: screen;
-  will-change: transform;
+  display: none;
 }
 
+/* Monochrome ambience: a faint burnt-orange whisper + neutral depth, no
+   multi-colour blobs. Keeps the glass surfaces from reading flat. */
 .lava-lamp .blob-1 {
   width: 46vw;
   height: 46vw;
   left: -6vw;
   top: -8vh;
-  background: radial-gradient(circle at 50% 50%, rgba(255, 122, 69, 0.85), rgba(255, 99, 33, 0) 70%);
-  animation: lava-drift-1 26s ease-in-out infinite;
+  background: radial-gradient(circle at 50% 50%, rgba(194, 65, 12, 0.9), rgba(194, 65, 12, 0) 70%);
+  animation: lava-drift-1 30s ease-in-out infinite;
 }
 
 .lava-lamp .blob-2 {
@@ -69,26 +127,26 @@ body {
   height: 40vw;
   right: -8vw;
   top: 4vh;
-  background: radial-gradient(circle at 50% 50%, rgba(124, 92, 255, 0.7), rgba(124, 92, 255, 0) 70%);
-  animation: lava-drift-2 32s ease-in-out infinite;
+  background: radial-gradient(circle at 50% 50%, rgba(160, 160, 170, 0.6), rgba(160, 160, 170, 0) 70%);
+  animation: lava-drift-2 34s ease-in-out infinite;
 }
 
 .lava-lamp .blob-3 {
-  width: 48vw;
-  height: 48vw;
-  left: 12vw;
+  width: 44vw;
+  height: 44vw;
+  left: 14vw;
   bottom: -18vh;
-  background: radial-gradient(circle at 50% 50%, rgba(45, 212, 191, 0.55), rgba(45, 212, 191, 0) 70%);
-  animation: lava-drift-3 30s ease-in-out infinite;
+  background: radial-gradient(circle at 50% 50%, rgba(120, 120, 130, 0.5), rgba(120, 120, 130, 0) 70%);
+  animation: lava-drift-3 38s ease-in-out infinite;
 }
 
 .lava-lamp .blob-4 {
-  width: 34vw;
-  height: 34vw;
-  right: 6vw;
+  width: 30vw;
+  height: 30vw;
+  right: 8vw;
   bottom: -10vh;
-  background: radial-gradient(circle at 50% 50%, rgba(255, 94, 138, 0.6), rgba(255, 94, 138, 0) 70%);
-  animation: lava-drift-4 36s ease-in-out infinite;
+  background: radial-gradient(circle at 50% 50%, rgba(217, 129, 63, 0.55), rgba(217, 129, 63, 0) 70%);
+  animation: lava-drift-4 40s ease-in-out infinite;
 }
 
 @keyframes lava-drift-1 {
@@ -117,11 +175,11 @@ body {
 }
 
 .glass-panel {
-  background: rgba(20, 18, 26, 0.55);
-  backdrop-filter: blur(28px) saturate(140%);
-  -webkit-backdrop-filter: blur(28px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background: var(--glass-bg);
+  backdrop-filter: blur(28px) saturate(120%);
+  -webkit-backdrop-filter: blur(28px) saturate(120%);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.28);
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -153,7 +211,7 @@ body {
 .markdown-content h2,
 .markdown-content h3,
 .markdown-content h4 {
-  color: #fff;
+  color: var(--text);
   font-weight: 650;
   line-height: 1.25;
 }
@@ -205,6 +263,46 @@ body {
 .markdown-content pre code {
   border: 0;
   background: transparent;
-  color: #e4e4e7;
+  color: var(--text);
   padding: 0;
+}
+
+/* ── Light-mode bridge ───────────────────────────────────────────────────────
+   Temporary remaps so light mode is legible before every component migrates to
+   semantic tokens. The /loop replaces these with proper per-component tokens. */
+html.light .text-white { color: #18181b; }
+html.light .text-zinc-200 { color: #27272a; }
+html.light .text-zinc-300 { color: #3f3f46; }
+html.light .text-zinc-400 { color: #52525b; }
+html.light .text-zinc-500 { color: #71717a; }
+html.light .text-zinc-600 { color: #9ca3af; }
+
+html.light .bg-black\/20 { background-color: rgba(0, 0, 0, 0.03); }
+html.light .bg-black\/30 { background-color: rgba(0, 0, 0, 0.04); }
+html.light .bg-black\/40 { background-color: rgba(0, 0, 0, 0.05); }
+html.light .bg-white\/5 { background-color: rgba(0, 0, 0, 0.035); }
+html.light .bg-white\/10 { background-color: rgba(0, 0, 0, 0.06); }
+html.light .bg-white\/\[0\.03\] { background-color: rgba(0, 0, 0, 0.03); }
+html.light .bg-white\/\[0\.06\] { background-color: rgba(0, 0, 0, 0.05); }
+
+html.light .border-white\/5 { border-color: rgba(0, 0, 0, 0.08); }
+html.light .border-white\/10 { border-color: rgba(0, 0, 0, 0.12); }
+
+.markdown-content code {
+  color: var(--accent);
+}
+
+/* Theme-aware text shimmer (logo + greeting): uses tokens so it reads in both
+   themes and re-colours instantly on toggle. */
+@keyframes text-shimmer {
+  0%, 100% { color: var(--text); }
+  50% { color: var(--accent); }
+}
+.shimmer-char {
+  display: inline-block;
+  white-space: pre;
+  animation: text-shimmer 2.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-char { animation: none; color: var(--text); }
 }
