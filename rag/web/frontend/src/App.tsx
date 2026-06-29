@@ -3,7 +3,7 @@ import {
   Send, FileText, Chroma, Ollama,
   Search, Layers, FileUp, Menu, X,
   RefreshCw, Loader2, AlertCircle, CheckCircle2, Trash2,
-  ChevronDown, ChevronRight, Copy, Check, Languages, Eye,
+  ChevronDown, Copy, Check, Languages, Eye,
   Power, Sun, Moon
 } from './lib/icons';
 import { getStoredTheme, setTheme, type Theme } from './lib/theme';
@@ -687,13 +687,6 @@ export default function App() {
   const [modelRoles, setModelRoles] = useState<ModelRoles | null>(null);
   const [savingRole, setSavingRole] = useState<ModelRole | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    indexacion: false,
-    recuperacion: false,
-    ranking: false,
-    reindexacion: true,  // Reindexación abierta por defecto para ver los botones
-  });
-
   const [settings, setSettings] = useState<PipelineSettings>({
     contextualRetrieval: true,
     queryDecomposition: true,
@@ -1305,7 +1298,7 @@ export default function App() {
               return (
                 <div key={role} className="border border-[var(--border)] bg-[var(--surface)] p-2.5">
                   <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="t-h3 text-[var(--text)]">{label}</span>
+                    <span className="t-h3 text-[var(--accent)]">{label}</span>
                     {savingRole === role && <Loader2 className="h-3 w-3 animate-spin text-[var(--accent)]" />}
                   </div>
                   <p className="mb-2 t-body-sm text-[var(--text-muted)]">{desc}</p>
@@ -1325,7 +1318,7 @@ export default function App() {
   );
 
   const renderPipelinePanel = () => (
-    <div className="mx-auto w-full max-w-2xl space-y-2">
+    <div className="mx-auto w-full max-w-4xl space-y-4">
       {(settingsError || isReindexing) && (
         <div className={`border px-3 py-2 text-xs ${settingsError ? 'border-red-500/20 bg-red-500/10 text-red-400' : 'border-[var(--accent)]/30 bg-[var(--accent)]/10 text-[var(--accent)]'}`}>
           {settingsError ? (
@@ -1349,102 +1342,68 @@ export default function App() {
         </div>
       )}
 
-      {/* 1. Indexación */}
-      <div className="border border-[var(--border)] overflow-hidden">
-        <button
-          className="w-full flex items-center gap-2 px-3 py-2.5 t-label text-[var(--accent)] bg-[var(--surface)] hover:bg-[var(--surface-2)] transition-colors"
-          onClick={() => setOpenSections(s => ({ ...s, indexacion: !s.indexacion }))}
-        >
-          {openSections.indexacion ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-          {T.section1}
-        </button>
-        {openSections.indexacion && (
-          <div className="p-2 pt-0 space-y-1 bg-[var(--surface)]">
+      <div className="grid gap-4 md:grid-cols-2">
+        <section className="flex flex-col border border-[var(--border)] bg-[var(--popover)] p-3">
+          <h3 className="t-label mb-3 text-[var(--accent)]">{T.section1}</h3>
+          <div className="space-y-0.5">
             <Toggle label={T.labelContextual} checked={settings.contextualRetrieval} onChange={() => toggleSetting('contextualRetrieval')} desc={T.descContextual} />
             <Toggle label={T.labelImageIndex} checked={settings.imageIndexing} onChange={() => toggleSetting('imageIndexing')} desc={T.descImageIndex} />
           </div>
-        )}
-      </div>
+        </section>
 
-      {/* 2. Recuperación */}
-      <div className="border border-[var(--border)] overflow-hidden">
-        <button
-          className="w-full flex items-center gap-2 px-3 py-2.5 t-label text-[var(--accent)] bg-[var(--surface)] hover:bg-[var(--surface-2)] transition-colors"
-          onClick={() => setOpenSections(s => ({ ...s, recuperacion: !s.recuperacion }))}
-        >
-          {openSections.recuperacion ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-          {T.section2}
-        </button>
-        {openSections.recuperacion && (
-          <div className="p-2 pt-0 space-y-1 bg-[var(--surface)]">
+        <section className="flex flex-col border border-[var(--border)] bg-[var(--popover)] p-3">
+          <h3 className="t-label mb-3 text-[var(--accent)]">{T.section2}</h3>
+          <div className="space-y-0.5">
             <Toggle label={T.labelHybrid} checked={settings.hybridSearch} onChange={() => toggleSetting('hybridSearch')} desc={T.descHybrid} />
             <Toggle label={T.labelQueryDecomp} checked={settings.queryDecomposition} onChange={() => toggleSetting('queryDecomposition')} desc={T.descQueryDecomp} />
           </div>
-        )}
-      </div>
+        </section>
 
-      {/* 3. Ranking & Contexto */}
-      <div className="border border-[var(--border)] overflow-hidden">
-        <button
-          className="w-full flex items-center gap-2 px-3 py-2.5 t-label text-[var(--accent)] bg-[var(--surface)] hover:bg-[var(--surface-2)] transition-colors"
-          onClick={() => setOpenSections(s => ({ ...s, ranking: !s.ranking }))}
-        >
-          {openSections.ranking ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-          {T.section3}
-        </button>
-        {openSections.ranking && (
-          <div className="p-2 pt-0 space-y-1 bg-[var(--surface)]">
+        <section className="flex flex-col border border-[var(--border)] bg-[var(--popover)] p-3 md:col-span-2">
+          <h3 className="t-label mb-3 text-[var(--accent)]">{T.section3}</h3>
+          <div className="grid gap-0 sm:grid-cols-2">
             <Toggle label={T.labelReranker} checked={settings.reranker} onChange={() => toggleSetting('reranker')} desc={T.descReranker} />
             <Toggle label={T.labelExpandContext} checked={settings.expandContext} onChange={() => toggleSetting('expandContext')} desc={T.descExpandContext} />
             <Toggle label={T.labelOptimizeContext} checked={settings.optimizeContext} onChange={() => toggleSetting('optimizeContext')} desc={T.descOptimizeContext} />
             <Toggle label={T.labelRecomp} checked={settings.recompSynthesis} onChange={() => toggleSetting('recompSynthesis')} desc={T.descRecomp} />
           </div>
-        )}
-      </div>
+        </section>
 
-      {/* 4. Reindexación */}
-      <div className="border border-[var(--accent)]/25 overflow-hidden">
-        <button
-          className="w-full flex items-center gap-2 px-3 py-2.5 t-label text-[var(--accent)] bg-[var(--accent)]/5 hover:bg-[var(--accent)]/10 transition-colors"
-          onClick={() => setOpenSections(s => ({ ...s, reindexacion: !s.reindexacion }))}
-        >
-          {openSections.reindexacion ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-          {T.section4}
-        </button>
-        {openSections.reindexacion && (
-          <div className="p-3 pt-0 space-y-3 bg-[var(--accent)]/5">
-            <p className="text-xs text-[var(--text-muted)]">{T.reindexHint}</p>
-            <div className="flex gap-2">
+        <section className="flex flex-col border border-[var(--border)] bg-[var(--popover)] p-4 md:col-span-2">
+          <h3 className="t-label mb-2 text-[var(--accent)]">{T.section4}</h3>
+          <p className="mb-4 text-xs text-[var(--text-muted)]">{T.reindexHint}</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+            <div className="flex flex-1 gap-2">
               <button
-                className="flex-1 py-3 px-4 border border-dashed border-[var(--border-strong)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--accent)] hover:bg-[var(--accent)]/5 transition-all flex flex-col items-center justify-center gap-1 text-sm group disabled:opacity-50"
+                className="flex flex-1 flex-col items-center justify-center gap-1 border border-dashed border-[var(--border-strong)] px-4 py-3 text-sm text-[var(--text-muted)] transition-all hover:border-[var(--accent)] hover:bg-[var(--popover-hover)] hover:text-[var(--text)] disabled:opacity-50 group"
                 onClick={() => reindexFileInputRef.current?.click()}
                 disabled={isReindexing}
               >
-                <FileUp className="w-5 h-5 group-hover:text-[var(--accent)]" />
+                <FileUp className="h-5 w-5 group-hover:text-[var(--accent)]" />
                 <span className="font-medium">
                   {pendingReindexFiles.length ? `${pendingReindexFiles.length} PDF(s)` : T.addPdfs}
                 </span>
               </button>
               {pendingReindexFiles.length > 0 && (
                 <button
-                  className="px-3 text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  className="px-3 text-[var(--text-muted)] transition-all hover:bg-red-500/10 hover:text-red-400"
                   onClick={() => { setPendingReindexFiles([]); if (reindexFileInputRef.current) reindexFileInputRef.current.value = ''; }}
                   title={T.remove}
                 >
-                  <X className="w-5 h-5" />
+                  <X className="h-5 w-5" />
                 </button>
               )}
             </div>
             <button
-              className="w-full py-3 px-4 bg-[var(--accent)] text-[var(--accent-contrast)] hover:bg-[var(--accent-hover)] transition-all flex items-center justify-center gap-2 text-sm font-semibold disabled:opacity-50"
+              className="flex items-center justify-center gap-2 bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-[var(--accent-contrast)] transition-all hover:bg-[var(--accent-hover)] disabled:opacity-50 sm:min-w-[10rem]"
               onClick={handleReindex}
               disabled={isReindexing}
             >
-              {isReindexing ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-5 h-5" />}
+              {isReindexing ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
               {T.reindexBtn}
             </button>
           </div>
-        )}
+        </section>
       </div>
     </div>
   );
@@ -1954,14 +1913,14 @@ function Toggle({ label, checked, onChange, desc }: { label: string; checked: bo
       type="button"
       role="switch"
       aria-checked={checked}
-      className="w-full flex items-center justify-between gap-4 p-2 rounded-lg hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-orange-500/50 transition-colors text-left group"
+      className="flex w-full items-center justify-between gap-4 rounded-lg p-2 text-left transition-colors hover:bg-[var(--popover-hover)] focus:outline-none focus:ring-2 focus:ring-orange-500/50 group"
       onClick={onChange}
     >
       <span className="flex-1">
-        <span className="block text-sm text-zinc-200 font-medium group-hover:text-white transition-colors">{label}</span>
-        <span className="block text-[11px] text-zinc-500 leading-snug mt-1">{desc}</span>
+        <span className="block text-sm font-medium text-[var(--text)] transition-colors">{label}</span>
+        <span className="mt-1 block text-[11px] leading-snug text-[var(--text-muted)]">{desc}</span>
       </span>
-      <span className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center justify-center rounded-full transition-colors duration-300 ease-in-out ${checked ? 'bg-orange-500 shadow-[0_0_10px_rgba(230,140,82,0.4)]' : 'bg-white/10'}`}>
+      <span className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center justify-center rounded-full transition-colors duration-300 ease-in-out ${checked ? 'bg-orange-500 shadow-[0_0_10px_rgba(230,140,82,0.4)]' : 'bg-[var(--popover-hover)]'}`}>
         <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition duration-300 ease-in-out ${checked ? 'translate-x-2.5' : '-translate-x-2.5'}`} />
       </span>
     </button>
@@ -1992,8 +1951,7 @@ function LanguageToggle({ lang, setLang }: { lang: Lang; setLang: (lang: Lang) =
 }
 
 // Styled replacement for the native <select> used to pick a model per role.
-// Matches the app's glass/dark theme (rounded-xl input, orange focus ring,
-// animated panel) instead of the OS-default dropdown.
+// Uses semantic theme tokens so the trigger and panel match light/dark mode.
 function ModelSelect({
   value, options, disabled, onChange,
 }: {
@@ -2025,10 +1983,10 @@ function ModelSelect({
         type="button"
         disabled={disabled}
         onClick={() => setOpen(o => !o)}
-        className="flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/40 px-2.5 py-2 text-xs text-zinc-200 transition-colors hover:border-white/20 focus:border-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500/20 disabled:opacity-50"
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--popover)] px-2.5 py-2 text-xs text-[var(--text)] transition-colors hover:border-[var(--border-strong)] focus:border-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500/20 disabled:opacity-50"
       >
         <span className="truncate">{value || '—'}</span>
-        <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 text-zinc-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       <AnimatePresence>
         {open && (
@@ -2037,7 +1995,7 @@ function ModelSelect({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.15 }}
-            className="custom-scrollbar absolute z-50 mt-1.5 max-h-56 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#15131c]/95 p-1 shadow-xl backdrop-blur-xl"
+            className="custom-scrollbar absolute z-50 mt-1.5 max-h-56 w-full overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--popover)] p-1 shadow-xl"
           >
             {options.map(name => {
               const selected = name === value;
@@ -2047,7 +2005,7 @@ function ModelSelect({
                     type="button"
                     onClick={() => { onChange(name); setOpen(false); }}
                     className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
-                      selected ? 'bg-orange-500/15 text-[var(--accent)]' : 'text-zinc-300 hover:bg-white/5'
+                      selected ? 'bg-[var(--popover-active)] text-[var(--accent)]' : 'text-[var(--text)] hover:bg-[var(--popover-hover)]'
                     }`}
                   >
                     <span className="truncate">{name}</span>
