@@ -70,7 +70,7 @@ Both front-ends share the same local RAG engine. The web UI sends each query thr
 
 **Web interface — querying a local document corpus**
 
-https://github.com/user-attachments/assets/224d002b-6eb9-43de-9a74-8125fdc6d6d1
+https://github.com/user-attachments/assets/f5f8fa1d-b193-4f94-85c2-8f903afa2348
 
 **CLI — querying a local document corpus**
 
