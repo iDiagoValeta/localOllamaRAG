@@ -222,7 +222,7 @@ def generar_queries_con_llm(pregunta: str) -> List[str]:
             model=cfg.MODELO_CHAT,
             prompt=prompt,
             think=False,
-            keep_alive=0,
+            keep_alive=cfg.OLLAMA_KEEP_ALIVE,
             options={
                 "temperature": 0.5,
                 "num_predict": 400,

@@ -257,6 +257,7 @@ def describir_imagen_con_llm(
                 "images": [image_b64],
             }],
             think=False,
+            keep_alive=cfg.OLLAMA_KEEP_ALIVE,
             options={"temperature": 0.1, "num_predict": 2000, "num_ctx": cfg.OLLAMA_OCR_NUM_CTX},
         )
         descripcion = response["message"]["content"].strip()

@@ -228,6 +228,10 @@ OLLAMA_RECOMP_NUM_CTX = _leer_env_int("OLLAMA_RECOMP_NUM_CTX", 8192)
 OLLAMA_CONTEXTUAL_NUM_CTX = _leer_env_int("OLLAMA_CONTEXTUAL_NUM_CTX", 32768)
 OLLAMA_OCR_NUM_CTX = _leer_env_int("OLLAMA_OCR_NUM_CTX", 8192)
 OLLAMA_REQUEST_TIMEOUT = _leer_env_int("OLLAMA_REQUEST_TIMEOUT", 900)
+# Seconds to keep weights in VRAM after each Ollama call; 0 unloads immediately.
+OLLAMA_KEEP_ALIVE = _leer_env_int("OLLAMA_KEEP_ALIVE", 0)
+OLLAMA_GENERATE_RETRIES = _leer_env_int("OLLAMA_GENERATE_RETRIES", 2)
+OLLAMA_GENERATE_RETRY_DELAY = _leer_env_int("OLLAMA_GENERATE_RETRY_DELAY", 3)
 
 
 # 3.4 Pipeline flags

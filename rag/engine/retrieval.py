@@ -15,6 +15,16 @@ import ollama
 from rag.cli.display import ui
 from rag.engine.runtime import get_runtime
 
+def _embedding_keep_alive(q_idx: int, n_queries: int):
+    # ponytail: unload embed model after the last query so the RAG generator fits in VRAM
+    return 0 if q_idx >= n_queries - 1 else None
+
+
+if __name__ == "__main__":
+    assert _embedding_keep_alive(0, 3) is None
+    assert _embedding_keep_alive(2, 3) == 0
+    raise SystemExit(0)
+
 cfg = get_runtime()
 # SECTION 9: HYBRID RETRIEVAL PIPELINE
 # ─────────────────────────────────────────────
@@ -80,7 +90,11 @@ def realizar_busqueda_hibrida(
 
     for q_idx, query in enumerate(queries):
         query_con_prefijo = f"{cfg.EMBED_PREFIX_QUERY}{query}"
-        response_emb = ollama.embeddings(model=cfg.MODELO_EMBEDDING, prompt=query_con_prefijo)
+        response_emb = ollama.embeddings(
+            model=cfg.MODELO_EMBEDDING,
+            prompt=query_con_prefijo,
+            keep_alive=_embedding_keep_alive(q_idx, len(queries)),
+        )
         if not embedding_dim:
             embedding_dim = len(response_emb["embedding"])
 
@@ -217,7 +231,4 @@ def realizar_busqueda_hibrida(
         )
 
     return fragmentos_ranked, mejor_score, metricas_totales
-
-
-
 

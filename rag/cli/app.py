@@ -267,6 +267,7 @@ class MonkeyGrabCLI:
             messages=messages,
             stream=True,
             think=False,
+            keep_alive=self.rag.OLLAMA_KEEP_ALIVE,
             options={"temperature": 0.7, "top_p": 0.9, "num_ctx": 8192},
         )
 

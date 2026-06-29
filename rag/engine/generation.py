@@ -10,6 +10,7 @@ import contextlib
 import io
 import json
 import logging
+import time
 import requests
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -19,6 +20,34 @@ from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
 OLLAMA_BASE_URL = "http://localhost:11434"
+
+
+def _modelos_ollama_configurados() -> set[str]:
+    return {
+        m for m in (
+            cfg.MODELO_RAG,
+            cfg.MODELO_CHAT,
+            cfg.MODELO_EMBEDDING,
+            cfg.MODELO_CONTEXTUAL,
+            cfg.MODELO_RECOMP,
+            cfg.MODELO_OCR,
+        ) if m
+    }
+
+
+def liberar_modelos_ollama(excepto: str | None = None) -> None:
+    """Ask Ollama to drop loaded weights (keep_alive=0) so the next model can fit."""
+    for nombre in _modelos_ollama_configurados():
+        if excepto and nombre == excepto:
+            continue
+        try:
+            requests.post(
+                f"{cfg.OLLAMA_BASE_URL}/api/generate",
+                json={"model": nombre, "keep_alive": 0},
+                timeout=30,
+            )
+        except Exception as exc:
+            logging.debug("Ollama unload %s: %s", nombre, exc)
 
 
 def _ollama_generate_stream(model: str, prompt: str, options: dict, system: Optional[str] = None):
@@ -43,22 +72,48 @@ def _ollama_generate_stream(model: str, prompt: str, options: dict, system: Opti
         "stream": True,
         "think": False,
         "options": options,
+        "keep_alive": cfg.OLLAMA_KEEP_ALIVE,
     }
     if system:
         payload["system"] = system
-    with requests.post(
-        f"{OLLAMA_BASE_URL}/api/generate",
-        json=payload,
-        stream=True,
-        timeout=cfg.OLLAMA_REQUEST_TIMEOUT,
-    ) as resp:
-        resp.raise_for_status()
-        for line in resp.iter_lines():
-            if line:
-                data = json.loads(line)
-                if data.get("done") and data.get("done_reason") not in (None, "stop"):
-                    logging.warning("RAG generator stopped early: done_reason=%s", data.get("done_reason"))
-                yield data
+
+    liberar_modelos_ollama(excepto=model)
+
+    url = f"{cfg.OLLAMA_BASE_URL}/api/generate"
+    attempts = max(1, cfg.OLLAMA_GENERATE_RETRIES)
+    for attempt in range(attempts):
+        try:
+            with requests.post(
+                url,
+                json=payload,
+                stream=True,
+                timeout=cfg.OLLAMA_REQUEST_TIMEOUT,
+            ) as resp:
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if line:
+                        data = json.loads(line)
+                        if data.get("done") and data.get("done_reason") not in (None, "stop"):
+                            logging.warning(
+                                "RAG generator stopped early: done_reason=%s",
+                                data.get("done_reason"),
+                            )
+                        yield data
+                return
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            if status is not None and status >= 500 and attempt + 1 < attempts:
+                logging.warning(
+                    "Ollama generate %s HTTP %s (attempt %d/%d); unloading and retrying",
+                    model,
+                    status,
+                    attempt + 1,
+                    attempts,
+                )
+                liberar_modelos_ollama()
+                time.sleep(cfg.OLLAMA_GENERATE_RETRY_DELAY)
+                continue
+            raise
 
 
 def _preparar_mensaje_usuario_rag(pregunta: str, fragmentos: List[Dict[str, Any]]) -> str:
@@ -334,5 +389,7 @@ def evaluar_pregunta_rag(
         return (respuesta, contexts)
 
 
-
+if __name__ == "__main__":
+    assert _modelos_ollama_configurados()
+    liberar_modelos_ollama()
 

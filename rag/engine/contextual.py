@@ -104,6 +104,7 @@ def generar_contexto_situacional(
                 {"role": "user",   "content": user_prompt}
             ],
             think=False,
+            keep_alive=cfg.OLLAMA_KEEP_ALIVE,
             options={"temperature": 0.1, "num_predict": 250, "num_ctx": cfg.OLLAMA_CONTEXTUAL_NUM_CTX},
         )
         contexto = response['message']['content'].strip()

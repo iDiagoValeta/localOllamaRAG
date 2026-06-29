@@ -361,7 +361,7 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
     try:
         payload = {
             "model": cfg.MODELO_RECOMP,
-            "keep_alive": 0,
+            "keep_alive": cfg.OLLAMA_KEEP_ALIVE,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
