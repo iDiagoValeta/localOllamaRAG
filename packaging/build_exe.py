@@ -22,7 +22,7 @@ Dependencies: PyInstaller, pywebview; Node.js only when (re)building the fronten
 # ─────────────────────────────────────────────
 #
 #  +-- 1. Paths and CLI
-#  +-- 2. Frontend build              npm run build (skippable)
+#  +-- 2. Frontend build              pnpm run build (skippable)
 #  +-- 3. Icon generation            logo.png -> MonkeyGrab.ico (optional)
 #  +-- 4. PyInstaller invocation
 #  +-- 5. main()
@@ -61,16 +61,25 @@ def _parse_args() -> argparse.Namespace:
 # ─────────────────────────────────────────────
 
 def build_frontend() -> None:
-    """Build the React UI into rag/web/frontend/dist via npm."""
-    npm = shutil.which("npm")
-    if npm is None:
-        print("! npm not found; skipping frontend build (using existing dist/ if present).")
-        return
+    """Build the React UI into rag/web/frontend/dist via pnpm.
+
+    Raises:
+        RuntimeError: If pnpm is not on PATH.
+    """
+    pnpm = shutil.which("pnpm")
+    if pnpm is None:
+        # Falling back to whatever dist/ happens to be lying around would ship
+        # a bundle with a stale UI and no warning in the artifact itself. Pass
+        # --skip-frontend to reuse an existing build on purpose.
+        raise RuntimeError(
+            "pnpm not found on PATH. Install it (npm install -g pnpm) or pass "
+            "--skip-frontend to package the existing dist/ deliberately."
+        )
     if not os.path.isdir(os.path.join(FRONTEND, "node_modules")):
-        print(">> npm install ...")
-        subprocess.run([npm, "install"], cwd=FRONTEND, check=True, shell=(os.name == "nt"))
-    print(">> npm run build ...")
-    subprocess.run([npm, "run", "build"], cwd=FRONTEND, check=True, shell=(os.name == "nt"))
+        print(">> pnpm install ...")
+        subprocess.run([pnpm, "install"], cwd=FRONTEND, check=True, shell=(os.name == "nt"))
+    print(">> pnpm run build ...")
+    subprocess.run([pnpm, "run", "build"], cwd=FRONTEND, check=True, shell=(os.name == "nt"))
 
 
 # ─────────────────────────────────────────────
