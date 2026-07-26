@@ -438,15 +438,14 @@ Active if `EXPANDIR_CONTEXTO = True`. For the `N_TOP_PARA_EXPANSION` (3) textual
 def preparar_fragmentos_para_generacion(
     fragmentos_ranked: List[Dict[str, Any]],
     collection: chromadb.Collection,
-    permitir_fallback_bajo_score: bool = False,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]
 ```
 
-Canonical function that turns the reranker-ordered candidates into the final evidence the generator receives. It is the single point of the system where the threshold filter, top-K cut, neighbor expansion and character limit are applied. CLI, web UI and RAGAS evaluation all share it to guarantee identical behavior.
+Canonical function that turns the reranker-ordered candidates into the final evidence the generator receives. It is the single point of the system where the threshold filter, top-K cut, neighbor expansion and character limit are applied. CLI, web UI and programmatic evaluation all share it to guarantee identical behavior.
 
 **Internal flow**:
 
-1. `_filtrar_por_umbral_reranker()`: if `USAR_RERANKER = True`, drops fragments with `score_reranker < UMBRAL_SCORE_RERANKER` (0.65). If `permitir_fallback_bajo_score = True` and no fragment passes the threshold, returns all candidates as an evaluation fallback.
+1. `_filtrar_por_umbral_reranker()`: if `USAR_RERANKER = True`, drops fragments with `score_reranker < UMBRAL_SCORE_RERANKER` (0.65).
 2. `[:TOP_K_FINAL]` cut: keeps the first `TOP_K_FINAL` (8) relevant candidates.
 3. `_expandir_fragmentos_contexto()`: adds adjacent chunks for the first `N_TOP_PARA_EXPANSION` (3) textual fragments, if `EXPANDIR_CONTEXTO = True`.
 4. `_limitar_fragmentos_por_chars()`: discards fragments that no longer fit within the `MAX_CONTEXTO_CHARS` (24000 chars) budget.
@@ -613,7 +612,7 @@ def evaluar_pregunta_rag(
 ) -> Tuple[str, List[str]]
 ```
 
-Exclusive path for RAGAS evaluations. Runs the full pipeline but:
+Path used for programmatic evaluation (scripted question/answer runs without a terminal session). Runs the full pipeline but:
 - Prints nothing to the terminal.
 - Generates no debug dumps.
 - Uses the same final fragment preparation as CLI and web UI: single `UMBRAL_SCORE_RERANKER` filter, top `TOP_K_FINAL`, expansion and character limit.

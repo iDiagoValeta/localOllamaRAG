@@ -157,7 +157,7 @@ The `.env` file at the project root is loaded automatically on startup. Anything
 
 Open `http://localhost:5000`. The sidebar covers **Documents**, **Models** and **RAG Pipeline** control, plus PDF upload, streaming responses and an `ES / EN / VAL` language selector. There are three fixed language stores — English (default), Castellano, Valencià — each bound to `rag/docs/{en,es,ca}/`; pick one to switch the active corpus at runtime.
 
-Ollama starts automatically at launch if installed but not running. Assign any installed model to a pipeline role (generator, chat, embeddings, reranker, etc.) from the **Models** tab — changes apply on the next query without a restart.
+Ollama starts automatically at launch if installed but not running. Assign any installed model to a pipeline role (generator, chat, embeddings, contextual, RECOMP, OCR) from the **Models** tab — changes apply on the next query without a restart. The reranker is a local CrossEncoder selected via `RERANKER_QUALITY`, not an Ollama model role.
 
 ### Desktop app
 

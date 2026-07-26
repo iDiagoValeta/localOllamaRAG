@@ -11,8 +11,8 @@ running Ollama server and local models. Direct script execution still runs
 the full experiment.
 
 Usage:
-    python research/tests/core/test_nothink.py
-    RUN_OLLAMA_INTEGRATION=1 python -m pytest research/tests/core/test_nothink.py
+    python tests/test_nothink.py
+    RUN_OLLAMA_INTEGRATION=1 python -m pytest tests/test_nothink.py
 
 Dependencies:
     - requests

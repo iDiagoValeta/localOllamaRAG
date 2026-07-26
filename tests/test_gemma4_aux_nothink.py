@@ -13,9 +13,9 @@ Strategies exercised:
   (3) Printed Modelfile snippet: ``PARAMETER think false`` for a derived model.
 
 Usage:
-    python research/tests/core/test_gemma4_aux_nothink.py
-    python research/tests/core/test_gemma4_aux_nothink.py --model gemma4:e4b
-    set OLLAMA_GEMMA4_TEST_MODEL=gemma4:e4b && python research/tests/core/test_gemma4_aux_nothink.py
+    python tests/test_gemma4_aux_nothink.py
+    python tests/test_gemma4_aux_nothink.py --model gemma4:e4b
+    set OLLAMA_GEMMA4_TEST_MODEL=gemma4:e4b && python tests/test_gemma4_aux_nothink.py
 
 Dependencies:
     - requests

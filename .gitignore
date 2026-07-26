@@ -62,17 +62,16 @@ rag/monkeygrab_server.port
 rag/show_fragments/*.txt
 rag/show_fragments/*.jsonl
 
-.claude/
-
-pipeline/
-
 media/
-
-.conda/
 
 .codex
 .cursor/
 AGENTS.md
-
-CLAUDE.md
 .codegraph/
+
+# Assistant instructions for this project are versioned so any clone (or CI
+# runner) picks them up; local session state and scratch files are not. This
+# block stays last: a later rule would otherwise re-ignore the file.
+CLAUDE.md
+.claude/*
+!.claude/CLAUDE.md
