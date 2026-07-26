@@ -1,8 +1,13 @@
-"""Architecture boundary test: domain/ and ports/ stay infrastructure-free.
+"""Architecture boundary test: domain/, ports/ and application/ stay infrastructure-free.
 
 docs/design/2026-07-26-monkeygrab-v2.md, section 4: "El dominio no importa
 nada de infraestructura" -- and F1's acceptance criterion makes the same
-demand of ports/. This test inspects each module's AST import statements
+demand of ports/ ("ningun modulo de domain/ o application/ importa
+chromadb, ollama, fitz ni torch"). application/ additionally may import
+monkeygrab.config (use cases are constructed with an AppConfig) on top of
+domain/ports, which the whitelist below already allows via the blanket
+"monkeygrab" prefix -- this test does not need a separate allowance for it.
+This test inspects each module's AST import statements
 (not a source-text grep, which a reformatted or aliased import could dodge)
 and fails if any top-level import target is not part of the Python standard
 library or the ``monkeygrab`` package itself. A whitelist of "what's
@@ -56,7 +61,7 @@ def _python_files(package_dir: Path):
     return sorted(package_dir.rglob("*.py"))
 
 
-@pytest.mark.parametrize("package_name", ["domain", "ports"])
+@pytest.mark.parametrize("package_name", ["domain", "ports", "application"])
 def test_package_imports_nothing_outside_the_standard_library(package_name):
     package_dir = SRC / package_name
     assert package_dir.is_dir(), f"expected {package_dir} to exist"
@@ -74,11 +79,12 @@ def test_package_imports_nothing_outside_the_standard_library(package_name):
     )
 
 
-def test_domain_and_ports_directories_are_not_accidentally_empty():
+def test_domain_ports_and_application_directories_are_not_accidentally_empty():
     """Guards the guard: an empty/misnamed directory would make the test
     above vacuously pass."""
     assert len(_python_files(SRC / "domain")) >= 2
     assert len(_python_files(SRC / "ports")) >= 2
+    assert len(_python_files(SRC / "application")) >= 2
 
 
 if __name__ == "__main__":

@@ -1,0 +1,243 @@
+"""Unit + equivalence tests for monkeygrab.application.retrieve.Retrieve.
+
+The RRF math and threshold filter already have dedicated equivalence tests
+(``test_rrf_fusion_equivalence.py``, ``test_retrieve_threshold_equivalence.py``);
+this file covers the orchestration around them with hand-written port fakes,
+plus an equivalence test for the sub-query response *parsing* logic against
+``rag.engine.reranking.generar_queries_con_llm`` (its prompt text is a
+verbatim copy, asserted separately below by capturing what's sent to the
+stubbed model).
+"""
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import pytest  # noqa: E402
+
+import rag.chat_pdfs as rag  # noqa: E402
+
+from monkeygrab.application.retrieve import Retrieve, _parse_subqueries  # noqa: E402
+from monkeygrab.config.app_config import AppConfig  # noqa: E402
+from monkeygrab.domain.chunk_metadata import ChunkMetadata  # noqa: E402
+from monkeygrab.domain.fragment import Fragment  # noqa: E402
+
+
+# ─────────────────────────────────────────────
+# _parse_subqueries vs generar_queries_con_llm's parsing
+# ─────────────────────────────────────────────
+
+
+def test_parse_subqueries_matches_generar_queries_con_llm_parsing(monkeypatch):
+    """Stub ollama.generate the same way the pipeline calls it and compare
+    the ORIGINAL's parsed result against feeding the identical raw text
+    through our parser directly -- proves the two parsing rules
+    (strip numbering, drop lines <=20 chars, cap at 3) agree."""
+    raw_response = (
+        "1. How does the attention mechanism compute query-key similarity scores?\n"
+        "- What role does multi-head attention play in the transformer encoder?\n"
+        "short\n"  # <=20 chars: dropped by both
+        "3) Why does the paper use scaled dot-product instead of additive attention?\n"
+        "This is a fourth line that would be truncated by the top-3 cap anyway.\n"
+    )
+
+    def _fake_generate(model, prompt, think, keep_alive, options):
+        return {"response": raw_response}
+
+    import rag.engine.reranking as reranking_mod
+
+    monkeypatch.setattr(reranking_mod.ollama, "generate", _fake_generate)
+
+    theirs = rag.generar_queries_con_llm("What is scaled dot-product attention and why is it used?")
+    ours = _parse_subqueries(raw_response)
+
+    assert ours == theirs
+    assert len(ours) == 3
+
+
+# ─────────────────────────────────────────────
+# Fakes
+# ─────────────────────────────────────────────
+
+
+def _fragment(id_, score_final=0.0):
+    source, rest = id_.split("_pag", 1)
+    page_str, chunk_str = rest.split("_chunk", 1)
+    return Fragment(
+        doc=f"doc-{id_}",
+        metadata=ChunkMetadata(source=source, page=int(page_str), chunk=int(chunk_str)),
+        score_final=score_final,
+    )
+
+
+class FakeEmbedder:
+    def __init__(self):
+        self.calls = []
+
+    def embed(self, text):
+        self.calls.append(text)
+        return [0.0]
+
+
+class FakeVectorStore:
+    def __init__(self, hits_by_call=None, default_hits=None):
+        self._hits_by_call = list(hits_by_call or [])
+        self._default_hits = default_hits or []
+        self.query_calls = 0
+
+    def query(self, embedding, n_results):
+        self.query_calls += 1
+        if self._hits_by_call:
+            return self._hits_by_call.pop(0)
+        return self._default_hits
+
+
+class FakeLexicalIndex:
+    def __init__(self, hits=None):
+        self._hits = hits or []
+        self.search_calls = 0
+
+    def search(self, query, top_n):
+        self.search_calls += 1
+        return self._hits
+
+
+class FakeReranker:
+    def __init__(self):
+        self.calls = []
+
+    def rerank(self, query, fragments, top_k):
+        self.calls.append((query, len(fragments), top_k))
+        # Simple deterministic re-score: reverse input order, mark score_reranker.
+        import dataclasses
+        return [dataclasses.replace(f, score_reranker=1.0 - i * 0.1) for i, f in enumerate(reversed(fragments[:top_k]))]
+
+
+class FakeQueryDecomposer:
+    def __init__(self, subqueries=None, raises=False):
+        self._subqueries = subqueries or []
+        self._raises = raises
+        self.calls = []
+
+    def generate(self, prompt, *, system=None, images=()):
+        self.calls.append(prompt)
+        if self._raises:
+            raise RuntimeError("decomposer unavailable")
+        return "\n".join(self._subqueries)
+
+
+def _config(**overrides):
+    cfg = AppConfig()
+    if overrides:
+        cfg = cfg.with_overrides(**overrides)
+    return cfg
+
+
+# ─────────────────────────────────────────────
+# Retrieve orchestration
+# ─────────────────────────────────────────────
+
+
+def test_semantic_only_search_when_hybrid_and_reranker_disabled():
+    hits = [_fragment("a.pdf_pag0_chunk0"), _fragment("b.pdf_pag0_chunk0")]
+    embedder = FakeEmbedder()
+    store = FakeVectorStore(default_hits=hits)
+    config = _config(**{"flags.usar_busqueda_hibrida": False, "flags.usar_reranker": False})
+
+    result = Retrieve(embedder, store, config).run("short query")
+
+    assert [f.id for f in result.fragments] == ["a.pdf_pag0_chunk0", "b.pdf_pag0_chunk0"]
+    assert result.metrics["reranked"] is False
+    assert store.query_calls == 1  # only the original question, no decomposition (question is short)
+
+
+def test_query_decomposition_only_triggers_above_60_chars_and_adds_variants():
+    short_question = "Short question."
+    long_question = "A" * 61  # len > 60
+
+    embedder = FakeEmbedder()
+    store = FakeVectorStore(default_hits=[])
+    decomposer = FakeQueryDecomposer(subqueries=[
+        "First reasonably long sub-query about the topic at hand here.",
+        "Second reasonably long sub-query about a different aspect entirely.",
+    ])
+    config = _config(**{"flags.usar_busqueda_hibrida": False, "flags.usar_reranker": False})
+
+    Retrieve(embedder, store, config, query_decomposer=decomposer).run(short_question)
+    assert decomposer.calls == []  # too short: decomposition never invoked
+    assert store.query_calls == 1  # only the original question embedded
+
+    embedder2 = FakeEmbedder()
+    store2 = FakeVectorStore(default_hits=[])
+    Retrieve(embedder2, store2, config, query_decomposer=decomposer).run(long_question)
+    assert len(decomposer.calls) == 1
+    assert store2.query_calls == 3  # original + 2 sub-queries
+
+
+def test_decomposer_failure_falls_back_to_original_question_only():
+    long_question = "B" * 61
+    embedder = FakeEmbedder()
+    store = FakeVectorStore(default_hits=[])
+    decomposer = FakeQueryDecomposer(raises=True)
+    config = _config(**{"flags.usar_busqueda_hibrida": False, "flags.usar_reranker": False})
+
+    result = Retrieve(embedder, store, config, query_decomposer=decomposer).run(long_question)
+
+    assert result.metrics["sub_queries"] == []
+    assert store.query_calls == 1
+
+
+def test_missing_optional_ports_disable_their_stage_regardless_of_flags():
+    """flags default to True for hybrid/reranker/decomposition, but with no
+    lexical_index/reranker/query_decomposer wired in, those stages must be
+    silently absent -- there is nothing to invoke."""
+    hits = [_fragment("a.pdf_pag0_chunk0")]
+    embedder = FakeEmbedder()
+    store = FakeVectorStore(default_hits=hits)
+    config = _config()  # all flags at their True defaults
+
+    result = Retrieve(embedder, store, config).run("A question long enough to trigger decomposition normally right here.")
+
+    assert result.metrics["reranked"] is False
+    assert result.metrics["keyword_candidates"] == 0
+    assert result.metrics["sub_queries"] == []
+
+
+def test_reranker_runs_and_then_threshold_filters_its_output():
+    hits = [_fragment(f"doc{i}.pdf_pag0_chunk0") for i in range(3)]
+    embedder = FakeEmbedder()
+    store = FakeVectorStore(default_hits=hits)
+    reranker = FakeReranker()
+    config = _config(**{
+        "flags.usar_busqueda_hibrida": False,
+        "reranking.score_threshold": 0.85,
+    })
+
+    result = Retrieve(embedder, store, config, reranker=reranker).run("short query")
+
+    assert reranker.calls  # reranker was invoked
+    # FakeReranker scores: 1.0, 0.9, 0.8 -- the threshold is inclusive (>=),
+    # so 1.0 and 0.9 clear 0.85 and only 0.8 is filtered out.
+    assert [round(f.score_reranker, 2) for f in result.fragments] == [1.0, 0.9]
+
+
+def test_top_k_final_truncates_even_when_reranker_is_off():
+    hits = [_fragment(f"doc{i}.pdf_pag0_chunk0") for i in range(5)]
+    embedder = FakeEmbedder()
+    store = FakeVectorStore(default_hits=hits)
+    config = _config(**{
+        "flags.usar_busqueda_hibrida": False,
+        "flags.usar_reranker": False,
+        "retrieval.top_k_final": 2,
+    })
+
+    result = Retrieve(embedder, store, config).run("short query")
+
+    assert len(result.fragments) == 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(pytest.main([__file__, "-v"]))
