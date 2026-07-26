@@ -31,6 +31,16 @@ a whole token: bounded by a non-alphanumeric character (or the start/end of
 the string) on both sides, the same idea as regex ``\\b``. See
 ``test_grade.py::test_number_does_not_match_inside_a_longer_number`` for the
 case this was written to catch.
+
+A later audit of gold_cases.jsonl found three narrower pitfalls in that same
+word-boundary idea, each fixed with its own guard and covered by its own
+tests: a bare number glued to a unit suffix with no separating space (e.g.
+``"110M"``) not matching (``_NUMERIC_UNIT_SUFFIXES`` in ``_contains_token``);
+a bare number matching as a fragment of an unrelated longer decimal (e.g.
+``"28"`` inside ``"28.4"`` or inside ``"0.28"``) via the ``(?<!\\.)`` /
+``(?!\\.\\d)`` guards in ``_contains_token``; and a Spanish-notation decimal
+comma (``"3,57"``) never being recognized, fixed by trying a second
+normalization (``_normalize_decimal_comma``) alongside the default one.
 """
 
 from __future__ import annotations
@@ -57,17 +67,43 @@ _LATEX_SIZING_RE = re.compile(r"\\(left|right)")
 # groups there are single digits, not thousands.
 _THOUSANDS_SEPARATOR_RE = re.compile(r"(?<=\d),(?=\d{3}(?:\D|$))")
 
+# Spanish decimal comma: "3,57" -> "3.57". Unlike _THOUSANDS_SEPARATOR_RE,
+# this fires on a comma between digits regardless of how many digits follow
+# -- used by _normalize_decimal_comma, a second candidate normalization of
+# the answer tried alongside _normalize (see that function's docstring for
+# why grading needs both instead of picking one interpretation).
+_DECIMAL_COMMA_RE = re.compile(r"(?<=\d),(?=\d)")
+
 _WHITESPACE_RE = re.compile(r"\s+")
 
 
-def _normalize(text: str) -> str:
-    """Canonicalize text for comparison.
+def _strip_markup(text: str) -> str:
+    """Lowercase and strip the Markdown/LaTeX markup shared by both normalizations.
 
-    Lowercases, strips Markdown emphasis and LaTeX math delimiters/braces
-    and sizing commands, collapses thousands separators, and collapses
-    whitespace. Applied identically to the haystack (generated answer) and
-    to every accepted literal, so both sides of a comparison go through the
-    same transform.
+    Args:
+        text: Raw text (an answer, or one accepted literal).
+
+    Returns:
+        Lowercased text with Markdown emphasis and LaTeX math delimiters,
+        grouping braces and sizing commands removed. Digit-grouping
+        (thousands separator vs. decimal comma) is left to the caller --
+        see ``_normalize`` and ``_normalize_decimal_comma``.
+    """
+    s = text or ""
+    s = _MARKDOWN_EMPHASIS_RE.sub("", s)
+    s = s.replace("$", "")  # LaTeX math delimiters
+    s = _LATEX_SIZING_RE.sub("", s)
+    s = s.replace("{", "").replace("}", "")  # LaTeX grouping braces, e.g. 10^{-4}
+    return s.lower()
+
+
+def _normalize(text: str) -> str:
+    """Canonicalize text for comparison, reading a comma as a thousands separator.
+
+    Strips Markdown/LaTeX markup, collapses thousands separators ("1,024"
+    -> "1024"), and collapses whitespace. Applied identically to the
+    haystack (generated answer) and to every accepted literal, so both
+    sides of a comparison go through the same transform.
 
     Args:
         text: Raw text (an answer, or one accepted literal).
@@ -76,13 +112,35 @@ def _normalize(text: str) -> str:
         Normalized text, safe to compare or search with word-boundary
         matching.
     """
-    s = text or ""
-    s = _MARKDOWN_EMPHASIS_RE.sub("", s)
-    s = s.replace("$", "")  # LaTeX math delimiters
-    s = _LATEX_SIZING_RE.sub("", s)
-    s = s.replace("{", "").replace("}", "")  # LaTeX grouping braces, e.g. 10^{-4}
-    s = s.lower()
+    s = _strip_markup(text)
     s = _THOUSANDS_SEPARATOR_RE.sub("", s)
+    s = _WHITESPACE_RE.sub(" ", s).strip()
+    return s
+
+
+def _normalize_decimal_comma(text: str) -> str:
+    """Canonicalize text for comparison, reading a comma as a Spanish decimal point.
+
+    A Spanish-language answer may write a decimal as "3,57" instead of
+    "3.57". A comma between digits is inherently ambiguous without locale
+    context -- "1,024" could be "mil veinticuatro" (a thousands-grouped
+    integer, ``_normalize``'s reading) or a number with three decimal
+    digits. Rather than guess a single interpretation from the string
+    alone, ``grade_answer`` runs the answer through both normalizations and
+    accepts a match against either; this function supplies the
+    decimal-comma reading. Accepted literals never need this: they are
+    always written in "." notation in gold_cases.jsonl.
+
+    Args:
+        text: Raw text (a generated answer).
+
+    Returns:
+        Normalized text with every digit-comma-digit run turned into
+        digit-dot-digit, safe to compare or search with word-boundary
+        matching.
+    """
+    s = _strip_markup(text)
+    s = _DECIMAL_COMMA_RE.sub(".", s)
     s = _WHITESPACE_RE.sub(" ", s).strip()
     return s
 
@@ -90,6 +148,29 @@ def _normalize(text: str) -> str:
 # ─────────────────────────────────────────────
 # SECTION 2: TOKEN MATCHING
 # ─────────────────────────────────────────────
+
+# A bare numeric literal ("110", "28.4") -- eligible for the two guards
+# below. Word/phrase literals ("6 identical layers", "l=24", "no") go
+# through the plain \b...\b path unchanged.
+_NUMERIC_LITERAL_RE = re.compile(r"^\d+(?:\.\d+)?$")
+
+# Unit suffixes a bare number may be glued to with no separating space in a
+# paper's own notation ("110M parameters", "a 28% relative improvement").
+# Plain \b...\b cannot see this: the suffix's leading character can be a
+# word character too, so there is no boundary between digit and letter.
+# Kept narrow -- every entry only ever widens acceptance, so it is included
+# only where this corpus's own papers actually glue it to a number:
+#   - m / b / k: order-of-magnitude abbreviations, e.g. BERT's
+#     "Total Parameters=110M".
+#   - "%": percentage, e.g. ResNet's "a 28% relative improvement".
+#   - gev / tev: these papers currently write them with a space
+#     ("126.0 GeV"), but PDF text extraction is not guaranteed to preserve
+#     that, so the glued form is accepted defensively.
+#   - x: multiplier notation; PDF text extraction commonly flattens these
+#     papers' Unicode "x" (multiplication sign) to plain ASCII "x", e.g.
+#     ResNet's "8x deeper than VGG nets".
+_NUMERIC_UNIT_SUFFIXES = ("gev", "tev", "%", "m", "b", "k", "x")
+_NUMERIC_SUFFIX_ALTERNATION = "|".join(_NUMERIC_UNIT_SUFFIXES)
 
 
 def _contains_token(haystack: str, needle: str) -> bool:
@@ -100,6 +181,22 @@ def _contains_token(haystack: str, needle: str) -> bool:
     boundary. This is what stops ``"512"`` from matching inside ``"1512"``
     (no boundary between the two digits) while still matching ``"512"``
     inside ``"page 512."`` (bounded by a space and a period).
+
+    For a bare numeric literal, ``\\b`` alone is not enough and gets two
+    extra guards:
+
+    - A trailing alternation between (a) one of ``_NUMERIC_UNIT_SUFFIXES``
+      followed by "not a word character", so ``"110"`` matches inside
+      ``"110M"`` even though digit and letter share no ``\\b``; or (b) the
+      plain ``\\b``, additionally guarded by ``(?!\\.\\d)`` so the literal
+      is not accepted as merely the integer part of an unrelated longer
+      decimal (``"28"`` must not match inside ``"28.4"``). Branch (a) never
+      needs that guard itself: a decimal point never starts a unit suffix.
+    - A leading ``(?<!\\.)``, so the literal is also not accepted as the
+      fractional part of an unrelated longer decimal (``"24"`` must not
+      match inside ``"0.24"``) -- plain ``\\b`` treats the decimal point as
+      a valid boundary, which is wrong when the digits on both sides of it
+      are really one number.
 
     Caveat: if ``needle`` itself starts or ends with a non-alphanumeric
     character (e.g. a bare ``"%"`` or a leading ``"-"``), ``\\b`` cannot
@@ -118,7 +215,17 @@ def _contains_token(haystack: str, needle: str) -> bool:
     needle_norm = _normalize(needle)
     if not needle_norm:
         return False
-    pattern = r"\b" + re.escape(needle_norm) + r"\b"
+    escaped = re.escape(needle_norm)
+    if _NUMERIC_LITERAL_RE.match(needle_norm):
+        pattern = (
+            r"(?<!\.)\b"
+            + escaped
+            + r"(?:(?:"
+            + _NUMERIC_SUFFIX_ALTERNATION
+            + r")(?!\w)|\b(?!\.\d))"
+        )
+    else:
+        pattern = r"\b" + escaped + r"\b"
     return re.search(pattern, haystack) is not None
 
 
@@ -144,9 +251,14 @@ def grade_answer(answer: str, case: Dict[str, Any]) -> Dict[str, Any]:
     if not accepted:
         return {"pass": False, "reason": "case has no accepted_answers to grade against"}
 
-    haystack = _normalize(answer)
+    # Two candidate readings of the answer, differing only in how a
+    # digit-comma-digit run is interpreted (thousands separator vs. Spanish
+    # decimal point -- see _normalize_decimal_comma). A literal counts as
+    # matched if it is found in either.
+    haystack_thousands = _normalize(answer)
+    haystack_decimal = _normalize_decimal_comma(answer)
     for literal in accepted:
-        if _contains_token(haystack, literal):
+        if _contains_token(haystack_thousands, literal) or _contains_token(haystack_decimal, literal):
             return {"pass": True, "reason": f"matched {literal!r}"}
     return {"pass": False, "reason": f"none of {accepted} found in answer"}
 

@@ -95,6 +95,102 @@ def test_short_word_does_not_match_inside_a_longer_word():
 
 
 # ─────────────────────────────────────────────
+# grade_answer -- a bare integer must not match inside a longer decimal
+# ─────────────────────────────────────────────
+
+
+def test_integer_literal_does_not_match_the_integer_part_of_a_longer_decimal():
+    """Plain ``\\b`` treats a decimal point as a valid boundary (it's a
+    non-word character), so a naive ``\\b...\\b`` match let an integer
+    literal match the whole-number part of an unrelated decimal: "28"
+    inside "28.4", "24" inside "24.5". Both verified passing (wrongly)
+    before the fix, with exactly these audit examples."""
+    assert not grade_answer("The score improved to 28.4 points.", {"accepted_answers": ["28"]})["pass"]
+    assert not grade_answer("The result was 24.5 on the benchmark.", {"accepted_answers": ["24"]})["pass"]
+
+
+def test_integer_literal_does_not_match_the_fractional_part_of_a_longer_decimal():
+    """Same bug, the other direction: ``\\b`` also let an integer literal
+    match the fractional digits of an unrelated decimal, e.g. "24" inside
+    "0.24"."""
+    assert not grade_answer("The measured value was 0.24 in the trial.", {"accepted_answers": ["24"]})["pass"]
+
+
+def test_integer_literal_still_matches_when_genuinely_standalone():
+    """The new guards must not overreach: a real standalone integer,
+    including one immediately followed by a sentence-ending period (not a
+    decimal point), must still match."""
+    assert grade_answer("The result was 24 points on the benchmark.", {"accepted_answers": ["24"]})["pass"]
+    assert grade_answer("The score was 28.", {"accepted_answers": ["28"]})["pass"]
+
+
+def test_decimal_literal_is_unaffected_by_the_new_guards():
+    """A literal that is itself a decimal keeps working exactly as before:
+    it matches its own occurrence and still rejects being a fragment of an
+    unrelated longer number (pre-existing ``\\b`` behavior, e.g. the
+    "1512"/"512" case)."""
+    assert grade_answer("The BLEU score is 28.4 points.", {"accepted_answers": ["28.4"]})["pass"]
+    assert not grade_answer("The BLEU score is 128.45 points.", {"accepted_answers": ["28.4"]})["pass"]
+
+
+# ─────────────────────────────────────────────
+# grade_answer -- numeric literal followed by a unit suffix
+# ─────────────────────────────────────────────
+
+
+def test_numeric_literal_matches_when_followed_by_a_recognized_unit_suffix():
+    """``\\b`` cannot see a digit/letter junction ("110" then "M" are both
+    word characters), so a model answering in the paper's own notation --
+    "110M parameters" for BERT_BASE -- was scored as wrong. This is the
+    exact audit example (gold_cases.jsonl's bert-base-params)."""
+    case = {"accepted_answers": ["110"]}
+    assert grade_answer("BERT_BASE has a total of 110M parameters.", case)["pass"]
+
+
+def test_numeric_literal_matches_with_percent_suffix():
+    """Same bug, "%" suffix: ResNet's abstract glues it directly to the
+    number ("a 28% relative improvement")."""
+    case = {"accepted_answers": ["28"]}
+    assert grade_answer("They obtain a 28% relative improvement on COCO.", case)["pass"]
+
+
+def test_numeric_literal_does_not_match_with_an_unrecognized_suffix():
+    """The suffix set is deliberately narrow. An attached word that merely
+    starts with a recognized suffix letter must still fail -- otherwise the
+    guard would readmit false positives like "110kg" for a literal "110"."""
+    case = {"accepted_answers": ["110"]}
+    assert not grade_answer("The device drew 110kg of load.", case)["pass"]
+    assert not grade_answer("Room 1104 has the equipment.", case)["pass"]
+
+
+# ─────────────────────────────────────────────
+# grade_answer -- Spanish decimal comma
+# ─────────────────────────────────────────────
+
+
+def test_spanish_decimal_comma_is_recognized():
+    """``_normalize`` alone only strips thousands-separator commas; it
+    never turns a Spanish decimal comma into a point, so no
+    Spanish-language numeric answer could pass. Four cases verified failing
+    in the audit, matching the corresponding *-es gold cases."""
+    assert grade_answer("El ensemble alcanzó un 3,57% de error top-5.", {"accepted_answers": ["3.57"]})["pass"]
+    assert grade_answer("BERT obtiene una puntuación GLUE de 80,5.", {"accepted_answers": ["80.5"]})["pass"]
+    assert grade_answer("Según Planck 2018, sigma8 vale 0,811.", {"accepted_answers": ["0.811"]})["pass"]
+    assert grade_answer("Se recogió una luminosidad de 5,8 fb-1.", {"accepted_answers": ["5.8"]})["pass"]
+
+
+def test_ambiguous_three_digit_comma_group_accepts_both_thousands_and_decimal_reading():
+    """"1,024" is genuinely ambiguous without locale context: a
+    thousands-grouped integer (1024) or a 3-decimal-digit fraction (1.024).
+    Chosen rule: try both normalizations of the answer and accept a match
+    against either, rather than guess a single reading. The thousands side
+    of this exact ambiguous shape is already covered by
+    test_thousands_separator_is_tolerated; this covers the decimal side."""
+    assert grade_answer("El valor obtenido fue 1,024 en el experimento.", {"accepted_answers": ["1.024"]})["pass"]
+    assert grade_answer("The hidden size is 1,024.", {"accepted_answers": ["1024"]})["pass"]
+
+
+# ─────────────────────────────────────────────
 # grade_answer -- normalization: thousands separators, LaTeX, Markdown
 # ─────────────────────────────────────────────
 
@@ -219,3 +315,64 @@ def test_gold_cases_include_papers_outside_the_dev_set():
     cases = _load_gold_cases()
     arxiv_papers = {c["paper"] for c in cases if c["source"] == "arxiv"}
     assert len(arxiv_papers) >= 3, f"expected >=3 blind-set papers, got {arxiv_papers}"
+
+
+# ─────────────────────────────────────────────
+# gold_cases.jsonl -- case-level fixes for near-unfalsifiable bare-digit literals
+# ─────────────────────────────────────────────
+#
+# A bare single/double-digit accepted literal (e.g. ["6"]) can be matched by
+# a wrong answer that merely happens to mention the same digit in an
+# unrelated context (a figure number, a section number...). Normalization
+# cannot fix this -- it's a property of the case's accepted_answers, not of
+# the matching logic. The cases below were rewritten to require the exact
+# phrasing verified in the source PDF instead of the bare digit; each test
+# checks both directions: the old false-positive wrong answer is now
+# rejected, and a realistically-phrased correct answer is still accepted.
+
+
+def _find_case(cases, case_id):
+    for c in cases:
+        if c["id"] == case_id:
+            return c
+    raise AssertionError(f"case {case_id!r} not found in gold_cases.jsonl")
+
+
+def test_att_n_layers_rejects_coincidental_figure_reference():
+    """Verified page 3 of attention-transformers.pdf: "The encoder is
+    composed of a stack of N = 6 identical layers." """
+    case = _find_case(_load_gold_cases(), "att-n-layers")
+    wrong = "The encoder has 12 layers, and Figure 6 shows the architecture."
+    correct = "The Transformer base model uses N = 6 identical layers in the encoder."
+    assert not grade_answer(wrong, case)["pass"]
+    assert grade_answer(correct, case)["pass"]
+
+
+def test_resnet_coco_improvement_rejects_a_coincidental_number():
+    """Verified page 1 (abstract) of arXiv 1512.03385: "we obtain a 28%
+    relative improvement on the COCO object detection dataset." """
+    case = _find_case(_load_gold_cases(), "resnet-coco-improvement")
+    wrong = "Table 28 in the appendix lists additional COCO results."
+    correct = "Deep residual representations give a 28% relative improvement on COCO."
+    assert not grade_answer(wrong, case)["pass"]
+    assert grade_answer(correct, case)["pass"]
+
+
+def test_bert_large_layers_rejects_a_coincidental_number():
+    """Verified page 3 of arXiv 1810.04805: "BERTLARGE (L=24, H=1024,
+    A=16, Total Parameters=340M)." """
+    case = _find_case(_load_gold_cases(), "bert-large-layers")
+    wrong = "Section 24 of the appendix covers ablations."
+    correct = "BERT_LARGE uses L=24 Transformer layers."
+    assert not grade_answer(wrong, case)["pass"]
+    assert grade_answer(correct, case)["pass"]
+
+
+def test_gw_snr_rejects_a_coincidental_number():
+    """Verified page 1 (abstract) of gravitational-waves.pdf: "observed
+    with a matched-filter signal-to-noise ratio of 24." """
+    case = _find_case(_load_gold_cases(), "gw-snr")
+    wrong = "The event was the 24th candidate reviewed by the collaboration."
+    correct = "The signal was observed with a matched-filter signal-to-noise ratio of 24."
+    assert not grade_answer(wrong, case)["pass"]
+    assert grade_answer(correct, case)["pass"]
