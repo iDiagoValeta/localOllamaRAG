@@ -212,7 +212,7 @@ def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
 
 # 3.3 Model roles and Ollama runtime
 
-MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "phi4-finetuned:latest")
+MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "gemma4:e4b")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e4b")
 MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b")
@@ -244,7 +244,6 @@ EXPANDIR_CONTEXTO = True
 USAR_OPTIMIZACION_CONTEXTO = True
 USAR_RECOMP_SYNTHESIS = True
 USAR_EMBEDDINGS_IMAGEN = True
-EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK = False
 LOGGING_METRICAS = True
 GUARDAR_DEBUG_RAG = True
 
@@ -258,22 +257,6 @@ PIPELINE_RUNTIME_FLAGS = (
     "USAR_OPTIMIZACION_CONTEXTO",
     "USAR_RECOMP_SYNTHESIS",
 )
-
-
-def set_ragbench_reranker_low_score_fallback(enabled: bool) -> bool:
-    """Allow RagBench evals to generate from low-scored reranker candidates.
-
-    This is intentionally not a general pipeline flag: normal RAG inference and
-    non-RagBench evaluations keep the reranker threshold as a hard relevance
-    gate. RagBench includes short factual questions where the cross-encoder can
-    score useful retrieved evidence below the interactive threshold; for those
-    runs we still use the reranker order, but fall back to the best candidates
-    instead of returning an empty answer.
-    """
-    global EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK
-    previous = EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK
-    EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK = bool(enabled)
-    return previous
 
 
 def get_pipeline_flags() -> Dict[str, bool]:
@@ -341,7 +324,7 @@ _DEFAULT_COLLECTION_NAME = COLLECTION_NAME
 
 
 def set_docs_folder_runtime(carpeta: str | None) -> tuple[str, str, str]:
-    """Switch ``CARPETA_DOCS`` and derived Chroma paths (for research/evaluation and tests).
+    """Switch ``CARPETA_DOCS`` and derived Chroma paths (for tests).
 
     Restores module-level defaults when ``carpeta`` is ``None`` (values captured
     at import from ``DOCS_FOLDER`` / ``rag/docs/es``).
@@ -586,16 +569,6 @@ Guidelines:
 - For analytical or complex questions, provide detailed explanations referencing specific information from the context.
 - Always respond in the same language as the context (English, Spanish/Castellano, or Catalan/Català).
 - For mathematical expressions, always use LaTeX notation: $...$ for inline math and $$...$$ for display/block equations."""
-
-
-def _modelo_necesita_system_prompt(nombre_modelo: str) -> bool:
-    """Return True if the model does not have a system prompt baked in its Modelfile.
-
-    Fine-tuned models in this project include 'finetuned' in their Ollama name
-    and already carry the RAG system prompt via their Modelfile. Any other model
-    receives the prompt explicitly via the API.
-    """
-    return "finetuned" not in nombre_modelo.lower()
 
 
 # ─────────────────────────────────────────────

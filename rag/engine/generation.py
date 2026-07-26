@@ -138,7 +138,6 @@ def generar_tokens_respuesta(mensaje_usuario: str, stats: Optional[Dict[str, Any
     Ollama ``done`` chunk are copied into it so the debug dump can report
     prompt/eval token counts and decoding speed.
     """
-    system = cfg.SYSTEM_PROMPT_RAG if cfg._modelo_necesita_system_prompt(cfg.MODELO_RAG) else None
     for chunk in cfg._ollama_generate_stream(
         model=cfg.MODELO_RAG,
         prompt=mensaje_usuario,
@@ -150,7 +149,7 @@ def generar_tokens_respuesta(mensaje_usuario: str, stats: Optional[Dict[str, Any
             "num_predict": -1,
             "num_ctx": cfg.OLLAMA_RAG_NUM_CTX,
         },
-        system=system,
+        system=cfg.SYSTEM_PROMPT_RAG,
     ):
         content = chunk.get("response", "")
         if content:
@@ -181,19 +180,15 @@ def _score_relevancia_fragmento(fragmento: Dict[str, Any]) -> float:
 
 def _filtrar_por_umbral_reranker(
     fragmentos_ranked: List[Dict[str, Any]],
-    permitir_fallback_bajo_score: bool = False,
-) -> Tuple[List[Dict[str, Any]], bool]:
+) -> List[Dict[str, Any]]:
     """Apply the single reranker relevance threshold."""
     if not cfg.USAR_RERANKER:
-        return list(fragmentos_ranked), False
+        return list(fragmentos_ranked)
 
-    fragmentos_filtrados = [
+    return [
         f for f in fragmentos_ranked
         if _score_relevancia_fragmento(f) >= cfg.UMBRAL_SCORE_RERANKER
     ]
-    if fragmentos_filtrados or not permitir_fallback_bajo_score:
-        return fragmentos_filtrados, False
-    return list(fragmentos_ranked), True
 
 
 def _fragmento_expandible(fragmento: Dict[str, Any]) -> bool:
@@ -269,13 +264,9 @@ def _limitar_fragmentos_por_chars(
 def preparar_fragmentos_para_generacion(
     fragmentos_ranked: List[Dict[str, Any]],
     collection: chromadb.Collection,
-    permitir_fallback_bajo_score: bool = False,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Convert ranked retrieval candidates into the final generator evidence."""
-    candidatos, fallback_bajo_score = _filtrar_por_umbral_reranker(
-        fragmentos_ranked,
-        permitir_fallback_bajo_score=permitir_fallback_bajo_score,
-    )
+    candidatos = _filtrar_por_umbral_reranker(fragmentos_ranked)
     fragmentos_base = list(candidatos[:cfg.TOP_K_FINAL])
     fragmentos_expandidos, n_expandidos = _expandir_fragmentos_contexto(
         fragmentos_base, collection
@@ -287,7 +278,6 @@ def preparar_fragmentos_para_generacion(
     metricas = {
         "candidatos_entrada": len(fragmentos_ranked),
         "candidatos_relevantes": len(candidatos),
-        "fallback_bajo_score": fallback_bajo_score,
         "fragmentos_base": len(fragmentos_base),
         "fragmentos_expandidos": n_expandidos,
         "fragmentos_descartados_por_chars": n_descartados_chars,
@@ -380,7 +370,6 @@ def evaluar_pregunta_rag(
         fragmentos_finales, _ = cfg.preparar_fragmentos_para_generacion(
             fragmentos_ranked,
             collection,
-            permitir_fallback_bajo_score=cfg.EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK,
         )
         if not fragmentos_finales:
             return ("", [])

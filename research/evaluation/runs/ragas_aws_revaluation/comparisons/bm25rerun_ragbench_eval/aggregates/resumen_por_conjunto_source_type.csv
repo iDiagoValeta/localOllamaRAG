@@ -1,2 +1,0 @@
-variant,conjunto,n,Context Precision,Context Recall,Factual Correctness,Faithfulness,Response Relevancy
-baseline_all_on,unknown,200,0.8652907743661399,0.9308333333333333,0.5682360036347004,0.9197951222753855,0.7970871494261587
