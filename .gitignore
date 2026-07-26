@@ -34,6 +34,11 @@ rag/web/frontend/node_modules/
 rag/web/frontend/dist/
 rag/web/zip/
 
+# arXiv PDFs fetched by tests/eval/fetch_papers.py for the gold eval corpus:
+# the arXiv id in tests/eval/gold_cases.jsonl already pins the exact paper,
+# so the binary is reproducible on demand and does not belong in git.
+tests/eval/papers_cache/
+
 # PyInstaller desktop-app build output (multi-GB bundle; never committed).
 /build/
 /dist/
