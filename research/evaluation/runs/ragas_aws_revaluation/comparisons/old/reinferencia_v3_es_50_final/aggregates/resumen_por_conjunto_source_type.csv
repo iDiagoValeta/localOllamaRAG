@@ -1,3 +1,0 @@
-variant,conjunto,n,Context Precision,Context Recall,Factual Correctness,Faithfulness,Response Relevancy
-baseline_all_on,wikipedia,50,0.9351515150760379,0.97,0.7571741747377242,0.9286282051282052,0.7342106629225426
-all_off,wikipedia,50,0.700769841212772,0.95,0.7419629414222045,0.9303333333333333,0.686788224193714

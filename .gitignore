@@ -1,56 +1,9 @@
-﻿research/models/merged-model/**
-
-*.gguf
+﻿*.gguf
 *.safetensors
 *.pt
 *.bin
 *.pth
-
-llama.cpp/
-llama-bin/
-
-research/training-output/qwen-3/*
-!research/training-output/qwen-3/generate_reports.py
-!research/training-output/qwen-3/training_stats.json
-!research/training-output/qwen-3/evaluation_comparison.json
-
-research/training-output/gemma-3/*
-!research/training-output/gemma-3/generate_reports.py
-!research/training-output/gemma-3/training_stats.json
-!research/training-output/gemma-3/evaluation_comparison.json
-
-research/training-output/phi-4/*
-!research/training-output/phi-4/generate_reports.py
-!research/training-output/phi-4/training_stats.json
-!research/training-output/phi-4/evaluation_comparison.json
-
-!research/training-output/phi-4/16/
-research/training-output/phi-4/16/*
-!research/training-output/phi-4/16/training_stats.json
-!research/training-output/phi-4/16/evaluation_comparison.json
-
-!research/training-output/phi-4/64/
-research/training-output/phi-4/64/*
-!research/training-output/phi-4/64/training_stats.json
-!research/training-output/phi-4/64/evaluation_comparison.json
-
-research/training-output/baseline/reports/
-
-research/models/gguf/qwen-3/*
-!research/models/gguf/qwen-3/Modelfile
-!research/models/gguf/qwen-3/README.md
-!research/models/gguf/qwen-3/LICENSE
-!research/models/gguf/qwen-3/CONVERSION.md
-
-research/models/gguf/gemma-3/*
-!research/models/gguf/gemma-3/Modelfile
-!research/models/gguf/gemma-3/README.md
-
-research/models/gguf/phi-4/*
-!research/models/gguf/phi-4/Modelfile
-!research/models/gguf/phi-4/README.md
-!research/models/gguf/phi-4/LICENSE
-!research/models/gguf/phi-4/CONVERSION.md
+*.faiss
 
 *.log
 salida_*
@@ -61,15 +14,21 @@ __pycache__/
 .Python
 venv/
 .venv/
+.venv-mineru/
 *.egg-info/
 .eggs/
 .pytest_cache/
 
 rag/vector_db/**
 
-repeticion
-
 rag/debug_rag/
+
+# Retrieval-experiment artifacts: vector indexes and eval runs are regenerated
+# from the corpus, so only the code that produces them belongs in git.
+rag/experiments/**/faiss_stores/
+rag/experiments/**/results/
+rag/experiments/chroma_*/
+rag/experiments/faiss_*/
 
 rag/web/frontend/node_modules/
 rag/web/frontend/dist/
@@ -100,29 +59,19 @@ rag/monkeygrab_server.port
 
 .reasonix/
 
-research/evaluation/chunks_*.txt
-research/evaluation/tmp/**
-research/evaluation/**/pytest_*/
-research/evaluation/**/pytest-cache-files-*/
 rag/show_fragments/*.txt
 rag/show_fragments/*.jsonl
 
-.claude/
-MODIFICACIONES_EVALUACION.md
-
-pipeline/
-
 media/
-
-.conda/
 
 .codex
 .cursor/
 AGENTS.md
-
-repeticion_run_eval.py
-repeticion_*/
-
-CLAUDE.md
-repeticion/export_repeticion_fragments.py
 .codegraph/
+
+# Assistant instructions for this project are versioned so any clone (or CI
+# runner) picks them up; local session state and scratch files are not. This
+# block stays last: a later rule would otherwise re-ignore the file.
+CLAUDE.md
+.claude/*
+!.claude/CLAUDE.md

@@ -1,5 +1,8 @@
 # RAG engine map
 
+> [!NOTE]
+> This document describes the current pipeline and will be replaced once the migration to a hexagonal architecture (see `docs/design/2026-07-26-monkeygrab-v2.md`) is complete.
+
 Analysis date: 2026-05-24.
 
 This document describes the role of `rag/chat_pdfs.py` and of every file in
@@ -116,7 +119,6 @@ For inter-file calls, CodeGraph resolves these relationships directly:
 - `generation.py` calls `chunking.py` for neighbor expansion.
 - `generation.py` calls `debug.py` to save the RAG debug trace.
 - `generation.py` calls `retrieval.py` in the silent evaluation flow.
-- `generation.py` calls `_modelo_necesita_system_prompt()` in `chat_pdfs.py`.
 - `retrieval.py` calls `lexical.py` for keywords and BM25.
 - `retrieval.py` calls `reranking.py` for query decomposition, validation and reranking.
 - Every module calls `runtime.get_runtime()` once to bind `cfg`.
@@ -193,11 +195,9 @@ Own functions:
 - `_leer_env_int(nombre_variable, default)`: reads integers from environment variables with a fallback.
 - `_leer_env_float(nombre_variable, default)`: reads floats from environment variables with a fallback.
 - `_inferir_descripcion_modelo(nombre_modelo)`: turns model names into a human-readable description for debug.
-- `set_ragbench_reranker_low_score_fallback(enabled)`: enables or disables the evaluation fallback with low-score reranker.
 - `get_pipeline_flags()`: returns the current runtime pipeline flags.
 - `set_pipeline_flags(overrides)`: applies runtime overrides to known flags.
 - `set_docs_folder_runtime(carpeta)`: changes the documents folder used at runtime.
-- `_modelo_necesita_system_prompt(nombre_modelo)`: decides whether `SYSTEM_PROMPT_RAG` must be sent explicitly to Ollama.
 - `main()`: starts the `MonkeyGrabCLI`.
 
 Re-exports functions from every main engine module.
@@ -326,11 +326,11 @@ Functions:
 - `generar_tokens_respuesta(mensaje_usuario)`: yields tokens with the canonical parameters of `MODELO_RAG`.
 - `_generar_respuesta_stream(mensaje_usuario, on_token=None)`: concatenates tokens and optionally forwards them to a callback.
 - `_score_relevancia_fragmento(fragmento)`: gets the active score, prioritizing `score_reranker`.
-- `_filtrar_por_umbral_reranker(fragmentos_ranked, permitir_fallback_bajo_score=False)`: applies `UMBRAL_SCORE_RERANKER` when the reranker is active.
+- `_filtrar_por_umbral_reranker(fragmentos_ranked)`: applies `UMBRAL_SCORE_RERANKER` when the reranker is active.
 - `_fragmento_expandible(fragmento)`: avoids expanding images and checks textual chunk metadata.
 - `_expandir_fragmentos_contexto(fragmentos, collection)`: adds neighbors of the first `N_TOP_PARA_EXPANSION` fragments.
 - `_limitar_fragmentos_por_chars(fragmentos)`: applies `MAX_CONTEXTO_CHARS`.
-- `preparar_fragmentos_para_generacion(fragmentos_ranked, collection, permitir_fallback_bajo_score=False)`: canonical function for final evidence selection.
+- `preparar_fragmentos_para_generacion(fragmentos_ranked, collection)`: canonical function for final evidence selection.
 - `generar_respuesta(pregunta, fragmentos, metricas=None, on_token=None)`: generates an answer and saves the debug dump.
 - `generar_respuesta_silenciosa(pregunta, fragmentos, metricas=None)`: generates without printing or saving debug.
 - `evaluar_pregunta_rag(pregunta, collection)`: full silent flow for evaluation.

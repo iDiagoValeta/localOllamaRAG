@@ -1,5 +1,8 @@
 # RAG pipeline — Technical reference
 
+> [!NOTE]
+> This document describes the current pipeline and will be replaced once the migration to a hexagonal architecture (see `docs/design/2026-07-26-monkeygrab-v2.md`) is complete.
+
 MonkeyGrab implements a fully local RAG (Retrieval-Augmented Generation) pipeline on top of Ollama + ChromaDB. This document describes every stage of the pipeline, the functions that implement it, and the parameters that control it.
 
 > [!TIP]
@@ -435,15 +438,14 @@ Active if `EXPANDIR_CONTEXTO = True`. For the `N_TOP_PARA_EXPANSION` (3) textual
 def preparar_fragmentos_para_generacion(
     fragmentos_ranked: List[Dict[str, Any]],
     collection: chromadb.Collection,
-    permitir_fallback_bajo_score: bool = False,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]
 ```
 
-Canonical function that turns the reranker-ordered candidates into the final evidence the generator receives. It is the single point of the system where the threshold filter, top-K cut, neighbor expansion and character limit are applied. CLI, web UI and RAGAS evaluation all share it to guarantee identical behavior.
+Canonical function that turns the reranker-ordered candidates into the final evidence the generator receives. It is the single point of the system where the threshold filter, top-K cut, neighbor expansion and character limit are applied. CLI, web UI and programmatic evaluation all share it to guarantee identical behavior.
 
 **Internal flow**:
 
-1. `_filtrar_por_umbral_reranker()`: if `USAR_RERANKER = True`, drops fragments with `score_reranker < UMBRAL_SCORE_RERANKER` (0.65). If `permitir_fallback_bajo_score = True` and no fragment passes the threshold, returns all candidates as an evaluation fallback.
+1. `_filtrar_por_umbral_reranker()`: if `USAR_RERANKER = True`, drops fragments with `score_reranker < UMBRAL_SCORE_RERANKER` (0.65).
 2. `[:TOP_K_FINAL]` cut: keeps the first `TOP_K_FINAL` (8) relevant candidates.
 3. `_expandir_fragmentos_contexto()`: adds adjacent chunks for the first `N_TOP_PARA_EXPANSION` (3) textual fragments, if `EXPANDIR_CONTEXTO = True`.
 4. `_limitar_fragmentos_por_chars()`: discards fragments that no longer fit within the `MAX_CONTEXTO_CHARS` (24000 chars) budget.
@@ -593,7 +595,7 @@ def _ollama_generate_stream(
 
 In addition, the payload forces `think=False` so reasoning models (Qwen3, Gemma 4) do not consume `num_predict` on an internal trace before emitting the answer.
 
-If the model name contains `"finetuned"`, the system prompt is baked into the Modelfile and is **not** sent via API. Otherwise `SYSTEM_PROMPT_RAG` is sent explicitly.
+`SYSTEM_PROMPT_RAG` is always sent explicitly via the API call.
 
 The total Ollama timeout is `OLLAMA_REQUEST_TIMEOUT = 900` seconds (15 minutes).
 
@@ -610,11 +612,10 @@ def evaluar_pregunta_rag(
 ) -> Tuple[str, List[str]]
 ```
 
-Exclusive path for RAGAS evaluations. Runs the full pipeline but:
+Path used for programmatic evaluation (scripted question/answer runs without a terminal session). Runs the full pipeline but:
 - Prints nothing to the terminal.
 - Generates no debug dumps.
 - Uses the same final fragment preparation as CLI and web UI: single `UMBRAL_SCORE_RERANKER` filter, top `TOP_K_FINAL`, expansion and character limit.
-- If `EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK = True`, relaxes the reranker threshold when no fragment has a sufficient score.
 
 Returns `(answer, list_of_used_contexts)`.
 
@@ -741,7 +742,6 @@ Ollama.
 | `USAR_OPTIMIZACION_CONTEXTO` | `True` | Strips PDF artifacts from the context |
 | `USAR_RECOMP_SYNTHESIS` | `True` | Synthesizes the context before sending it to the LLM |
 | `USAR_EMBEDDINGS_IMAGEN` | `True` | Indexes PDF images via OCR |
-| `EVAL_RAGBENCH_RERANKER_LOW_SCORE_FALLBACK` | `False` | Relaxes the reranker threshold in evaluations |
 | `LOGGING_METRICAS` | `True` | Prints per-stage metrics |
 | `GUARDAR_DEBUG_RAG` | `True` | Saves a dump of every RAG interaction |
 
@@ -840,7 +840,7 @@ Query: `"What components does a Transformer architecture have?"`
 
 9. GENERATION
    User message: question + <context>synthesis</context>
-   System prompt: SYSTEM_PROMPT_RAG (if the model does not have it baked in)
+   System prompt: SYSTEM_PROMPT_RAG (always sent explicitly)
    Ollama streaming: temperature=0.15, num_ctx=16384
    Tokens emitted in real time to the terminal/web UI
 

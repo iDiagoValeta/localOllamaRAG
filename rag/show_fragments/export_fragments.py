@@ -27,8 +27,6 @@ according to ``metadata["format"]`` from ``chat_pdfs.indexar_documentos``.
 Usage (from repository root):
     python rag/show_fragments/export_fragments.py                # all stores -> exports/
     python rag/show_fragments/export_fragments.py --language es  # one language
-    python rag/show_fragments/export_fragments.py --ragbench dev # RagBench dev
-    python rag/show_fragments/export_fragments.py --ragbench eval
     python rag/show_fragments/export_fragments.py --format jsonl --out-dir ./mi_salida
 
 By default, files are written under ``rag/show_fragments/exports/`` (tracked in
@@ -65,8 +63,7 @@ import chromadb  # noqa: E402
 RAG_DIR = os.path.join(_proj_root, "rag")
 VECTOR_DB_DIR = os.path.join(RAG_DIR, "vector_db")
 DEFAULT_LANGUAGES = ("ca", "en", "es")
-RAGBENCH_SPLITS = ("dev", "eval")
-DEFAULT_STORE_SLUGS = DEFAULT_LANGUAGES + tuple(f"en_ragbench_{s}" for s in RAGBENCH_SPLITS)
+DEFAULT_STORE_SLUGS = DEFAULT_LANGUAGES
 
 DEFAULT_OUT_DIR = os.path.join(RAG_DIR, "show_fragments", "exports")
 DEFAULT_FILE_TEMPLATE = "chunks_vector_db_{slug}.txt"
@@ -91,9 +88,9 @@ def build_store_spec(slug: str) -> StoreSpec:
     """Build the Chroma path and collection name for one store slug.
 
     ``slug`` is the basename of the PDF folder under ``rag/docs/`` (e.g.
-    ``es``, ``ca``, ``en``, ``en_ragbench_dev``, ``en_ragbench_eval``). It is
-    matched verbatim against the Chroma path and collection names produced by
-    ``chat_pdfs.py`` (see ``PATH_DB`` / ``COLLECTION_NAME`` there).
+    ``es``, ``ca``, ``en``). It is matched verbatim against the Chroma path
+    and collection names produced by ``chat_pdfs.py`` (see ``PATH_DB`` /
+    ``COLLECTION_NAME`` there).
     """
     s = slug.strip().lower()
     embed_slug = _embed_slug()
@@ -107,7 +104,7 @@ def build_store_spec(slug: str) -> StoreSpec:
 
 
 def default_store_specs() -> List[StoreSpec]:
-    """Return the local vector stores exported by default (languages + RagBench)."""
+    """Return the local vector stores exported by default (one per language)."""
     return [build_store_spec(slug) for slug in DEFAULT_STORE_SLUGS]
 
 
@@ -373,12 +370,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=None,
         help="Exportar una única base vectorial por idioma (ca, en, es).",
     )
-    target.add_argument(
-        "--ragbench",
-        choices=RAGBENCH_SPLITS,
-        default=None,
-        help="Exportar un corpus RagBench EN ('dev' o 'eval').",
-    )
     p.add_argument(
         "--db-path",
         default=None,
@@ -393,7 +384,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "-o",
         "--output",
         default=None,
-        help="Archivo de salida (solo con un único destino: --language, --ragbench o --db-path)",
+        help="Archivo de salida (solo con un único destino: --language o --db-path)",
     )
     p.add_argument(
         "--out-dir",
@@ -439,8 +430,8 @@ def main() -> None:
         )
         raise SystemExit(0 if n >= 0 else 1)
 
-    # --- Single store target (--language or --ragbench) ---
-    single_slug = args.language or (f"en_ragbench_{args.ragbench}" if args.ragbench else None)
+    # --- Single store target (--language) ---
+    single_slug = args.language
     if single_slug:
         spec = build_store_spec(single_slug)
         out_path = (
@@ -465,7 +456,7 @@ def main() -> None:
         raise SystemExit(0 if n != -1 else 1)
 
     if args.output:
-        print("ERROR: --output solo se puede usar con --language, --ragbench o --db-path")
+        print("ERROR: --output solo se puede usar con --language o --db-path")
         raise SystemExit(1)
 
     # --- Default: discover every Chroma store under rag/vector_db ---

@@ -6,6 +6,18 @@ prompt_toolkit>=3.0.0
 colorama>=0.4.6
 pymupdf4llm>=0.0.5
 pypdf>=3.0.0
-sentence-transformers>=2.2.0
 rank-bm25>=0.2.2
 python-dotenv>=1.0.0
+
+sentence-transformers>=2.2.0
+
+# The multimodal retrieval stack (jina-clip embeddings + FAISS) is deliberately
+# absent here. The spike validated it inside an isolated venv whose torch and
+# transformers are OLDER than the ones this project actually runs on, so
+# copying those pins would silently downgrade a working environment. The
+# versions get resolved against the real runtime when the multimodal adapters
+# land, not before.
+#
+# MinerU is never a Python dependency of the product: it is an external CLI
+# invoked through subprocess, precisely so its own pins cannot collide with
+# ours.
