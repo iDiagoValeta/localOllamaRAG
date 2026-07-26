@@ -16,7 +16,6 @@ never had to handle correctly because nobody had set it yet.
 """
 
 import os
-from typing import Optional
 
 
 def read_env_int(name: str, default: int) -> int:

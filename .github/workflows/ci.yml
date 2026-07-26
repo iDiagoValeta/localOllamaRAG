@@ -60,6 +60,30 @@ jobs:
       - name: Run
         run: pytest tests/unit tests/eval -q --no-header --ignore=tests/unit/adapters
 
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    # The lockfile is the point of moving to pnpm, so it has to be enforced
+    # somewhere: --frozen-lockfile fails if package.json and the lockfile ever
+    # drift, which is what would happen the first time someone ran npm here.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: rag/web/frontend/pnpm-lock.yaml
+      - name: Install
+        working-directory: rag/web/frontend
+        run: pnpm install --frozen-lockfile
+      - name: Type-check
+        working-directory: rag/web/frontend
+        run: pnpm run lint
+      - name: Build
+        working-directory: rag/web/frontend
+        run: pnpm run build
+
   engine:
     name: Engine behaviour
     runs-on: ubuntu-latest
