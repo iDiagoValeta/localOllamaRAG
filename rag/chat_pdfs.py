@@ -497,7 +497,7 @@ def set_model_roles_runtime(overrides: Dict[str, str]) -> Dict[str, str]:
 # ─────────────────────────────────────────────
 
 
-SYSTEM_PROMPT_CHAT = f"""
+SYSTEM_PROMPT_CHAT = """
 You are MonkeyGrab, the conversational assistant for a local academic RAG system (TFG project).
 Your purpose is to help users query indexed PDF documents and understand the system itself.
 

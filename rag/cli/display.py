@@ -63,7 +63,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme as RichTheme
 
-from rag.cli.commands import ALIASES, COMMANDS, primary_commands
+from rag.cli.commands import primary_commands
 
 try:
     from colorama import just_fix_windows_console

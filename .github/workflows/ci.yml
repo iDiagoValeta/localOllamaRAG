@@ -1,0 +1,80 @@
+name: CI
+
+# Fast gate. Everything here runs on a hosted runner with no GPU, no Ollama and
+# no model downloads, so it can gate every pull request without becoming the
+# thing people skip. What it deliberately does NOT cover: the real retrieval
+# pipeline end to end. That needs local models and lives in the full gate, and
+# pretending otherwise would turn this workflow into a green light that means
+# nothing.
+#
+# The jobs are ordered cheapest-first: a syntax error should not wait for a
+# torch download to be reported.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install ruff
+        run: pip install ruff==0.14.10
+      - name: Check
+        run: ruff check --output-format=github .
+
+  architecture:
+    name: Architecture and pure logic
+    runs-on: ubuntu-latest
+    # No project dependencies on purpose: these tests cover the domain, the
+    # ports, the configuration and the grader, none of which may touch
+    # infrastructure. If this job ever needs chromadb or torch to pass, a
+    # boundary has been crossed and that is exactly what it exists to detect.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install test runner
+        run: pip install pytest
+      - name: Run
+        run: pytest tests/unit tests/eval -q --no-header
+
+  engine:
+    name: Engine behaviour
+    runs-on: ubuntu-latest
+    needs: [lint, architecture]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install CPU torch first
+        # sentence-transformers pulls torch in, and the default wheel carries
+        # the whole CUDA stack (~2.5 GB) for a runner with no GPU. Claiming the
+        # CPU build up front keeps the job in the minutes range.
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Install dependencies
+        run: |
+          pip install -r rag/requirements.txt
+          pip install -r rag/web/requirements.txt
+          pip install pytest
+      - name: Run characterization and engine tests
+        # The Ollama integration tests skip themselves when no server answers,
+        # which is the case here by design.
+        run: pytest -q --no-header

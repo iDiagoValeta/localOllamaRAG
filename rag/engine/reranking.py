@@ -194,7 +194,7 @@ def generar_queries_con_llm(pregunta: str) -> List[str]:
     question and is written in the same language.
 
     Ollama ``think=False`` disables the reasoning trace for thinking-capable
-    models (Gemma 4, Qwen3, etc.); see ``tests/test_gemma4_aux_nothink.py``.
+    models (Gemma 4, Qwen3, etc.); see ``tools/diagnostics/ollama_aux_nothink.py``.
     With ``think=True``, ``num_predict`` can be consumed by the trace alone, leaving
     an empty answer — production therefore keeps ``think=False`` and ``num_predict`` 400.
 
