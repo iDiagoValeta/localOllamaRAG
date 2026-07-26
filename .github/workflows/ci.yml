@@ -40,10 +40,16 @@ jobs:
   architecture:
     name: Architecture and pure logic
     runs-on: ubuntu-latest
-    # No project dependencies on purpose: these tests cover the domain, the
-    # ports, the configuration and the grader, none of which may touch
-    # infrastructure. If this job ever needs chromadb or torch to pass, a
-    # boundary has been crossed and that is exactly what it exists to detect.
+    # No project dependencies on purpose: the domain, the ports, the
+    # configuration and the grader may not touch infrastructure, so they must
+    # pass with nothing but a test runner installed. If this job ever needs
+    # chromadb or torch, a boundary has been crossed — which is what it exists
+    # to detect.
+    #
+    # The adapter tests are excluded because adapters ARE infrastructure: they
+    # import chromadb, ollama and pymupdf4llm at module level even when the
+    # objects are doubled. They run in the engine job below. Verified locally
+    # against an interpreter without those packages.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -52,7 +58,7 @@ jobs:
       - name: Install test runner
         run: pip install pytest
       - name: Run
-        run: pytest tests/unit tests/eval -q --no-header
+        run: pytest tests/unit tests/eval -q --no-header --ignore=tests/unit/adapters
 
   engine:
     name: Engine behaviour

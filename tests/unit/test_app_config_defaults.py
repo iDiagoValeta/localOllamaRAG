@@ -19,6 +19,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -131,7 +133,20 @@ def _fresh_rag_chat_pdfs_snapshot():
         text=True,
         timeout=120,
     )
-    assert result.returncode == 0, f"failed to import rag.chat_pdfs in a subprocess:\n{result.stderr}"
+    if result.returncode != 0:
+        # A missing engine dependency means this environment cannot host the
+        # comparison at all, which is a different fact from "the defaults
+        # diverged" and must not be reported as the latter. The fast CI gate
+        # installs no infrastructure on purpose, so it lands here; the engine
+        # job has the full stack and does run the comparison.
+        if "ModuleNotFoundError" in result.stderr:
+            pytest.skip(
+                "rag.chat_pdfs cannot be imported here (missing engine "
+                f"dependency). Comparison skipped, not passed:\n{result.stderr.strip()[-300:]}"
+            )
+        raise AssertionError(
+            f"failed to import rag.chat_pdfs in a subprocess:\n{result.stderr}"
+        )
     return json.loads(result.stdout)
 
 
