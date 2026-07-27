@@ -1,21 +1,5 @@
 """Application -- use cases orchestrating ports, domain and config.
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- text_chunking.py       split_markdown_into_chunks, adjacent_chunk_ids
-#  |                          -- moved from rag/engine/chunking.py
-#  +-- rrf_fusion.py          fuse_semantic_and_keyword
-#  |                          -- moved from rag/engine/retrieval.py's fusion block
-#  +-- context_assembly.py    optimize_context_text, build_context_for_model, ...
-#  |                          -- moved from rag/engine/context.py
-#  +-- index_corpus.py        IndexCorpus  -- extract -> chunk -> contextualize? -> embed -> store
-#  +-- retrieve.py            Retrieve     -- decompose? -> semantic+lexical -> RRF -> rerank? -> threshold
-#  +-- answer.py              Answer       -- expand? -> char budget -> synthesize? -> generate
-#
-# ─────────────────────────────────────────────
-
 This layer holds the algorithmic logic that today lives in ``rag/engine/``
 entangled with the ``cfg = get_runtime()`` service locator (see
 docs/design/2026-07-26-monkeygrab-v2.md, section 1). Every use case here
@@ -40,7 +24,7 @@ piece by piece by running both the moved and the original implementation
 side by side. Logic that could not be carried over 1:1 (because it depends
 on infrastructure the new ports don't expose, e.g. image/OCR extraction, or
 on pure-but-unlisted helper functions in modules outside this migration's
-explicit scope, e.g. ``extraer_keywords``) is called out explicitly in each
+explicit scope) is called out explicitly in each
 use case's module docstring rather than silently invented or silently
 dropped.
 

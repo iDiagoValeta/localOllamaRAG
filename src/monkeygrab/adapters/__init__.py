@@ -1,20 +1,5 @@
 """Adapters -- infrastructure implementations of the Protocols in monkeygrab.ports.
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- extraction/    pymupdf_extractor.py         PymupdfExtractor      -- PdfExtractor
-#  +-- extraction/    pymupdf_image_extractor.py   PymupdfImageExtractor -- ImageExtractor
-#  +-- embedding/     ollama_embedder.py           OllamaEmbedder        -- Embedder
-#  +-- vectorstore/   chroma_store.py              ChromaVectorStore     -- VectorStore
-#  +-- lexical/       bm25_index.py                Bm25LexicalIndex      -- LexicalIndex
-#  +-- reranking/     cross_encoder_reranker.py    CrossEncoderReranker  -- Reranker
-#  +-- chat/          ollama_chat.py               OllamaChatModel       -- ChatModel
-#  +-- chat/          ollama_model_unloader.py     OllamaModelUnloader   -- ModelUnloader
-#
-# ─────────────────────────────────────────────
-
 Each adapter takes its configuration by constructor -- ``AppConfig`` or the
 specific sub-config it needs -- and never reads ``rag.chat_pdfs`` globals or
 calls ``get_runtime()`` (enforced by

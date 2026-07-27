@@ -1,10 +1,4 @@
-"""PathsConfig -- filesystem locations, derived vector-store paths.
-
-# ─────────────────────────────────────────────
-# SECTION 1: PURE DERIVATION
-# SECTION 2: CONFIG
-# ─────────────────────────────────────────────
-"""
+"""PathsConfig -- filesystem locations, derived vector-store paths."""
 
 import os
 from dataclasses import dataclass
@@ -30,9 +24,7 @@ RAG_BASE_DIR = os.path.join(_PROJECT_ROOT, "rag")
 _DEFAULT_EMBEDDING_MODEL = "embeddinggemma:latest"
 
 
-# ─────────────────────────────────────────────
-# SECTION 1: PURE DERIVATION
-# ─────────────────────────────────────────────
+# PURE DERIVATION
 
 
 def derive_db_paths(docs_folder: str, embedding_model: str, data_dir: str) -> Tuple[str, str]:
@@ -59,9 +51,7 @@ def derive_db_paths(docs_folder: str, embedding_model: str, data_dir: str) -> Tu
     )
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: CONFIG
-# ─────────────────────────────────────────────
+# CONFIG
 
 
 @dataclass(frozen=True)

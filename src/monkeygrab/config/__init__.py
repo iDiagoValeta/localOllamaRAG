@@ -1,21 +1,5 @@
 """Immutable configuration -- AppConfig and its 7 sub-configs.
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- env.py           read_env_int/float/str/choice -- hard-fail env readers
-#  +-- models.py        ModelsConfig, OllamaRuntimeConfig + pure derivations
-#  +-- chunking.py       ChunkingConfig
-#  +-- retrieval.py      RetrievalConfig
-#  +-- reranking.py      RerankingConfig
-#  +-- context.py        ContextConfig
-#  +-- flags.py          PipelineFlagsConfig
-#  +-- paths.py          PathsConfig + derive_db_paths
-#  +-- app_config.py     AppConfig (from_env / with_overrides)
-#
-# ─────────────────────────────────────────────
-
 ``AppConfig.from_env()`` reproduces ``rag/chat_pdfs.py`` section 3's
 defaults exactly (see ``tests/unit/test_app_config_defaults.py``).
 ``AppConfig.with_overrides(**changes)`` is the immutable replacement for

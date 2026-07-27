@@ -1,9 +1,4 @@
-"""CrossEncoderReranker -- Reranker adapter over sentence_transformers.CrossEncoder.
-
-# ─────────────────────────────────────────────
-# SECTION 1: ADAPTER
-# ─────────────────────────────────────────────
-"""
+"""CrossEncoderReranker -- Reranker adapter over sentence_transformers.CrossEncoder."""
 
 import contextlib
 import dataclasses
@@ -26,22 +21,52 @@ _MODEL_NAMES = {
 }
 
 
+def resolve_reranker_device(override: Optional[str] = None) -> Tuple[str, bool]:
+    """Decide which device the Cross-Encoder should load on.
+
+    An explicit argument wins, then the ``RERANKER_DEVICE`` environment
+    variable, then CUDA availability. The second return value reports whether
+    the choice was pinned by one of the first two: a pinned device must fail
+    loudly if it cannot be used, while an auto-detected GPU may fall back to
+    CPU.
+
+    Args:
+        override: Force ``"cpu"`` or ``"cuda"``, bypassing the environment
+            and auto-detection.
+
+    Returns:
+        Tuple of (device, whether the choice was forced).
+    """
+    if override is not None:
+        return override, True
+
+    env_override = os.getenv("RERANKER_DEVICE", "").strip().lower()
+    if env_override in ("cpu", "cuda"):
+        return env_override, True
+
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return "cuda", False
+    except ImportError:
+        pass
+    return "cpu", False
+
+
 class CrossEncoderReranker:
     """Re-scores retrieval candidates with a Cross-Encoder loaded once, lazily.
 
     Model variant comes from ``ModelsConfig.reranker_quality`` (``"quality"``
     -> BAAI/bge-reranker-v2-m3, ``"fast"`` -> cross-encoder/ms-marco-MiniLM-
-    L-6-v2), same mapping as ``obtener_modelo_reranker`` in
-    ``rag/engine/reranking.py``. The model is loaded on first ``rerank()``
+    L-6-v2). The model is loaded on first ``rerank()``
     call rather than at construction time, so building this adapter (e.g. in
     a test with a stubbed ``sentence_transformers.CrossEncoder``) never
     touches a GPU or downloads weights until it is actually asked to score
     something.
 
-    Device selection keeps today's ``RERANKER_DEVICE`` env override
-    (``rag/engine/reranking.py::_detectar_dispositivo_reranker``); the
-    optional ``device`` constructor argument takes precedence over it, for
-    callers (and tests) that want to force a device without touching the
+    Device selection honours the ``RERANKER_DEVICE`` environment variable;
+    the optional ``device`` constructor argument takes precedence over it,
+    for callers and tests that want to force a device without touching the
     environment.
 
     Failure policy: hard-fail, with the explicit two-step device fallback the
@@ -51,10 +76,9 @@ class CrossEncoderReranker:
     available, no override): if ``RERANKER_DEVICE``/``device`` pins a
     specific device, that device is used as-is and a load failure raises
     immediately. Either way, a load failure that survives the allowed
-    fallback raises -- unlike today's ``obtener_modelo_reranker``, which
-    returns ``None`` and lets ``rerank_resultados`` silently skip reranking.
-    A scoring-time failure (the model loads but ``.rank()`` raises) also
-    raises, instead of returning the input untouched.
+    fallback raises rather than disabling reranking behind the caller's
+    back. A scoring-time failure -- the model loads but ``.rank()`` raises
+    -- also raises, instead of returning the input untouched.
     """
 
     def __init__(self, models: ModelsConfig, device: Optional[str] = None):
@@ -71,20 +95,7 @@ class CrossEncoderReranker:
 
     def _resolve_device(self) -> Tuple[str, bool]:
         """Return ``(device, forced)``. ``forced`` disables the CUDA->CPU fallback."""
-        if self._device_override is not None:
-            return self._device_override, True
-
-        env_override = os.getenv("RERANKER_DEVICE", "").strip().lower()
-        if env_override in ("cpu", "cuda"):
-            return env_override, True
-
-        try:
-            import torch
-            if torch.cuda.is_available():
-                return "cuda", False
-        except ImportError:
-            pass
-        return "cpu", False
+        return resolve_reranker_device(self._device_override)
 
     def _load(self, device: str) -> CrossEncoder:
         model_kwargs = {"torch_dtype": "float16"} if device == "cuda" else {}
@@ -163,9 +174,10 @@ class CrossEncoderReranker:
 
         model = self._ensure_model()
 
-        # Chunks store `<situational summary>\n\n<body>`; rerank against the
-        # body only, matching rerank_resultados's stripping in
-        # rag/engine/reranking.py.
+        # Contextual retrieval prepends a situational summary to each chunk,
+        # separated by a literal `\n\n` sentinel. Rerank against the body
+        # alone: the summary was written to help retrieval find the chunk,
+        # and scoring it again double-counts that hint.
         texts = []
         for frag in fragments:
             text = frag.doc

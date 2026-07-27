@@ -1,16 +1,5 @@
 """jina_clip_worker.py -- persistent out-of-process host for jina-clip-v2.
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- 1. CONSTANTS       model name, Matryoshka truncation dimension
-#  +-- 2. STARTUP         CUDA hard-check, model load, "ready"/"fatal" handshake
-#  +-- 3. REQUEST HANDLING  one line-JSON request in, one line-JSON response out
-#  +-- 4. MAIN LOOP       read stdin until EOF, dispatch, never crash on a bad request
-#
-# ─────────────────────────────────────────────
-
 Runs ONLY under the isolated `.venv-mineru` interpreter (torch 2.6.0+cu124,
 transformers 4.57.6, sentence-transformers 5.6.1) -- jina-clip-v2's remote
 code is written against transformers 4.x and fails to load under the
@@ -72,9 +61,7 @@ def _fatal(error: str) -> None:
     sys.exit(1)
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: STARTUP
-# ─────────────────────────────────────────────
+# STARTUP
 
 
 def _load_model():
@@ -132,9 +119,7 @@ def _patch_declared_modalities(model) -> None:
     inner_module.__class__.modalities = property(lambda self: ["text", "image"])
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: REQUEST HANDLING
-# ─────────────────────────────────────────────
+# REQUEST HANDLING
 
 
 def _handle_request(line: str, model) -> None:
@@ -169,9 +154,7 @@ def _handle_request(line: str, model) -> None:
         _emit({"id": request_id, "ok": False, "error": str(exc)})
 
 
-# ─────────────────────────────────────────────
-# SECTION 4: MAIN LOOP
-# ─────────────────────────────────────────────
+# MAIN LOOP
 
 
 def main() -> None:

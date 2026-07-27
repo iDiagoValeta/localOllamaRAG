@@ -21,14 +21,16 @@ gets documented where, what doesn't get documented at all): `docs/README.md`.
 1. **Never commit or push without asking first.** No exceptions.
 2. **The current design lives in `docs/design/2026-07-26-monkeygrab-v2.md`.** It takes precedence over any other architecture instruction in this repo. `docs/README.md` governs *how* things get documented.
 3. **Always respond in Spanish** to the user.
-4. **Follow the code patterns in §6** when writing new code in `rag/`; `src/monkeygrab/` follows its own lighter convention (§7).
+4. **Follow the code patterns in §6** when writing new code in `rag/`; §7 lists what `src/monkeygrab/` does differently.
 5. **Do not modify any `requirements.txt`** without confirmation — versions are pinned.
 6. **Do not flip pipeline flags** (`USAR_RECOMP_SYNTHESIS`, `USAR_RERANKER`, etc.) without agreement — they affect latency, cost and evaluation results.
-7. **Preserve `rag/chat_pdfs.py` public API.** It is consumed verbatim by `rag/web/app.py` (as `rag_engine`) and `tests/`. Renaming a symbol breaks both. Public surface:
-   - **Constants:** `PATH_DB`, `COLLECTION_NAME`, `CARPETA_DOCS`, `SYSTEM_PROMPT_CHAT`, `SYSTEM_PROMPT_RAG`, `MAX_HISTORIAL_MENSAJES`, `MODELO_CHAT`, `MODELO_RAG`, `MIN_LONGITUD_PREGUNTA_RAG`, `UMBRAL_SCORE_RERANKER`, `TOP_K_FINAL`, `EXPANDIR_CONTEXTO`, `N_TOP_PARA_EXPANSION`, `MAX_CONTEXTO_CHARS`, `CONTEXTUAL_DOC_CHARS`, `USAR_LLM_QUERY_DECOMPOSITION`, `USAR_BUSQUEDA_HIBRIDA`, `USAR_RERANKER`, `USAR_OPTIMIZACION_CONTEXTO`, `USAR_RECOMP_SYNTHESIS`, `USAR_EMBEDDINGS_IMAGEN`, `USAR_CONTEXTUAL_RETRIEVAL`, `RERANKER_AVAILABLE`, `BM25_AVAILABLE`, `BM25_K1`, `BM25_B`, `RRF_K`, `PESO_SEMANTICO_RRF`, `PESO_BM25_RRF`, `N_RESULTADOS_KEYWORD`, `CHUNK_SIZE`, `CHUNK_OVERLAP`, `MIN_CHUNK_LENGTH`, `STOPWORDS`.
-   - **CLI/web functions:** `indexar_documentos`, `realizar_busqueda_hibrida`, `expandir_con_chunks_adyacentes`, `sintetizar_contexto_recomp`, `construir_contexto_para_modelo`, `guardar_debug_rag`, `generar_respuesta_silenciosa`, `obtener_documentos_indexados`, `cargar_historial`, `guardar_historial`, `limpiar_historial`.
-   - **Eval/test functions:** `get_pipeline_flags`, `set_pipeline_flags`, `set_docs_folder_runtime`, `evaluar_pregunta_rag`.
-   - **Runtime model roles (web control panel):** `MODEL_ROLE_VARS`, `get_model_roles`, `set_model_roles_runtime`; path/prefix derivation helpers `_derivar_paths_db`, `_derivar_prefijos_embedding`. Web API adds `/api/ollama[/start|/models]`, `/api/models`, `/api/stores` (GET) and `/api/stores/select` (POST). There are exactly three fixed language stores — `en` (English, default), `es` (Castellano), `ca` (Valencià) — each bound to `rag/docs/<id>/`. They always exist (possibly empty); there is no create/delete/hide/restore and no user-created stores. `settings.json` persists `active_store` (falls back to `en` if unknown); the active store is selectable, and documents can be viewed/added/removed per store.
+7. **Preserve `rag/chat_pdfs.py` public API.** It is consumed verbatim by `rag/web/app.py` (as `rag_engine`), the CLI and `tests/`. Renaming a symbol breaks all three at once. The authoritative list is the re-export block at the end of that file; the groups are:
+   - **Constants:** paths and collection names, model roles, every pipeline flag and numeric parameter, both system prompts, plus the `*_AVAILABLE` compatibility constants the UIs display.
+   - **Pipeline entry points:** `indexar_documentos`, `realizar_busqueda_hibrida`, `preparar_fragmentos_para_generacion`, `generar_respuesta`, `generar_respuesta_silenciosa`, `generar_tokens_respuesta`, `evaluar_pregunta_rag`.
+   - **Support:** context assembly, debug dumps, chat history, `obtener_documentos_indexados`, and the text helpers re-exported from `monkeygrab.application.keywords` (`STOPWORDS`, `extract_keywords`, ...).
+   - **Runtime switches (web control panel):** `get_pipeline_flags`, `set_pipeline_flags`, `set_docs_folder_runtime`, `MODEL_ROLE_VARS`, `get_model_roles`, `set_model_roles_runtime`, plus the derivation helpers `_derivar_paths_db` and `_derivar_prefijos_embedding`.
+
+   The web API adds `/api/ollama[/start|/models]`, `/api/models`, `/api/stores` (GET) and `/api/stores/select` (POST). There are exactly three fixed language stores — `en` (English, default), `es` (Castellano), `ca` (Valencià) — each bound to `rag/docs/<id>/`. They always exist, possibly empty; there is no create/delete/hide/restore and no user-created stores. `settings.json` persists `active_store`, falling back to `en` if unknown. The active store is selectable, and documents can be viewed, added and removed per store.
 8. **Hard-fail policy, project-wide.** Every adapter under `src/monkeygrab/adapters/` raises on failure instead of degrading — no silent CUDA→CPU fallback, no silent extractor swap, no silent RECOMP-to-raw-context fallback. Do not add a fallback chain inside an adapter; if a caller needs one, it composes two ports explicitly. See `docs/design/2026-07-26-monkeygrab-v2.md` §3 ("Política de fallos").
 9. **Test boundaries are load-bearing, not incidental:**
    - `tests/characterization/` pins the *current* pipeline's observed behavior, including its known bugs. Do not edit these tests to make a change pass — if a change legitimately alters behavior, that's a signal to stop and confirm, not to update the test. The one documented exception is `test_stale_default_config_bug.py`, whose own docstring says exactly when and how it is allowed to change.
@@ -57,7 +59,7 @@ src/monkeygrab/          Hexagonal core (see src/monkeygrab/README.md)
   adapters/                Port implementations: pymupdf, Chroma, Ollama, BM25, CrossEncoder
 rag/                      Interfaces (CLI + web) and pipeline entry points
   chat_pdfs.py              Public facade + global config (see §1 rule 7)
-  engine/                    retrieval, reranking, context, generation, indexing
+  engine/                    wiring, retrieval, indexing, context, generation, chunking, debug, history
   cli/                       MonkeyGrabCLI (interactive loop, i18n strings)
   web/                       Flask backend + React frontend (pnpm; frontend/dist gitignored)
   docs/                      Corpus PDFs (es/, ca/, en/); versioned
@@ -71,15 +73,22 @@ docs/design/               Architecture design docs; current: 2026-07-26-monkeyg
 docs/README.md             Documentation standard
 ```
 
-**Wiring today, not aspirational:** `rag/engine/*` is still the pipeline's
-entry point. It imports specific pure functions out of
-`monkeygrab.application` (RRF fusion, chunking, context assembly, plus two
-private helpers) in place of code that used to live inline; each swap is
-checked byte-for-byte against the original in
-`tests/unit/application/*_equivalence.py`. The full use-case classes
-(`IndexCorpus`, `Retrieve`, `Answer`) exist and are independently unit-tested
-but nothing in the CLI or web layer constructs or calls them yet — do not
-describe that wiring as done.
+**Wiring today, not aspirational:**
+
+- **Indexing and retrieval run through the core.** `rag/engine/indexing.py`
+  runs `IndexCorpus`; `rag/engine/retrieval.py` runs `Retrieve` — the same use
+  case `tests/eval/run_eval.py` constructs, which is what stops the evaluation
+  gate and the shipped product from measuring different retrieval. Both build
+  their ports through `rag/engine/wiring.py`, the single bridge between this
+  package's mutable globals and the immutable `AppConfig` the core takes.
+- **Generation does not.** `rag/engine/generation.py` and
+  `rag/engine/context.py` own the answer path and import only pure helpers out
+  of `monkeygrab.application`. The `Answer` use case is unit-tested and
+  unwired; do not describe it as in use. Wiring it needs the full gate (§5),
+  since it moves the code that produces answers.
+- `rag/engine/wiring.py` caches the Cross-Encoder and the tokenized BM25
+  corpus. Anything else it builds is cheap and rebuilt per call, which is what
+  makes a runtime model or flag change take effect on the next query.
 
 ---
 
@@ -139,30 +148,25 @@ See §1 rule 9 for what must not be edited (`tests/characterization/`,
 
 ## 6. Code patterns — `rag/`
 
-1. **MODULE MAP at the top** of every non-trivial Python file — ASCII tree indexing all sections.
-2. **Section separators** — `# ─────────────────────────────────────────────` + `# SECTION N: NAME`; subsections `# --- N.1 ---`.
-3. **Imports → constants → logic.** Stdlib → third-party → local; then config (models, paths, flags, numeric params).
-4. **Env setup before heavy imports.** Set `TORCH_COMPILE_DISABLE`, `TRITON_DISABLE`, etc. *before* `import torch` / `transformers`.
-5. **Optional deps** — `try/except ImportError` + boolean availability flag (e.g. `PYMUPDF_AVAILABLE`).
-6. **Explicit pipeline phases** — label and separate: load → prepare → infer → evaluate → export.
-7. **Artifact-oriented output** — experimental scripts always write metrics JSON + per-sample CSV + plots. Never stdout-only.
-8. **Mixed ES/EN naming (established).** Functions in Spanish (`realizar_busqueda_hibrida`); config constants in English (`CHUNK_SIZE`, `TOP_K_FINAL`); docstrings and comments in English. Follow the module's pattern; do not mix within a block.
-9. **Script-first, not enterprise.** Logic in modules + `main()`. Only exception: `MonkeyGrabCLI` in `rag/cli/app.py`.
-10. **Document pipeline flags in their own block** — inline comment per flag.
-11. **Google-style docstrings** — Args / Returns / Raises; module-level docstring includes Usage and Dependencies.
+1. **No decorative banners.** No `MODULE MAP` trees, no box-drawing rules, no numbered section headers. A plain `# Title` comment is fine where a file genuinely has parts; the module docstring says what the module is for.
+2. **Google-style docstrings** — Args / Returns / Raises. Every module opens with a docstring stating its purpose; PEP 257 for everything else (one-line docstrings on one line).
+3. **Comments explain why, not what.** If a comment restates the line below it, delete it. The comments worth writing are the ones that record a constraint, a trade-off or a defect the code works around.
+4. **Imports → constants → logic.** Stdlib → third-party → local; then config (models, paths, flags, numeric params).
+5. **Env setup before heavy imports.** Set `TORCH_COMPILE_DISABLE`, `TRITON_DISABLE`, etc. *before* `import torch` / `transformers`.
+6. **Mixed ES/EN naming (established).** Functions in Spanish (`realizar_busqueda_hibrida`); config constants in English (`CHUNK_SIZE`, `TOP_K_FINAL`); docstrings and comments in English. Follow the module's pattern; do not mix within a block.
+7. **Script-first, not enterprise.** Logic in modules + `main()`. Only exception: `MonkeyGrabCLI` in `rag/cli/app.py`.
+8. **Document pipeline flags in their own block** — inline comment per flag.
 
 ---
 
 ## 7. Code patterns — `src/monkeygrab/`
 
-Distinct from §6 — do not apply the ES/EN split here:
+Items 1–5 of §6 apply here too. What differs:
 
-1. **English naming throughout** (`Retrieve`, `Answer`, `IndexCorpus`, `ChunkMetadata`) — no Spanish function names.
+1. **English naming throughout** (`Retrieve`, `Answer`, `IndexCorpus`, `ChunkMetadata`) — no Spanish function names, no ES/EN split.
 2. **No service locator.** Every use case takes its ports and its `AppConfig` through the constructor/call and reads config fresh — never captured in a default argument (see `tests/characterization/test_stale_default_config_bug.py` for the bug this structurally forecloses).
 3. **Ports are `Protocol`s.** Adapters satisfy them structurally; they do not inherit from the port.
 4. **Hard-fail** (§1 rule 8).
-5. **MODULE MAP docstring convention carries over from §6 item 1.**
-6. Items 2, 3 and 11 of §6 (section separators, import order, Google-style docstrings) still apply.
 
 ---
 
@@ -194,7 +198,7 @@ python tests/eval/run_eval.py --models <model...>           # full gate locally;
 # Misc
 codegraph sync                                  # refresh .codegraph index
 codegraph status                                # show index health/backend
-codegraph query busqueda_lexica_bm25            # symbol lookup via CLI fallback
+codegraph query realizar_busqueda_hibrida       # symbol lookup via CLI fallback
 git check-ignore -v <path>
 ```
 

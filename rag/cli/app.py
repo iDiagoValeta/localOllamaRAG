@@ -1,5 +1,4 @@
-"""
-MonkeyGrab CLI Application.
+"""MonkeyGrab CLI Application.
 
 Main interactive loop for the MonkeyGrab command-line interface. Orchestrates
 the user prompt, slash command dispatch, and integration with the RAG engine.
@@ -17,29 +16,6 @@ Dependencies:
     - A RAG engine module providing search, indexing, and generation functions
 """
 
-
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  CONFIGURATION
-#  +-- 1. Imports
-#
-#  MonkeyGrabCLI CLASS
-#  +-- 2. INITIALIZATION        __init__, ChromaDB + engine wiring
-#  +-- 3. STARTUP               run() — logo, indexing, ollama health check
-#  +-- 4. MAIN LOOP             _loop() — prompt dispatch
-#  +-- 5. CHAT / RAG PROCESSING _process_chat, _chat_stream, _process_rag
-#  +-- 6. COMMAND HANDLERS      /docs, /stats, /reindex, /temas, /help, /salir
-#  +-- 7. HELPERS               runtime info, documents summary, topics
-#  +-- 8. OLLAMA HEALTH CHECK   _ollama_health()
-#
-# ─────────────────────────────────────────────
-
-# ─────────────────────────────────────────────
-# SECTION 1: IMPORTS
-# ─────────────────────────────────────────────
-
 import difflib
 import os
 import shutil
@@ -54,9 +30,7 @@ from rag.cli.display import QueryTimer, SessionStats, ui
 from rag.cli.strings import s
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: MAIN CLI CLASS
-# ─────────────────────────────────────────────
+# MAIN CLI CLASS
 
 class MonkeyGrabCLI:
     """Main CLI application for MonkeyGrab.
@@ -66,9 +40,6 @@ class MonkeyGrabCLI:
     provided rag_engine module.
     """
 
-    # ─────────────────────────────────────────────
-    # INITIALIZATION
-    # ─────────────────────────────────────────────
 
     def __init__(self, rag_engine):
         """Initialize the CLI application.
@@ -119,9 +90,7 @@ class MonkeyGrabCLI:
                 details.append(f"handled but not listed: {sorted(orphaned)}")
             raise RuntimeError("CLI command registry out of sync — " + "; ".join(details))
 
-    # ─────────────────────────────────────────────
-    # SECTION 3: STARTUP
-    # ─────────────────────────────────────────────
+    # STARTUP
 
     def run(self) -> None:
         """Entry point. Initialize the system and start the main loop."""
@@ -166,9 +135,7 @@ class MonkeyGrabCLI:
 
         self._loop()
 
-    # ─────────────────────────────────────────────
-    # SECTION 4: MAIN LOOP
-    # ─────────────────────────────────────────────
+    # MAIN LOOP
 
     def _loop(self) -> None:
         """Read-dispatch-respond loop. Runs until the user exits."""
@@ -212,9 +179,7 @@ class MonkeyGrabCLI:
             else:
                 self._process_chat(pregunta)
 
-    # ─────────────────────────────────────────────
-    # SECTION 5: CHAT / RAG PROCESSING
-    # ─────────────────────────────────────────────
+    # CHAT / RAG PROCESSING
 
     def _process_chat(self, pregunta: str) -> None:
         """Process a question in chat mode.
@@ -406,9 +371,7 @@ class MonkeyGrabCLI:
         ui.response_footer_rag(fragmentos_finales, timer)
         self.session.tick_rag(timer.total, self.rag.MODELO_RAG)
 
-    # ─────────────────────────────────────────────
-    # SECTION 6: COMMAND HANDLERS
-    # ─────────────────────────────────────────────
+    # COMMAND HANDLERS
 
     def _cmd_rag(self) -> bool:
         self.mode = "rag"
@@ -480,9 +443,7 @@ class MonkeyGrabCLI:
                 pass
         return True
 
-    # ─────────────────────────────────────────────
-    # SECTION 7: HELPERS
-    # ─────────────────────────────────────────────
+    # HELPERS
 
     def _show_init_info(self, total_documentos: int = 0, total_fragmentos: int = 0) -> None:
         ui.init_panel(self._runtime_info(total_documentos, total_fragmentos))
@@ -495,7 +456,7 @@ class MonkeyGrabCLI:
         reranker_model = None
         reranker_device = None
         if rag.USAR_RERANKER:
-            reranker_device_val = rag._detectar_dispositivo_reranker()
+            reranker_device_val, _forced = rag.resolve_reranker_device()
             reranker_model = ('BAAI/bge-reranker-v2-m3'
                               if rag.RERANKER_MODEL_QUALITY == 'quality'
                               else 'ms-marco-MiniLM-L-6-v2')
@@ -632,9 +593,7 @@ class MonkeyGrabCLI:
 
         ui.topics_display(docs_data)
 
-    # ─────────────────────────────────────────────
-    # SECTION 8: OLLAMA HEALTH CHECK
-    # ─────────────────────────────────────────────
+    # OLLAMA HEALTH CHECK
 
     def _ollama_health(self, timeout: float = 2.0) -> Tuple[bool, str]:
         """Ping Ollama's ``/api/tags`` endpoint and summarize the result.

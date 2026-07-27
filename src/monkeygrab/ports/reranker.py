@@ -1,9 +1,4 @@
-"""Reranker -- Cross-Encoder-style re-scoring of retrieval candidates.
-
-# ─────────────────────────────────────────────
-# SECTION 1: PORT
-# ─────────────────────────────────────────────
-"""
+"""Reranker -- Cross-Encoder-style re-scoring of retrieval candidates."""
 
 from typing import List, Protocol, Sequence
 
@@ -13,19 +8,16 @@ from monkeygrab.domain.fragment import Fragment
 class Reranker(Protocol):
     """Re-scores and truncates retrieval candidates against the query.
 
-    Matches ``rerank_resultados(pregunta, documentos_recuperados, top_k)``
-    in ``rag/engine/reranking.py``: query plus candidate fragments in,
-    the top ``top_k`` fragments out with a fresh relevance score.
+    Fusion ranks by how often and how highly each branch retrieved a chunk;
+    this port instead reads the query and the chunk together and scores their
+    actual relevance. It is expensive, which is why it runs last and only on
+    the candidates fusion already shortlisted.
 
-    Failure policy: hard-fail. Raise if the model cannot score the
-    candidates (fails to load, inference error). Today's three-level
-    silent degradation -- GPU load failure falls back to CPU, and if the
-    reranker cannot be loaded at all ``rerank_resultados`` returns the
-    input unranked and untruncated -- does not carry over: an adapter that
-    cannot rerank must not pretend it did. If GPU-with-CPU-fallback is
-    still wanted operationally, it is the adapter's own explicit two-step
-    logic (attempt, catch, retry once), not a caller-invisible substitution
-    of "reranked" for "not reranked".
+    Failure policy: hard-fail. Raise if the model cannot load or cannot
+    score, rather than returning the input unranked -- an adapter that could
+    not rerank must not report results as if it had. A GPU-to-CPU retry is
+    allowed, but as the adapter's own explicit two-step logic, never as a
+    caller-invisible substitution of "not reranked" for "reranked".
     """
 
     def rerank(self, query: str, fragments: Sequence[Fragment], top_k: int) -> List[Fragment]:

@@ -1,9 +1,4 @@
-"""VectorStore -- add/query/get/count over embedded chunks.
-
-# ─────────────────────────────────────────────
-# SECTION 1: PORT
-# ─────────────────────────────────────────────
-"""
+"""VectorStore -- add/query/get/count over embedded chunks."""
 
 from typing import List, Optional, Protocol, Sequence
 
@@ -12,44 +7,25 @@ from monkeygrab.domain.fragment import Fragment
 
 
 class VectorStore(Protocol):
-    """Exactly the five Chroma operations the pipeline exercises today.
+    """Storage and retrieval of embedded chunks.
 
-    No more, no less -- each maps to one real call site, and no ``where``
-    filter is used anywhere in the codebase, so it is deliberately absent
-    here (a metadata-sidecar index such as FAISS can implement this whole
-    port without a query planner):
+    Five operations, each backing one thing the pipeline actually does:
+    ``add`` stores a chunk during indexing, ``query`` is semantic search,
+    ``get_by_ids`` fetches neighbor chunks for context expansion,
+    ``get_page`` supports full-corpus scans (building the lexical index,
+    listing indexed documents) and ``count`` reports corpus size.
 
-    - ``add``: ``collection.add(ids=[id_doc], embeddings=[embedding],
-      documents=[chunk_doc_text], metadatas=[metadata])`` in
-      ``_indexar_chunk`` (``rag/engine/indexing.py``), always one chunk
-      at a time.
-    - ``query``: ``collection.query(query_embeddings=[...], n_results=...,
-      include=[...])`` in ``realizar_busqueda_hibrida``
-      (``rag/engine/retrieval.py``), once per query variant.
-    - ``get_by_ids``: ``collection.get(ids=ids_vecinos, include=[...])``
-      in ``_expandir_fragmentos_contexto`` (``rag/engine/generation.py``),
-      to fetch specific neighbor chunks.
-    - ``get_page``: ``collection.get(limit=..., offset=..., include=[...])``
-      in ``_construir_indice_bm25`` (``rag/engine/lexical.py``, batched
-      full-corpus scan to build the BM25 index) and the unpaginated
-      ``collection.get(include=['metadatas'])`` in
-      ``obtener_documentos_indexados`` (``rag/engine/indexing.py``,
-      ``limit=None`` here means "everything").
-    - ``count``: ``collection.count()``, used both by
-      ``_obtener_indice_bm25``'s cache key and inside ``get_page``'s
-      batch loop.
+    There is no ``where`` filter because nothing in the pipeline filters by
+    metadata. Keeping it out means a plain vector index with a metadata
+    sidecar, such as FAISS, can satisfy this port without a query planner.
 
-    Every method returns ``Fragment`` -- the shape callers immediately
-    rebuild raw Chroma rows into anyway (``all_semantic_results`` in
-    ``realizar_busqueda_hibrida``, the neighbor dicts in
-    ``_expandir_fragmentos_contexto``, the BM25 ``corpus_entries`` in
-    ``_construir_indice_bm25`` all use ``doc``/``metadata``/``id`` with
-    scores left at their defaults). Ranking (RRF, reranking) is computed
-    by the retrieval use case, never by this port.
+    Every method returns ``Fragment`` with its score fields at their
+    defaults. This port stores and fetches; ranking belongs to the retrieval
+    use case.
 
-    Failure policy: hard-fail. Raise on any storage or query failure --
-    ``obtener_documentos_indexados`` today swallows errors and returns an
-    empty list; that silent-empty behavior does not carry over.
+    Failure policy: hard-fail. Raise on any storage or query failure. An
+    empty result must mean the corpus held nothing matching, never that a
+    read failed.
     """
 
     def add(self, chunk: Chunk, embedding: Sequence[float]) -> None:

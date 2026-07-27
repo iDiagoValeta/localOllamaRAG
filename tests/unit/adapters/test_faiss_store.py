@@ -44,11 +44,6 @@ def _unit(vector):
     return [v / norm for v in vector]
 
 
-# ─────────────────────────────────────────────
-# Round-trip: add / query / get_by_ids / get_page / count
-# ─────────────────────────────────────────────
-
-
 def test_add_query_get_by_ids_get_page_count_round_trip(tmp_path):
     store = FaissVectorStore(_paths(tmp_path))
 
@@ -96,11 +91,6 @@ def test_query_on_empty_store_returns_empty_list(tmp_path):
     assert store.query([1.0, 0.0], n_results=5) == []
 
 
-# ─────────────────────────────────────────────
-# Determinism
-# ─────────────────────────────────────────────
-
-
 def test_query_breaks_score_ties_by_ascending_chunk_id(tmp_path):
     """Two chunks share an identical embedding -- an exact score tie. FAISS's
     own internal tie order (here, insertion order: cb before ca) must be
@@ -126,11 +116,6 @@ def test_repeated_identical_queries_return_identical_order(tmp_path):
     second = [f.id for f in store.query(query_vector, n_results=3)]
 
     assert first == second
-
-
-# ─────────────────────────────────────────────
-# Persistence
-# ─────────────────────────────────────────────
 
 
 def test_persists_to_disk_and_reopening_matches(tmp_path):
@@ -219,11 +204,6 @@ def test_meta_and_index_row_count_mismatch_hard_fails(tmp_path):
         FaissVectorStore(paths)
 
 
-# ─────────────────────────────────────────────
-# Hard fails: dimension, duplicate id, write failure
-# ─────────────────────────────────────────────
-
-
 def test_add_hard_fails_on_dimension_mismatch(tmp_path):
     store = FaissVectorStore(_paths(tmp_path))
     store.add(_chunk("u.pdf", 0, 0), _unit([1.0, 0.0, 0.0]))
@@ -261,11 +241,6 @@ def test_add_hard_fails_when_persistence_write_fails(tmp_path, monkeypatch):
 
     with pytest.raises(RuntimeError, match="failed to persist"):
         store.add(_chunk("x.pdf", 0, 0), _unit([1.0, 0.0]))
-
-
-# ─────────────────────────────────────────────
-# Equivalence with ChromaVectorStore
-# ─────────────────────────────────────────────
 
 
 def test_faiss_and_chroma_are_interchangeable_behind_the_port(tmp_path):

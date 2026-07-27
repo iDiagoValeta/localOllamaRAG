@@ -1,9 +1,5 @@
 """Environment-variable readers for AppConfig.from_env().
 
-# ─────────────────────────────────────────────
-# SECTION 1: READERS
-# ─────────────────────────────────────────────
-
 Intentional deviation from ``rag/chat_pdfs.py``'s ``_leer_env_int`` /
 ``_leer_env_float``: those catch ``ValueError`` and silently fall back to
 the default even when the variable IS SET to something unparseable. This

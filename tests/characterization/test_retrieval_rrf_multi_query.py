@@ -1,5 +1,4 @@
-"""Characterization test for RRF fusion over MULTIPLE semantic query variants
-in ``rag.engine.retrieval.realizar_busqueda_hibrida`` -- pre-migration snapshot.
+"""Characterization test for RRF fusion over MULTIPLE semantic query variants.
 
 ``tests/characterization/test_retrieval_rrf.py`` disables LLM query
 decomposition entirely to isolate the fusion math with a SINGLE semantic
@@ -7,15 +6,14 @@ query variant. That leaves the accumulation behavior across MULTIPLE query
 variants uncharacterized: the sum of ``1 / (rank + RRF_K)`` for a fragment
 that appears in more than one variant's semantic results, the ``min()`` of
 ``distancia`` taken across variants, and the population of ``query_matches``
-with every variant index that hit a fragment (``rag/engine/retrieval.py``,
-the loop starting at "for q_idx, query in enumerate(queries):"). This is
-exactly the part a reimplementation could get wrong without any test
-noticing: BM25 and the Cross-Encoder reranker both have their own dedicated
-suites, but nothing exercised multi-variant semantic accumulation directly.
+with every variant index that hit a fragment. This is exactly the part a
+reimplementation could get wrong without any test noticing: BM25 and the
+Cross-Encoder reranker both have their own dedicated suites, but nothing
+exercised multi-variant semantic accumulation directly.
 
-Do not edit the expected scores/order/query_matches during a migration: if
-this test starts failing, the multi-query fusion behavior changed, which is
-the regression this suite exists to catch.
+Do not edit the expected scores/order/query_matches: if this test starts
+failing, the multi-query fusion behavior changed, which is the regression
+this suite exists to catch.
 """
 
 import sys
@@ -28,7 +26,8 @@ if str(ROOT) not in sys.path:
 import pytest
 
 import rag.chat_pdfs as rag
-from rag.engine import retrieval as retrieval_mod
+from monkeygrab.domain.generation_chunk import GenerationChunk
+from rag.engine import wiring
 
 # Three semantic query variants: the original question (variant 1) plus two
 # LLM-decomposed sub-queries (variants 2 and 3). Design:
@@ -72,7 +71,7 @@ _SUBQUERY_B = "sub-query B: yet another angle on the same underlying question"
 
 class FakeCollection:
     """Returns one fixed, pre-ranked result set per call, in call order --
-    one call per semantic query variant, matching realizar_busqueda_hibrida's
+    one call per semantic query variant, matching the use case's
     per-query-variant loop."""
 
     def __init__(self):
@@ -84,8 +83,20 @@ class FakeCollection:
         return result
 
 
-def _fake_embeddings(model, prompt, keep_alive):
-    return {"embedding": [0.1, 0.2, 0.3]}
+class FakeEmbedder:
+    def embed(self, text, *, keep_alive=None):
+        return [0.1, 0.2, 0.3]
+
+
+class FakeQueryDecomposer:
+    """ChatModel double returning both sub-queries, one per line, as the real
+    decomposition prompt asks the model to."""
+
+    def generate(self, prompt, system=None):
+        return f"{_SUBQUERY_A}\n{_SUBQUERY_B}"
+
+    def stream(self, prompt, system=None):
+        yield GenerationChunk(text=self.generate(prompt), done=True)
 
 
 def test_rrf_accumulates_across_multiple_semantic_query_variants(monkeypatch):
@@ -94,10 +105,9 @@ def test_rrf_accumulates_across_multiple_semantic_query_variants(monkeypatch):
     monkeypatch.setattr(rag, "USAR_LLM_QUERY_DECOMPOSITION", True)
     monkeypatch.setattr(rag, "USAR_RERANKER", False)
     monkeypatch.setattr(rag, "USAR_BUSQUEDA_HIBRIDA", False)
-    monkeypatch.setattr(rag, "generar_queries_con_llm", lambda pregunta: [_SUBQUERY_A, _SUBQUERY_B])
-    monkeypatch.setattr(rag, "extraer_keywords", lambda texto: [])
-    monkeypatch.setattr(rag, "_validar_coherencia_query", lambda q: True)
-    monkeypatch.setattr(retrieval_mod.ollama, "embeddings", _fake_embeddings)
+    monkeypatch.setattr("monkeygrab.application.retrieve.extract_keywords", lambda texto: [])
+    monkeypatch.setattr(wiring, "embedder", lambda config: FakeEmbedder())
+    monkeypatch.setattr(wiring, "query_decomposer", lambda config: FakeQueryDecomposer())
 
     fragmentos, mejor_score, metricas = rag.realizar_busqueda_hibrida(long_question, FakeCollection())
 

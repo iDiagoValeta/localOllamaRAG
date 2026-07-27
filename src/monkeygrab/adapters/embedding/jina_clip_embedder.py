@@ -1,16 +1,5 @@
 """JinaClipEmbedder -- Embedder/ImageEmbedder adapter over an out-of-process jina-clip-v2 worker.
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- 1. CONSTANTS         truncation dim, default timeouts, worker script path
-#  +-- 2. WORKER LIFECYCLE  lazy start, one persistent subprocess, hard-fail on death
-#  +-- 3. ADAPTER           JinaClipEmbedder: Embedder.embed + ImageEmbedder.embed_image
-#  +-- 4. VECTOR MATH       pure, unit-testable L2-normalize / normalized-sum combination
-#
-# ─────────────────────────────────────────────
-
 License note (jina-clip-v2, CC BY-NC): this adapter loads a non-commercial-
 licensed model. That is an accepted, documented decision for this project's
 personal/portfolio use
@@ -48,9 +37,7 @@ from typing import Dict, List, Optional
 # structural (duck typing), the same contract every other adapter in this
 # package satisfies without inheriting its port.
 
-# ─────────────────────────────────────────────
-# SECTION 1: CONSTANTS
-# ─────────────────────────────────────────────
+# CONSTANTS
 
 _TRUNCATE_DIM = 512  # must match jina_clip_worker.py's _TRUNCATE_DIM
 # Cold model load was measured at ~29s in the spike; generous margin for a
@@ -64,9 +51,7 @@ _WORKER_SCRIPT = str(Path(__file__).with_name("jina_clip_worker.py"))
 _EOF = object()
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: WORKER LIFECYCLE
-# ─────────────────────────────────────────────
+# WORKER LIFECYCLE
 
 
 class JinaClipEmbedder:
@@ -130,7 +115,7 @@ class JinaClipEmbedder:
         self._next_id = itertools.count(1)
         self._dead_reason: Optional[str] = None
 
-    # --- lifecycle ------------------------------------------------------
+    # lifecycle
 
     def _ensure_worker(self) -> subprocess.Popen:
         if self._process is not None:
@@ -260,7 +245,7 @@ class JinaClipEmbedder:
         except Exception:
             pass
 
-    # --- request/response -------------------------------------------------
+    # request/response
 
     def _request(self, op: str, payload: Dict[str, str]) -> List[float]:
         self._ensure_worker()
@@ -303,9 +288,7 @@ class JinaClipEmbedder:
             )
         return vector
 
-    # ─────────────────────────────────────────────
-    # SECTION 3: ADAPTER
-    # ─────────────────────────────────────────────
+    # ADAPTER
 
     def embed(self, text: str, *, keep_alive: Optional[int] = None) -> List[float]:
         """Embed ``text`` via the out-of-process jina-clip-v2 worker.
@@ -374,9 +357,7 @@ class JinaClipEmbedder:
         return _l2_normalize(combined)
 
 
-# ─────────────────────────────────────────────
-# SECTION 4: VECTOR MATH
-# ─────────────────────────────────────────────
+# VECTOR MATH
 
 
 def _l2_normalize(vector: List[float]) -> List[float]:

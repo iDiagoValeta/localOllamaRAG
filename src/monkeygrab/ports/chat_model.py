@@ -1,9 +1,4 @@
-"""ChatModel -- Ollama-style text/vision generation, single-shot or streamed.
-
-# ─────────────────────────────────────────────
-# SECTION 1: PORT
-# ─────────────────────────────────────────────
-"""
+"""ChatModel -- Ollama-style text/vision generation, single-shot or streamed."""
 
 from typing import Iterator, Optional, Protocol, Sequence
 
@@ -11,54 +6,31 @@ from monkeygrab.domain.generation_chunk import GenerationChunk
 
 
 class ChatModel(Protocol):
-    """One Ollama-backed model role: generate text, optionally from images.
+    """One model role: generate text, optionally from images.
 
-    Every pipeline role that talks to an LLM (``MODELO_CHAT``,
-    ``MODELO_CONTEXTUAL``, ``MODELO_RECOMP``, ``MODELO_OCR``, ``MODELO_RAG``)
-    is a separate model *name*, dependency-injected as its own
-    ``ChatModel`` instance -- this port models the single capability
-    "talk to one model", not model selection or role wiring.
+    Every pipeline role that talks to an LLM -- answer generation, chat,
+    query decomposition, contextual enrichment, context synthesis, image
+    description -- is a separate model name wired as its own instance. This
+    port is the single capability "talk to one model"; choosing which model
+    plays which role happens outside it.
 
-    Two methods cover every real call site:
+    Two methods cover every use. ``generate`` returns the complete text and
+    takes optional images, which only the vision role uses. ``stream`` yields
+    ``GenerationChunk`` for the answer the user watches arrive. It yields
+    chunks rather than plain strings because the final one carries the
+    model name, stop reason, timings and token counts that the debug dump
+    reports; an iterator of strings would drop all of that silently. A caller
+    that only wants text reads ``chunk.text`` and ignores the rest.
 
-    - ``generate``: single-shot, full-text-back calls --
-      ``generar_queries_con_llm`` (``rag/engine/reranking.py``,
-      ``ollama.generate``), ``sintetizar_contexto_recomp``
-      (``rag/engine/context.py``, ``POST /api/chat``),
-      ``generar_contexto_situacional`` (``rag/engine/contextual.py``,
-      ``ollama.chat``), and ``describir_imagen_con_llm``
-      (``rag/engine/images.py``, ``ollama.chat`` with ``images=[b64]``) --
-      hence the optional ``images`` parameter, unused by every caller
-      except the OCR role.
-    - ``stream``: token-streaming calls -- ``_ollama_generate_stream`` /
-      ``generar_tokens_respuesta`` (``rag/engine/generation.py``), used
-      only for the final RAG/chat answer shown to the user. Yields
-      ``GenerationChunk`` rather than plain text: the debug dump
-      ``generar_respuesta`` writes on every RAG turn (on by default,
-      ``guardar_debug_rag``) reports prompt/eval token counts and
-      decoding speed off the final streamed chunk's metadata
-      (``model``, ``done_reason``, timings, token counts) -- an
-      ``Iterator[str]`` has no way to carry that alongside the tokens, so
-      a caller wired to only that shape loses it silently. A caller that
-      only wants the text reads ``chunk.text`` off each item and ignores
-      the rest; see ``GenerationChunk``'s own docstring for the full
-      shape and ``monkeygrab.application.answer.Answer`` for a caller
-      that streams tokens live (``on_token``) while still collecting the
-      final metadata.
+    Sampling parameters -- temperature, prediction limits, context window,
+    keep-alive -- are runtime tuning rather than part of what makes something
+    a chat model, so they belong to the adapter and its configuration, not to
+    this Protocol.
 
-    Sampling parameters (``temperature``, ``num_predict``, ``num_ctx``,
-    ``think``, ``keep_alive``, ...) differ per call site today but are
-    runtime tuning, not part of what makes this port "a chat model" --
-    they stay adapter/config concerns, not Protocol parameters.
-
-    Failure policy: hard-fail. Raise on any generation failure. Several
-    callers today catch broadly and fall back to empty output or raw
-    unsynthesized context (``generar_queries_con_llm`` returns ``[]``,
-    ``sintetizar_contexto_recomp`` falls back to raw chunks in five
-    different failure conditions, ``describir_imagen_con_llm`` returns
-    ``""``) -- none of that silent degradation is this port's job; a
-    caller that wants a fallback makes it an explicit decision using two
-    ports, not something one adapter does invisibly.
+    Failure policy: hard-fail. Raise on any generation failure. Optional
+    stages do degrade gracefully, but that is a decision the calling use case
+    makes explicitly, visible in its own code -- never something an adapter
+    does invisibly by returning empty output.
     """
 
     def generate(

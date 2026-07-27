@@ -20,8 +20,7 @@ from monkeygrab.domain.fragment import Fragment
 from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
-# SECTION 10: CONTEXT AND GENERATION
-# ─────────────────────────────────────────────
+# CONTEXT AND GENERATION
 
 
 def _es_continuacion_parrafo(linea_previa: str, linea_actual: str) -> bool:
@@ -382,7 +381,5 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
     except Exception as e:
         logging.warning(f"Critical error in RECOMP synthesis ({cfg.MODELO_RECOMP}): {e}")
         return cfg.construir_contexto_para_modelo(fragmentos)
-
-
 
 

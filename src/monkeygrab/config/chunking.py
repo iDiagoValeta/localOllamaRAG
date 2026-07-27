@@ -1,9 +1,5 @@
 """ChunkingConfig -- indexing-time text and image splitting parameters.
 
-# ─────────────────────────────────────────────
-# SECTION 1: CONFIG
-# ─────────────────────────────────────────────
-
 Defaults are a field-for-field copy of ``rag/chat_pdfs.py`` section 3.7
 (the ``RAG_*``/``CONTEXTUAL_DOC_CHARS`` group of ``_leer_env_int`` calls).
 """

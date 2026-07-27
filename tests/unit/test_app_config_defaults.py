@@ -28,10 +28,6 @@ if str(ROOT) not in sys.path:
 from monkeygrab.config import AppConfig  # noqa: E402
 
 
-# ─────────────────────────────────────────────
-# field-by-field equality against rag.chat_pdfs
-# ─────────────────────────────────────────────
-
 # (AppConfig dotted path, matching rag.chat_pdfs attribute name). Listed
 # flat and explicit -- one line per constant in rag/chat_pdfs.py section 3 --
 # so a missing/extra field is a visible diff, not a silent gap.

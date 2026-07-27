@@ -42,11 +42,6 @@ _TINY_PNG = base64.b64decode(
 )
 
 
-# ─────────────────────────────────────────────
-# Fakes / helpers
-# ─────────────────────────────────────────────
-
-
 class _FakeCompleted:
     def __init__(self, returncode=0, stdout="", stderr=""):
         self.returncode = returncode
@@ -82,11 +77,6 @@ def _make_bin(tmp_path: Path, name="mineru.exe") -> Path:
     return bin_path
 
 
-# ─────────────────────────────────────────────
-# Command construction
-# ─────────────────────────────────────────────
-
-
 def test_extract_builds_the_correct_mineru_command(monkeypatch, tmp_path):
     pdf = _make_pdf(tmp_path)
     bin_path = _make_bin(tmp_path)
@@ -108,11 +98,6 @@ def test_extract_builds_the_correct_mineru_command(monkeypatch, tmp_path):
     assert cmd[cmd.index("-p") + 1] == str(pdf)
     assert cmd[cmd.index("-b") + 1] == "pipeline"
     assert Path(cmd[cmd.index("-o") + 1]).parent == cache_dir
-
-
-# ─────────────────────────────────────────────
-# Environment variables
-# ─────────────────────────────────────────────
 
 
 def test_model_source_defaults_to_local(monkeypatch, tmp_path):
@@ -185,11 +170,6 @@ def test_default_mineru_bin_falls_back_to_the_project_venv(monkeypatch):
     resolved = module._default_mineru_bin()
 
     assert resolved.endswith(os.path.join(".venv-mineru", "Scripts", "mineru.exe"))
-
-
-# ─────────────────────────────────────────────
-# Failure modes -- the important tests
-# ─────────────────────────────────────────────
 
 
 def test_missing_binary_raises_an_actionable_error(tmp_path):
@@ -299,11 +279,6 @@ def test_image_extractor_swallows_cli_failure_and_returns_empty_mapping(tmp_path
     assert extractor.extract(str(pdf)) == {}
 
 
-# ─────────────────────────────────────────────
-# Caching
-# ─────────────────────────────────────────────
-
-
 def test_second_extraction_of_the_same_pdf_reuses_the_cache(monkeypatch, tmp_path):
     pdf = _make_pdf(tmp_path)
     bin_path = _make_bin(tmp_path)
@@ -384,11 +359,6 @@ def test_a_corrupted_cache_entry_is_discarded_and_reextracted(monkeypatch, tmp_p
     extractor.extract(str(pdf))
 
     assert len(calls) == 2  # bad cache was discarded, MinerU ran again
-
-
-# ─────────────────────────────────────────────
-# Parsing a representative MinerU output
-# ─────────────────────────────────────────────
 
 
 def test_parses_a_representative_mineru_output_including_a_table_and_a_figure(monkeypatch, tmp_path):

@@ -8,7 +8,7 @@ section 1 -- "rag/engine/ modules do cfg = get_runtime(), which returns the
 chat_pdfs module itself"). This inspects each adapter module's AST import
 statements (not a source-text grep, which an aliased import could dodge) and
 fails if any top-level import target is ``rag`` or any of its submodules
-(``rag.chat_pdfs``, ``rag.engine.lexical``, ...) -- importing any of them
+(``rag.chat_pdfs``, ``rag.engine.*``) -- importing any of them
 transitively pulls in ``rag.chat_pdfs`` via ``rag.engine.runtime.get_runtime()``.
 """
 

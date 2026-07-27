@@ -1,9 +1,4 @@
-"""ModelUnloader -- best-effort VRAM reclaim across every configured model role.
-
-# ─────────────────────────────────────────────
-# SECTION 1: PORT
-# ─────────────────────────────────────────────
-"""
+"""ModelUnloader -- best-effort VRAM reclaim across every configured model role."""
 
 from typing import Optional, Protocol
 

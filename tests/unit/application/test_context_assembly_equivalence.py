@@ -35,11 +35,6 @@ def _as_dict(frag):
     return {"doc": frag.doc, "metadata": {"source": frag.metadata.source, "page": frag.metadata.page, "chunk": frag.metadata.chunk}}
 
 
-# ─────────────────────────────────────────────
-# build_context_for_model vs construir_contexto_para_modelo
-# ─────────────────────────────────────────────
-
-
 def test_sorted_and_renumbered_output_matches_original(monkeypatch):
     monkeypatch.setattr(rag, "USAR_OPTIMIZACION_CONTEXTO", False)
     fragments = [
@@ -93,11 +88,6 @@ def test_with_optimization_enabled_matches_original(monkeypatch):
     theirs = rag.construir_contexto_para_modelo([_as_dict(f) for f in fragments])
 
     assert ours == theirs
-
-
-# ─────────────────────────────────────────────
-# optimize_context_text vs optimizar_texto_contexto
-# ─────────────────────────────────────────────
 
 
 def test_collapse_and_bold_strip_matches_original():

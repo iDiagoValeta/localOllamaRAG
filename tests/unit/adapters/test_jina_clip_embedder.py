@@ -28,11 +28,6 @@ def _vector(fill=0.1, n=_DIM):
     return [fill] * n
 
 
-# ─────────────────────────────────────────────
-# Fake subprocess plumbing
-# ─────────────────────────────────────────────
-
-
 class _FakeStream:
     """Iterable line stream fed from a queue -- stands in for a Popen pipe.
 
@@ -151,11 +146,6 @@ def _embedder(monkeypatch, behavior=_echo_ok, *, startup_message="ready", **kwar
     return embedder, calls
 
 
-# ─────────────────────────────────────────────
-# Protocol: request serialization / response parsing
-# ─────────────────────────────────────────────
-
-
 def test_embed_sends_a_text_request_and_returns_the_worker_vector(monkeypatch):
     embedder, calls = _embedder(monkeypatch)
 
@@ -174,11 +164,6 @@ def test_request_ids_increment_across_calls(monkeypatch):
 
     ids = [json.loads(line)["id"] for line in calls[0].stdin.lines]
     assert ids == [1, 2]
-
-
-# ─────────────────────────────────────────────
-# Worker lifecycle: lazy start, reuse
-# ─────────────────────────────────────────────
 
 
 def test_worker_is_not_started_at_construction(monkeypatch):
@@ -217,11 +202,6 @@ def test_close_terminates_the_worker_and_a_later_call_starts_a_fresh_one(monkeyp
     embedder.embed("two")
 
     assert len(calls) == 2
-
-
-# ─────────────────────────────────────────────
-# Failure modes: all must raise, never hang or degrade silently
-# ─────────────────────────────────────────────
 
 
 def test_worker_that_dies_before_ready_raises(monkeypatch):
@@ -319,11 +299,6 @@ def test_worker_marked_dead_refuses_further_calls_without_a_new_process(monkeypa
     assert len(calls) == 1
 
 
-# ─────────────────────────────────────────────
-# Image + caption combination: normalized sum, not a mean
-# ─────────────────────────────────────────────
-
-
 def test_embed_image_without_caption_sends_only_an_image_request(monkeypatch):
     def behavior(process, request):
         assert request["op"] == "image"
@@ -397,11 +372,6 @@ def test_embed_image_with_caption_is_a_normalized_sum_not_an_unnormalized_mean(m
     assert result == pytest.approx(expected_sum_normalized)
     assert result != pytest.approx(unnormalized_mean)  # the mean has sub-unit norm
     assert sum(component * component for component in result) == pytest.approx(1.0)
-
-
-# ─────────────────────────────────────────────
-# Vector math: pure function, tested directly
-# ─────────────────────────────────────────────
 
 
 def test_l2_normalize_returns_a_unit_vector():

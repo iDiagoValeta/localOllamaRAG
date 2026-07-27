@@ -1,21 +1,5 @@
 """Ports -- Protocols the application layer will depend on, adapters implement.
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- pdf_extractor.py    PdfExtractor    -- PDF -> per-page raw text
-#  +-- image_extractor.py  ImageExtractor  -- PDF -> raster images by page
-#  +-- embedder.py         Embedder        -- text -> embedding vector
-#  +-- image_embedder.py   ImageEmbedder   -- image (+caption) -> embedding vector
-#  +-- vector_store.py     VectorStore     -- add/query/get/count over chunks
-#  +-- lexical_index.py    LexicalIndex    -- BM25-style text search
-#  +-- reranker.py         Reranker        -- Cross-Encoder-style re-scoring
-#  +-- chat_model.py       ChatModel       -- Ollama-style generate/stream
-#  +-- model_unloader.py   ModelUnloader   -- VRAM reclaim across model roles
-#
-# ─────────────────────────────────────────────
-
 Every Protocol here has exactly one job and takes/returns only domain types
 (``monkeygrab.domain``) and primitives -- never ``chromadb.Collection``,
 ``ollama.Client``, or any other infrastructure type. This is what lets an

@@ -1,5 +1,4 @@
-"""
-MonkeyGrab CLI string tables — trilingual support (ES / EN / CA).
+"""MonkeyGrab CLI string tables — trilingual support (ES / EN / CA).
 
 All user-visible text is defined here as a key → string mapping.  The active
 language is read once from the ``MONKEYGRAB_LANG`` environment variable
@@ -16,14 +15,11 @@ values (paths, model names, numbers) pass through unchanged.
 
 Selecting the language at launch (PowerShell / cmd / bash)::
 
-    # PowerShell (Windows)
     $env:MONKEYGRAB_LANG = "en"; python rag/chat_pdfs.py
     $env:MONKEYGRAB_LANG = "ca"; python rag/chat_pdfs.py
 
-    # cmd.exe (Windows)
     set MONKEYGRAB_LANG=en && python rag/chat_pdfs.py
 
-    # bash / zsh (Linux / macOS)
     MONKEYGRAB_LANG=en python rag/chat_pdfs.py
     MONKEYGRAB_LANG=ca python rag/chat_pdfs.py
 
@@ -35,9 +31,6 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-# ─────────────────────────────────────────────
-# SPANISH (default)
-# ─────────────────────────────────────────────
 
 _ES: dict = {
     # Branding
@@ -232,10 +225,6 @@ _ES: dict = {
 }
 
 
-# ─────────────────────────────────────────────
-# ENGLISH
-# ─────────────────────────────────────────────
-
 _EN: dict = {
     # Branding
     "brand.subtitle":           "local PDF RAG",
@@ -429,10 +418,6 @@ _EN: dict = {
 }
 
 
-# ─────────────────────────────────────────────
-# VALENCIAN
-# ─────────────────────────────────────────────
-
 _CA: dict = {
     # Branding
     "brand.subtitle":           "local PDF RAG",
@@ -625,9 +610,6 @@ _CA: dict = {
     "indexing.none":            "No s'han indexat documents.",
 }
 
-# ─────────────────────────────────────────────
-# PUBLIC API
-# ─────────────────────────────────────────────
 
 LANGUAGES: dict = {"es": _ES, "en": _EN, "ca": _CA}
 

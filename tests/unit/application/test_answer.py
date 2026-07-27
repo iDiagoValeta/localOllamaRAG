@@ -84,11 +84,6 @@ def _config(**overrides):
     return cfg
 
 
-# ─────────────────────────────────────────────
-# _is_expandable / _expand_with_neighbors
-# ─────────────────────────────────────────────
-
-
 def test_image_fragments_are_never_expandable():
     frag = _fragment("a.pdf_pag0_chunk0", fmt="image", total_in_page=3)
     assert _is_expandable(frag) is False
@@ -126,11 +121,6 @@ def test_expand_hard_fails_when_vector_store_fails():
 
     with pytest.raises(RuntimeError, match="vector store unavailable"):
         _expand_with_neighbors([anchor], store, n_top_for_expansion=3)
-
-
-# ─────────────────────────────────────────────
-# Answer.run -- context synthesis + generation
-# ─────────────────────────────────────────────
 
 
 def test_raw_context_used_when_recomp_disabled():
@@ -238,11 +228,6 @@ def test_system_prompt_is_forwarded_to_the_rag_chat_model():
     Answer(FakeVectorStore(), rag_model, config, system_prompt="SYSTEM PROMPT TEXT").run("q?", fragments)
 
     assert rag_model.stream_calls[0]["system"] == "SYSTEM PROMPT TEXT"
-
-
-# ─────────────────────────────────────────────
-# Generation metadata (metrics["generation"])
-# ─────────────────────────────────────────────
 
 
 def test_generation_metrics_are_populated_from_the_final_streamed_chunk():

@@ -24,11 +24,6 @@ import pytest
 import rag.chat_pdfs as rag
 
 
-# ─────────────────────────────────────────────
-# _derivar_paths_db / _derivar_prefijos_embedding -- pure derivation
-# ─────────────────────────────────────────────
-
-
 def test_derivar_paths_db_namespaces_vector_db_by_folder_basename_and_embedding_slug():
     """PATH_DB is keyed by (docs-folder basename, embedding model slug before
     the ':' tag) so different embedding models never share a vector store."""
@@ -62,11 +57,6 @@ def test_derivar_prefijos_embedding_only_nomic_models_get_task_prefixes(modelo, 
     assert rag._derivar_prefijos_embedding(modelo) == expected
 
 
-# ─────────────────────────────────────────────
-# set_pipeline_flags
-# ─────────────────────────────────────────────
-
-
 def test_set_pipeline_flags_mutates_module_globals_and_returns_previous_values():
     previous = rag.set_pipeline_flags({"USAR_RERANKER": False, "USAR_BUSQUEDA_HIBRIDA": False})
     try:
@@ -89,11 +79,6 @@ def test_set_pipeline_flags_rejects_index_time_or_unknown_flags():
 
     with pytest.raises(ValueError, match="USAR_CONTEXTUAL_RETRIEVAL"):
         rag.set_pipeline_flags({"USAR_CONTEXTUAL_RETRIEVAL": False})
-
-
-# ─────────────────────────────────────────────
-# set_model_roles_runtime
-# ─────────────────────────────────────────────
 
 
 def test_set_model_roles_runtime_changing_embedding_recomputes_db_paths_and_prefixes():
@@ -144,11 +129,6 @@ def test_set_model_roles_runtime_ignores_blank_overrides_and_rejects_unknown_rol
             rag.set_model_roles_runtime({"unsupported_role": "x"})
     finally:
         rag.set_model_roles_runtime(original_roles)
-
-
-# ─────────────────────────────────────────────
-# set_docs_folder_runtime
-# ─────────────────────────────────────────────
 
 
 def test_set_docs_folder_runtime_returns_previous_state_and_none_restores_import_time_defaults():

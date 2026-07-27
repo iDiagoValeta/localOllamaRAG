@@ -21,11 +21,6 @@ import rag.chat_pdfs as rag
 CONTEXTUAL_SEP = "\\n\\n"
 
 
-# ─────────────────────────────────────────────
-# construir_contexto_para_modelo
-# ─────────────────────────────────────────────
-
-
 def test_context_is_sorted_by_source_page_chunk_and_renumbered_from_one():
     """Fragments are re-sorted by (source, page, chunk) regardless of the
     order retrieval ranked them in -- the RAG generator sees document order,
@@ -81,11 +76,6 @@ def test_context_marks_fragments_that_do_not_end_in_closing_punctuation():
 
     assert "Ends cleanly.\n\n" in resultado
     assert resultado.endswith("Cut off mid\n[excerpt ends mid-sentence]")
-
-
-# ─────────────────────────────────────────────
-# optimizar_texto_contexto
-# ─────────────────────────────────────────────
 
 
 def test_optimizar_collapses_double_spaces_and_strips_bold_markers():

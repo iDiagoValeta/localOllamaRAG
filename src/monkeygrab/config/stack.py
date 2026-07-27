@@ -1,15 +1,5 @@
 """StackConfig -- which implementation stands behind each port.
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- 1. Choice constants     the valid value of each selector
-#  +-- 2. StackConfig          frozen dataclass, one field per swappable port
-#  +-- 3. from_env()           reads the selectors, rejecting unknown values
-#
-# ─────────────────────────────────────────────
-
 Ports make an implementation replaceable in principle; this module is what makes
 it replaceable in practice. Without a selector, comparing two technologies means
 editing the code that wires them, which is expensive enough that the comparison
@@ -51,9 +41,7 @@ EMBEDDER_JINA_CLIP = "jina_clip"
 EMBEDDERS = (EMBEDDER_OLLAMA, EMBEDDER_JINA_CLIP)
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: STACKCONFIG
-# ─────────────────────────────────────────────
+# STACKCONFIG
 
 
 @dataclass(frozen=True)
@@ -90,9 +78,7 @@ class StackConfig:
         return f"{self.extractor}-{self.embedder}-{self.vector_store}"
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: CONSTRUCTION
-# ─────────────────────────────────────────────
+# CONSTRUCTION
 
 
 def stack_from_env() -> StackConfig:

@@ -36,11 +36,6 @@ def _both(texto, chunk_size, overlap, min_chunk_length=MIN_CHUNK_LENGTH):
     return ours_as_dicts, theirs
 
 
-# ─────────────────────────────────────────────
-# split_markdown_into_chunks vs dividir_en_chunks
-# ─────────────────────────────────────────────
-
-
 def test_paragraph_split_matches_original():
     p1 = ("Paragraph one covers the general background and motivation for this "
           "technical report in a reasonably long sentence structure that spans "
@@ -142,11 +137,6 @@ def test_min_chunk_length_parameter_matches_original_cfg_override(monkeypatch):
     monkeypatch.setattr(rag, "MIN_CHUNK_LENGTH", 1000)
     ours, theirs = _both(texto, chunk_size=2000, overlap=0, min_chunk_length=1000)
     assert ours == theirs == []
-
-
-# ─────────────────────────────────────────────
-# adjacent_chunk_ids vs expandir_con_chunks_adyacentes
-# ─────────────────────────────────────────────
 
 
 def _metadata(**kwargs):

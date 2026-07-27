@@ -1,16 +1,4 @@
-"""FaissVectorStore -- VectorStore adapter over a persisted FAISS index.
-
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- SECTION 1: PERSISTENCE FORMAT   -- filenames + format version
-#  +-- SECTION 2: METADATA CONVERSION  -- Chunk/Fragment metadata <-> JSONL row
-#  +-- SECTION 3: DISK I/O             -- load-or-init, save (index + sidecar)
-#  +-- SECTION 4: ADAPTER              -- the five VectorStore operations
-#
-# ─────────────────────────────────────────────
-"""
+"""FaissVectorStore -- VectorStore adapter over a persisted FAISS index."""
 
 import json
 import os
@@ -35,9 +23,7 @@ from monkeygrab.domain.fragment import Fragment
 _Row = Tuple[str, str, ChunkMetadata]
 
 
-# ─────────────────────────────────────────────
-# SECTION 1: PERSISTENCE FORMAT
-# ─────────────────────────────────────────────
+# PERSISTENCE FORMAT
 
 # Bump on any change to the on-disk layout (vector dtype/metric, JSONL schema,
 # file names): a store built under an older version must not be silently read
@@ -49,9 +35,7 @@ _META_FILENAME = "meta.jsonl"
 _VERSION_FILENAME = "version.txt"
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: METADATA CONVERSION
-# ─────────────────────────────────────────────
+# METADATA CONVERSION
 
 
 def _metadata_to_dict(metadata: ChunkMetadata) -> Dict[str, Any]:
@@ -87,9 +71,7 @@ def _metadata_from_dict(meta: Dict[str, Any]) -> ChunkMetadata:
     )
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: DISK I/O
-# ─────────────────────────────────────────────
+# DISK I/O
 
 
 def _corrupt(store_dir: str, reason: str) -> RuntimeError:
@@ -159,9 +141,7 @@ def _load_or_init(store_dir: str) -> Tuple[Optional["faiss.Index"], List[_Row]]:
     return index, rows
 
 
-# ─────────────────────────────────────────────
-# SECTION 4: ADAPTER
-# ─────────────────────────────────────────────
+# ADAPTER
 
 
 class FaissVectorStore:

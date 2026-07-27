@@ -1,17 +1,6 @@
 """MineruExtractor / MineruImageExtractor -- PdfExtractor and ImageExtractor
 adapters over the MinerU CLI (`-b pipeline` backend).
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- SECTION 1: CLI INVOCATION + CACHE  -- _run_mineru and its helpers
-#  +-- SECTION 2: CONTENT-LIST PARSING    -- pure, testable block -> text/image mapping
-#  +-- SECTION 3: MineruExtractor         -- PdfExtractor adapter
-#  +-- SECTION 4: MineruImageExtractor    -- ImageExtractor adapter
-#
-# ─────────────────────────────────────────────
-
 MinerU is never a Python dependency of this product (see rag/requirements.txt):
 it is an external CLI, invoked through ``subprocess`` against its own isolated
 venv, so its pins never collide with the product's. Both adapters in this
@@ -88,9 +77,7 @@ _CACHE_VERSION = "v1"
 _DISCARDED_BLOCK_TYPES = frozenset({"page_number", "footer", "page_footnote", "aside_text"})
 
 
-# ─────────────────────────────────────────────
-# SECTION 1: CLI INVOCATION + CACHE
-# ─────────────────────────────────────────────
+# CLI INVOCATION + CACHE
 
 
 def _default_mineru_bin() -> str:
@@ -250,9 +237,7 @@ def _run_mineru(
     return _validate_output(dest, pdf_path.stem)
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: CONTENT-LIST PARSING
-# ─────────────────────────────────────────────
+# CONTENT-LIST PARSING
 
 
 def _render_block_text(block: Dict[str, Any]) -> str:
@@ -385,9 +370,7 @@ def _content_list_to_images(
     return images_by_page
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: MINERUEXTRACTOR (PdfExtractor)
-# ─────────────────────────────────────────────
+# MINERUEXTRACTOR (PdfExtractor)
 
 
 class MineruExtractor:
@@ -442,9 +425,7 @@ class MineruExtractor:
         return _content_list_to_pages(blocks)
 
 
-# ─────────────────────────────────────────────
-# SECTION 4: MINERUIMAGEEXTRACTOR (ImageExtractor)
-# ─────────────────────────────────────────────
+# MINERUIMAGEEXTRACTOR (ImageExtractor)
 
 
 class MineruImageExtractor:

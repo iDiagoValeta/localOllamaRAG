@@ -1,5 +1,4 @@
-"""
-MonkeyGrab CLI package.
+"""MonkeyGrab CLI package.
 
 Encapsulates the entire CLI presentation layer of the system.
 Uses `rich` for visual rendering.

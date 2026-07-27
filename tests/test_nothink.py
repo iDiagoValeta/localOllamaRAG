@@ -1,5 +1,4 @@
-"""
-Test suite for Ollama no-think mode suppression strategies.
+"""Test suite for Ollama no-think mode suppression strategies.
 
 Validates three different approaches to suppress the <think> reasoning
 block in Qwen3-based models served through Ollama: (A) raw prompt with
@@ -19,24 +18,6 @@ Dependencies:
     - A running Ollama server with the Qwen3-FineTuned model loaded
 """
 
-# ------------------------------------------------------------
-# MODULE MAP -- Section index
-# ------------------------------------------------------------
-#
-# CONFIGURATION
-# +-- 1. Imports and constants
-#
-# HELPERS
-# +-- 2. sep, stream_generate, assess, ollama_available
-#
-# EXPERIMENT
-# +-- 3. run_nothink_experiment
-# +-- 4. print_summary
-#
-# ENTRY
-# +-- 5. pytest integration test and main()
-#
-# ------------------------------------------------------------
 
 import json
 import os
@@ -47,9 +28,7 @@ from pathlib import Path
 
 import requests
 
-# ------------------------------------------------------------
-# SECTION 1: IMPORTS AND CONSTANTS
-# ------------------------------------------------------------
+# IMPORTS AND CONSTANTS
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 MODEL = "Qwen3-FineTuned:latest"
@@ -71,9 +50,7 @@ QWEN3_TEMPLATE = (
 )
 
 
-# ------------------------------------------------------------
-# SECTION 2: HELPERS
-# ------------------------------------------------------------
+# HELPERS
 
 def sep(label: str) -> None:
     """Print a visual separator line with a centered label."""
@@ -137,9 +114,7 @@ def ollama_available(timeout: float = 2.0) -> bool:
     return True
 
 
-# ------------------------------------------------------------
-# SECTION 3: NOTHINK EXPERIMENT
-# ------------------------------------------------------------
+# NOTHINK EXPERIMENT
 
 def run_nothink_experiment() -> dict[str, str]:
     """Run all no-think suppression strategies against a live Ollama server.
@@ -250,9 +225,7 @@ def run_nothink_experiment() -> dict[str, str]:
     return results
 
 
-# ------------------------------------------------------------
-# SECTION 4: SUMMARY
-# ------------------------------------------------------------
+# SUMMARY
 
 def print_summary(results: dict[str, str]) -> None:
     """Print a compact verdict table for experiment responses."""
@@ -264,9 +237,7 @@ def print_summary(results: dict[str, str]) -> None:
     print()
 
 
-# ------------------------------------------------------------
-# SECTION 5: PYTEST AND ENTRY POINT
-# ------------------------------------------------------------
+# PYTEST AND ENTRY POINT
 
 def test_nothink_strategies() -> None:
     """Pytest integration entry point, skipped unless explicitly enabled."""

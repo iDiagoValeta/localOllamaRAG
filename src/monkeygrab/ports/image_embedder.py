@@ -1,9 +1,4 @@
-"""ImageEmbedder -- image (optionally captioned) to embedding vector.
-
-# ─────────────────────────────────────────────
-# SECTION 1: PORT
-# ─────────────────────────────────────────────
-"""
+"""ImageEmbedder -- image (optionally captioned) to embedding vector."""
 
 from typing import List, Protocol
 

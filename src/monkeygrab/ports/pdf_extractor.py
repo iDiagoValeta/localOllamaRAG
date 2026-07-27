@@ -1,9 +1,4 @@
-"""PdfExtractor -- PDF file to per-page raw text.
-
-# ─────────────────────────────────────────────
-# SECTION 1: PORT
-# ─────────────────────────────────────────────
-"""
+"""PdfExtractor -- PDF file to per-page raw text."""
 
 from typing import List, Protocol
 

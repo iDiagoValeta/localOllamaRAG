@@ -1,9 +1,5 @@
 """ContextConfig -- character budget for the evidence sent to the generator.
 
-# ─────────────────────────────────────────────
-# SECTION 1: CONFIG
-# ─────────────────────────────────────────────
-
 Default is a copy of ``rag/chat_pdfs.py`` section 3.7 (``MAX_CONTEXTO_CHARS``).
 """
 

@@ -2,7 +2,11 @@
 
 Deterministic judge for the RAG pipeline: known-answer questions over real arXiv papers,
 graded without an LLM. Built per `docs/design/2026-07-26-monkeygrab-v2.md` section 7.1-7.2.
-This step only builds the judge and its corpus — nothing here runs the pipeline yet.
+
+`run_eval.py` runs the real pipeline over every case. It retrieves through the same
+`Retrieve` use case the CLI and the web app go through, and generates through the same
+facade entry point, so a pass rate measured here describes what ships — not a parallel
+implementation that happens to live in the test tree.
 
 ## Files
 

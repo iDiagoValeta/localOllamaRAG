@@ -1,13 +1,10 @@
-"""Unit + equivalence tests for monkeygrab.application.index_corpus.IndexCorpus.
+"""Unit tests for monkeygrab.application.index_corpus.IndexCorpus.
 
-``detect_document_language`` is equivalence-tested against
-``rag.engine.contextual._detectar_idioma`` (both pure functions). The rest
-of ``IndexCorpus`` -- extraction/chunking/contextual-enrichment/embedding/
-storage orchestration -- has no single original function to diff against
-(``indexar_documentos`` mixes this with folder iteration, pypdf fallback and
-image indexing that are explicitly out of scope, see
-``monkeygrab.application.index_corpus``'s module docstring), so it is
-covered here with hand-written port fakes instead.
+``detect_document_language`` is a pure function and is pinned directly on its
+expected output per language. ``IndexCorpus`` itself -- extraction, chunking,
+contextual enrichment, embedding and storage orchestration -- is exercised
+against hand-written port fakes, so no Ollama server, PDF or vector store is
+touched.
 """
 
 import sys
@@ -19,8 +16,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import pytest  # noqa: E402
-
-import rag.chat_pdfs as rag  # noqa: E402
 
 from monkeygrab.application.index_corpus import IndexCorpus, detect_document_language  # noqa: E402
 from monkeygrab.config.app_config import AppConfig  # noqa: E402
@@ -34,25 +29,18 @@ from monkeygrab.domain.extracted_image import ExtractedImage  # noqa: E402
 from monkeygrab.domain.extracted_page import ExtractedPage  # noqa: E402
 
 
-# ─────────────────────────────────────────────
-# detect_document_language vs _detectar_idioma
-# ─────────────────────────────────────────────
-
-
-@pytest.mark.parametrize("texto", [
-    "Este documento también describe el sistema pero con más detalle así como los resultados.",
-    "Aquest document també descriu el sistema però amb més detall i els resultats obtinguts.",
-    "This document also describes the system but with more detail and the results that were obtained.",
-    "",
-    "Palabras sueltas sin marcadores claros",
+@pytest.mark.parametrize("texto, esperado", [
+    ("Este documento también describe el sistema pero con más detalle así como los resultados.", "Spanish"),
+    ("Aquest document també descriu el sistema però amb més detall i els resultats obtinguts.", "Catalan"),
+    ("This document also describes the system but with more detail and the results that were obtained.", "English"),
+    # No distinctive marker in either sample: the tie resolves to Spanish, the
+    # first key of the score dict. Pinned because the caller injects the result
+    # into a prompt, so the tie-break must stay a fixed language, not vary.
+    ("", "Spanish"),
+    ("Palabras sueltas sin marcadores claros", "Spanish"),
 ])
-def test_detect_document_language_matches_original(texto):
-    assert detect_document_language(texto) == rag._detectar_idioma(texto)
-
-
-# ─────────────────────────────────────────────
-# Fakes
-# ─────────────────────────────────────────────
+def test_detect_document_language(texto, esperado):
+    assert detect_document_language(texto) == esperado
 
 
 class FakeExtractor:
@@ -141,11 +129,6 @@ def _small_config(**overrides):
     return cfg
 
 
-# ─────────────────────────────────────────────
-# IndexCorpus orchestration
-# ─────────────────────────────────────────────
-
-
 def test_indexes_one_chunk_per_page_with_correct_metadata_and_no_contextual_model():
     pages = [ExtractedPage(page=0, text="A page with enough content to survive the minimum chunk length.")]
     extractor = FakeExtractor(pages)
@@ -201,7 +184,7 @@ def test_contextual_enrichment_prepends_situational_summary_with_literal_separat
 
     chunk, _embedding = store.added[0]
     # Literal 4-char "\n\n" separator (backslash-n-backslash-n), per
-    # generar_contexto_situacional / _texto_fuente_fragmento's contract.
+    # the situational-summary separator contract.
     assert chunk.text.startswith("This document is about testing.\\n\\n")
     assert contextual.calls  # the ChatModel port was actually invoked
 
@@ -235,11 +218,6 @@ def test_contextual_model_failure_falls_back_to_no_enrichment():
     assert len(store.added) == 1
     chunk, _embedding = store.added[0]
     assert chunk.text == "Enough content here to clear the small test threshold easily."
-
-
-# ─────────────────────────────────────────────
-# Image indexing
-# ─────────────────────────────────────────────
 
 
 def _no_text_config(**overrides):
@@ -387,7 +365,7 @@ def test_multiple_images_on_a_page_get_sequential_offset_chunk_indices():
 
 def test_degenerate_image_description_is_not_indexed():
     """Spam-filtered OCR output (low lexical diversity) must not produce a chunk,
-    matching describir_imagen_con_llm's own `_es_descripcion_spam` gate."""
+    matching the description-spam gate applied during indexing."""
     pages = [ExtractedPage(page=0, text="short")]
     images = FakeImageExtractor({0: [ExtractedImage(image_bytes=b"x", width=200, height=200, ext="png")]})
     spam = "no text no text no text no text no text no text no text no text no text no text"

@@ -1,9 +1,5 @@
 """rrf_fusion -- Reciprocal-Rank-Fusion of semantic and lexical retrieval.
 
-# ─────────────────────────────────────────────
-# SECTION 1: FUSION
-# ─────────────────────────────────────────────
-
 Moved from the fusion block inside
 ``rag.engine.retrieval.realizar_busqueda_hibrida`` (the part between "fusing
 results..." and the reranker call): given already-ranked semantic hits (one

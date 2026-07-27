@@ -23,16 +23,17 @@
 </p>
 
 <p align="center">
-  <a href="#1-overview">Overview</a> ·
-  <a href="#2-getting-started">Getting started</a> ·
-  <a href="#3-configuration">Configuration</a> ·
-  <a href="#4-usage">Usage</a> ·
-  <a href="#5-license">License</a>
+  <a href="#overview">Overview</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#configuration">Configuration</a> ·
+  <a href="#usage">Usage</a> ·
+  <a href="#development">Development</a> ·
+  <a href="#license">License</a>
 </p>
 
 ---
 
-## 1. Overview
+## Overview
 
 MonkeyGrab lets you ask questions about your PDF documents in natural language. Point it at a folder of PDFs, start the CLI or the web interface, and get answers grounded in the actual content of those files — no data sent to any cloud.
 
@@ -42,7 +43,7 @@ MonkeyGrab lets you ask questions about your PDF documents in natural language. 
 - **Multilingual** — Spanish, English and Valencian UI and retrieval out of the box.
 - **Image-aware** — optionally describes raster images in PDFs with a vision model, making visual content retrievable.
 - **Three interfaces** — terminal CLI, [Flask](https://flask.palletsprojects.com/) + [React](https://react.dev/) web UI, and a packaged Windows desktop app.
-- **Hexagonal core** — retrieval and generation logic lives behind swappable ports (`src/monkeygrab/`), so the underlying storage or model tech can change without touching the interfaces above it.
+- **Hexagonal core** — indexing and retrieval run behind swappable ports (`src/monkeygrab/`), so the storage or model technology can change without touching the interfaces above it.
 
 PDFs are indexed once into a [ChromaDB](https://www.trychroma.com/) vector store. Each query passes through a configurable multi-stage retrieval pipeline before reaching the generator, all running locally via [Ollama](https://ollama.com/). Both front-ends share the same engine and stream the answer back token by token; in the web UI, cited sources open in an inline PDF viewer.
 
@@ -66,7 +67,7 @@ PDFs are indexed once into a [ChromaDB](https://www.trychroma.com/) vector store
 
 ---
 
-## 2. Getting started
+## Getting started
 
 **Prerequisites:** Python 3.10+, [Ollama](https://ollama.com/) running locally.
 
@@ -113,7 +114,7 @@ The vector index is created automatically in `rag/vector_db/` on first run.
 
 ---
 
-## 3. Configuration
+## Configuration
 
 MonkeyGrab is configured entirely through environment variables. Copy the bundled template and edit only what you need:
 
@@ -141,7 +142,7 @@ The `.env` file at the project root is loaded automatically on startup. Anything
 
 ---
 
-## 4. Usage
+## Usage
 
 ### CLI
 
@@ -177,14 +178,26 @@ MonkeyGrab can also be packaged as a standalone Windows `.exe` (PyInstaller + py
 
 ## Development
 
-Every change is checked by two CI gates: a fast one (lint, architecture
-rules, frontend build) on every pull request, and a full one that runs the
-real pipeline against a set of gold question/answer cases before a merge to
-`main`. See [`.claude/CLAUDE.md`](.claude/CLAUDE.md) for the architecture and
-contributor rules.
+Two CI gates, deliberately not one. The **fast gate** runs on every pull
+request: lint, the architecture dependency rules, the unit suite against test
+doubles, and the frontend build — no GPU, no models, no network. The **full
+gate** runs the real pipeline (Ollama generation and embeddings, hybrid
+retrieval, cross-encoder reranking) against a corpus of gold
+question/answer cases and fails if the pass rate drops below the recorded
+baseline. It is required before merging anything that touches retrieval or
+generation, because the fast gate never exercises a real model.
+
+```bash
+pytest                                        # full suite, no GPU required
+python tests/eval/run_eval.py --models <model...>   # full gate; needs Ollama + GPU
+```
+
+Architecture entry points: [`src/monkeygrab/README.md`](src/monkeygrab/README.md)
+for the core, [`rag/README.md`](rag/README.md) for the interfaces, and
+[`.claude/CLAUDE.md`](.claude/CLAUDE.md) for the contributor rules.
 
 ---
 
-## 5. License
+## License
 
 [MIT](LICENSE) © Ignacio Diago Valeta.

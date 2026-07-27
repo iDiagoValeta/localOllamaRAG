@@ -1,5 +1,4 @@
-"""
-MonkeyGrab CLI commands: single source of truth.
+"""MonkeyGrab CLI commands: single source of truth.
 
 Both the dispatcher in ``app.py`` and the help / autocompletion in
 ``display.py`` read from this module, so the slash-command list cannot drift
@@ -19,10 +18,6 @@ from __future__ import annotations
 import os
 from typing import List, Tuple
 
-
-# ─────────────────────────────────────────────
-# CANONICAL (Spanish) command list
-# ─────────────────────────────────────────────
 
 COMMANDS: List[Tuple[str, str]] = [
     ("/rag",     "cmd.rag.desc"),
@@ -50,9 +45,6 @@ ALIASES: List[Tuple[str, str, str]] = [
     ("/temes",   "/temas",   "cmd.temas.desc"),
 ]
 
-# ─────────────────────────────────────────────
-# Language-specific primary command lists
-# ─────────────────────────────────────────────
 
 _PRIMARY_EN: List[Tuple[str, str]] = [
     ("/rag",     "cmd.rag.desc"),

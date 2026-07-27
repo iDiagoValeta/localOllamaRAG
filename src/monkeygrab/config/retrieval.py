@@ -1,10 +1,7 @@
 """RetrievalConfig -- semantic/BM25 fan-out and Reciprocal-Rank-Fusion.
 
-# ─────────────────────────────────────────────
-# SECTION 1: CONFIG
-# ─────────────────────────────────────────────
-
-Defaults are a field-for-field copy of ``rag/chat_pdfs.py`` section 3.7.
+Defaults mirror the ones ``rag/chat_pdfs.py`` reads from the environment;
+``tests/unit/test_app_config_defaults.py`` fails if the two drift apart.
 """
 
 from dataclasses import dataclass
@@ -12,8 +9,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class RetrievalConfig:
-    """Parameters ``realizar_busqueda_hibrida`` (``rag/engine/retrieval.py``)
-    and ``busqueda_lexica_bm25`` (``rag/engine/lexical.py``) read.
+    """How wide each retrieval branch casts its net, and how the two combine.
 
     Attributes:
         n_semantic_results: Candidates fetched per semantic query variant
@@ -33,8 +29,8 @@ class RetrievalConfig:
             (``RAG_PESO_SEMANTICO_RRF``).
         weight_bm25_rrf: Fusion weight applied to the BM25 RRF score
             (``RAG_PESO_BM25_RRF``).
-        min_question_length: Minimum question length (chars) for
-            ``evaluar_pregunta_rag`` to run the pipeline at all
+        min_question_length: Minimum question length in characters below
+            which the pipeline does not run at all
             (``RAG_MIN_LONGITUD_PREGUNTA``).
     """
 

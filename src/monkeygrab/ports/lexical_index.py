@@ -1,9 +1,4 @@
-"""LexicalIndex -- BM25-style lexical (keyword) search.
-
-# ─────────────────────────────────────────────
-# SECTION 1: PORT
-# ─────────────────────────────────────────────
-"""
+"""LexicalIndex -- BM25-style lexical (keyword) search."""
 
 from typing import List, Protocol
 
@@ -13,20 +8,17 @@ from monkeygrab.domain.fragment import Fragment
 class LexicalIndex(Protocol):
     """Ranks stored chunks against a query by lexical (term) overlap.
 
-    Matches the single public entry point the pipeline calls today:
-    ``busqueda_lexica_bm25(pregunta, collection, top_n)`` in
-    ``rag/engine/lexical.py``. How the index is built and kept in sync with
-    the corpus (today: an Okapi BM25 index scanned and cached per
-    collection, invalidated by a ``(name, count, k1, b)`` cache key -- see
-    ``_obtener_indice_bm25``) is an adapter concern, not part of this
-    port's contract: nothing in the pipeline calls a separate "index
-    these chunks" step, so this Protocol does not invent one.
+    The lexical branch of hybrid retrieval: it finds chunks that share
+    literal terms with the question, which is what semantic search is worst
+    at -- identifiers, acronyms, figures and numbers.
 
-    Failure policy: hard-fail. Raise if the search cannot be performed
-    (e.g. the underlying index cannot be built or read). Returning an
-    empty list is reserved for the genuine "no positive match" case
-    (all BM25 scores <= 0, exactly as ``busqueda_lexica_bm25`` does today),
-    not for swallowed errors.
+    There is deliberately no "index these chunks" method. Building the index
+    and keeping it in sync with the corpus is an adapter concern, and the
+    retrieval use case has no business knowing whether one exists.
+
+    Failure policy: hard-fail. Raise if the search cannot be performed at
+    all. An empty list means "no chunk matched", which is a result; it must
+    never stand in for a swallowed error.
     """
 
     def search(self, query: str, top_n: int) -> List[Fragment]:

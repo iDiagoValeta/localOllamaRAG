@@ -19,11 +19,6 @@ from monkeygrab.config.chunking import ChunkingConfig  # noqa: E402
 from monkeygrab.domain.extracted_image import ExtractedImage  # noqa: E402
 
 
-# ─────────────────────────────────────────────
-# Fake fitz
-# ─────────────────────────────────────────────
-
-
 class _FakeRect:
     def __init__(self, x0, y0, x1, y1):
         self.x0, self.y0, self.x1, self.y1 = x0, y0, x1, y1
@@ -79,11 +74,6 @@ def _make_fake_fitz(pages, image_data_by_xref, closed_flag=None):
 
 def _config(**overrides):
     return ChunkingConfig(**overrides) if overrides else ChunkingConfig()
-
-
-# ─────────────────────────────────────────────
-# extract()
-# ─────────────────────────────────────────────
 
 
 def test_extracts_one_qualifying_image_with_its_caption(monkeypatch):

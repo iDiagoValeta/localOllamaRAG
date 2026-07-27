@@ -1,5 +1,4 @@
-"""
-MonkeyGrab -- Local web interface.
+"""MonkeyGrab -- Local web interface.
 
 Flask server for the full RAG pipeline. Provides the same functionality
 as the CLI: CHAT mode (free conversation) and RAG mode (document query).
@@ -16,28 +15,6 @@ Dependencies:
     - rag.chat_pdfs (project internal module)
 """
 
-
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  CONFIGURATION
-#  +-- 1. Imports and Flask setup
-#         sys.path, rag_engine import, Flask + CORS, global _state
-#
-#  BACKEND
-#  +-- 2. COLLECTION MANAGEMENT   ChromaDB init, reindex, DB invalidation
-#  +-- 3. STREAMING HELPERS       _chat_stream, _format_sources
-#  +-- 3b. OLLAMA / MODELS / STORES   runtime helpers for the control panel
-#
-#  API
-#  +-- 4. API ROUTES              all Flask @app.route endpoints (incl. ``/api/corpus``)
-#  +-- 4b. CONTROL PANEL ROUTES   /api/ollama*, /api/models, /api/stores*
-#
-#  ENTRY
-#  +-- 5. ENTRY POINT             main()
-#
-# ─────────────────────────────────────────────
 
 import gc
 import os
@@ -58,9 +35,7 @@ from flask import Flask, request, jsonify, Response, stream_with_context, send_f
 from flask_cors import CORS
 
 
-# ─────────────────────────────────────────────
-# SECTION 1: IMPORTS AND FLASK SETUP
-# ─────────────────────────────────────────────
+# IMPORTS AND FLASK SETUP
 
 # sys.path must include project root so `rag.chat_pdfs` resolves from rag/web/
 _here = os.path.abspath(__file__)
@@ -153,9 +128,7 @@ def _safe_pdf_basename(filename: str) -> str:
     return basename
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: COLLECTION MANAGEMENT
-# ─────────────────────────────────────────────
+# COLLECTION MANAGEMENT
 
 def _invalidate_collection_if_deleted():
     """Clear state to start fresh if the DB folder was deleted."""
@@ -255,9 +228,7 @@ def _reset_db():
                 raise last_error
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: STREAMING HELPERS
-# ─────────────────────────────────────────────
+# STREAMING HELPERS
 
 def _chat_stream(pregunta: str) -> Generator[str, None, None]:
     """Generate tokens from chat mode via streaming.
@@ -365,10 +336,6 @@ def _collection_document_details(coll) -> list:
         })
     return normalized
 
-
-# ─────────────────────────────────────────────
-# SECTION 3b: OLLAMA / MODELS / STORES HELPERS
-# ─────────────────────────────────────────────
 
 def _ollama_version() -> Optional[str]:
     """Return the running Ollama version string, or ``None`` if unreachable."""
@@ -601,9 +568,7 @@ def _ollama_error_payload(exc: Exception) -> dict:
     }
 
 
-# ─────────────────────────────────────────────
-# SECTION 4: API ROUTES
-# ─────────────────────────────────────────────
+# API ROUTES
 
 
 @app.route("/")
@@ -1159,11 +1124,6 @@ def api_settings_post():
     return jsonify({"ok": True, "settings": updated})
 
 
-# ─────────────────────────────────────────────
-# SECTION 4b: CONTROL PANEL ROUTES
-# ─────────────────────────────────────────────
-
-
 @app.route("/api/ollama", methods=["GET"])
 def api_ollama_status():
     """Report whether the local Ollama server is reachable."""
@@ -1292,9 +1252,7 @@ def api_stores_select():
 _load_persisted_settings()
 
 
-# ─────────────────────────────────────────────
-# SECTION 5: ENTRY POINT
-# ─────────────────────────────────────────────
+# ENTRY POINT
 
 def main():
     port = int(os.getenv("MONKEYGRAB_PORT", "5000"))

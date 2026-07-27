@@ -1,11 +1,5 @@
 """ModelsConfig -- model roles and the Ollama runtime they execute under.
 
-# ─────────────────────────────────────────────
-# SECTION 1: OLLAMA RUNTIME
-# SECTION 2: MODEL ROLES
-# SECTION 3: PURE DERIVATIONS (embedding prefixes, model description)
-# ─────────────────────────────────────────────
-
 Defaults below are a field-for-field copy of ``rag/chat_pdfs.py`` section
 3.3 (model roles + ``OLLAMA_*`` runtime) -- see that file for the
 authoritative values if this ever needs re-syncing.
@@ -16,8 +10,7 @@ from typing import Tuple
 
 
 # ─────────────────────────────────────────────
-# SECTION 1: OLLAMA RUNTIME
-# ─────────────────────────────────────────────
+# OLLAMA RUNTIME
 
 
 @dataclass(frozen=True)
@@ -45,9 +38,7 @@ class OllamaRuntimeConfig:
     generate_retry_delay: int = 3  # OLLAMA_GENERATE_RETRY_DELAY
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: MODEL ROLES
-# ─────────────────────────────────────────────
+# MODEL ROLES
 
 
 @dataclass(frozen=True)
@@ -98,9 +89,7 @@ class ModelsConfig:
     ollama: OllamaRuntimeConfig = OllamaRuntimeConfig()
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: PURE DERIVATIONS
-# ─────────────────────────────────────────────
+# PURE DERIVATIONS
 
 
 def infer_model_description(model_name: str) -> str:

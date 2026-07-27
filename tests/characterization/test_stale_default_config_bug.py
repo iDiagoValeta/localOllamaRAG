@@ -38,7 +38,7 @@ import rag.chat_pdfs as rag
 
 
 class _FakeCollection:
-    """Minimal Chroma collection double for busqueda_lexica_bm25's full scan."""
+    """Minimal Chroma collection double for a full-corpus scan."""
 
     def __init__(self, docs):
         self.docs = docs
@@ -74,45 +74,74 @@ def test_hot_changing_chunk_size_does_not_affect_calls_without_an_explicit_argum
     assert len(chunks[0]["text"]) > 50  # the stale default (2000), not the live 50, was applied
 
 
-def test_hot_changing_keyword_result_limit_does_not_affect_calls_without_an_explicit_argument(monkeypatch):
-    """Same defect, second location: ``busqueda_lexica_bm25``'s ``top_n``
-    default was bound to ``cfg.N_RESULTADOS_KEYWORD`` (40) at import time.
+def test_keyword_result_limit_now_follows_a_config_change():
+    """Formerly the second stale-default location: ``busqueda_lexica_bm25``'s
+    ``top_n`` default was bound to ``cfg.N_RESULTADOS_KEYWORD`` at import time.
+
+    Lexical search now runs through ``Bm25LexicalIndex``, which takes the
+    limit as a call argument supplied per run from ``AppConfig``. The limit a
+    caller passes is the limit that applies.
     """
-    monkeypatch.setattr(rag, "N_RESULTADOS_KEYWORD", 3)
+    from monkeygrab.adapters.lexical.bm25_index import Bm25LexicalIndex
+    from monkeygrab.config.retrieval import RetrievalConfig
+    from monkeygrab.domain.chunk_metadata import ChunkMetadata
+    from monkeygrab.domain.fragment import Fragment
 
-    docs = [f"alpha token{i}" for i in range(10)]
-    results, _metrics = rag.busqueda_lexica_bm25("alpha", _FakeCollection(docs))
+    class _FakeStore:
+        def __init__(self, docs):
+            self.fragments = [
+                Fragment(doc=d, metadata=ChunkMetadata(source=f"doc{i}.pdf", page=0, chunk=i))
+                for i, d in enumerate(docs)
+            ]
 
-    # All 10 positive BM25 matches come back; the "new" limit of 3 was never applied.
-    assert len(results) == 10
+        def count(self):
+            return len(self.fragments)
+
+        def get_page(self, limit, offset):
+            return self.fragments
+
+    # One distractor keeps BM25's idf for "alpha" positive, so the ten
+    # matching documents all score above zero and the limit is what truncates.
+    docs = [f"alpha token{i}" for i in range(10)] + ["unrelated distractor"]
+    index = Bm25LexicalIndex(_FakeStore(docs), RetrievalConfig())
+
+    assert len(index.search("alpha", top_n=10)) == 10
+    assert len(index.search("alpha", top_n=3)) == 3
 
 
-def test_hot_changing_final_top_k_leaves_rerank_resultados_default_stale(monkeypatch):
-    """Third location, checked at the signature level (invoking
-    ``rerank_resultados`` for real would load a CrossEncoder/torch, which
-    this suite deliberately avoids -- see module docstring on
-    determinism/no-GPU). The bound default is enough to prove the same
-    defect exists here independently of chunking and BM25."""
-    default_before = inspect.signature(rag.rerank_resultados).parameters["top_k"].default
-    monkeypatch.setattr(rag, "TOP_K_FINAL", 999)
+def test_final_top_k_is_no_longer_frozen_into_a_signature_default():
+    """Formerly the third stale-default location: ``rerank_resultados``'s
+    ``top_k`` default was bound to ``cfg.TOP_K_FINAL`` at import time.
 
-    default_after = inspect.signature(rag.rerank_resultados).parameters["top_k"].default
+    ``Reranker.rerank`` takes ``top_k`` as a required argument, so there is no
+    default left to go stale. Checked at the signature level, which also keeps
+    this suite from loading a CrossEncoder.
+    """
+    from monkeygrab.adapters.reranking.cross_encoder_reranker import CrossEncoderReranker
 
-    assert default_after == default_before  # unchanged despite the "live" TOP_K_FINAL mutation
-    assert default_after != 999
+    top_k = inspect.signature(CrossEncoderReranker.rerank).parameters["top_k"]
+
+    assert top_k.default is inspect.Parameter.empty
 
 
-def test_hot_changing_max_images_per_page_leaves_extraer_imagenes_pdf_default_stale(monkeypatch):
-    """Fourth location: ``extraer_imagenes_pdf``'s ``max_por_pagina`` default
-    was bound to ``cfg.MAX_IMAGENES_POR_PAGINA`` at import time. Checked at
-    signature level to avoid a real PyMuPDF file-open call."""
-    default_before = inspect.signature(rag.extraer_imagenes_pdf).parameters["max_por_pagina"].default
-    monkeypatch.setattr(rag, "MAX_IMAGENES_POR_PAGINA", 999)
+def test_image_extraction_limit_now_follows_a_config_change():
+    """Formerly the fourth stale-default location: ``extraer_imagenes_pdf``'s
+    ``max_por_pagina`` default was bound to ``cfg.MAX_IMAGENES_POR_PAGINA`` at
+    import time, so a config change never reached it.
 
-    default_after = inspect.signature(rag.extraer_imagenes_pdf).parameters["max_por_pagina"].default
+    Image extraction now runs through ``PymupdfImageExtractor``, built per
+    indexing run from an ``AppConfig``. Overriding the limit and rebuilding the
+    extractor yields the new limit -- the fixed behavior, asserted here in
+    place of the defect the other cases still document.
+    """
+    from monkeygrab.adapters.extraction.pymupdf_image_extractor import PymupdfImageExtractor
+    from monkeygrab.config.app_config import AppConfig
 
-    assert default_after == default_before
-    assert default_after != 999
+    config = AppConfig.from_env()
+    raised = config.with_overrides(**{"chunking.max_images_per_page": 999})
+
+    assert PymupdfImageExtractor(config.chunking)._max_per_page != 999
+    assert PymupdfImageExtractor(raised.chunking)._max_per_page == 999
 
 
 def test_contrast_min_chunk_length_is_read_live_inside_the_function_body(monkeypatch):

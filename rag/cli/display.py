@@ -1,5 +1,4 @@
-"""
-MonkeyGrab CLI display backends.
+"""MonkeyGrab CLI display backends.
 
 Rich is the default renderer outside Windows. On Windows the interactive path
 uses prompt_toolkit + ANSI output to keep the prompt stable while still
@@ -11,40 +10,8 @@ the bottom of this file, which ensures a single visual language across the
 three backends.
 """
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  CONFIGURATION
-#  +-- 1. Imports
-#  +-- 2. Palette (single source of truth)
-#  +-- 3. Module-level helpers
-#
-#  DATA CLASSES
-#  +-- 4. QueryTimer
-#  +-- 5. SessionStats
-#
-#  DISPLAY CLASS
-#  +-- 6. __init__ + backend selection
-#  +-- 7. Primitives (lines, rules, themed tables)
-#  +-- 8. Branding (logo, init_panel, welcome, farewell)
-#  +-- 9. Status messages (success/warning/error/info/debug)
-#  +-- 10. Pipeline feedback (phases)
-#  +-- 11. Input (prompt, autocompletion, persistent history)
-#  +-- 12. Response streaming
-#  +-- 13. Stats / Docs / Topics
-#  +-- 14. Edge-case messages (no_pdfs, question_too_short, ...)
-#
-#  ENTRY
-#  +-- 15. ui singleton
-#
-# ─────────────────────────────────────────────
 
 from __future__ import annotations
-
-# ─────────────────────────────────────────────
-# SECTION 1: IMPORTS
-# ─────────────────────────────────────────────
 
 import os
 import re
@@ -103,9 +70,7 @@ if os.name == "nt" and just_fix_windows_console:
     just_fix_windows_console()
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: PALETTE (single source of truth)
-# ─────────────────────────────────────────────
+# PALETTE (single source of truth)
 
 
 @dataclass(frozen=True)
@@ -158,9 +123,7 @@ ANSI_BOLD = "\033[1m"
 ANSI_DIM = "\033[2m"
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: MODULE-LEVEL HELPERS
-# ─────────────────────────────────────────────
+# MODULE-LEVEL HELPERS
 
 
 BackendName = Literal["rich", "prompt_toolkit", "plain"]
@@ -229,9 +192,7 @@ def _select_backend() -> BackendName:
     return "rich"
 
 
-# ─────────────────────────────────────────────
-# SECTION 4: QueryTimer
-# ─────────────────────────────────────────────
+# QueryTimer
 
 
 class QueryTimer:
@@ -270,9 +231,7 @@ class QueryTimer:
         return time.perf_counter() - self._start
 
 
-# ─────────────────────────────────────────────
-# SECTION 5: SessionStats
-# ─────────────────────────────────────────────
+# SessionStats
 
 
 @dataclass
@@ -307,9 +266,7 @@ class SessionStats:
         return time.time() - self.start
 
 
-# ─────────────────────────────────────────────
-# SECTION 6: DISPLAY CLASS — INIT + BACKEND
-# ─────────────────────────────────────────────
+# DISPLAY CLASS — INIT + BACKEND
 
 
 if PTK_AVAILABLE:
@@ -435,9 +392,7 @@ class Display:
         from rag.cli.strings import s as _str
         return _str(key, lang=self._lang, **kwargs)
 
-    # ─────────────────────────────────────────────
-    # SECTION 7: PRIMITIVES
-    # ─────────────────────────────────────────────
+    # PRIMITIVES
 
     def _ansi(self, text: str, *styles: str) -> str:
         return f"{''.join(styles)}{text}{ANSI_RESET}"
@@ -583,9 +538,7 @@ class Display:
                 text.append(name, style="dim")
         return text
 
-    # ─────────────────────────────────────────────
-    # SECTION 8: BRANDING
-    # ─────────────────────────────────────────────
+    # BRANDING
 
     def logo(self) -> None:
         """Minimal brand header — just the name, no decorative rule."""
@@ -657,9 +610,7 @@ class Display:
         self.console.print(f"  [dim]{self._s('help.shortcuts.inline')}[/]")
         self.console.print()
 
-    # ─────────────────────────────────────────────
-    # SECTION 9: STATUS MESSAGES
-    # ─────────────────────────────────────────────
+    # STATUS MESSAGES
 
     def success(self, msg: str) -> None:
         if self.backend != "rich":
@@ -735,9 +686,7 @@ class Display:
             )
         )
 
-    # ─────────────────────────────────────────────
-    # SECTION 10: PIPELINE FEEDBACK
-    # ─────────────────────────────────────────────
+    # PIPELINE FEEDBACK
 
     def pipeline_start(self, message: Optional[str] = None) -> Optional[Status]:
         if message is None:
@@ -784,9 +733,7 @@ class Display:
             self._status.stop()
             self._status = None
 
-    # ─────────────────────────────────────────────
-    # SECTION 11: INPUT
-    # ─────────────────────────────────────────────
+    # INPUT
 
     def prompt(self, mode: str, model: str = "") -> str:
         mode_label = "rag" if mode == "rag" else "chat"
@@ -828,9 +775,7 @@ class Display:
             self.safe_tty = True
             return input(self.prompt(mode, model))
 
-    # ─────────────────────────────────────────────
-    # SECTION 12: RESPONSE STREAMING
-    # ─────────────────────────────────────────────
+    # RESPONSE STREAMING
 
     def begin_stream(self) -> None:
         self._stream_bold = False
@@ -969,9 +914,7 @@ class Display:
             self.console.print(f"  [dim]↳[/] [muted]{short_doc}[/] [dim]{pages_str}[/]")
         self.console.print()
 
-    # ─────────────────────────────────────────────
-    # SECTION 13: STATS / DOCS / TOPICS
-    # ─────────────────────────────────────────────
+    # STATS / DOCS / TOPICS
 
     def stats_dashboard(
         self,
@@ -1046,7 +989,7 @@ class Display:
 
         self.console.print()
 
-        # --- Corpus ---
+        # Corpus
         self.console.print(
             f"  [text]{info.get('total_documentos', n_docs)}[/] [dim]PDFs[/]"
             f"  [dim]·[/]  [text]{total_fragments}[/] [dim]fragments[/]"
@@ -1057,7 +1000,7 @@ class Display:
         )
         self.console.print()
 
-        # --- Pipeline ---
+        # Pipeline
         rr = (f"reranker on  ({info.get('reranker_device', '')})"
               if info.get("reranker") == "on" else "reranker off")
         self.console.print(
@@ -1068,10 +1011,10 @@ class Display:
         self.console.print(self._build_flags(info))
         self.console.print()
 
-        # --- Models ---
+        # Models
         self.console.print(self._models_table(info))
 
-        # --- Session ---
+        # Session
         if session is not None and session.total_queries > 0:
             self._session_summary(session)
         else:
@@ -1180,9 +1123,7 @@ class Display:
         self.console.print(f"  [dim]{tip}[/]")
         self.console.print()
 
-    # ─────────────────────────────────────────────
-    # SECTION 14: EDGE-CASE MESSAGES + MODE CHANGE
-    # ─────────────────────────────────────────────
+    # EDGE-CASE MESSAGES + MODE CHANGE
 
     def mode_change(self, mode: str, model: str = "") -> None:
         self._toolbar_mode = mode
@@ -1318,8 +1259,6 @@ class Display:
         self.warning(self._s("no_pdfs", folder=folder))
 
 
-# ─────────────────────────────────────────────
-# SECTION 15: ENTRY (singleton)
-# ─────────────────────────────────────────────
+# ENTRY (singleton)
 
 ui = Display()

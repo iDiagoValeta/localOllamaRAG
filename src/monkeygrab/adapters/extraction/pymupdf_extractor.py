@@ -1,9 +1,4 @@
-"""PymupdfExtractor -- PdfExtractor adapter over pymupdf4llm.
-
-# ─────────────────────────────────────────────
-# SECTION 1: ADAPTER
-# ─────────────────────────────────────────────
-"""
+"""PymupdfExtractor -- PdfExtractor adapter over pymupdf4llm."""
 
 from typing import List
 

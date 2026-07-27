@@ -229,5 +229,3 @@ def guardar_debug_rag(
         logging.warning(f"Error saving debug RAG: {e}")
 
 
-
-

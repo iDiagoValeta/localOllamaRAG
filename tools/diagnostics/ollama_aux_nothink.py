@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-ollama_aux_nothink.py -- Probe reasoning suppression for Gemma 4 (Ollama).
+"""ollama_aux_nothink.py -- Probe reasoning suppression for Gemma 4 (Ollama).
 
 MonkeyGrab uses ``ollama.generate`` for the auxiliary chat model (sub-queries in
 ``generar_queries_con_llm``). Gemma 4 is reasoning-capable; this script checks
@@ -25,23 +24,6 @@ See also:
     https://docs.ollama.com/capabilities/thinking
 """
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-# CONFIGURATION
-# +-- 1. Constants (base URL, default model, auxiliary-style prompt)
-#
-# HELPERS
-# +-- 2. HTTP generate/chat, thinking heuristics, printing
-#
-# TEST RUNNER
-# +-- 3. run_scenarios(), modelfile_snippet()
-#
-# ENTRY
-# +-- 4. main()
-#
-# ─────────────────────────────────────────────
 
 from __future__ import annotations
 
@@ -54,9 +36,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import requests
 
-# ─────────────────────────────────────────────
-# SECTION 1: CONSTANTS
-# ─────────────────────────────────────────────
+# CONSTANTS
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
 DEFAULT_MODEL = os.getenv("OLLAMA_GEMMA4_TEST_MODEL", "gemma4:e4b")
@@ -90,9 +70,7 @@ _TEXT_THINK_PATTERNS = (
 )
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: HELPERS
-# ─────────────────────────────────────────────
+# HELPERS
 
 
 def _post_json(path: str, payload: Dict[str, Any], timeout: int = 120) -> Dict[str, Any]:
@@ -221,9 +199,7 @@ def banner(title: str) -> None:
     print(f"\n{'=' * 72}\n  {title}\n{'=' * 72}")
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: TEST RUNNER
-# ─────────────────────────────────────────────
+# TEST RUNNER
 
 
 def run_scenarios(
@@ -235,7 +211,7 @@ def run_scenarios(
 
     banner(f"Model: {model!r}  |  stream={stream}")
 
-    # --- /api/generate (production-like for aux model) ---
+    # /api/generate (production-like for aux model)
     for label, think_flag in (
         ("generate  think=False", False),
         ("generate  think=True", True),
@@ -270,7 +246,7 @@ def run_scenarios(
         print("\n  (--skip-chat: no /api/chat runs)\n")
         return
 
-    # --- /api/chat (if you migrate aux to chat + think flag) ---
+    # /api/chat (if you migrate aux to chat + think flag)
     for label, think_flag in (
         ("chat  think=False", False),
         ("chat  think=True", True),
@@ -319,9 +295,7 @@ Point ``OLLAMA_CHAT_MODEL={derived_name}`` if this works better than passing
     )
 
 
-# ─────────────────────────────────────────────
-# SECTION 4: ENTRY
-# ─────────────────────────────────────────────
+# ENTRY
 
 
 def main() -> None:

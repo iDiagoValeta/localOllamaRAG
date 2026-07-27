@@ -1,15 +1,5 @@
 """text_chunking -- hierarchical markdown chunking and neighbor-id expansion.
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- TextChunk               -- chunking output before position metadata exists
-#  +-- split_markdown_into_chunks  -- moved from rag.engine.chunking.dividir_en_chunks
-#  +-- adjacent_chunk_ids          -- moved from rag.engine.chunking.expandir_con_chunks_adyacentes
-#
-# ─────────────────────────────────────────────
-
 Both functions are a literal port of ``rag/engine/chunking.py``, with every
 ``cfg.*`` read replaced by an explicit parameter -- the structural fix for
 the stale-default-argument bug documented in
@@ -38,7 +28,6 @@ from monkeygrab.domain.chunk_metadata import ChunkMetadata
 
 # ─────────────────────────────────────────────
 # TEXT CHUNK
-# ─────────────────────────────────────────────
 
 
 @dataclass(frozen=True)
@@ -58,11 +47,6 @@ class TextChunk:
 
     text: str
     header: str
-
-
-# ─────────────────────────────────────────────
-# MARKDOWN CHUNKING
-# ─────────────────────────────────────────────
 
 
 def split_markdown_into_chunks(
@@ -220,11 +204,6 @@ def split_markdown_into_chunks(
         chunks_finales.append(TextChunk(text=texto_chunk.strip(), header=frag["header"]))
 
     return chunks_finales
-
-
-# ─────────────────────────────────────────────
-# NEIGHBOR EXPANSION
-# ─────────────────────────────────────────────
 
 
 def adjacent_chunk_ids(metadata: ChunkMetadata, n_neighbors: int = 1) -> List[str]:
