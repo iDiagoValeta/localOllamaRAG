@@ -1,0 +1,65 @@
+name: Full eval gate
+
+# Full gate: runs the REAL pipeline (Ollama generation and embeddings, hybrid
+# BM25+semantic retrieval, Cross-Encoder reranking) against every case in
+# tests/eval/gold_cases.jsonl and fails the run if the pass rate drops below
+# tests/eval/baseline_min_pass_rate.txt. This is the "gate completo" required
+# by docs/design/2026-07-26-monkeygrab-v2.md sections 7.2/7.3 before a phase
+# merges to main -- the fast ci.yml gate never exercises the real model or
+# retrieval path, only the domain/application layer and the grader against
+# test doubles.
+#
+# THIS GATE REQUIRES A LOCAL OLLAMA SERVER AND A CUDA GPU. The models it
+# calls (gemma4:e2b, gemma4:e4b, qwen3.5:0.8b, embeddinggemma) and the
+# reranker CrossEncoder are not available on hosted GitHub runners, so this
+# workflow only runs on a self-hosted runner where those prerequisites are
+# already met, and it is never triggered automatically (workflow_dispatch
+# only) -- it is not meant to gate every PR the way ci.yml does, only a
+# deliberate "is this phase really green" check before merge.
+#
+# tests/eval/run_eval.py is otherwise self-sufficient: it downloads any
+# missing blind-set arXiv papers, indexes whatever is not already indexed,
+# and fails with an actionable message (not a false green) if a prerequisite
+# is missing -- see tests/eval/README.md for the ratchet mechanism.
+
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: "Space-separated Ollama generator models to evaluate"
+        required: false
+        default: "gemma4:e2b qwen3.5:0.8b"
+      update_baseline:
+        description: "Raise the pass-rate baseline if this run is green (never lowers it)"
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  full-eval:
+    name: Full eval gate (real pipeline, self-hosted)
+    # Label must match whatever self-hosted runner has Ollama + a CUDA GPU
+    # registered for this repository; adjust if that runner's labels change.
+    runs-on: [self-hosted, gpu]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run the gold-case eval gate
+        shell: pwsh
+        env:
+          PYTHONPATH: "."
+        run: |
+          $models = "${{ inputs.models }}" -split '\s+' | Where-Object { $_ }
+          $extraArgs = @()
+          if ("${{ inputs.update_baseline }}" -eq "true") {
+            $extraArgs += "--update-baseline"
+          }
+          python tests/eval/run_eval.py --models @models @extraArgs
+
+      - name: Upload dated results JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-eval-results
+          path: tests/eval/runs/*.json
+          if-no-files-found: warn

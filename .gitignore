@@ -21,6 +21,11 @@ venv/
 
 rag/vector_db/**
 
+# Per-document MinerU extraction cache (MineruExtractor / MineruImageExtractor,
+# src/monkeygrab/adapters/extraction/mineru_extractor.py): reproducible from
+# the source PDF on demand, invalidated by cache version on adapter changes.
+/.mineru_cache/
+
 rag/debug_rag/
 
 # Retrieval-experiment artifacts: vector indexes and eval runs are regenerated
