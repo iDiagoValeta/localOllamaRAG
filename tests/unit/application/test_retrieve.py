@@ -76,9 +76,11 @@ def _fragment(id_, score_final=0.0):
 class FakeEmbedder:
     def __init__(self):
         self.calls = []
+        self.keep_alive_calls = []
 
-    def embed(self, text):
+    def embed(self, text, *, keep_alive=None):
         self.calls.append(text)
+        self.keep_alive_calls.append(keep_alive)
         return [0.0]
 
 
@@ -237,6 +239,40 @@ def test_top_k_final_truncates_even_when_reranker_is_off():
     result = Retrieve(embedder, store, config).run("short query")
 
     assert len(result.fragments) == 2
+
+
+# ─────────────────────────────────────────────
+# Embedding model VRAM residency (keep_alive)
+# ─────────────────────────────────────────────
+
+
+def test_single_query_variant_unloads_the_embedding_model_immediately():
+    """With only the original question (no decomposition), that one call IS
+    the last variant -- it must ask to unload the embedding model so the RAG
+    generator that runs next fits in VRAM."""
+    embedder = FakeEmbedder()
+    store = FakeVectorStore(default_hits=[])
+    config = _config(**{"flags.usar_busqueda_hibrida": False, "flags.usar_reranker": False})
+
+    Retrieve(embedder, store, config).run("short query")
+
+    assert embedder.keep_alive_calls == [0]
+
+
+def test_only_the_last_of_several_query_variants_unloads_the_embedding_model():
+    long_question = "C" * 61
+    embedder = FakeEmbedder()
+    store = FakeVectorStore(default_hits=[])
+    decomposer = FakeQueryDecomposer(subqueries=[
+        "First reasonably long sub-query about the topic at hand here.",
+        "Second reasonably long sub-query about a different aspect entirely.",
+    ])
+    config = _config(**{"flags.usar_busqueda_hibrida": False, "flags.usar_reranker": False})
+
+    Retrieve(embedder, store, config, query_decomposer=decomposer).run(long_question)
+
+    # 3 variants (original + 2 sub-queries): only the last one unloads.
+    assert embedder.keep_alive_calls == [None, None, 0]
 
 
 if __name__ == "__main__":

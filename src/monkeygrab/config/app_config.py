@@ -267,6 +267,18 @@ class AppConfig:
                 )
             changes_by_section[section_name][field_name] = value
 
+        if "docs_folder" in changes_by_section["paths"]:
+            # set_docs_folder_runtime (rag/chat_pdfs.py) always normalized via
+            # os.path.abspath before assigning CARPETA_DOCS; the web PDF
+            # viewer resolves paths.docs_folder directly against disk, so a
+            # relative override left as-is here would resolve against
+            # whatever the process's cwd happens to be at request time
+            # instead of staying stable. Normalize before it feeds
+            # derive_db_paths below, same as the original.
+            changes_by_section["paths"]["docs_folder"] = os.path.abspath(
+                changes_by_section["paths"]["docs_folder"]
+            )
+
         new_models = sections["models"]
         if changes_by_section["models"]:
             new_models = dataclasses.replace(new_models, **changes_by_section["models"])

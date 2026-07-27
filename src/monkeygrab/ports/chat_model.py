@@ -7,6 +7,8 @@
 
 from typing import Iterator, Optional, Protocol, Sequence
 
+from monkeygrab.domain.generation_chunk import GenerationChunk
+
 
 class ChatModel(Protocol):
     """One Ollama-backed model role: generate text, optionally from images.
@@ -30,7 +32,19 @@ class ChatModel(Protocol):
       except the OCR role.
     - ``stream``: token-streaming calls -- ``_ollama_generate_stream`` /
       ``generar_tokens_respuesta`` (``rag/engine/generation.py``), used
-      only for the final RAG/chat answer shown to the user.
+      only for the final RAG/chat answer shown to the user. Yields
+      ``GenerationChunk`` rather than plain text: the debug dump
+      ``generar_respuesta`` writes on every RAG turn (on by default,
+      ``guardar_debug_rag``) reports prompt/eval token counts and
+      decoding speed off the final streamed chunk's metadata
+      (``model``, ``done_reason``, timings, token counts) -- an
+      ``Iterator[str]`` has no way to carry that alongside the tokens, so
+      a caller wired to only that shape loses it silently. A caller that
+      only wants the text reads ``chunk.text`` off each item and ignores
+      the rest; see ``GenerationChunk``'s own docstring for the full
+      shape and ``monkeygrab.application.answer.Answer`` for a caller
+      that streams tokens live (``on_token``) while still collecting the
+      final metadata.
 
     Sampling parameters (``temperature``, ``num_predict``, ``num_ctx``,
     ``think``, ``keep_alive``, ...) differ per call site today but are
@@ -70,16 +84,19 @@ class ChatModel(Protocol):
         """
         ...
 
-    def stream(self, prompt: str, *, system: Optional[str] = None) -> Iterator[str]:
-        """Generate a response, yielding text as it is produced.
+    def stream(self, prompt: str, *, system: Optional[str] = None) -> Iterator[GenerationChunk]:
+        """Generate a response, yielding chunks as it is produced.
 
         Args:
             prompt: User/task prompt.
             system: Optional system prompt.
 
         Yields:
-            Successive text chunks; concatenating all of them is the
-            complete response.
+            One ``GenerationChunk`` per produced piece; concatenating every
+            ``chunk.text`` in order is the complete response. Exactly one
+            chunk (the last) has ``done=True`` and carries the generation
+            metadata (``model``, ``done_reason``, timings, token counts) --
+            see ``GenerationChunk``.
 
         Raises:
             Exception: On any generation failure.

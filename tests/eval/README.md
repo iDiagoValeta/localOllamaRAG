@@ -12,7 +12,11 @@ This step only builds the judge and its corpus — nothing here runs the pipelin
 | `fetch_papers.py` | Idempotent arXiv PDF downloader (id -> cached, gitignored PDF). |
 | `grade.py` | Deterministic scoring: `grade_answer`, `grade_retrieval`. |
 | `test_grade.py` | pytest suite for the grader + a schema check over `gold_cases.jsonl`. |
+| `run_eval.py` | The gate: runs the real pipeline over every case and grades it (below). |
+| `baseline_min_pass_rate.txt` | Pass-rate floor `run_eval.py` gates against. Only ever raised, never lowered. |
 | `papers_cache/` | Downloaded blind-set PDFs. Gitignored — reproduced from `arxiv_id`. |
+| `blind_docs/` | Blind-set PDFs staged under their `paper` slug for indexing. Gitignored. |
+| `runs/` | Dated JSON results from each `run_eval.py` run. Gitignored. |
 
 ## Corpus
 
@@ -72,3 +76,51 @@ python tests/eval/fetch_papers.py 1512.03385         # fetch one paper by id
 ```
 
 `fetch_papers.py` is idempotent: a cached, header-validated PDF is never re-downloaded.
+
+## Running the full gate (`run_eval.py`)
+
+Single, self-sufficient command -- no manual indexing, no machine-specific paths:
+
+```bash
+python tests/eval/run_eval.py                                 # default: gemma4:e2b + qwen3.5:0.8b
+python tests/eval/run_eval.py --models gemma4:e2b gemma4:e4b   # different generator model set
+python tests/eval/run_eval.py --update-baseline                # also raise the baseline if green
+```
+
+Requires a local Ollama server, every model this run needs already pulled
+(`ollama pull ...` -- the runner tells you exactly which if one is missing),
+and in practice a GPU: the reranker and every model role run on CPU
+otherwise, which this gate does not support.
+
+What it does, in order, failing with an actionable message the moment
+something is missing:
+
+1. Checks Ollama is reachable and every required model (`--models`, plus the
+   fixed auxiliary model used for query decomposition / contextual retrieval
+   / RECOMP / image OCR, plus the embedding model) is installed.
+2. Downloads any missing blind-set arXiv papers (reusing `fetch_papers.py`)
+   and stages them under `blind_docs/<paper-slug>.pdf`.
+3. Indexes whatever is not already indexed -- dev-set papers into the
+   existing `rag/docs/en/` collection, blind-set papers into their own
+   collection under `blind_docs/` -- via the real `indexar_documentos`
+   pipeline. Already-indexed papers are never reprocessed.
+4. Verifies every paper referenced by a gold case actually has an index
+   entry before running anything.
+5. Runs every case through the real retrieval + (for factual cases)
+   generation pipeline, grading with `grade.py`. Retrieval for a case is
+   computed once and reused across every `--models` entry -- retrieval does
+   not depend on the generator, so re-running it per model would test
+   nothing new. `figure_retrieval`/`table_retrieval` cases never call a
+   generator at all.
+6. Writes a dated JSON report to `runs/<timestamp>.json` (per-case detail:
+   pass/fail, timing, and on failure the generated answer and retrieved
+   fragments) plus a console summary by case type and by model.
+7. Compares the overall pass rate against `baseline_min_pass_rate.txt` and
+   exits non-zero if it dropped -- that comparison is the gate. `--update-baseline`
+   additionally raises the file to `pass_rate - 0.05` (rounded down to the
+   nearest 0.01) *after* the gate check, and only if that is higher than the
+   current value -- the baseline never moves down automatically.
+
+`table_retrieval` cases are expected to fail today: the pipeline tags
+retrieved content as `text`/`image` only, with no `table` kind yet (see the
+Schema section above). That is a known gap, not a case bug.

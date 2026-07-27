@@ -5,7 +5,7 @@
 # ─────────────────────────────────────────────
 """
 
-from typing import List, Protocol
+from typing import List, Optional, Protocol
 
 
 class Embedder(Protocol):
@@ -26,6 +26,17 @@ class Embedder(Protocol):
     prefix to ``text`` before calling ``embed``, so this port never needs
     to know whether the text is a query or a document.
 
+    ``keep_alive`` exists because VRAM residency is an observable part of
+    this port's contract, not an adapter implementation detail: on the
+    per-query-variant retrieval loop, ``realizar_busqueda_hibrida``
+    (``rag/engine/retrieval.py``) explicitly unloads the embedding model
+    (``keep_alive=0``) after the LAST variant so the RAG generator that
+    runs immediately afterward fits in an 8GB GPU -- see
+    ``_embedding_keep_alive``. Indexing's ``_indexar_chunk`` never passes
+    ``keep_alive`` at all, i.e. it always wants the server default, which
+    is what the parameter's ``None`` default reproduces. A caller that
+    never cares about residency (indexing) simply never passes it.
+
     Failure policy: hard-fail. Raise on any embedding failure. The retry
     used in ``_indexar_chunk`` today (catch, truncate to 1000 chars,
     retry once) is an adapter-level convenience for degenerate input, not
@@ -33,11 +44,14 @@ class Embedder(Protocol):
     second failure after the retry still raises.
     """
 
-    def embed(self, text: str) -> List[float]:
+    def embed(self, text: str, *, keep_alive: Optional[int] = None) -> List[float]:
         """Embed ``text`` into a single dense vector.
 
         Args:
             text: Text to embed, already prefixed by the caller if needed.
+            keep_alive: Seconds to keep the model loaded after this call,
+                ``0`` to unload it immediately, or ``None`` for the
+                runtime's own default residency policy.
 
         Returns:
             The embedding vector.

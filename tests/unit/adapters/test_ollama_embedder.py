@@ -22,7 +22,7 @@ def test_embed_uses_the_injected_model_not_a_frozen_default(monkeypatch):
     """Two embedders built from different config must call Ollama with different models."""
     calls = []
 
-    def fake_embeddings(model, prompt):
+    def fake_embeddings(model, prompt, keep_alive):
         calls.append((model, prompt))
         return {"embedding": [0.1, 0.2, 0.3]}
 
@@ -41,7 +41,10 @@ def test_embed_uses_the_injected_model_not_a_frozen_default(monkeypatch):
 
 
 def test_embed_returns_the_vector_from_ollama(monkeypatch):
-    monkeypatch.setattr(module.ollama, "embeddings", lambda model, prompt: {"embedding": [1.0, 2.0]})
+    monkeypatch.setattr(
+        module.ollama, "embeddings",
+        lambda model, prompt, keep_alive: {"embedding": [1.0, 2.0]},
+    )
 
     result = OllamaEmbedder(ModelsConfig(embedding="m:latest")).embed("text")
 
@@ -54,7 +57,7 @@ def test_embed_does_not_prepend_any_prefix_itself(monkeypatch):
     seen_prompts = []
     monkeypatch.setattr(
         module.ollama, "embeddings",
-        lambda model, prompt: seen_prompts.append(prompt) or {"embedding": []},
+        lambda model, prompt, keep_alive: seen_prompts.append(prompt) or {"embedding": []},
     )
 
     OllamaEmbedder(ModelsConfig(embedding="m:latest")).embed("search_query: raw text")
@@ -62,10 +65,39 @@ def test_embed_does_not_prepend_any_prefix_itself(monkeypatch):
     assert seen_prompts == ["search_query: raw text"]
 
 
+def test_embed_defaults_keep_alive_to_none(monkeypatch):
+    """Indexing (`_indexar_chunk`) never passes `keep_alive` at all -- the port's
+    `None` default must reach Ollama unchanged, i.e. the server's own default."""
+    seen = []
+    monkeypatch.setattr(
+        module.ollama, "embeddings",
+        lambda model, prompt, keep_alive: seen.append(keep_alive) or {"embedding": []},
+    )
+
+    OllamaEmbedder(ModelsConfig(embedding="m:latest")).embed("text")
+
+    assert seen == [None]
+
+
+def test_embed_forwards_an_explicit_keep_alive(monkeypatch):
+    """Retrieval's per-query-variant loop passes keep_alive=0 on the last variant
+    to unload the embedding model before the RAG generator runs -- the adapter
+    must forward whatever the caller asks for, unchanged."""
+    seen = []
+    monkeypatch.setattr(
+        module.ollama, "embeddings",
+        lambda model, prompt, keep_alive: seen.append(keep_alive) or {"embedding": []},
+    )
+
+    OllamaEmbedder(ModelsConfig(embedding="m:latest")).embed("text", keep_alive=0)
+
+    assert seen == [0]
+
+
 def test_embed_retries_once_on_overlong_input_then_succeeds(monkeypatch):
     calls = []
 
-    def fake_embeddings(model, prompt):
+    def fake_embeddings(model, prompt, keep_alive):
         calls.append(prompt)
         if len(calls) == 1:
             raise Exception("Ollama error: context length exceeded (500)")
@@ -80,10 +112,26 @@ def test_embed_retries_once_on_overlong_input_then_succeeds(monkeypatch):
     assert calls[1] == ("x" * 5000)[:1000]
 
 
+def test_embed_retry_forwards_the_same_keep_alive(monkeypatch):
+    seen_keep_alive = []
+
+    def fake_embeddings(model, prompt, keep_alive):
+        seen_keep_alive.append(keep_alive)
+        if len(seen_keep_alive) == 1:
+            raise Exception("context length exceeded")
+        return {"embedding": [9.0]}
+
+    monkeypatch.setattr(module.ollama, "embeddings", fake_embeddings)
+
+    OllamaEmbedder(ModelsConfig(embedding="m:latest")).embed("x" * 5000, keep_alive=0)
+
+    assert seen_keep_alive == [0, 0]
+
+
 def test_embed_hard_fails_on_a_non_length_error_without_retrying(monkeypatch):
     calls = []
 
-    def fake_embeddings(model, prompt):
+    def fake_embeddings(model, prompt, keep_alive):
         calls.append(prompt)
         raise ConnectionError("Ollama server unreachable")
 
@@ -100,7 +148,7 @@ def test_embed_hard_fails_when_the_retry_also_fails(monkeypatch):
     but a second failure must still raise -- never a silent skip."""
     calls = []
 
-    def fake_embeddings(model, prompt):
+    def fake_embeddings(model, prompt, keep_alive):
         calls.append(prompt)
         raise Exception("context length exceeded")
 

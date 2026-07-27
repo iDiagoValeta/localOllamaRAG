@@ -24,7 +24,7 @@ these pure helpers around a ``ChatModel`` port call.
 """
 
 import re
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, Sequence, Tuple
 
 from monkeygrab.domain.fragment import Fragment
 

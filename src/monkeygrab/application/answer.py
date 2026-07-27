@@ -9,6 +9,7 @@
 #  +-- _is_expandable             -- moved from generation.py's _fragmento_expandible
 #  +-- _expand_with_neighbors     -- moved from generation.py's _expandir_fragmentos_contexto
 #  +-- _limit_by_char_budget      -- moved from generation.py's _limitar_fragmentos_por_chars
+#  +-- _generation_stats          -- final-chunk metadata -> "generation" metrics dict
 #  +-- Answer                     -- the use case, incl. RECOMP synthesis
 #
 # ─────────────────────────────────────────────
@@ -17,6 +18,17 @@ Takes the fragments ``Retrieve`` already ranked and threshold-filtered,
 expands them with neighboring chunks, trims to the character budget,
 optionally synthesizes a facts briefing via RECOMP instead of feeding raw
 chunks, and streams the final generation.
+
+``run()`` consumes ``ChatModel.stream()``'s ``GenerationChunk`` items directly
+rather than plain text: it appends ``chunk.text`` to the answer (and forwards
+it to ``on_token``, for a caller streaming to a web client) while it goes,
+and once the final chunk arrives (``chunk.done``) it copies the generation
+metadata into ``AnswerResult.metrics["generation"]`` -- the same fields and
+``tokens_per_second`` derivation ``generar_respuesta``'s debug dump computes
+today, now reachable from a plain ``ChatModel`` caller instead of requiring
+the ``stats`` out-parameter ``generar_tokens_respuesta`` used to thread
+through by hand. Persisting the debug dump itself stays a caller concern
+(``guardar_debug_rag``), same as before.
 
 RECOMP synthesis (``rag.engine.context.sintetizar_contexto_recomp``) is not
 one of the four modules this migration is scoped to move, but it is
@@ -49,6 +61,7 @@ from monkeygrab.application.text_chunking import adjacent_chunk_ids
 from monkeygrab.config.app_config import AppConfig
 from monkeygrab.config.flags import PipelineFlagsConfig
 from monkeygrab.domain.fragment import Fragment
+from monkeygrab.domain.generation_chunk import GenerationChunk
 from monkeygrab.ports.chat_model import ChatModel
 from monkeygrab.ports.vector_store import VectorStore
 
@@ -148,6 +161,36 @@ def _limit_by_char_budget(
     return fragmentos_truncados, len(fragments) - len(fragmentos_truncados)
 
 
+# Field names to copy from a done GenerationChunk into AnswerResult's
+# "generation" metrics -- literal match of _GEN_STATS_KEYS in
+# rag/engine/generation.py, applied to the typed chunk instead of a raw dict.
+_GEN_STATS_FIELDS = (
+    "model", "done_reason", "total_duration", "load_duration",
+    "prompt_eval_count", "prompt_eval_duration", "eval_count", "eval_duration",
+)
+
+
+def _generation_stats(chunk: GenerationChunk) -> Dict[str, Any]:
+    """Build the "generation" metrics dict from the final streamed chunk.
+
+    Moved from the stats-copying half of ``generar_tokens_respuesta`` (only
+    keys actually present in the Ollama ``done`` line are copied -- here,
+    fields the adapter left ``None`` because Ollama's line did not report
+    them) plus the ``tokens_por_segundo`` derivation from ``generar_respuesta``
+    (``rag/engine/generation.py``): both used to be unreachable from any
+    ``ChatModel``-only caller once ``stream()`` returned plain text, which is
+    exactly the gap this port change closes.
+    """
+    stats: Dict[str, Any] = {
+        field: value
+        for field, value in ((f, getattr(chunk, f)) for f in _GEN_STATS_FIELDS)
+        if value is not None
+    }
+    if chunk.eval_count and chunk.eval_duration:
+        stats["tokens_per_second"] = chunk.eval_count / (chunk.eval_duration / 1e9)
+    return stats
+
+
 class Answer:
     """Neighbor expansion (opt.) -> char budget -> context synthesis (opt.) -> generation.
 
@@ -216,15 +259,20 @@ class Answer:
         user_message = f"{question}\n\n<context>{context_str}</context>"
 
         text = ""
-        for token in self._rag_chat_model.stream(user_message, system=self._system_prompt):
-            text += token
-            if on_token is not None:
-                on_token(token)
+        generation_stats: Dict[str, Any] = {}
+        for chunk in self._rag_chat_model.stream(user_message, system=self._system_prompt):
+            if chunk.text:
+                text += chunk.text
+                if on_token is not None:
+                    on_token(chunk.text)
+            if chunk.done:
+                generation_stats = _generation_stats(chunk)
 
         metrics: Dict[str, Any] = {
             "fragments_expanded": n_expanded,
             "fragments_discarded_by_chars": n_discarded,
             "fragments_final": len(limited),
+            "generation": generation_stats,
             **context_metrics,
         }
         return AnswerResult(text=text, metrics=metrics)

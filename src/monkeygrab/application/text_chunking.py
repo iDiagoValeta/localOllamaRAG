@@ -31,7 +31,7 @@ pins it.
 
 import re
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
 from monkeygrab.domain.chunk_metadata import ChunkMetadata
 

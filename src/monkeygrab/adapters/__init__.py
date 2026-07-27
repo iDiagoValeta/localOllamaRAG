@@ -4,12 +4,14 @@
 # MODULE MAP -- Section index
 # ─────────────────────────────────────────────
 #
-#  +-- extraction/    pymupdf_extractor.py   PymupdfExtractor    -- PdfExtractor
-#  +-- embedding/     ollama_embedder.py     OllamaEmbedder      -- Embedder
-#  +-- vectorstore/   chroma_store.py        ChromaVectorStore   -- VectorStore
-#  +-- lexical/       bm25_index.py          Bm25LexicalIndex    -- LexicalIndex
-#  +-- reranking/     cross_encoder_reranker.py CrossEncoderReranker -- Reranker
-#  +-- chat/          ollama_chat.py         OllamaChatModel     -- ChatModel
+#  +-- extraction/    pymupdf_extractor.py         PymupdfExtractor      -- PdfExtractor
+#  +-- extraction/    pymupdf_image_extractor.py   PymupdfImageExtractor -- ImageExtractor
+#  +-- embedding/     ollama_embedder.py           OllamaEmbedder        -- Embedder
+#  +-- vectorstore/   chroma_store.py              ChromaVectorStore     -- VectorStore
+#  +-- lexical/       bm25_index.py                Bm25LexicalIndex      -- LexicalIndex
+#  +-- reranking/     cross_encoder_reranker.py    CrossEncoderReranker  -- Reranker
+#  +-- chat/          ollama_chat.py               OllamaChatModel       -- ChatModel
+#  +-- chat/          ollama_model_unloader.py     OllamaModelUnloader   -- ModelUnloader
 #
 # ─────────────────────────────────────────────
 

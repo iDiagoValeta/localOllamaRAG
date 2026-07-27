@@ -9,6 +9,7 @@ RRF fusion -> reranking (opt.) -> reranker-threshold filter.
 #  +-- _generate_subqueries        -- query decomposition via ChatModel (optional)
 #  +-- _relevance_score            -- moved from generation.py's _score_relevancia_fragmento
 #  +-- _filter_by_reranker_threshold -- moved from generation.py's _filtrar_por_umbral_reranker
+#  +-- _embedding_keep_alive       -- moved from retrieval.py's _embedding_keep_alive
 #  +-- Retrieve                    -- the use case
 #
 # ─────────────────────────────────────────────
@@ -147,6 +148,25 @@ def _filter_by_reranker_threshold(
     return [f for f in fragments if _relevance_score(f) >= threshold]
 
 
+def _embedding_keep_alive(q_idx: int, n_queries: int) -> Optional[int]:
+    """VRAM residency for one query-variant embedding call.
+
+    Literal port of ``_embedding_keep_alive`` in ``rag/engine/retrieval.py``:
+    the embedding model is unloaded (``keep_alive=0``) after the LAST query
+    variant, freeing VRAM for the RAG generator that runs immediately
+    afterward; every earlier variant keeps the server's own default residency
+    (``None``) since another embedding call is about to follow right away.
+
+    Args:
+        q_idx: Zero-based index of this query variant in ``queries``.
+        n_queries: Total number of query variants.
+
+    Returns:
+        ``0`` on the last variant, ``None`` otherwise.
+    """
+    return 0 if q_idx >= n_queries - 1 else None
+
+
 class Retrieve:
     """Query decomposition (opt.) -> semantic + lexical search -> RRF fusion
     -> reranking (opt.) -> reranker-threshold filter.
@@ -229,8 +249,11 @@ class Retrieve:
                 queries.append(lq)
 
         semantic_hits_per_query: List[List[Fragment]] = []
-        for q in queries:
-            embedding = self._embedder.embed(f"{config.models.embed_prefix_query}{q}")
+        for q_idx, q in enumerate(queries):
+            embedding = self._embedder.embed(
+                f"{config.models.embed_prefix_query}{q}",
+                keep_alive=_embedding_keep_alive(q_idx, len(queries)),
+            )
             semantic_hits_per_query.append(
                 self._vector_store.query(embedding, retrieval.n_semantic_results)
             )

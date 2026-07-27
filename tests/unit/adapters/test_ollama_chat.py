@@ -4,6 +4,7 @@ Stubs ollama.chat and requests.post entirely -- no Ollama server, no network
 -- so these run in milliseconds.
 """
 
+import logging
 import sys
 from pathlib import Path
 
@@ -15,6 +16,7 @@ import pytest
 
 from monkeygrab.adapters.chat import ollama_chat as module
 from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel
+from monkeygrab.domain.generation_chunk import GenerationChunk
 
 
 # ─────────────────────────────────────────────
@@ -141,28 +143,80 @@ def test_stream_uses_the_injected_model_and_num_ctx(monkeypatch):
     monkeypatch.setattr(module.requests, "post", fake_post)
 
     chat_model = OllamaChatModel("streamed-model", num_ctx=777, request_timeout=42)
-    tokens = list(chat_model.stream("prompt"))
+    chunks = list(chat_model.stream("prompt"))
 
-    assert tokens == ["hi"]
+    assert [c.text for c in chunks] == ["hi"]
     assert calls[0]["json"]["model"] == "streamed-model"
     assert calls[0]["json"]["options"]["num_ctx"] == 777
     assert calls[0]["timeout"] == 42
     assert calls[0]["json"]["think"] is False
 
 
-def test_stream_yields_every_response_chunk_in_order(monkeypatch):
+def test_stream_yields_a_generation_chunk_per_line_including_the_empty_done_line(monkeypatch):
+    """Unlike the pre-migration adapter (which filtered out any line with an
+    empty "response", silently dropping the done=True stats line), every
+    parsed line must reach the caller -- matching _ollama_generate_stream,
+    which yields the raw dict for every line without filtering."""
     import json as jsonlib
 
     lines = [
         jsonlib.dumps({"response": "Hel"}).encode(),
         jsonlib.dumps({"response": "lo"}).encode(),
-        jsonlib.dumps({"response": "", "done": True}).encode(),
+        jsonlib.dumps({"response": "", "done": True, "done_reason": "stop"}).encode(),
     ]
     monkeypatch.setattr(module.requests, "post", lambda **kwargs: _FakeStreamResponse(lines))
 
-    tokens = list(OllamaChatModel("m", num_ctx=100).stream("prompt"))
+    chunks = list(OllamaChatModel("m", num_ctx=100).stream("prompt"))
 
-    assert tokens == ["Hel", "lo"]
+    assert [c.text for c in chunks] == ["Hel", "lo", ""]
+    assert [c.done for c in chunks] == [False, False, True]
+
+
+def test_stream_final_chunk_carries_the_full_generation_metadata(monkeypatch):
+    """The debug dump (guardar_debug_rag) and the tokens-per-second derivation
+    in generar_respuesta both read these fields off the done chunk -- losing
+    any of them here is exactly the bug this port change fixes."""
+    import json as jsonlib
+
+    done_line = {
+        "response": "", "done": True, "done_reason": "stop", "model": "m",
+        "total_duration": 123, "load_duration": 45, "prompt_eval_count": 10,
+        "prompt_eval_duration": 67, "eval_count": 8, "eval_duration": 900,
+    }
+    lines = [jsonlib.dumps(done_line).encode()]
+    monkeypatch.setattr(module.requests, "post", lambda **kwargs: _FakeStreamResponse(lines))
+
+    [chunk] = list(OllamaChatModel("m", num_ctx=100).stream("prompt"))
+
+    assert chunk == GenerationChunk(
+        text="", done=True, model="m", done_reason="stop",
+        total_duration=123, load_duration=45, prompt_eval_count=10,
+        prompt_eval_duration=67, eval_count=8, eval_duration=900,
+    )
+
+
+def test_stream_logs_a_warning_when_generation_stops_early(monkeypatch, caplog):
+    import json as jsonlib
+
+    lines = [jsonlib.dumps({"response": "", "done": True, "done_reason": "length"}).encode()]
+    monkeypatch.setattr(module.requests, "post", lambda **kwargs: _FakeStreamResponse(lines))
+
+    with caplog.at_level(logging.WARNING):
+        list(OllamaChatModel("truncated-model", num_ctx=100).stream("prompt"))
+
+    assert any("truncated-model" in r.message and "length" in r.message for r in caplog.records)
+
+
+def test_stream_does_not_warn_when_generation_stops_normally(monkeypatch, caplog):
+    import json as jsonlib
+
+    lines = [jsonlib.dumps({"response": "", "done": True, "done_reason": "stop"}).encode()]
+    monkeypatch.setattr(module.requests, "post", lambda **kwargs: _FakeStreamResponse(lines))
+
+    with caplog.at_level(logging.WARNING):
+        list(OllamaChatModel("m", num_ctx=100).stream("prompt"))
+
+    assert caplog.records == []
 
 
 def test_stream_retries_once_on_a_5xx_error_then_succeeds(monkeypatch):
@@ -179,12 +233,73 @@ def test_stream_retries_once_on_a_5xx_error_then_succeeds(monkeypatch):
     monkeypatch.setattr(module.requests, "post", fake_post)
     monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
 
-    tokens = list(
+    chunks = list(
         OllamaChatModel("m", num_ctx=100, generate_retries=2, generate_retry_delay=0).stream("prompt")
     )
 
-    assert tokens == ["ok"]
+    assert [c.text for c in chunks] == ["ok"]
     assert len(attempts) == 2
+
+
+# ─────────────────────────────────────────────
+# stream() -- model_unloader wiring
+# ─────────────────────────────────────────────
+
+
+class _FakeModelUnloader:
+    def __init__(self):
+        self.calls = []
+
+    def unload_all_except(self, keep=None):
+        self.calls.append(keep)
+
+
+def test_stream_without_a_model_unloader_never_calls_one(monkeypatch):
+    """model_unloader defaults to None -- must be a true no-op, not an error."""
+    import json as jsonlib
+
+    lines = [jsonlib.dumps({"response": "hi", "done": True}).encode()]
+    monkeypatch.setattr(module.requests, "post", lambda **kwargs: _FakeStreamResponse(lines))
+
+    list(OllamaChatModel("m", num_ctx=100).stream("prompt"))  # must not raise
+
+
+def test_stream_unloads_every_other_model_before_the_initial_request(monkeypatch):
+    import json as jsonlib
+
+    lines = [jsonlib.dumps({"response": "hi", "done": True}).encode()]
+    monkeypatch.setattr(module.requests, "post", lambda **kwargs: _FakeStreamResponse(lines))
+    unloader = _FakeModelUnloader()
+
+    list(OllamaChatModel("my-model", num_ctx=100, model_unloader=unloader).stream("prompt"))
+
+    assert unloader.calls == ["my-model"]
+
+
+def test_stream_unloads_everything_before_retrying_a_5xx(monkeypatch):
+    import json as jsonlib
+
+    attempts = []
+
+    def fake_post(**kwargs):
+        attempts.append(1)
+        if len(attempts) == 1:
+            return _FakeStreamResponse([], status_code=503)
+        return _FakeStreamResponse([jsonlib.dumps({"response": "ok", "done": True}).encode()])
+
+    monkeypatch.setattr(module.requests, "post", fake_post)
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+    unloader = _FakeModelUnloader()
+
+    list(
+        OllamaChatModel(
+            "my-model", num_ctx=100, generate_retries=2, generate_retry_delay=0,
+            model_unloader=unloader,
+        ).stream("prompt")
+    )
+
+    # Initial call keeps "my-model" loaded; the retry unloads everything (keep=None).
+    assert unloader.calls == ["my-model", None]
 
 
 def test_stream_hard_fails_immediately_on_a_4xx_error_without_retrying(monkeypatch):

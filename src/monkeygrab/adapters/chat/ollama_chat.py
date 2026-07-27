@@ -7,11 +7,15 @@
 
 import base64
 import json
+import logging
 import time
 from typing import Any, Dict, Iterator, Optional, Sequence
 
 import ollama
 import requests
+
+from monkeygrab.domain.generation_chunk import GenerationChunk
+from monkeygrab.ports.model_unloader import ModelUnloader
 
 # Not subclassed from monkeygrab.ports.chat_model.ChatModel: Protocol
 # conformance here is structural (duck typing), the same contract every other
@@ -54,13 +58,15 @@ class OllamaChatModel:
     because it needs line-by-line JSON streaming and 5xx-only retry that the
     ``ollama`` client does not expose.
 
-    Not replicated here: ``liberar_modelos_ollama``, the VRAM-freeing call
-    that unloads every *other* configured model role before streaming a
-    response. That requires knowing every role's model name at once, which
-    is orchestration across multiple ``ChatModel`` instances, not something
-    a single-role adapter can do -- it has no home yet in this architecture
-    and belongs in the future application layer that wires all the roles
-    together.
+    ``model_unloader`` reproduces ``liberar_modelos_ollama``, the VRAM-
+    freeing call ``_ollama_generate_stream`` makes right before it starts
+    streaming (and again, unloading everything, before retrying a 5xx). It
+    is an optional constructor dependency rather than something this
+    single-role adapter computes itself, because unloading "every *other*
+    configured role's model" requires knowing every role's model name at
+    once -- see the ``ModelUnloader`` port docstring for why that is a
+    separate port. ``None`` (the default) reproduces "no VRAM management",
+    same as every other optional port in this project.
 
     Failure policy: hard-fail. Every real call site today catches broadly and
     substitutes empty output or raw unsynthesized context on failure; none of
@@ -78,6 +84,7 @@ class OllamaChatModel:
         generate_retry_delay: int = 3,
         options: Optional[Dict[str, Any]] = None,
         base_url: str = _DEFAULT_BASE_URL,
+        model_unloader: Optional[ModelUnloader] = None,
     ):
         """Args:
             model: Ollama model name for this role.
@@ -95,6 +102,9 @@ class OllamaChatModel:
             base_url: Ollama HTTP server base URL, used by ``stream`` only
                 (``generate`` goes through the ``ollama`` client, which reads
                 its own ``OLLAMA_HOST``).
+            model_unloader: ``ModelUnloader`` used by ``stream`` to free VRAM
+                before generating (and before retrying a 5xx), or ``None`` to
+                skip that entirely -- see the class docstring.
         """
         self._model = model
         self._num_ctx = num_ctx
@@ -104,6 +114,7 @@ class OllamaChatModel:
         self._generate_retry_delay = generate_retry_delay
         self._base_options = dict(options or {})
         self._base_url = base_url
+        self._model_unloader = model_unloader
 
     def _options(self) -> Dict[str, Any]:
         merged = dict(self._base_options)
@@ -151,7 +162,7 @@ class OllamaChatModel:
 
         return response["message"]["content"]
 
-    def stream(self, prompt: str, *, system: Optional[str] = None) -> Iterator[str]:
+    def stream(self, prompt: str, *, system: Optional[str] = None) -> Iterator[GenerationChunk]:
         """Stream a response from ``/api/generate`` over raw HTTP.
 
         Args:
@@ -159,7 +170,13 @@ class OllamaChatModel:
             system: Optional system prompt.
 
         Yields:
-            Successive text chunks.
+            One ``GenerationChunk`` per parsed response line, exactly as
+            ``_ollama_generate_stream`` yields one raw dict per line --
+            including the final ``done=True`` line (metadata only, usually
+            empty ``text``), which the original's own token-forwarding loop
+            (``generar_tokens_respuesta``) filters out of its *token*
+            output but still reads for stats; here that split is the
+            caller's job, not this adapter's (see ``GenerationChunk``).
 
         Raises:
             RuntimeError: On any generation failure (after exhausting the
@@ -176,6 +193,9 @@ class OllamaChatModel:
         if system:
             payload["system"] = system
 
+        if self._model_unloader is not None:
+            self._model_unloader.unload_all_except(self._model)
+
         url = f"{self._base_url}/api/generate"
 
         for attempt in range(self._generate_retries):
@@ -188,13 +208,30 @@ class OllamaChatModel:
                         if not line:
                             continue
                         data = json.loads(line)
-                        content = data.get("response", "")
-                        if content:
-                            yield content
+                        done = bool(data.get("done"))
+                        if done and data.get("done_reason") not in (None, "stop"):
+                            logging.warning(
+                                "%s generation stopped early: done_reason=%s",
+                                self._model, data.get("done_reason"),
+                            )
+                        yield GenerationChunk(
+                            text=data.get("response", ""),
+                            done=done,
+                            model=data.get("model"),
+                            done_reason=data.get("done_reason"),
+                            total_duration=data.get("total_duration"),
+                            load_duration=data.get("load_duration"),
+                            prompt_eval_count=data.get("prompt_eval_count"),
+                            prompt_eval_duration=data.get("prompt_eval_duration"),
+                            eval_count=data.get("eval_count"),
+                            eval_duration=data.get("eval_duration"),
+                        )
                 return
             except requests.HTTPError as exc:
                 status = exc.response.status_code if exc.response is not None else None
                 if status is not None and status >= 500 and attempt + 1 < self._generate_retries:
+                    if self._model_unloader is not None:
+                        self._model_unloader.unload_all_except(None)
                     time.sleep(self._generate_retry_delay)
                     continue
                 raise RuntimeError(

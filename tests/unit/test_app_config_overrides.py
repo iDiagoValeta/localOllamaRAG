@@ -8,6 +8,7 @@ unparseable/unknown environment values instead of silently falling back to a
 default.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -99,6 +100,30 @@ def test_overriding_paths_docs_folder_recomputes_db_paths():
     assert cfg.paths.docs_folder == new_folder
     assert cfg.paths.collection_name == "docs_es"
     assert cfg.paths.path_db != original.paths.path_db
+
+
+def test_overriding_paths_docs_folder_normalizes_a_relative_path():
+    """set_docs_folder_runtime (rag/chat_pdfs.py) always applied os.path.abspath
+    before assigning CARPETA_DOCS, so the value was guaranteed absolute
+    regardless of what the caller passed in. with_overrides must match: a
+    relative override left as-is would resolve against whatever the
+    process's cwd happens to be when something later reads
+    paths.docs_folder (e.g. the web PDF viewer), instead of staying stable."""
+    original = AppConfig()
+
+    cfg = original.with_overrides(**{"paths.docs_folder": "relative/subdir"})
+
+    assert cfg.paths.docs_folder == os.path.abspath("relative/subdir")
+    assert os.path.isabs(cfg.paths.docs_folder)
+
+
+def test_overriding_paths_docs_folder_with_an_already_absolute_path_is_unchanged():
+    original = AppConfig()
+    absolute_folder = str(Path(original.paths.base_dir) / "docs" / "ca")
+
+    cfg = original.with_overrides(**{"paths.docs_folder": absolute_folder})
+
+    assert cfg.paths.docs_folder == absolute_folder
 
 
 # ─────────────────────────────────────────────

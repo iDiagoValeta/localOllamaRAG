@@ -24,6 +24,7 @@ from monkeygrab.application.answer import Answer, _expand_with_neighbors, _is_ex
 from monkeygrab.config.app_config import AppConfig  # noqa: E402
 from monkeygrab.domain.chunk_metadata import ChunkMetadata  # noqa: E402
 from monkeygrab.domain.fragment import Fragment  # noqa: E402
+from monkeygrab.domain.generation_chunk import GenerationChunk  # noqa: E402
 
 
 def _fragment(id_, doc="body text", fmt=None, total_in_page=None, score_final=0.0):
@@ -53,17 +54,21 @@ class FakeVectorStore:
 
 
 class FakeChatModel:
-    def __init__(self, tokens=("Hello", " world"), raises=False, response="response"):
+    def __init__(self, tokens=("Hello", " world"), raises=False, response="response", final_chunk=None):
         self._tokens = tokens
         self._raises = raises
         self._response = response
+        # Defaults to a done chunk with no metadata (Ollama sometimes reports
+        # none of these on a line), same as the "no generation_stats" case.
+        self._final_chunk = final_chunk if final_chunk is not None else GenerationChunk(done=True)
         self.stream_calls = []
         self.generate_calls = []
 
     def stream(self, prompt, *, system=None):
         self.stream_calls.append({"prompt": prompt, "system": system})
         for t in self._tokens:
-            yield t
+            yield GenerationChunk(text=t, done=False)
+        yield self._final_chunk
 
     def generate(self, prompt, *, system=None, images=()):
         self.generate_calls.append({"prompt": prompt, "system": system})
@@ -233,6 +238,58 @@ def test_system_prompt_is_forwarded_to_the_rag_chat_model():
     Answer(FakeVectorStore(), rag_model, config, system_prompt="SYSTEM PROMPT TEXT").run("q?", fragments)
 
     assert rag_model.stream_calls[0]["system"] == "SYSTEM PROMPT TEXT"
+
+
+# ─────────────────────────────────────────────
+# Generation metadata (metrics["generation"])
+# ─────────────────────────────────────────────
+
+
+def test_generation_metrics_are_populated_from_the_final_streamed_chunk():
+    """The debug dump / tokens-per-second derivation generar_respuesta computes
+    today needs exactly these fields off the final chunk -- this is the gap
+    ChatModel.stream() returning GenerationChunk (instead of plain text)
+    closes: they must reach AnswerResult.metrics, not get silently dropped."""
+    fragments = [_fragment("a.pdf_pag0_chunk0", doc="Evidence.")]
+    final_chunk = GenerationChunk(
+        done=True, model="phi4-finetuned:latest", done_reason="stop",
+        total_duration=5_000_000_000, load_duration=100,
+        prompt_eval_count=120, prompt_eval_duration=200,
+        eval_count=80, eval_duration=2_000_000_000,  # 2s -> 40 tokens/s
+    )
+    rag_model = FakeChatModel(final_chunk=final_chunk)
+    config = _config(**{"flags.usar_recomp_synthesis": False, "flags.expandir_contexto": False})
+
+    result = Answer(FakeVectorStore(), rag_model, config).run("q?", fragments)
+
+    assert result.metrics["generation"]["model"] == "phi4-finetuned:latest"
+    assert result.metrics["generation"]["done_reason"] == "stop"
+    assert result.metrics["generation"]["eval_count"] == 80
+    assert result.metrics["generation"]["eval_duration"] == 2_000_000_000
+    assert result.metrics["generation"]["tokens_per_second"] == pytest.approx(40.0)
+
+
+def test_generation_metrics_omit_fields_the_final_chunk_did_not_report():
+    """Only fields actually present on the done chunk are copied -- matches
+    generar_tokens_respuesta's `if k in chunk: stats[k] = chunk[k]`, applied
+    to GenerationChunk's `None` defaults instead of a missing dict key."""
+    fragments = [_fragment("a.pdf_pag0_chunk0", doc="Evidence.")]
+    rag_model = FakeChatModel(final_chunk=GenerationChunk(done=True, model="m"))
+    config = _config(**{"flags.usar_recomp_synthesis": False, "flags.expandir_contexto": False})
+
+    result = Answer(FakeVectorStore(), rag_model, config).run("q?", fragments)
+
+    assert result.metrics["generation"] == {"model": "m"}
+
+
+def test_generation_metrics_omit_tokens_per_second_without_eval_count_and_duration():
+    fragments = [_fragment("a.pdf_pag0_chunk0", doc="Evidence.")]
+    rag_model = FakeChatModel(final_chunk=GenerationChunk(done=True, model="m"))
+    config = _config(**{"flags.usar_recomp_synthesis": False, "flags.expandir_contexto": False})
+
+    result = Answer(FakeVectorStore(), rag_model, config).run("q?", fragments)
+
+    assert "tokens_per_second" not in result.metrics["generation"]
 
 
 if __name__ == "__main__":

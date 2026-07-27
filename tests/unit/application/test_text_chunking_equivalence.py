@@ -20,7 +20,6 @@ if str(ROOT) not in sys.path:
 import rag.chat_pdfs as rag  # noqa: E402
 
 from monkeygrab.application.text_chunking import (  # noqa: E402
-    TextChunk,
     adjacent_chunk_ids,
     split_markdown_into_chunks,
 )

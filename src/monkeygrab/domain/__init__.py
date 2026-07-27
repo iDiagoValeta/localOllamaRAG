@@ -4,10 +4,12 @@
 # MODULE MAP -- Section index
 # ─────────────────────────────────────────────
 #
-#  +-- chunk_metadata.py   ChunkMetadata   -- position/format of a stored chunk
-#  +-- chunk.py            Chunk           -- text unit ready to embed and store
-#  +-- extracted_page.py   ExtractedPage   -- one page of raw PDF-extracted text
-#  +-- fragment.py         Fragment        -- a retrieved/scored chunk
+#  +-- chunk_metadata.py    ChunkMetadata    -- position/format of a stored chunk
+#  +-- chunk.py             Chunk            -- text unit ready to embed and store
+#  +-- extracted_page.py    ExtractedPage    -- one page of raw PDF-extracted text
+#  +-- extracted_image.py   ExtractedImage   -- one raster image pulled from a PDF page
+#  +-- fragment.py          Fragment         -- a retrieved/scored chunk
+#  +-- generation_chunk.py  GenerationChunk  -- one item streamed from ChatModel.stream()
 #
 # ─────────────────────────────────────────────
 
@@ -20,7 +22,16 @@ pulling in a specific vector store, model runtime, or PDF library.
 
 from monkeygrab.domain.chunk import Chunk
 from monkeygrab.domain.chunk_metadata import ChunkMetadata
+from monkeygrab.domain.extracted_image import ExtractedImage
 from monkeygrab.domain.extracted_page import ExtractedPage
 from monkeygrab.domain.fragment import Fragment
+from monkeygrab.domain.generation_chunk import GenerationChunk
 
-__all__ = ["Chunk", "ChunkMetadata", "ExtractedPage", "Fragment"]
+__all__ = [
+    "Chunk",
+    "ChunkMetadata",
+    "ExtractedImage",
+    "ExtractedPage",
+    "Fragment",
+    "GenerationChunk",
+]

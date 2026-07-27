@@ -17,7 +17,10 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import rag.chat_pdfs  # noqa: E402,F401 -- must import before rag.engine.generation (circular import guard)
+# Bound to an explicit alias, not plain `import rag.chat_pdfs`: that form binds
+# the name `rag` to the root package, which carries none of the config
+# attributes this test patches, so any later reference reads the wrong object.
+import rag.chat_pdfs as chat_pdfs  # noqa: E402 -- must precede rag.engine.generation (circular import guard)
 from rag.engine.generation import _filtrar_por_umbral_reranker  # noqa: E402
 
 from monkeygrab.application.retrieve import _filter_by_reranker_threshold  # noqa: E402
@@ -68,14 +71,19 @@ def _call_original(fragments, usar_reranker, threshold):
     cfg.UMBRAL_SCORE_RERANKER live from rag.chat_pdfs -- patch them for the
     duration of one call so this stays a plain equivalence check without
     importing rag.chat_pdfs's monkeypatch fixtures into every test."""
-    import rag.chat_pdfs as rag
 
-    original_usar, original_umbral = rag.USAR_RERANKER, rag.UMBRAL_SCORE_RERANKER
-    rag.USAR_RERANKER, rag.UMBRAL_SCORE_RERANKER = usar_reranker, threshold
+    original_usar, original_umbral = (
+        chat_pdfs.USAR_RERANKER,
+        chat_pdfs.UMBRAL_SCORE_RERANKER,
+    )
+    chat_pdfs.USAR_RERANKER, chat_pdfs.UMBRAL_SCORE_RERANKER = usar_reranker, threshold
     try:
         return _filtrar_por_umbral_reranker([_as_dict(f) for f in fragments])
     finally:
-        rag.USAR_RERANKER, rag.UMBRAL_SCORE_RERANKER = original_usar, original_umbral
+        chat_pdfs.USAR_RERANKER, chat_pdfs.UMBRAL_SCORE_RERANKER = (
+            original_usar,
+            original_umbral,
+        )
 
 
 def test_fallback_to_score_final_matches_original():

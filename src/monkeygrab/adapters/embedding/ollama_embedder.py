@@ -5,7 +5,7 @@
 # ─────────────────────────────────────────────
 """
 
-from typing import List
+from typing import List, Optional
 
 import ollama
 
@@ -44,11 +44,16 @@ class OllamaEmbedder:
         """
         self._model = models.embedding
 
-    def embed(self, text: str) -> List[float]:
+    def embed(self, text: str, *, keep_alive: Optional[int] = None) -> List[float]:
         """Embed ``text`` via ``ollama.embeddings``.
 
         Args:
             text: Text to embed, already prefixed by the caller if needed.
+            keep_alive: Forwarded to ``ollama.embeddings`` as-is -- seconds
+                to keep the model loaded, ``0`` to unload it immediately
+                after this call, or ``None`` for the server's own default
+                (matches ``_indexar_chunk``, which never passes this at
+                all).
 
         Returns:
             The embedding vector.
@@ -58,7 +63,7 @@ class OllamaEmbedder:
                 truncate-and-retry for overlong input).
         """
         try:
-            response = ollama.embeddings(model=self._model, prompt=text)
+            response = ollama.embeddings(model=self._model, prompt=text, keep_alive=keep_alive)
             return response["embedding"]
         except Exception as exc:
             if not _looks_like_overlong_input(exc):
@@ -66,7 +71,9 @@ class OllamaEmbedder:
                     f"Ollama embedding failed for model {self._model!r}: {exc}"
                 ) from exc
             try:
-                response = ollama.embeddings(model=self._model, prompt=text[:1000])
+                response = ollama.embeddings(
+                    model=self._model, prompt=text[:1000], keep_alive=keep_alive
+                )
                 return response["embedding"]
             except Exception as exc2:
                 raise RuntimeError(
