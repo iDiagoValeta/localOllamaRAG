@@ -12,6 +12,7 @@ covered here with hand-written port fakes instead.
 
 import sys
 from pathlib import Path
+import dataclasses
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
@@ -23,6 +24,12 @@ import rag.chat_pdfs as rag  # noqa: E402
 
 from monkeygrab.application.index_corpus import IndexCorpus, detect_document_language  # noqa: E402
 from monkeygrab.config.app_config import AppConfig  # noqa: E402
+from monkeygrab.config.stack import (  # noqa: E402
+    EMBEDDER_JINA_CLIP,
+    EXTRACTOR_MINERU,
+    VECTOR_STORE_FAISS,
+    StackConfig,
+)
 from monkeygrab.domain.extracted_image import ExtractedImage  # noqa: E402
 from monkeygrab.domain.extracted_page import ExtractedPage  # noqa: E402
 
@@ -63,6 +70,18 @@ class FakeEmbedder:
     def embed(self, text):
         self.calls.append(text)
         return [0.1, 0.2, 0.3]
+
+
+class FakeMultimodalEmbedder(FakeEmbedder):
+    """Text embedder that also satisfies ImageEmbedder (jina-style)."""
+
+    def __init__(self):
+        super().__init__()
+        self.image_calls = []
+
+    def embed_image(self, image_path, *, caption=""):
+        self.image_calls.append({"path": image_path, "caption": caption})
+        return [0.9, 0.8, 0.7]
 
 
 class FakeVectorStore:
@@ -256,6 +275,45 @@ def test_image_extractor_without_an_ocr_model_skips_image_indexing():
 
     assert result.chunks_indexed == 0
     assert not images.calls  # extraction itself never runs without a way to describe the result
+
+
+def test_multimodal_native_image_embed_without_ocr():
+    """jina-style stacks index figures via embed_image; OCR must not be required."""
+    pages = [ExtractedPage(page=0, text="short")]
+    image = ExtractedImage(
+        image_bytes=b"raw-png-bytes", width=220, height=180, ext="png", caption="Fig. 1"
+    )
+    images = FakeImageExtractor({1: [image]})
+    embedder = FakeMultimodalEmbedder()
+    store = FakeVectorStore()
+    config = dataclasses.replace(
+        _no_text_config(),
+        stack=StackConfig(
+            extractor=EXTRACTOR_MINERU,
+            vector_store=VECTOR_STORE_FAISS,
+            embedder=EMBEDDER_JINA_CLIP,
+        ),
+    )
+
+    result = IndexCorpus(
+        FakeExtractor(pages),
+        embedder,
+        store,
+        config,
+        image_extractor=images,
+        ocr_chat_model=None,
+    ).run("doc.pdf", "doc.pdf")
+
+    assert result.metrics["image_chunks_indexed"] == 1
+    assert len(store.added) == 1
+    chunk, embedding = store.added[0]
+    assert chunk.metadata.format == "image"
+    assert chunk.metadata.chunk == 10_000
+    assert chunk.text == "Fig. 1"
+    assert embedding == [0.9, 0.8, 0.7]
+    assert len(embedder.image_calls) == 1
+    assert embedder.image_calls[0]["caption"] == "Fig. 1"
+    assert images.calls == ["doc.pdf"]
 
 
 def test_image_flag_off_skips_image_indexing_even_with_both_ports_wired_in():

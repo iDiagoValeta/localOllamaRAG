@@ -104,6 +104,18 @@ class ChromaVectorStore:
         client = chromadb.PersistentClient(path=paths.path_db)
         self._collection = client.get_or_create_collection(name=paths.collection_name)
 
+    @classmethod
+    def wrap_collection(cls, collection: chromadb.Collection) -> "ChromaVectorStore":
+        """Adapt a caller-owned Chroma collection without opening a second client.
+
+        CLI/web/eval open the collection before calling ``indexar_documentos``
+        and pass it in; writing through that same object keeps their
+        ``collection.count()`` / ``get`` views consistent with what was indexed.
+        """
+        store = cls.__new__(cls)
+        store._collection = collection
+        return store
+
     def add(self, chunk: Chunk, embedding: Sequence[float]) -> None:
         self._collection.add(
             ids=[chunk.id],

@@ -31,15 +31,11 @@ not by convention.
 ## Current wiring (read before assuming more than this)
 
 `rag/engine/*` still owns the pipeline entry points the CLI and web UI call.
-It imports specific pure functions out of `application/` (`rrf_fusion`,
-`text_chunking`, `context_assembly`, plus two private helpers from
-`retrieve.py`/`answer.py`) and calls them in place of the code that used to
-live inline — each substitution is checked byte-for-byte against the
-original in `tests/unit/application/*_equivalence.py`.
-
-The full use-case classes (`IndexCorpus`, `Retrieve`, `Answer`) exist and are
-independently unit-tested, but nothing in the CLI or web layer constructs or
-calls them yet — that wiring is future work. Don't document it as done.
+Indexing goes through `IndexCorpus`: `rag/engine/indexing.py` builds ports via
+`monkeygrab.composition.build_stack` (env: `PDF_EXTRACTOR`, `VECTOR_STORE`,
+`EMBEDDER`; default remains pymupdf + Ollama + Chroma). Retrieval/generation
+still call pure helpers out of `application/` in place; the full `Retrieve` /
+`Answer` use-case classes are unit-tested but not yet constructed by CLI/web.
 
 ## Adapters whose dependencies collide with the product's
 
@@ -49,9 +45,10 @@ code only loads under an older transformers than the one the product runs.
 Rather than downgrade the product environment for one model, the pattern is
 to run the dependency in its own isolated interpreter (here, `.venv-mineru`)
 as a persistent subprocess, speaking line-JSON over stdin/stdout
-(`jina_clip_worker.py`, never imported by product code). MinerU is expected
-to follow the same shape when it's added. The adapter itself stays pure
-stdlib either way, so its unit tests never need the isolated environment.
+(`jina_clip_worker.py`, never imported by product code). MinerU follows the
+same isolation idea as an external CLI (never a product Python dependency).
+The jina adapter itself stays pure stdlib either way, so its unit tests never
+need the isolated environment.
 
 ## Adding a new adapter (e.g. to compare a retrieval technology)
 
@@ -65,6 +62,6 @@ stdlib either way, so its unit tests never need the isolated environment.
    infrastructure the adapter calls (see the existing adapter tests for the
    pattern) — `tests/unit/adapters/test_adapters_do_not_import_rag.py` is the
    one boundary check specific to this directory.
-5. There is no runtime adapter-selection mechanism yet (no `PDF_EXTRACTOR`-style
-   switch in `AppConfig`) — construct the adapter and pass it into the
-   relevant use case directly until that wiring exists.
+5. Register it in `composition.py` (`build_extractor` / `build_vector_store` /
+   `build_embedder`) behind a `StackConfig` choice, and document the env var
+   in `config/stack.py`.
