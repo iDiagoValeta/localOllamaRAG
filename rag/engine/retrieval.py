@@ -12,6 +12,9 @@ from typing import Any, Dict, List, Tuple
 import chromadb
 import ollama
 
+from monkeygrab.application.rrf_fusion import fuse_semantic_and_keyword
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
+from monkeygrab.domain.fragment import Fragment
 from rag.cli.display import ui
 from rag.engine.runtime import get_runtime
 
@@ -87,6 +90,12 @@ def realizar_busqueda_hibrida(
     all_semantic_results = {}
     embedding_dim = 0
     resultados_por_query: List[int] = []
+    # Raw per-query-variant hits (not merged), fed to the RRF fusion delegate
+    # below (monkeygrab.application.rrf_fusion.fuse_semantic_and_keyword) --
+    # kept alongside all_semantic_results rather than derived from it, so
+    # fase_semantica's dedup-by-min-distance metrics stay computed exactly as
+    # before.
+    semantic_hits_por_query: List[List[Fragment]] = []
 
     for q_idx, query in enumerate(queries):
         query_con_prefijo = f"{cfg.EMBED_PREFIX_QUERY}{query}"
@@ -105,6 +114,7 @@ def realizar_busqueda_hibrida(
         )
         resultados_por_query.append(len(results_semantic['documents'][0]))
 
+        hits_query: List[Fragment] = []
         for idx, (doc, distancia, metadata) in enumerate(zip(
             results_semantic['documents'][0],
             results_semantic['distances'][0],
@@ -128,6 +138,15 @@ def realizar_busqueda_hibrida(
             all_semantic_results[chunk_id]['query_matches'].append(q_idx + 1)
             if distancia < all_semantic_results[chunk_id]['distancia']:
                 all_semantic_results[chunk_id]['distancia'] = distancia
+
+            hits_query.append(Fragment(
+                doc=doc,
+                metadata=ChunkMetadata(
+                    source=metadata['source'], page=metadata['page'], chunk=metadata.get('chunk', 0)
+                ),
+                distancia=distancia,
+            ))
+        semantic_hits_por_query.append(hits_query)
 
     distancias = [v['distancia'] for v in all_semantic_results.values()]
     metricas_totales['fase_semantica'] = {
@@ -153,43 +172,63 @@ def realizar_busqueda_hibrida(
 
     ui.debug("fusing results...")
 
-    fragmentos_data = all_semantic_results.copy()
+    # RRF fusion (semantic branch across query variants + BM25 branch) is
+    # delegated to monkeygrab.application.rrf_fusion.fuse_semantic_and_keyword
+    # -- equivalence-tested against this exact call in
+    # tests/unit/application/test_rrf_fusion_equivalence.py and
+    # test_rrf_fusion_multi_query_equivalence.py. Fragment/ChunkMetadata only
+    # carry source/page/chunk (enough for the RRF math and the chunk_id);
+    # the full original 'doc'/'metadata' dicts (every key ChromaDB/BM25
+    # attached) are looked up by id afterward instead of being reconstructed
+    # from the domain entities, so no key is lost or invented at the
+    # boundary.
+    doc_y_metadata_por_id: Dict[str, Dict[str, Any]] = {
+        chunk_id: {'doc': data['doc'], 'metadata': data['metadata']}
+        for chunk_id, data in all_semantic_results.items()
+    }
 
-    for idx, result in enumerate(results_keyword, 1):
-        chunk_id = result['id']
+    keyword_hits: List[Fragment] = []
+    for result in results_keyword:
+        cid = result['id']
+        if cid not in doc_y_metadata_por_id:
+            doc_y_metadata_por_id[cid] = {'doc': result['doc'], 'metadata': result['metadata']}
+        keyword_hits.append(Fragment(
+            doc=result['doc'],
+            metadata=ChunkMetadata(
+                source=result['metadata']['source'],
+                page=result['metadata']['page'],
+                chunk=result['metadata'].get('chunk', 0),
+            ),
+            distancia=result['distancia'],
+        ))
 
-        if chunk_id in fragmentos_data:
-            fragmentos_data[chunk_id]['score_keyword'] += 1.0 / (idx + cfg.RRF_K)
-            if 'BM25' not in fragmentos_data[chunk_id]['matches']:
-                fragmentos_data[chunk_id]['matches'].append('BM25')
-        else:
-            fragmentos_data[chunk_id] = {
-                'doc': result['doc'],
-                'metadata': result['metadata'],
-                'distancia': result['distancia'],
-                'id': chunk_id,
-                'score_semantic': 0.0,
-                'score_keyword': 1.0 / (idx + cfg.RRF_K),
-                'matches': ['BM25'],
-                'query_matches': []
-            }
-
-    for frag in fragmentos_data.values():
-        frag['score_final'] = (
-            frag['score_semantic'] * cfg.PESO_SEMANTICO_RRF
-            + frag['score_keyword'] * cfg.PESO_BM25_RRF
-        )
-
-    fragmentos_ranked = sorted(
-        fragmentos_data.values(),
-        key=lambda x: x['score_final'],
-        reverse=True
+    fused = fuse_semantic_and_keyword(
+        semantic_hits_per_query=semantic_hits_por_query,
+        keyword_hits=keyword_hits,
+        rrf_k=cfg.RRF_K,
+        weight_semantic=cfg.PESO_SEMANTICO_RRF,
+        weight_keyword=cfg.PESO_BM25_RRF,
     )
 
+    fragmentos_ranked = [
+        {
+            'doc': doc_y_metadata_por_id[f.id]['doc'],
+            'metadata': doc_y_metadata_por_id[f.id]['metadata'],
+            'distancia': f.distancia,
+            'id': f.id,
+            'score_semantic': f.score_semantic,
+            'score_keyword': f.score_keyword,
+            'matches': list(f.matches),
+            'query_matches': list(f.query_matches),
+            'score_final': f.score_final,
+        }
+        for f in fused
+    ]
+
     metricas_totales['candidatos_fusion'] = len(fragmentos_ranked)
-    solo_semantica = sum(1 for f in fragmentos_data.values() if f['score_semantic'] > 0 and f['score_keyword'] == 0)
-    solo_lexica = sum(1 for f in fragmentos_data.values() if f['score_keyword'] > 0 and f['score_semantic'] == 0)
-    ambas_ramas = sum(1 for f in fragmentos_data.values() if f['score_semantic'] > 0 and f['score_keyword'] > 0)
+    solo_semantica = sum(1 for f in fragmentos_ranked if f['score_semantic'] > 0 and f['score_keyword'] == 0)
+    solo_lexica = sum(1 for f in fragmentos_ranked if f['score_keyword'] > 0 and f['score_semantic'] == 0)
+    ambas_ramas = sum(1 for f in fragmentos_ranked if f['score_semantic'] > 0 and f['score_keyword'] > 0)
     metricas_totales['fase_fusion'] = {
         'peso_semantico': cfg.PESO_SEMANTICO_RRF,
         'peso_lexico': cfg.PESO_BM25_RRF,

@@ -123,6 +123,12 @@ def _fresh_rag_chat_pdfs_snapshot():
     script = (
         "import json, sys\n"
         f"sys.path.insert(0, {str(ROOT)!r})\n"
+        # rag.engine.* now delegates parts of its logic to monkeygrab.application
+        # (see the clean-architecture migration), so rag.chat_pdfs transitively
+        # needs the "src" layout root too -- mirrors pytest.ini's own
+        # `pythonpath = . src`, which the main pytest process gets for free but
+        # this subprocess does not.
+        f"sys.path.insert(0, {str(ROOT / 'src')!r})\n"
         "import rag.chat_pdfs as rag\n"
         f"print(json.dumps({{name: getattr(rag, name) for name in {names!r}}}))\n"
     )
