@@ -108,6 +108,15 @@ _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
+# rag.engine.* delegates parts of its logic to monkeygrab.application (the
+# hexagonal-architecture layer under src/), so that package must be
+# importable too -- mirrors pytest.ini's `pythonpath = . src`, which only
+# covers the test process, not this module's own standalone/direct-execution
+# bootstrap above.
+_src_root = os.path.join(_project_root, "src")
+if _src_root not in sys.path:
+    sys.path.insert(0, _src_root)
+
 
 # Load configuration from a ``.env`` file at the project root, if present.
 # ``override=False`` keeps the process environment authoritative over the file,
@@ -497,7 +506,7 @@ def set_model_roles_runtime(overrides: Dict[str, str]) -> Dict[str, str]:
 # ─────────────────────────────────────────────
 
 
-SYSTEM_PROMPT_CHAT = f"""
+SYSTEM_PROMPT_CHAT = """
 You are MonkeyGrab, the conversational assistant for a local academic RAG system (TFG project).
 Your purpose is to help users query indexed PDF documents and understand the system itself.
 

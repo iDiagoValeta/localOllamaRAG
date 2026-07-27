@@ -9,9 +9,9 @@ to strip any think blocks from the output. Reports whether each model
 successfully avoided producing reasoning content.
 
 Usage:
-    python tests/test_ollama_stream_nothink.py
-    python tests/test_ollama_stream_nothink.py --model qwen3:14b --prompt "Hello"
-    python tests/test_ollama_stream_nothink.py -m qwen3-base-direct -m qwen3:4b-instruct
+    python tools/diagnostics/ollama_stream_nothink.py
+    python tools/diagnostics/ollama_stream_nothink.py --model qwen3:14b --prompt "Hello"
+    python tools/diagnostics/ollama_stream_nothink.py -m qwen3-base-direct -m qwen3:4b-instruct
 Dependencies:
     - requests
     - A running Ollama server with the target models loaded
@@ -36,7 +36,6 @@ import argparse
 import json
 import re
 import sys
-from pathlib import Path
 
 import requests
 

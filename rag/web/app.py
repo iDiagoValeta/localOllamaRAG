@@ -613,7 +613,7 @@ def index():
     if os.path.isfile(react_index):
         return send_from_directory(_react_dist, "index.html")
     return (
-        "<h1>MonkeyGrab</h1><p>Build React no encontrado. Ejecuta: <code>cd rag/web/frontend && npm install && npm run build</code></p>",
+        "<h1>MonkeyGrab</h1><p>Build React no encontrado. Ejecuta: <code>cd rag/web/frontend && pnpm install && pnpm run build</code></p>",
         503,
         {"Content-Type": "text/html; charset=utf-8"},
     )
@@ -750,7 +750,7 @@ def api_init():
     try:
         resp, status = _api_init_logic()
         return jsonify(resp), status
-    except Exception as e:
+    except Exception:
         # Corrupt or deleted DB: invalidate and retry once
         _state["collection"] = None
         _state["indexing_failed"] = False
@@ -1306,8 +1306,8 @@ def main():
         print(f"  Frontend React: {_react_dist}")
     else:
         print(f"  ⚠  Build React no encontrado en {_react_dist}")
-        print(f"     Ejecuta: cd rag/web/frontend && npm install && npm run build")
-        print(f"     (Usando template legacy como fallback)")
+        print("     Ejecuta: cd rag/web/frontend && pnpm install && pnpm run build")
+        print("     (Usando template legacy como fallback)")
     print()
     app.run(host=host, port=port, debug=False, threaded=True)
 

@@ -44,7 +44,6 @@ import difflib
 import os
 import shutil
 import signal
-import sys
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-test_gemma4_aux_nothink.py -- Probe reasoning suppression for Gemma 4 (Ollama).
+ollama_aux_nothink.py -- Probe reasoning suppression for Gemma 4 (Ollama).
 
 MonkeyGrab uses ``ollama.generate`` for the auxiliary chat model (sub-queries in
 ``generar_queries_con_llm``). Gemma 4 is reasoning-capable; this script checks
@@ -13,9 +13,9 @@ Strategies exercised:
   (3) Printed Modelfile snippet: ``PARAMETER think false`` for a derived model.
 
 Usage:
-    python tests/test_gemma4_aux_nothink.py
-    python tests/test_gemma4_aux_nothink.py --model gemma4:e4b
-    set OLLAMA_GEMMA4_TEST_MODEL=gemma4:e4b && python tests/test_gemma4_aux_nothink.py
+    python tools/diagnostics/ollama_aux_nothink.py
+    python tools/diagnostics/ollama_aux_nothink.py --model gemma4:e4b
+    set OLLAMA_GEMMA4_TEST_MODEL=gemma4:e4b && python tools/diagnostics/ollama_aux_nothink.py
 
 Dependencies:
     - requests

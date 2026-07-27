@@ -6,9 +6,13 @@ configuration stays owned by rag.chat_pdfs and is read lazily through ``cfg``
 are observed without any per-call synchronization.
 """
 
-import re
 from typing import Any, Dict, List
 
+from monkeygrab.application.text_chunking import (
+    adjacent_chunk_ids,
+    split_markdown_into_chunks,
+)
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
 from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
@@ -36,128 +40,15 @@ def dividir_en_chunks(
     Returns:
         List of dicts with ``"text"`` and ``"header"`` keys.
     """
-    if not texto or not texto.strip():
-        return []
-
-    texto = re.sub(r'~~`?[^~]*`?~~', '', texto)
-    texto = re.sub(r'(?<!\*)\*{1,2}(?!\*)', '', texto)
-    texto = re.sub(r'`([^`\n]{1,3})`', r'\1', texto)
-    texto = re.sub(r'\n{3,}', '\n\n', texto)
-
-    header_pattern = re.compile(
-        r'^(?:#{1,4}\s+.+|\*\*(?:[A-Z0-9].+?)\*\*\s*)$',
-        re.MULTILINE
-    )
-
-    secciones = []
-    last_end = 0
-    current_header = ""
-
-    for match in header_pattern.finditer(texto):
-        contenido_previo = texto[last_end:match.start()].strip()
-        if contenido_previo:
-            secciones.append({"header": current_header, "content": contenido_previo})
-
-        raw_header = match.group(0).strip()
-        current_header = re.sub(r'^\*\*(.+?)\*\*$', r'\1', raw_header).strip()
-        last_end = match.end()
-
-    contenido_final = texto[last_end:].strip()
-    if contenido_final:
-        secciones.append({"header": current_header, "content": contenido_final})
-
-    if not secciones:
-        secciones = [{"header": "", "content": texto.strip()}]
-
-    separadores = ["\n\n", "\n", ". ", ".\n", "! ", "? ", "; ", ", ", " "]
-
-    def _split_recursivo(text: str, max_size: int, depth: int = 0) -> List[str]:
-        """Recursively split text using hierarchical separators."""
-        if len(text) <= max_size:
-            return [text] if text.strip() else []
-
-        for sep_idx, separador in enumerate(separadores):
-            if separador not in text:
-                continue
-
-            partes = text.split(separador)
-            resultado = []
-            chunk_actual = ""
-
-            for i, parte in enumerate(partes):
-                parte_con_sep = parte + separador if i < len(partes) - 1 else parte
-
-                if len(chunk_actual) + len(parte_con_sep) <= max_size:
-                    chunk_actual += parte_con_sep
-                else:
-                    if chunk_actual.strip():
-                        resultado.append(chunk_actual.strip())
-
-                    if len(parte_con_sep) > max_size and depth < len(separadores) - 1:
-                        resultado.extend(_split_recursivo(parte_con_sep, max_size, depth + 1))
-                        chunk_actual = ""
-                    else:
-                        while len(parte_con_sep) > max_size:
-                            resultado.append(parte_con_sep[:max_size].strip())
-                            parte_con_sep = parte_con_sep[max_size:]
-                        chunk_actual = parte_con_sep
-
-            if chunk_actual.strip():
-                resultado.append(chunk_actual.strip())
-
-            if resultado:
-                return resultado
-
-        resultado = []
-        for i in range(0, len(text), max_size):
-            fragmento = text[i:i + max_size].strip()
-            if fragmento:
-                resultado.append(fragmento)
-        return resultado
-
-    fragmentos_raw = []
-    for seccion in secciones:
-        header = seccion["header"]
-        content = seccion["content"]
-
-        header_prefix = f"{header}\n" if header else ""
-        espacio_contenido = chunk_size - len(header_prefix)
-
-        if espacio_contenido < cfg.MIN_CHUNK_LENGTH:
-            espacio_contenido = chunk_size
-            header_prefix = ""
-
-        partes = _split_recursivo(content, espacio_contenido)
-
-        for parte in partes:
-            texto_chunk = (header_prefix + parte).strip()
-            if len(texto_chunk) >= cfg.MIN_CHUNK_LENGTH:
-                fragmentos_raw.append({"text": texto_chunk, "header": header})
-
-    if not fragmentos_raw:
-        if len(texto.strip()) >= cfg.MIN_CHUNK_LENGTH:
-            return [{"text": texto.strip()[:chunk_size], "header": ""}]
-        return []
-
-    chunks_finales = []
-    for i, frag in enumerate(fragmentos_raw):
-        texto_chunk = frag["text"]
-
-        if i > 0 and overlap > 0:
-            prev_text = fragmentos_raw[i - 1]["text"]
-            overlap_text = prev_text[-overlap:]
-            space_idx = overlap_text.find(' ')
-            if space_idx > 0:
-                overlap_text = overlap_text[space_idx + 1:]
-            if overlap_text and overlap_text not in texto_chunk[:overlap + 50]:
-                texto_chunk = overlap_text + " " + texto_chunk
-
-        chunks_finales.append({
-            "text": texto_chunk.strip(),
-            "header": frag["header"]
-        })
-
-    return chunks_finales
+    # Implementation lives in monkeygrab.application.text_chunking
+    # (split_markdown_into_chunks) -- a literal port, equivalence-tested
+    # against this function in tests/unit/application/test_text_chunking_
+    # equivalence.py. cfg.MIN_CHUNK_LENGTH is still read live here (not
+    # captured as a stale default) and passed through as an explicit
+    # parameter, since the new layer takes config as arguments instead of
+    # reading a module global.
+    chunks = split_markdown_into_chunks(texto, chunk_size, overlap, cfg.MIN_CHUNK_LENGTH)
+    return [{"text": c.text, "header": c.header} for c in chunks]
 
 
 def expandir_con_chunks_adyacentes(
@@ -176,33 +67,17 @@ def expandir_con_chunks_adyacentes(
     Returns:
         List of neighboring chunk IDs.
     """
-    archivo = metadata['source']
-    pagina = metadata['page']
-    chunk_num = metadata.get('chunk', 0)
-    total_in_page = metadata.get('total_chunks_in_page', None)
-
-    ids_adyacentes = []
-
-    for i in range(1, n_vecinos + 1):
-        if chunk_num - i >= 0:
-            ids_adyacentes.append(f"{archivo}_pag{pagina}_chunk{chunk_num - i}")
-
-    if chunk_num == 0 and pagina > 0:
-        for last_c in range(3):
-            ids_adyacentes.append(f"{archivo}_pag{pagina - 1}_chunk{last_c}")
-
-    if total_in_page is not None:
-        for i in range(1, n_vecinos + 1):
-            if chunk_num + i < total_in_page:
-                ids_adyacentes.append(f"{archivo}_pag{pagina}_chunk{chunk_num + i}")
-
-        if chunk_num >= total_in_page - 1:
-            for first_c in range(min(2, n_vecinos + 1)):
-                ids_adyacentes.append(f"{archivo}_pag{pagina + 1}_chunk{first_c}")
-    else:
-        ids_adyacentes.append(f"{archivo}_pag{pagina + 1}_chunk0")
-
-    return ids_adyacentes
+    # Implementation lives in monkeygrab.application.text_chunking
+    # (adjacent_chunk_ids). chunk_id is accepted for API compatibility but,
+    # like the original, never read -- every id built here derives from
+    # metadata alone.
+    meta = ChunkMetadata(
+        source=metadata['source'],
+        page=metadata['page'],
+        chunk=metadata.get('chunk', 0),
+        total_chunks_in_page=metadata.get('total_chunks_in_page', None),
+    )
+    return adjacent_chunk_ids(meta, n_neighbors=n_vecinos)
 
 
 

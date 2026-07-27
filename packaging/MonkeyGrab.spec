@@ -13,6 +13,8 @@ Build:
 """
 
 import os
+import sys
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
 PROJ = os.path.dirname(os.path.abspath(SPECPATH))  # noqa: F821 (SPECPATH injected by PyInstaller)
@@ -30,8 +32,16 @@ for _corpus in ("es", "ca", "en"):
     if os.path.isdir(_src):
         datas.append((_src, os.path.join("rag", "docs", _corpus)))
 
-# Our own package (engine + cli + web) so dynamically referenced modules survive.
+# Our own packages so dynamically referenced modules survive. `monkeygrab` lives
+# under src/, which is not on the default search path, so the layout root has to
+# be announced before collecting it -- rag.engine delegates its logic there, and
+# without this the frozen app raises ModuleNotFoundError on first import while
+# working perfectly from a source checkout.
+_SRC = os.path.join(PROJ, "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 hiddenimports += collect_submodules("rag")
+hiddenimports += collect_submodules("monkeygrab")
 
 # --- Heavy third-party packages: collect data + binaries + submodules --------
 _collect = [
@@ -98,7 +108,7 @@ block_cipher = None
 
 a = Analysis(
     [os.path.join(PROJ, "rag", "web", "desktop.py")],
-    pathex=[PROJ],
+    pathex=[PROJ, _SRC],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

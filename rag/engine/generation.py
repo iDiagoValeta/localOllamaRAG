@@ -16,10 +16,20 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import chromadb
 
+from monkeygrab.application.answer import _limit_by_char_budget
+from monkeygrab.application.retrieve import _filter_by_reranker_threshold
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
+from monkeygrab.domain.fragment import Fragment
 from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
 OLLAMA_BASE_URL = "http://localhost:11434"
+
+# Placeholder metadata for the two threshold/budget filters below: both only
+# ever read score fields or `doc` length, never metadata, but Fragment
+# requires a ChunkMetadata to construct. Shared frozen instance, safe to
+# reuse across calls.
+_METADATA_MARCADOR = ChunkMetadata(source="", page=0)
 
 
 def _modelos_ollama_configurados() -> set[str]:
@@ -170,24 +180,38 @@ def _generar_respuesta_stream(mensaje_usuario: str, on_token=None, stats: Option
     return respuesta_completa
 
 
-def _score_relevancia_fragmento(fragmento: Dict[str, Any]) -> float:
-    """Return the active relevance score for post-reranker filtering."""
-    try:
-        return float(fragmento.get("score_reranker", fragmento.get("score_final", 0)) or 0)
-    except (TypeError, ValueError):
-        return 0.0
-
-
 def _filtrar_por_umbral_reranker(
     fragmentos_ranked: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """Apply the single reranker relevance threshold."""
-    if not cfg.USAR_RERANKER:
-        return list(fragmentos_ranked)
+    """Apply the single reranker relevance threshold.
 
+    Implementation lives in monkeygrab.application.retrieve
+    (_filter_by_reranker_threshold / _relevance_score); equivalence-tested
+    against this function in tests/unit/application/
+    test_retrieve_threshold_equivalence.py. The dict-based signature is kept
+    because rag/chat_pdfs.py's public API is frozen (CLAUDE.md rule 7): each
+    dict is converted to a throwaway Fragment carrying only the two score
+    fields the filter reads, and the ORIGINAL dicts -- not reconstructions
+    -- are returned, matched back to the survivors by object identity so
+    every other key (doc, metadata, matches, ...) passes through untouched.
+    """
+    fragmentos_dominio = [
+        Fragment(
+            doc=f.get("doc", ""),
+            metadata=_METADATA_MARCADOR,
+            score_reranker=f.get("score_reranker"),
+            score_final=f.get("score_final", 0.0),
+        )
+        for f in fragmentos_ranked
+    ]
+    conservados = _filter_by_reranker_threshold(
+        fragmentos_dominio, cfg.USAR_RERANKER, cfg.UMBRAL_SCORE_RERANKER
+    )
+    conservados_ids = {id(f) for f in conservados}
     return [
-        f for f in fragmentos_ranked
-        if _score_relevancia_fragmento(f) >= cfg.UMBRAL_SCORE_RERANKER
+        original
+        for original, dominio in zip(fragmentos_ranked, fragmentos_dominio)
+        if id(dominio) in conservados_ids
     ]
 
 
@@ -246,19 +270,22 @@ def _expandir_fragmentos_contexto(
 def _limitar_fragmentos_por_chars(
     fragmentos: List[Dict[str, Any]],
 ) -> Tuple[List[Dict[str, Any]], int]:
-    """Apply the retrieved-evidence character budget before context synthesis."""
-    contexto_total = sum(len(f["doc"]) for f in fragmentos)
-    if contexto_total <= cfg.MAX_CONTEXTO_CHARS:
-        return fragmentos, 0
+    """Apply the retrieved-evidence character budget before context synthesis.
 
-    fragmentos_truncados = []
-    chars_acum = 0
-    for f in fragmentos:
-        if chars_acum + len(f["doc"]) > cfg.MAX_CONTEXTO_CHARS:
-            break
-        fragmentos_truncados.append(f)
-        chars_acum += len(f["doc"])
-    return fragmentos_truncados, len(fragmentos) - len(fragmentos_truncados)
+    Implementation lives in monkeygrab.application.answer
+    (_limit_by_char_budget); equivalence-tested against this function in
+    tests/unit/application/test_answer_char_budget_equivalence.py. The
+    budget only ever keeps a PREFIX of the input (it walks fragments in
+    order and stops at the first one that would overflow), so the kept
+    original dicts are recovered by taking the same-length prefix of
+    `fragmentos` rather than reconstructing them from the throwaway
+    Fragments built just to carry `doc` length.
+    """
+    fragmentos_dominio = [
+        Fragment(doc=f["doc"], metadata=_METADATA_MARCADOR) for f in fragmentos
+    ]
+    conservados, n_descartados = _limit_by_char_budget(fragmentos_dominio, cfg.MAX_CONTEXTO_CHARS)
+    return fragmentos[:len(conservados)], n_descartados
 
 
 def preparar_fragmentos_para_generacion(

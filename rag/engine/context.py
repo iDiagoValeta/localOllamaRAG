@@ -11,6 +11,12 @@ import re
 import requests
 from typing import Any, Dict, List
 
+from monkeygrab.application.context_assembly import (
+    build_context_for_model,
+    optimize_context_text,
+)
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
+from monkeygrab.domain.fragment import Fragment
 from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
@@ -129,33 +135,12 @@ def optimizar_texto_contexto(texto: str) -> str:
     Returns:
         Cleaned text ready for LLM context.
     """
-    texto = re.sub(r'#{1,6}\s*□', '', texto)
-    texto = re.sub(r'^□\s*$', '', texto, flags=re.MULTILINE)
-
-    texto = re.sub(r'^#{1,6}\s+', '', texto, flags=re.MULTILINE)
-
-    texto = re.sub(
-        r'^[A-ZÀ-Ú][a-zà-ú]+ [A-ZÀ-Ú][a-zà-ú]+,\s+[A-ZÀ-Ú].*?\d+\s*/\s*\d+\s+\w+.*$',
-        '', texto, flags=re.MULTILINE
-    )
-
-    texto = re.sub(r'\*{0,2}Solución:?\*{0,2}\s*La\s+\d+\s*', '', texto)
-
-    texto = re.sub(r'\*\*(.+?)\*\*', r'\1', texto)
-
-    texto = re.sub(r'[ \t]{2,}', ' ', texto)
-
-    texto = re.sub(r'[ \t]+$', '', texto, flags=re.MULTILINE)
-
-    texto = _reunir_parrafos(texto)
-
-    texto = re.sub(r'^\s+$', '', texto, flags=re.MULTILINE)
-
-    texto = re.sub(r'(?m)^\s*\d{1,3}\s*$', '', texto)   # standalone PDF page numbers
-
-    texto = re.sub(r'\n{3,}', '\n\n', texto)
-
-    return texto.strip()
+    # Implementation lives in monkeygrab.application.context_assembly
+    # (optimize_context_text) -- a literal port, no config dependency.
+    # _reunir_parrafos/_es_continuacion_parrafo above are kept even though
+    # this function no longer calls them: rag/chat_pdfs.py imports them by
+    # name as part of its frozen public facade (see CLAUDE.md rule 7).
+    return optimize_context_text(texto)
 
 
 def _marcar_fragmento_incompleto(texto: str) -> str:
@@ -240,32 +225,26 @@ def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:
     Returns:
         Formatted context string ready for the ``<context>`` tag.
     """
-    fragmentos_ordenados = sorted(
-        fragmentos,
-        key=lambda f: (f['metadata']['source'], f['metadata']['page'], f['metadata'].get('chunk', 0))
-    )
+    # Implementation lives in monkeygrab.application.context_assembly
+    # (build_context_for_model). Fragment/ChunkMetadata here only need to
+    # carry source/page/chunk/doc -- the sorting key and formatting logic
+    # never touch any other metadata field -- so the conversion is lossless
+    # for what this function returns (a plain string).
+    fragmentos_dominio = [
+        Fragment(
+            doc=f['doc'],
+            metadata=ChunkMetadata(
+                source=f['metadata']['source'],
+                page=f['metadata']['page'],
+                chunk=f['metadata'].get('chunk', 0),
+            ),
+        )
+        for f in fragmentos
+    ]
+    resultado, metrics = build_context_for_model(fragmentos_dominio, cfg.USAR_OPTIMIZACION_CONTEXTO)
 
-    textos_originales = [frag['doc'] for frag in fragmentos_ordenados]
-    chars_original = sum(len(t) for t in textos_originales)
-
-    fragmentos_formateados = []
-    for i, frag in enumerate(fragmentos_ordenados, 1):
-        texto = optimizar_texto_contexto(frag['doc']) if cfg.USAR_OPTIMIZACION_CONTEXTO else frag['doc']
-        if not texto:
-            continue
-
-        if '\\n\\n' in texto:
-            ctx_summary, raw_content = texto.split('\\n\\n', 1)
-            raw_content = _marcar_fragmento_incompleto(raw_content.strip())
-            texto = f"[Fragment Context]\n{ctx_summary.strip()}\n\n[Source Text]\n{raw_content}"
-        else:
-            texto = _marcar_fragmento_incompleto(texto.strip())
-
-        fragmentos_formateados.append(f"--- [Fragment {i}] ---\n{texto}")
-
-    resultado = "\n\n".join(fragmentos_formateados)
-
-    chars_optimizado = len(resultado)
+    chars_original = metrics['chars_original']
+    chars_optimizado = metrics['chars_optimized']
     if chars_original > 0 and cfg.LOGGING_METRICAS:
         ahorro = chars_original - chars_optimizado
         pct = (ahorro / chars_original) * 100 if ahorro > 0 else 0

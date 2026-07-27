@@ -1,0 +1,25 @@
+# Lint configuration.
+#
+# The rule set is deliberately narrow: pyflakes (F) and syntax/runtime errors
+# (E9) catch things that are actually broken — undefined names, dead imports,
+# unreachable code — while style opinions stay out of the way. A linter that
+# reports hundreds of cosmetic findings on an existing codebase gets muted, and
+# a muted linter catches nothing.
+
+target-version = "py310"
+line-length = 100
+
+exclude = [
+    ".venv-mineru",
+    "rag/web/frontend",
+    "rag/experiments",
+]
+
+[lint]
+select = ["F", "E9"]
+
+[lint.per-file-ignores]
+# Re-exporting is the whole point of a facade: rag/chat_pdfs.py exists so that
+# the CLI, the web layer and the tests can import the engine from one place.
+"rag/chat_pdfs.py" = ["F401"]
+"**/__init__.py" = ["F401"]
