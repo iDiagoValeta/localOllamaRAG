@@ -14,9 +14,6 @@ import chromadb
 from monkeygrab.application.retrieve import Retrieve
 from rag.cli.display import ui
 from rag.engine import wiring
-from rag.engine.runtime import get_runtime
-
-cfg = get_runtime()
 
 
 def realizar_busqueda_hibrida(
