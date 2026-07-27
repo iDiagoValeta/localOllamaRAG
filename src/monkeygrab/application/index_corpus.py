@@ -129,6 +129,31 @@ def _build_document_sample(pages: Sequence[ExtractedPage], contextual_doc_chars:
     return "\n\n".join(partes)[:contextual_doc_chars]
 
 
+def _text_chunk_format(chunk_text: str) -> str:
+    """Classify a text chunk as a table or as prose.
+
+    An extractor that preserves table structure emits HTML, and a chunk carrying
+    a table is a different kind of content from a paragraph: it answers "what
+    value is in this cell" rather than "what does this section say". Marking it
+    lets retrieval surface tables for questions that need one.
+
+    Without this, a preserved table is indexed as ordinary prose and becomes
+    invisible as a table — which is why table retrieval measured 0/5 on the
+    text-flattening path even though the numbers were present in the text.
+
+    The test is the HTML tag rather than the extractor's identity, so any backend
+    that keeps tables intact benefits and none has to announce itself.
+
+    Args:
+        chunk_text: Raw chunk text, before contextual enrichment.
+
+    Returns:
+        ``"table"`` when the chunk contains an HTML table, ``"markdown"``
+        otherwise.
+    """
+    return "table" if "<table" in chunk_text.lower() else "markdown"
+
+
 # ─────────────────────────────────────────────
 # IMAGE DESCRIPTION FILTERING (pure helpers)
 # ─────────────────────────────────────────────
@@ -303,7 +328,7 @@ class IndexCorpus:
                     page=page.page,
                     chunk=chunk_idx,
                     total_chunks_in_page=len(text_chunks),
-                    format="markdown",
+                    format=_text_chunk_format(chunk_text),
                     section_header=text_chunk.header,
                 )
                 chunk = Chunk(text=final_text, metadata=metadata)
