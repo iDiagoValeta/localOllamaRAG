@@ -46,10 +46,10 @@ jobs:
     # chromadb or torch, a boundary has been crossed — which is what it exists
     # to detect.
     #
-    # The adapter tests are excluded because adapters ARE infrastructure: they
-    # import chromadb, ollama and pymupdf4llm at module level even when the
-    # objects are doubled. They run in the engine job below. Verified locally
-    # against an interpreter without those packages.
+    # Tests that import the engine on purpose (adapters, and the equivalence
+    # tests that compare against the original implementation) are skipped by
+    # tests/conftest.py, which detects that the stack is absent. No path list
+    # lives here: it would go stale the moment a test is added.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -58,7 +58,7 @@ jobs:
       - name: Install test runner
         run: pip install pytest
       - name: Run
-        run: pytest tests/unit tests/eval -q --no-header --ignore=tests/unit/adapters
+        run: pytest tests/unit tests/eval -q --no-header
 
   frontend:
     name: Frontend build
@@ -69,6 +69,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          # The action reads packageManager from the repository root by default,
+          # and this project's package.json lives one level down.
+          package_json_file: rag/web/frontend/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
