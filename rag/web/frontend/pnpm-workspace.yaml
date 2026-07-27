@@ -1,0 +1,14 @@
+# pnpm settings. This file, not package.json: since pnpm 11 the `pnpm` field of
+# package.json is no longer read at all, so configuration placed there is inert
+# and misleading.
+#
+# pnpm refuses to run dependency install scripts unless they are named here, and
+# fails the install rather than skipping them quietly. That is the supply-chain
+# behaviour this project wants: a package can only execute code at install time
+# if someone decided it should.
+#
+# esbuild is listed because it genuinely needs its script to place a native
+# binary, and vite cannot build without it. Nothing else is listed, and adding an
+# entry should be a deliberate call every time.
+onlyBuiltDependencies:
+  - esbuild
