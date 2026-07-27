@@ -275,7 +275,26 @@ verde **y** gate completo en verde sobre el corpus de papers, no solo el primero
 | Migración larga con la app rota | Strangler fig: cada fase deja la app funcional |
 | Las heurísticas del spike no generalizan | F3 las generaliza o las elimina, con gold cases de otros documentos como juez |
 
-## 9. Fuera de alcance
+## 9. Registro de decisiones tomadas durante la ejecución
+
+Decisiones que no estaban en el plan original y se resolvieron sobre la marcha, con su motivo. Se
+anotan aquí porque varias contradicen lo que el propio documento decía antes.
+
+| Decisión | Motivo |
+|---|---|
+| Los pines del stack multimodal **no** se declaran hasta tener el entorno real delante | El venv del spike tiene `torch` y `transformers` **anteriores** a los del runtime del producto; declararlos habría degradado un entorno que funciona |
+| `media/` se conserva pese a no estar referenciado | Son las grabaciones originales de las demos, no regenerables, y 29 MB frente a 43 GB liberados no justifican el riesgo |
+| `test_image_rag.py` se elimina en vez de repararse | No definía ninguna función de test: aportaba cero verificación y costaba un import de chromadb por corrida |
+| Los dos sondeos de Ollama salen de `tests/` a `tools/diagnostics/` | Igual: parecían cobertura sin serlo. Un gate honesto no cuenta ficheros que no verifican nada |
+| El lint se limita a pyflakes y errores de sintaxis | Un linter que reporta cientos de hallazgos cosméticos sobre código existente se silencia, y un linter silenciado no detecta nada |
+| Los tests de adaptadores corren en el gate del motor, no en el rápido | Un adaptador **es** infraestructura: importa su librería aunque el objeto esté doblado. Verificado contra un intérprete sin esas librerías |
+| La comparación de defaults contra el motor se salta si el motor no se puede importar | "Este entorno no tiene chromadb" y "los defaults divergieron" son hechos distintos; confundirlos entrena a ignorar el fallo que importa |
+| `RERANKER_QUALITY` pasa a validar su valor | Hoy cualquier cadena distinta de `quality` significa `fast` en silencio. Coherente con la política hard-fail, pero **es** un cambio de comportamiento |
+| La extracción de imágenes conserva su degradación silenciosa | Es enriquecimiento opcional gobernado por un flag; abortar la indexación entera por una imagen corrupta sería peor. Excepción documentada en el puerto |
+| `pnpm` se ancla con `packageManager` y se valida en CI | Cambiar de gestor no sirve de nada mientras nada impida volver a `npm` y regenerar el lockfile |
+| El corpus de casos endurece los literales de un solo dígito | `"6"` casaba con `"Figure 6"` en una respuesta que decía 12 capas. Se prioriza precisión sobre acreditar respuestas telegráficas |
+
+## 10. Fuera de alcance
 
 Rust (issue aparte), CLI profesional (#2), reescritura del frontend más allá de descomponer
 `App.tsx`, ANN aproximado (IVF/HNSW) mientras la búsqueda exacta baste, y recuperar la capa de
