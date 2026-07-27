@@ -23,8 +23,10 @@ import ast
 import importlib.util
 from pathlib import Path
 
-# Imported at module scope by rag/chat_pdfs.py; any one of them missing means the
-# engine cannot be imported at all.
+# What importing rag.chat_pdfs pulls in, directly or through the adapters its
+# pipeline entry points wire up. Any one missing means the engine cannot be
+# imported at all. Erring on the strict side only skips tests that would have
+# run; being too lax would let collection fail outright.
 _ENGINE_REQUIREMENTS = (
     "requests",
     "chromadb",
