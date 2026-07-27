@@ -352,7 +352,23 @@ def run_factual_case(
     for model in models:
         rag.set_model_roles_runtime({"rag": model})
         t0 = time.perf_counter()
-        answer = rag.generar_respuesta_silenciosa(case["question"], list(fragments))
+        try:
+            answer = rag.generar_respuesta_silenciosa(case["question"], list(fragments))
+        except Exception as exc:
+            # A dead or overloaded Ollama must not be reported as a quality
+            # regression: the run is inconclusive, which is a different verdict
+            # from "the system got worse". Marked as an infrastructure error so
+            # the gate can refuse to compare against the baseline at all.
+            gen_elapsed = time.perf_counter() - t0
+            records.append({
+                "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
+                "lang": case["lang"], "model": model, "passed": False,
+                "infrastructure_error": True,
+                "reason": f"{type(exc).__name__}: {exc}",
+                "elapsed_seconds": round(retrieval_elapsed + gen_elapsed, 2),
+            })
+            print(f"  [ERROR] {case['id']} / {model} -- {type(exc).__name__}: {exc}", flush=True)
+            continue
         gen_elapsed = time.perf_counter() - t0
         result = grade.grade_answer(answer, case)
         record = {
@@ -378,8 +394,22 @@ def run_all_cases(
     for case in cases:
         collection = dev_collection if case["source"] == "corpus" else blind_collection
         t0 = time.perf_counter()
-        fragmentos_ranked, _, _ = rag.realizar_busqueda_hibrida(case["question"], collection)
-        fragmentos_finales, _ = rag.preparar_fragmentos_para_generacion(fragmentos_ranked, collection)
+        try:
+            fragmentos_ranked, _, _ = rag.realizar_busqueda_hibrida(case["question"], collection)
+            fragmentos_finales, _ = rag.preparar_fragmentos_para_generacion(fragmentos_ranked, collection)
+        except Exception as exc:
+            # Retrieval needs Ollama for the query embedding, so it fails for the
+            # same environmental reasons generation does. Same treatment.
+            retrieval_elapsed = time.perf_counter() - t0
+            records.append({
+                "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
+                "lang": case["lang"], "model": None, "passed": False,
+                "infrastructure_error": True,
+                "reason": f"retrieval failed -- {type(exc).__name__}: {exc}",
+                "elapsed_seconds": round(retrieval_elapsed, 2),
+            })
+            print(f"  [ERROR] {case['id']} -- retrieval: {type(exc).__name__}: {exc}", flush=True)
+            continue
         retrieval_elapsed = time.perf_counter() - t0
 
         if case["case_type"] in ("figure_retrieval", "table_retrieval"):
@@ -538,6 +568,23 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     pass_rate = summary["overall"]["pass_rate"]
     threshold = _read_baseline()
+
+    # A run where Ollama died partway through says nothing about retrieval or
+    # answer quality, so it must not be compared against the baseline: doing so
+    # would report an environment outage as a quality regression, and with
+    # --update-baseline it could even ratchet the threshold using junk numbers.
+    # Inconclusive is its own verdict, and it still exits non-zero because
+    # nothing was verified.
+    broken = [r for r in records if r.get("infrastructure_error")]
+    if broken:
+        print(f"\n[gate] INCONCLUSIVE: {len(broken)} case(s) could not be evaluated")
+        for record in broken[:5]:
+            print(f"        {record['id']}: {record['reason']}")
+        if len(broken) > 5:
+            print(f"        ... and {len(broken) - 5} more")
+        print("        Not compared against the baseline: this run measured nothing.")
+        return 1
+
     if threshold is None:
         print("\n[gate] no baseline yet (tests/eval/baseline_min_pass_rate.txt missing) -- not gating this run")
         gate_exit = 0
