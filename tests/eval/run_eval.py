@@ -304,35 +304,24 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
             )
 
         lexical = Bm25LexicalIndex(store, config.retrieval)
-        # On an 8 GB card the jina worker already owns the GPU; a CUDA
-        # CrossEncoder beside it is what turns later Ollama generate calls into
-        # HTTP 500s. CPU rerank is slower but keeps the gate conclusive.
-        reranker = None
-        if config.flags.usar_reranker:
-            device = "cpu" if config.stack.is_multimodal else None
-            reranker = CrossEncoderReranker(config.models, device=device)
-        decomposer = None
-        # Query decomposition also calls Ollama mid-retrieve; with jina resident
-        # that is the same VRAM collision. Skip it on the multimodal stack.
-        if config.flags.usar_llm_query_decomposition and not config.stack.is_multimodal:
-            ollama = config.models.ollama
-            decomposer = OllamaChatModel(
-                config.models.chat,
-                num_ctx=ollama.query_num_ctx,
-                keep_alive=ollama.keep_alive,
-                options={
-                    "temperature": 0.5,
-                    "num_predict": 400,
-                    "stop": ["\n\n"],
-                },
-            )
+        # Reranking runs on whatever device the adapter detects, which is CUDA
+        # here. It no longer has to share the card with the jina worker: the
+        # runner retrieves every case first and only then generates, so the two
+        # models are never resident at the same time.
+        reranker = CrossEncoderReranker(config.models) if config.flags.usar_reranker else None
+        # Query decomposition is off for EVERY stack, and that is a decision
+        # about the comparison rather than about VRAM. It calls Ollama in the
+        # middle of retrieval, which would put a generator beside the embedder
+        # again; disabling it only for the multimodal stack would have made the
+        # A/B differ in two variables instead of one, which is how a comparison
+        # stops meaning anything. Both stacks lose the same stage.
         retrieve = Retrieve(
             stack.embedder,
             store,
             config,
             lexical_index=lexical,
             reranker=reranker,
-            query_decomposer=decomposer,
+            query_decomposer=None,
         )
         print(
             f"[index] {label}: stack={config.stack.slug} "
@@ -428,17 +417,19 @@ def _eval_app_config(rag, carpeta: Path):
             "flags.usar_recomp_synthesis": rag.USAR_RECOMP_SYNTHESIS,
         }
     )
-    # Multimodal indexing already embeds figures natively; situational captions
-    # only burn VRAM against the jina worker on an 8 GB card.
+    # Contextual retrieval stays off for the multimodal stack, and this is the
+    # one asymmetry the A/B cannot remove cheaply: it is a property of the index,
+    # not of the query, so equalising it would mean rebuilding an index — with an
+    # LLM call per chunk on one side, or discarding the existing production index
+    # on the other. It is reported as a known limitation instead of hidden, and
+    # it handicaps the multimodal stack, so a win there is a conservative result.
+    #
+    # The reranking pool is NOT shrunk any more. It was, to survive a CPU
+    # CrossEncoder, and that silently made the two stacks differ in which
+    # candidates ever reached the top-k — a second variable in a comparison meant
+    # to have one.
     if config.stack.is_multimodal:
-        config = config.with_overrides(
-            **{
-                "flags.usar_contextual_retrieval": False,
-                # CPU CrossEncoder over 200 long chunks is multi-minute per
-                # query on this machine; keep the stage but shrink the pool.
-                "retrieval.top_k_rerank_candidates": 40,
-            }
-        )
+        config = config.with_overrides(**{"flags.usar_contextual_retrieval": False})
     return config
 
 
@@ -524,6 +515,28 @@ def run_factual_case(
     return records
 
 
+def _release_gpu_models(*retrievers) -> None:
+    """Free every retrieval model holding GPU memory, before generation starts.
+
+    Both matter, and missing either one is fatal in the same way. The embedder
+    owns a worker process; the reranker holds its weights resident. On an 8 GB
+    card either is enough to stop Ollama from loading a generator, and Ollama
+    does not fail fast when memory is short — it blocks until the read times
+    out, so the symptom is a 15-minute hang rather than an error.
+
+    Adapters without either hook (the Ollama embedder) need nothing.
+    """
+    for retrieve in retrievers:
+        for attribute, method in (("_embedder", "close"), ("_reranker", "release")):
+            target = getattr(retrieve, attribute, None)
+            hook = getattr(target, method, None)
+            if callable(hook):
+                try:
+                    hook()
+                except Exception as exc:  # noqa: BLE001 - shutdown must not mask results
+                    print(f"[phase] {attribute}.{method}() failed, continuing: {exc}", flush=True)
+
+
 def run_all_cases(
     rag,
     cases: Sequence[Dict[str, Any]],
@@ -531,42 +544,60 @@ def run_all_cases(
     retrieve_blind,
     models: Sequence[str],
 ) -> List[Dict[str, Any]]:
-    """Run every gold case via ``Retrieve`` (same path for every stack)."""
+    """Run every gold case via ``Retrieve``, retrieving everything before
+    generating anything.
+
+    The pipeline uses its models in sequence -- embed, rerank, generate -- so
+    they never actually need to be resident together. Interleaving per case
+    forced exactly that, and on an 8 GB card the previous shape either collided
+    into HTTP 500s or paid a 28 s embedder cold start for every factual case.
+    Splitting the run into phases lets each model own the GPU and starts the
+    embedder once, which is the difference between a three-hour run and a
+    twenty-minute one.
+
+    The cost is memory: every case's retrieved fragments are held until the
+    generation phase. At 51 cases and a handful of fragments each, that is
+    kilobytes.
+    """
     records: List[Dict[str, Any]] = []
+    pending: List[Dict[str, Any]] = []
+
+    print("[phase 1/2] retrieval for every case (embedder + reranker on GPU)", flush=True)
     for case in cases:
         retrieve = retrieve_dev if case["source"] == "corpus" else retrieve_blind
         t0 = time.perf_counter()
         try:
             result = retrieve.run(case["question"])
-            fragmentos_finales = [_fragment_to_dict(f) for f in result.fragments]
+            fragments = [_fragment_to_dict(f) for f in result.fragments]
         except Exception as exc:
-            retrieval_elapsed = time.perf_counter() - t0
             records.append({
                 "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
                 "lang": case["lang"], "model": None, "passed": False,
                 "infrastructure_error": True,
                 "reason": f"retrieval failed -- {type(exc).__name__}: {exc}",
-                "elapsed_seconds": round(retrieval_elapsed, 2),
+                "elapsed_seconds": round(time.perf_counter() - t0, 2),
             })
             print(f"  [ERROR] {case['id']} -- retrieval: {type(exc).__name__}: {exc}", flush=True)
             continue
-        retrieval_elapsed = time.perf_counter() - t0
+        elapsed = time.perf_counter() - t0
 
+        # Retrieval-only cases are already decided; grading them now keeps the
+        # generation phase to the cases that actually need a model.
         if case["case_type"] in ("figure_retrieval", "table_retrieval"):
-            record = run_retrieval_case(case, fragmentos_finales, retrieval_elapsed)
+            record = run_retrieval_case(case, fragments, elapsed)
             records.append(record)
             status = "PASS" if record["passed"] else "FAIL"
-            print(f"  [{status}] {case['id']} ({retrieval_elapsed:.1f}s) -- {record['reason']}", flush=True)
+            print(f"  [{status}] {case['id']} ({elapsed:.1f}s) -- {record['reason']}", flush=True)
         else:
-            # Free jina VRAM only before Ollama generation; leave the worker up
-            # across retrieval-only cases so it is not cold-started 51 times.
-            closer = getattr(retrieve._embedder, "close", None)
-            if callable(closer):
-                try:
-                    closer()
-                except Exception:
-                    pass
-            records.extend(run_factual_case(rag, case, fragmentos_finales, models, retrieval_elapsed))
+            pending.append({"case": case, "fragments": fragments, "elapsed": elapsed})
+
+    _release_gpu_models(retrieve_dev, retrieve_blind)
+
+    print(f"\n[phase 2/2] generation for {len(pending)} case(s) (Ollama alone on GPU)", flush=True)
+    for item in pending:
+        records.extend(
+            run_factual_case(rag, item["case"], item["fragments"], models, item["elapsed"])
+        )
     return records
 
 

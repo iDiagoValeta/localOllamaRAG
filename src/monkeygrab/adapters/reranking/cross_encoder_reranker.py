@@ -116,6 +116,33 @@ class CrossEncoderReranker:
                     f"({exc}) and the CPU fallback also failed: {exc2}"
                 ) from exc2
 
+    def release(self) -> None:
+        """Drop the loaded model and return its GPU memory.
+
+        A reranker that has scored its candidates is done, but the weights stay
+        resident and on an 8 GB card that is enough to stop a generator from
+        loading at all: Ollama does not fail fast when the memory is not there,
+        it blocks until the request times out. Lazy loading means a later
+        ``rerank`` simply loads again.
+
+        Safe to call when nothing is loaded, and never raises: freeing memory
+        must not be able to break the caller that was being helpful.
+        """
+        if self._model is None:
+            return
+        self._model = None
+        self._loaded_device = None
+        try:
+            import gc
+
+            import torch
+
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:  # noqa: BLE001 - best-effort cleanup
+            pass
+
     def rerank(self, query: str, fragments: Sequence[Fragment], top_k: int) -> List[Fragment]:
         """Re-score ``fragments`` against ``query`` and keep the best ``top_k``.
 
