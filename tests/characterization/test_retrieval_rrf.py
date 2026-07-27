@@ -1,17 +1,16 @@
-"""Characterization test for the RRF fusion stage of
-``rag.engine.retrieval.realizar_busqueda_hibrida`` -- pre-migration snapshot.
+"""Characterization test for the RRF fusion stage of hybrid retrieval.
 
-Only the fusion math and resulting ORDER are under test here: semantic
-retrieval (Chroma) and Ollama embeddings are doubled out, LLM query
-decomposition and the Cross-Encoder reranker are disabled via pipeline
-flags, and BM25 lexical search is doubled with a canned ranked list (BM25
-itself already has dedicated coverage in tests/test_bm25_lexical.py). This
-isolates exactly the part the v2 migration is expected to move: RRF scoring
-and merge order given fixed semantic + lexical rankings.
+Only the fusion math and the resulting ORDER are under test here: semantic
+retrieval and embeddings are doubled out, LLM query decomposition and the
+Cross-Encoder reranker are disabled via pipeline flags, and BM25 lexical
+search is doubled with a canned ranked list (BM25 itself has dedicated
+coverage in tests/test_bm25_lexical.py). This isolates RRF scoring and merge
+order given fixed semantic and lexical rankings.
 
-Do not edit the expected order/scores during the migration: if this test
-starts failing, the fusion behavior changed, which is the regression this
-suite exists to catch.
+The doubles are injected at the port boundary, which is where retrieval now
+takes its dependencies. The expected order and scores are the contract and
+predate that change: do not edit them. If this test starts failing, the
+fusion behavior changed, which is the regression this suite exists to catch.
 """
 
 import sys
@@ -24,7 +23,9 @@ if str(ROOT) not in sys.path:
 import pytest
 
 import rag.chat_pdfs as rag
-from rag.engine import retrieval as retrieval_mod
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
+from monkeygrab.domain.fragment import Fragment
+from rag.engine import wiring
 
 
 class FakeCollection:
@@ -49,34 +50,32 @@ class FakeCollection:
         }
 
 
-def _fake_bm25(pregunta, collection):
+class FakeEmbedder:
+    def embed(self, text, *, keep_alive=None):
+        return [0.1, 0.2, 0.3]
+
+
+class FakeLexicalIndex:
     """BM25 double: fixed ranking with docC as a lexical-only hit."""
-    results = [
-        {
-            "doc": "alpha epsilon content C", "distancia": 0.5, "bm25_score": 3.0,
-            "id": "fileC.pdf_pag0_chunk0",
-            "metadata": {"source": "fileC.pdf", "page": 0, "chunk": 0},
-        },
-        {
-            "doc": "alpha beta content A", "distancia": 0.5, "bm25_score": 2.0,
-            "id": "fileA.pdf_pag0_chunk0",
-            "metadata": {"source": "fileA.pdf", "page": 0, "chunk": 0},
-        },
-        {
-            "doc": "omega chi content D", "distancia": 0.5, "bm25_score": 1.0,
-            "id": "fileD.pdf_pag0_chunk0",
-            "metadata": {"source": "fileD.pdf", "page": 0, "chunk": 0},
-        },
-    ]
-    metrics = {
-        "disponible": True, "documentos_indexados": 3,
-        "terminos_query": 1, "resultados_totales": 3, "mejor_score": 3.0,
-    }
-    return results, metrics
 
-
-def _fake_embeddings(model, prompt, keep_alive):
-    return {"embedding": [0.1, 0.2, 0.3]}
+    def search(self, query, top_n):
+        return [
+            Fragment(
+                doc="alpha epsilon content C",
+                metadata=ChunkMetadata(source="fileC.pdf", page=0, chunk=0),
+                distancia=0.5,
+            ),
+            Fragment(
+                doc="alpha beta content A",
+                metadata=ChunkMetadata(source="fileA.pdf", page=0, chunk=0),
+                distancia=0.5,
+            ),
+            Fragment(
+                doc="omega chi content D",
+                metadata=ChunkMetadata(source="fileD.pdf", page=0, chunk=0),
+                distancia=0.5,
+            ),
+        ]
 
 
 def test_rrf_fusion_favors_cross_branch_consensus_over_single_branch_top_rank(monkeypatch):
@@ -93,9 +92,9 @@ def test_rrf_fusion_favors_cross_branch_consensus_over_single_branch_top_rank(mo
     monkeypatch.setattr(rag, "USAR_LLM_QUERY_DECOMPOSITION", False)
     monkeypatch.setattr(rag, "USAR_RERANKER", False)
     monkeypatch.setattr(rag, "USAR_BUSQUEDA_HIBRIDA", True)
-    monkeypatch.setattr(rag, "extraer_keywords", lambda texto: [])
-    monkeypatch.setattr(rag, "busqueda_lexica_bm25", _fake_bm25)
-    monkeypatch.setattr(retrieval_mod.ollama, "embeddings", _fake_embeddings)
+    monkeypatch.setattr("monkeygrab.application.retrieve.extract_keywords", lambda texto: [])
+    monkeypatch.setattr(wiring, "embedder", lambda config: FakeEmbedder())
+    monkeypatch.setattr(wiring, "lexical_index", lambda collection, config: FakeLexicalIndex())
 
     fragmentos, mejor_score, metricas = rag.realizar_busqueda_hibrida(
         "alpha query", FakeCollection()

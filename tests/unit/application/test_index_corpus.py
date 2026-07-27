@@ -1,13 +1,10 @@
-"""Unit + equivalence tests for monkeygrab.application.index_corpus.IndexCorpus.
+"""Unit tests for monkeygrab.application.index_corpus.IndexCorpus.
 
-``detect_document_language`` is equivalence-tested against
-``rag.engine.contextual._detectar_idioma`` (both pure functions). The rest
-of ``IndexCorpus`` -- extraction/chunking/contextual-enrichment/embedding/
-storage orchestration -- has no single original function to diff against
-(``indexar_documentos`` mixes this with folder iteration, pypdf fallback and
-image indexing that are explicitly out of scope, see
-``monkeygrab.application.index_corpus``'s module docstring), so it is
-covered here with hand-written port fakes instead.
+``detect_document_language`` is a pure function and is pinned directly on its
+expected output per language. ``IndexCorpus`` itself -- extraction, chunking,
+contextual enrichment, embedding and storage orchestration -- is exercised
+against hand-written port fakes, so no Ollama server, PDF or vector store is
+touched.
 """
 
 import sys
@@ -19,8 +16,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import pytest  # noqa: E402
-
-import rag.chat_pdfs as rag  # noqa: E402
 
 from monkeygrab.application.index_corpus import IndexCorpus, detect_document_language  # noqa: E402
 from monkeygrab.config.app_config import AppConfig  # noqa: E402
@@ -34,20 +29,18 @@ from monkeygrab.domain.extracted_image import ExtractedImage  # noqa: E402
 from monkeygrab.domain.extracted_page import ExtractedPage  # noqa: E402
 
 
-# ─────────────────────────────────────────────
-# detect_document_language vs _detectar_idioma
-# ─────────────────────────────────────────────
-
-
-@pytest.mark.parametrize("texto", [
-    "Este documento también describe el sistema pero con más detalle así como los resultados.",
-    "Aquest document també descriu el sistema però amb més detall i els resultats obtinguts.",
-    "This document also describes the system but with more detail and the results that were obtained.",
-    "",
-    "Palabras sueltas sin marcadores claros",
+@pytest.mark.parametrize("texto, esperado", [
+    ("Este documento también describe el sistema pero con más detalle así como los resultados.", "Spanish"),
+    ("Aquest document també descriu el sistema però amb més detall i els resultats obtinguts.", "Catalan"),
+    ("This document also describes the system but with more detail and the results that were obtained.", "English"),
+    # No distinctive marker in either sample: the tie resolves to Spanish, the
+    # first key of the score dict. Pinned because the caller injects the result
+    # into a prompt, so the tie-break must stay a fixed language, not vary.
+    ("", "Spanish"),
+    ("Palabras sueltas sin marcadores claros", "Spanish"),
 ])
-def test_detect_document_language_matches_original(texto):
-    assert detect_document_language(texto) == rag._detectar_idioma(texto)
+def test_detect_document_language(texto, esperado):
+    assert detect_document_language(texto) == esperado
 
 
 # ─────────────────────────────────────────────

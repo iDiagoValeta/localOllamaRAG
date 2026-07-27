@@ -590,19 +590,13 @@ Guidelines:
 
 from rag.engine.history import cargar_historial, guardar_historial, limpiar_historial
 from rag.engine.chunking import dividir_en_chunks, expandir_con_chunks_adyacentes
-from rag.engine.lexical import (
-    STOPWORDS,
+from monkeygrab.adapters.reranking.cross_encoder_reranker import resolve_reranker_device
+from monkeygrab.application.keywords import (
     GENERIC_TERMS_BLACKLIST,
-    extraer_keywords,
-    _tokenizar_bm25,
-    busqueda_lexica_bm25,
-)
-from rag.engine.reranking import (
-    _detectar_dispositivo_reranker,
-    obtener_modelo_reranker,
-    rerank_resultados,
-    generar_queries_con_llm,
-    _validar_coherencia_query,
+    STOPWORDS,
+    extract_keywords,
+    is_coherent_query,
+    tokenize_bm25,
 )
 from rag.engine.retrieval import realizar_busqueda_hibrida
 from rag.engine.context import (
@@ -627,14 +621,6 @@ from rag.engine.generation import (
     generar_respuesta,
     generar_respuesta_silenciosa,
     evaluar_pregunta_rag,
-)
-from rag.engine.contextual import _detectar_idioma, generar_contexto_situacional
-from rag.engine.images import (
-    _es_descripcion_spam,
-    _es_prompt_echo,
-    _es_solo_caption,
-    extraer_imagenes_pdf,
-    describir_imagen_con_llm,
 )
 from rag.engine.indexing import indexar_documentos, obtener_documentos_indexados
 

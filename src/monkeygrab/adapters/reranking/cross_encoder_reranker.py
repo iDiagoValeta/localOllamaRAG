@@ -26,6 +26,38 @@ _MODEL_NAMES = {
 }
 
 
+def resolve_reranker_device(override: Optional[str] = None) -> Tuple[str, bool]:
+    """Decide which device the Cross-Encoder should load on.
+
+    An explicit argument wins, then the ``RERANKER_DEVICE`` environment
+    variable, then CUDA availability. The second return value reports whether
+    the choice was pinned by one of the first two: a pinned device must fail
+    loudly if it cannot be used, while an auto-detected GPU may fall back to
+    CPU.
+
+    Args:
+        override: Force ``"cpu"`` or ``"cuda"``, bypassing the environment
+            and auto-detection.
+
+    Returns:
+        Tuple of (device, whether the choice was forced).
+    """
+    if override is not None:
+        return override, True
+
+    env_override = os.getenv("RERANKER_DEVICE", "").strip().lower()
+    if env_override in ("cpu", "cuda"):
+        return env_override, True
+
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return "cuda", False
+    except ImportError:
+        pass
+    return "cpu", False
+
+
 class CrossEncoderReranker:
     """Re-scores retrieval candidates with a Cross-Encoder loaded once, lazily.
 
@@ -71,20 +103,7 @@ class CrossEncoderReranker:
 
     def _resolve_device(self) -> Tuple[str, bool]:
         """Return ``(device, forced)``. ``forced`` disables the CUDA->CPU fallback."""
-        if self._device_override is not None:
-            return self._device_override, True
-
-        env_override = os.getenv("RERANKER_DEVICE", "").strip().lower()
-        if env_override in ("cpu", "cuda"):
-            return env_override, True
-
-        try:
-            import torch
-            if torch.cuda.is_available():
-                return "cuda", False
-        except ImportError:
-            pass
-        return "cpu", False
+        return resolve_reranker_device(self._device_override)
 
     def _load(self, device: str) -> CrossEncoder:
         model_kwargs = {"torch_dtype": "float16"} if device == "cuda" else {}

@@ -1,9 +1,10 @@
-"""Auxiliary implementation module for rag.chat_pdfs.
+"""Indexing entry point for the CLI and the web app.
 
-This module keeps business logic split out of the public facade. Runtime
-configuration stays owned by rag.chat_pdfs and is read lazily through ``cfg``
-(a live reference to that module), so web/API toggles and test monkeypatches
-are observed without any per-call synchronization.
+Wires the extraction, embedding and storage adapters selected by the stack
+configuration and runs ``monkeygrab.application.index_corpus.IndexCorpus``
+over a folder of PDFs. Chunking, contextual enrichment and image captioning
+all live in the use case; what remains here is folder iteration and progress
+reporting.
 """
 
 import logging
@@ -14,50 +15,16 @@ import chromadb
 
 from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel
 from monkeygrab.adapters.extraction.pymupdf_image_extractor import PymupdfImageExtractor
-from monkeygrab.adapters.vectorstore.chroma_store import ChromaVectorStore
 from monkeygrab.application.index_corpus import IndexCorpus
 from monkeygrab.composition import build_stack
 from monkeygrab.config.app_config import AppConfig
 from monkeygrab.config.stack import EXTRACTOR_MINERU, VECTOR_STORE_CHROMA
 from rag.cli.display import ui
-from rag.engine.runtime import get_runtime
-
-cfg = get_runtime()
-# --- 11.3 Indexing ---
-
-
-def _app_config_from_runtime() -> AppConfig:
-    """Build ``AppConfig`` from env selectors, synced to live ``chat_pdfs`` state.
-
-    Stack backends come from the process environment (``PDF_EXTRACTOR`` /
-    ``VECTOR_STORE`` / ``EMBEDDER``). Paths, model roles and index-time flags
-    follow the mutable runtime module so ``set_docs_folder_runtime`` /
-    ``set_model_roles_runtime`` / ``set_pipeline_flags`` keep working.
-    """
-    return AppConfig.from_env().with_overrides(
-        **{
-            "paths.docs_folder": cfg.CARPETA_DOCS,
-            "models.rag": cfg.MODELO_RAG,
-            "models.chat": cfg.MODELO_CHAT,
-            "models.embedding": cfg.MODELO_EMBEDDING,
-            "models.contextual": cfg.MODELO_CONTEXTUAL,
-            "models.recomp": cfg.MODELO_RECOMP,
-            "models.ocr": cfg.MODELO_OCR,
-            "flags.usar_contextual_retrieval": cfg.USAR_CONTEXTUAL_RETRIEVAL,
-            "flags.usar_embeddings_imagen": cfg.USAR_EMBEDDINGS_IMAGEN,
-            "flags.usar_llm_query_decomposition": cfg.USAR_LLM_QUERY_DECOMPOSITION,
-            "flags.usar_busqueda_hibrida": cfg.USAR_BUSQUEDA_HIBRIDA,
-            "flags.usar_reranker": cfg.USAR_RERANKER,
-            "flags.expandir_contexto": cfg.EXPANDIR_CONTEXTO,
-            "flags.usar_optimizacion_contexto": cfg.USAR_OPTIMIZACION_CONTEXTO,
-            "flags.usar_recomp_synthesis": cfg.USAR_RECOMP_SYNTHESIS,
-            "flags.logging_metricas": cfg.LOGGING_METRICAS,
-            "flags.guardar_debug_rag": cfg.GUARDAR_DEBUG_RAG,
-        }
-    )
+from rag.engine import wiring
 
 
 def _build_image_extractor(config: AppConfig):
+    """Return the image extractor matching the configured PDF extractor."""
     if config.stack.extractor == EXTRACTOR_MINERU:
         from monkeygrab.adapters.extraction.mineru_extractor import MineruImageExtractor
 
@@ -105,14 +72,14 @@ def indexar_documentos(
     if not silent:
         ui.pipeline_start("Indexing documents...")
 
-    config = _app_config_from_runtime()
+    config = wiring.app_config_from_runtime()
     stack = build_stack(config)
 
     # Callers open this collection before indexing; reuse it so their handle
     # sees the writes. FAISS ignores it (paths already carry the stack slug).
     vector_store = stack.vector_store
     if config.stack.vector_store == VECTOR_STORE_CHROMA:
-        vector_store = ChromaVectorStore.wrap_collection(collection)
+        vector_store = wiring.vector_store(collection)
 
     ollama = config.models.ollama
     contextual_model = None

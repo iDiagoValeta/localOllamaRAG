@@ -1,44 +1,27 @@
-"""Retrieve -- query decomposition (opt.) -> semantic + lexical search ->
-RRF fusion -> reranking (opt.) -> reranker-threshold filter.
+"""The retrieval use case: from a user question to ranked evidence.
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- RetrieveResult              -- fragments + observability metrics
-#  +-- _generate_subqueries        -- query decomposition via ChatModel (optional)
-#  +-- _relevance_score            -- moved from generation.py's _score_relevancia_fragmento
-#  +-- _filter_by_reranker_threshold -- moved from generation.py's _filtrar_por_umbral_reranker
-#  +-- _embedding_keep_alive       -- moved from retrieval.py's _embedding_keep_alive
-#  +-- Retrieve                    -- the use case
-#
-# ─────────────────────────────────────────────
+Runs optional query decomposition, semantic search over every query variant,
+optional BM25 lexical search, Reciprocal-Rank-Fusion of the two branches,
+optional Cross-Encoder reranking, and the relevance-threshold filter that
+decides what is worth generating from.
 
-Orchestrates ``rag.engine.retrieval.realizar_busqueda_hibrida`` (multi-query
-semantic search + BM25 + RRF fusion + optional reranking) followed by the
-reranker-threshold filter that used to live at the top of
-``rag.engine.generation.preparar_fragmentos_para_generacion``. Everything
-that talks to infrastructure goes through an injected port (``Embedder``,
-``VectorStore``, ``LexicalIndex``, ``Reranker``, ``ChatModel``); the RRF math
-itself lives in ``monkeygrab.application.rrf_fusion`` (equivalence-tested
-separately).
+Everything touching infrastructure arrives as an injected port (``Embedder``,
+``VectorStore``, ``LexicalIndex``, ``Reranker``, ``ChatModel``), so this
+module has no notion of Ollama, ChromaDB or sentence-transformers. The fusion
+arithmetic lives in ``monkeygrab.application.rrf_fusion`` and the text
+analysis in ``monkeygrab.application.keywords``; both are pure and tested on
+their own.
 
-Known, deliberate scope reduction vs. the original
-``realizar_busqueda_hibrida``: when LLM query decomposition yields no
-sub-queries (disabled, question too short, or the LLM call fails), the
-original falls back to appending ONE extra query variant built from
-``extraer_keywords``/``_validar_coherencia_query`` (``rag/engine/lexical.py``
-and ``rag/engine/reranking.py``). Those two helpers are not part of the four
-modules this migration is scoped to move and are not exposed by any port, so
-that fallback query variant is not reproduced here -- see the class
-docstring and the final report for why, and why the *coherence check* on the
-LLM sub-queries themselves needed no equivalent (it is provably a no-op in
-the original: see below).
+This is the single retrieval path: the CLI and web interfaces reach it
+through ``rag.engine.retrieval``, and the evaluation gate constructs it
+directly. Neither can drift from the other.
 """
 
 import dataclasses
+import time
 from typing import Any, Dict, List, Optional
 
+from monkeygrab.application.keywords import extract_keywords, is_coherent_query
 from monkeygrab.application.rrf_fusion import fuse_semantic_and_keyword
 from monkeygrab.config.app_config import AppConfig
 from monkeygrab.domain.fragment import Fragment
@@ -167,6 +150,54 @@ def _embedding_keep_alive(q_idx: int, n_queries: int) -> Optional[int]:
     return 0 if q_idx >= n_queries - 1 else None
 
 
+def _distance_summary(semantic_hits_per_query: List[List[Fragment]]) -> Dict[str, Any]:
+    """Summarize semantic distances over the deduplicated hit set.
+
+    A chunk retrieved by several query variants is counted once, at its best
+    (smallest) distance, so the summary describes distinct evidence rather
+    than rewarding fan-out.
+
+    Args:
+        semantic_hits_per_query: Hits per query variant, in embedding order.
+
+    Returns:
+        Unique-fragment count plus min/max/mean L2 distance. Zeroed when
+        nothing was retrieved.
+    """
+    best_per_id: Dict[str, float] = {}
+    for hits in semantic_hits_per_query:
+        for hit in hits:
+            if hit.id not in best_per_id or hit.distancia < best_per_id[hit.id]:
+                best_per_id[hit.id] = hit.distancia
+
+    distances = list(best_per_id.values())
+    return {
+        "unique_fragments": len(best_per_id),
+        "l2_min": min(distances) if distances else 0.0,
+        "l2_max": max(distances) if distances else 0.0,
+        "l2_mean": sum(distances) / len(distances) if distances else 0.0,
+    }
+
+
+def _branch_counts(fused: List[Fragment]) -> Dict[str, int]:
+    """Count how many fused fragments each retrieval branch accounts for.
+
+    Cross-branch agreement is the signal hybrid retrieval exists to produce,
+    so these three counts are what tell you whether fusion did anything.
+
+    Args:
+        fused: Fragments after RRF fusion.
+
+    Returns:
+        Counts of semantic-only, lexical-only and both-branch fragments.
+    """
+    return {
+        "semantic_only": sum(1 for f in fused if f.score_semantic > 0 and f.score_keyword == 0),
+        "lexical_only": sum(1 for f in fused if f.score_keyword > 0 and f.score_semantic == 0),
+        "both_branches": sum(1 for f in fused if f.score_semantic > 0 and f.score_keyword > 0),
+    }
+
+
 class Retrieve:
     """Query decomposition (opt.) -> semantic + lexical search -> RRF fusion
     -> reranking (opt.) -> reranker-threshold filter.
@@ -235,18 +266,8 @@ class Retrieve:
         ):
             llm_queries = _generate_subqueries(self._query_decomposer, question)
 
-        # Net result of the original's "if llm_queries: append llm_queries[0]
-        # if coherent" branch followed unconditionally by "for lq in
-        # llm_queries: append if not already present" is IDENTICAL to just
-        # appending every llm_queries entry in order once each -- the
-        # coherence check on llm_queries[0] never changes which queries end
-        # up in the final list (an incoherent llm_queries[0] gets added
-        # anyway by the unconditional loop). Provably equivalent, not a
-        # simplification.
-        queries = [question]
-        for lq in llm_queries:
-            if lq not in queries:
-                queries.append(lq)
+        keywords = extract_keywords(question)
+        queries = self._build_query_variants(question, llm_queries, keywords)
 
         semantic_hits_per_query: List[List[Fragment]] = []
         for q_idx, q in enumerate(queries):
@@ -269,11 +290,16 @@ class Retrieve:
             retrieval.weight_semantic_rrf,
             retrieval.weight_bm25_rrf,
         )
+        fused_candidates = len(fused)
+        branch_counts = _branch_counts(fused)
 
         reranked = False
+        rerank_seconds = 0.0
         if flags.usar_reranker and self._reranker is not None and fused:
+            started = time.perf_counter()
             candidatos_rerank = fused[: retrieval.top_k_rerank_candidates]
             fused = self._reranker.rerank(question, candidatos_rerank, top_k=retrieval.top_k_final)
+            rerank_seconds = time.perf_counter() - started
             reranked = True
 
         filtered = _filter_by_reranker_threshold(fused, flags.usar_reranker, config.reranking.score_threshold)
@@ -286,11 +312,54 @@ class Retrieve:
         metrics = {
             "query_variants": queries,
             "sub_queries": llm_queries,
+            "keywords": keywords,
             "semantic_candidates": sum(len(hits) for hits in semantic_hits_per_query),
+            "semantic_hits_per_query": [len(hits) for hits in semantic_hits_per_query],
+            "semantic_distances": _distance_summary(semantic_hits_per_query),
             "keyword_candidates": len(keyword_hits),
-            "fused_candidates": len(fused),
+            "fused_candidates": fused_candidates,
+            "fusion_branches": branch_counts,
             "reranked": reranked,
+            "rerank_seconds": rerank_seconds,
             "candidates_above_threshold": len(filtered),
             "final_count": len(final_fragments),
         }
         return RetrieveResult(fragments=final_fragments, metrics=metrics)
+
+    @staticmethod
+    def _build_query_variants(
+        question: str, llm_queries: List[str], keywords: List[str]
+    ) -> List[str]:
+        """Assemble the semantic query variants to embed, original first.
+
+        Sub-queries from the LLM are used when available. When there are none
+        -- decomposition disabled, question too short, or the call failed --
+        the leading extracted keywords are joined into one extra variant
+        instead, so a short question still gets a second angle on the corpus.
+        That fallback is dropped when the joined keywords do not read as a
+        coherent query, since embedding a bag of words retrieves noise.
+
+        Args:
+            question: The original user question; always the first variant.
+            llm_queries: Sub-queries from decomposition, possibly empty.
+            keywords: Keywords extracted from the question, most specific first.
+
+        Returns:
+            Query variants in embedding order, without duplicates.
+        """
+        queries = [question]
+
+        if not llm_queries and keywords:
+            keyword_query = " ".join(keywords[:6]).strip()
+            if keyword_query and is_coherent_query(keyword_query) and keyword_query not in queries:
+                queries.append(keyword_query)
+
+        # Appending every sub-query once, in order, is equivalent to the
+        # original's "append the first if coherent, then append any missing
+        # one": an incoherent first sub-query was added by the second loop
+        # anyway, so the coherence check never changed the resulting list.
+        for lq in llm_queries:
+            if lq not in queries:
+                queries.append(lq)
+
+        return queries

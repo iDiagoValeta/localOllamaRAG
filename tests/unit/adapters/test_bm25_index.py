@@ -65,6 +65,16 @@ def test_search_returns_empty_list_for_a_query_with_no_tokens():
     assert store.get_page_calls == 0  # never even needs to build the index
 
 
+def test_search_returns_nothing_when_the_whole_corpus_tokenizes_away():
+    """A corpus of nothing but stopwords leaves BM25 with no terms to index.
+    That is an empty result, not a crash and not an unranked passthrough."""
+    store = FakeVectorStore([_fragment("the and or")])
+
+    results = Bm25LexicalIndex(store, RetrievalConfig()).search("alpha", top_n=5)
+
+    assert results == []
+
+
 def test_search_respects_top_n():
     # A distractor document without the query terms keeps their BM25 idf
     # positive -- if every document shared "keyword match", rank_bm25's idf

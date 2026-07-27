@@ -495,7 +495,7 @@ class MonkeyGrabCLI:
         reranker_model = None
         reranker_device = None
         if rag.USAR_RERANKER:
-            reranker_device_val = rag._detectar_dispositivo_reranker()
+            reranker_device_val, _forced = rag.resolve_reranker_device()
             reranker_model = ('BAAI/bge-reranker-v2-m3'
                               if rag.RERANKER_MODEL_QUALITY == 'quality'
                               else 'ms-marco-MiniLM-L-6-v2')

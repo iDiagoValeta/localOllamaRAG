@@ -1,12 +1,12 @@
-"""Unit + equivalence tests for monkeygrab.application.retrieve.Retrieve.
+"""Unit tests for monkeygrab.application.retrieve.Retrieve.
 
-The RRF math and threshold filter already have dedicated equivalence tests
-(``test_rrf_fusion_equivalence.py``, ``test_retrieve_threshold_equivalence.py``);
-this file covers the orchestration around them with hand-written port fakes,
-plus an equivalence test for the sub-query response *parsing* logic against
-``rag.engine.reranking.generar_queries_con_llm`` (its prompt text is a
-verbatim copy, asserted separately below by capturing what's sent to the
-stubbed model).
+Covers the orchestration -- which query variants get embedded, which optional
+stages run, and how reranking interacts with the relevance threshold -- using
+hand-written port fakes, so nothing here touches Ollama, ChromaDB or a GPU.
+
+The pieces Retrieve delegates to have their own files: RRF fusion in
+test_rrf_fusion.py, the threshold filter in test_retrieve_threshold_equivalence.py,
+and keyword extraction in test_keywords.py.
 """
 
 import sys
@@ -18,44 +18,37 @@ if str(ROOT) not in sys.path:
 
 import pytest  # noqa: E402
 
-import rag.chat_pdfs as rag  # noqa: E402
-
 from monkeygrab.application.retrieve import Retrieve, _parse_subqueries  # noqa: E402
 from monkeygrab.config.app_config import AppConfig  # noqa: E402
 from monkeygrab.domain.chunk_metadata import ChunkMetadata  # noqa: E402
 from monkeygrab.domain.fragment import Fragment  # noqa: E402
 
 
-# ─────────────────────────────────────────────
-# _parse_subqueries vs generar_queries_con_llm's parsing
-# ─────────────────────────────────────────────
-
-
-def test_parse_subqueries_matches_generar_queries_con_llm_parsing(monkeypatch):
-    """Stub ollama.generate the same way the pipeline calls it and compare
-    the ORIGINAL's parsed result against feeding the identical raw text
-    through our parser directly -- proves the two parsing rules
-    (strip numbering, drop lines <=20 chars, cap at 3) agree."""
+def test_parse_subqueries_strips_numbering_drops_short_lines_and_caps_at_three():
+    """Models answer the decomposition prompt with numbered or bulleted lines
+    despite being told not to, and sometimes pad with a stray fragment. The
+    parser normalizes all of that: markers stripped, lines of 20 characters or
+    fewer discarded as noise, and no more than three queries kept."""
     raw_response = (
         "1. How does the attention mechanism compute query-key similarity scores?\n"
         "- What role does multi-head attention play in the transformer encoder?\n"
-        "short\n"  # <=20 chars: dropped by both
+        "short\n"  # <=20 chars: dropped
         "3) Why does the paper use scaled dot-product instead of additive attention?\n"
         "This is a fourth line that would be truncated by the top-3 cap anyway.\n"
     )
 
-    def _fake_generate(model, prompt, think, keep_alive, options):
-        return {"response": raw_response}
+    parsed = _parse_subqueries(raw_response)
 
-    import rag.engine.reranking as reranking_mod
+    assert parsed == [
+        "How does the attention mechanism compute query-key similarity scores?",
+        "What role does multi-head attention play in the transformer encoder?",
+        "Why does the paper use scaled dot-product instead of additive attention?",
+    ]
 
-    monkeypatch.setattr(reranking_mod.ollama, "generate", _fake_generate)
 
-    theirs = rag.generar_queries_con_llm("What is scaled dot-product attention and why is it used?")
-    ours = _parse_subqueries(raw_response)
-
-    assert ours == theirs
-    assert len(ours) == 3
+def test_parse_subqueries_returns_nothing_for_an_empty_response():
+    assert _parse_subqueries("") == []
+    assert _parse_subqueries("   \n  \n") == []
 
 
 # ─────────────────────────────────────────────
@@ -153,7 +146,10 @@ def test_semantic_only_search_when_hybrid_and_reranker_disabled():
 
     assert [f.id for f in result.fragments] == ["a.pdf_pag0_chunk0", "b.pdf_pag0_chunk0"]
     assert result.metrics["reranked"] is False
-    assert store.query_calls == 1  # only the original question, no decomposition (question is short)
+    # The question plus the keyword-derived fallback variant; no decomposition,
+    # since the question is below the length threshold.
+    assert result.metrics["query_variants"] == ["short query", "query short"]
+    assert store.query_calls == 2
 
 
 def test_query_decomposition_only_triggers_above_60_chars_and_adds_variants():
@@ -168,15 +164,21 @@ def test_query_decomposition_only_triggers_above_60_chars_and_adds_variants():
     ])
     config = _config(**{"flags.usar_busqueda_hibrida": False, "flags.usar_reranker": False})
 
-    Retrieve(embedder, store, config, query_decomposer=decomposer).run(short_question)
+    result = Retrieve(embedder, store, config, query_decomposer=decomposer).run(short_question)
     assert decomposer.calls == []  # too short: decomposition never invoked
-    assert store.query_calls == 1  # only the original question embedded
+    # Original question plus the keyword fallback that stands in for the
+    # sub-queries decomposition did not produce.
+    assert result.metrics["query_variants"] == ["Short question.", "short question"]
+    assert store.query_calls == 2
 
     embedder2 = FakeEmbedder()
     store2 = FakeVectorStore(default_hits=[])
-    Retrieve(embedder2, store2, config, query_decomposer=decomposer).run(long_question)
+    # A run of identical characters yields no usable keyword, so this run
+    # isolates decomposition: original + 2 sub-queries, no fallback variant.
+    result2 = Retrieve(embedder2, store2, config, query_decomposer=decomposer).run(long_question)
     assert len(decomposer.calls) == 1
-    assert store2.query_calls == 3  # original + 2 sub-queries
+    assert result2.metrics["keywords"] == []
+    assert store2.query_calls == 3
 
 
 def test_decomposer_failure_falls_back_to_original_question_only():
@@ -247,15 +249,20 @@ def test_top_k_final_truncates_even_when_reranker_is_off():
 
 
 def test_single_query_variant_unloads_the_embedding_model_immediately():
-    """With only the original question (no decomposition), that one call IS
-    the last variant -- it must ask to unload the embedding model so the RAG
-    generator that runs next fits in VRAM."""
+    """With only the original question, that one call IS the last variant --
+    it must ask to unload the embedding model so the RAG generator that runs
+    next fits in VRAM.
+
+    The question is all stopwords, so no keyword fallback variant is built
+    and no decomposition runs at this length: exactly one embedding call.
+    """
     embedder = FakeEmbedder()
     store = FakeVectorStore(default_hits=[])
     config = _config(**{"flags.usar_busqueda_hibrida": False, "flags.usar_reranker": False})
 
-    Retrieve(embedder, store, config).run("short query")
+    result = Retrieve(embedder, store, config).run("the is of")
 
+    assert result.metrics["query_variants"] == ["the is of"]
     assert embedder.keep_alive_calls == [0]
 
 
