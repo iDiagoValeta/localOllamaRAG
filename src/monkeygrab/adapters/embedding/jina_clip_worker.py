@@ -108,7 +108,28 @@ def _load_model():
     except Exception as exc:
         _fatal(f"failed to load {_MODEL_NAME!r}: {exc}")
 
+    _patch_declared_modalities(model)
     return model
+
+
+def _patch_declared_modalities(model) -> None:
+    """Work around a version-skew gap between jina-clip-v2's remote code and
+    sentence-transformers 5.x's modality validation.
+
+    sentence-transformers 5.x added a strict pre-flight check in `.encode()`
+    that rejects any input whose type isn't in the module's declared
+    `modalities` list. `InputModule.modalities` defaults to `["text"]` and
+    jina-clip-v2's remote `custom_st.Transformer` (written before this
+    feature existed) never overrides it -- so `.encode()` refuses images with
+    "Modality 'image' is not supported", even though that same class's own
+    `tokenize()`/`forward()` implementation (verified by reading its source)
+    fully handles `PIL.Image.Image` inputs via `get_image_features`. This
+    patches only the DECLARATION read by the pre-flight check, on the class
+    object loaded into this process -- it does not modify the cached remote
+    code file, and it does not change what the model computes.
+    """
+    inner_module = model[0]
+    inner_module.__class__.modalities = property(lambda self: ["text", "image"])
 
 
 # ─────────────────────────────────────────────

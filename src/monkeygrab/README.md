@@ -41,6 +41,18 @@ The full use-case classes (`IndexCorpus`, `Retrieve`, `Answer`) exist and are
 independently unit-tested, but nothing in the CLI or web layer constructs or
 calls them yet — that wiring is future work. Don't document it as done.
 
+## Adapters whose dependencies collide with the product's
+
+`adapters/embedding/jina_clip_embedder.py` is the first adapter whose
+library doesn't fit the product's pinned stack at all: jina-clip-v2's remote
+code only loads under an older transformers than the one the product runs.
+Rather than downgrade the product environment for one model, the pattern is
+to run the dependency in its own isolated interpreter (here, `.venv-mineru`)
+as a persistent subprocess, speaking line-JSON over stdin/stdout
+(`jina_clip_worker.py`, never imported by product code). MinerU is expected
+to follow the same shape when it's added. The adapter itself stays pure
+stdlib either way, so its unit tests never need the isolated environment.
+
 ## Adding a new adapter (e.g. to compare a retrieval technology)
 
 1. Pick the port it implements (`ports/<name>.py`) and read its docstring —
