@@ -293,7 +293,13 @@ def test_gold_cases_have_required_fields_for_their_type():
             assert kinds, f"{cid}: retrieval case missing 'expect_kind_any'"
             assert set(kinds) <= _VALID_KINDS, f"{cid}: bad kind in {kinds}"
         else:
-            assert case.get("accepted_answers"), f"{cid}: factual case missing 'accepted_answers'"
+            # A factual case needs something to grade against, and either
+            # mechanism qualifies: accepted_answers (any one literal matches) or
+            # required_all (every literal must be present, for cases where
+            # precision needs two separate anchors rather than one exact phrase).
+            assert case.get("accepted_answers") or case.get("required_all"), (
+                f"{cid}: factual case needs 'accepted_answers' or 'required_all'"
+            )
 
 
 def test_gold_cases_cover_both_languages_and_all_case_types():
@@ -348,14 +354,46 @@ def test_att_n_layers_rejects_coincidental_figure_reference():
     assert grade_answer(correct, case)["pass"]
 
 
-def test_resnet_coco_improvement_rejects_a_coincidental_number():
+def test_resnet_coco_improvement_accepts_the_bare_number_it_asks_for():
     """Verified page 1 (abstract) of arXiv 1512.03385: "we obtain a 28%
-    relative improvement on the COCO object detection dataset." """
+    relative improvement on the COCO object detection dataset."
+
+    The question instructs the model to answer with the number only, so
+    demanding the full phrase contradicted it — a model that complied was
+    graded wrong. The bare literal is safe because the grader refuses to match
+    an integer inside a longer number or inside a decimal.
+    """
     case = _find_case(_load_gold_cases(), "resnet-coco-improvement")
-    wrong = "Table 28 in the appendix lists additional COCO results."
-    correct = "Deep residual representations give a 28% relative improvement on COCO."
-    assert not grade_answer(wrong, case)["pass"]
-    assert grade_answer(correct, case)["pass"]
+    assert grade_answer("28", case)["pass"]
+    assert grade_answer("A 28% relative improvement on COCO.", case)["pass"]
+    assert not grade_answer("The improvement was 28.4 points.", case)["pass"]
+    assert not grade_answer("Baseline scored 128 overall.", case)["pass"]
+
+
+def test_multiplication_notation_is_one_answer_in_every_spelling():
+    """A patch size is the same fact whether it arrives as LaTeX, as the
+    Unicode sign, or as prose, and whether or not it carries spaces.
+
+    This was a real false negative: the model answered "$16 \\times 16$" and was
+    graded wrong against a literal spelling "16x16".
+    """
+    case = _find_case(_load_gold_cases(), "vit-patch-size-es")
+    for spelling in ("$16 \\times 16$", "16×16", "16 x 16", "16x16"):
+        assert grade_answer(f"Usa parches de {spelling} pixeles.", case)["pass"], spelling
+
+
+def test_required_all_needs_every_anchor_present():
+    """gw-snr is graded by two anchors instead of one exact sentence.
+
+    The paper writes "matched-filter signal-to-noise ratio of 24"; a model
+    writing "ratio was 24" is equally correct, and a bare "24" would match any
+    stray digit. Requiring both anchors rejects neither.
+    """
+    case = _find_case(_load_gold_cases(), "gw-snr")
+    assert grade_answer("The signal-to-noise ratio was 24.", case)["pass"]
+    assert grade_answer("Observed with a signal-to-noise ratio of 24.", case)["pass"]
+    assert not grade_answer("The signal-to-noise ratio was high.", case)["pass"]
+    assert not grade_answer("Figure 24 shows the strain data.", case)["pass"]
 
 
 def test_bert_large_layers_rejects_a_coincidental_number():

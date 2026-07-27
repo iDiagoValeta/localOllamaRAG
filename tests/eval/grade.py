@@ -60,6 +60,10 @@ _MARKDOWN_EMPHASIS_RE = re.compile(r"[*_`]+")
 # LaTeX sizing commands (\left(, \right]) carry no literal content.
 _LATEX_SIZING_RE = re.compile(r"\\(left|right)")
 
+# Digit, optional spaces, "x", optional spaces, digit -- the spacing around a
+# multiplication sign is typography, not content: "16 x 16" is "16x16".
+_MULTIPLICATION_SPACING_RE = re.compile(r"(\d)\s*[xX]\s*(\d)")
+
 # Thousands separators: "1,024" -> "1024", "12,345,678" -> "12345678".
 # Only a comma sitting between digits with exactly a 3-digit group on its
 # right (immediately followed by a non-digit or end of string) is treated
@@ -94,6 +98,13 @@ def _strip_markup(text: str) -> str:
     s = s.replace("$", "")  # LaTeX math delimiters
     s = _LATEX_SIZING_RE.sub("", s)
     s = s.replace("{", "").replace("}", "")  # LaTeX grouping braces, e.g. 10^{-4}
+    # Multiplication reaches us three ways for the same value: the Unicode sign
+    # from a PDF, the LaTeX command from a model writing math, and a plain "x"
+    # from a model writing prose. A patch size of 16x16 is the same answer in
+    # all three, so they collapse to one form -- including the spacing, since
+    # "16 x 16" and "16x16" differ only in typography.
+    s = s.replace("\\times", "x").replace("×", "x")
+    s = _MULTIPLICATION_SPACING_RE.sub(r"\1x\2", s)
     return s.lower()
 
 
@@ -248,7 +259,8 @@ def grade_answer(answer: str, case: Dict[str, Any]) -> Dict[str, Any]:
         is what a CI failure log shows.
     """
     accepted = case.get("accepted_answers") or []
-    if not accepted:
+    required_all = case.get("required_all") or []
+    if not accepted and not required_all:
         return {"pass": False, "reason": "case has no accepted_answers to grade against"}
 
     # Two candidate readings of the answer, differing only in how a
@@ -257,8 +269,26 @@ def grade_answer(answer: str, case: Dict[str, Any]) -> Dict[str, Any]:
     # matched if it is found in either.
     haystack_thousands = _normalize(answer)
     haystack_decimal = _normalize_decimal_comma(answer)
+
+    def _present(literal: str) -> bool:
+        return (
+            _contains_token(haystack_thousands, literal)
+            or _contains_token(haystack_decimal, literal)
+        )
+
+    # required_all demands every literal be present, which buys precision
+    # without dictating phrasing. Requiring one exact sentence rejected correct
+    # answers over a preposition -- "ratio was 24" failed a literal spelling
+    # "ratio of 24" -- while a bare "24" would match any stray digit. Asking for
+    # "signal-to-noise" AND "24" separately rejects neither.
+    if required_all:
+        missing = [literal for literal in required_all if not _present(literal)]
+        if missing:
+            return {"pass": False, "reason": f"missing required {missing}"}
+        return {"pass": True, "reason": f"all of {required_all} present"}
+
     for literal in accepted:
-        if _contains_token(haystack_thousands, literal) or _contains_token(haystack_decimal, literal):
+        if _present(literal):
             return {"pass": True, "reason": f"matched {literal!r}"}
     return {"pass": False, "reason": f"none of {accepted} found in answer"}
 
