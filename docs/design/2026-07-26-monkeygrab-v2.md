@@ -275,7 +275,47 @@ verde **y** gate completo en verde sobre el corpus de papers, no solo el primero
 | Migración larga con la app rota | Strangler fig: cada fase deja la app funcional |
 | Las heurísticas del spike no generalizan | F3 las generaliza o las elimina, con gold cases de otros documentos como juez |
 
-## 9. Registro de decisiones tomadas durante la ejecución
+## 9. Resultado del A/B
+
+Medido el 2026-07-27 sobre los 51 casos gold, mismo juez, mismo generador
+(`gemma4:e2b`) y el mismo camino de recuperación en ambos lados. Una sola
+variable: el stack.
+
+| Tipo de caso | `pymupdf-ollama-chroma` | `mineru-jina_clip-faiss` |
+|---|---|---|
+| Recuperación de tablas | 0/5 (0%) | **5/5 (100%)** |
+| Recuperación de figuras | 5/10 (50%) | 6/10 (60%) |
+| Conceptos factuales | 9/11 (82%) | 10/11 (91%) |
+| Números factuales | 21/25 (84%) | 21/25 (84%) |
+| **Total** | **35/51 (68,6%)** | **42/51 (82,3%)** |
+| Duración | 24,2 min | 28,6 min |
+
+Gana en todas las categorías y no pierde en ninguna, **cargando un handicap**: el
+índice multimodal se construyó sin contextual retrieval, que el actual sí tiene.
+Igualarlo exigiría reconstruir un índice con una llamada al LLM por chunk, así
+que se declara en vez de ocultarse — y hace que el resultado sea conservador.
+
+Tres de las cinco tablas recuperadas son del conjunto ciego (ResNet, BERT, ViT),
+que es lo que descarta el sobreajuste a los papers de desarrollo.
+
+**Por qué las tablas pasan de ninguna a todas.** No es ajuste fino: aplanar un
+PDF no degrada una tabla, la destruye como objeto. Sus números se dispersan en
+prosa y no existe ningún fragmento de tipo tabla que recuperar. Hicieron falta
+las dos mitades — MinerU emitiendo HTML, y el indexado marcando como tabla el
+fragmento que lo contiene. Solo con la primera, el resultado no habría cambiado.
+
+**El default no cambia con este resultado.** El stack nuevo exige el venv aislado
+y una GPU con CUDA; ponerlo por omisión dejaría un clon recién hecho con una app
+que no arranca. La medición dice que gana; la instalación dice que todavía no
+puede ser el default. Queda seleccionable y documentado.
+
+**Sobre la eficiencia (objetivo 2).** La recuperación es más rápida con el stack
+nuevo: 3-5 s por consulta frente a 6-7 s. Las corridas anteriores que sugerían lo
+contrario medían un apaño —reranker en CPU y un worker reiniciado 51 veces—, no
+el stack. La corrida completa es algo más lenta por el arranque del worker y por
+generar sobre más fragmentos.
+
+## 10. Registro de decisiones tomadas durante la ejecución
 
 Decisiones que no estaban en el plan original y se resolvieron sobre la marcha, con su motivo. Se
 anotan aquí porque varias contradicen lo que el propio documento decía antes.
@@ -294,7 +334,7 @@ anotan aquí porque varias contradicen lo que el propio documento decía antes.
 | `pnpm` se ancla con `packageManager` y se valida en CI | Cambiar de gestor no sirve de nada mientras nada impida volver a `npm` y regenerar el lockfile |
 | El corpus de casos endurece los literales de un solo dígito | `"6"` casaba con `"Figure 6"` en una respuesta que decía 12 capas. Se prioriza precisión sobre acreditar respuestas telegráficas |
 
-## 10. Fuera de alcance
+## 11. Fuera de alcance
 
 Rust (issue aparte), CLI profesional (#2), reescritura del frontend más allá de descomponer
 `App.tsx`, ANN aproximado (IVF/HNSW) mientras la búsqueda exacta baste, y recuperar la capa de
