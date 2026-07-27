@@ -589,7 +589,15 @@ def run_all_cases(
             status = "PASS" if record["passed"] else "FAIL"
             print(f"  [{status}] {case['id']} ({elapsed:.1f}s) -- {record['reason']}", flush=True)
         else:
+            # Factual cases are only graded in phase 2, but they still need a
+            # heartbeat here: without one, a run whose first cases are all
+            # factual prints nothing for minutes and a hung Ollama is
+            # indistinguishable from normal progress.
             pending.append({"case": case, "fragments": fragments, "elapsed": elapsed})
+            print(
+                f"  [retrieved] {case['id']} ({elapsed:.1f}s, {len(fragments)} fragments)",
+                flush=True,
+            )
 
     _release_gpu_models(retrieve_dev, retrieve_blind)
 
