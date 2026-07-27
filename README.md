@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"></a>
   <a href="https://ollama.com/"><img src="https://img.shields.io/badge/Ollama-Local%20LLM-000000?style=flat-square&logo=ollama&logoColor=white" alt="Ollama"></a>
-  <a href="https://www.trychroma.com/"><img src="https://img.shields.io/badge/ChromaDB-Vector%20store-4B32C3?style=flat-square" alt="ChromaDB"></a>
+  <a href="#swappable-backends"><img src="https://img.shields.io/badge/Vector%20store-Chroma%20%7C%20FAISS-4B32C3?style=flat-square" alt="Vector store: Chroma or FAISS"></a>
   <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React"></a>
 </p>
 
@@ -43,9 +43,9 @@ MonkeyGrab lets you ask questions about your PDF documents in natural language. 
 - **Multilingual** — Spanish, English and Valencian UI and retrieval out of the box.
 - **Image-aware** — optionally describes raster images in PDFs with a vision model, making visual content retrievable.
 - **Three interfaces** — terminal CLI, [Flask](https://flask.palletsprojects.com/) + [React](https://react.dev/) web UI, and a packaged Windows desktop app.
-- **Hexagonal core** — indexing and retrieval run behind swappable ports (`src/monkeygrab/`), so the storage or model technology can change without touching the interfaces above it.
+- **Swappable backends** — PDF extraction, the vector store and the embedder are each chosen by an environment variable, so comparing two technologies is a config change and a second run, not a rewrite. See [Swappable backends](#swappable-backends).
 
-PDFs are indexed once into a [ChromaDB](https://www.trychroma.com/) vector store. Each query passes through a configurable multi-stage retrieval pipeline before reaching the generator, all running locally via [Ollama](https://ollama.com/). Both front-ends share the same engine and stream the answer back token by token; in the web UI, cited sources open in an inline PDF viewer.
+PDFs are indexed once into a vector store. Each query passes through a configurable multi-stage retrieval pipeline before reaching the generator, all running locally via [Ollama](https://ollama.com/). Both front-ends share the same engine and stream the answer back token by token; in the web UI, cited sources open in an inline PDF viewer.
 
 <p align="center">
   <img src="assets/userInteraction.svg" alt="User interaction flow across the web and CLI interfaces" width="900" />
@@ -116,7 +116,7 @@ The vector index is created automatically in `rag/vector_db/` on first run.
 
 ## Configuration
 
-MonkeyGrab is configured entirely through environment variables. Copy the bundled template and edit only what you need:
+Models, paths and backends come from environment variables. Copy the bundled template and edit only what you need:
 
 ```bash
 cp .env.example .env          # macOS / Linux
@@ -126,7 +126,9 @@ Copy-Item .env.example .env   # Windows PowerShell
 The `.env` file at the project root is loaded automatically on startup. Anything exported in your shell still takes precedence over it.
 
 > [!TIP]
-> [`.env.example`](.env.example) documents **every** supported variable with its default value and a one-line description. Start there for anything beyond the essentials below.
+> [`.env.example`](.env.example) documents every supported variable with its default value and a one-line description. Start there for anything beyond the essentials below.
+
+The **pipeline stages** — query decomposition, hybrid search, reranking, neighbour expansion, context optimization, RECOMP synthesis — are not environment variables. They are toggled at runtime from the web UI's **RAG Pipeline** panel and apply to the next query without a restart.
 
 | Variable | Description |
 |----------|-------------|
@@ -138,7 +140,24 @@ The `.env` file at the project root is loaded automatically on startup. Anything
 | `MONKEYGRAB_LANG` | CLI language: `es` (default), `en` or `ca` |
 
 > [!IMPORTANT]
-> [ChromaDB](https://www.trychroma.com/) paths follow the pattern `rag/vector_db/<folder>_<embed_slug>/`. Changing `DOCS_FOLDER` or `OLLAMA_EMBED_MODEL` selects a different index — run `/reindex` when you intentionally switch either.
+> Index paths follow the pattern `rag/vector_db/<folder>_<embed_slug>/`. Changing `DOCS_FOLDER` or `OLLAMA_EMBED_MODEL` selects a different index — run `/reindex` when you intentionally switch either.
+
+### Swappable backends
+
+Three parts of the pipeline are chosen by environment variable. The defaults are the stack the project ships and has measured; the alternatives exist so a technology can be compared against it rather than argued about.
+
+| Variable | Default | Alternative |
+|----------|---------|-------------|
+| `PDF_EXTRACTOR` | `pymupdf` — fast, loses table structure | `mineru` — slow, keeps tables as HTML and formulas as LaTeX |
+| `VECTOR_STORE` | `chroma` — storage and metadata included | `faiss` — index only, with a metadata sidecar |
+| `EMBEDDER` | `ollama` — text only; figures need a vision model to caption them first | `jina_clip` — text and images in one space |
+
+An unrecognised value fails at startup rather than falling back to the default, so a typo cannot silently give you a run you thought was something else.
+
+> [!NOTE]
+> A non-default combination writes to its own index directory, suffixed with the stack slug (e.g. `..._mineru-jina_clip-faiss`), because vectors from different embedders are not comparable and must never share a store. Switching stacks therefore means indexing again.
+>
+> The alternatives carry setup costs the defaults do not: MinerU is an external CLI, and `jina_clip` runs in an isolated interpreter because its dependencies conflict with the product's. See [`src/monkeygrab/README.md`](src/monkeygrab/README.md).
 
 ---
 
@@ -151,7 +170,10 @@ The `.env` file at the project root is loaded automatically on startup. Anything
 | `/rag` | RAG mode — answers grounded in your documents |
 | `/chat` | Chat mode — free conversation without document context |
 | `/docs` | List indexed documents |
+| `/temas` `/topics` `/temes` | Show the main topics found across the corpus |
+| `/stats` | Session statistics and the active pipeline configuration |
 | `/reindex` | Drop the current index and re-index all documents |
+| `/limpiar` `/clear` `/netejar` | Clear the chat history |
 | `/ayuda` `/help` `/ajuda` | Show all available commands |
 | `/salir` `/exit` `/eixir` | Exit and save history |
 
@@ -171,8 +193,10 @@ MonkeyGrab can also be packaged as a standalone Windows `.exe` (PyInstaller + py
 
 > [!WARNING]
 > - **Vector graphics** (SVG figures) embedded in PDFs are not extracted.
-> - **Math, tables and images** are not plain text — expect occasional errors or incomplete answers on those pages even with OCR and image captions.
+> - **Math, tables and images** are not plain text — expect occasional errors or incomplete answers on those pages even with OCR and image captions. Table retrieval is the known weak point with the default extractor, which is what `mineru` exists to address.
 > - **Indexing cost** grows with chunk size, contextual enrichment, image captions and similar options.
+> - **The reranker downloads its model on first use.** It is on by default and pulls a cross-encoder from Hugging Face into your local cache — a one-time step that needs internet. Everything after it runs offline; turn reranking off in the web UI's **RAG Pipeline** panel if you need a fully air-gapped first run.
+> - **Optional stages fail loudly, not quietly.** If an enabled stage cannot run — the reranker's model will not load, say — the query raises instead of silently returning worse results. Turn the stage off to proceed without it.
 
 ---
 
