@@ -343,34 +343,16 @@ def _kind_from_format(fmt: Optional[str]) -> str:
 
 
 def _fragment_to_dict(fragment) -> Dict[str, Any]:
-    """Convert a domain ``Fragment`` into the dict shape generation still consumes."""
-    meta = fragment.metadata
-    metadata: Dict[str, Any] = {
-        "source": meta.source,
-        "page": meta.page,
-        "chunk": meta.chunk,
-        "section_header": meta.section_header or "",
-    }
-    if meta.total_chunks_in_page is not None:
-        metadata["total_chunks_in_page"] = meta.total_chunks_in_page
-    if meta.format is not None:
-        metadata["format"] = meta.format
-    if meta.image_width is not None:
-        metadata["image_width"] = meta.image_width
-    if meta.image_height is not None:
-        metadata["image_height"] = meta.image_height
-    return {
-        "id": fragment.id,
-        "doc": fragment.doc,
-        "metadata": metadata,
-        "distancia": fragment.distancia,
-        "score_semantic": fragment.score_semantic,
-        "score_keyword": fragment.score_keyword,
-        "score_final": fragment.score_final,
-        "score_reranker": fragment.score_reranker,
-        "matches": list(fragment.matches),
-        "query_matches": list(fragment.query_matches),
-    }
+    """Convert a domain ``Fragment`` into the dict shape generation consumes.
+
+    Delegates to the same conversion the CLI and the web app go through, so the
+    fragments this runner feeds to generation are shaped exactly like the ones
+    a real query produces. A second copy here would be a place for the gate to
+    drift from the product without anything failing.
+    """
+    from rag.engine.wiring import fragment_to_dict
+
+    return fragment_to_dict(fragment)
 
 
 def _eval_app_config(rag, carpeta: Path):

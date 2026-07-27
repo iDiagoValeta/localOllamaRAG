@@ -159,21 +159,13 @@ def reranker(config: AppConfig) -> CrossEncoderReranker:
     """
     key = config.models.reranker_quality
     if _reranker_cache["key"] != key:
+        # Switching tiers strands the previous model's weights in VRAM, which
+        # on an 8 GB card is enough to stop the generator from loading at all.
+        outgoing: Optional[CrossEncoderReranker] = _reranker_cache["reranker"]
+        if outgoing is not None:
+            outgoing.release()
         _reranker_cache.update(key=key, reranker=CrossEncoderReranker(config.models))
     return _reranker_cache["reranker"]
-
-
-def reset_component_cache() -> None:
-    """Drop the cached lexical index and reranker.
-
-    Only tests need this: within a process the caches invalidate themselves on
-    the state that matters. Releasing the reranker also returns its GPU memory.
-    """
-    cached: Optional[CrossEncoderReranker] = _reranker_cache["reranker"]
-    if cached is not None:
-        cached.release()
-    _lexical_cache.update(key=None, index=None)
-    _reranker_cache.update(key=None, reranker=None)
 
 
 def metadata_to_dict(metadata) -> Dict[str, Any]:
@@ -294,7 +286,6 @@ __all__ = [
     "metadata_to_dict",
     "query_decomposer",
     "reranker",
-    "reset_component_cache",
     "retrieval_metrics_to_legacy",
     "vector_store",
 ]
