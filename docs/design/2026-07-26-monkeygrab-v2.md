@@ -1,10 +1,22 @@
 # MonkeyGrab v2.0 — Diseño
 
 **Fecha:** 2026-07-26
-**Estado:** aprobado
+**Estado:** aprobado · en ejecución
 **Alcance:** reestructuración completa del repositorio hacia clean architecture, eliminación de la
 capa de investigación, CI verificable por fases, y adopción del stack MinerU + embeddings
 multimodales + FAISS detrás de puertos sustituibles.
+
+> [!NOTE]
+> **Estado a 2026-07-27.** F0, F1 y F2 están en `main`. Los adaptadores de F3
+> existen y están verificados, pero el default del stack sigue siendo
+> pymupdf + Ollama + Chroma.
+>
+> Del núcleo hexagonal, **indexación y recuperación** se ejecutan a través de
+> sus casos de uso (`IndexCorpus`, `Retrieve`); **generación no**, y `Answer`
+> sigue sin cablear. `get_runtime()` no ha desaparecido: `rag/engine/wiring.py`
+> lo encapsula como único puente hacia `AppConfig`, en lugar de que cada módulo
+> lo consulte por su cuenta. La aceptación de F1 describe el objetivo, no lo
+> que hay hoy.
 
 ---
 
@@ -333,6 +345,11 @@ anotan aquí porque varias contradicen lo que el propio documento decía antes.
 | La extracción de imágenes conserva su degradación silenciosa | Es enriquecimiento opcional gobernado por un flag; abortar la indexación entera por una imagen corrupta sería peor. Excepción documentada en el puerto |
 | `pnpm` se ancla con `packageManager` y se valida en CI | Cambiar de gestor no sirve de nada mientras nada impida volver a `npm` y regenerar el lockfile |
 | El corpus de casos endurece los literales de un solo dígito | `"6"` casaba con `"Figure 6"` en una respuesta que decía 12 capas. Se prioriza precisión sobre acreditar respuestas telegráficas |
+| La recuperación converge sobre `Retrieve` antes que la generación | El gate medía `Retrieve` mientras CLI y web ejecutaban el pipeline inline: el criterio de aceptación certificaba código que ningún usuario corría. La generación no tenía esa divergencia, porque el gate ya llama a `generar_respuesta_silenciosa` |
+| `Answer` se mantiene sin cablear en vez de borrarse | Cablearlo mueve el código que produce respuestas y exige el gate completo con GPU para firmarse. Borrarlo tiraría trabajo verificado que es el destino de la fase siguiente |
+| `Retrieve` recupera la variante de consulta por palabras clave | Se había omitido al portarlo. Sin ella, toda pregunta por debajo del umbral de descomposición perdía en silencio su segundo ángulo de búsqueda |
+| El desempate de palabras clave pasa a ser alfabético | Las de igual prioridad salían en orden de iteración de un `set`, derivado del hash aleatorizado por proceso: la consulta de respaldo, y con ella el resultado de la recuperación, variaba entre ejecuciones de la misma pregunta |
+| Los banners `MODULE MAP` y las cabeceras numeradas desaparecen | Duplicaban la estructura del módulo sin que nada lo verificase, y ya habían quedado obsoletos en varios ficheros |
 
 ## 11. Fuera de alcance
 

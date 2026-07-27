@@ -5,10 +5,10 @@ and the ``Retrieve`` use case need: the stopword set, the BM25 tokenizer, the
 keyword extractor that builds a fallback query variant, and the coherence
 check that rejects bag-of-words queries.
 
-These used to exist twice -- once in ``rag/engine/lexical.py`` for the running
-pipeline and once copied into the BM25 adapter to keep it free of the legacy
-package's import chain. This module is the single home the adapter's comment
-anticipated; it depends on nothing but the standard library.
+These used to exist twice: once in the running pipeline and once copied into
+the BM25 adapter, to keep the adapter free of the legacy package's import
+chain. This module is the single home for both, and depends on nothing but
+the standard library.
 """
 
 import re

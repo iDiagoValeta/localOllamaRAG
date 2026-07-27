@@ -10,30 +10,18 @@ from monkeygrab.domain.chunk_metadata import ChunkMetadata
 class Fragment:
     """A chunk as it flows through retrieval, ranking and generation.
 
-    Field-for-field match of the dicts built and passed around in
-    ``rag/engine/retrieval.py`` (``realizar_busqueda_hibrida``'s
-    ``all_semantic_results`` / ``fragmentos_data`` / ``fragmentos_ranked``),
-    ``rag/engine/lexical.py`` (``busqueda_lexica_bm25``'s result dicts, minus
-    ``bm25_score`` -- that field never survives RRF fusion: fused entries in
-    ``realizar_busqueda_hibrida`` are rebuilt from ``score_semantic`` /
-    ``score_keyword`` / ``score_final`` only), and
-    ``rag/engine/generation.py`` (``_expandir_fragmentos_contexto``'s
-    neighbor-chunk dicts, and ``_score_relevancia_fragmento``'s
-    ``score_reranker`` / ``score_final`` fallback).
+    One entity carries a chunk from the moment a retrieval branch finds it to
+    the moment its text reaches the generator, accumulating scores on the
+    way. Each branch writes only its own score field, so a fragment records
+    where its evidence came from and not just how highly it ranked.
 
     Attributes:
-        doc: Chunk text as stored/retrieved (called ``doc`` in every
-            dict that flows through the pipeline today, kept as-is
-            rather than renamed to avoid a false equivalence with
-            ``Chunk.text``: a ``Fragment`` may carry a truncated or
-            re-fetched copy of that same text).
+        doc: Chunk text as stored or retrieved. Not named ``text``, to avoid
+            implying equivalence with ``Chunk.text``: a fragment may carry a
+            truncated or re-fetched copy of it.
         metadata: Position and format of the underlying chunk. ``id`` is
-            derived from this (see below), never stored redundantly --
-            every id construction site in the pipeline
-            (``realizar_busqueda_hibrida``, ``busqueda_lexica_bm25``,
-            ``_expandir_fragmentos_contexto``) already uses the exact same
-            ``f"{source}_pag{page}_chunk{chunk}"`` formula, so a stored
-            field could only ever go stale relative to it.
+            derived from it rather than stored, so the two can never
+            disagree.
         distancia: Semantic (L2) distance from the query embedding.
             ``inf`` for fragments pulled in without a semantic score
             (BM25-only hits, neighbor-expansion additions).

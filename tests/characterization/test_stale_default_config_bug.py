@@ -38,7 +38,7 @@ import rag.chat_pdfs as rag
 
 
 class _FakeCollection:
-    """Minimal Chroma collection double for busqueda_lexica_bm25's full scan."""
+    """Minimal Chroma collection double for a full-corpus scan."""
 
     def __init__(self, docs):
         self.docs = docs

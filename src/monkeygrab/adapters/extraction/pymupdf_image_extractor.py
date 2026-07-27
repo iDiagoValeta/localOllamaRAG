@@ -16,17 +16,15 @@ from monkeygrab.domain.extracted_image import ExtractedImage
 class PymupdfImageExtractor:
     """Extracts raster images from a PDF via PyMuPDF, grouped by page.
 
-    Literal port of ``extraer_imagenes_pdf`` (``rag/engine/images.py``):
-    opens the PDF once with ``fitz``, walks every page's image list, skips
-    images below the configured minimum size, and looks for a caption in
-    the margin immediately below each image's bounding box.
+    Opens the PDF once, walks every page's image list, skips images below
+    the configured minimum size, and looks for a caption in the margin
+    immediately below each image's bounding box.
 
     Per the ``ImageExtractor`` port's documented carve-out from this
-    project's hard-fail default, both of the original's failure layers are
-    reproduced exactly: if ``fitz`` cannot open the file at all, this
-    returns ``{}`` (logged, not raised) instead of aborting the whole PDF's
-    indexing; if one image's bytes cannot be extracted, that image is
-    skipped and extraction continues with the rest.
+    project's hard-fail default, failures are logged rather than raised at
+    two levels: a PDF that cannot be opened yields ``{}`` instead of
+    aborting the document's text indexing, and a single image whose bytes
+    cannot be read is skipped while extraction continues.
     """
 
     def __init__(self, chunking: ChunkingConfig):

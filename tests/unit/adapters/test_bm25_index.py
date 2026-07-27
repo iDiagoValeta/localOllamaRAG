@@ -78,8 +78,8 @@ def test_search_returns_nothing_when_the_whole_corpus_tokenizes_away():
 def test_search_respects_top_n():
     # A distractor document without the query terms keeps their BM25 idf
     # positive -- if every document shared "keyword match", rank_bm25's idf
-    # goes negative/zero (matching busqueda_lexica_bm25's documented "score
-    # <= 0 -> excluded" behavior) and no results would be positive at all.
+    # goes negative or zero, chunks scoring at or below zero are excluded,
+    # and no result would come back at all.
     store = FakeVectorStore(
         [_fragment(f"keyword match number {i}", chunk=i) for i in range(5)]
         + [_fragment("an unrelated distractor document", chunk=99)]
@@ -127,7 +127,7 @@ def test_index_is_cached_per_instance_and_rebuilt_only_when_the_corpus_changes()
 
 
 def test_two_instances_never_share_a_cache():
-    """rag/engine/lexical.py's module-global cache is shared process-wide;
+    """A module-global cache would be shared process-wide;
     the adapter's replacement must not reproduce that."""
     # Each store needs >=2 distractor docs so the query term's idf stays
     # strictly positive under rank_bm25's Robertson-Sparck-Jones formula

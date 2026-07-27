@@ -66,7 +66,7 @@ class IndexCorpusResult:
 def detect_document_language(texto: str) -> str:
     """Heuristic language detector from a document text sample.
 
-    Moved from ``rag.engine.contextual._detectar_idioma``. Counts
+    Counts
     distinctive function-word occurrences to distinguish Spanish, Catalan,
     and English.
 
@@ -155,7 +155,7 @@ _PROMPT_ECHO_MARKERS = (
 def _is_description_spam(texto: str) -> bool:
     """Detect degenerate OCR output: repeated phrases or 'no text' spam.
 
-    Moved from ``rag.engine.images._es_descripcion_spam``. Two complementary
+    Two complementary
     checks: low lexical diversity (unique words / total words < 0.35, catches
     any repetitive loop) and a 'no'/'text' token ratio over 20% (catches the
     specific "no text, no text, ..." pattern).
@@ -173,7 +173,8 @@ def _is_description_spam(texto: str) -> bool:
 def _is_prompt_echo(descripcion: str) -> bool:
     """Detect when the vision model echoes the prompt instead of describing the image.
 
-    Moved from ``rag.engine.images._es_prompt_echo``.
+    The vision model sometimes restates the instructions it was given
+    instead of describing the image; such output is worse than none.
     """
     desc_lower = descripcion.lower()
     return any(marker.lower() in desc_lower for marker in _PROMPT_ECHO_MARKERS)
@@ -182,7 +183,7 @@ def _is_prompt_echo(descripcion: str) -> bool:
 def _is_caption_only(descripcion: str, caption: str) -> bool:
     """Check if the description merely echoes the caption with no new visual content.
 
-    Moved from ``rag.engine.images._es_solo_caption``: true when >85% of
+    True when more than 85% of
     caption tokens appear in the description and the description is not
     substantially longer than the caption.
     """
@@ -437,7 +438,7 @@ class IndexCorpus:
     def _describe_image(self, image_bytes: bytes, caption: str, idioma_doc: str) -> str:
         """Generate a vision-model description of one image, filtered for degenerate output.
 
-        Moved from ``rag.engine.images.describir_imagen_con_llm``, minus its
+        Minus the
         own ``USAR_EMBEDDINGS_IMAGEN`` guard (the caller already gates on the
         flag and on ``ocr_chat_model`` being wired in) and the direct
         ``ollama.chat`` call (delegated to the injected "ocr" ``ChatModel``
@@ -499,7 +500,7 @@ class IndexCorpus:
     def _generate_situational_context(self, chunk_text: str, texto_base: str, idioma_doc: str) -> str:
         """Generate 2-3 sentences of situational context for a chunk via an LLM.
 
-        Moved from ``rag.engine.contextual.generar_contexto_situacional``,
+        Written in the document's own language,
         minus its own ``USAR_CONTEXTUAL_RETRIEVAL`` guard (the caller already
         gates on the flag before invoking this) and the direct ``ollama.chat``
         call (delegated to the injected ``ChatModel`` port).

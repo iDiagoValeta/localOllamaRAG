@@ -26,46 +26,28 @@ _DEFAULT_BASE_URL = "http://localhost:11434"
 class OllamaChatModel:
     """One Ollama-backed model role: single-shot generation or token streaming.
 
-    Per the ``ChatModel`` port docstring, every pipeline role that talks to
-    an LLM (``MODELO_CHAT``, ``MODELO_CONTEXTUAL``, ``MODELO_RECOMP``,
-    ``MODELO_OCR``, ``MODELO_RAG``) is a separate model *name*, wired as its
-    own ``ChatModel`` instance -- so one ``OllamaChatModel`` instance is one
-    role, constructed with that role's ``num_ctx`` and default sampling
-    ``options`` (temperature, num_predict, top_p, repeat_penalty, stop, ...).
-    Those defaults vary per role today (see ``generar_queries_con_llm``,
-    ``generar_contexto_situacional``, ``sintetizar_contexto_recomp``,
-    ``describir_imagen_con_llm``, ``generar_tokens_respuesta``) and are kept
-    as a free-form ``options`` dict rather than exploded into named
-    parameters, mirroring the shape Ollama's own API already takes.
+    One instance is one role, constructed with that role's context window and
+    default sampling options. Options stay a free-form dict rather than named
+    parameters, mirroring the shape Ollama's own API takes, because which
+    knobs matter varies by role and by model.
 
-    ``think`` is hardcoded ``False`` (not a constructor parameter): every
-    real call site sets it, unconditionally, to keep thinking-capable models
-    (Gemma 4, Qwen3, ...) from spending their ``num_predict`` budget on a
-    reasoning trace instead of the answer.
+    ``think`` is hardcoded off. Thinking-capable models otherwise spend their
+    prediction budget on a reasoning trace and return an empty answer, which
+    is indistinguishable from a failure at every call site.
 
-    ``generate`` uses ``ollama.chat`` for both of today's real shapes: a
-    plain single-user-message prompt (``generar_queries_con_llm``, which
-    calls ``ollama.generate`` directly today but is functionally a one-turn
-    chat) and a system+user message with optional image bytes
-    (``generar_contexto_situacional``, ``describir_imagen_con_llm``).
-    ``stream`` talks to ``/api/generate`` over raw HTTP directly, like
-    ``_ollama_generate_stream`` in ``rag/engine/generation.py`` does today,
-    because it needs line-by-line JSON streaming and 5xx-only retry that the
-    ``ollama`` client does not expose.
+    ``generate`` goes through the ``ollama`` client, which covers both real
+    shapes: a one-turn prompt, and a system plus user message with optional
+    image bytes. ``stream`` instead talks to ``/api/generate`` over raw HTTP,
+    because it needs line-by-line JSON and a retry policy limited to 5xx --
+    neither of which the client exposes.
 
-    ``model_unloader`` reproduces ``liberar_modelos_ollama``, the VRAM-
-    freeing call ``_ollama_generate_stream`` makes right before it starts
-    streaming (and again, unloading everything, before retrying a 5xx). It
-    is an optional constructor dependency rather than something this
-    single-role adapter computes itself, because unloading "every *other*
-    configured role's model" requires knowing every role's model name at
-    once -- see the ``ModelUnloader`` port docstring for why that is a
-    separate port. ``None`` (the default) reproduces "no VRAM management",
-    same as every other optional port in this project.
+    ``model_unloader`` frees VRAM before streaming starts, and again before
+    retrying a 5xx. It is injected rather than computed here because
+    unloading "every *other* role's model" requires knowing all the roles at
+    once, which a single-role adapter deliberately does not. ``None`` means
+    no VRAM management.
 
-    Failure policy: hard-fail. Every real call site today catches broadly and
-    substitutes empty output or raw unsynthesized context on failure; none of
-    that survives here -- any Ollama failure raises.
+    Failure policy: hard-fail. Any Ollama failure raises.
     """
 
     def __init__(

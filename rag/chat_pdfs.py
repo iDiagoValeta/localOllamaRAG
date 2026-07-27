@@ -37,23 +37,11 @@ How to run (interactive CLI):
     and in ``rag/README.md``.
 """
 
-import base64
-import io
-import json
 import logging
 import os
-import re
-import requests
 import sys
 import warnings
-from collections import Counter
-from contextlib import redirect_stderr, redirect_stdout
-from typing import Any, Dict, List, Optional, Tuple
-
-
-import chromadb
-import ollama
-from pypdf import PdfReader
+from typing import Dict
 
 
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -82,21 +70,11 @@ except ImportError:
     pass
 
 
-from rag.cli.display import ui
-
-
-# REQUIRED DEPENDENCIES
-
-
-with redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
-    import pymupdf4llm
-import fitz
-from rank_bm25 import BM25Okapi
-from sentence_transformers import CrossEncoder
-
-
-# Public compatibility constants. The imports above are mandatory and fail at
-# startup when the Python environment is incomplete.
+# Compatibility constants, kept because the CLI and the web UI display them.
+# They no longer gate anything: extraction, reranking and lexical search each
+# import their own library inside the adapter that uses it, and each raises
+# there if it is missing. Nothing in this module needs those libraries, so
+# importing them here only slowed startup for callers that never index.
 
 PYMUPDF_AVAILABLE = True
 FITZ_DISPONIBLE = True

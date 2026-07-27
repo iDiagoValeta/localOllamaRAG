@@ -24,7 +24,7 @@ piece by piece by running both the moved and the original implementation
 side by side. Logic that could not be carried over 1:1 (because it depends
 on infrastructure the new ports don't expose, e.g. image/OCR extraction, or
 on pure-but-unlisted helper functions in modules outside this migration's
-explicit scope, e.g. ``extraer_keywords``) is called out explicitly in each
+explicit scope) is called out explicitly in each
 use case's module docstring rather than silently invented or silently
 dropped.
 

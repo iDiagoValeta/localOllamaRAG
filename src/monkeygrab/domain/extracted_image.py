@@ -5,13 +5,11 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ExtractedImage:
-    """Raw image bytes plus the caption found near it, the input to image
-    description (a vision-capable ``ChatModel.generate(..., images=[...])``
-    call).
+    """Raw image bytes plus the caption found near it.
 
-    Field-for-field match of the dicts ``rag.engine.images.extraer_imagenes_pdf``
-    returns per page (``"image_bytes"``, ``"width"``, ``"height"``, ``"ext"``,
-    ``"caption"``).
+    The input to image description: a vision model is asked what the image
+    depicts, and the caption goes in with it as context, because a figure
+    caption usually names what the pixels alone are ambiguous about.
 
     Attributes:
         image_bytes: Raw image bytes, in whatever format the source PDF

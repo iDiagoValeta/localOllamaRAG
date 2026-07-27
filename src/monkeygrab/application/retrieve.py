@@ -53,8 +53,8 @@ class RetrieveResult:
 def _parse_subqueries(raw_response: str) -> List[str]:
     """Parse an LLM's raw sub-query response into up to 3 query strings.
 
-    Moved from the parsing tail of
-    ``rag.engine.reranking.generar_queries_con_llm``.
+    Models emit numbering and bullets despite being told not to, and pad
+    with stray fragments; both are normalized away here.
     """
     queries = [
         q.strip().lstrip("0123456789.-) ")
@@ -67,12 +67,9 @@ def _parse_subqueries(raw_response: str) -> List[str]:
 def _generate_subqueries(chat_model: ChatModel, pregunta: str) -> List[str]:
     """Generate up to 3 search sub-queries via an auxiliary LLM.
 
-    Prompt text is a verbatim copy of
-    ``rag.engine.reranking.generar_queries_con_llm``'s prompt. Sampling
-    parameters (temperature 0.5, num_predict 400, stop sequence) are not
-    passed here -- the ``ChatModel`` port has no per-call options parameter
-    by design (see the port docstring); they belong to how the injected
-    ``ChatModel`` adapter for the "chat" role was constructed.
+    Sampling parameters are deliberately absent: the ``ChatModel`` port has
+    no per-call options, so how warm this generation runs is decided when
+    the adapter for the "chat" role is constructed.
 
     Args:
         chat_model: ``ChatModel`` adapter wired to the query-decomposition
@@ -101,8 +98,7 @@ def _generate_subqueries(chat_model: ChatModel, pregunta: str) -> List[str]:
         # fallback makes it an explicit decision using two ports"). Query
         # decomposition is optional enrichment (Retrieve's docstring: "opt.")
         # -- its failure degrades to "search with the original question
-        # only", matching generar_queries_con_llm's own
-        # `except Exception: return []`.
+        # only".
         return []
     return _parse_subqueries(raw)
 
@@ -212,8 +208,8 @@ class Retrieve:
     treated as if it were off for that stage, regardless of what
     ``config.flags`` says -- there is nothing to invoke otherwise. This
     mirrors the original's `if cfg.USAR_X and <thing available>` guards,
-    just made explicit instead of relying on a lazily-loaded singleton that
-    might return ``None`` (``obtener_modelo_reranker``).
+    made explicit in the constructor instead of hidden behind a lazily
+    loaded singleton that might quietly turn out to be unavailable.
     """
 
     def __init__(

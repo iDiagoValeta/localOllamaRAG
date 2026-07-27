@@ -184,7 +184,7 @@ def test_contextual_enrichment_prepends_situational_summary_with_literal_separat
 
     chunk, _embedding = store.added[0]
     # Literal 4-char "\n\n" separator (backslash-n-backslash-n), per
-    # generar_contexto_situacional / _texto_fuente_fragmento's contract.
+    # the situational-summary separator contract.
     assert chunk.text.startswith("This document is about testing.\\n\\n")
     assert contextual.calls  # the ChatModel port was actually invoked
 
@@ -365,7 +365,7 @@ def test_multiple_images_on_a_page_get_sequential_offset_chunk_indices():
 
 def test_degenerate_image_description_is_not_indexed():
     """Spam-filtered OCR output (low lexical diversity) must not produce a chunk,
-    matching describir_imagen_con_llm's own `_es_descripcion_spam` gate."""
+    matching the description-spam gate applied during indexing."""
     pages = [ExtractedPage(page=0, text="short")]
     images = FakeImageExtractor({0: [ExtractedImage(image_bytes=b"x", width=200, height=200, ext="png")]})
     spam = "no text no text no text no text no text no text no text no text no text no text"

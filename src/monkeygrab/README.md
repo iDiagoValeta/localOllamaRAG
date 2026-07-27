@@ -9,7 +9,8 @@ Full rationale and phased rollout: [`docs/design/2026-07-26-monkeygrab-v2.md`](.
 ```
 domain/        entities, zero infrastructure imports    (Chunk, Fragment, ExtractedPage, ...)
 ports/         Protocols the application layer depends on (PdfExtractor, Embedder, VectorStore, ...)
-application/   use cases: IndexCorpus, Retrieve, Answer, + pure helpers (rrf_fusion, text_chunking, context_assembly)
+application/   use cases: IndexCorpus, Retrieve, Answer, + pure helpers (rrf_fusion, text_chunking,
+               context_assembly, keywords)
 config/        AppConfig — immutable, built once via from_env(), changed via with_overrides() (never mutated)
 adapters/      port implementations (pymupdf, Chroma, Ollama, BM25, CrossEncoder today)
 ```
@@ -30,12 +31,24 @@ not by convention.
 
 ## Current wiring (read before assuming more than this)
 
-`rag/engine/*` still owns the pipeline entry points the CLI and web UI call.
-Indexing goes through `IndexCorpus`: `rag/engine/indexing.py` builds ports via
-`monkeygrab.composition.build_stack` (env: `PDF_EXTRACTOR`, `VECTOR_STORE`,
-`EMBEDDER`; default remains pymupdf + Ollama + Chroma). Retrieval/generation
-still call pure helpers out of `application/` in place; the full `Retrieve` /
-`Answer` use-case classes are unit-tested but not yet constructed by CLI/web.
+**Indexing and retrieval run through the core.** `rag/engine/indexing.py`
+builds its ports via `composition.build_stack` (env: `PDF_EXTRACTOR`,
+`VECTOR_STORE`, `EMBEDDER`; the default is still pymupdf + Ollama + Chroma)
+and runs `IndexCorpus`. `rag/engine/retrieval.py` builds its ports via
+`rag/engine/wiring.py` and runs `Retrieve` — the same use case
+`tests/eval/run_eval.py` constructs, so the evaluation gate and the shipped
+product cannot measure different retrieval.
+
+**Generation does not.** `rag/engine/generation.py` and `rag/engine/context.py`
+still own the answer path, importing pure helpers out of `application/` but
+not the `Answer` use case, which is unit-tested and unwired. Wiring it is the
+next phase and needs the full GPU evaluation gate to sign off, since it moves
+the code that produces answers. Do not describe `Answer` as in use.
+
+`rag/engine/wiring.py` is the only bridge between the mutable runtime globals
+in `rag/chat_pdfs.py` and the immutable `AppConfig` this package takes. It
+also caches the two components too expensive to rebuild per query: the
+Cross-Encoder weights and the tokenized BM25 corpus.
 
 ## Adapters whose dependencies collide with the product's
 
