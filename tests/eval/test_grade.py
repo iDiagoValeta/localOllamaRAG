@@ -25,11 +25,6 @@ _VALID_KINDS = {"text", "table", "image"}
 _RETRIEVAL_CASE_TYPES = {"figure_retrieval", "table_retrieval"}
 
 
-# ─────────────────────────────────────────────
-# grade_answer -- positive / negative
-# ─────────────────────────────────────────────
-
-
 def test_exact_number_matches():
     case = {"accepted_answers": ["28.4"]}
     result = grade_answer("The BLEU score is 28.4 points.", case)
@@ -61,11 +56,6 @@ def test_missing_accepted_answers_fails_closed():
     assert not result["pass"]
 
 
-# ─────────────────────────────────────────────
-# grade_answer -- the boundary bug this module fixes
-# ─────────────────────────────────────────────
-
-
 def test_number_does_not_match_inside_a_longer_number():
     """The bug this grader was written to fix: a naive substring check
     (as used by the explore/mineru-faiss-multimodal spike's grade.py) makes
@@ -92,11 +82,6 @@ def test_short_word_does_not_match_inside_a_longer_word():
     assert not grade_answer("As is well known, the model converges.", case)["pass"]
     assert not grade_answer("This is normal behavior.", case)["pass"]
     assert grade_answer("No, DPO does not require sampling.", case)["pass"]
-
-
-# ─────────────────────────────────────────────
-# grade_answer -- a bare integer must not match inside a longer decimal
-# ─────────────────────────────────────────────
 
 
 def test_integer_literal_does_not_match_the_integer_part_of_a_longer_decimal():
@@ -133,11 +118,6 @@ def test_decimal_literal_is_unaffected_by_the_new_guards():
     assert not grade_answer("The BLEU score is 128.45 points.", {"accepted_answers": ["28.4"]})["pass"]
 
 
-# ─────────────────────────────────────────────
-# grade_answer -- numeric literal followed by a unit suffix
-# ─────────────────────────────────────────────
-
-
 def test_numeric_literal_matches_when_followed_by_a_recognized_unit_suffix():
     """``\\b`` cannot see a digit/letter junction ("110" then "M" are both
     word characters), so a model answering in the paper's own notation --
@@ -163,11 +143,6 @@ def test_numeric_literal_does_not_match_with_an_unrecognized_suffix():
     assert not grade_answer("Room 1104 has the equipment.", case)["pass"]
 
 
-# ─────────────────────────────────────────────
-# grade_answer -- Spanish decimal comma
-# ─────────────────────────────────────────────
-
-
 def test_spanish_decimal_comma_is_recognized():
     """``_normalize`` alone only strips thousands-separator commas; it
     never turns a Spanish decimal comma into a point, so no
@@ -188,11 +163,6 @@ def test_ambiguous_three_digit_comma_group_accepts_both_thousands_and_decimal_re
     test_thousands_separator_is_tolerated; this covers the decimal side."""
     assert grade_answer("El valor obtenido fue 1,024 en el experimento.", {"accepted_answers": ["1.024"]})["pass"]
     assert grade_answer("The hidden size is 1,024.", {"accepted_answers": ["1024"]})["pass"]
-
-
-# ─────────────────────────────────────────────
-# grade_answer -- normalization: thousands separators, LaTeX, Markdown
-# ─────────────────────────────────────────────
 
 
 def test_thousands_separator_is_tolerated():
@@ -225,11 +195,6 @@ def test_markdown_emphasis_is_stripped():
     assert grade_answer("DPO is a simple **RL-free** algorithm.", case)["pass"]
 
 
-# ─────────────────────────────────────────────
-# grade_retrieval
-# ─────────────────────────────────────────────
-
-
 def test_retrieval_passes_when_expected_kind_present():
     case = {"expect_kind_any": ["image"]}
     assert grade_retrieval(["text", "image"], case)["pass"]
@@ -248,11 +213,6 @@ def test_retrieval_any_of_multiple_expected_kinds_is_enough():
 def test_retrieval_missing_expectation_fails_closed():
     assert not grade_retrieval(["text"], {"expect_kind_any": []})["pass"]
     assert not grade_retrieval(["text"], {})["pass"]
-
-
-# ─────────────────────────────────────────────
-# gold_cases.jsonl -- schema sanity (parses, every case is well-formed)
-# ─────────────────────────────────────────────
 
 
 def _load_gold_cases():
@@ -321,20 +281,6 @@ def test_gold_cases_include_papers_outside_the_dev_set():
     cases = _load_gold_cases()
     arxiv_papers = {c["paper"] for c in cases if c["source"] == "arxiv"}
     assert len(arxiv_papers) >= 3, f"expected >=3 blind-set papers, got {arxiv_papers}"
-
-
-# ─────────────────────────────────────────────
-# gold_cases.jsonl -- case-level fixes for near-unfalsifiable bare-digit literals
-# ─────────────────────────────────────────────
-#
-# A bare single/double-digit accepted literal (e.g. ["6"]) can be matched by
-# a wrong answer that merely happens to mention the same digit in an
-# unrelated context (a figure number, a section number...). Normalization
-# cannot fix this -- it's a property of the case's accepted_answers, not of
-# the matching logic. The cases below were rewritten to require the exact
-# phrasing verified in the source PDF instead of the bare digit; each test
-# checks both directions: the old false-positive wrong answer is now
-# rejected, and a realistically-phrased correct answer is still accepted.
 
 
 def _find_case(cases, case_id):

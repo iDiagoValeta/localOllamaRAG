@@ -1,9 +1,4 @@
-"""GenerationChunk -- one item streamed from ChatModel.stream().
-
-# ─────────────────────────────────────────────
-# SECTION 1: ENTITY
-# ─────────────────────────────────────────────
-"""
+"""GenerationChunk -- one item streamed from ChatModel.stream()."""
 
 from dataclasses import dataclass
 from typing import Optional

@@ -1,5 +1,4 @@
-"""
-MonkeyGrab -- Desktop application entry point.
+"""MonkeyGrab -- Desktop application entry point.
 
 Wraps the Flask web app (rag.web.app) in a native OS window via pywebview and
 runs the server in a background thread. This is the module frozen by PyInstaller
@@ -31,18 +30,6 @@ Dependencies:
     - pywebview (native window), werkzeug/flask (server), rag.web.app (backend).
 """
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- 1. Imports and path setup
-#  +-- 2. Data directory             per-user writable root (frozen vs dev)
-#  +-- 3. Server lifecycle           port, threaded werkzeug server, readiness, boot log
-#  +-- 4. Window boot                heavy import + server start, then navigate
-#  +-- 5. Headless mode              server-only run (no GUI)
-#  +-- 6. main()                     dispatch GUI vs headless, run, shut down
-#
-# ─────────────────────────────────────────────
 
 import os
 import sys
@@ -52,9 +39,7 @@ import time
 import traceback
 
 
-# ─────────────────────────────────────────────
-# SECTION 1: IMPORTS AND PATH SETUP
-# ─────────────────────────────────────────────
+# IMPORTS AND PATH SETUP
 
 # Make ``rag.web.app`` importable when run as a loose script from the repo root.
 # When frozen by PyInstaller the package is already on the import path.
@@ -123,9 +108,7 @@ LOADING_HTML = """
 """
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: DATA DIRECTORY
-# ─────────────────────────────────────────────
+# DATA DIRECTORY
 
 def _default_data_dir() -> str:
     """Per-user writable data directory for vector DBs, stores, history and debug."""
@@ -161,9 +144,7 @@ def _ensure_data_dir() -> str:
     return data_dir
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: SERVER LIFECYCLE
-# ─────────────────────────────────────────────
+# SERVER LIFECYCLE
 
 def _resolve_port() -> int:
     """Return ``MONKEYGRAB_PORT`` if set/valid, otherwise a free ephemeral port."""
@@ -210,9 +191,7 @@ def _log_boot_error(exc: BaseException) -> str:
         return ""
 
 
-# ─────────────────────────────────────────────
-# SECTION 4: WINDOW BOOT
-# ─────────────────────────────────────────────
+# WINDOW BOOT
 
 def _boot(window, port: int) -> None:
     """Import the backend, start the server, then navigate the window to the UI.
@@ -242,9 +221,7 @@ def _boot(window, port: int) -> None:
         )
 
 
-# ─────────────────────────────────────────────
-# SECTION 5: HEADLESS MODE
-# ─────────────────────────────────────────────
+# HEADLESS MODE
 
 def _run_headless(port: int) -> None:
     """Run the server with no GUI (testing / server use). Blocks until interrupted."""
@@ -269,9 +246,7 @@ def _run_headless(port: int) -> None:
         server.shutdown()
 
 
-# ─────────────────────────────────────────────
-# SECTION 6: ENTRY POINT
-# ─────────────────────────────────────────────
+# ENTRY POINT
 
 def main() -> None:
     """Launch the desktop window (or a headless server) and run until closed."""

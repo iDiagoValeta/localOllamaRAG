@@ -1,14 +1,4 @@
-"""ChromaVectorStore -- VectorStore adapter over a ChromaDB collection.
-
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- SECTION 1: METADATA CONVERSION  -- Chunk/Fragment metadata <-> Chroma dict
-#  +-- SECTION 2: ADAPTER              -- the five VectorStore operations
-#
-# ─────────────────────────────────────────────
-"""
+"""ChromaVectorStore -- VectorStore adapter over a ChromaDB collection."""
 
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -24,9 +14,7 @@ from monkeygrab.domain.fragment import Fragment
 # adapter in this package satisfies without inheriting its port.
 
 
-# ─────────────────────────────────────────────
-# SECTION 1: METADATA CONVERSION
-# ─────────────────────────────────────────────
+# METADATA CONVERSION
 
 
 def _metadata_to_dict(metadata: ChunkMetadata) -> Dict[str, Any]:
@@ -74,9 +62,7 @@ def _metadata_from_dict(meta: Dict[str, Any]) -> ChunkMetadata:
     )
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: ADAPTER
-# ─────────────────────────────────────────────
+# ADAPTER
 
 
 class ChromaVectorStore:

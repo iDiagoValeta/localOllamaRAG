@@ -43,11 +43,6 @@ def test_detect_document_language(texto, esperado):
     assert detect_document_language(texto) == esperado
 
 
-# ─────────────────────────────────────────────
-# Fakes
-# ─────────────────────────────────────────────
-
-
 class FakeExtractor:
     def __init__(self, pages):
         self._pages = pages
@@ -132,11 +127,6 @@ def _small_config(**overrides):
     if overrides:
         cfg = cfg.with_overrides(**overrides)
     return cfg
-
-
-# ─────────────────────────────────────────────
-# IndexCorpus orchestration
-# ─────────────────────────────────────────────
 
 
 def test_indexes_one_chunk_per_page_with_correct_metadata_and_no_contextual_model():
@@ -228,11 +218,6 @@ def test_contextual_model_failure_falls_back_to_no_enrichment():
     assert len(store.added) == 1
     chunk, _embedding = store.added[0]
     assert chunk.text == "Enough content here to clear the small test threshold easily."
-
-
-# ─────────────────────────────────────────────
-# Image indexing
-# ─────────────────────────────────────────────
 
 
 def _no_text_config(**overrides):

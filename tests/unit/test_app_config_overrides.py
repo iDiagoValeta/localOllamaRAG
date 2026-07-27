@@ -21,11 +21,6 @@ import pytest
 from monkeygrab.config import AppConfig
 
 
-# ─────────────────────────────────────────────
-# with_overrides -- immutability
-# ─────────────────────────────────────────────
-
-
 def test_with_overrides_returns_new_instance_and_does_not_mutate_original():
     original = AppConfig()
     updated = original.with_overrides(**{"flags.usar_reranker": False})
@@ -45,11 +40,6 @@ def test_with_overrides_leaves_unmentioned_fields_in_the_same_section_untouched(
     updated = original.with_overrides(**{"flags.usar_reranker": False})
 
     assert updated.flags.usar_busqueda_hibrida is original.flags.usar_busqueda_hibrida is True
-
-
-# ─────────────────────────────────────────────
-# with_overrides -- derived-field side effects
-# ─────────────────────────────────────────────
 
 
 def test_overriding_models_rag_recomputes_desc():
@@ -126,11 +116,6 @@ def test_overriding_paths_docs_folder_with_an_already_absolute_path_is_unchanged
     assert cfg.paths.docs_folder == absolute_folder
 
 
-# ─────────────────────────────────────────────
-# with_overrides -- validation
-# ─────────────────────────────────────────────
-
-
 def test_with_overrides_rejects_key_without_a_dot():
     with pytest.raises(ValueError, match="section.*field"):
         AppConfig().with_overrides(usar_reranker=False)
@@ -144,11 +129,6 @@ def test_with_overrides_rejects_unknown_section():
 def test_with_overrides_rejects_unknown_field_in_known_section():
     with pytest.raises(ValueError, match="bogus_field"):
         AppConfig().with_overrides(**{"flags.bogus_field": True})
-
-
-# ─────────────────────────────────────────────
-# from_env -- hard-fail validation
-# ─────────────────────────────────────────────
 
 
 def test_from_env_raises_on_unparseable_int_env_var(monkeypatch):

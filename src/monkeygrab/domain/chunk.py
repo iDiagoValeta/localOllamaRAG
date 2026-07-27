@@ -1,9 +1,4 @@
-"""Chunk -- a text unit ready to be embedded and stored.
-
-# ─────────────────────────────────────────────
-# SECTION 1: ENTITY
-# ─────────────────────────────────────────────
-"""
+"""Chunk -- a text unit ready to be embedded and stored."""
 
 from dataclasses import dataclass
 

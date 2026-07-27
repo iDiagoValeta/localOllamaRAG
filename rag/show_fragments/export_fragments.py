@@ -14,8 +14,7 @@
 # +-- 5. main()
 #
 # ─────────────────────────────────────────────
-"""
-export_fragments.py -- Dump indexed ChromaDB chunks to text or JSONL files.
+"""export_fragments.py -- Dump indexed ChromaDB chunks to text or JSONL files.
 
 **Default:** scans ``rag/vector_db`` and exports **every** Chroma persistent
 store found (one output file per collection). Corpus folders may use any
@@ -45,10 +44,6 @@ import sys
 from collections import Counter
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
-# ─────────────────────────────────────────────
-# SECTION 1: IMPORTS
-# ─────────────────────────────────────────────
-
 # Three levels up: rag/show_fragments/export_fragments.py -> repo root.
 _proj_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _proj_root not in sys.path:
@@ -56,9 +51,7 @@ if _proj_root not in sys.path:
 
 import chromadb  # noqa: E402
 
-# ─────────────────────────────────────────────
-# SECTION 2: CONSTANTS, CLASSIFICATION, CLI
-# ─────────────────────────────────────────────
+# CONSTANTS, CLASSIFICATION, CLI
 
 RAG_DIR = os.path.join(_proj_root, "rag")
 VECTOR_DB_DIR = os.path.join(RAG_DIR, "vector_db")
@@ -233,9 +226,7 @@ def _kind_counts(rows: List[Tuple[str, str, Dict[str, Any]]]) -> Counter:
     return c
 
 
-# ─────────────────────────────────────────────
-# SECTION 4: WRITERS
-# ─────────────────────────────────────────────
+# WRITERS
 
 def write_text(
     path: str,
@@ -400,16 +391,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return p
 
 
-# ─────────────────────────────────────────────
-# SECTION 5: ENTRY
-# ─────────────────────────────────────────────
+# ENTRY
 
 def main() -> None:
     args = build_arg_parser().parse_args()
     out_fmt = args.format
     out_dir = os.path.abspath(args.out_dir)
 
-    # --- Manual single target ---
+    # Manual single target
     if args.db_path:
         if not args.collection:
             print("ERROR: --collection es obligatorio con --db-path")
@@ -430,7 +419,7 @@ def main() -> None:
         )
         raise SystemExit(0 if n >= 0 else 1)
 
-    # --- Single store target (--language) ---
+    # Single store target (--language)
     single_slug = args.language
     if single_slug:
         spec = build_store_spec(single_slug)
@@ -459,7 +448,7 @@ def main() -> None:
         print("ERROR: --output solo se puede usar con --language o --db-path")
         raise SystemExit(1)
 
-    # --- Default: discover every Chroma store under rag/vector_db ---
+    # Default: discover every Chroma store under rag/vector_db
     os.makedirs(out_dir, exist_ok=True)
     ext = ".jsonl" if out_fmt == "jsonl" else ".txt"
     exported_paths: List[str] = []

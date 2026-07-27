@@ -1,9 +1,5 @@
 """PipelineFlagsConfig -- togglable pipeline stages.
 
-# ─────────────────────────────────────────────
-# SECTION 1: CONFIG
-# ─────────────────────────────────────────────
-
 Defaults copy ``rag/chat_pdfs.py`` section 3.4 literally: every flag there
 is a hardcoded ``True``, not read from the environment at all -- so
 ``AppConfig.from_env`` does not read any env var for this section either,

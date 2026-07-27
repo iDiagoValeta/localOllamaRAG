@@ -19,11 +19,6 @@ from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel
 from monkeygrab.domain.generation_chunk import GenerationChunk
 
 
-# ─────────────────────────────────────────────
-# generate()
-# ─────────────────────────────────────────────
-
-
 def test_generate_uses_the_injected_model_and_num_ctx_not_frozen_defaults(monkeypatch):
     calls = []
     monkeypatch.setattr(
@@ -104,11 +99,6 @@ def test_generate_hard_fails_on_ollama_error(monkeypatch):
 
     with pytest.raises(RuntimeError, match="ollama down"):
         OllamaChatModel("m", num_ctx=100).generate("hello")
-
-
-# ─────────────────────────────────────────────
-# stream()
-# ─────────────────────────────────────────────
 
 
 class _FakeStreamResponse:
@@ -239,11 +229,6 @@ def test_stream_retries_once_on_a_5xx_error_then_succeeds(monkeypatch):
 
     assert [c.text for c in chunks] == ["ok"]
     assert len(attempts) == 2
-
-
-# ─────────────────────────────────────────────
-# stream() -- model_unloader wiring
-# ─────────────────────────────────────────────
 
 
 class _FakeModelUnloader:

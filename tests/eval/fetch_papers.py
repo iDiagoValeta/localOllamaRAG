@@ -1,17 +1,5 @@
 """fetch_papers -- idempotent arXiv PDF downloader for the gold eval corpus.
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- 1. CONSTANTS          cache dir, arXiv URL template, politeness knobs
-#  +-- 2. VALIDATION         is-this-really-a-PDF check
-#  +-- 3. DOWNLOAD           idempotent single-paper fetch
-#  +-- 4. DISCOVERY          arXiv ids referenced by gold_cases.jsonl
-#  +-- 5. CLI                main()
-#
-# ─────────────────────────────────────────────
-
 Downloads arXiv papers by numeric id into a local cache directory that is
 NOT committed to git (see ``.gitignore``): the id already pins the exact
 paper version (arXiv ids are immutable once assigned, and a bare id always
@@ -46,9 +34,7 @@ from typing import Iterable, List
 
 import requests
 
-# ─────────────────────────────────────────────
-# SECTION 1: CONSTANTS
-# ─────────────────────────────────────────────
+# CONSTANTS
 
 # Default cache location: alongside the gold cases, gitignored (see root
 # .gitignore). Kept inside tests/eval/ so the whole eval corpus -- code,
@@ -87,9 +73,7 @@ class PaperDownloadError(RuntimeError):
     """Raised when an arXiv id cannot be resolved to a valid, complete PDF."""
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: VALIDATION
-# ─────────────────────────────────────────────
+# VALIDATION
 
 
 def _looks_like_pdf(path: Path) -> bool:
@@ -106,9 +90,7 @@ def _looks_like_pdf(path: Path) -> bool:
     return header == b"%PDF-"
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: DOWNLOAD
-# ─────────────────────────────────────────────
+# DOWNLOAD
 
 
 def download_paper(arxiv_id: str, dest_dir: Path) -> Path:
@@ -194,9 +176,7 @@ def download_papers(arxiv_ids: Iterable[str], dest_dir: Path) -> List[Path]:
     return paths
 
 
-# ─────────────────────────────────────────────
-# SECTION 4: DISCOVERY
-# ─────────────────────────────────────────────
+# DISCOVERY
 
 
 def arxiv_ids_from_gold_file(gold_file: Path) -> List[str]:
@@ -225,9 +205,7 @@ def arxiv_ids_from_gold_file(gold_file: Path) -> List[str]:
     return seen
 
 
-# ─────────────────────────────────────────────
-# SECTION 5: CLI
-# ─────────────────────────────────────────────
+# CLI
 
 
 def main(argv: List[str] = None) -> int:

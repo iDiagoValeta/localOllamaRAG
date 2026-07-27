@@ -18,11 +18,6 @@ import rag.chat_pdfs as rag
 from rag.engine.generation import _filtrar_por_umbral_reranker, _limitar_fragmentos_por_chars
 
 
-# ─────────────────────────────────────────────
-# _filtrar_por_umbral_reranker
-# ─────────────────────────────────────────────
-
-
 def test_reranker_threshold_keeps_scores_strictly_at_or_above_threshold(monkeypatch):
     """Boundary is inclusive (``>=``): a fragment scoring exactly the
     threshold is kept, one just below it is dropped."""
@@ -78,11 +73,6 @@ def test_reranker_threshold_all_below_returns_empty_list(monkeypatch):
     fragmentos = [{"id": "a", "score_reranker": 0.1}, {"id": "b", "score_reranker": 0.2}]
 
     assert _filtrar_por_umbral_reranker(fragmentos) == []
-
-
-# ─────────────────────────────────────────────
-# _limitar_fragmentos_por_chars
-# ─────────────────────────────────────────────
 
 
 def test_char_budget_no_truncation_when_total_fits(monkeypatch):

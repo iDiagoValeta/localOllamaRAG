@@ -1,9 +1,4 @@
-"""CrossEncoderReranker -- Reranker adapter over sentence_transformers.CrossEncoder.
-
-# ─────────────────────────────────────────────
-# SECTION 1: ADAPTER
-# ─────────────────────────────────────────────
-"""
+"""CrossEncoderReranker -- Reranker adapter over sentence_transformers.CrossEncoder."""
 
 import contextlib
 import dataclasses

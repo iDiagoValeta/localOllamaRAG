@@ -1,9 +1,4 @@
-"""ChatModel -- Ollama-style text/vision generation, single-shot or streamed.
-
-# ─────────────────────────────────────────────
-# SECTION 1: PORT
-# ─────────────────────────────────────────────
-"""
+"""ChatModel -- Ollama-style text/vision generation, single-shot or streamed."""
 
 from typing import Iterator, Optional, Protocol, Sequence
 

@@ -16,8 +16,7 @@ from monkeygrab.domain.chunk_metadata import ChunkMetadata
 from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
-# SECTION 6: PREPROCESSING AND CHUNKING
-# ─────────────────────────────────────────────
+# PREPROCESSING AND CHUNKING
 
 
 def dividir_en_chunks(
@@ -78,7 +77,5 @@ def expandir_con_chunks_adyacentes(
         total_chunks_in_page=metadata.get('total_chunks_in_page', None),
     )
     return adjacent_chunk_ids(meta, n_neighbors=n_vecinos)
-
-
 
 

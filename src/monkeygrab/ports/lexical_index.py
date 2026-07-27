@@ -1,9 +1,4 @@
-"""LexicalIndex -- BM25-style lexical (keyword) search.
-
-# ─────────────────────────────────────────────
-# SECTION 1: PORT
-# ─────────────────────────────────────────────
-"""
+"""LexicalIndex -- BM25-style lexical (keyword) search."""
 
 from typing import List, Protocol
 

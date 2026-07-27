@@ -1,17 +1,5 @@
 """context_assembly -- fragment text cleanup and final context-string formatting.
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- SECTION 1: PARAGRAPH REJOINING   -- undo PDF-extraction line breaks
-#  +-- SECTION 2: TEXT OPTIMIZATION     -- strip PDF noise
-#  +-- SECTION 3: FRAGMENT FORMATTING   -- per-fragment marking/splitting
-#  +-- SECTION 4: CONTEXT ASSEMBLY      -- build_context_for_model
-#  +-- SECTION 5: RECOMP TEXT HELPERS   -- pure helpers used by Answer's RECOMP step
-#
-# ─────────────────────────────────────────────
-
 Moved verbatim from ``rag/engine/context.py`` (all pure string transforms;
 no I/O, no Ollama). ``build_context_for_model`` takes ``Sequence[Fragment]``
 instead of the original's ``List[Dict]`` -- same fields, read via
@@ -120,9 +108,7 @@ def _reunir_parrafos(texto: str) -> str:
     return '\n'.join(result)
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: TEXT OPTIMIZATION
-# ─────────────────────────────────────────────
+# TEXT OPTIMIZATION
 
 
 def optimize_context_text(texto: str) -> str:
@@ -171,9 +157,7 @@ def optimize_context_text(texto: str) -> str:
     return texto.strip()
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: FRAGMENT FORMATTING
-# ─────────────────────────────────────────────
+# FRAGMENT FORMATTING
 
 
 def _marcar_fragmento_incompleto(texto: str) -> str:
@@ -202,9 +186,7 @@ def _texto_fuente_fragmento(doc: str) -> str:
     return doc.strip()
 
 
-# ─────────────────────────────────────────────
-# SECTION 4: CONTEXT ASSEMBLY
-# ─────────────────────────────────────────────
+# CONTEXT ASSEMBLY
 
 
 def build_context_for_model(
@@ -269,9 +251,7 @@ def build_context_for_model(
     return resultado, metrics
 
 
-# ─────────────────────────────────────────────
-# SECTION 5: RECOMP TEXT HELPERS
-# ─────────────────────────────────────────────
+# RECOMP TEXT HELPERS
 
 
 def strip_ollama_think_blocks(text: str) -> str:

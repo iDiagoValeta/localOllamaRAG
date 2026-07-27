@@ -26,11 +26,6 @@ from monkeygrab.config.stack import (  # noqa: E402
 )
 
 
-# ─────────────────────────────────────────────
-# defaults preserve today's behaviour
-# ─────────────────────────────────────────────
-
-
 def test_unset_environment_selects_the_current_production_stack(monkeypatch):
     """An unset environment must not change what the app does today."""
     for var in ("PDF_EXTRACTOR", "VECTOR_STORE", "EMBEDDER"):
@@ -74,11 +69,6 @@ def test_stacks_can_be_mixed(monkeypatch):
     assert not stack.is_multimodal
 
 
-# ─────────────────────────────────────────────
-# unknown values fail loudly
-# ─────────────────────────────────────────────
-
-
 @pytest.mark.parametrize(
     "variable",
     ["PDF_EXTRACTOR", "VECTOR_STORE", "EMBEDDER"],
@@ -93,11 +83,6 @@ def test_an_unimplemented_backend_raises_instead_of_falling_back(monkeypatch, va
 
     with pytest.raises(ValueError, match=variable):
         stack_from_env()
-
-
-# ─────────────────────────────────────────────
-# identity of an index depends on the stack
-# ─────────────────────────────────────────────
 
 
 def test_different_stacks_have_different_slugs():

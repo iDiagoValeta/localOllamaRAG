@@ -51,11 +51,6 @@ def test_parse_subqueries_returns_nothing_for_an_empty_response():
     assert _parse_subqueries("   \n  \n") == []
 
 
-# ─────────────────────────────────────────────
-# Fakes
-# ─────────────────────────────────────────────
-
-
 def _fragment(id_, score_final=0.0):
     source, rest = id_.split("_pag", 1)
     page_str, chunk_str = rest.split("_chunk", 1)
@@ -129,11 +124,6 @@ def _config(**overrides):
     if overrides:
         cfg = cfg.with_overrides(**overrides)
     return cfg
-
-
-# ─────────────────────────────────────────────
-# Retrieve orchestration
-# ─────────────────────────────────────────────
 
 
 def test_semantic_only_search_when_hybrid_and_reranker_disabled():
@@ -241,11 +231,6 @@ def test_top_k_final_truncates_even_when_reranker_is_off():
     result = Retrieve(embedder, store, config).run("short query")
 
     assert len(result.fragments) == 2
-
-
-# ─────────────────────────────────────────────
-# Embedding model VRAM residency (keep_alive)
-# ─────────────────────────────────────────────
 
 
 def test_single_query_variant_unloads_the_embedding_model_immediately():

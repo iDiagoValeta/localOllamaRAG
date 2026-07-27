@@ -1,9 +1,4 @@
-"""ExtractedImage -- one raster image pulled from a PDF page, pre-description.
-
-# ─────────────────────────────────────────────
-# SECTION 1: ENTITY
-# ─────────────────────────────────────────────
-"""
+"""ExtractedImage -- one raster image pulled from a PDF page, pre-description."""
 
 from dataclasses import dataclass
 

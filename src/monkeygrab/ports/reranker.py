@@ -1,9 +1,4 @@
-"""Reranker -- Cross-Encoder-style re-scoring of retrieval candidates.
-
-# ─────────────────────────────────────────────
-# SECTION 1: PORT
-# ─────────────────────────────────────────────
-"""
+"""Reranker -- Cross-Encoder-style re-scoring of retrieval candidates."""
 
 from typing import List, Protocol, Sequence
 

@@ -1,9 +1,4 @@
-"""ImageExtractor -- PDF file to raster images grouped by page.
-
-# ─────────────────────────────────────────────
-# SECTION 1: PORT
-# ─────────────────────────────────────────────
-"""
+"""ImageExtractor -- PDF file to raster images grouped by page."""
 
 from typing import Dict, List, Protocol
 

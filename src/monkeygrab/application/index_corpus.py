@@ -1,20 +1,6 @@
 """IndexCorpus -- extract -> chunk -> (contextualize, opt.) -> embed -> store,
 plus image extraction -> description -> (contextualize, opt.) -> embed -> store.
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- IndexCorpusResult          -- chunks-indexed count + observability metrics
-#  +-- detect_document_language   -- moved from contextual.py's _detectar_idioma
-#  +-- _PROMPT_ECHO_MARKERS       -- moved from images.py, image-description filtering
-#  +-- _is_description_spam       -- moved from images.py's _es_descripcion_spam
-#  +-- _is_prompt_echo            -- moved from images.py's _es_prompt_echo
-#  +-- _is_caption_only           -- moved from images.py's _es_solo_caption
-#  +-- IndexCorpus                -- the use case
-#
-# ─────────────────────────────────────────────
-
 Orchestrates one document through ``rag.engine.indexing.indexar_documentos``'s
 per-file pipeline: extract pages (``PdfExtractor``), split each page into
 chunks (``monkeygrab.application.text_chunking``), optionally enrich each
@@ -153,16 +139,6 @@ def _text_chunk_format(chunk_text: str) -> str:
     """
     return "table" if "<table" in chunk_text.lower() else "markdown"
 
-
-# ─────────────────────────────────────────────
-# IMAGE DESCRIPTION FILTERING (pure helpers)
-# ─────────────────────────────────────────────
-#
-# Literal copies from rag/engine/images.py: degenerate-output detection for
-# the vision model's image descriptions. Kept as module-level pure functions
-# (no ChatModel/config dependency) rather than a separate application module,
-# since IndexCorpus is their only caller -- same rationale as
-# _build_document_sample above.
 
 _PROMPT_ECHO_MARKERS = (
     # Prompt template fragments -- update if the prompt wording changes.
@@ -356,9 +332,6 @@ class IndexCorpus:
             getattr(self._embedder, "embed_image", None)
         )
 
-    # ─────────────────────────────────────────────
-    # IMAGE INDEXING
-    # ─────────────────────────────────────────────
 
     def _index_images_native(self, pdf_path: str, filename: str) -> int:
         """Extract figures and embed them via ``ImageEmbedder.embed_image``.

@@ -1,9 +1,4 @@
-"""OllamaEmbedder -- Embedder adapter over ``ollama.embeddings``.
-
-# ─────────────────────────────────────────────
-# SECTION 1: ADAPTER
-# ─────────────────────────────────────────────
-"""
+"""OllamaEmbedder -- Embedder adapter over ``ollama.embeddings``."""
 
 from typing import List, Optional
 

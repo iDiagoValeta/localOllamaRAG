@@ -1,9 +1,4 @@
-"""PymupdfImageExtractor -- ImageExtractor adapter over PyMuPDF (fitz).
-
-# ─────────────────────────────────────────────
-# SECTION 1: ADAPTER
-# ─────────────────────────────────────────────
-"""
+"""PymupdfImageExtractor -- ImageExtractor adapter over PyMuPDF (fitz)."""
 
 import logging
 from typing import Dict, List

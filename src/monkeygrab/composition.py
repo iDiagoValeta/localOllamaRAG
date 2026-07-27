@@ -1,16 +1,5 @@
 """Composition root -- builds the adapter graph a StackConfig asks for.
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- 1. build_extractor      text extraction backend
-#  +-- 2. build_vector_store   vector index backend
-#  +-- 3. build_embedder       embedding backend
-#  +-- 4. build_stack          all three at once, as a named tuple
-#
-# ─────────────────────────────────────────────
-
 This is the only module that knows which concrete adapter exists. Use cases
 receive ports, so nothing above this layer changes when a technology is swapped:
 comparing two stacks is an environment variable plus a second run of the gate.
@@ -73,9 +62,7 @@ def paths_for_stack(config: AppConfig) -> PathsConfig:
     return dataclasses.replace(paths, path_db=f"{paths.path_db}__{slug}")
 
 
-# ─────────────────────────────────────────────
-# SECTION 1: EXTRACTOR
-# ─────────────────────────────────────────────
+# EXTRACTOR
 
 
 def build_extractor(config: AppConfig) -> Any:
@@ -105,9 +92,7 @@ def build_extractor(config: AppConfig) -> Any:
     raise ValueError(f"No extractor adapter for {choice!r}")
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: VECTOR STORE
-# ─────────────────────────────────────────────
+# VECTOR STORE
 
 
 def build_vector_store(config: AppConfig) -> Any:
@@ -139,9 +124,7 @@ def build_vector_store(config: AppConfig) -> Any:
     raise ValueError(f"No vector store adapter for {choice!r}")
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: EMBEDDER
-# ─────────────────────────────────────────────
+# EMBEDDER
 
 
 def build_embedder(config: AppConfig) -> Any:
@@ -180,9 +163,7 @@ def build_embedder(config: AppConfig) -> Any:
     raise ValueError(f"No embedder adapter for {choice!r}")
 
 
-# ─────────────────────────────────────────────
-# SECTION 4: WHOLE STACK
-# ─────────────────────────────────────────────
+# WHOLE STACK
 
 
 def build_stack(config: AppConfig) -> Stack:

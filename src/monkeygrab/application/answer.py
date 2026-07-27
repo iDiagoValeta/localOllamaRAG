@@ -1,19 +1,6 @@
 """Answer -- neighbor expansion (opt.) -> char budget -> context synthesis
 (opt.) -> generation.
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- AnswerResult              -- generated text + observability metrics
-#  +-- _is_expandable             -- moved from generation.py's _fragmento_expandible
-#  +-- _expand_with_neighbors     -- moved from generation.py's _expandir_fragmentos_contexto
-#  +-- _limit_by_char_budget      -- moved from generation.py's _limitar_fragmentos_por_chars
-#  +-- _generation_stats          -- final-chunk metadata -> "generation" metrics dict
-#  +-- Answer                     -- the use case, incl. RECOMP synthesis
-#
-# ─────────────────────────────────────────────
-
 Takes the fragments ``Retrieve`` already ranked and threshold-filtered,
 expands them with neighboring chunks, trims to the character budget,
 optionally synthesizes a facts briefing via RECOMP instead of feeding raw
@@ -277,9 +264,6 @@ class Answer:
         }
         return AnswerResult(text=text, metrics=metrics)
 
-    # ─────────────────────────────────────────────
-    # CONTEXT SYNTHESIS (RECOMP, optional)
-    # ─────────────────────────────────────────────
 
     def _build_context(
         self, fragments: Sequence[Fragment], question: str, flags: PipelineFlagsConfig

@@ -1,9 +1,5 @@
 """RerankingConfig -- Cross-Encoder relevance threshold.
 
-# ─────────────────────────────────────────────
-# SECTION 1: CONFIG
-# ─────────────────────────────────────────────
-
 Default is a copy of ``rag/chat_pdfs.py`` section 3.7
 (``RAG_UMBRAL_SCORE_RERANKER``). The reranker *model variant*
 (``RERANKER_QUALITY``, "quality"/"fast") lives in ``config.models.ModelsConfig

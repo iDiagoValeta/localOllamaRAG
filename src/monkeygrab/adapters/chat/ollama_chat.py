@@ -1,9 +1,4 @@
-"""OllamaChatModel -- ChatModel adapter over Ollama generate/chat.
-
-# ─────────────────────────────────────────────
-# SECTION 1: ADAPTER
-# ─────────────────────────────────────────────
-"""
+"""OllamaChatModel -- ChatModel adapter over Ollama generate/chat."""
 
 import base64
 import json

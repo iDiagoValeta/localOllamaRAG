@@ -1,5 +1,4 @@
-"""
-MonkeyGrab -- RAG engine for PDF document queries.
+"""MonkeyGrab -- RAG engine for PDF document queries.
 
 Interactive application with two operating modes: CHAT (free conversation with
 a base model, persistent history, and project identity) and RAG (document
@@ -37,53 +36,6 @@ How to run (interactive CLI):
     ``OLLAMA_OCR_MODEL`` (image indexing), etc., as documented in the project README
     and in ``rag/README.md``.
 """
-
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  CONFIGURATION (startup)
-#  +-- 1. Imports             stdlib -> third-party (ollama, chromadb, pypdf) -> local
-#  +-- 2. Required deps       PDF extraction, reranking and BM25
-#  +-- 3. Global config
-#  |      +-- 3.1 Terminal runtime (UTF-8)
-#  |      +-- 3.2 Environment readers
-#  |      +-- 3.3 Model roles and Ollama runtime
-#  |      +-- 3.4 Pipeline flags
-#  |      +-- 3.5 Paths and persistence
-#  |      +-- 3.6 Embedding prefixes
-#  |      +-- 3.7 Indexing, retrieval and ranking parameters
-#  |      +-- 3.8 Logging and process environment
-#  |      +-- 3.9 Model role runtime switching
-#  |
-#  PUBLIC FACADE
-#  +-- 4. System prompts      CHAT (identity + language); RAG prompt baked into Modelfile
-#  +-- 5. Engine reexports    public API preserved from rag.engine.* modules
-#  |
-#  SPLIT IMPLEMENTATION (rag/engine/)
-#  +-- history.py             CHAT history persistence
-#  +-- chunking.py            Markdown chunking and neighbor IDs
-#  +-- lexical.py             keywords, stopwords and BM25 lexical search
-#  +-- reranking.py           query decomposition and CrossEncoder reranking
-#  +-- retrieval.py           hybrid retrieval orchestration
-#  +-- context.py             context cleanup, formatting and RECOMP synthesis
-#  +-- debug.py               debug_rag interaction dumps
-#  +-- generation.py          Ollama generation and silent evaluation path
-#  +-- contextual.py          contextual retrieval helpers
-#  +-- images.py              PDF image extraction and OCR descriptions
-#  +-- indexing.py            PDF indexing and collection document listing
-#  +-- runtime.py             sync layer for mutable runtime flags/config
-#  |
-#  ENTRY
-#  +-- main()                 MonkeyGrabCLI.run()
-#
-# ─────────────────────────────────────────────
-
-
-# ─────────────────────────────────────────────
-# SECTION 1: IMPORTS
-# ─────────────────────────────────────────────
-
 
 import base64
 import io
@@ -133,9 +85,7 @@ except ImportError:
 from rag.cli.display import ui
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: REQUIRED DEPENDENCIES
-# ─────────────────────────────────────────────
+# REQUIRED DEPENDENCIES
 
 
 with redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
@@ -154,12 +104,10 @@ RERANKER_AVAILABLE = True
 BM25_AVAILABLE = True
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: GLOBAL CONFIGURATION
-# ─────────────────────────────────────────────
+# GLOBAL CONFIGURATION
 
 
-# 3.1 Terminal runtime
+# Terminal runtime
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -172,7 +120,7 @@ if hasattr(sys.stderr, "reconfigure"):
     except Exception:
         pass
 
-# 3.2 Environment readers
+# Environment readers
 
 
 def _leer_env_int(nombre_variable: str, default: int) -> int:
@@ -219,7 +167,7 @@ def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
     return nombre_modelo.split(":")[0]
 
 
-# 3.3 Model roles and Ollama runtime
+# Model roles and Ollama runtime
 
 MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "gemma4:e4b")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e4b")
@@ -243,7 +191,7 @@ OLLAMA_GENERATE_RETRIES = _leer_env_int("OLLAMA_GENERATE_RETRIES", 2)
 OLLAMA_GENERATE_RETRY_DELAY = _leer_env_int("OLLAMA_GENERATE_RETRY_DELAY", 3)
 
 
-# 3.4 Pipeline flags
+# Pipeline flags
 
 USAR_CONTEXTUAL_RETRIEVAL = True
 USAR_LLM_QUERY_DECOMPOSITION = True
@@ -290,7 +238,7 @@ def set_pipeline_flags(overrides: Dict[str, bool]) -> Dict[str, bool]:
     return previous
 
 
-# 3.5 Paths and persistence
+# Paths and persistence
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -362,7 +310,7 @@ MAX_HISTORIAL_MENSAJES = 40
 CARPETA_DEBUG_RAG = os.path.join(DATA_DIR, "debug_rag")
 
 
-# 3.6 Embedding prefixes
+# Embedding prefixes
 
 def _derivar_prefijos_embedding(modelo_embedding: str) -> tuple[str, str]:
     """Return ``(query_prefix, doc_prefix)`` task prefixes for an embedding model.
@@ -385,7 +333,7 @@ def _derivar_prefijos_embedding(modelo_embedding: str) -> tuple[str, str]:
 EMBED_PREFIX_QUERY, EMBED_PREFIX_DOC = _derivar_prefijos_embedding(MODELO_EMBEDDING)
 
 
-# 3.7 Indexing, retrieval and ranking parameters
+# Indexing, retrieval and ranking parameters
 
 CONTEXTUAL_DOC_CHARS = _leer_env_int("CONTEXTUAL_DOC_CHARS", 24000)
 CHUNK_SIZE = _leer_env_int("RAG_CHUNK_SIZE", 2000)
@@ -415,7 +363,7 @@ MIN_LONGITUD_PREGUNTA_RAG = _leer_env_int("RAG_MIN_LONGITUD_PREGUNTA", 10)
 MAX_CONTEXTO_CHARS = _leer_env_int("MAX_CONTEXTO_CHARS", 24000)
 
 
-# 3.8 Logging and process environment
+# Logging and process environment
 
 LOG_LEVEL = logging.ERROR
 
@@ -435,7 +383,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
 
-# 3.9 Model role runtime switching
+# Model role runtime switching
 
 # Maps the public role keys used by the web UI / API to the module-level model
 # variables. Engine modules read these lazily through ``cfg``, so reassigning
@@ -501,9 +449,7 @@ def set_model_roles_runtime(overrides: Dict[str, str]) -> Dict[str, str]:
     return get_model_roles()
 
 
-# ─────────────────────────────────────────────
-# SECTION 4: SYSTEM PROMPTS
-# ─────────────────────────────────────────────
+# SYSTEM PROMPTS
 
 
 SYSTEM_PROMPT_CHAT = """
@@ -580,14 +526,6 @@ Guidelines:
 - For mathematical expressions, always use LaTeX notation: $...$ for inline math and $$...$$ for display/block equations."""
 
 
-# ─────────────────────────────────────────────
-
-# -----------------------------------------------------------------------------
-# BUSINESS LOGIC FACADE
-# -----------------------------------------------------------------------------
-# The implementation lives in rag.engine.*. Keep these imports explicit so all
-# existing callers can continue to use rag.chat_pdfs as the public runtime API.
-
 from rag.engine.history import cargar_historial, guardar_historial, limpiar_historial
 from rag.engine.chunking import dividir_en_chunks, expandir_con_chunks_adyacentes
 from monkeygrab.adapters.reranking.cross_encoder_reranker import resolve_reranker_device
@@ -624,10 +562,6 @@ from rag.engine.generation import (
 )
 from rag.engine.indexing import indexar_documentos, obtener_documentos_indexados
 
-
-# -----------------------------------------------------------------------------
-# ENTRY POINT
-# -----------------------------------------------------------------------------
 
 def main():
     """Launch the MonkeyGrab CLI application."""

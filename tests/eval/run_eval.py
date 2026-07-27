@@ -1,18 +1,5 @@
 """run_eval -- self-sufficient runner for the gold eval gate (real pipeline, no mocks).
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- 1. CONSTANTS          paths, default models, ratchet margin
-#  +-- 2. PREFLIGHT          Ollama reachability + required models present
-#  +-- 3. CORPUS STAGING     blind-set download/staging + cache-aware indexing
-#  +-- 4. CASE EXECUTION     one gold case -> graded record(s)
-#  +-- 5. REPORTING          JSON artifact, console summary, baseline gate
-#  +-- 6. CLI                main()
-#
-# ─────────────────────────────────────────────
-
 This is the "gate completo" from docs/design/2026-07-26-monkeygrab-v2.md
 section 7.2: a single command that turns tests/eval/gold_cases.jsonl into a
 pass/fail verdict by running the *real* pipeline (Ollama generation and
@@ -54,9 +41,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 import requests
 
-# ─────────────────────────────────────────────
-# SECTION 1: CONSTANTS
-# ─────────────────────────────────────────────
+# CONSTANTS
 
 EVAL_DIR = Path(__file__).resolve().parent
 REPO_ROOT = EVAL_DIR.parents[1]
@@ -112,9 +97,7 @@ class EvalSetupError(RuntimeError):
     """
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: PREFLIGHT
-# ─────────────────────────────────────────────
+# PREFLIGHT
 
 
 def _installed_ollama_models() -> List[str]:
@@ -153,9 +136,7 @@ def preflight_ollama(required_models: Iterable[str]) -> None:
         )
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: CORPUS STAGING
-# ─────────────────────────────────────────────
+# CORPUS STAGING
 
 
 def load_gold_cases() -> List[Dict[str, Any]]:
@@ -349,9 +330,7 @@ def verify_all_papers_indexed(
         raise EvalSetupError(f"papers referenced by gold cases but not indexed: {sorted(set(missing))}")
 
 
-# ─────────────────────────────────────────────
-# SECTION 4: CASE EXECUTION
-# ─────────────────────────────────────────────
+# CASE EXECUTION
 
 
 def _kind_from_format(fmt: Optional[str]) -> str:
@@ -609,9 +588,7 @@ def run_all_cases(
     return records
 
 
-# ─────────────────────────────────────────────
-# SECTION 5: REPORTING
-# ─────────────────────────────────────────────
+# REPORTING
 
 
 def _bucket_stats(records: Sequence[Dict[str, Any]], key_fn) -> Dict[str, Dict[str, Any]]:
@@ -677,9 +654,7 @@ def _update_baseline(pass_rate: float) -> None:
     print(f"[baseline] {verb} to {candidate:.2f} (observed {pass_rate:.4f} minus {BASELINE_MARGIN:.2f} margin)")
 
 
-# ─────────────────────────────────────────────
-# SECTION 6: CLI
-# ─────────────────────────────────────────────
+# CLI
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:

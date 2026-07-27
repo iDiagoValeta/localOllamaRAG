@@ -1,9 +1,4 @@
-"""ChunkMetadata -- position and format of a stored chunk.
-
-# ─────────────────────────────────────────────
-# SECTION 1: ENTITY
-# ─────────────────────────────────────────────
-"""
+"""ChunkMetadata -- position and format of a stored chunk."""
 
 from dataclasses import dataclass
 from typing import Optional

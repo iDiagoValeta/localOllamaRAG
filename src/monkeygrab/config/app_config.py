@@ -1,15 +1,5 @@
 """AppConfig -- immutable configuration root for the whole pipeline.
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- 1. AppConfig            frozen dataclass grouping the 7 sub-configs
-#  +-- 2. from_env()           builds AppConfig from process environment
-#  +-- 3. with_overrides()     returns a NEW AppConfig, never mutates
-#
-# ─────────────────────────────────────────────
-
 Replaces the mutable module-globals of ``rag/chat_pdfs.py`` (section 3) and
 its three runtime mutators (``set_pipeline_flags``, ``set_model_roles_runtime``,
 ``set_docs_folder_runtime``) with one object, injected into use cases instead
@@ -47,9 +37,7 @@ from monkeygrab.config.stack import StackConfig, stack_from_env
 _SECTION_NAMES = ("models", "chunking", "retrieval", "reranking", "context", "flags", "paths")
 
 
-# ─────────────────────────────────────────────
-# SECTION 1: APPCONFIG
-# ─────────────────────────────────────────────
+# APPCONFIG
 
 
 @dataclass(frozen=True)
@@ -84,9 +72,7 @@ class AppConfig:
     # current production stack, so an unset environment behaves exactly as before.
     stack: StackConfig = field(default_factory=StackConfig)
 
-    # ─────────────────────────────────────────────
-    # SECTION 2: FROM_ENV
-    # ─────────────────────────────────────────────
+    # FROM_ENV
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -177,7 +163,7 @@ class AppConfig:
         )
 
         # All 10 pipeline flags are hardcoded True in rag/chat_pdfs.py section
-        # 3.4 -- none of them are read from the environment there, so none
+        # -- none of them are read from the environment there, so none
         # are read from the environment here either.
         flags = PipelineFlagsConfig()
 
@@ -203,9 +189,7 @@ class AppConfig:
             stack=stack_from_env(),
         )
 
-    # ─────────────────────────────────────────────
-    # SECTION 3: WITH_OVERRIDES
-    # ─────────────────────────────────────────────
+    # WITH_OVERRIDES
 
     def with_overrides(self, **cambios: Any) -> "AppConfig":
         """Return a NEW ``AppConfig`` with the given fields replaced.

@@ -48,9 +48,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Sequence
 
-# ─────────────────────────────────────────────
-# SECTION 1: NORMALIZATION
-# ─────────────────────────────────────────────
+# NORMALIZATION
 
 # Markdown emphasis a model's answer or the retrieved context may wrap
 # numbers/words in (**bold**, _italic_, `code`) -- stripped so it never
@@ -156,9 +154,7 @@ def _normalize_decimal_comma(text: str) -> str:
     return s
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: TOKEN MATCHING
-# ─────────────────────────────────────────────
+# TOKEN MATCHING
 
 # A bare numeric literal ("110", "28.4") -- eligible for the two guards
 # below. Word/phrase literals ("6 identical layers", "l=24", "no") go
@@ -240,9 +236,7 @@ def _contains_token(haystack: str, needle: str) -> bool:
     return re.search(pattern, haystack) is not None
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: GRADERS
-# ─────────────────────────────────────────────
+# GRADERS
 
 
 def grade_answer(answer: str, case: Dict[str, Any]) -> Dict[str, Any]:

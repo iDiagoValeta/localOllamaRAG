@@ -25,11 +25,6 @@ if str(ROOT) not in sys.path:
 import rag.chat_pdfs as rag
 
 
-# ─────────────────────────────────────────────
-# dividir_en_chunks -- separator hierarchy and overlap
-# ─────────────────────────────────────────────
-
-
 def test_splits_on_paragraph_boundary_when_content_exceeds_chunk_size():
     """Content that fits per-paragraph but not as a whole is split on ``\\n\\n``.
 
@@ -160,11 +155,6 @@ def test_pieces_below_min_chunk_length_are_dropped_and_whole_section_falls_back_
 def test_empty_and_whitespace_only_input_produce_no_chunks():
     assert rag.dividir_en_chunks("", chunk_size=300, overlap=50) == []
     assert rag.dividir_en_chunks("   \n  ", chunk_size=300, overlap=50) == []
-
-
-# ─────────────────────────────────────────────
-# expandir_con_chunks_adyacentes -- neighbor ID construction
-# ─────────────────────────────────────────────
 
 
 def test_expand_neighbors_mid_page_returns_prev_and_next_chunk_ids():

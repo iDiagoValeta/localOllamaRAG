@@ -1,9 +1,4 @@
-"""OllamaModelUnloader -- ModelUnloader adapter over Ollama's keep_alive=0.
-
-# ─────────────────────────────────────────────
-# SECTION 1: ADAPTER
-# ─────────────────────────────────────────────
-"""
+"""OllamaModelUnloader -- ModelUnloader adapter over Ollama's keep_alive=0."""
 
 import logging
 from typing import Optional, Set

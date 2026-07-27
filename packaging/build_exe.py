@@ -1,5 +1,4 @@
-"""
-Build the MonkeyGrab desktop app (.exe) with PyInstaller.
+"""Build the MonkeyGrab desktop app (.exe) with PyInstaller.
 
 Orchestrates the full freeze: (1) ensure the React UI is built, (2) generate the
 window/app icon from the logo, (3) run PyInstaller against ``MonkeyGrab.spec``.
@@ -17,17 +16,6 @@ Prerequisites on the *target* machine (not bundled):
 Dependencies: PyInstaller, pywebview; Node.js only when (re)building the frontend.
 """
 
-# ─────────────────────────────────────────────
-# MODULE MAP -- Section index
-# ─────────────────────────────────────────────
-#
-#  +-- 1. Paths and CLI
-#  +-- 2. Frontend build              pnpm run build (skippable)
-#  +-- 3. Icon generation            logo.png -> MonkeyGrab.ico (optional)
-#  +-- 4. PyInstaller invocation
-#  +-- 5. main()
-#
-# ─────────────────────────────────────────────
 
 import argparse
 import os
@@ -36,9 +24,7 @@ import subprocess
 import sys
 
 
-# ─────────────────────────────────────────────
-# SECTION 1: PATHS AND CLI
-# ─────────────────────────────────────────────
+# PATHS AND CLI
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJ = os.path.dirname(HERE)
@@ -56,9 +42,7 @@ def _parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-# ─────────────────────────────────────────────
-# SECTION 2: FRONTEND BUILD
-# ─────────────────────────────────────────────
+# FRONTEND BUILD
 
 def build_frontend() -> None:
     """Build the React UI into rag/web/frontend/dist via pnpm.
@@ -82,9 +66,7 @@ def build_frontend() -> None:
     subprocess.run([pnpm, "run", "build"], cwd=FRONTEND, check=True, shell=(os.name == "nt"))
 
 
-# ─────────────────────────────────────────────
-# SECTION 3: ICON GENERATION
-# ─────────────────────────────────────────────
+# ICON GENERATION
 
 def build_icon() -> None:
     """Generate MonkeyGrab.ico from the logo if Pillow is available."""
@@ -104,9 +86,7 @@ def build_icon() -> None:
     print(f">> icon generated: {ICON}")
 
 
-# ─────────────────────────────────────────────
-# SECTION 4: PYINSTALLER INVOCATION
-# ─────────────────────────────────────────────
+# PYINSTALLER INVOCATION
 
 def run_pyinstaller(dist_dir: str) -> None:
     """Freeze the app with PyInstaller using the versioned spec."""
@@ -123,9 +103,7 @@ def run_pyinstaller(dist_dir: str) -> None:
     print(f"\nDone. Bundle: {exe}" if os.path.isfile(exe) else f"\nBuild finished; check {dist_dir}")
 
 
-# ─────────────────────────────────────────────
-# SECTION 5: ENTRY POINT
-# ─────────────────────────────────────────────
+# ENTRY POINT
 
 def main() -> None:
     args = _parse_args()

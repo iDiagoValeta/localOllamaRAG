@@ -14,8 +14,7 @@ from typing import Dict, List
 from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
-# SECTION 5: HISTORY PERSISTENCE
-# ─────────────────────────────────────────────
+# HISTORY PERSISTENCE
 
 
 def cargar_historial() -> List[Dict[str, str]]:
@@ -60,7 +59,5 @@ def limpiar_historial(historial: List[Dict[str, str]]) -> None:
     """
     historial.clear()
     guardar_historial(historial)
-
-
 
 

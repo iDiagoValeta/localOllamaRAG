@@ -1,9 +1,4 @@
-"""Embedder -- text to embedding vector.
-
-# ─────────────────────────────────────────────
-# SECTION 1: PORT
-# ─────────────────────────────────────────────
-"""
+"""Embedder -- text to embedding vector."""
 
 from typing import List, Optional, Protocol
 

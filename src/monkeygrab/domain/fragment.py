@@ -1,9 +1,4 @@
-"""Fragment -- a retrieved chunk, scored across the retrieval pipeline.
-
-# ─────────────────────────────────────────────
-# SECTION 1: ENTITY
-# ─────────────────────────────────────────────
-"""
+"""Fragment -- a retrieved chunk, scored across the retrieval pipeline."""
 
 from dataclasses import dataclass, field
 from typing import Optional, Tuple

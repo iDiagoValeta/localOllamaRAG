@@ -1,9 +1,4 @@
-"""VectorStore -- add/query/get/count over embedded chunks.
-
-# ─────────────────────────────────────────────
-# SECTION 1: PORT
-# ─────────────────────────────────────────────
-"""
+"""VectorStore -- add/query/get/count over embedded chunks."""
 
 from typing import List, Optional, Protocol, Sequence
 

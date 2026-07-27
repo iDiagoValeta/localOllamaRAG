@@ -1,9 +1,4 @@
-"""ExtractedPage -- one page of raw text pulled from a PDF, pre-chunking.
-
-# ─────────────────────────────────────────────
-# SECTION 1: ENTITY
-# ─────────────────────────────────────────────
-"""
+"""ExtractedPage -- one page of raw text pulled from a PDF, pre-chunking."""
 
 from dataclasses import dataclass
 
