@@ -2,13 +2,18 @@
 # package.json is no longer read at all, so configuration placed there is inert
 # and misleading.
 #
-# pnpm refuses to run dependency install scripts unless they are named here, and
+# pnpm refuses to run a dependency's install scripts unless it is named here, and
 # fails the install rather than skipping them quietly. That is the supply-chain
-# behaviour this project wants: a package can only execute code at install time
-# if someone decided it should.
+# behaviour this project moved to pnpm for: a package can only execute code at
+# install time if someone decided it should.
 #
-# esbuild is listed because it genuinely needs its script to place a native
-# binary, and vite cannot build without it. Nothing else is listed, and adding an
-# entry should be a deliberate call every time.
-onlyBuiltDependencies:
-  - esbuild
+# esbuild needs its script to place a native binary and vite cannot build without
+# it, so it is allowed by name. Nothing else is, and each addition should be a
+# deliberate decision.
+#
+# The key is `allowBuilds`, which replaced `onlyBuiltDependencies` in pnpm 11.
+# This is not reproducible on Windows, where the platform package ships the
+# binary and the script never runs -- it only surfaces on Linux, which is why CI
+# caught it and local installs did not.
+allowBuilds:
+  esbuild: true
