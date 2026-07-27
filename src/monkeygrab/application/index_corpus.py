@@ -129,6 +129,31 @@ def _build_document_sample(pages: Sequence[ExtractedPage], contextual_doc_chars:
     return "\n\n".join(partes)[:contextual_doc_chars]
 
 
+def _text_chunk_format(chunk_text: str) -> str:
+    """Classify a text chunk as a table or as prose.
+
+    An extractor that preserves table structure emits HTML, and a chunk carrying
+    a table is a different kind of content from a paragraph: it answers "what
+    value is in this cell" rather than "what does this section say". Marking it
+    lets retrieval surface tables for questions that need one.
+
+    Without this, a preserved table is indexed as ordinary prose and becomes
+    invisible as a table — which is why table retrieval measured 0/5 on the
+    text-flattening path even though the numbers were present in the text.
+
+    The test is the HTML tag rather than the extractor's identity, so any backend
+    that keeps tables intact benefits and none has to announce itself.
+
+    Args:
+        chunk_text: Raw chunk text, before contextual enrichment.
+
+    Returns:
+        ``"table"`` when the chunk contains an HTML table, ``"markdown"``
+        otherwise.
+    """
+    return "table" if "<table" in chunk_text.lower() else "markdown"
+
+
 # ─────────────────────────────────────────────
 # IMAGE DESCRIPTION FILTERING (pure helpers)
 # ─────────────────────────────────────────────
@@ -204,16 +229,11 @@ class IndexCorpus:
     -- there is nothing to invoke otherwise, the same pattern used by
     ``Retrieve``'s and ``Answer``'s optional ports.
 
-    ``image_extractor``/``ocr_chat_model`` are likewise ``Optional`` and
-    gate together: image indexing runs only when BOTH are wired in AND
-    ``flags.usar_embeddings_imagen`` is true. Requiring both (rather than
-    running extraction with no way to describe what it found) avoids doing
-    PDF/image I/O whose result could never produce a chunk -- unlike
-    ``indexar_documentos``, which always extracts once ``USAR_EMBEDDINGS_IMAGEN``
-    is true and then discards undescribable images one by one, this is an
-    equivalent end result (no image chunks without a working "ocr" role)
-    reached without the wasted extraction work when the caller plainly has no
-    "ocr" model wired in.
+    ``image_extractor`` is required for any image path. How those images become
+    vectors depends on the stack: a multimodal embedder (``stack.is_multimodal``
+    plus ``embed_image``) indexes figures directly; a text-only embedder still
+    needs ``ocr_chat_model`` to caption them first. Without a way to produce a
+    vector, image extraction is skipped rather than run for nothing.
     """
 
     def __init__(
@@ -303,7 +323,7 @@ class IndexCorpus:
                     page=page.page,
                     chunk=chunk_idx,
                     total_chunks_in_page=len(text_chunks),
-                    format="markdown",
+                    format=_text_chunk_format(chunk_text),
                     section_header=text_chunk.header,
                 )
                 chunk = Chunk(text=final_text, metadata=metadata)
@@ -313,12 +333,13 @@ class IndexCorpus:
                 total_chunks += 1
 
         total_image_chunks = 0
-        if (
-            flags.usar_embeddings_imagen
-            and self._image_extractor is not None
-            and self._ocr_chat_model is not None
-        ):
-            total_image_chunks = self._index_images(pdf_path, filename, texto_base_doc, idioma_doc)
+        if flags.usar_embeddings_imagen and self._image_extractor is not None:
+            if self._uses_native_image_embed():
+                total_image_chunks = self._index_images_native(pdf_path, filename)
+            elif self._ocr_chat_model is not None:
+                total_image_chunks = self._index_images(
+                    pdf_path, filename, texto_base_doc, idioma_doc
+                )
             total_chunks += total_image_chunks
 
         metrics = {
@@ -329,9 +350,60 @@ class IndexCorpus:
         }
         return IndexCorpusResult(chunks_indexed=total_chunks, metrics=metrics)
 
+    def _uses_native_image_embed(self) -> bool:
+        """True when figures can go straight into the embedder (no OCR caption)."""
+        return self._config.stack.is_multimodal and callable(
+            getattr(self._embedder, "embed_image", None)
+        )
+
     # ─────────────────────────────────────────────
     # IMAGE INDEXING
     # ─────────────────────────────────────────────
+
+    def _index_images_native(self, pdf_path: str, filename: str) -> int:
+        """Extract figures and embed them via ``ImageEmbedder.embed_image``.
+
+        Writes each ``ExtractedImage``'s bytes to a temp file because the
+        ``ImageEmbedder`` port takes a path (the jina worker loads from disk).
+        Chunk ``text`` keeps the caption when present so lexical/debug views
+        still have something readable; the vector itself is from pixels.
+        """
+        import os
+        import tempfile
+
+        images_by_page = self._image_extractor.extract(pdf_path)
+        n_indexed = 0
+        embed_image = self._embedder.embed_image
+
+        for page_num, page_images in images_by_page.items():
+            for img_idx, image in enumerate(page_images):
+                suffix = f".{image.ext}" if image.ext else ".png"
+                fd, tmp_path = tempfile.mkstemp(suffix=suffix)
+                try:
+                    with os.fdopen(fd, "wb") as handle:
+                        handle.write(image.image_bytes)
+                    embedding = embed_image(tmp_path, caption=image.caption or "")
+                finally:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+
+                caption = (image.caption or "").strip()
+                text = caption if caption else f"[figure] page={page_num} idx={img_idx}"
+                metadata = ChunkMetadata(
+                    source=filename,
+                    page=page_num,
+                    chunk=_IMAGE_CHUNK_OFFSET + img_idx,
+                    format="image",
+                    section_header="",
+                    image_width=image.width,
+                    image_height=image.height,
+                )
+                self._vector_store.add(Chunk(text=text, metadata=metadata), embedding)
+                n_indexed += 1
+
+        return n_indexed
 
     def _index_images(
         self, pdf_path: str, filename: str, texto_base_doc: str, idioma_doc: str

@@ -98,6 +98,22 @@ _FIELD_MAP = [
 ]
 
 
+# Fields that exist only in the new configuration and therefore have nothing in
+# rag.chat_pdfs to be compared against. Listed explicitly rather than skipped by
+# a prefix rule, so that adding a field still forces a decision here instead of
+# quietly escaping the drift guard.
+#
+# The backend selectors are new capability: the old engine had no way to choose an
+# implementation, which is why swapping one meant editing wiring code. Their
+# defaults are covered by tests/unit/test_stack_selection.py, which asserts that
+# an unset environment reproduces the current production stack.
+_FIELDS_WITHOUT_ENGINE_COUNTERPART = {
+    "stack.extractor",
+    "stack.vector_store",
+    "stack.embedder",
+}
+
+
 def _resolve(obj, dotted_path):
     for part in dotted_path.split("."):
         obj = getattr(obj, part)
@@ -184,7 +200,7 @@ def test_field_map_is_exhaustive_over_appconfig_leaf_fields():
     import dataclasses
 
     cfg = AppConfig()
-    mapped = {path for path, _ in _FIELD_MAP}
+    mapped = {path for path, _ in _FIELD_MAP} | _FIELDS_WITHOUT_ENGINE_COUNTERPART
 
     def _leaf_paths(obj, prefix=""):
         paths = set()

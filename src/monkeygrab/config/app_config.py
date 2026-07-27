@@ -38,6 +38,7 @@ from monkeygrab.config.models import (
 from monkeygrab.config.paths import RAG_BASE_DIR, PathsConfig, derive_db_paths
 from monkeygrab.config.reranking import RerankingConfig
 from monkeygrab.config.retrieval import RetrievalConfig
+from monkeygrab.config.stack import StackConfig, stack_from_env
 
 # The 7 sections with runtime-override support via with_overrides(); anything
 # nested deeper (e.g. models.ollama.*) is set at construction time only, same
@@ -79,6 +80,9 @@ class AppConfig:
     context: ContextConfig = field(default_factory=ContextConfig)
     flags: PipelineFlagsConfig = field(default_factory=PipelineFlagsConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
+    # Which implementation stands behind each swappable port. Its default is the
+    # current production stack, so an unset environment behaves exactly as before.
+    stack: StackConfig = field(default_factory=StackConfig)
 
     # ─────────────────────────────────────────────
     # SECTION 2: FROM_ENV
@@ -196,6 +200,7 @@ class AppConfig:
         return cls(
             models=models, chunking=chunking, retrieval=retrieval,
             reranking=reranking, context=context, flags=flags, paths=paths,
+            stack=stack_from_env(),
         )
 
     # ─────────────────────────────────────────────

@@ -7,6 +7,7 @@
 #  +-- pdf_extractor.py    PdfExtractor    -- PDF -> per-page raw text
 #  +-- image_extractor.py  ImageExtractor  -- PDF -> raster images by page
 #  +-- embedder.py         Embedder        -- text -> embedding vector
+#  +-- image_embedder.py   ImageEmbedder   -- image (+caption) -> embedding vector
 #  +-- vector_store.py     VectorStore     -- add/query/get/count over chunks
 #  +-- lexical_index.py    LexicalIndex    -- BM25-style text search
 #  +-- reranker.py         Reranker        -- Cross-Encoder-style re-scoring
@@ -32,6 +33,7 @@ strategy. Each Protocol's docstring restates this for its own failure modes.
 
 from monkeygrab.ports.chat_model import ChatModel
 from monkeygrab.ports.embedder import Embedder
+from monkeygrab.ports.image_embedder import ImageEmbedder
 from monkeygrab.ports.image_extractor import ImageExtractor
 from monkeygrab.ports.lexical_index import LexicalIndex
 from monkeygrab.ports.model_unloader import ModelUnloader
@@ -42,6 +44,7 @@ from monkeygrab.ports.vector_store import VectorStore
 __all__ = [
     "ChatModel",
     "Embedder",
+    "ImageEmbedder",
     "ImageExtractor",
     "LexicalIndex",
     "ModelUnloader",

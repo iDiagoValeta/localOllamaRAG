@@ -11,13 +11,19 @@ python-dotenv>=1.0.0
 
 sentence-transformers>=2.2.0
 
-# The multimodal retrieval stack (jina-clip embeddings + FAISS) is deliberately
-# absent here. The spike validated it inside an isolated venv whose torch and
-# transformers are OLDER than the ones this project actually runs on, so
-# copying those pins would silently downgrade a working environment. The
-# versions get resolved against the real runtime when the multimodal adapters
-# land, not before.
+# FAISS backs the alternative vector store. It is a required dependency rather
+# than an optional one so the test proving FAISS and Chroma return identical
+# rankings runs on every build: a claim of interchangeability that CI never
+# exercises decays into a comment.
+faiss-cpu>=1.8
+
+# Two pieces of the multimodal stack are deliberately NOT here.
 #
-# MinerU is never a Python dependency of the product: it is an external CLI
-# invoked through subprocess, precisely so its own pins cannot collide with
-# ours.
+# MinerU is an external CLI, invoked through subprocess. Its own pins conflict
+# with these, and the adapter only needs the binary.
+#
+# jina-clip-v2 cannot run in this environment at all: under transformers 5.x it
+# fails initializing weights, and neither disabling lazy init nor forcing CPU
+# helps. It loads under transformers 4.57, so it lives in an isolated venv and
+# the adapter drives a worker process there. Pinning transformers down to suit
+# one model would degrade every other consumer of this file.
