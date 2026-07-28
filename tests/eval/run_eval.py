@@ -87,6 +87,14 @@ AUX_MODEL = "gemma4:e2b"
 # variance (model sampling, Ollama warmup) from flipping the gate red.
 BASELINE_MARGIN = 0.05
 
+# Case types decided entirely by retrieval: they skip generation in
+# run_all_cases (a pass says a fragment of the right kind was surfaced, not
+# that any answer used it) and are reported in their own build_summary bucket
+# so blending them into "answer" would not read as answer quality that it
+# isn't. One definition drives both, so a third retrieval-only type can't be
+# added to the dispatch without also changing how it's reported.
+_RETRIEVAL_ONLY_CASE_TYPES = ("figure_retrieval", "table_retrieval")
+
 
 class EvalSetupError(RuntimeError):
     """Raised when a prerequisite (Ollama, a model, an index) is missing.
@@ -563,7 +571,7 @@ def run_all_cases(
         # figure sitting next to a retrieved paragraph would otherwise count as
         # "retrieved" and quietly inflate the figure and table scores -- the
         # two the multimodal stack exists to move.
-        if case["case_type"] in ("figure_retrieval", "table_retrieval"):
+        if case["case_type"] in _RETRIEVAL_ONLY_CASE_TYPES:
             record = run_retrieval_case(case, retrieved, elapsed)
             records.append(record)
             status = "PASS" if record["passed"] else "FAIL"
@@ -604,12 +612,6 @@ def _bucket_stats(records: Sequence[Dict[str, Any]], key_fn) -> Dict[str, Dict[s
         key: {**b, "pass_rate": round(b["passed"] / b["total"], 4) if b["total"] else 0.0}
         for key, b in buckets.items()
     }
-
-
-# Case types decided entirely by retrieval: they never call a generator, so a
-# pass says a fragment of the right kind was surfaced -- not that any answer
-# used it. Blending them into one figure reads as answer quality and is not.
-_RETRIEVAL_ONLY_CASE_TYPES = ("figure_retrieval", "table_retrieval")
 
 
 def _rate(records: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
