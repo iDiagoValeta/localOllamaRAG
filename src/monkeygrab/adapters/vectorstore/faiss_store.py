@@ -158,7 +158,7 @@ class FaissVectorStore:
     L2-normalized before insertion and before querying, which turns the
     index's raw inner product into cosine similarity.
 
-    Persistence layout: three files under ``<path_db>/<collection_name>/``
+    Persistence layout: four files under ``<path_db>/<collection_name>/``
     (one client path holding several named collections):
 
     - ``index.faiss`` -- the FAISS index itself (``faiss.write_index``).
@@ -167,6 +167,15 @@ class FaissVectorStore:
     - ``version.txt`` -- the on-disk format version, checked on load so a
       future layout change fails loudly on old stores instead of
       misreading them.
+    - ``fingerprint.txt`` -- an opaque recipe fingerprint the caller hands
+      this adapter to persist; this store never interprets it (meaning
+      lives in ``monkeygrab.application.index_fingerprint``). Deliberately
+      optional, and deliberately excluded from ``_load_or_init``'s
+      all-or-none presence check: every store written before fingerprinting
+      existed lacks this file and must keep loading. Do not fold it into
+      that check -- doing so would turn every pre-existing index into a
+      hard failure. Its absence means "recipe unknown", which callers
+      treat as stale.
 
     Id-to-position mapping: FAISS indexes by integer position, but chunk ids
     are strings (``Chunk.id``, e.g. ``"paper.pdf_pag2_chunk3"``). Row *i* of
