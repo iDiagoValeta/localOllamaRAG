@@ -543,6 +543,7 @@ def run_all_cases(
         t0 = time.perf_counter()
         try:
             result = retrieve.run(case["question"])
+            retrieved = [_fragment_to_dict(f) for f in result.fragments]
             selected, _metrics = evidence.select_evidence(result.fragments)
             fragments = [_fragment_to_dict(f) for f in selected]
         except Exception as exc:
@@ -559,8 +560,14 @@ def run_all_cases(
 
         # Retrieval-only cases are already decided; grading them now keeps the
         # generation phase to the cases that actually need a model.
+        #
+        # They are graded on what retrieval RETURNED, not on the expanded
+        # evidence: neighbour expansion pulls in chunks by position, so a
+        # figure sitting next to a retrieved paragraph would otherwise count as
+        # "retrieved" and quietly inflate the figure and table scores -- the
+        # two the multimodal stack exists to move.
         if case["case_type"] in ("figure_retrieval", "table_retrieval"):
-            record = run_retrieval_case(case, fragments, elapsed)
+            record = run_retrieval_case(case, retrieved, elapsed)
             records.append(record)
             status = "PASS" if record["passed"] else "FAIL"
             print(f"  [{status}] {case['id']} ({elapsed:.1f}s) -- {record['reason']}", flush=True)
