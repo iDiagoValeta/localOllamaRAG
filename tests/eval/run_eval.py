@@ -196,6 +196,22 @@ def stage_blind_papers(cases: Sequence[Dict[str, Any]]) -> Dict[str, str]:
     return required
 
 
+def should_rebuild(stored: Optional[str], expected: str) -> bool:
+    """Whether a store must be discarded and rebuilt before it can be measured.
+
+    Args:
+        stored: The fingerprint the store recorded, or ``None`` if it recorded
+            none.
+        expected: The fingerprint of the configuration this run will use.
+
+    Returns:
+        True unless the store provably matches. An unknown recipe rebuilds:
+        reusing chunks whose provenance cannot be established would report one
+        number for a mixture of two pipelines.
+    """
+    return stored != expected
+
+
 def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str):
     """Index missing PDFs into the multimodal stack; return its use cases.
 
@@ -218,6 +234,7 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
     from monkeygrab.adapters.reranking.cross_encoder_reranker import CrossEncoderReranker
     from monkeygrab.application.answer import Answer
     from monkeygrab.application.index_corpus import IndexCorpus
+    from monkeygrab.application.index_fingerprint import compute_index_fingerprint
     from monkeygrab.application.retrieve import Retrieve
     from monkeygrab.composition import build_stack
 
@@ -227,7 +244,20 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
         config = _eval_app_config(rag, carpeta)
         stack = build_stack(config)
         store = stack.vector_store
-        existing = _sources_in_store(store)
+        expected_fingerprint = compute_index_fingerprint(config)
+        stored_fingerprint = store.read_fingerprint()
+        existing = set()
+        if should_rebuild(stored_fingerprint, expected_fingerprint):
+            if store.count():
+                print(
+                    f"[index] {label}: recipe changed "
+                    f"({stored_fingerprint or 'unrecorded'} -> {expected_fingerprint}), "
+                    "discarding and rebuilding",
+                    flush=True,
+                )
+                store.clear()
+        else:
+            existing = _sources_in_store(store)
         missing = sorted(required - existing)
         if not missing:
             print(f"[index] {label}: cache hit, {len(required)} paper(s) already indexed")
@@ -264,6 +294,12 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
                 f"{label}: {still_missing} still not indexed after an indexing attempt "
                 "-- check the [index] log above for the underlying error"
             )
+
+        # Written only after every required paper is confirmed present, so an
+        # aborted indexing run never leaves a fingerprint claiming a complete
+        # index. A half-built store keeps its old (or absent) value and gets
+        # rebuilt on the next run.
+        store.write_fingerprint(expected_fingerprint)
 
         lexical = Bm25LexicalIndex(store, config.retrieval)
         # Reranking runs on whatever device the adapter detects, which is CUDA
