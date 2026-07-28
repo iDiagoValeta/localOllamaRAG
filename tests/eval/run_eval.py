@@ -39,8 +39,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
-import requests
-
 # CONSTANTS
 
 EVAL_DIR = Path(__file__).resolve().parent
@@ -57,7 +55,6 @@ if str(REPO_ROOT / "src") not in sys.path:
 if str(EVAL_DIR) not in sys.path:
     sys.path.insert(0, str(EVAL_DIR))
 
-import fetch_papers  # noqa: E402  (tests/eval sibling module)
 import grade  # noqa: E402  (tests/eval sibling module)
 
 GOLD_FILE = EVAL_DIR / "gold_cases.jsonl"
@@ -113,6 +110,12 @@ def _installed_ollama_models() -> List[str]:
     Raises:
         EvalSetupError: Ollama is not reachable at OLLAMA_BASE_URL.
     """
+    # Deferred so importing this module -- which test_index_reuse.py and
+    # test_summary_split.py do, to reach pure helpers like should_rebuild and
+    # build_summary -- never requires requests. The fast CI gate installs
+    # only pytest, precisely to prove those helpers need nothing else.
+    import requests
+
     try:
         response = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
         response.raise_for_status()
@@ -181,6 +184,13 @@ def stage_blind_papers(cases: Sequence[Dict[str, Any]]) -> Dict[str, str]:
     Returns:
         ``{"<paper>.pdf": arxiv_id}`` for every blind-set paper, staged.
     """
+    # Deferred for the same reason as the `requests` import in
+    # _installed_ollama_models: fetch_papers.py itself imports requests at
+    # module level, so importing it eagerly here would defeat the
+    # dependency-free fast CI gate just as much as importing requests
+    # directly would.
+    import fetch_papers
+
     required = _required_pdfs(cases, "arxiv")
     if not required:
         return {}
