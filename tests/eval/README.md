@@ -128,3 +128,30 @@ something is missing:
 
 Infrastructure failures leave the run inconclusive. Only a complete run with
 the calibrated generator model is compared against the baseline.
+
+## Measuring the noise floor and the gate's sensitivity
+
+Both need a GPU machine with Ollama running — the fast CI gate cannot run
+them. `compare_runs.py` itself is pure and is covered by the fast gate.
+
+**Noise floor.** Run the identical configuration twice and compare:
+
+```bash
+python tests/eval/run_eval.py
+python tests/eval/run_eval.py
+python tests/eval/compare_runs.py tests/eval/runs/<first>.json tests/eval/runs/<second>.json
+```
+
+Every flip is noise. Record the observed number: no delta at or below it counts
+as a real change, and an optimisation loop must not treat one as an improvement.
+
+**Sensitivity.** Compare a healthy run against a deliberately degraded one:
+
+```bash
+RAG_TOP_K_FINAL=1 python tests/eval/run_eval.py
+python tests/eval/compare_runs.py tests/eval/runs/<healthy>.json tests/eval/runs/<degraded>.json
+```
+
+The degraded run must flip a clearly larger number of cases to FAIL than the
+noise floor. A gate that barely moves under a known degradation cannot detect
+an improvement either.
