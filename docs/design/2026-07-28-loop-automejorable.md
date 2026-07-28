@@ -5,7 +5,7 @@ configuraciones mejores del pipeline, y los criterios que dicen si está
 conseguido.
 
 Antecedente: la auditoría de `8f83c5f` (migración multimodal) encontró que tres
-de sus siete hallazgos son defectos del **medidor**, no del runtime — índice que
+de sus siete hallazgos son defectos del **medidor**, no del runtime: índice que
 no se invalida, baseline sin evidencia versionada, métrica de figuras que puntúa
 recuperación y se lee como respuesta. Este diseño los absorbe como criterios de
 aceptación en vez de tratarlos como deuda aparte.
@@ -24,7 +24,7 @@ sujeta a una restricción dura de latencia. No es un escalar combinado: no se fi
 ningún tipo de cambio entre puntos de acierto y minutos. Un candidato que se pasa
 del techo queda descalificado aunque acierte más.
 
-**Espacio de acción, primera etapa:** sólo configuración — flags de pipeline,
+**Espacio de acción, primera etapa:** sólo configuración, es decir flags de pipeline,
 tamaño de fragmento, top-k, pesos de fusión, parámetros BM25, prompts. Todo lo
 que `AppConfig` ya modela como objeto inmutable y serializable. El espacio se
 amplía a código cuando el arnés haya demostrado que mide bien, no antes.
@@ -64,7 +64,7 @@ del LLM aporta algo sobre un control determinista.
 De los 51 casos actuales fallan 9. Ese es el margen de mejora completo: el loop
 no puede ganar más de nueve casos porque no hay más que ganar.
 
-La comparación entre dos configuraciones es **pareada** sobre los mismos casos —
+La comparación entre dos configuraciones es **pareada** sobre los mismos casos:
 se miran los casos que vuelcan de estado, no las tasas globales. Con estas
 cantidades hacen falta del orden de seis vuelcos a favor sin ninguno en contra
 para que la diferencia no sea atribuible al azar.
@@ -82,7 +82,7 @@ el que el loop puede demostrar algo es de unos cinco casos.
 Para que el loop demuestre varias mejoras sucesivas antes de agotarse, el pozo de
 casos fallidos debe ser varias veces el umbral de detección: alrededor de treinta.
 
-Los casos nuevos vienen de documentos más duros y fallarán más — se asume una
+Los casos nuevos vienen de documentos más duros y fallarán más, así que se asume una
 tasa de fallo del orden de cuatro de cada diez, frente a dos de cada diez en el
 corpus actual. Con esa proporción:
 
@@ -147,7 +147,7 @@ esta fuente*.
 ### Margen inalcanzable
 
 Separar la métrica de figura (criterio 4) hará aflorar casos que fallan porque el
-generador nunca ve el contenido visual — se almacena la leyenda o el literal
+generador nunca ve el contenido visual: se almacena la leyenda o el literal
 `[figure] page=N`. Ese margen es real y se mide, pero **ninguna configuración
 puede cerrarlo**: exige un cambio de código fuera del espacio de acción de la
 primera etapa.
@@ -191,8 +191,8 @@ determinista como control y el criterio 5 se corre con ambos.
 regresión, y sólo entonces paga el conjunto de búsqueda completo. Devuelve el
 registro en vez de sólo imprimirlo.
 
-El nivel rápido es un **subconjunto fijo del conjunto de búsqueda** —unos 15
-casos elegidos por dar señal: figuras, dominios nuevos, formas difíciles—, no una
+El nivel rápido es un **subconjunto fijo del conjunto de búsqueda** (unos 15
+casos elegidos por dar señal: figuras, dominios nuevos, formas difíciles), no una
 muestra rotatoria. Una muestra que cambia entre iteraciones introduce varianza en
 la comparación, y un ratchet que sólo sube acabaría envenenado por la suerte del
 muestreo.
@@ -210,8 +210,8 @@ iteración: configuración exacta, casos aprobados y fallados uno a uno, tiempos
 veredicto con motivo. Hace posible el criterio 7 y le da expediente al baseline,
 que hoy es un `0.77` suelto cuyo run de calibración está fuera del repo.
 
-**Huella del índice.** Resumen de todo lo que afecta al contenido del índice —
-extractor, parámetros de troceado, modelo de embedding, flags de indexado —
+**Huella del índice.** Resumen de todo lo que afecta al contenido del índice
+(extractor, parámetros de troceado, modelo de embedding, flags de indexado),
 guardado junto al índice. Si no coincide, se reindexa. Es el criterio 3.
 
 **Ubicación.** El arnés no es producto: no entra en el núcleo hexagonal ni en la
@@ -286,7 +286,7 @@ Cada bloque recibe su propio plan de implementación.
 
 - Edición de código por parte del loop, y todo lo que exigiría: aislamiento por
   rama, revisión automática del diff, criterio de reversión.
-- Generación multimodal — que el generador interprete el contenido visual de una
+- Generación multimodal: que el generador interprete el contenido visual de una
   figura. Es la vía para cerrar el margen inalcanzable de §3, y necesita su propio
   diseño.
 - Los tres hallazgos de runtime de la auditoría (worker no thread-safe, VRAM sin
