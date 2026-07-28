@@ -30,8 +30,10 @@ CPU otherwise, which is not a supported configuration for this gate.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import math
+import os
 import shutil
 import sys
 import time
@@ -537,6 +539,48 @@ def run_factual_case(
     return records
 
 
+# Measured in issue #27 (2026-07-29): with the product default KEEP_ALIVE=0,
+# Ollama discards the model's weights after every call, so each factual case
+# in phase 2 paid a ~200s cold load -- a fixed per-call cost, not variance.
+# That reload buys nothing here specifically: run_all_cases already calls
+# _release_gpu_models() before phase 2 starts, so Ollama owns the GPU alone
+# from that point and there is nothing else waiting on the VRAM it would
+# free. 120s comfortably survives the sub-second gap between one case's
+# generation calls and the next (grading plus a dict lookup, no GPU work),
+# without pinning the model in memory once the harness itself exits.
+_EVAL_GENERATION_KEEP_ALIVE_SECONDS = "120"
+
+
+@contextlib.contextmanager
+def _generation_keep_alive():
+    """Scope OLLAMA_KEEP_ALIVE to this process, for phase 2's generation calls only.
+
+    generar_respuesta_silenciosa (rag/engine/generation.py) builds a fresh
+    AppConfig on every call via wiring.app_config_from_runtime(), which reads
+    OLLAMA_KEEP_ALIVE straight from the environment -- the config this module
+    builds for retrieval (_eval_app_config) is a separate object that never
+    reaches that call, so the environment is the only lever available here.
+
+    Deliberately scoped to the phase 2 block (set after _release_gpu_models,
+    restored once generation finishes) rather than the whole run: phase 1
+    never touches Ollama, so it cannot benefit, and leaving it set past
+    main() would let a non-zero keep-alive leak into anything else importing
+    rag.chat_pdfs afterwards. Does not touch the product default -- see
+    issue #27: keep_alive=0 exists because the embedder and reranker
+    contend for the same 8 GB (issue #25), and raising it globally would
+    make that contention worse.
+    """
+    previous = os.environ.get("OLLAMA_KEEP_ALIVE")
+    os.environ["OLLAMA_KEEP_ALIVE"] = _EVAL_GENERATION_KEEP_ALIVE_SECONDS
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("OLLAMA_KEEP_ALIVE", None)
+        else:
+            os.environ["OLLAMA_KEEP_ALIVE"] = previous
+
+
 def _release_gpu_models(*retrievers) -> None:
     """Free every retrieval model holding GPU memory, before generation starts.
 
@@ -636,10 +680,11 @@ def run_all_cases(
     _release_gpu_models(retrieve_dev, retrieve_blind)
 
     print(f"\n[phase 2/2] generation for {len(pending)} case(s) (Ollama alone on GPU)", flush=True)
-    for item in pending:
-        records.extend(
-            run_factual_case(rag, item["case"], item["fragments"], models, item["elapsed"])
-        )
+    with _generation_keep_alive():
+        for item in pending:
+            records.extend(
+                run_factual_case(rag, item["case"], item["fragments"], models, item["elapsed"])
+            )
     return records
 
 
