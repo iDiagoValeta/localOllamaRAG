@@ -61,3 +61,7 @@ in source/dev runs the variable is unset and everything stays repo-relative.
   (one-time, needs internet) into the user cache.
 - A desktop bundle without `.venv-mineru` starts, but indexing and retrieval
   fail visibly because the fixed multimodal stack has no fallback.
+- The packaged build fails the same way even with `.venv-mineru` present:
+  the worker script never leaves the PyInstaller archive, so it cannot start
+  ([#26](https://github.com/iDiagoValeta/localOllamaRAG/issues/26)). Use the
+  CLI or web app until that is fixed.

@@ -225,9 +225,11 @@ collide with the product's, so both are installed together into one isolated
 interpreter at `.venv-mineru/Scripts/python.exe` (Windows) or
 `.venv-mineru/bin/python` (Linux/Mac), at the project root, following each
 project's own install instructions. That interpreter needs a CUDA GPU: Jina
-CLIP v2 refuses to start on CPU (measured at roughly 100 seconds per document,
-impractical for indexing), so a GPU is required, not merely recommended.
-There is no setup script for this yet; see
+CLIP v2 can run on CPU (that is how the roughly 100 seconds per document
+figure was measured, impractical for indexing), but this project's worker
+refuses to start it there. That is the same "no silent fallbacks" policy
+from above, applied to a slow device instead of a missing one. There is no
+setup script for this yet; see
 [`src/monkeygrab/README.md`](src/monkeygrab/README.md) for how the isolation
 is used.
 
@@ -246,7 +248,8 @@ Each corpus has its own Jina CLIP and FAISS index under `rag/vector_db/`. Run
 The **CLI** takes slash commands: `/rag` and `/chat` switch mode, `/docs` lists
 what is indexed, `/temas` shows corpus topics, `/stats` the active pipeline
 configuration, `/reindex` rebuilds the index, `/limpiar` clears history, `/salir`
-exits and `/ayuda` lists everything. Each has English and Valencian aliases.
+exits and `/ayuda` lists everything. `/temas`, `/limpiar`, `/salir` and `/ayuda`
+also have English and Valencian aliases.
 
 The **web UI** adds document upload, per-role model assignment, the pipeline
 toggles, and an inline PDF viewer that opens cited sources at the right page.
