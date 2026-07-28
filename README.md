@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python"></a>
   <a href="https://ollama.com/"><img src="https://img.shields.io/badge/Ollama-Local%20LLM-000000?style=flat-square&logo=ollama&logoColor=white" alt="Ollama"></a>
-  <a href="#what-it-runs-on"><img src="https://img.shields.io/badge/Vector%20store-Chroma%20%7C%20FAISS-4B32C3?style=flat-square" alt="Vector store: Chroma or FAISS"></a>
+  <a href="#what-it-runs-on"><img src="https://img.shields.io/badge/Vector%20store-FAISS-4B32C3?style=flat-square" alt="Vector store: FAISS"></a>
   <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB" alt="React"></a>
 </p>
 
@@ -40,16 +40,11 @@ Ask questions about your PDFs in natural language and get answers grounded in
 what those files actually say. Point MonkeyGrab at a folder, start the CLI or the
 web interface, and nothing leaves the machine.
 
-- **Local-first** — indexing, retrieval and generation all run on your hardware via [Ollama](https://ollama.com/). No API keys.
+- **Local-first** — indexing, retrieval and generation all run on your hardware; [Ollama](https://ollama.com/) provides the language models. No API keys.
 - **Hybrid retrieval** — vector search and [Okapi BM25](https://www.staff.city.ac.uk/~sbrp622/papers/foundations_bm25_review.pdf) fused with [Reciprocal Rank Fusion](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf), then re-scored by a [cross-encoder](https://www.sbert.net/examples/applications/cross-encoder/README.html).
 - **Multilingual** — Castellano, English and Valencià, in both the interface and the corpus.
-- **Image-aware** — figures and tables are described by a vision model at indexing time, so visual content becomes retrievable.
-- **Swappable backends** — extraction, vector store and embedder are each one environment variable, so comparing two technologies is a config change, not a rewrite.
+- **Multimodal** — [MinerU](https://github.com/opendatalab/MinerU) preserves document structure, while [Jina CLIP v2](https://huggingface.co/jinaai/jina-clip-v2) makes text and images searchable in the same semantic space.
 - **Three interfaces** — terminal CLI, [Flask](https://flask.palletsprojects.com/) + [React](https://react.dev/) web app, and a packaged Windows desktop app.
-
-<p align="center">
-  <img src="assets/userInteraction.svg" alt="User interaction flow across the web and CLI interfaces" width="900" />
-</p>
 
 <details>
 <summary><strong>See it in action</strong></summary>
@@ -69,53 +64,41 @@ web interface, and nothing leaves the machine.
 
 ## Architecture
 
-The pipeline logic lives in a [hexagonal core](https://alistair.cockburn.us/hexagonal-architecture/)
-under [`src/monkeygrab/`](src/monkeygrab/README.md). It depends on *ports* —
-plain [`Protocol`](https://docs.python.org/3/library/typing.html#typing.Protocol)
-definitions — and never on ChromaDB, Ollama or PyMuPDF. The adapters that wrap
-those libraries are handed in from outside, which is what makes a backend
-replaceable by configuration instead of by editing.
+MonkeyGrab now has one production retrieval stack. The CLI, web app, desktop
+app and evaluation pipeline all use the same four-part multimodal path.
 
-```mermaid
-flowchart TB
-    subgraph IFACE["rag/ · interfaces"]
-        CLI["CLI<br/>rag/cli/"]
-        WEB["Web · Flask + React<br/>rag/web/"]
-        APP["Desktop · pywebview<br/>rag/web/desktop.py"]
-    end
+1. **[MinerU](https://github.com/opendatalab/MinerU) understands the PDF.**
+   It extracts reading order and document structure, keeps tables as structured
+   content, and separates figures and charts as images. It does not answer
+   questions; it prepares the source material.
 
-    FAC["<b>rag/chat_pdfs.py</b><br/>facade · configuration · prompts"]
-    WIR["<b>rag/engine/wiring.py</b><br/>runtime config → AppConfig<br/>builds the adapters"]
+2. **[Jina CLIP v2](https://huggingface.co/jinaai/jina-clip-v2) connects text
+   and images.** It maps both modalities into one aligned semantic space, so a
+   written question can retrieve a figure directly without first turning that
+   figure into a text description. MonkeyGrab uses its 512-dimensional
+   Matryoshka representation. The downloadable model is licensed under
+   [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/), so local
+   use is non-commercial unless a separate commercial licence is obtained.
 
-    subgraph CORE["src/monkeygrab/ · hexagonal core"]
-        direction LR
-        UC["<b>application/</b><br/>IndexCorpus · Retrieve · Answer<br/>rrf_fusion · keywords · chunking"]
-        PT["<b>ports/</b><br/>Embedder · VectorStore · LexicalIndex<br/>Reranker · ChatModel · PdfExtractor"]
-        DM["<b>domain/</b><br/>Chunk · Fragment · ChunkMetadata"]
-    end
+3. **[FAISS](https://github.com/facebookresearch/faiss) stores and searches the
+   representations.** MonkeyGrab uses an exact, normalized inner-product index,
+   which is equivalent to cosine similarity here. FAISS is a search library,
+   not an artificial-intelligence model.
 
-    INFRA["<b>adapters/</b> · infrastructure<br/>PyMuPDF · MinerU · Chroma · FAISS<br/>Ollama · jina-clip · BM25 · CrossEncoder"]
+4. **[BGE Reranker v2 M3](https://huggingface.co/BAAI/bge-reranker-v2-m3)
+   orders the evidence.** It reads the question together with each candidate
+   and assigns a relevance score, moving the most useful fragments to the top.
+   It does not generate the final answer.
 
-    CLI --> FAC
-    WEB --> FAC
-    APP --> WEB
-    FAC --> WIR
-    WIR --> UC
-    UC --> PT
-    UC --> DM
-    PT --> DM
-    INFRA -.implements.-> PT
-    WIR -.constructs.-> INFRA
+In short: a PDF becomes structured text, tables and images; those elements
+become comparable vectors; exact search finds candidates; the reranker selects
+the strongest evidence; and only then does Ollama write the answer.
 
-    classDef iface fill:#5C6BC0,stroke:#3949AB,color:#fff
-    classDef bridge fill:#8E44AD,stroke:#6C3483,color:#fff
-    classDef core fill:#2EA44F,stroke:#1E7E34,color:#fff
-    classDef infra fill:#4B32C3,stroke:#372593,color:#fff
-    class CLI,WEB,APP iface
-    class FAC,WIR bridge
-    class UC,PT,DM core
-    class INFRA infra
-```
+The pipeline logic itself lives in a
+[hexagonal core](https://alistair.cockburn.us/hexagonal-architecture/) under
+[`src/monkeygrab/`](src/monkeygrab/README.md). It depends on plain contracts,
+not on MinerU, Jina CLIP, FAISS or Ollama. The concrete technologies are
+connected at the application boundary.
 
 **The dependency rule points one way.** `application` may import
 `domain`, `ports` and `config`; `ports` may import `domain`; `domain` and
@@ -155,7 +138,7 @@ implementation to measure.
 
 ## What it runs on
 
-Six [Ollama](https://ollama.com/library) roles, each its own environment
+Four [Ollama](https://ollama.com/library) roles, each its own environment
 variable. They are separate on purpose: a small model is enough to rewrite a
 query, and a large one is wasted on it.
 
@@ -163,10 +146,8 @@ query, and a large one is wasted on it.
 |---|---|---|
 | **Answer generation** | Writes the final answer from the retrieved evidence | `OLLAMA_RAG_MODEL` |
 | **Chat & query decomposition** | Free conversation, and rewriting a question into sub-queries | `OLLAMA_CHAT_MODEL` |
-| **Embeddings** | Vectorises chunks at indexing and queries at search time | `OLLAMA_EMBED_MODEL` |
 | **Contextual enrichment** | Summarises each chunk's place in its document, at indexing | `OLLAMA_CONTEXTUAL_MODEL` |
 | **Context synthesis (RECOMP)** | Compresses the evidence into a briefing before generation | `OLLAMA_RECOMP_MODEL` |
-| **Vision / OCR** | Describes figures and tables so they become searchable | `OLLAMA_OCR_MODEL` |
 
 > [!TIP]
 > The current default for each is in [`.env.example`](.env.example), next to
@@ -177,63 +158,25 @@ The rest of the stack is not an Ollama model:
 
 | Component | What it is | Set with |
 |---|---|---|
-| **Reranker** | [`BAAI/bge-reranker-v2-m3`](https://huggingface.co/BAAI/bge-reranker-v2-m3), or [`ms-marco-MiniLM-L-6-v2`](https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2) on the `fast` tier. Downloaded from Hugging Face on first use. | `RERANKER_QUALITY` |
+| **Reranker** | [`BAAI/bge-reranker-v2-m3`](https://huggingface.co/BAAI/bge-reranker-v2-m3). Downloaded from Hugging Face on first use. | fixed |
 | **Lexical search** | [Okapi BM25](https://github.com/dorianbrown/rank_bm25), always on when hybrid search is | — |
-| **Vector store** | [ChromaDB](https://www.trychroma.com/) | `VECTOR_STORE` |
-| **PDF extraction** | [PyMuPDF4LLM](https://pymupdf.readthedocs.io/en/latest/pymupdf4llm/) | `PDF_EXTRACTOR` |
-
-### Swappable backends
-
-Three ports have a second implementation, so a technology can be measured
-against the default rather than argued about.
-
-| Variable | Default | Alternative |
-|---|---|---|
-| `PDF_EXTRACTOR` | `pymupdf` — fast, flattens tables to text | [`mineru`](https://github.com/opendatalab/MinerU) — slow, keeps tables as HTML and formulas as LaTeX |
-| `VECTOR_STORE` | `chroma` — storage, metadata and index together | [`faiss`](https://github.com/facebookresearch/faiss) — index only, with a metadata sidecar |
-| `EMBEDDER` | `ollama` — text only, so figures must be captioned first | [`jina_clip`](https://huggingface.co/jinaai/jina-clip-v2) — text and images in one vector space |
-
-An unrecognised value fails at startup instead of falling back, so a typo cannot
-hand you a run you thought was something else.
+| **Embeddings** | [`jinaai/jina-clip-v2`](https://huggingface.co/jinaai/jina-clip-v2), shared text/image space | fixed |
+| **Vector store** | [FAISS](https://github.com/facebookresearch/faiss), exact cosine search | fixed |
+| **PDF extraction** | [MinerU](https://github.com/opendatalab/MinerU), structured text, tables and figures | fixed |
 
 > [!NOTE]
-> A non-default combination writes to its own index directory, suffixed with the
-> stack slug (`..._mineru-jina_clip-faiss`): vectors from different embedders are
-> not comparable and must never share a store. Switching stacks means indexing
-> again.
->
-> The alternatives carry setup the defaults do not. MinerU is an external CLI,
-> and `jina_clip` runs in an isolated interpreter because its dependencies
+> MinerU is an external CLI, and `jina_clip` runs in an isolated interpreter
+> because its dependencies
 > conflict with the product's — see [`src/monkeygrab/README.md`](src/monkeygrab/README.md).
 
 ---
 
 ## The query pipeline
 
-Green stages always run. Blue ones are toggled at runtime from the web UI's
-**RAG Pipeline** panel, and turning one off applies to the next query with no
-restart.
-
-```mermaid
-flowchart LR
-    Q(["Question"]) --> DEC["Query<br/>decomposition"]
-    DEC --> SEM["Semantic<br/>search"]
-    DEC --> BM["BM25<br/>lexical search"]
-    SEM --> RRF["RRF fusion"]
-    BM --> RRF
-    RRF --> RNK["Cross-encoder<br/>reranking"]
-    RNK --> THR["Relevance<br/>threshold"]
-    THR --> EXP["Neighbour<br/>expansion"]
-    EXP --> REC["RECOMP<br/>synthesis"]
-    REC --> GEN(["Streamed<br/>answer"])
-
-    classDef req fill:#2EA44F,stroke:#1E7E34,color:#fff
-    classDef opt fill:#5C6BC0,stroke:#3949AB,color:#fff
-    classDef io fill:#FF8C00,stroke:#CC7000,color:#fff
-    class SEM,RRF req
-    class DEC,BM,RNK,THR,EXP,REC opt
-    class Q,GEN io
-```
+Every question follows the same path: query preparation, semantic and lexical
+retrieval, rank fusion, reranking, evidence filtering, optional context
+synthesis, and answer generation. Optional stages can be changed from the web
+interface and apply to the next query without a restart.
 
 | Stage | What it does |
 |---|---|
@@ -256,8 +199,8 @@ by queries whose wording appears nowhere in it.
 
 Requires [Python 3.10+](https://www.python.org/downloads/) and
 [Ollama](https://ollama.com/download) running locally, with at least a generator
-and an embedding model pulled. Drop PDFs into `rag/docs/en/` — the index builds
-itself on first run.
+model pulled. Drop PDFs into `rag/docs/en/` — the index builds itself on first
+run.
 
 ```bash
 python rag/chat_pdfs.py    # CLI
@@ -269,18 +212,17 @@ python rag/web/app.py      # web UI at http://localhost:5000
 <br/>
 
 Dependencies are in [`rag/requirements.txt`](rag/requirements.txt) (core) and
-[`rag/web/requirements.txt`](rag/web/requirements.txt) (web UI). Pull the models
-named in [What it runs on](#what-it-runs-on), or point the variables at models
-you already have.
+[`rag/web/requirements.txt`](rag/web/requirements.txt) (web UI). Pull the Ollama
+models selected in your configuration. MinerU, Jina CLIP and the reranker are
+installed or downloaded separately as documented by their linked projects.
 
 Copy [`.env.example`](.env.example) to `.env` at the project root; it documents
 every supported variable with its default. The shell environment always wins over
 the file. `MONKEYGRAB_LANG` sets the interface language (`es`, `en`, `ca`) and
 `DOCS_FOLDER` the corpus.
 
-Index paths follow `rag/vector_db/<folder>_<embed_slug>/`, so changing the
-embedding model or the corpus selects a different index — run `/reindex` when you
-switch either on purpose.
+Each corpus has its own Jina CLIP and FAISS index under `rag/vector_db/`. Run
+`/reindex` after changing the corpus, extraction behaviour or chunking rules.
 
 </details>
 
@@ -296,9 +238,10 @@ toggles, and an inline PDF viewer that opens cited sources at the right page.
 Ollama is started automatically if it is installed but not running. Three fixed
 language stores — English, Castellano, Valencià — map to `rag/docs/{en,es,ca}/`.
 
-The **desktop app** packages all of it into a standalone Windows executable with
-[PyInstaller](https://pyinstaller.org/) and [pywebview](https://pywebview.flowrl.com/),
-needing no Python on the target machine. See [`packaging/README.md`](packaging/README.md).
+The **desktop app** wraps the web interface in a Windows executable with
+[PyInstaller](https://pyinstaller.org/) and [pywebview](https://pywebview.flowrl.com/).
+The current bundle still needs the isolated MinerU/Jina runtime beside the
+executable; see [`packaging/README.md`](packaging/README.md).
 
 ---
 
@@ -306,10 +249,11 @@ needing no Python on the target machine. See [`packaging/README.md`](packaging/R
 
 > [!WARNING]
 > - **Vector graphics** (SVG figures) embedded in PDFs are not extracted.
-> - **Math, tables and images** are not plain text — expect occasional errors on those pages even with OCR captions. Table retrieval is the known weak point of the default extractor, which is what `mineru` exists to address.
+> - **Structured extraction is not perfect.** MinerU preserves tables and separates figures, but complex layouts, mathematical notation and unusual PDFs can still be misread.
+> - **Jina CLIP v2 has a non-commercial local licence.** A commercial deployment needs separate licensing or a replacement embedding model.
 > - **The reranker downloads its model on first use**, a one-time step that needs internet. Everything after runs offline; turn reranking off if you need a fully air-gapped first run.
 > - **Optional stages fail loudly.** If an enabled stage cannot run, the query raises instead of silently returning worse results. Turn the stage off to proceed without it.
-> - **Indexing cost** grows with chunk size, contextual enrichment and image captions.
+> - **Indexing cost** grows with corpus size, contextual enrichment and the number of extracted images.
 
 ---
 
@@ -319,7 +263,8 @@ Two CI gates, deliberately not one. The **fast gate**
 ([`ci.yml`](.github/workflows/ci.yml)) runs on every pull request: lint, the
 architecture dependency rules, the unit suite against test doubles, and the
 frontend build — no GPU, no models, no network. The **full gate**
-([`full-eval.yml`](.github/workflows/full-eval.yml)) runs the real pipeline
+([`full-eval.yml`](.github/workflows/full-eval.yml)) is launched manually on a
+self-hosted GPU runner and executes the real pipeline
 against a corpus of hand-verified gold cases and fails if the pass rate drops
 below the recorded baseline. It is required before merging anything that touches
 retrieval or generation, because the fast gate never exercises a real model.
@@ -334,6 +279,20 @@ Tests are split by what they protect:
 [`tests/characterization/`](tests/characterization/) to pin observed pipeline
 behaviour, and [`tests/eval/`](tests/eval/README.md) for the gold-case gate.
 Contributor rules are in [`.claude/CLAUDE.md`](.claude/CLAUDE.md).
+
+---
+
+## Acknowledgements
+
+MonkeyGrab is built on external open-source projects and openly available
+models. Thank you to the teams behind
+[MinerU](https://github.com/opendatalab/MinerU),
+[Jina CLIP v2](https://huggingface.co/jinaai/jina-clip-v2),
+[FAISS](https://github.com/facebookresearch/faiss) and
+[BGE/FlagEmbedding](https://github.com/FlagOpen/FlagEmbedding) for making this
+multimodal stack possible. The project also relies on
+[Ollama](https://ollama.com/), [rank-bm25](https://github.com/dorianbrown/rank_bm25),
+[Flask](https://flask.palletsprojects.com/) and [React](https://react.dev/).
 
 ---
 

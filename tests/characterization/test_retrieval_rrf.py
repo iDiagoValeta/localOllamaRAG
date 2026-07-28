@@ -29,25 +29,16 @@ from rag.engine import wiring
 
 
 class FakeCollection:
-    """Chroma collection double: returns a fixed, pre-ranked semantic result set
-    regardless of the embedding vector it's queried with."""
+    """Vector-store double returning a fixed semantic ranking."""
 
-    def query(self, query_embeddings, n_results, include):
+    def query(self, embedding, n_results):
         # Rank 1: docB (semantic-only signal). Rank 2: docA (also hit by BM25).
         # Rank 3: docD (also hit by BM25, weaker on both branches).
-        return {
-            "documents": [[
-                "gamma delta content B",
-                "alpha beta content A",
-                "omega chi content D",
-            ]],
-            "metadatas": [[
-                {"source": "fileB.pdf", "page": 0, "chunk": 0},
-                {"source": "fileA.pdf", "page": 0, "chunk": 0},
-                {"source": "fileD.pdf", "page": 0, "chunk": 0},
-            ]],
-            "distances": [[0.10, 0.20, 0.30]],
-        }
+        return [
+            Fragment("gamma delta content B", ChunkMetadata("fileB.pdf", 0, 0), 0.10),
+            Fragment("alpha beta content A", ChunkMetadata("fileA.pdf", 0, 0), 0.20),
+            Fragment("omega chi content D", ChunkMetadata("fileD.pdf", 0, 0), 0.30),
+        ]
 
 
 class FakeEmbedder:

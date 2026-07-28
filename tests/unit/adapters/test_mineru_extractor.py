@@ -8,7 +8,7 @@ hash.
 
 The failure-mode tests are the important ones here: this adapter's whole
 reason for existing (issue #6) is refusing to silently degrade the way the
-old pymupdf4llm/pypdf fallback chain did, so every way MinerU can fail must
+previous fallback chain did, so every way MinerU can fail must
 surface as a raised exception with an actionable message, never as empty or
 partial output.
 """
@@ -34,7 +34,7 @@ from monkeygrab.domain.extracted_image import ExtractedImage  # noqa: E402
 from monkeygrab.domain.extracted_page import ExtractedPage  # noqa: E402
 
 # A minimal-but-valid 1x1 transparent PNG, small enough to inline. Used as a
-# stand-in for a MinerU-cropped figure -- fitz.Pixmap can read real
+# stand-in for a MinerU-cropped figure -- Pillow can read real
 # dimensions from it, unlike arbitrary bytes.
 _TINY_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
@@ -220,7 +220,7 @@ def test_no_output_directory_raises(monkeypatch, tmp_path):
 
 
 def test_empty_markdown_raises_instead_of_falling_back(monkeypatch, tmp_path):
-    """The exact failure mode the old pymupdf4llm/pypdf fallback hid for months."""
+    """An empty extraction must remain visible."""
     pdf = _make_pdf(tmp_path)
     bin_path = _make_bin(tmp_path)
 

@@ -499,11 +499,6 @@ class Display:
                 info.get("modelo_recomp", ""),
                 self._s("model.use.recomp") if info.get("recomp") else "off",
             ),
-            (
-                self._s("role.ocr"),
-                info.get("modelo_ocr", ""),
-                self._s("model.use.ocr") if info.get("images") else "off",
-            ),
         ]
         for role, model, use in model_rows:
             use_style = "off" if use == "off" else "muted"

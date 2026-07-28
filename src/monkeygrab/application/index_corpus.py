@@ -1,16 +1,13 @@
-"""IndexCorpus -- extract -> chunk -> (contextualize, opt.) -> embed -> store,
-plus image extraction -> description -> (contextualize, opt.) -> embed -> store.
+"""IndexCorpus -- structured PDF extraction, multimodal embedding and storage.
 
 Orchestrates one document through ``rag.engine.indexing.indexar_documentos``'s
 per-file pipeline: extract pages (``PdfExtractor``), split each page into
 chunks (``monkeygrab.application.text_chunking``), optionally enrich each
 chunk with an LLM-generated situational summary (``ChatModel``, "contextual"
-role), embed (``Embedder``) and store (``VectorStore``) -- then, when image
-indexing is wired in and enabled, extract raster images (``ImageExtractor``),
-describe each with a vision ``ChatModel`` ("ocr" role), filter degenerate
-descriptions, optionally contextualize them the same way as text chunks, and
-store them as their own chunks using the same offset-index scheme
-``indexar_documentos`` uses (see ``_IMAGE_CHUNK_OFFSET`` below).
+role), embed text and tables (``Embedder``), and store them (``VectorStore``).
+When image indexing is enabled, figures extracted by MinerU are embedded
+directly through the same multimodal model and stored in the shared vector
+space.
 
 Scope, deliberately narrower than ``indexar_documentos``:
 
@@ -19,17 +16,11 @@ Scope, deliberately narrower than ``indexar_documentos``:
   ``PdfExtractor`` port (single-file ``extract(pdf_path)``) or this use case
   needs to own; a caller loops over files and calls ``IndexCorpus.run`` once
   per PDF.
-- **No pypdf fallback branch.** The ``PdfExtractor`` port is hard-fail by
-  design (see the port docstring): there is no second extractor to silently
-  degrade to inside this use case, so the "format": "plain_text" branch
-  ``indexar_documentos`` takes when pymupdf4llm raises does not have an
-  equivalent here -- every text chunk this use case produces is "format":
-  "markdown". This is an intentional consequence of the F1 hard-fail policy
-  (docs/design/2026-07-26-monkeygrab-v2.md, section 3), not an oversight.
+- **No extraction fallback branch.** The ``PdfExtractor`` port is hard-fail
+  by design. Every text chunk this use case produces is Markdown.
 """
 
 import dataclasses
-import logging
 from typing import Any, Dict, List, Optional, Sequence
 
 from monkeygrab.application.text_chunking import split_markdown_into_chunks
@@ -140,77 +131,18 @@ def _text_chunk_format(chunk_text: str) -> str:
     return "table" if "<table" in chunk_text.lower() else "markdown"
 
 
-_PROMPT_ECHO_MARKERS = (
-    # Prompt template fragments -- update if the prompt wording changes.
-    "Using this caption as context, describe the visual content",
-    "describe the visual content of this image in detail",
-    "Focus on what is depicted, not on any text overlaid",
-    "describe the arrows between blocks",
-    "name the inputs and outputs",
-    "lists every labeled block",
-    "The figure caption reads",  # model echoing the injected caption prefix
-)
-
-
-def _is_description_spam(texto: str) -> bool:
-    """Detect degenerate OCR output: repeated phrases or 'no text' spam.
-
-    Two complementary
-    checks: low lexical diversity (unique words / total words < 0.35, catches
-    any repetitive loop) and a 'no'/'text' token ratio over 20% (catches the
-    specific "no text, no text, ..." pattern).
-    """
-    palabras = texto.lower().split()
-    if len(palabras) < 10:
-        return False
-    diversidad = len(set(palabras)) / len(palabras)
-    if diversidad < 0.35:
-        return True
-    ratio_no_text = (palabras.count("no") + palabras.count("text")) / len(palabras)
-    return ratio_no_text > 0.20
-
-
-def _is_prompt_echo(descripcion: str) -> bool:
-    """Detect when the vision model echoes the prompt instead of describing the image.
-
-    The vision model sometimes restates the instructions it was given
-    instead of describing the image; such output is worse than none.
-    """
-    desc_lower = descripcion.lower()
-    return any(marker.lower() in desc_lower for marker in _PROMPT_ECHO_MARKERS)
-
-
-def _is_caption_only(descripcion: str, caption: str) -> bool:
-    """Check if the description merely echoes the caption with no new visual content.
-
-    True when more than 85% of
-    caption tokens appear in the description and the description is not
-    substantially longer than the caption.
-    """
-    if not caption:
-        return False
-    tokens_desc = set(descripcion.lower().split())
-    tokens_cap = set(caption.lower().split())
-    if not tokens_cap:
-        return False
-    overlap = len(tokens_desc & tokens_cap) / len(tokens_cap)
-    return overlap > 0.85 and len(tokens_desc) < len(tokens_cap) * 1.3
-
-
 class IndexCorpus:
     """Extract -> chunk -> (contextualize, opt.) -> embed -> store, one PDF at a time,
-    plus the same pipeline for images when image indexing is wired in and enabled.
+    plus direct image embedding when image indexing is enabled.
 
     ``contextual_model`` is ``Optional``: when not wired in, contextual
     enrichment is skipped regardless of ``flags.usar_contextual_retrieval``
     -- there is nothing to invoke otherwise, the same pattern used by
     ``Retrieve``'s and ``Answer``'s optional ports.
 
-    ``image_extractor`` is required for any image path. How those images become
-    vectors depends on the stack: a multimodal embedder (``stack.is_multimodal``
-    plus ``embed_image``) indexes figures directly; a text-only embedder still
-    needs ``ocr_chat_model`` to caption them first. Without a way to produce a
-    vector, image extraction is skipped rather than run for nothing.
+    ``image_extractor`` is required for image indexing. The configured Jina CLIP
+    adapter satisfies both the text and image embedding ports, so figures never
+    pass through a separate vision-caption model.
     """
 
     def __init__(
@@ -221,22 +153,17 @@ class IndexCorpus:
         config: AppConfig,
         contextual_model: Optional[ChatModel] = None,
         image_extractor: Optional[ImageExtractor] = None,
-        ocr_chat_model: Optional[ChatModel] = None,
     ):
         """Args:
             extractor: Reads a PDF into per-page raw text.
             embedder: Embeds each chunk's final text before storage.
             vector_store: Stores each embedded chunk.
             config: Root config; ``chunking``, ``flags`` and
-                ``models.embed_prefix_doc`` are read fresh on every ``run()``.
+                the configured embedder is read fresh on every ``run()``.
             contextual_model: ``ChatModel`` wired to the "contextual" role,
                 or ``None`` to disable contextual enrichment (text AND image
                 chunks).
             image_extractor: Reads a PDF's raster images, or ``None`` to
-                disable image indexing regardless of
-                ``flags.usar_embeddings_imagen``.
-            ocr_chat_model: ``ChatModel`` wired to the "ocr" (vision) role,
-                used to describe each extracted image, or ``None`` to
                 disable image indexing regardless of
                 ``flags.usar_embeddings_imagen``.
         """
@@ -245,7 +172,6 @@ class IndexCorpus:
         self._vector_store = vector_store
         self._contextual_model = contextual_model
         self._image_extractor = image_extractor
-        self._ocr_chat_model = ocr_chat_model
         self._config = config
 
     def run(self, pdf_path: str, filename: str) -> IndexCorpusResult:
@@ -305,18 +231,13 @@ class IndexCorpus:
                 )
                 chunk = Chunk(text=final_text, metadata=metadata)
 
-                embedding = self._embedder.embed(f"{config.models.embed_prefix_doc}{final_text}")
+                embedding = self._embedder.embed(final_text)
                 self._vector_store.add(chunk, embedding)
                 total_chunks += 1
 
         total_image_chunks = 0
         if flags.usar_embeddings_imagen and self._image_extractor is not None:
-            if self._uses_native_image_embed():
-                total_image_chunks = self._index_images_native(pdf_path, filename)
-            elif self._ocr_chat_model is not None:
-                total_image_chunks = self._index_images(
-                    pdf_path, filename, texto_base_doc, idioma_doc
-                )
+            total_image_chunks = self._index_images(pdf_path, filename)
             total_chunks += total_image_chunks
 
         metrics = {
@@ -327,14 +248,7 @@ class IndexCorpus:
         }
         return IndexCorpusResult(chunks_indexed=total_chunks, metrics=metrics)
 
-    def _uses_native_image_embed(self) -> bool:
-        """True when figures can go straight into the embedder (no OCR caption)."""
-        return self._config.stack.is_multimodal and callable(
-            getattr(self._embedder, "embed_image", None)
-        )
-
-
-    def _index_images_native(self, pdf_path: str, filename: str) -> int:
+    def _index_images(self, pdf_path: str, filename: str) -> int:
         """Extract figures and embed them via ``ImageEmbedder.embed_image``.
 
         Writes each ``ExtractedImage``'s bytes to a temp file because the
@@ -378,124 +292,6 @@ class IndexCorpus:
                 n_indexed += 1
 
         return n_indexed
-
-    def _index_images(
-        self, pdf_path: str, filename: str, texto_base_doc: str, idioma_doc: str
-    ) -> int:
-        """Extract, describe and store every qualifying image of the PDF.
-
-        Moved from the ``if imagenes_pdf:`` block of ``indexar_documentos``
-        (``rag/engine/indexing.py``, ~line 223): same offset-index chunk-id
-        scheme, same "describe, then contextualize like a text chunk"
-        pipeline per image, same "no description -> skip this image" rule.
-
-        Args:
-            pdf_path: Path to the PDF file to read images from.
-            filename: Recorded as ``ChunkMetadata.source``, same as text chunks.
-            texto_base_doc: Document-level sample, reused for both the vision
-                prompt's language instruction and situational-context generation.
-            idioma_doc: Document language, same as text chunks.
-
-        Returns:
-            Number of image chunks stored.
-        """
-        images_by_page = self._image_extractor.extract(pdf_path)
-        n_indexed = 0
-
-        for page_num, page_images in images_by_page.items():
-            for img_idx, image in enumerate(page_images):
-                descripcion = self._describe_image(image.image_bytes, image.caption, idioma_doc)
-                if not descripcion:
-                    continue
-
-                if self._config.flags.usar_contextual_retrieval and self._contextual_model is not None:
-                    situational = self._generate_situational_context(
-                        descripcion, texto_base_doc, idioma_doc
-                    )
-                    final_description = (situational + descripcion).strip()
-                else:
-                    final_description = descripcion
-
-                metadata = ChunkMetadata(
-                    source=filename,
-                    page=page_num,
-                    chunk=_IMAGE_CHUNK_OFFSET + img_idx,
-                    format="image",
-                    section_header="",
-                    image_width=image.width,
-                    image_height=image.height,
-                )
-                chunk = Chunk(text=final_description, metadata=metadata)
-
-                embedding = self._embedder.embed(
-                    f"{self._config.models.embed_prefix_doc}{final_description}"
-                )
-                self._vector_store.add(chunk, embedding)
-                n_indexed += 1
-
-        return n_indexed
-
-    def _describe_image(self, image_bytes: bytes, caption: str, idioma_doc: str) -> str:
-        """Generate a vision-model description of one image, filtered for degenerate output.
-
-        Minus the
-        own ``USAR_EMBEDDINGS_IMAGEN`` guard (the caller already gates on the
-        flag and on ``ocr_chat_model`` being wired in) and the direct
-        ``ollama.chat`` call (delegated to the injected "ocr" ``ChatModel``
-        port, via ``images=[image_bytes]`` the same way the original calls
-        ``ollama.chat(..., images=[image_b64])`` -- base64 encoding is the
-        ``OllamaChatModel`` adapter's job, per the ``ChatModel`` port
-        contract, not this use case's).
-
-        Args:
-            image_bytes: Raw image bytes.
-            caption: Caption text found near the image in the PDF, if any.
-            idioma_doc: Document language, used to instruct the vision model.
-
-        Returns:
-            Non-empty description on success, or ``""`` on failure or
-            degenerate output (spam, prompt echo, caption-only).
-        """
-        idioma_instruccion = (
-            f"Write your entire description in {idioma_doc}. "
-            if idioma_doc and idioma_doc != "English"
-            else ""
-        )
-        prompt = (
-            idioma_instruccion
-            + (f"The figure caption reads: '{caption}'. " if caption else "")
-            + "Describe the visual content of this image. "
-            "If it is a flowchart or architecture diagram: list every labeled block "
-            "(e.g. MatMul, SoftMax, Encoder, Linear), name the inputs and outputs "
-            "(e.g. Q, K, V), describe the arrows between blocks, and state the "
-            "architecture family (e.g. Transformer, CNN). "
-            "If it is a table: state the number of rows and columns, list the column "
-            "headers, and describe the type of data in each column. "
-            "Only describe what you can actually see. Do not invent numbers, metrics, "
-            "or data that are not visible in the image. "
-            "End with one sentence summarizing what this figure illustrates."
-        )
-
-        try:
-            descripcion = self._ocr_chat_model.generate(prompt, images=[image_bytes]).strip()
-        except Exception as exc:
-            # Explicit use-case-level fallback (see the ChatModel port's
-            # failure policy): image description is optional enrichment --
-            # on failure the image is simply not indexed, matching the
-            # original's `except Exception: ...; return ""`.
-            logging.warning("Error describing image: %s", exc)
-            return ""
-
-        if _is_description_spam(descripcion):
-            logging.warning("Discarding degenerate OCR output (spam)")
-            return ""
-        if _is_prompt_echo(descripcion):
-            logging.warning("Discarding prompt echo")
-            return ""
-        if caption and _is_caption_only(descripcion, caption):
-            logging.warning("Discarding description that merely echoes the caption")
-            return ""
-        return descripcion if len(descripcion) > 10 else ""
 
     def _generate_situational_context(self, chunk_text: str, texto_base: str, idioma_doc: str) -> str:
         """Generate 2-3 sentences of situational context for a chunk via an LLM.

@@ -28,7 +28,7 @@ gets documented where, what doesn't get documented at all): `docs/README.md`.
    - **Constants:** paths and collection names, model roles, every pipeline flag and numeric parameter, both system prompts, plus the `*_AVAILABLE` compatibility constants the UIs display.
    - **Pipeline entry points:** `indexar_documentos`, `realizar_busqueda_hibrida`, `preparar_fragmentos_para_generacion`, `generar_respuesta`, `generar_respuesta_silenciosa`, `generar_tokens_respuesta`, `evaluar_pregunta_rag`.
    - **Support:** context assembly, debug dumps, chat history, `obtener_documentos_indexados`, and the text helpers re-exported from `monkeygrab.application.keywords` (`STOPWORDS`, `extract_keywords`, ...).
-   - **Runtime switches (web control panel):** `get_pipeline_flags`, `set_pipeline_flags`, `set_docs_folder_runtime`, `MODEL_ROLE_VARS`, `get_model_roles`, `set_model_roles_runtime`, plus the derivation helpers `_derivar_paths_db` and `_derivar_prefijos_embedding`.
+   - **Runtime switches (web control panel):** `get_pipeline_flags`, `set_pipeline_flags`, `set_docs_folder_runtime`, `MODEL_ROLE_VARS`, `get_model_roles`, `set_model_roles_runtime`, plus the path derivation helper `_derivar_paths_db`.
 
    The web API adds `/api/ollama[/start|/models]`, `/api/models`, `/api/stores` (GET) and `/api/stores/select` (POST). There are exactly three fixed language stores — `en` (English, default), `es` (Castellano), `ca` (Valencià) — each bound to `rag/docs/<id>/`. They always exist, possibly empty; there is no create/delete/hide/restore and no user-created stores. `settings.json` persists `active_store`, falling back to `en` if unknown. The active store is selectable, and documents can be viewed, added and removed per store.
 8. **Hard-fail policy, project-wide.** Every adapter under `src/monkeygrab/adapters/` raises on failure instead of degrading — no silent CUDA→CPU fallback, no silent extractor swap, no silent RECOMP-to-raw-context fallback. Do not add a fallback chain inside an adapter; if a caller needs one, it composes two ports explicitly. See `docs/design/2026-07-26-monkeygrab-v2.md` §3 ("Política de fallos").
@@ -56,14 +56,14 @@ src/monkeygrab/          Hexagonal core (see src/monkeygrab/README.md)
   ports/                   Protocols the application layer depends on
   application/             Use cases (IndexCorpus, Retrieve, Answer) + pure helpers
   config/                  AppConfig — immutable, from_env() / with_overrides()
-  adapters/                Port implementations: pymupdf, Chroma, Ollama, BM25, CrossEncoder
+  adapters/                Port implementations: MinerU, jina-clip, FAISS, Ollama, BM25, BGE
 rag/                      Interfaces (CLI + web) and pipeline entry points
   chat_pdfs.py              Public facade + global config (see §1 rule 7)
   engine/                    wiring, retrieval, indexing, context, generation, chunking, debug, history
   cli/                       MonkeyGrabCLI (interactive loop, i18n strings)
   web/                       Flask backend + React frontend (pnpm; frontend/dist gitignored)
   docs/                      Corpus PDFs (es/, ca/, en/); versioned
-  vector_db/                 ChromaDB per corpus (gitignored)
+  vector_db/                 FAISS per corpus (gitignored)
 tests/
   unit/                      domain/ports/config/application + adapters, doubled infrastructure
   characterization/          pins current pipeline behavior — do not edit (§1 rule 9)
@@ -96,19 +96,19 @@ docs/README.md             Documentation standard
 
 ---
 
-## 3. Model roles
+## 3. Models
 
-All configured via env vars; defaults are the second arg of `os.getenv` in `rag/chat_pdfs.py`. The process environment **always** wins over the defaults.
+Ollama roles are configured via env vars; defaults are the second arg of
+`os.getenv` in `rag/chat_pdfs.py`. The process environment **always** wins over
+the defaults. Jina CLIP v2 and BGE Reranker v2 M3 are fixed.
 
 | Role | Env var | Notes |
 |------|---------|-------|
 | RAG generator (streaming) | `OLLAMA_RAG_MODEL` | `/rag` mode |
 | Chat + sub-queries | `OLLAMA_CHAT_MODEL` | `/chat` and RAG query decomposition; `think=False` |
-| Embeddings | `OLLAMA_EMBED_MODEL` | Slug appended to ChromaDB path |
 | Contextual retrieval | `OLLAMA_CONTEXTUAL_MODEL` | Chunk enrichment at indexing (`USAR_CONTEXTUAL_RETRIEVAL`) |
 | RECOMP synthesis | `OLLAMA_RECOMP_MODEL` | Pre-generation context synthesis (`USAR_RECOMP_SYNTHESIS`) |
-| Vision / OCR | `OLLAMA_OCR_MODEL` | Image captions in PDFs (`USAR_EMBEDDINGS_IMAGEN`); multimodal, `think=False` |
-| Reranker | `RERANKER_QUALITY` | Local CrossEncoder tier (`quality` \| `fast`); not an Ollama model |
+| Reranker | fixed | `BAAI/bge-reranker-v2-m3`; not an Ollama model |
 
 Other env vars: `DOCS_FOLDER` (default `rag/docs/en/`), `MONKEYGRAB_DATA_DIR` (writable root for `vector_db`/history/debug; defaults to the package dir in dev, `%LOCALAPPDATA%/MonkeyGrab` in the packaged app), `MONKEYGRAB_LANG` (default `es`; `en`/`ca`).
 
@@ -137,8 +137,8 @@ presented as pipeline coverage, and vice versa:
   themselves when no server answers).
 - **Full gate** (`.github/workflows/full-eval.yml`, `workflow_dispatch` only,
   self-hosted GPU runner with Ollama installed): runs the real pipeline —
-  Ollama generation and embeddings, hybrid BM25+semantic retrieval,
-  Cross-Encoder reranking — against every case in `tests/eval/gold_cases.jsonl`
+  Ollama generation, Jina CLIP embeddings, hybrid BM25+semantic retrieval,
+  BGE reranking — against every case in `tests/eval/gold_cases.jsonl`
   via `tests/eval/run_eval.py`, and fails if the pass rate drops below
   `tests/eval/baseline_min_pass_rate.txt`. This is the gate that must be
   green, together with the fast gate, before merging any change to retrieval
@@ -178,7 +178,7 @@ Items 1–5 of §6 apply here too. What differs:
 
 **Two `.gitignore` files only:** root + `rag/web/frontend/`. No scattered `.gitignore`. Version the minimum needed to reproduce the product — code, `Modelfile`, small metric JSONs, scripts, corpus PDFs — never weights or vector indices.
 
-- **`rag/docs/`** — all corpora versioned (`es/`, `ca/`, `en/`). `rag/vector_db/` fully ignored. Default chunk dumps go to `rag/show_fragments/exports/` (versioned); loose `*.txt` / `*.jsonl` under `rag/show_fragments/` (not `exports/`) are ignored.
+- **`rag/docs/`** — all corpora versioned (`es/`, `ca/`, `en/`). `rag/vector_db/` fully ignored. Default chunk dumps go to `rag/show_fragments/exports/` (versioned); loose `*.txt` / `*.jsonl` under `rag/show_fragments/` (not `exports/`) and local scratch results under `pipeline/output/` are ignored.
 
 ---
 
@@ -200,42 +200,12 @@ pytest tests/unit tests/eval --ignore=tests/unit/adapters   # what the fast "arc
 python tests/eval/run_eval.py --models <model...>           # full gate locally; needs Ollama + GPU
 
 # Misc
-codegraph sync                                  # refresh .codegraph index
-codegraph status                                # show index health/backend
-codegraph query realizar_busqueda_hibrida       # symbol lookup via CLI fallback
 git check-ignore -v <path>
 ```
 
 ### CLI slash commands
 
 `/rag` `/chat` `/docs` `/temas`(`/topics` `/temes`) `/stats` `/reindex` `/limpiar`(`/clear` `/netejar`) `/ayuda`(`/help` `/ajuda`) `/salir`(`/exit` `/eixir`).
-
----
-
-## 10. Code navigation — CodeGraph
-
-This project has a CodeGraph index (`.codegraph/`, AST-parsed, covers both
-`rag/` and `src/monkeygrab/`). Use CodeGraph **before** writing or editing
-code when the task touches symbols, callers/callees, or blast radius.
-
-Prefer `codegraph_*` MCP tools when they are exposed in the session. If they are
-not available, use the CLI:
-
-| Intent | MCP tool | CLI fallback |
-|--------|----------|--------------|
-| Find a symbol by name | `codegraph_search` | `codegraph query <symbol>` |
-| Focused context for a task | `codegraph_context` | `codegraph context "<task>"` |
-| Files under a path | `codegraph_files` | `codegraph files` |
-| Index health / stats | `codegraph_status` | `codegraph status` |
-| Refresh index | — | `codegraph sync` |
-
-**Rules**: prefer CodeGraph over grep for symbol lookups. Do not re-verify
-CodeGraph results with grep unless the CLI reports an error or stale index.
-After editing a file, run `codegraph sync` before relying on updated graph
-data. On this Windows setup `codegraph status` may show `Backend: wasm` because
-`better-sqlite3` is unavailable; that is usable but slower. Run CodeGraph CLI
-commands sequentially in WASM mode, because parallel queries can lock the
-database. `Backend: native` is an optimization, not a correctness requirement.
 
 ---
 
@@ -249,8 +219,9 @@ pip install -r rag/web/requirements.txt                  # Web UI (optional)
 `src/monkeygrab/` has no separate install step: it is not packaged, just
 added to `sys.path` (`rag/chat_pdfs.py`'s bootstrap; `pytest.ini`'s
 `pythonpath = . src`). `domain`/`ports`/`config`/`application` need nothing
-beyond the standard library; `adapters/` reuse whatever `rag/requirements.txt`
-already installs (chromadb, ollama, pymupdf4llm, sentence-transformers).
+beyond the standard library; `adapters/` reuse what `rag/requirements.txt`
+installs (FAISS, Ollama, Pillow, sentence-transformers). MinerU and Jina CLIP
+run through the isolated `.venv-mineru` environment.
 
 System: Python 3.10+, Ollama running locally. A CUDA GPU is recommended once the
 multimodal retrieval stack (jina-clip, FAISS) is in use — see

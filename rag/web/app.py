@@ -11,7 +11,7 @@ Usage (from project root):
 Open http://127.0.0.1:5000 in your browser.
 
 Dependencies:
-    - flask, flask-cors, chromadb, werkzeug
+    - flask, flask-cors, werkzeug
     - rag.chat_pdfs (project internal module)
 """
 
@@ -29,7 +29,6 @@ from collections import Counter
 from typing import Generator, Optional
 from werkzeug.utils import secure_filename
 
-import chromadb
 import requests
 from flask import Flask, request, jsonify, Response, stream_with_context, send_from_directory
 from flask_cors import CORS
@@ -132,9 +131,10 @@ def _safe_pdf_basename(filename: str) -> str:
 
 def _invalidate_collection_if_deleted():
     """Clear state to start fresh if the DB folder was deleted."""
-    path_db = rag_engine.PATH_DB
-    if not os.path.exists(os.path.dirname(path_db)):
+    store_dir = os.path.join(rag_engine.PATH_DB, rag_engine.COLLECTION_NAME)
+    if _state["collection"] is not None and not os.path.exists(store_dir):
         _state["collection"] = None
+        rag_engine.reset_vector_store_cache()
         _state["indexing_failed"] = False
         _state["indexing_error"] = None
         _state["indexing_done_empty"] = False
@@ -142,19 +142,11 @@ def _invalidate_collection_if_deleted():
 
 
 def _get_collection():
-    """Obtain or create the ChromaDB collection, invalidating if the folder was deleted.
-
-    Returns:
-        The ChromaDB collection object.
-    """
+    """Obtain or create the FAISS store for the active corpus."""
     with _indexing_lock:
         _invalidate_collection_if_deleted()
         if _state["collection"] is None:
-            os.makedirs(os.path.dirname(rag_engine.PATH_DB), exist_ok=True)
-            client = chromadb.PersistentClient(path=rag_engine.PATH_DB)
-            _state["collection"] = client.get_or_create_collection(
-                name=rag_engine.COLLECTION_NAME
-            )
+            _state["collection"] = rag_engine.obtener_vector_store()
         return _state["collection"]
 
 
@@ -205,27 +197,10 @@ def _ensure_indexed():
 
 
 def _reset_db():
-    """Release the ChromaDB collection and delete it via the API (without touching the filesystem).
-
-    Avoids WinError 32 on Windows during re-indexing by using delete_collection
-    instead of rmtree.
-    """
-    _state["collection"] = None
+    """Clear the active FAISS store."""
+    coll = _get_collection()
+    coll.clear()
     _state["indexing_done_empty"] = False
-    gc.collect()
-    last_error = None
-    for attempt in range(5):
-        time.sleep(0.5 * (attempt + 1))  # 0.5s, 1s, 1.5s, 2s, 2.5s
-        try:
-            client = chromadb.PersistentClient(path=rag_engine.PATH_DB)
-            client.delete_collection(name=rag_engine.COLLECTION_NAME)
-            return
-        except ValueError:
-            return  # Collection did not exist
-        except Exception as e:
-            last_error = e
-            if attempt >= 4:
-                raise last_error
 
 
 # STREAMING HELPERS
@@ -306,13 +281,14 @@ def _sse_event(event: str, payload: dict) -> str:
 def _collection_document_details(coll) -> list:
     """Return per-document metadata without changing the legacy documents list."""
     try:
-        all_data = coll.get(include=["metadatas"])
+        fragments = coll.get_page(None, 0)
     except Exception:
         return []
 
     details = {}
-    for meta in all_data.get("metadatas") or []:
-        doc = meta.get("source")
+    for fragment in fragments:
+        meta = fragment.metadata
+        doc = meta.source
         if not doc:
             continue
         info = details.setdefault(
@@ -320,10 +296,9 @@ def _collection_document_details(coll) -> list:
             {"name": doc, "fragments": 0, "pages": set(), "formats": set()},
         )
         info["fragments"] += 1
-        if "page" in meta:
-            info["pages"].add(meta["page"])
-        if meta.get("format"):
-            info["formats"].add(meta["format"])
+        info["pages"].add(meta.page)
+        if meta.format:
+            info["formats"].add(meta.format)
 
     normalized = []
     for doc in sorted(details):
@@ -438,7 +413,7 @@ def _store_pdf_count(folder: str) -> int:
 
 def _store_entry(name: str, label: str, folder: str) -> dict:
     """Build the JSON descriptor for one vector store."""
-    path_db, _ = rag_engine._derivar_paths_db(folder, rag_engine.MODELO_EMBEDDING)
+    path_db, _ = rag_engine._derivar_paths_db(folder)
     active = os.path.abspath(folder) == os.path.abspath(rag_engine.CARPETA_DOCS)
     indexed = os.path.isdir(path_db) and bool(os.listdir(path_db))
     entry = {
@@ -486,6 +461,7 @@ def _switch_store_folder(folder: str) -> None:
     with _indexing_lock:
         rag_engine.set_docs_folder_runtime(folder)
         _state["collection"] = None
+        rag_engine.reset_vector_store_cache()
         _state["indexing"] = False
         _state["indexing_failed"] = False
         _state["indexing_error"] = None
@@ -516,9 +492,8 @@ def _save_persisted_settings() -> None:
 def _load_persisted_settings() -> None:
     """Apply persisted settings at startup: model roles, then store, then flags.
 
-    Roles are applied before the store so an embedding-model change re-derives the
-    DB path before the store re-derives it again for its own folder. Missing or
-    invalid entries are skipped; the engine defaults stand when nothing is saved.
+    Roles are applied before the store. Missing or invalid entries are skipped;
+    the engine defaults stand when nothing is saved.
     """
     try:
         # utf-8-sig tolerates a BOM if the file was hand-edited with a Windows tool.
@@ -674,7 +649,7 @@ def _api_init_logic():
 
 @app.route("/api/corpus", methods=["POST"])
 def api_corpus():
-    """Switch the PDF corpus folder (``rag/docs/{es,ca,en}``) and derived Chroma path."""
+    """Switch the PDF corpus folder and its derived FAISS path."""
     if _state["indexing"]:
         return jsonify({"ok": False, "error": "indexing_in_progress"}), 409
     data = request.get_json() or {}
@@ -687,6 +662,7 @@ def api_corpus():
     with _indexing_lock:
         rag_engine.set_docs_folder_runtime(abs_path)
         _state["collection"] = None
+        rag_engine.reset_vector_store_cache()
         _state["indexing"] = False
         _state["indexing_failed"] = False
         _state["indexing_error"] = None
@@ -718,6 +694,7 @@ def api_init():
     except Exception:
         # Corrupt or deleted DB: invalidate and retry once
         _state["collection"] = None
+        rag_engine.reset_vector_store_cache()
         _state["indexing_failed"] = False
         _state["indexing_error"] = None
         _state["indexing_done_empty"] = False
@@ -912,7 +889,7 @@ def api_docs():
 
 @app.route("/api/docs/<path:filename>", methods=["DELETE"])
 def api_delete_doc(filename):
-    """Delete a document: remove its chunks from ChromaDB and the PDF file from disk.
+    """Delete a document from FAISS and remove the PDF file from disk.
 
     Args:
         filename: Name of the PDF file to delete.
@@ -923,7 +900,7 @@ def api_delete_doc(filename):
     filepath = os.path.join(rag_engine.CARPETA_DOCS, filename)
     try:
         coll = _get_collection()
-        coll.delete(where={"source": filename})
+        coll.delete_source(filename)
         if os.path.isfile(filepath):
             os.remove(filepath)
         docs = rag_engine.obtener_documentos_indexados(coll)
@@ -956,15 +933,16 @@ def api_topics():
     for doc_name in docs:
         doc_info = {"name": doc_name}
         try:
-            all_data = coll.get(
-                where={"source": doc_name},
-                include=["documents", "metadatas"],
-            )
-            if all_data["documents"]:
-                pages = {meta["page"] for meta in all_data["metadatas"]}
+            fragments = [
+                fragment
+                for fragment in coll.get_page(None, 0)
+                if fragment.metadata.source == doc_name
+            ]
+            if fragments:
+                pages = {fragment.metadata.page for fragment in fragments}
                 doc_info["pages"] = len(pages)
-                doc_info["fragments"] = len(all_data["documents"])
-                texto = " ".join(all_data["documents"][:20])
+                doc_info["fragments"] = len(fragments)
+                texto = " ".join(fragment.doc for fragment in fragments[:20])
                 palabras = texto.split()
                 significativas = [
                     p.strip('.,;:()[]{}"\'-\'').lower()
@@ -1165,11 +1143,7 @@ def api_models_get():
 
 @app.route("/api/models", methods=["POST"])
 def api_models_post():
-    """Reassign pipeline model roles at runtime.
-
-    Changing the embedding model re-derives the vector-store path; the collection
-    is dropped so the next access rebinds, and re-indexing starts if needed.
-    """
+    """Reassign Ollama generation roles at runtime."""
     if _state["indexing"]:
         return jsonify({"ok": False, "error": "indexing_in_progress"}), 409
     data = request.get_json() or {}
@@ -1180,32 +1154,13 @@ def api_models_post():
     if not overrides:
         return jsonify({"ok": False, "error": "no_valid_roles"}), 400
 
-    prev_embed = rag_engine.MODELO_EMBEDDING
     try:
         roles = rag_engine.set_model_roles_runtime(overrides)
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
 
-    embedding_changed = rag_engine.MODELO_EMBEDDING != prev_embed
     _save_persisted_settings()
-    resp = {"ok": True, "roles": roles, "embedding_changed": embedding_changed}
-    if embedding_changed:
-        with _indexing_lock:
-            _state["collection"] = None
-            _state["indexing"] = False
-            _state["indexing_failed"] = False
-            _state["indexing_error"] = None
-            _state["indexing_done_empty"] = False
-            _state["indexing_progress"] = None
-        gc.collect()
-        coll = _get_collection()
-        total = coll.count()
-        if total == 0:
-            _ensure_indexed()
-        resp["total_fragments"] = total
-        resp["indexing"] = _state["indexing"]
-        resp["stores"] = _all_stores()
-    return jsonify(resp)
+    return jsonify({"ok": True, "roles": roles})
 
 
 @app.route("/api/stores", methods=["GET"])
@@ -1215,7 +1170,7 @@ def api_stores_list():
         "ok": True,
         "stores": _all_stores(),
         "active": _active_store_name(),
-        "embedding": rag_engine.MODELO_EMBEDDING,
+        "embedding": "jinaai/jina-clip-v2",
     })
 
 

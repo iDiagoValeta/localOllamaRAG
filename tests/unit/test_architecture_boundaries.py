@@ -13,7 +13,7 @@ which a reformatted or aliased import could dodge):
    every top-level import target in domain/ports/config/application must be
    part of the Python standard library or the ``monkeygrab`` package itself.
    A whitelist of "what's allowed" (stdlib) is used rather than a denylist of
-   "known infra libraries" (chromadb, ollama, fitz, torch, ...) so a *new*
+   "known infra libraries" (faiss, ollama, PIL, torch, ...) so a *new*
    infrastructure dependency added later is caught automatically instead of
    requiring this test to be updated in lockstep. This also transitively
    blocks importing ``rag`` (the legacy service-locator package): it is
@@ -23,8 +23,8 @@ which a reformatted or aliased import could dodge):
    (``test_package_imports_only_allowed_monkeygrab_layers``): (1) alone is
    NOT enough, because it only records "monkeygrab" as the top-level import
    target for every ``monkeygrab.*`` import, regardless of which submodule --
-   ``from monkeygrab.adapters.vectorstore.chroma_store import ChromaVectorStore``
-   written inside ``domain/`` would PASS check (1) while dragging chromadb in
+   ``from monkeygrab.adapters.vectorstore.faiss_store import FaissVectorStore``
+   written inside ``domain/`` would PASS check (1) while dragging FAISS in
    transitively. This second check keeps the FULL dotted import path and
    verifies the targeted monkeygrab *subpackage* against a per-layer
    whitelist: domain -> only domain; ports -> domain/ports; config -> only
@@ -95,7 +95,7 @@ def _monkeygrab_import_targets(py_file: Path) -> Set[str]:
 
     Unlike ``_top_level_imports`` (which collapses every such import down to
     the single string "monkeygrab", useless for a per-layer check), this
-    keeps the complete path -- e.g. "monkeygrab.adapters.vectorstore.chroma_store"
+    keeps the complete path -- e.g. "monkeygrab.adapters.vectorstore.faiss_store"
     -- so ``_subpackage_of`` can tell which layer is actually being reached
     into.
     """
@@ -115,7 +115,7 @@ def _monkeygrab_import_targets(py_file: Path) -> Set[str]:
 
 
 def _subpackage_of(dotted_monkeygrab_import: str) -> str:
-    """"monkeygrab.adapters.vectorstore.chroma_store" -> "adapters".
+    """"monkeygrab.adapters.vectorstore.faiss_store" -> "adapters".
 
     A bare ``import monkeygrab`` (no submodule) has no subpackage to check
     and returns ``""`` -- nothing in this codebase does that today, and a
@@ -150,8 +150,8 @@ def test_package_imports_nothing_outside_the_standard_library(package_name):
 
 @pytest.mark.parametrize("package_name", _LAYERS)
 def test_package_imports_only_allowed_monkeygrab_layers(package_name):
-    """Per-layer check: catches e.g. `from monkeygrab.adapters.vectorstore.chroma_store
-    import ChromaVectorStore` inside domain/, which the blanket "starts with
+    """Per-layer check: catches e.g. `from monkeygrab.adapters.vectorstore.faiss_store
+    import FaissVectorStore` inside domain/, which the blanket "starts with
     monkeygrab" check above lets through (see the module docstring)."""
     package_dir = SRC / package_name
     allowed = _LAYER_ALLOWED_MONKEYGRAB_SUBPACKAGES[package_name]

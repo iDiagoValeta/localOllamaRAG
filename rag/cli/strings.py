@@ -74,8 +74,7 @@ _ES: dict = {
     "state.off":                "inactivo",
 
     # Extractor names
-    "extractor.pymupdf":        "pymupdf4llm",
-    "extractor.pypdf":          "pypdf (fallback)",
+    "extractor.mineru":         "MinerU",
 
     # Models table
     "models.role":              "Rol",
@@ -87,7 +86,6 @@ _ES: dict = {
     "model.use.embed":          "índice",
     "model.use.contextual":     "indexación",
     "model.use.recomp":         "síntesis",
-    "model.use.ocr":            "imágenes",
 
     # Model roles
     "role.rag":                 "RAG",
@@ -95,7 +93,6 @@ _ES: dict = {
     "role.embed":               "Embeddings",
     "role.contextual":          "Contextual",
     "role.recomp":              "RECOMP",
-    "role.ocr":                 "OCR",
 
     # Help / welcome
     "help.modes_title":         "Modos",
@@ -267,8 +264,7 @@ _EN: dict = {
     "state.off":                "off",
 
     # Extractor names
-    "extractor.pymupdf":        "pymupdf4llm",
-    "extractor.pypdf":          "pypdf (fallback)",
+    "extractor.mineru":         "MinerU",
 
     # Models table
     "models.role":              "Role",
@@ -280,7 +276,6 @@ _EN: dict = {
     "model.use.embed":          "index",
     "model.use.contextual":     "indexing",
     "model.use.recomp":         "synthesis",
-    "model.use.ocr":            "images",
 
     # Model roles
     "role.rag":                 "RAG",
@@ -288,7 +283,6 @@ _EN: dict = {
     "role.embed":               "Embeddings",
     "role.contextual":          "Contextual",
     "role.recomp":              "RECOMP",
-    "role.ocr":                 "OCR",
 
     # Help / welcome
     "help.modes_title":         "Modes",
@@ -460,8 +454,7 @@ _CA: dict = {
     "state.off":                "inactiu",
 
     # Extractor names
-    "extractor.pymupdf":        "pymupdf4llm",
-    "extractor.pypdf":          "pypdf (reserva)",
+    "extractor.mineru":         "MinerU",
 
     # Models table
     "models.role":              "Rol",
@@ -473,7 +466,6 @@ _CA: dict = {
     "model.use.embed":          "índex",
     "model.use.contextual":     "indexació",
     "model.use.recomp":         "síntesi",
-    "model.use.ocr":            "imatges",
 
     # Model roles
     "role.rag":                 "RAG",
@@ -481,7 +473,6 @@ _CA: dict = {
     "role.embed":               "Embeddings",
     "role.contextual":          "Contextual",
     "role.recomp":              "RECOMP",
-    "role.ocr":                 "OCR",
 
     # Help / welcome
     "help.modes_title":         "Modes",

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Send, FileText, Chroma, Ollama,
+  Send, FileText, Database, Ollama,
   Search, Layers, FileUp, Menu, X,
   RefreshCw, Loader2, AlertCircle, CheckCircle2, Trash2,
   ChevronDown, Copy, Check, Languages, Eye,
@@ -61,7 +61,7 @@ interface OllamaModel {
   vision?: boolean;
 }
 
-type ModelRole = 'rag' | 'chat' | 'embedding' | 'contextual' | 'recomp' | 'ocr';
+type ModelRole = 'rag' | 'chat' | 'contextual' | 'recomp';
 type ModelRoles = Record<ModelRole, string>;
 
 interface VectorStore {
@@ -94,7 +94,7 @@ const STRINGS = {
     section2: '2. Recuperación',
     labelHybrid: 'Búsqueda híbrida', descHybrid: 'Semántica + BM25',
     labelQueryDecomp: 'Descomposición de consultas', descQueryDecomp: 'Subconsultas con LLM auxiliar',
-    labelImageIndex: 'Indexado de imágenes', descImageIndex: 'Descripciones con visión',
+    labelImageIndex: 'Indexado de imágenes', descImageIndex: 'Recuperación visual directa',
     section3: '3. Ranking y contexto',
     labelReranker: 'Reordenador cross-encoder', descReranker: 'Reordenamiento de precisión',
     labelExpandContext: 'Expandir contexto', descExpandContext: 'Añade fragmentos adyacentes',
@@ -144,10 +144,8 @@ const STRINGS = {
     noModels: 'No hay modelos instalados. Descárgalos con «ollama pull».',
     roleRag: 'Generador RAG', descRoleRag: 'Respuesta final en modo documento',
     roleChat: 'Subconsultas', descRoleChat: 'Conversación y descomposición de consultas',
-    roleEmbedding: 'Embeddings', descRoleEmbedding: 'Vectoriza documentos y consultas',
     roleContextual: 'Recuperación contextual', descRoleContextual: 'Enriquece fragmentos al indexar',
     roleRecomp: 'Síntesis RECOMP', descRoleRecomp: 'Resume el contexto antes de generar',
-    roleOcr: 'Visión / OCR', descRoleOcr: 'Describe imágenes de los PDFs',
     modelSaveError: 'No se pudo cambiar el modelo.',
   },
   en: {
@@ -163,7 +161,7 @@ const STRINGS = {
     section2: '2. Retrieval',
     labelHybrid: 'Hybrid Search', descHybrid: 'Semantic + BM25',
     labelQueryDecomp: 'Query Decomposition', descQueryDecomp: 'Sub-queries via auxiliary LLM',
-    labelImageIndex: 'Image indexing', descImageIndex: 'Vision captions',
+    labelImageIndex: 'Image indexing', descImageIndex: 'Direct visual retrieval',
     section3: '3. Ranking & Context',
     labelReranker: 'Cross-Encoder Reranker', descReranker: 'Precision reordering',
     labelExpandContext: 'Expand Context', descExpandContext: 'Add adjacent chunks',
@@ -213,10 +211,8 @@ const STRINGS = {
     noModels: 'No models installed. Pull some with “ollama pull”.',
     roleRag: 'RAG generator', descRoleRag: 'Final answer in document mode',
     roleChat: 'Sub-queries', descRoleChat: 'Conversation and query decomposition',
-    roleEmbedding: 'Embeddings', descRoleEmbedding: 'Vectorizes documents and queries',
     roleContextual: 'Contextual retrieval', descRoleContextual: 'Enriches chunks at indexing',
     roleRecomp: 'RECOMP synthesis', descRoleRecomp: 'Summarizes context before generation',
-    roleOcr: 'Vision / OCR', descRoleOcr: 'Describes images inside PDFs',
     modelSaveError: 'Could not change the model.',
   },
   ca: {
@@ -232,7 +228,7 @@ const STRINGS = {
     section2: '2. Recuperació',
     labelHybrid: 'Cerca híbrida', descHybrid: 'Semàntica + BM25',
     labelQueryDecomp: 'Descomposició de consultes', descQueryDecomp: 'Sub-consultes amb LLM auxiliar',
-    labelImageIndex: 'Indexat d\'imatges', descImageIndex: 'Descripcions amb visió',
+    labelImageIndex: 'Indexat d\'imatges', descImageIndex: 'Recuperació visual directa',
     section3: '3. Rànquing i context',
     labelReranker: 'Reordenador cross-encoder', descReranker: 'Reordenament de precisió',
     labelExpandContext: 'Expandir context', descExpandContext: 'Afig fragments adjacents',
@@ -282,10 +278,8 @@ const STRINGS = {
     noModels: 'No hi ha models instal·lats. Descarrega\'n amb «ollama pull».',
     roleRag: 'Generador RAG', descRoleRag: 'Resposta final en mode document',
     roleChat: 'Subconsultes', descRoleChat: 'Conversa i descomposició de consultes',
-    roleEmbedding: 'Embeddings', descRoleEmbedding: 'Vectoritza documents i consultes',
     roleContextual: 'Recuperació contextual', descRoleContextual: 'Enriqueix fragments en indexar',
     roleRecomp: 'Síntesi RECOMP', descRoleRecomp: 'Resumeix el context abans de generar',
-    roleOcr: 'Visió / OCR', descRoleOcr: 'Descriu imatges dels PDFs',
     modelSaveError: 'No s\'ha pogut canviar el model.',
   },
 } as const;
@@ -956,19 +950,6 @@ export default function App() {
         return;
       }
       setModelRoles(res.roles);
-      if (res.embedding_changed) {
-        if (res.stores) setStores(res.stores);
-        if (res.indexing) {
-          setIndexingError(null);
-          setIndexingProgress(null);
-          setIsIndexing(true);
-          setRetryTrigger(t => t + 1);
-        } else {
-          setTotalFragments(res.total_fragments || 0);
-          const d = await api.docs().catch(() => null);
-          if (d?.ok) setDocuments(d.documents || []);
-        }
-      }
     } catch {
       setModelRoles(prev);
       setModelError(T.modelSaveError);
@@ -1287,10 +1268,8 @@ export default function App() {
             {([
               { role: 'rag' as ModelRole, label: T.roleRag, desc: T.descRoleRag },
               { role: 'chat' as ModelRole, label: T.roleChat, desc: T.descRoleChat },
-              { role: 'embedding' as ModelRole, label: T.roleEmbedding, desc: T.descRoleEmbedding },
               { role: 'contextual' as ModelRole, label: T.roleContextual, desc: T.descRoleContextual },
               { role: 'recomp' as ModelRole, label: T.roleRecomp, desc: T.descRoleRecomp },
-              { role: 'ocr' as ModelRole, label: T.roleOcr, desc: T.descRoleOcr },
             ]).map(({ role, label, desc }) => {
               const current = modelRoles?.[role] ?? '';
               const names = ollamaModels.map(m => m.name);
@@ -1488,7 +1467,7 @@ export default function App() {
               >
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 pl-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                    <Chroma className="h-3 w-3" />
+                    <Database className="h-3 w-3" />
                     {T.storesLabel}
                   </div>
                   <div className={`rounded-2xl border border-white/10 bg-black/30 p-1.5 space-y-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${storeBusy || isReindexing || isLoading ? 'opacity-50' : ''}`}>
@@ -1592,7 +1571,7 @@ export default function App() {
               <div className="flex items-center gap-2 min-w-0">
                 {mainPanel === 'models'
                   ? <Ollama className="w-5 h-5 flex-shrink-0 text-[var(--text)]" />
-                  : <Chroma className="w-5 h-5 flex-shrink-0" />}
+                  : <Database className="w-5 h-5 flex-shrink-0" />}
                 <h2 className="t-h2 text-[var(--text)] truncate">{mainPanel === 'models' ? T.tabModels : T.tabPipeline}</h2>
               </div>
               <button
@@ -1636,7 +1615,7 @@ export default function App() {
                 className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide transition-all flex items-center gap-2 ${mode === 'rag' ? 'bg-[var(--accent)] text-[var(--accent-contrast)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
                 onClick={() => handleModeChange('rag')}
               >
-                <Chroma className="w-4 h-4" />
+                <Database className="w-4 h-4" />
                 RAG
               </button>
             </div>

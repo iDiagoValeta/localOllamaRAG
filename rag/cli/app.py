@@ -10,7 +10,7 @@ Usage:
     cli.run()
 
 Dependencies:
-    - chromadb
+    - FAISS through the MonkeyGrab vector-store port
     - rag.cli.display (ui singleton, QueryTimer, SessionStats)
     - rag.cli.commands (single source of truth for slash-commands)
     - A RAG engine module providing search, indexing, and generation functions
@@ -18,12 +18,9 @@ Dependencies:
 
 import difflib
 import os
-import shutil
 import signal
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
-
-import chromadb
 
 from rag.cli.commands import ALIASES, COMMANDS, primary_commands
 from rag.cli.display import QueryTimer, SessionStats, ui
@@ -51,7 +48,7 @@ class MonkeyGrabCLI:
         """
         self.rag = rag_engine
         self.mode = "chat"
-        self.collection: Optional[chromadb.Collection] = None
+        self.collection = None
         self.historial_chat: List[Dict[str, str]] = []
         self.session = SessionStats()
 
@@ -107,10 +104,7 @@ class MonkeyGrabCLI:
         ok, detail = self._ollama_health()
         ui.ollama_status(ok, detail)
 
-        client = chromadb.PersistentClient(path=self.rag.PATH_DB)
-        self.collection = client.get_or_create_collection(
-            name=self.rag.COLLECTION_NAME
-        )
+        self.collection = self.rag.obtener_vector_store()
 
         archivos_pdf = self._list_pdf_files()
         pdfs_count = len(archivos_pdf)
@@ -414,14 +408,9 @@ class MonkeyGrabCLI:
         """
         ui.reindex_start()
         try:
-            if os.path.exists(self.rag.PATH_DB):
-                shutil.rmtree(self.rag.PATH_DB)
-                ui.success(ui._s("reindex.db_deleted"))
-
-            client_new = chromadb.PersistentClient(path=self.rag.PATH_DB)
-            collection_new = client_new.get_or_create_collection(
-                name=self.rag.COLLECTION_NAME
-            )
+            self.collection.clear()
+            ui.success(ui._s("reindex.db_deleted"))
+            collection_new = self.collection
             total = self.rag.indexar_documentos(
                 self.rag.CARPETA_DOCS, collection_new
             )
@@ -457,9 +446,7 @@ class MonkeyGrabCLI:
         reranker_device = None
         if rag.USAR_RERANKER:
             reranker_device_val, _forced = rag.resolve_reranker_device()
-            reranker_model = ('BAAI/bge-reranker-v2-m3'
-                              if rag.RERANKER_MODEL_QUALITY == 'quality'
-                              else 'ms-marco-MiniLM-L-6-v2')
+            reranker_model = 'BAAI/bge-reranker-v2-m3'
             reranker_device = (reranker_device_val.upper()
                                + (' (FP16)' if reranker_device_val == 'cuda' else ''))
 
@@ -467,11 +454,10 @@ class MonkeyGrabCLI:
             'mode': self.mode,
             'modelo_rag': rag.MODELO_RAG,
             'modelo_chat': rag.MODELO_CHAT,
-            'modelo_embedding': rag.MODELO_EMBEDDING,
+            'modelo_embedding': 'jinaai/jina-clip-v2',
             'modelo_contextual': rag.MODELO_CONTEXTUAL,
             'modelo_recomp': rag.MODELO_RECOMP,
-            'modelo_ocr': rag.MODELO_OCR,
-            'extractor': 'extractor.pymupdf',
+            'extractor': 'extractor.mineru',
             'busqueda': ('pipeline.search.hybrid' if rag.USAR_BUSQUEDA_HIBRIDA
                          else 'pipeline.search.semantic'),
             'hybrid': rag.USAR_BUSQUEDA_HIBRIDA,
@@ -502,18 +488,17 @@ class MonkeyGrabCLI:
             return []
 
     def _get_document_summaries(self) -> List[Dict[str, Any]]:
-        """Aggregate document metadata from Chroma without truncating counts."""
+        """Aggregate document metadata from the FAISS sidecar."""
         summaries: Dict[str, Dict[str, Any]] = {}
         try:
-            all_metadata = self.collection.get(include=['metadatas'])
+            fragments = self.collection.get_page(None, 0)
         except Exception as e:
             ui.error(f"error leyendo metadatos de documentos: {e}")
             return []
 
-        for meta in all_metadata.get('metadatas', []) or []:
-            if not meta:
-                continue
-            source = meta.get('source')
+        for fragment in fragments:
+            meta = fragment.metadata
+            source = meta.source
             if not source:
                 continue
             entry = summaries.setdefault(source, {
@@ -523,10 +508,10 @@ class MonkeyGrabCLI:
                 'formats_set': set(),
             })
             entry['fragments'] += 1
-            if isinstance(meta.get('page'), int):
-                entry['pages_set'].add(meta['page'])
-            if meta.get('format'):
-                entry['formats_set'].add(meta['format'])
+            if isinstance(meta.page, int):
+                entry['pages_set'].add(meta.page)
+            if meta.format:
+                entry['formats_set'].add(meta.format)
 
         total_fragments = sum(e['fragments'] for e in summaries.values())
         result = []
@@ -560,14 +545,11 @@ class MonkeyGrabCLI:
                 'fragments': n_frags,
             }
             try:
-                # Fetch all chunks for this document to get accurate term frequencies
-                fetch_limit = max(n_frags, 100) if isinstance(n_frags, int) and n_frags > 0 else 500
-                all_data = self.collection.get(
-                    where={"source": doc_name},
-                    include=['documents', 'metadatas'],
-                    limit=fetch_limit,
-                )
-                documents = all_data.get('documents') or []
+                documents = [
+                    fragment.doc
+                    for fragment in self.collection.get_page(None, 0)
+                    if fragment.metadata.source == doc_name
+                ]
                 analizados = len(documents)
                 doc_info['analizados'] = analizados
                 if documents:

@@ -31,7 +31,7 @@ class PipelineFlagsConfig:
             fragment text before generation (``USAR_OPTIMIZACION_CONTEXTO``).
         usar_recomp_synthesis: Runtime. Synthesize a facts briefing instead of
             feeding raw chunks to the generator (``USAR_RECOMP_SYNTHESIS``).
-        usar_embeddings_imagen: Index-time. Extract and OCR-describe PDF
+        usar_embeddings_imagen: Index-time. Extract and directly embed PDF
             images as extra chunks (``USAR_EMBEDDINGS_IMAGEN``).
         logging_metricas: Log per-stage pipeline metrics (``LOGGING_METRICAS``).
         guardar_debug_rag: Write a debug dump per RAG interaction

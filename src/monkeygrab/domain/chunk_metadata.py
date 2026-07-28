@@ -22,11 +22,10 @@ class ChunkMetadata:
         total_chunks_in_page: Total number of text chunks produced for this
             page, used to detect the first and last chunk of a page during
             neighbor expansion. ``None`` for incomplete metadata.
-        format: Extraction format -- ``"markdown"``, ``"plain_text"``, or
-            ``"image"`` for the description of an extracted figure or table.
+        format: Content format -- ``"markdown"``, ``"table"``, or ``"image"``.
             ``None`` when unset.
         section_header: Nearest Markdown header above this chunk (empty
-            string if none), or the OCR caption context for images.
+            string if none).
         image_width: Pixel width, only set for ``format == "image"``.
         image_height: Pixel height, only set for ``format == "image"``.
     """

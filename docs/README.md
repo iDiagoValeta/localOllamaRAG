@@ -6,7 +6,7 @@
 | `src/monkeygrab/README.md` | The layers, the dependency rule, how to add an adapter. |
 | `rag/README.md` | What `rag/` is today and where the rest of the docs live. |
 | `.claude/CLAUDE.md` | Operating contract for any agent working in this repo. |
-| `docs/design/*.md` | Standing design decisions and their rationale — written once, not updated per change. |
+| `docs/design/*.md` | Current standing design decisions and their rationale; update them when architecture changes. |
 | Directory-local `README.md` | Only where a directory's purpose isn't obvious from its code — not one per folder by default. |
 
 ## What is NOT documented

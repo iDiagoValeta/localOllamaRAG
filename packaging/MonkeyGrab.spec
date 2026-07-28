@@ -4,7 +4,7 @@ PyInstaller spec for the MonkeyGrab desktop app.
 
 Builds a one-folder bundle (dist/MonkeyGrab/MonkeyGrab.exe) that wraps the Flask
 backend + React UI + RAG engine in a native window (pywebview). Heavy ML deps
-(torch, transformers, sentence-transformers, chromadb, onnxruntime) are collected
+(torch, transformers, sentence-transformers, FAISS, onnxruntime) are collected
 wholesale to maximize the chance of a working freeze; the bundle is large by
 design. Ollama is NOT bundled -- it is an external prerequisite on each machine.
 
@@ -45,9 +45,9 @@ hiddenimports += collect_submodules("monkeygrab")
 
 # --- Heavy third-party packages: collect data + binaries + submodules --------
 _collect = [
-    "chromadb", "sentence_transformers", "transformers", "tokenizers",
+    "faiss", "sentence_transformers", "transformers", "tokenizers",
     "torch", "onnxruntime", "huggingface_hub", "safetensors",
-    "pymupdf4llm", "fitz", "pymupdf", "rank_bm25", "ollama",
+    "PIL", "rank_bm25", "ollama",
     "flask", "flask_cors", "werkzeug", "jinja2",
     "datasets", "accelerate",   # eagerly imported by sentence_transformers 5.x
     "webview",
@@ -63,22 +63,15 @@ for _pkg in _collect:
         pass
 
 # Package metadata (importlib.metadata.version checks fail at runtime otherwise;
-# chromadb and the HF/torch stack all introspect their own version).
+# The HF/torch stack introspects its own version.
 for _pkg in (
-    "chromadb", "transformers", "torch", "sentence_transformers", "tokenizers",
+    "faiss-cpu", "transformers", "torch", "sentence_transformers", "tokenizers",
     "huggingface_hub", "safetensors", "tqdm", "numpy", "onnxruntime",
     "pydantic", "regex", "pyyaml", "filelock", "ollama", "flask", "rank_bm25",
-    "pymupdf4llm", "pymupdf",
+    "Pillow",
 ):
     try:
         datas += copy_metadata(_pkg, recursive=True)
-    except Exception:
-        pass
-
-# chromadb pulls telemetry/validation deps that use lazy imports and entry points.
-for _pkg in ("opentelemetry", "posthog", "pydantic", "pydantic_core", "chromadb"):
-    try:
-        hiddenimports += collect_submodules(_pkg)
     except Exception:
         pass
 

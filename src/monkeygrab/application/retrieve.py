@@ -7,7 +7,7 @@ decides what is worth generating from.
 
 Everything touching infrastructure arrives as an injected port (``Embedder``,
 ``VectorStore``, ``LexicalIndex``, ``Reranker``, ``ChatModel``), so this
-module has no notion of Ollama, ChromaDB or sentence-transformers. The fusion
+module has no notion of Ollama, FAISS or sentence-transformers. The fusion
 arithmetic lives in ``monkeygrab.application.rrf_fusion`` and the text
 analysis in ``monkeygrab.application.keywords``; both are pure and tested on
 their own.
@@ -225,7 +225,7 @@ class Retrieve:
             embedder: Embeds each query variant.
             vector_store: Semantic search backend.
             config: Root config; ``flags``, ``retrieval``, ``reranking`` and
-                ``models.embed_prefix_query`` are read fresh on every ``run()``.
+                the configured embedder is read fresh on every ``run()``.
             lexical_index: BM25-style lexical search, or ``None`` to disable
                 hybrid search regardless of ``flags.usar_busqueda_hibrida``.
             reranker: Cross-Encoder reranking, or ``None`` to disable
@@ -268,7 +268,7 @@ class Retrieve:
         semantic_hits_per_query: List[List[Fragment]] = []
         for q_idx, q in enumerate(queries):
             embedding = self._embedder.embed(
-                f"{config.models.embed_prefix_query}{q}",
+                q,
                 keep_alive=_embedding_keep_alive(q_idx, len(queries)),
             )
             semantic_hits_per_query.append(

@@ -43,7 +43,7 @@ jobs:
     # No project dependencies on purpose: the domain, the ports, the
     # configuration and the grader may not touch infrastructure, so they must
     # pass with nothing but a test runner installed. If this job ever needs
-    # chromadb or torch, a boundary has been crossed — which is what it exists
+    # FAISS or torch, a boundary has been crossed — which is what it exists
     # to detect.
     #
     # Tests that import the engine on purpose (adapters, and the equivalence

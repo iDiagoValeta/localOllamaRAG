@@ -19,8 +19,8 @@ class OllamaModelUnloader:
     Ollama model role except one.
 
     Literal port of ``liberar_modelos_ollama``/``_modelos_ollama_configurados``
-    (``rag/engine/generation.py``): built once with every role's model name
-    (the six ``ModelsConfig`` fields, de-duplicated -- several roles commonly
+    (``rag/engine/generation.py``): built once with every Ollama role's model
+    name (de-duplicated -- several roles commonly
     share the same model, e.g. ``rag``/``chat``/``contextual`` all defaulting
     to ``gemma4:e4b``), so ``unload_all_except`` can ask the runtime to drop
     everything but the one about to run without needing to know model names
@@ -34,15 +34,14 @@ class OllamaModelUnloader:
         timeout: int = 30,
     ):
         """Args:
-            models: Model-role config; every role field (``rag``, ``chat``,
-                ``embedding``, ``contextual``, ``recomp``, ``ocr``) is read.
+            models: Model-role config; ``rag``, ``chat``, ``contextual`` and
+                ``recomp`` are read.
             base_url: Ollama HTTP server base URL.
             timeout: Per-request HTTP timeout in seconds.
         """
         self._model_names: Set[str] = {
             m for m in (
-                models.rag, models.chat, models.embedding,
-                models.contextual, models.recomp, models.ocr,
+                models.rag, models.chat, models.contextual, models.recomp,
             ) if m
         }
         self._base_url = base_url

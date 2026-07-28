@@ -9,11 +9,11 @@ from monkeygrab.domain.fragment import Fragment
 class VectorStore(Protocol):
     """Storage and retrieval of embedded chunks.
 
-    Five operations, each backing one thing the pipeline actually does:
+    Seven operations, each backing one thing the pipeline actually does:
     ``add`` stores a chunk during indexing, ``query`` is semantic search,
     ``get_by_ids`` fetches neighbor chunks for context expansion,
-    ``get_page`` supports full-corpus scans (building the lexical index,
-    listing indexed documents) and ``count`` reports corpus size.
+    ``get_page`` supports full-corpus scans, ``count`` reports corpus size,
+    ``delete_source`` removes one document and ``clear`` resets a corpus.
 
     There is no ``where`` filter because nothing in the pipeline filters by
     metadata. Keeping it out means a plain vector index with a metadata
@@ -94,4 +94,12 @@ class VectorStore(Protocol):
         Raises:
             Exception: On any storage failure.
         """
+        ...
+
+    def delete_source(self, source: str) -> int:
+        """Remove every chunk belonging to one source document."""
+        ...
+
+    def clear(self) -> None:
+        """Remove every chunk from the store."""
         ...

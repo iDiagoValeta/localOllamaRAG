@@ -22,13 +22,11 @@ from monkeygrab.config.flags import PipelineFlagsConfig
 from monkeygrab.config.models import (
     ModelsConfig,
     OllamaRuntimeConfig,
-    derive_embedding_prefixes,
     infer_model_description,
 )
 from monkeygrab.config.paths import RAG_BASE_DIR, PathsConfig, derive_db_paths
 from monkeygrab.config.reranking import RerankingConfig
 from monkeygrab.config.retrieval import RetrievalConfig
-from monkeygrab.config.stack import StackConfig, stack_from_env
 
 # The 7 sections with runtime-override support via with_overrides(); anything
 # nested deeper (e.g. models.ollama.*) is set at construction time only, same
@@ -68,9 +66,6 @@ class AppConfig:
     context: ContextConfig = field(default_factory=ContextConfig)
     flags: PipelineFlagsConfig = field(default_factory=PipelineFlagsConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
-    # Which implementation stands behind each swappable port. Its default is the
-    # current production stack, so an unset environment behaves exactly as before.
-    stack: StackConfig = field(default_factory=StackConfig)
 
     # FROM_ENV
 
@@ -90,9 +85,7 @@ class AppConfig:
         Unlike ``rag/chat_pdfs.py``'s ``_leer_env_int``/``_leer_env_float``,
         an environment variable that IS SET but not parseable raises
         instead of silently falling back to the default (hard-fail policy;
-        see ``monkeygrab.config.env``). ``RERANKER_QUALITY`` is similarly
-        validated against its two known values instead of silently
-        treating anything other than ``"quality"`` as ``"fast"``.
+        see ``monkeygrab.config.env``).
 
         Returns:
             A fully-populated ``AppConfig``.
@@ -101,20 +94,12 @@ class AppConfig:
             ValueError: If any environment variable is set to an invalid value.
         """
         rag_model = env.read_env_str("OLLAMA_RAG_MODEL", "gemma4:e4b")
-        embedding_model = env.read_env_str("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
-        embed_prefix_query, embed_prefix_doc = derive_embedding_prefixes(embedding_model)
-
         models = ModelsConfig(
             rag=rag_model,
             chat=env.read_env_str("OLLAMA_CHAT_MODEL", "gemma4:e4b"),
-            embedding=embedding_model,
             contextual=env.read_env_str("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b"),
             recomp=env.read_env_str("OLLAMA_RECOMP_MODEL", "gemma4:e4b"),
-            ocr=env.read_env_str("OLLAMA_OCR_MODEL", "gemma4:e4b"),
             desc=env.read_env_str("MODELO_DESC", infer_model_description(rag_model)),
-            embed_prefix_query=embed_prefix_query,
-            embed_prefix_doc=embed_prefix_doc,
-            reranker_quality=env.read_env_choice("RERANKER_QUALITY", "quality", ("quality", "fast")),
             ollama=OllamaRuntimeConfig(
                 num_ctx=env.read_env_int("OLLAMA_NUM_CTX", 8192),
                 rag_num_ctx=env.read_env_int("OLLAMA_RAG_NUM_CTX", 16384),
@@ -122,7 +107,6 @@ class AppConfig:
                 query_num_ctx=env.read_env_int("OLLAMA_QUERY_NUM_CTX", 2048),
                 recomp_num_ctx=env.read_env_int("OLLAMA_RECOMP_NUM_CTX", 8192),
                 contextual_num_ctx=env.read_env_int("OLLAMA_CONTEXTUAL_NUM_CTX", 32768),
-                ocr_num_ctx=env.read_env_int("OLLAMA_OCR_NUM_CTX", 8192),
                 request_timeout=env.read_env_int("OLLAMA_REQUEST_TIMEOUT", 900),
                 keep_alive=env.read_env_int("OLLAMA_KEEP_ALIVE", 0),
                 generate_retries=env.read_env_int("OLLAMA_GENERATE_RETRIES", 2),
@@ -135,9 +119,6 @@ class AppConfig:
             chunk_overlap=env.read_env_int("RAG_CHUNK_OVERLAP", 400),
             min_chunk_length=env.read_env_int("RAG_MIN_CHUNK_LENGTH", 150),
             contextual_doc_chars=env.read_env_int("CONTEXTUAL_DOC_CHARS", 24000),
-            max_images_per_page=env.read_env_int("RAG_MAX_IMAGES_PER_PAGE", 5),
-            min_image_size_px=env.read_env_int("RAG_MIN_IMAGE_SIZE_PX", 100),
-            caption_margin_px=env.read_env_int("RAG_CAPTION_MARGIN_PX", 80),
         )
 
         retrieval = RetrievalConfig(
@@ -170,7 +151,7 @@ class AppConfig:
         base_dir = RAG_BASE_DIR
         data_dir = os.path.abspath(env.read_env_str("MONKEYGRAB_DATA_DIR", base_dir))
         docs_folder = env.read_env_str("DOCS_FOLDER", os.path.join(base_dir, "docs", "en"))
-        path_db, collection_name = derive_db_paths(docs_folder, embedding_model, data_dir)
+        path_db, collection_name = derive_db_paths(docs_folder, data_dir)
 
         paths = PathsConfig(
             base_dir=base_dir,
@@ -186,7 +167,6 @@ class AppConfig:
         return cls(
             models=models, chunking=chunking, retrieval=retrieval,
             reranking=reranking, context=context, flags=flags, paths=paths,
-            stack=stack_from_env(),
         )
 
     # WITH_OVERRIDES
@@ -202,8 +182,7 @@ class AppConfig:
         request, and no default-argument snapshot that can go stale.
 
         Keys are dotted ``"<section>.<field>"`` strings, e.g.
-        ``config.with_overrides(**{"flags.usar_reranker": False,
-        "models.embedding": "nomic-embed-text:latest"})``. ``<section>`` is
+        ``config.with_overrides(**{"flags.usar_reranker": False})``. ``<section>`` is
         one of ``models``, ``chunking``, ``retrieval``, ``reranking``,
         ``context``, ``flags``, ``paths``; ``<field>`` must be a real field
         of that section's dataclass.
@@ -212,10 +191,6 @@ class AppConfig:
 
         - ``"models.rag"``: recomputes ``models.desc`` (was: the ``if
           overrides.get("rag")`` branch of ``set_model_roles_runtime``).
-        - ``"models.embedding"``: recomputes ``models.embed_prefix_query``/
-          ``embed_prefix_doc`` and ``paths.path_db``/``collection_name``
-          (was: the ``embedding_changed`` branch of
-          ``set_model_roles_runtime``).
         - ``"paths.docs_folder"``: recomputes ``paths.path_db``/
           ``collection_name`` (was: ``set_docs_folder_runtime``).
 
@@ -273,19 +248,11 @@ class AppConfig:
             new_models = dataclasses.replace(new_models, **changes_by_section["models"])
         if "rag" in changes_by_section["models"]:
             new_models = dataclasses.replace(new_models, desc=infer_model_description(new_models.rag))
-        if "embedding" in changes_by_section["models"]:
-            query_prefix, doc_prefix = derive_embedding_prefixes(new_models.embedding)
-            new_models = dataclasses.replace(
-                new_models, embed_prefix_query=query_prefix, embed_prefix_doc=doc_prefix
-            )
-
         new_paths = sections["paths"]
         if changes_by_section["paths"]:
             new_paths = dataclasses.replace(new_paths, **changes_by_section["paths"])
-        if "embedding" in changes_by_section["models"] or "docs_folder" in changes_by_section["paths"]:
-            path_db, collection_name = derive_db_paths(
-                new_paths.docs_folder, new_models.embedding, new_paths.data_dir
-            )
+        if "docs_folder" in changes_by_section["paths"]:
+            path_db, collection_name = derive_db_paths(new_paths.docs_folder, new_paths.data_dir)
             new_paths = dataclasses.replace(new_paths, path_db=path_db, collection_name=collection_name)
 
         new_sections = {"models": new_models, "paths": new_paths}

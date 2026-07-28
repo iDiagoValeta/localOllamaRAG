@@ -9,16 +9,15 @@ case directly, so what is measured there is what ships.
 import logging
 from typing import Any, Dict, List, Tuple
 
-import chromadb
-
 from monkeygrab.application.retrieve import Retrieve
+from monkeygrab.ports.vector_store import VectorStore
 from rag.cli.display import ui
 from rag.engine import wiring
 
 
 def realizar_busqueda_hibrida(
     pregunta: str,
-    collection: chromadb.Collection
+    collection: VectorStore
 ) -> Tuple[List[Dict[str, Any]], float, Dict[str, Any]]:
     """Retrieve and rank the evidence for a question.
 
@@ -31,7 +30,7 @@ def realizar_busqueda_hibrida(
 
     Args:
         pregunta: User query.
-        collection: ChromaDB collection to search.
+        collection: FAISS store to search.
 
     Returns:
         Tuple of (ranked fragments, best score, metrics dict). The fragment
@@ -40,13 +39,13 @@ def realizar_busqueda_hibrida(
     ui.debug("Starting hybrid search...")
 
     config = wiring.app_config_from_runtime()
-    store = wiring.vector_store(collection)
+    store = collection
 
     use_case = Retrieve(
         wiring.embedder(config),
         store,
         config,
-        lexical_index=wiring.lexical_index(collection, config) if config.flags.usar_busqueda_hibrida else None,
+        lexical_index=wiring.lexical_index(store, config) if config.flags.usar_busqueda_hibrida else None,
         reranker=wiring.reranker(config) if config.flags.usar_reranker else None,
         query_decomposer=wiring.query_decomposer(config) if config.flags.usar_llm_query_decomposition else None,
     )

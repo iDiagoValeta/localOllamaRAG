@@ -15,7 +15,6 @@ import pytest
 
 from monkeygrab.adapters.reranking import cross_encoder_reranker as module
 from monkeygrab.adapters.reranking.cross_encoder_reranker import CrossEncoderReranker
-from monkeygrab.config.models import ModelsConfig
 from monkeygrab.domain.chunk_metadata import ChunkMetadata
 from monkeygrab.domain.fragment import Fragment
 
@@ -61,24 +60,11 @@ def _force_cpu(monkeypatch):
     monkeypatch.setenv("RERANKER_DEVICE", "cpu")
 
 
-def test_reranker_uses_the_injected_model_quality_not_a_frozen_default(monkeypatch):
+def test_reranker_uses_fixed_bge_model(monkeypatch):
     _patch_crossencoder(monkeypatch)
     _force_cpu(monkeypatch)
 
-    CrossEncoderReranker(ModelsConfig(reranker_quality="fast")).rerank(
-        "query", [_fragment("a")], top_k=1
-    )
-
-    assert FakeCrossEncoder.instances[0].model_name == "cross-encoder/ms-marco-MiniLM-L-6-v2"
-
-
-def test_reranker_uses_quality_model_by_default(monkeypatch):
-    _patch_crossencoder(monkeypatch)
-    _force_cpu(monkeypatch)
-
-    CrossEncoderReranker(ModelsConfig(reranker_quality="quality")).rerank(
-        "query", [_fragment("a")], top_k=1
-    )
+    CrossEncoderReranker().rerank("query", [_fragment("a")], top_k=1)
 
     assert FakeCrossEncoder.instances[0].model_name == "BAAI/bge-reranker-v2-m3"
 
@@ -87,7 +73,7 @@ def test_model_is_not_loaded_until_the_first_rerank_call(monkeypatch):
     _patch_crossencoder(monkeypatch)
     _force_cpu(monkeypatch)
 
-    CrossEncoderReranker(ModelsConfig())  # construction alone must not load anything
+    CrossEncoderReranker()  # construction alone must not load anything
 
     assert FakeCrossEncoder.instances == []
 
@@ -96,7 +82,7 @@ def test_rerank_with_no_fragments_returns_empty_list_without_loading_the_model(m
     _patch_crossencoder(monkeypatch)
     _force_cpu(monkeypatch)
 
-    result = CrossEncoderReranker(ModelsConfig()).rerank("query", [], top_k=5)
+    result = CrossEncoderReranker().rerank("query", [], top_k=5)
 
     assert result == []
     assert FakeCrossEncoder.instances == []
@@ -107,7 +93,7 @@ def test_rerank_sets_score_reranker_and_score_final_from_the_model(monkeypatch):
     _force_cpu(monkeypatch)
 
     fragments = [_fragment("a", 0), _fragment("b", 1)]
-    result = CrossEncoderReranker(ModelsConfig()).rerank("query", fragments, top_k=2)
+    result = CrossEncoderReranker().rerank("query", fragments, top_k=2)
 
     assert [f.metadata.chunk for f in result] == [0, 1]
     assert result[0].score_reranker == pytest.approx(1.0)
@@ -118,7 +104,7 @@ def test_rerank_sets_score_reranker_and_score_final_from_the_model(monkeypatch):
 def test_explicit_device_override_is_used_verbatim(monkeypatch):
     _patch_crossencoder(monkeypatch)
 
-    CrossEncoderReranker(ModelsConfig(), device="cuda").rerank("q", [_fragment("a")], top_k=1)
+    CrossEncoderReranker(device="cuda").rerank("q", [_fragment("a")], top_k=1)
 
     assert FakeCrossEncoder.instances[0].device == "cuda"
 
@@ -134,12 +120,11 @@ def test_forced_device_load_failure_hard_fails_without_a_cpu_fallback(monkeypatc
     _patch_crossencoder(monkeypatch, factory=always_raises)
 
     with pytest.raises(RuntimeError, match="failed to load on 'cpu'"):
-        CrossEncoderReranker(ModelsConfig()).rerank("q", [_fragment("a")], top_k=1)
+        CrossEncoderReranker().rerank("q", [_fragment("a")], top_k=1)
 
 
-def test_auto_detected_cuda_falls_back_to_cpu_once_before_hard_failing(monkeypatch):
-    """Auto-detected (unforced) CUDA is allowed one explicit fallback to CPU --
-    but if that also fails, the adapter must raise, never return None."""
+def test_auto_detected_cuda_failure_does_not_fall_back_to_cpu(monkeypatch):
+    """An auto-selected CUDA device is still hard-fail, never changed silently."""
     monkeypatch.delenv("RERANKER_DEVICE", raising=False)
 
     fake_torch = type(sys)("torch")
@@ -155,10 +140,10 @@ def test_auto_detected_cuda_falls_back_to_cpu_once_before_hard_failing(monkeypat
 
     _patch_crossencoder(monkeypatch, factory=always_raises)
 
-    with pytest.raises(RuntimeError, match="CPU fallback also failed"):
-        CrossEncoderReranker(ModelsConfig()).rerank("q", [_fragment("a")], top_k=1)
+    with pytest.raises(RuntimeError, match="failed to load on 'cuda'"):
+        CrossEncoderReranker().rerank("q", [_fragment("a")], top_k=1)
 
-    assert attempts == ["cuda", "cpu"]  # both attempted, in order, before raising
+    assert attempts == ["cuda"]
 
 
 def test_rerank_hard_fails_when_scoring_itself_raises(monkeypatch):
@@ -173,7 +158,7 @@ def test_rerank_hard_fails_when_scoring_itself_raises(monkeypatch):
     _patch_crossencoder(monkeypatch, factory=LoadsButFailsToScore)
 
     with pytest.raises(RuntimeError, match="reranking failed"):
-        CrossEncoderReranker(ModelsConfig()).rerank("q", [_fragment("a")], top_k=1)
+        CrossEncoderReranker().rerank("q", [_fragment("a")], top_k=1)
 
 
 if __name__ == "__main__":

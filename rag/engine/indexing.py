@@ -1,55 +1,44 @@
 """Indexing entry point for the CLI and the web app.
 
-Wires the extraction, embedding and storage adapters selected by the stack
-configuration and runs ``monkeygrab.application.index_corpus.IndexCorpus``
-over a folder of PDFs. Chunking, contextual enrichment and image captioning
-all live in the use case; what remains here is folder iteration and progress
-reporting.
+Wires the fixed extraction, embedding and storage adapters and runs
+``monkeygrab.application.index_corpus.IndexCorpus`` over a folder of PDFs.
+Chunking, contextual enrichment and direct image embedding live in the use
+case; what remains here is folder iteration and progress reporting.
 """
 
 import logging
 import os
 from typing import List, Optional
 
-import chromadb
-
 from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel
-from monkeygrab.adapters.extraction.pymupdf_image_extractor import PymupdfImageExtractor
+from monkeygrab.adapters.extraction.mineru_extractor import MineruImageExtractor
 from monkeygrab.application.index_corpus import IndexCorpus
-from monkeygrab.composition import build_stack
+from monkeygrab.composition import build_extractor
 from monkeygrab.config.app_config import AppConfig
-from monkeygrab.config.stack import EXTRACTOR_MINERU, VECTOR_STORE_CHROMA
+from monkeygrab.ports.vector_store import VectorStore
 from rag.cli.display import ui
 from rag.engine import wiring
 
 
 def _build_image_extractor(config: AppConfig):
-    """Return the image extractor matching the configured PDF extractor."""
-    if config.stack.extractor == EXTRACTOR_MINERU:
-        from monkeygrab.adapters.extraction.mineru_extractor import MineruImageExtractor
-
-        return MineruImageExtractor()
-    return PymupdfImageExtractor(config.chunking)
+    del config
+    return MineruImageExtractor()
 
 
 def indexar_documentos(
     carpeta: str,
-    collection: chromadb.Collection,
+    collection: VectorStore,
     solo_archivos: Optional[List[str]] = None,
     silent: bool = False,
     progress_callback=None,
 ) -> int:
     """Index PDFs from a folder via ``IndexCorpus`` and the configured stack.
 
-    Backends come from ``build_stack(AppConfig)`` (``PDF_EXTRACTOR``,
-    ``VECTOR_STORE``, ``EMBEDDER``). With no env overrides that is the
-    historic pymupdf + Ollama + Chroma path. The ``collection`` argument is
-    still required for API compatibility with CLI/web/eval: when the stack
-    uses Chroma, writes go through that exact collection object.
+    MinerU, jina-clip-v2 and FAISS are the only supported backends.
 
     Args:
         carpeta: Path to the folder containing PDF files.
-        collection: ChromaDB collection to index into (Chroma stack only).
+        collection: Active FAISS vector store.
         solo_archivos: If set, only index these specific filenames
             (for incremental adds without full re-index).
         silent: Suppress all terminal output (for background/web use).
@@ -73,13 +62,6 @@ def indexar_documentos(
         ui.pipeline_start("Indexing documents...")
 
     config = wiring.app_config_from_runtime()
-    stack = build_stack(config)
-
-    # Callers open this collection before indexing; reuse it so their handle
-    # sees the writes. FAISS ignores it (paths already carry the stack slug).
-    vector_store = stack.vector_store
-    if config.stack.vector_store == VECTOR_STORE_CHROMA:
-        vector_store = wiring.vector_store(collection)
 
     ollama = config.models.ollama
     contextual_model = None
@@ -95,30 +77,16 @@ def indexar_documentos(
         )
 
     image_extractor = None
-    ocr_chat_model = None
     if config.flags.usar_embeddings_imagen:
         image_extractor = _build_image_extractor(config)
-        # Multimodal embedders satisfy ImageEmbedder; OCR would only fight them
-        # for the same 8 GB VRAM. Text-only stacks still need the vision role.
-        if not config.stack.is_multimodal:
-            ocr_chat_model = OllamaChatModel(
-                config.models.ocr,
-                num_ctx=ollama.ocr_num_ctx,
-                keep_alive=ollama.keep_alive,
-                request_timeout=ollama.request_timeout,
-                generate_retries=ollama.generate_retries,
-                generate_retry_delay=ollama.generate_retry_delay,
-                options={"temperature": 0.1, "num_predict": 2000},
-            )
 
     use_case = IndexCorpus(
-        stack.extractor,
-        stack.embedder,
-        vector_store,
+        build_extractor(config),
+        wiring.embedder(config),
+        collection,
         config,
         contextual_model=contextual_model,
         image_extractor=image_extractor,
-        ocr_chat_model=ocr_chat_model,
     )
 
     total_chunks = 0
@@ -147,21 +115,20 @@ def indexar_documentos(
     return total_chunks
 
 
-def obtener_documentos_indexados(collection: chromadb.Collection) -> List[str]:
+def obtener_documentos_indexados(collection: VectorStore) -> List[str]:
     """List unique document names (``source``) in the collection.
 
     Args:
-        collection: ChromaDB collection to inspect.
+        collection: FAISS store to inspect.
 
     Returns:
         Sorted list of document filenames.
     """
     try:
-        all_metadata = collection.get(include=["metadatas"])
-        documentos = set()
-        for meta in all_metadata["metadatas"]:
-            if "source" in meta:
-                documentos.add(meta["source"])
-        return sorted(list(documentos))
+        return sorted({
+            fragment.metadata.source
+            for fragment in collection.get_page(None, 0)
+            if fragment.metadata.source
+        })
     except Exception:
         return []

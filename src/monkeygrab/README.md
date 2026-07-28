@@ -1,7 +1,7 @@
 # `src/monkeygrab/` — core
 
 Hexagonal core of MonkeyGrab: the retrieval/generation logic as swappable
-ports and adapters, independent of Chroma, Ollama, or any specific model.
+ports and adapters, independent of FAISS, Ollama, or any specific model.
 Full rationale and phased rollout: [`docs/design/2026-07-26-monkeygrab-v2.md`](../../docs/design/2026-07-26-monkeygrab-v2.md).
 
 ## Layers
@@ -12,7 +12,7 @@ ports/         Protocols the application layer depends on (PdfExtractor, Embedde
 application/   use cases: IndexCorpus, Retrieve, Answer, + pure helpers (rrf_fusion, text_chunking,
                context_assembly, keywords)
 config/        AppConfig — immutable, built once via from_env(), changed via with_overrides() (never mutated)
-adapters/      port implementations (pymupdf, Chroma, Ollama, BM25, CrossEncoder today)
+adapters/      port implementations (MinerU, jina-clip, FAISS, Ollama, BM25, CrossEncoder)
 ```
 
 Dependency rule: `application` → `domain`/`ports`/`config`; `ports` → `domain`;
@@ -24,7 +24,7 @@ not by convention.
 
 > [!IMPORTANT]
 > **Hard-fail policy.** Every adapter raises on failure instead of degrading —
-> no silent CUDA→CPU→disabled reranker, no silent pymupdf4llm→pypdf fallback.
+> no silent CUDA→CPU→disabled reranker and no hidden extraction fallback.
 > A caller that wants a fallback chain builds it explicitly from two ports; an
 > adapter never hides a second strategy inside itself. See each port's
 > docstring under `ports/` for its specific failure contract.
@@ -32,9 +32,8 @@ not by convention.
 ## Current wiring (read before assuming more than this)
 
 **All three stages run through the core.** `rag/engine/indexing.py` runs
-`IndexCorpus` with backends from `composition.build_stack` (env:
-`PDF_EXTRACTOR`, `VECTOR_STORE`, `EMBEDDER`; the default is still pymupdf +
-Ollama + Chroma). `rag/engine/retrieval.py` runs `Retrieve` and
+`IndexCorpus` with the fixed MinerU + jina-clip + FAISS composition.
+`rag/engine/retrieval.py` runs `Retrieve` and
 `rag/engine/generation.py` runs `Answer`. `tests/eval/run_eval.py` constructs
 the same use cases, so the evaluation gate and the shipped product cannot
 measure different behaviour.
@@ -79,6 +78,5 @@ need the isolated environment.
    infrastructure the adapter calls (see the existing adapter tests for the
    pattern) — `tests/unit/adapters/test_adapters_do_not_import_rag.py` is the
    one boundary check specific to this directory.
-5. Register it in `composition.py` (`build_extractor` / `build_vector_store` /
-   `build_embedder`) behind a `StackConfig` choice, and document the env var
-   in `config/stack.py`.
+5. Register it in `composition.py` only when it replaces the current
+   implementation; the product exposes one composition, not runtime selectors.

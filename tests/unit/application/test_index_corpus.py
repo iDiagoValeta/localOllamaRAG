@@ -9,7 +9,6 @@ touched.
 
 import sys
 from pathlib import Path
-import dataclasses
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
@@ -19,12 +18,6 @@ import pytest  # noqa: E402
 
 from monkeygrab.application.index_corpus import IndexCorpus, detect_document_language  # noqa: E402
 from monkeygrab.config.app_config import AppConfig  # noqa: E402
-from monkeygrab.config.stack import (  # noqa: E402
-    EMBEDDER_JINA_CLIP,
-    EXTRACTOR_MINERU,
-    VECTOR_STORE_FAISS,
-    StackConfig,
-)
 from monkeygrab.domain.extracted_image import ExtractedImage  # noqa: E402
 from monkeygrab.domain.extracted_page import ExtractedPage  # noqa: E402
 
@@ -103,21 +96,6 @@ class FakeImageExtractor:
         return self._images_by_page
 
 
-class FakeOcrChatModel:
-    """ChatModel double for the "ocr" (vision) role."""
-
-    def __init__(self, response="A diagram showing three connected blocks.", raises=False):
-        self._response = response
-        self._raises = raises
-        self.calls = []
-
-    def generate(self, prompt, *, system=None, images=()):
-        self.calls.append({"prompt": prompt, "images": images})
-        if self._raises:
-            raise RuntimeError("ocr model unavailable")
-        return self._response
-
-
 def _small_config(**overrides):
     cfg = AppConfig().with_overrides(**{
         "chunking.chunk_size": 200,
@@ -161,16 +139,14 @@ def test_pages_below_min_chunk_length_are_skipped():
     assert result.metrics["pages_indexed"] == 0
 
 
-def test_embedder_receives_the_doc_prefix_from_config():
+def test_embedder_receives_document_text_without_legacy_prefix():
     pages = [ExtractedPage(page=0, text="Enough content here to clear the small test threshold easily.")]
     embedder = FakeEmbedder()
-    config = _small_config(**{"models.embedding": "nomic-embed-text:latest"})
-    # nomic models get a "search_document: " prefix (see derive_embedding_prefixes)
-    assert config.models.embed_prefix_doc == "search_document: "
+    config = _small_config()
 
     IndexCorpus(FakeExtractor(pages), embedder, FakeVectorStore(), config).run("x.pdf", "x.pdf")
 
-    assert embedder.calls[0].startswith("search_document: ")
+    assert embedder.calls[0] == pages[0].text
 
 
 def test_contextual_enrichment_prepends_situational_summary_with_literal_separator():
@@ -228,35 +204,18 @@ def _no_text_config(**overrides):
 
 def test_no_image_extractor_wired_in_skips_image_indexing_even_with_flag_on():
     pages = [ExtractedPage(page=0, text="short")]
-    ocr = FakeOcrChatModel()
 
     use_case = IndexCorpus(
-        FakeExtractor(pages), FakeEmbedder(), FakeVectorStore(), _no_text_config(),
-        image_extractor=None, ocr_chat_model=ocr,
+        FakeExtractor(pages), FakeMultimodalEmbedder(), FakeVectorStore(),
+        _no_text_config(), image_extractor=None,
     )
     result = use_case.run("x.pdf", "x.pdf")
 
     assert result.chunks_indexed == 0
     assert result.metrics["image_chunks_indexed"] == 0
-    assert not ocr.calls
 
 
-def test_image_extractor_without_an_ocr_model_skips_image_indexing():
-    pages = [ExtractedPage(page=0, text="short")]
-    images = FakeImageExtractor({0: [ExtractedImage(image_bytes=b"x", width=200, height=200, ext="png")]})
-
-    use_case = IndexCorpus(
-        FakeExtractor(pages), FakeEmbedder(), FakeVectorStore(), _no_text_config(),
-        image_extractor=images, ocr_chat_model=None,
-    )
-    result = use_case.run("x.pdf", "x.pdf")
-
-    assert result.chunks_indexed == 0
-    assert not images.calls  # extraction itself never runs without a way to describe the result
-
-
-def test_multimodal_native_image_embed_without_ocr():
-    """jina-style stacks index figures via embed_image; OCR must not be required."""
+def test_indexes_image_directly_in_the_shared_multimodal_space():
     pages = [ExtractedPage(page=0, text="short")]
     image = ExtractedImage(
         image_bytes=b"raw-png-bytes", width=220, height=180, ext="png", caption="Fig. 1"
@@ -264,14 +223,7 @@ def test_multimodal_native_image_embed_without_ocr():
     images = FakeImageExtractor({1: [image]})
     embedder = FakeMultimodalEmbedder()
     store = FakeVectorStore()
-    config = dataclasses.replace(
-        _no_text_config(),
-        stack=StackConfig(
-            extractor=EXTRACTOR_MINERU,
-            vector_store=VECTOR_STORE_FAISS,
-            embedder=EMBEDDER_JINA_CLIP,
-        ),
-    )
+    config = _no_text_config()
 
     result = IndexCorpus(
         FakeExtractor(pages),
@@ -279,7 +231,6 @@ def test_multimodal_native_image_embed_without_ocr():
         store,
         config,
         image_extractor=images,
-        ocr_chat_model=None,
     ).run("doc.pdf", "doc.pdf")
 
     assert result.metrics["image_chunks_indexed"] == 1
@@ -297,52 +248,18 @@ def test_multimodal_native_image_embed_without_ocr():
 def test_image_flag_off_skips_image_indexing_even_with_both_ports_wired_in():
     pages = [ExtractedPage(page=0, text="short")]
     images = FakeImageExtractor({0: [ExtractedImage(image_bytes=b"x", width=200, height=200, ext="png")]})
-    ocr = FakeOcrChatModel()
+    embedder = FakeMultimodalEmbedder()
     config = _no_text_config(**{"flags.usar_embeddings_imagen": False})
 
     use_case = IndexCorpus(
-        FakeExtractor(pages), FakeEmbedder(), FakeVectorStore(), config,
-        image_extractor=images, ocr_chat_model=ocr,
+        FakeExtractor(pages), embedder, FakeVectorStore(), config,
+        image_extractor=images,
     )
     result = use_case.run("x.pdf", "x.pdf")
 
     assert result.chunks_indexed == 0
-    assert not ocr.calls
-
-
-def test_indexes_one_image_chunk_with_offset_index_and_correct_metadata():
-    pages = [ExtractedPage(page=0, text="short")]
-    image = ExtractedImage(image_bytes=b"raw-bytes", width=300, height=150, ext="png", caption="Figure 1")
-    images = FakeImageExtractor({2: [image]})
-    ocr = FakeOcrChatModel(response="A bar chart comparing three configurations across two metrics.")
-    embedder = FakeEmbedder()
-    store = FakeVectorStore()
-
-    use_case = IndexCorpus(
-        FakeExtractor(pages), embedder, store, _no_text_config(),
-        image_extractor=images, ocr_chat_model=ocr,
-    )
-    result = use_case.run("some/path.pdf", filename="paper.pdf")
-
-    assert result.chunks_indexed == 1
-    assert result.metrics["image_chunks_indexed"] == 1
-    assert len(store.added) == 1
-    chunk, embedding = store.added[0]
-    assert chunk.metadata.source == "paper.pdf"
-    assert chunk.metadata.page == 2
-    assert chunk.metadata.chunk == 10_000  # _IMAGE_CHUNK_OFFSET + img_idx(0)
-    assert chunk.metadata.format == "image"
-    assert chunk.metadata.image_width == 300
-    assert chunk.metadata.image_height == 150
-    assert chunk.metadata.total_chunks_in_page is None  # image chunks never set this
-    assert chunk.id == "paper.pdf_pag2_chunk10000"
-    assert chunk.text == "A bar chart comparing three configurations across two metrics."
-    assert embedding == [0.1, 0.2, 0.3]
-    # extract() is called with the real pdf_path, same as the text-extraction path.
-    assert images.calls == ["some/path.pdf"]
-    # The vision ChatModel is called with the image bytes, not base64 text --
-    # base64 encoding is the OllamaChatModel adapter's job, not this use case's.
-    assert ocr.calls[0]["images"] == [b"raw-bytes"]
+    assert not images.calls
+    assert not embedder.image_calls
 
 
 def test_multiple_images_on_a_page_get_sequential_offset_chunk_indices():
@@ -351,106 +268,16 @@ def test_multiple_images_on_a_page_get_sequential_offset_chunk_indices():
         ExtractedImage(image_bytes=b"a", width=200, height=200, ext="png"),
         ExtractedImage(image_bytes=b"b", width=200, height=200, ext="png"),
     ]})
-    ocr = FakeOcrChatModel(response="A sufficiently long and coherent image description here.")
+    embedder = FakeMultimodalEmbedder()
     store = FakeVectorStore()
 
     IndexCorpus(
-        FakeExtractor(pages), FakeEmbedder(), store, _no_text_config(),
-        image_extractor=images, ocr_chat_model=ocr,
+        FakeExtractor(pages), embedder, store, _no_text_config(),
+        image_extractor=images,
     ).run("x.pdf", "x.pdf")
 
     chunk_indices = sorted(chunk.metadata.chunk for chunk, _emb in store.added)
     assert chunk_indices == [10_000, 10_001]
-
-
-def test_degenerate_image_description_is_not_indexed():
-    """Spam-filtered OCR output (low lexical diversity) must not produce a chunk,
-    matching the description-spam gate applied during indexing."""
-    pages = [ExtractedPage(page=0, text="short")]
-    images = FakeImageExtractor({0: [ExtractedImage(image_bytes=b"x", width=200, height=200, ext="png")]})
-    spam = "no text no text no text no text no text no text no text no text no text no text"
-    ocr = FakeOcrChatModel(response=spam)
-    store = FakeVectorStore()
-
-    result = IndexCorpus(
-        FakeExtractor(pages), FakeEmbedder(), store, _no_text_config(),
-        image_extractor=images, ocr_chat_model=ocr,
-    ).run("x.pdf", "x.pdf")
-
-    assert result.chunks_indexed == 0
-    assert result.metrics["image_chunks_indexed"] == 0
-    assert store.added == []
-
-
-def test_image_description_that_only_echoes_the_caption_is_not_indexed():
-    pages = [ExtractedPage(page=0, text="short")]
-    caption = "Figure 3 shows the overall system architecture diagram"
-    image = ExtractedImage(image_bytes=b"x", width=200, height=200, ext="png", caption=caption)
-    images = FakeImageExtractor({0: [image]})
-    # Near-identical to the caption -- token overlap > 85%, not much longer.
-    ocr = FakeOcrChatModel(response=caption)
-    store = FakeVectorStore()
-
-    IndexCorpus(
-        FakeExtractor(pages), FakeEmbedder(), store, _no_text_config(),
-        image_extractor=images, ocr_chat_model=ocr,
-    ).run("x.pdf", "x.pdf")
-
-    assert store.added == []
-
-
-def test_ocr_model_failure_skips_the_image_without_aborting_indexing():
-    """Explicit use-case-level fallback, matching the original's
-    `except Exception: ...; return ""`: a failing vision model must not
-    propagate and abort indexing of the rest of the document."""
-    pages = [ExtractedPage(page=0, text="short")]
-    images = FakeImageExtractor({0: [ExtractedImage(image_bytes=b"x", width=200, height=200, ext="png")]})
-    ocr = FakeOcrChatModel(raises=True)
-    store = FakeVectorStore()
-
-    result = IndexCorpus(
-        FakeExtractor(pages), FakeEmbedder(), store, _no_text_config(),
-        image_extractor=images, ocr_chat_model=ocr,
-    ).run("x.pdf", "x.pdf")
-
-    assert result.chunks_indexed == 0
-    assert store.added == []
-
-
-def test_contextual_enrichment_applies_to_image_chunks_when_flag_and_model_are_both_present():
-    pages = [ExtractedPage(page=0, text="short")]
-    images = FakeImageExtractor({0: [ExtractedImage(image_bytes=b"x", width=200, height=200, ext="png")]})
-    ocr = FakeOcrChatModel(response="A sufficiently long and coherent image description here.")
-    contextual = FakeContextualModel(response="This document covers testing infrastructure.")
-    store = FakeVectorStore()
-
-    IndexCorpus(
-        FakeExtractor(pages), FakeEmbedder(), store, _no_text_config(),
-        contextual_model=contextual, image_extractor=images, ocr_chat_model=ocr,
-    ).run("x.pdf", "x.pdf")
-
-    chunk, _embedding = store.added[0]
-    assert chunk.text.startswith("This document covers testing infrastructure.\\n\\n")
-    assert contextual.calls
-
-
-def test_contextual_flag_off_skips_enrichment_for_image_chunks_too():
-    pages = [ExtractedPage(page=0, text="short")]
-    images = FakeImageExtractor({0: [ExtractedImage(image_bytes=b"x", width=200, height=200, ext="png")]})
-    description = "A sufficiently long and coherent image description here."
-    ocr = FakeOcrChatModel(response=description)
-    contextual = FakeContextualModel(response="Should not appear.")
-    store = FakeVectorStore()
-    config = _no_text_config(**{"flags.usar_contextual_retrieval": False})
-
-    IndexCorpus(
-        FakeExtractor(pages), FakeEmbedder(), store, config,
-        contextual_model=contextual, image_extractor=images, ocr_chat_model=ocr,
-    ).run("x.pdf", "x.pdf")
-
-    chunk, _embedding = store.added[0]
-    assert not contextual.calls
-    assert chunk.text == description
 
 
 if __name__ == "__main__":

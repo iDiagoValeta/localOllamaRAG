@@ -56,9 +56,9 @@ One case per line:
 | `verified_pages` | PDF pages (1-indexed) where the fact/figure/table was confirmed. |
 | `notes` | Optional: nuance worth flagging (ambiguous source values, grading caveats). |
 
-`table`/`image` follow the target content taxonomy from the design doc, section 4 — today's
-pipeline only tags `text`/`image`, so `table_retrieval` cases will fail until table-aware
-extraction lands. That is expected, not a case bug.
+`table` and `image` match the content taxonomy produced by the current MinerU
+indexer. Tables retain their structured HTML and figures are embedded directly
+with Jina CLIP.
 
 ## Adding a case
 
@@ -86,7 +86,7 @@ python tests/eval/fetch_papers.py 1512.03385         # fetch one paper by id
 Single, self-sufficient command -- no manual indexing, no machine-specific paths:
 
 ```bash
-python tests/eval/run_eval.py                                 # default: gemma4:e2b + qwen3.5:0.8b
+python tests/eval/run_eval.py                                 # default: gemma4:e2b
 python tests/eval/run_eval.py --models gemma4:e2b gemma4:e4b   # different generator model set
 python tests/eval/run_eval.py --update-baseline                # also raise the baseline if green
 ```
@@ -100,8 +100,9 @@ What it does, in order, failing with an actionable message the moment
 something is missing:
 
 1. Checks Ollama is reachable and every required model (`--models`, plus the
-   fixed auxiliary model used for query decomposition / contextual retrieval
-   / RECOMP / image OCR, plus the embedding model) is installed.
+   fixed auxiliary model used for query decomposition, contextual retrieval
+   and RECOMP) is installed. Jina CLIP and BGE are local Hugging Face models,
+   not Ollama roles.
 2. Downloads any missing blind-set arXiv papers (reusing `fetch_papers.py`)
    and stages them under `blind_docs/<paper-slug>.pdf`.
 3. Indexes whatever is not already indexed -- dev-set papers into the
@@ -125,6 +126,5 @@ something is missing:
    nearest 0.01) *after* the gate check, and only if that is higher than the
    current value -- the baseline never moves down automatically.
 
-`table_retrieval` cases are expected to fail today: the pipeline tags
-retrieved content as `text`/`image` only, with no `table` kind yet (see the
-Schema section above). That is a known gap, not a case bug.
+Infrastructure failures leave the run inconclusive. Only a complete run with
+the calibrated generator model is compared against the baseline.

@@ -186,7 +186,7 @@ def guardar_debug_rag(
                 'config': {
                     'modelo_rag': cfg._inferir_descripcion_modelo(cfg.MODELO_RAG),
                     'modelo_rag_tag': cfg.MODELO_RAG,
-                    'modelo_embedding': cfg.MODELO_EMBEDDING,
+                    'modelo_embedding': 'jinaai/jina-clip-v2',
                     'modelo_recomp': cfg.MODELO_RECOMP,
                     'modelo_chat': cfg.MODELO_CHAT,
                     'contextual_retrieval': cfg.USAR_CONTEXTUAL_RETRIEVAL,
@@ -206,7 +206,7 @@ def guardar_debug_rag(
                     'peso_bm25_rrf': cfg.PESO_BM25_RRF,
                     'umbral_score_reranker': cfg.UMBRAL_SCORE_RERANKER,
                     'max_contexto_chars': cfg.MAX_CONTEXTO_CHARS,
-                    'reranker_model_quality': cfg.RERANKER_MODEL_QUALITY,
+                    'reranker_model': 'BAAI/bge-reranker-v2-m3',
                     'bm25_k1': cfg.BM25_K1,
                     'bm25_b': cfg.BM25_B,
                     'num_ctx_rag': cfg.OLLAMA_RAG_NUM_CTX,

@@ -26,6 +26,8 @@ if str(ROOT) not in sys.path:
 import pytest
 
 import rag.chat_pdfs as rag
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
+from monkeygrab.domain.fragment import Fragment
 from monkeygrab.domain.generation_chunk import GenerationChunk
 from rag.engine import wiring
 
@@ -77,10 +79,17 @@ class FakeCollection:
     def __init__(self):
         self.call_count = 0
 
-    def query(self, query_embeddings, n_results, include):
+    def query(self, embedding, n_results):
         result = _VARIANT_RESULTS[self.call_count]
         self.call_count += 1
-        return result
+        return [
+            Fragment(doc, ChunkMetadata(meta["source"], meta["page"], meta["chunk"]), distance)
+            for doc, meta, distance in zip(
+                result["documents"][0],
+                result["metadatas"][0],
+                result["distances"][0],
+            )
+        ]
 
 
 class FakeEmbedder:

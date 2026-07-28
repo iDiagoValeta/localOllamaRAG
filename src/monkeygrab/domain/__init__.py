@@ -1,6 +1,6 @@
 """Domain entities -- pure data, zero infrastructure imports.
 
-No module here may import chromadb, ollama, fitz, torch, requests, or any
+No module here may import faiss, ollama, PIL, torch, requests, or any
 other infrastructure library -- enforced by
 ``tests/unit/test_architecture_boundaries.py``. This is what makes these
 entities safe to reuse from any adapter, use case, or interface layer without

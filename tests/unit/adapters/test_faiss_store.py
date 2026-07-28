@@ -1,9 +1,6 @@
 """Unit tests for monkeygrab.adapters.vectorstore.faiss_store.FaissVectorStore.
 
-Round-trips a real faiss.IndexFlatIP through tmp_path directories -- unlike
-test_chroma_store.py (which stubs chromadb.PersistentClient), there is no
-thin client seam to stub here: the whole point of this adapter is what it
-does with a real FAISS index, so these tests exercise it directly. The one
+Round-trips a real faiss.IndexFlatIP through tmp_path directories. The one
 exception is test_add_hard_fails_when_persistence_write_fails, which injects
 a write failure that cannot be reliably reproduced with a real disk.
 """
@@ -18,7 +15,6 @@ if str(ROOT) not in sys.path:
 
 import pytest
 
-from monkeygrab.adapters.vectorstore.chroma_store import ChromaVectorStore
 from monkeygrab.adapters.vectorstore.faiss_store import FaissVectorStore
 from monkeygrab.config.paths import PathsConfig
 from monkeygrab.domain.chunk import Chunk
@@ -36,9 +32,7 @@ def _paths(tmp_path, name="store"):
 def _unit(vector):
     """Normalize a vector to unit L2 norm.
 
-    Fixture vectors across this file use unit length so that Chroma's L2
-    ranking and FAISS's cosine ranking provably agree -- see the
-    interchangeability test below for the full argument.
+    Fixture vectors use unit length for predictable cosine rankings.
     """
     norm = math.sqrt(sum(v * v for v in vector))
     return [v / norm for v in vector]
@@ -243,51 +237,26 @@ def test_add_hard_fails_when_persistence_write_fails(tmp_path, monkeypatch):
         store.add(_chunk("x.pdf", 0, 0), _unit([1.0, 0.0]))
 
 
-def test_faiss_and_chroma_are_interchangeable_behind_the_port(tmp_path):
-    """Same vectors and metadata through both real adapters -- the query
-    order must match exactly, proving they are swappable behind VectorStore.
+def test_delete_source_rebuilds_index_and_persists(tmp_path):
+    paths = _paths(tmp_path, "delete")
+    store = FaissVectorStore(paths)
+    store.add(_chunk("a.pdf", 0, 0), _unit([1.0, 0.0]))
+    store.add(_chunk("b.pdf", 0, 0), _unit([0.0, 1.0]))
 
-    Distance *values* are deliberately not compared: Chroma reports its own
-    distance metric (squared L2 by default) over the raw vectors it was
-    given, while FaissVectorStore reports cosine distance (1 - cosine
-    similarity) over its own L2-normalized copy of those vectors (see
-    FaissVectorStore.query's docstring note) -- the two numbers are not
-    meant to agree. The fixture vectors below are pre-normalized to unit
-    length specifically so the *orderings* agree regardless of which metric
-    Chroma uses: for unit vectors a and b, ||a - b||^2 == 2 - 2*cos(a, b), a
-    strictly monotonic function of cosine similarity, so "nearest by L2" and
-    "nearest by cosine" always pick the same order.
-    """
-    chunks_and_vectors = [
-        (_chunk("eq.pdf", 0, 0, "north"), _unit([1.0, 0.0, 0.0])),
-        (_chunk("eq.pdf", 0, 1, "east"), _unit([0.0, 1.0, 0.0])),
-        (_chunk("eq.pdf", 1, 0, "near-north"), _unit([0.9, 0.1, 0.0])),
-        (_chunk("eq.pdf", 1, 1, "far corner"), _unit([-0.3, -0.3, 0.9])),
-    ]
+    assert store.delete_source("a.pdf") == 1
+    reopened = FaissVectorStore(paths)
+    assert reopened.count() == 1
+    assert reopened.get_page(None, 0)[0].metadata.source == "b.pdf"
 
-    chroma_store = ChromaVectorStore(_paths(tmp_path, "chroma_eq"))
-    faiss_store = FaissVectorStore(
-        PathsConfig(path_db=str(tmp_path / "faiss_db"), collection_name="faiss_eq")
-    )
-    for chunk, vector in chunks_and_vectors:
-        chroma_store.add(chunk, vector)
-        faiss_store.add(chunk, vector)
 
-    query_vector = _unit([0.95, 0.05, 0.0])
-    chroma_results = chroma_store.query(query_vector, n_results=4)
-    faiss_results = faiss_store.query(query_vector, n_results=4)
+def test_clear_removes_all_persisted_rows(tmp_path):
+    paths = _paths(tmp_path, "clear")
+    store = FaissVectorStore(paths)
+    store.add(_chunk("a.pdf", 0, 0), _unit([1.0, 0.0]))
 
-    assert [f.id for f in chroma_results] == [f.id for f in faiss_results]
+    store.clear()
 
-    # get_by_ids: mix existing and nonexistent ids. The port explicitly
-    # allows "no particular order" here, so compare as id sets, not lists --
-    # and this is exactly the case (a neighbor lookup that partially misses)
-    # the two adapters must agree on to be truly interchangeable.
-    existing_ids = {chunks_and_vectors[0][0].id, chunks_and_vectors[2][0].id}
-    ids_to_fetch = list(existing_ids) + ["missing.pdf_pag9_chunk9"]
-    chroma_by_ids = {f.id for f in chroma_store.get_by_ids(ids_to_fetch)}
-    faiss_by_ids = {f.id for f in faiss_store.get_by_ids(ids_to_fetch)}
-    assert chroma_by_ids == faiss_by_ids == existing_ids
+    assert FaissVectorStore(paths).count() == 0
 
 
 if __name__ == "__main__":

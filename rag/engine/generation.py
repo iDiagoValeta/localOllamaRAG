@@ -15,9 +15,8 @@ import io
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-import chromadb
-
 from rag.engine import wiring
+from monkeygrab.ports.vector_store import VectorStore
 from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
@@ -51,7 +50,7 @@ _NO_COLLECTION = _NoCollection()
 
 def preparar_fragmentos_para_generacion(
     fragmentos_ranked: List[Dict[str, Any]],
-    collection: chromadb.Collection,
+    collection: VectorStore,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Turn ranked retrieval candidates into the evidence the generator sees.
 
@@ -60,7 +59,7 @@ def preparar_fragmentos_para_generacion(
 
     Args:
         fragmentos_ranked: Ranked fragments from ``realizar_busqueda_hibrida``.
-        collection: ChromaDB collection, used to fetch neighbour chunks.
+        collection: FAISS store used to fetch neighbour chunks.
 
     Returns:
         Tuple of (evidence fragments, metrics).
@@ -203,13 +202,13 @@ def generar_respuesta_silenciosa(pregunta: str, fragmentos: List[Dict[str, Any]]
 
 def evaluar_pregunta_rag(
     pregunta: str,
-    collection: chromadb.Collection
+    collection: VectorStore
 ) -> Tuple[str, List[str]]:
     """Run the full RAG pipeline silently, for automated evaluation.
 
     Args:
         pregunta: The evaluation question.
-        collection: ChromaDB collection to search.
+        collection: FAISS store to search.
 
     Returns:
         Tuple of (response text, the context strings it was given).

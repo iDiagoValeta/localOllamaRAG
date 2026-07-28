@@ -1,6 +1,6 @@
 name: Full eval gate
 
-# Full gate: runs the REAL pipeline (Ollama generation and embeddings, hybrid
+# Full gate: runs the REAL pipeline (Ollama generation, Jina CLIP embeddings, hybrid
 # BM25+semantic retrieval, Cross-Encoder reranking) against every case in
 # tests/eval/gold_cases.jsonl and fails the run if the pass rate drops below
 # tests/eval/baseline_min_pass_rate.txt. This is the "gate completo" required
@@ -10,7 +10,7 @@ name: Full eval gate
 # test doubles.
 #
 # THIS GATE REQUIRES A LOCAL OLLAMA SERVER AND A CUDA GPU. The models it
-# calls (gemma4:e2b, gemma4:e4b, qwen3.5:0.8b, embeddinggemma) and the
+# calls (gemma4:e2b by default) and the
 # reranker CrossEncoder are not available on hosted GitHub runners, so this
 # workflow only runs on a self-hosted runner where those prerequisites are
 # already met, and it is never triggered automatically (workflow_dispatch
@@ -28,7 +28,7 @@ on:
       models:
         description: "Space-separated Ollama generator models to evaluate"
         required: false
-        default: "gemma4:e2b qwen3.5:0.8b"
+        default: "gemma4:e2b"
       update_baseline:
         description: "Raise the pass-rate baseline if this run is green (never lowers it)"
         type: boolean

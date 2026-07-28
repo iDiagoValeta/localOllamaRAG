@@ -12,8 +12,8 @@ today.
 Hard-fail policy (project-wide, see ``monkeygrab.ports`` and
 docs/design/2026-07-26-monkeygrab-v2.md section 3): every adapter here raises
 on failure instead of silently degrading. No adapter is imported at package
-level -- each submodule imports its own third-party dependency (chromadb,
-ollama, rank_bm25, sentence_transformers, pymupdf4llm) directly, so importing
+level -- each submodule imports its own third-party dependency (FAISS,
+Ollama, rank_bm25, sentence_transformers) directly, so importing
 ``monkeygrab.adapters`` itself stays cheap; import the specific adapter module
 you need.
 """

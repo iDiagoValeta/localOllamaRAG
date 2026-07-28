@@ -21,8 +21,8 @@ Usage:
     python tests/eval/run_eval.py --models gemma4:e2b gemma4:e4b
     python tests/eval/run_eval.py --update-baseline
 
-Dependencies: the full rag/requirements.txt stack (chromadb, ollama,
-sentence-transformers, rank-bm25, pymupdf4llm) plus a running local Ollama
+Dependencies: the full multimodal stack (FAISS, MinerU, jina-clip-v2,
+sentence-transformers and Ollama) plus a running local Ollama
 server and, in practice, a GPU -- the reranker and every model role run on
 CPU otherwise, which is not a supported configuration for this gate.
 """
@@ -72,15 +72,14 @@ DEV_DOCS_DIR = REPO_ROOT / "rag" / "docs" / "en"
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 
-# Default RAG generator models: the two small ones the 8 GB GPU in this
-# environment can hold comfortably. gemma4:e4b is supported via --models but
-# not defaulted to -- its Q4_K_M weights alone (~9.6 GB) exceed local VRAM.
-DEFAULT_MODELS = ["gemma4:e2b", "qwen3.5:0.8b"]
+# The baseline was calibrated with this model. Other models can be measured
+# explicitly, but must not be mixed into the same ratchet.
+DEFAULT_MODELS = ["gemma4:e2b"]
 
-# Model used for every non-generator role during this run (query
-# decomposition, contextual-retrieval enrichment, RECOMP synthesis, image
-# OCR/captioning). Kept separate from --models so indexing cost does not
-# multiply by the number of generator models under test.
+# Model used for the auxiliary Ollama roles during this run: query
+# decomposition, contextual-retrieval enrichment and RECOMP synthesis. Kept
+# separate from --models so indexing cost does not multiply by the number of
+# generator models under test.
 AUX_MODEL = "gemma4:e2b"
 
 # Safety margin subtracted from an observed pass rate before it is written as
@@ -165,7 +164,7 @@ def stage_blind_papers(cases: Sequence[Dict[str, Any]]) -> Dict[str, str]:
     truncated or rate-limited response is never mistaken for a cached paper.
     The downloaded file is copied (not moved, so the arXiv-id-named cache
     stays intact and reusable) to ``<paper-slug>.pdf`` because
-    indexar_documentos derives the ChromaDB ``source`` metadata from the
+    indexing derives the stored ``source`` metadata from the
     filename, and gold_cases.jsonl's ``paper`` field is the slug, not the id.
 
     Args:
@@ -198,11 +197,7 @@ def stage_blind_papers(cases: Sequence[Dict[str, Any]]) -> Dict[str, str]:
 
 
 def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str):
-    """Index missing PDFs into the env-selected stack; return a ``Retrieve`` for it.
-
-    Both stacks (default pymupdf+ollama+chroma and mineru+jina+faiss) go through
-    ``IndexCorpus`` + ``build_stack`` here, so later case execution can call the
-    same ``Retrieve`` use case without touching ``rag/engine/retrieval.py``.
+    """Index missing PDFs into the multimodal stack; return its use cases.
 
     Args:
         rag: The imported rag.chat_pdfs module (runtime model/flag source).
@@ -219,14 +214,12 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
     """
     from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel
     from monkeygrab.adapters.extraction.mineru_extractor import MineruImageExtractor
-    from monkeygrab.adapters.extraction.pymupdf_image_extractor import PymupdfImageExtractor
     from monkeygrab.adapters.lexical.bm25_index import Bm25LexicalIndex
     from monkeygrab.adapters.reranking.cross_encoder_reranker import CrossEncoderReranker
     from monkeygrab.application.answer import Answer
     from monkeygrab.application.index_corpus import IndexCorpus
     from monkeygrab.application.retrieve import Retrieve
     from monkeygrab.composition import build_stack
-    from monkeygrab.config.stack import EXTRACTOR_MINERU, VECTOR_STORE_CHROMA
 
     required = set(required_pdfs)
     rag.set_docs_folder_runtime(str(carpeta))
@@ -242,20 +235,8 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
             print(f"[index] {label}: indexing {len(missing)} missing paper(s): {missing}")
             t0 = time.perf_counter()
             image_extractor = None
-            ocr_model = None
             if config.flags.usar_embeddings_imagen:
-                if config.stack.extractor == EXTRACTOR_MINERU:
-                    image_extractor = MineruImageExtractor()
-                else:
-                    image_extractor = PymupdfImageExtractor(config.chunking)
-                if not config.stack.is_multimodal:
-                    ollama = config.models.ollama
-                    ocr_model = OllamaChatModel(
-                        config.models.ocr,
-                        num_ctx=ollama.ocr_num_ctx,
-                        keep_alive=ollama.keep_alive,
-                        options={"temperature": 0.1, "num_predict": 2000},
-                    )
+                image_extractor = MineruImageExtractor()
             contextual_model = None
             if config.flags.usar_contextual_retrieval:
                 ollama = config.models.ollama
@@ -272,7 +253,6 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
                 config,
                 contextual_model=contextual_model,
                 image_extractor=image_extractor,
-                ocr_chat_model=ocr_model,
             )
             for filename in missing:
                 indexer.run(str(carpeta / filename), filename)
@@ -290,13 +270,9 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
         # here. It no longer has to share the card with the jina worker: the
         # runner retrieves every case first and only then generates, so the two
         # models are never resident at the same time.
-        reranker = CrossEncoderReranker(config.models) if config.flags.usar_reranker else None
-        # Query decomposition is off for EVERY stack, and that is a decision
-        # about the comparison rather than about VRAM. It calls Ollama in the
-        # middle of retrieval, which would put a generator beside the embedder
-        # again; disabling it only for the multimodal stack would have made the
-        # A/B differ in two variables instead of one, which is how a comparison
-        # stops meaning anything. Both stacks lose the same stage.
+        reranker = CrossEncoderReranker() if config.flags.usar_reranker else None
+        # Query decomposition stays off so Ollama never competes with the
+        # multimodal embedder for the same 8 GB of VRAM.
         retrieve = Retrieve(
             stack.embedder,
             store,
@@ -315,8 +291,8 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
         evidence = Answer(store, wiring.rag_chat_model(config), config)
 
         print(
-            f"[index] {label}: stack={config.stack.slug} "
-            f"chunks={store.count()} chroma={config.stack.vector_store == VECTOR_STORE_CHROMA}",
+            f"[index] {label}: stack=mineru-jina_clip-faiss "
+            f"chunks={store.count()}",
             flush=True,
         )
         return retrieve, evidence, stack
@@ -366,7 +342,7 @@ def _fragment_to_dict(fragment) -> Dict[str, Any]:
 
 
 def _eval_app_config(rag, carpeta: Path):
-    """AppConfig from env stack selectors, synced to live eval runtime roles."""
+    """Build the fixed multimodal evaluation configuration."""
     from monkeygrab.config.app_config import AppConfig
 
     config = AppConfig.from_env().with_overrides(
@@ -374,10 +350,8 @@ def _eval_app_config(rag, carpeta: Path):
             "paths.docs_folder": str(carpeta),
             "models.rag": rag.MODELO_RAG,
             "models.chat": rag.MODELO_CHAT,
-            "models.embedding": rag.MODELO_EMBEDDING,
             "models.contextual": rag.MODELO_CONTEXTUAL,
             "models.recomp": rag.MODELO_RECOMP,
-            "models.ocr": rag.MODELO_OCR,
             "flags.usar_contextual_retrieval": rag.USAR_CONTEXTUAL_RETRIEVAL,
             "flags.usar_embeddings_imagen": rag.USAR_EMBEDDINGS_IMAGEN,
             "flags.usar_llm_query_decomposition": rag.USAR_LLM_QUERY_DECOMPOSITION,
@@ -388,20 +362,7 @@ def _eval_app_config(rag, carpeta: Path):
             "flags.usar_recomp_synthesis": rag.USAR_RECOMP_SYNTHESIS,
         }
     )
-    # Contextual retrieval stays off for the multimodal stack, and this is the
-    # one asymmetry the A/B cannot remove cheaply: it is a property of the index,
-    # not of the query, so equalising it would mean rebuilding an index — with an
-    # LLM call per chunk on one side, or discarding the existing production index
-    # on the other. It is reported as a known limitation instead of hidden, and
-    # it handicaps the multimodal stack, so a win there is a conservative result.
-    #
-    # The reranking pool is NOT shrunk any more. It was, to survive a CPU
-    # CrossEncoder, and that silently made the two stacks differ in which
-    # candidates ever reached the top-k — a second variable in a comparison meant
-    # to have one.
-    if config.stack.is_multimodal:
-        config = config.with_overrides(**{"flags.usar_contextual_retrieval": False})
-    return config
+    return config.with_overrides(**{"flags.usar_contextual_retrieval": False})
 
 
 def _sources_in_store(store) -> set[str]:
@@ -683,23 +644,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     run_started = time.perf_counter()
 
     cases = load_gold_cases()
-    from monkeygrab.config.stack import EMBEDDER_OLLAMA, stack_from_env
-
-    stack_cfg = stack_from_env()
     required_models = set(args.models) | {AUX_MODEL}
-    if stack_cfg.embedder == EMBEDDER_OLLAMA:
-        required_models.add("embeddinggemma:latest")
+    stack_slug = "mineru-jina_clip-faiss"
 
     stacks_to_close = []
     try:
         preflight_ollama(required_models)
 
-        # Heavy import (chromadb, sentence-transformers, rank-bm25...) only
+        # Heavy import (FAISS, sentence-transformers, rank-bm25...) only
         # after the cheap network/model preflight has already passed.
         import rag.chat_pdfs as rag
 
         rag.set_model_roles_runtime({
-            "chat": AUX_MODEL, "contextual": AUX_MODEL, "recomp": AUX_MODEL, "ocr": AUX_MODEL,
+            "chat": AUX_MODEL, "contextual": AUX_MODEL, "recomp": AUX_MODEL,
         })
 
         blind_required = stage_blind_papers(cases)
@@ -725,7 +682,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         )
 
         print(
-            f"\n[run] stack={stack_cfg.slug} {len(cases)} cases x "
+            f"\n[run] stack={stack_slug} {len(cases)} cases x "
             f"up to {len(args.models)} model(s)\n",
             flush=True,
         )
@@ -749,11 +706,11 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out_path = RESULTS_DIR / f"{timestamp}_{stack_cfg.slug}.json"
+    out_path = RESULTS_DIR / f"{timestamp}_{stack_slug}.json"
     out_path.write_text(json.dumps({
         "run": {
             "timestamp": timestamp,
-            "stack": stack_cfg.slug,
+            "stack": stack_slug,
             "models": args.models,
             "aux_model": AUX_MODEL,
             "num_cases": len(cases),

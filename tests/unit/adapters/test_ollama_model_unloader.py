@@ -30,13 +30,13 @@ def test_unloads_every_configured_model_except_the_one_kept(monkeypatch):
     )
 
     models = _models(
-        rag="rag-model:latest", chat="chat-model:latest", embedding="embed-model:latest",
-        contextual="ctx-model:latest", recomp="recomp-model:latest", ocr="ocr-model:latest",
+        rag="rag-model:latest", chat="chat-model:latest",
+        contextual="ctx-model:latest", recomp="recomp-model:latest",
     )
     OllamaModelUnloader(models).unload_all_except("rag-model:latest")
 
     unloaded = {c["model"] for c in calls}
-    assert unloaded == {"chat-model:latest", "embed-model:latest", "ctx-model:latest", "recomp-model:latest", "ocr-model:latest"}
+    assert unloaded == {"chat-model:latest", "ctx-model:latest", "recomp-model:latest"}
     assert "rag-model:latest" not in unloaded
     assert all(c["keep_alive"] == 0 for c in calls)
 
@@ -48,8 +48,8 @@ def test_unloads_every_model_when_keep_is_none(monkeypatch):
         lambda url, json, timeout: calls.append(json) or None,
     )
 
-    models = _models(rag="m1:latest", chat="m1:latest", embedding="m2:latest",
-                      contextual="m1:latest", recomp="m1:latest", ocr="m1:latest")
+    models = _models(rag="m1:latest", chat="m1:latest",
+                      contextual="m1:latest", recomp="m2:latest")
     OllamaModelUnloader(models).unload_all_except(None)
 
     unloaded = {c["model"] for c in calls}
@@ -65,8 +65,8 @@ def test_duplicate_role_models_are_only_unloaded_once(monkeypatch):
         lambda url, json, timeout: calls.append(json) or None,
     )
 
-    models = _models(rag="shared:latest", chat="shared:latest", embedding="shared:latest",
-                      contextual="shared:latest", recomp="shared:latest", ocr="other:latest")
+    models = _models(rag="shared:latest", chat="shared:latest",
+                      contextual="shared:latest", recomp="other:latest")
     OllamaModelUnloader(models).unload_all_except("other:latest")
 
     assert len(calls) == 1
@@ -83,8 +83,8 @@ def test_an_unload_failure_for_one_model_does_not_stop_the_others(monkeypatch):
 
     monkeypatch.setattr(module.requests, "post", fake_post)
 
-    models = _models(rag="keep:latest", chat="flaky:latest", embedding="other:latest",
-                      contextual="keep:latest", recomp="keep:latest", ocr="keep:latest")
+    models = _models(rag="keep:latest", chat="flaky:latest",
+                      contextual="other:latest", recomp="keep:latest")
     OllamaModelUnloader(models).unload_all_except("keep:latest")  # must not raise
 
     assert set(calls) == {"flaky:latest", "other:latest"}
@@ -97,8 +97,8 @@ def test_posts_to_the_configured_base_url_and_timeout(monkeypatch):
         lambda url, json, timeout: calls.append({"url": url, "timeout": timeout}),
     )
 
-    models = _models(rag="m1:latest", chat="m1:latest", embedding="m1:latest",
-                      contextual="m1:latest", recomp="m1:latest", ocr="m1:latest")
+    models = _models(rag="m1:latest", chat="m1:latest",
+                      contextual="m1:latest", recomp="m1:latest")
     OllamaModelUnloader(models, base_url="http://example:9999", timeout=7).unload_all_except(None)
 
     assert calls[0]["url"] == "http://example:9999/api/generate"

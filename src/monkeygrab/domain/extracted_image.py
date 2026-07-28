@@ -1,4 +1,4 @@
-"""ExtractedImage -- one raster image pulled from a PDF page, pre-description."""
+"""ExtractedImage -- one raster image pulled from a PDF page, pre-embedding."""
 
 from dataclasses import dataclass
 
@@ -7,9 +7,8 @@ from dataclasses import dataclass
 class ExtractedImage:
     """Raw image bytes plus the caption found near it.
 
-    The input to image description: a vision model is asked what the image
-    depicts, and the caption goes in with it as context, because a figure
-    caption usually names what the pixels alone are ambiguous about.
+    The multimodal embedder receives the pixels and optional caption together,
+    preserving visual content while adding nearby textual context.
 
     Attributes:
         image_bytes: Raw image bytes, in whatever format the source PDF

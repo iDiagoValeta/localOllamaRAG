@@ -6,7 +6,7 @@ import type { SVGProps } from 'react';
 //  - Translate  → languages (was a generic "Languages")
 //  - FileMagnifyingGlass → view/open a PDF (was a generic eye)
 //  - FilePdf    → PDF documents (distinct, purpose-built)
-//  - Chroma / Ollama → vector store + RAG / chat + models (brand marks, not wordmarks)
+//  - Database / Ollama → vector store + RAG / chat + models
 export {
   PaperPlaneTilt as Send,
   FilePdf as FileText,
@@ -33,29 +33,6 @@ export {
   Sun,
   Moon,
 } from '@phosphor-icons/react';
-
-// Chroma mark (homarr-labs/dashboard-icons) — yellow/blue/red ellipses only.
-export function Chroma({ className, ...props }: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="17.36 -11.81 221.29 141.62"
-      fill="none"
-      className={className}
-      aria-hidden
-      {...props}
-    >
-      <g transform="matrix(0.86440678,0,0,0.86440678,17.355932,-11.812063)">
-        <ellipse fill="#ffde2d" cx="170.66679" cy="81.919838" rx="85.333206" ry="81.919838" />
-        <ellipse fill="#327eff" cx="85.333206" cy="81.919838" rx="85.333206" ry="81.919838" />
-        <path
-          fill="#ff6446"
-          d="m 170.66679,81.919964 c 0,45.243426 -38.20536,81.919196 -85.333713,81.919196 V 81.919964 Z M 85.333205,81.919836 C 85.333205,36.676791 123.53819,8.9599821e-5 170.66679,8.9599821e-5 V 81.919836 Z"
-        />
-      </g>
-    </svg>
-  );
-}
 
 // Ollama llama mark (simple-icons, CC0).
 export function Ollama({ className, ...props }: SVGProps<SVGSVGElement>) {

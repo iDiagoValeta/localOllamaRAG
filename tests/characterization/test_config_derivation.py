@@ -1,8 +1,7 @@
 """Characterization tests for configuration derivation in rag/chat_pdfs.py --
 pre-migration snapshot.
 
-Covers ``_derivar_paths_db`` / ``_derivar_prefijos_embedding`` (pure
-derivation functions) and the runtime mutators ``set_pipeline_flags`` /
+Covers ``_derivar_paths_db`` and the runtime mutators ``set_pipeline_flags`` /
 ``set_model_roles_runtime`` / ``set_docs_folder_runtime`` (what they mutate,
 what they return, and their validation errors). Design doc
 (docs/design/2026-07-26-monkeygrab-v2.md, section 4) replaces this mutable
@@ -24,37 +23,13 @@ import pytest
 import rag.chat_pdfs as rag
 
 
-def test_derivar_paths_db_namespaces_vector_db_by_folder_basename_and_embedding_slug():
-    """PATH_DB is keyed by (docs-folder basename, embedding model slug before
-    the ':' tag) so different embedding models never share a vector store."""
+def test_derivar_paths_db_uses_fixed_multimodal_slug():
     carpeta = os.path.join("rag", "docs", "en")
 
-    path_db, collection_name = rag._derivar_paths_db(carpeta, "embeddinggemma:latest")
+    path_db, collection_name = rag._derivar_paths_db(carpeta)
 
-    assert path_db == os.path.join(rag.DATA_DIR, "vector_db", "en_embeddinggemma")
+    assert path_db == os.path.join(rag.DATA_DIR, "vector_db", "en_jina_clip")
     assert collection_name == "docs_en"
-
-
-def test_derivar_paths_db_slug_strips_tag_and_replaces_slashes():
-    carpeta = os.path.join("rag", "docs", "es")
-
-    path_db, collection_name = rag._derivar_paths_db(carpeta, "org/nomic-embed-text:v1.5")
-
-    assert path_db == os.path.join(rag.DATA_DIR, "vector_db", "es_org_nomic-embed-text")
-    assert collection_name == "docs_es"
-
-
-@pytest.mark.parametrize("modelo,expected", [
-    ("nomic-embed-text:latest", ("search_query: ", "search_document: ")),
-    ("NOMIC-Something:v1", ("search_query: ", "search_document: ")),  # case-insensitive match
-    ("embeddinggemma:latest", ("", "")),
-    ("bge-m3", ("", "")),
-])
-def test_derivar_prefijos_embedding_only_nomic_models_get_task_prefixes(modelo, expected):
-    """Only embedding models with "nomic" in their base name (case-insensitive)
-    get the search_query:/search_document: task prefixes Nomic expects;
-    every other model embeds text unmodified."""
-    assert rag._derivar_prefijos_embedding(modelo) == expected
 
 
 def test_set_pipeline_flags_mutates_module_globals_and_returns_previous_values():
@@ -79,30 +54,6 @@ def test_set_pipeline_flags_rejects_index_time_or_unknown_flags():
 
     with pytest.raises(ValueError, match="USAR_CONTEXTUAL_RETRIEVAL"):
         rag.set_pipeline_flags({"USAR_CONTEXTUAL_RETRIEVAL": False})
-
-
-def test_set_model_roles_runtime_changing_embedding_recomputes_db_paths_and_prefixes():
-    """Reassigning the "embedding" role must also recompute PATH_DB,
-    COLLECTION_NAME and the embed prefixes -- they're namespaced by embedding
-    model. Other roles must NOT trigger this recomputation."""
-    original_roles = rag.get_model_roles()
-    original_path_db = rag.PATH_DB
-    try:
-        rag.set_model_roles_runtime({"embedding": "nomic-embed-text:latest"})
-
-        assert rag.MODELO_EMBEDDING == "nomic-embed-text:latest"
-        assert rag.PATH_DB != original_path_db
-        assert "nomic-embed-text" in rag.PATH_DB
-        assert rag.EMBED_PREFIX_QUERY == "search_query: "
-    finally:
-        # NOTE: set_model_roles_runtime returns the mapping AFTER applying
-        # overrides (unlike set_pipeline_flags / set_docs_folder_runtime,
-        # which both return the PREVIOUS state) -- restoring requires
-        # capturing get_model_roles() before mutating, not the call's own
-        # return value. Documented here because it's an easy trap for a test
-        # (or a caller) to fall into.
-        rag.set_model_roles_runtime(original_roles)
-        assert rag.PATH_DB == original_path_db
 
 
 def test_set_model_roles_runtime_changing_rag_role_does_not_touch_db_paths():

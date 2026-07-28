@@ -22,8 +22,7 @@ class Bm25LexicalIndex:
     sync with the corpus is explicitly an adapter concern (see the port
     docstring). This adapter gets its corpus by scanning a ``VectorStore``
     port instance (``get_page``/``count``), so it depends on the storage
-    *port*, not on ChromaDB specifically -- swapping the ``VectorStore``
-    adapter (e.g. Chroma -> FAISS) swaps the BM25 corpus source for free.
+    *port*, not on FAISS specifically.
 
     Scanning and tokenizing a whole corpus is far too expensive to repeat per
     query, so the built index is cached under a ``(count, k1, b)`` key held on

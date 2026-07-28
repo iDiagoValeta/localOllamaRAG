@@ -37,26 +37,6 @@ if str(ROOT) not in sys.path:
 import rag.chat_pdfs as rag
 
 
-class _FakeCollection:
-    """Minimal Chroma collection double for a full-corpus scan."""
-
-    def __init__(self, docs):
-        self.docs = docs
-        self.metas = [{"source": f"doc{i}.pdf", "page": 0, "chunk": i} for i in range(len(docs))]
-        self.ids = [f"doc{i}.pdf_pag0_chunk{i}" for i in range(len(docs))]
-
-    def count(self):
-        return len(self.docs)
-
-    def get(self, limit=None, offset=0, include=None, **kwargs):
-        end = None if limit is None else offset + limit
-        return {
-            "documents": self.docs[offset:end],
-            "metadatas": self.metas[offset:end],
-            "ids": self.ids[offset:end],
-        }
-
-
 def test_hot_changing_chunk_size_does_not_affect_calls_without_an_explicit_argument(monkeypatch):
     """``dividir_en_chunks``'s ``chunk_size`` default was bound to
     ``cfg.CHUNK_SIZE`` at import time (2000). Mutating ``rag.CHUNK_SIZE`` at
@@ -122,26 +102,6 @@ def test_final_top_k_is_no_longer_frozen_into_a_signature_default():
     top_k = inspect.signature(CrossEncoderReranker.rerank).parameters["top_k"]
 
     assert top_k.default is inspect.Parameter.empty
-
-
-def test_image_extraction_limit_now_follows_a_config_change():
-    """Formerly the fourth stale-default location: ``extraer_imagenes_pdf``'s
-    ``max_por_pagina`` default was bound to ``cfg.MAX_IMAGENES_POR_PAGINA`` at
-    import time, so a config change never reached it.
-
-    Image extraction now runs through ``PymupdfImageExtractor``, built per
-    indexing run from an ``AppConfig``. Overriding the limit and rebuilding the
-    extractor yields the new limit -- the fixed behavior, asserted here in
-    place of the defect the other cases still document.
-    """
-    from monkeygrab.adapters.extraction.pymupdf_image_extractor import PymupdfImageExtractor
-    from monkeygrab.config.app_config import AppConfig
-
-    config = AppConfig.from_env()
-    raised = config.with_overrides(**{"chunking.max_images_per_page": 999})
-
-    assert PymupdfImageExtractor(config.chunking)._max_per_page != 999
-    assert PymupdfImageExtractor(raised.chunking)._max_per_page == 999
 
 
 def test_contrast_min_chunk_length_is_read_live_inside_the_function_body(monkeypatch):

@@ -1,23 +1,18 @@
 requests>=2.28.0
 ollama>=0.4.0
-chromadb>=0.4.0
 rich>=13.0.0
 prompt_toolkit>=3.0.0
 colorama>=0.4.6
-pymupdf4llm>=0.0.5
-pypdf>=3.0.0
 rank-bm25>=0.2.2
 python-dotenv>=1.0.0
+Pillow>=10.0.0
 
 sentence-transformers>=2.2.0
 
-# FAISS backs the alternative vector store. It is a required dependency rather
-# than an optional one so the test proving FAISS and Chroma return identical
-# rankings runs on every build: a claim of interchangeability that CI never
-# exercises decays into a comment.
+# FAISS is the only vector store.
 faiss-cpu>=1.8
 
-# Two pieces of the multimodal stack are deliberately NOT here.
+# Two pieces of the multimodal stack are deliberately isolated.
 #
 # MinerU is an external CLI, invoked through subprocess. Its own pins conflict
 # with these, and the adapter only needs the binary.

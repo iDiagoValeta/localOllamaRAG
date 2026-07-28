@@ -12,9 +12,9 @@ class ImageExtractor(Protocol):
     adapter configuration, read once at construction: they are properties of
     a whole indexing run, not of one PDF.
 
-    Describing what an image depicts is not this port's job. That is a
-    vision-model call, already covered by ``ChatModel.generate(prompt,
-    images=[...])`` with a model wired to the "ocr" role.
+    Converting an image into a vector is not this port's job. The caller passes
+    each ``ExtractedImage`` to the ``ImageEmbedder`` without generating an
+    intermediate textual description.
 
     Failure policy: this port is the documented carve-out from the project's
     hard-fail default (design doc, section 3). Failures are logged and

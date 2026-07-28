@@ -2,7 +2,7 @@
 
 Covers: with_overrides never mutates the original instance, the derived-field
 side effects that replace set_model_roles_runtime/set_docs_folder_runtime
-(rag -> desc, embedding -> prefixes + db paths, docs_folder -> db paths),
+(rag -> desc and docs_folder -> db paths),
 invalid override keys raise, and AppConfig.from_env() hard-fails on
 unparseable/unknown environment values instead of silently falling back to a
 default.
@@ -51,25 +51,8 @@ def test_overriding_models_rag_recomputes_desc():
     assert cfg.models.desc == "qwen3"
 
 
-def test_overriding_models_embedding_recomputes_prefixes_and_db_paths():
-    """Mirrors set_model_roles_runtime's ``embedding_changed`` branch:
-    changing the embedding role must recompute both the task prefixes and
-    the vector-store path/collection name, since both are namespaced by
-    the embedding model."""
-    original = AppConfig()
-    cfg = original.with_overrides(**{"models.embedding": "nomic-embed-text:latest"})
-
-    assert cfg.models.embedding == "nomic-embed-text:latest"
-    assert cfg.models.embed_prefix_query == "search_query: "
-    assert cfg.models.embed_prefix_doc == "search_document: "
-    assert cfg.paths.path_db != original.paths.path_db
-    assert "nomic-embed-text" in cfg.paths.path_db
-    # docs folder / collection name basis is unchanged, only the embedding slug moved.
-    assert cfg.paths.collection_name == original.paths.collection_name
-
-
 def test_overriding_models_chat_does_not_touch_desc_or_db_paths():
-    """Only the "rag" role feeds desc; only "embedding" feeds db paths."""
+    """Only the RAG role feeds the description."""
     original = AppConfig()
     cfg = original.with_overrides(**{"models.chat": "qwen3:14b"})
 
@@ -80,8 +63,7 @@ def test_overriding_models_chat_does_not_touch_desc_or_db_paths():
 
 def test_overriding_paths_docs_folder_recomputes_db_paths():
     """Mirrors set_docs_folder_runtime: switching the PDF source folder
-    must recompute PATH_DB/COLLECTION_NAME using the (unchanged) embedding
-    model."""
+    must recompute PATH_DB/COLLECTION_NAME."""
     original = AppConfig()
     new_folder = str(Path(original.paths.base_dir) / "docs" / "es")
 
@@ -143,19 +125,11 @@ def test_from_env_raises_on_unparseable_float_env_var(monkeypatch):
         AppConfig.from_env()
 
 
-def test_from_env_raises_on_unknown_reranker_quality(monkeypatch):
-    monkeypatch.setenv("RERANKER_QUALITY", "ultra-quality")
-    with pytest.raises(ValueError, match="RERANKER_QUALITY"):
-        AppConfig.from_env()
-
-
 def test_from_env_accepts_valid_env_overrides(monkeypatch):
     monkeypatch.setenv("RAG_CHUNK_SIZE", "1234")
-    monkeypatch.setenv("RERANKER_QUALITY", "fast")
     cfg = AppConfig.from_env()
 
     assert cfg.chunking.chunk_size == 1234
-    assert cfg.models.reranker_quality == "fast"
 
 
 if __name__ == "__main__":

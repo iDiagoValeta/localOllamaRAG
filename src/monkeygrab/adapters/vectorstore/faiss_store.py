@@ -41,9 +41,7 @@ _VERSION_FILENAME = "version.txt"
 def _metadata_to_dict(metadata: ChunkMetadata) -> Dict[str, Any]:
     """Serialize a ``ChunkMetadata`` into the dict shape written to ``meta.jsonl``.
 
-    Unlike Chroma (whose metadata values must be str/int/float/bool, forcing
-    unset optional fields to be omitted entirely), JSONL has no such
-    restriction -- every field is always present, ``null`` when unset.
+    JSONL keeps every metadata field present, using ``null`` when unset.
     """
     return {
         "source": metadata.source,
@@ -156,8 +154,7 @@ class FaissVectorStore:
     index's raw inner product into cosine similarity.
 
     Persistence layout: three files under ``<path_db>/<collection_name>/``
-    (the same two-level split ChromaDB uses -- one client path holding
-    several named collections):
+    (one client path holding several named collections):
 
     - ``index.faiss`` -- the FAISS index itself (``faiss.write_index``).
     - ``meta.jsonl`` -- one JSON object per stored chunk, in insertion
@@ -258,8 +255,7 @@ class FaissVectorStore:
             _, doc, metadata = self._rows[position]
             # Cosine distance (1 - cosine similarity) on the normalized
             # vectors this store indexes -- not a literal L2 magnitude like
-            # Chroma's default metric, but the same "smaller is nearer"
-            # contract the Fragment.distancia field documents; ordering is
+            # "Smaller is nearer", matching the Fragment.distancia contract; ordering is
             # what downstream ranking (RRF, min/max/mean debug stats) uses.
             fragments.append(Fragment(doc=doc, metadata=metadata, distancia=1.0 - score))
         return fragments
@@ -280,6 +276,37 @@ class FaissVectorStore:
 
     def count(self) -> int:
         return len(self._rows)
+
+    def delete_source(self, source: str) -> int:
+        positions = [
+            position
+            for position, (_, _, metadata) in enumerate(self._rows)
+            if metadata.source != source
+        ]
+        removed = len(self._rows) - len(positions)
+        if removed == 0:
+            return 0
+
+        kept_rows = [self._rows[position] for position in positions]
+        if kept_rows:
+            vectors = np.vstack([self._index.reconstruct(position) for position in positions])
+            index = faiss.IndexFlatIP(vectors.shape[1])
+            index.add(np.asarray(vectors, dtype=np.float32))
+            self._index = index
+        else:
+            self._index = None
+        self._rows = kept_rows
+        self._id_to_pos = {row[0]: i for i, row in enumerate(self._rows)}
+        self._rewrite()
+        return removed
+
+    def clear(self) -> None:
+        self._index = None
+        self._rows = []
+        self._id_to_pos = {}
+        for path in (self._index_path, self._meta_path, self._version_path):
+            if os.path.exists(path):
+                os.remove(path)
 
     def _save(self, new_row: _Row) -> None:
         """Persist the just-added row: rewrite the index, append to the sidecar.
@@ -305,5 +332,30 @@ class FaissVectorStore:
             if not os.path.exists(self._version_path):
                 with open(self._version_path, "w", encoding="utf-8") as f:
                     f.write(_FORMAT_VERSION)
+        except OSError as e:
+            raise RuntimeError(f"failed to persist FAISS store at {self._dir!r}: {e}") from e
+
+    def _rewrite(self) -> None:
+        if not self._rows:
+            self.clear()
+            return
+        try:
+            index_tmp = self._index_path + ".tmp"
+            meta_tmp = self._meta_path + ".tmp"
+            version_tmp = self._version_path + ".tmp"
+            faiss.write_index(self._index, index_tmp)
+            with open(meta_tmp, "w", encoding="utf-8") as f:
+                for chunk_id, doc, metadata in self._rows:
+                    f.write(json.dumps({
+                        "id": chunk_id,
+                        "doc": doc,
+                        "metadata": _metadata_to_dict(metadata),
+                    }))
+                    f.write("\n")
+            with open(version_tmp, "w", encoding="utf-8") as f:
+                f.write(_FORMAT_VERSION)
+            os.replace(index_tmp, self._index_path)
+            os.replace(meta_tmp, self._meta_path)
+            os.replace(version_tmp, self._version_path)
         except OSError as e:
             raise RuntimeError(f"failed to persist FAISS store at {self._dir!r}: {e}") from e

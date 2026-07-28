@@ -32,8 +32,8 @@ How to run (interactive CLI):
     from the repository root.
 
     Prerequisites: Ollama running; PDFs under ``rag/docs/en/`` unless ``DOCS_FOLDER``
-    points elsewhere. Model names via ``OLLAMA_RAG_MODEL``, ``OLLAMA_EMBED_MODEL``,
-    ``OLLAMA_OCR_MODEL`` (image indexing), etc., as documented in the project README
+    points elsewhere. Generation model names use ``OLLAMA_RAG_MODEL`` and the
+    related Ollama roles documented in the project README
     and in ``rag/README.md``.
 """
 
@@ -76,8 +76,6 @@ except ImportError:
 # there if it is missing. Nothing in this module needs those libraries, so
 # importing them here only slowed startup for callers that never index.
 
-PYMUPDF_AVAILABLE = True
-FITZ_DISPONIBLE = True
 RERANKER_AVAILABLE = True
 BM25_AVAILABLE = True
 
@@ -149,10 +147,8 @@ def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
 
 MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "gemma4:e4b")
 MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e4b")
-MODELO_EMBEDDING = os.getenv("OLLAMA_EMBED_MODEL", "embeddinggemma:latest")
 MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b")
 MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma4:e4b")
-MODELO_OCR = os.getenv("OLLAMA_OCR_MODEL", "gemma4:e4b")
 MODELO_DESC = os.getenv("MODELO_DESC", _inferir_descripcion_modelo(MODELO_RAG))
 
 OLLAMA_NUM_CTX = _leer_env_int("OLLAMA_NUM_CTX", 8192)
@@ -161,7 +157,6 @@ OLLAMA_AUX_NUM_CTX = _leer_env_int("OLLAMA_AUX_NUM_CTX", 8192)
 OLLAMA_QUERY_NUM_CTX = _leer_env_int("OLLAMA_QUERY_NUM_CTX", 2048)
 OLLAMA_RECOMP_NUM_CTX = _leer_env_int("OLLAMA_RECOMP_NUM_CTX", 8192)
 OLLAMA_CONTEXTUAL_NUM_CTX = _leer_env_int("OLLAMA_CONTEXTUAL_NUM_CTX", 32768)
-OLLAMA_OCR_NUM_CTX = _leer_env_int("OLLAMA_OCR_NUM_CTX", 8192)
 OLLAMA_REQUEST_TIMEOUT = _leer_env_int("OLLAMA_REQUEST_TIMEOUT", 900)
 # Seconds to keep weights in VRAM after each Ollama call; 0 unloads immediately.
 OLLAMA_KEEP_ALIVE = _leer_env_int("OLLAMA_KEEP_ALIVE", 0)
@@ -182,8 +177,7 @@ USAR_EMBEDDINGS_IMAGEN = True
 LOGGING_METRICAS = True
 GUARDAR_DEBUG_RAG = True
 
-# Runtime toggles are inference-time only; indexing flags require a fresh
-# Chroma collection to compare fairly.
+# Runtime toggles are inference-time only; indexing flags require a fresh index.
 PIPELINE_RUNTIME_FLAGS = (
     "USAR_LLM_QUERY_DECOMPOSITION",
     "USAR_BUSQUEDA_HIBRIDA",
@@ -203,7 +197,7 @@ def set_pipeline_flags(overrides: Dict[str, bool]) -> Dict[str, bool]:
     """Override inference-time pipeline flags for the current Python process.
 
     Index-time flags are intentionally excluded because they require rebuilding
-    a Chroma collection to be compared fairly.
+    the FAISS index to be compared fairly.
     """
     invalid = sorted(set(overrides) - set(PIPELINE_RUNTIME_FLAGS))
     if invalid:
@@ -229,29 +223,22 @@ DATA_DIR = os.path.abspath(os.getenv("MONKEYGRAB_DATA_DIR", BASE_DIR))
 CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "en"))
 
 
-def _derivar_paths_db(carpeta: str, modelo_embedding: str) -> tuple[str, str]:
-    """Derive ``(PATH_DB, COLLECTION_NAME)`` from a docs folder and embedding model.
-
-    The embedding slug is part of the DB path so vector stores built with
-    different embedding models never collide on disk. The DB lives under
-    ``DATA_DIR`` so packaged builds write to a user-writable location.
+def _derivar_paths_db(carpeta: str) -> tuple[str, str]:
+    """Derive the fixed jina-clip/FAISS path for a docs folder.
 
     Args:
         carpeta: PDF directory (absolute or relative).
-        modelo_embedding: Ollama embedding model name; the tag is stripped for the slug.
-
     Returns:
         Tuple ``(path_db, collection_name)``.
     """
     nombre = os.path.basename(os.path.abspath(carpeta))
-    slug = modelo_embedding.split(":")[0].replace("/", "_")
     return (
-        os.path.join(DATA_DIR, "vector_db", f"{nombre}_{slug}"),
+        os.path.join(DATA_DIR, "vector_db", f"{nombre}_jina_clip"),
         f"docs_{nombre}",
     )
 
 
-PATH_DB, COLLECTION_NAME = _derivar_paths_db(CARPETA_DOCS, MODELO_EMBEDDING)
+PATH_DB, COLLECTION_NAME = _derivar_paths_db(CARPETA_DOCS)
 
 _DEFAULT_CARPETA_DOCS = CARPETA_DOCS
 _DEFAULT_PATH_DB = PATH_DB
@@ -259,7 +246,7 @@ _DEFAULT_COLLECTION_NAME = COLLECTION_NAME
 
 
 def set_docs_folder_runtime(carpeta: str | None) -> tuple[str, str, str]:
-    """Switch ``CARPETA_DOCS`` and derived Chroma paths (for tests).
+    """Switch ``CARPETA_DOCS`` and derived FAISS paths.
 
     Restores module-level defaults when ``carpeta`` is ``None`` (values captured
     at import from ``DOCS_FOLDER`` / ``rag/docs/es``).
@@ -278,7 +265,7 @@ def set_docs_folder_runtime(carpeta: str | None) -> tuple[str, str, str]:
         COLLECTION_NAME = _DEFAULT_COLLECTION_NAME
     else:
         CARPETA_DOCS = os.path.abspath(carpeta)
-        PATH_DB, COLLECTION_NAME = _derivar_paths_db(CARPETA_DOCS, MODELO_EMBEDDING)
+        PATH_DB, COLLECTION_NAME = _derivar_paths_db(CARPETA_DOCS)
     return previous
 
 
@@ -288,38 +275,12 @@ MAX_HISTORIAL_MENSAJES = 40
 CARPETA_DEBUG_RAG = os.path.join(DATA_DIR, "debug_rag")
 
 
-# Embedding prefixes
-
-def _derivar_prefijos_embedding(modelo_embedding: str) -> tuple[str, str]:
-    """Return ``(query_prefix, doc_prefix)`` task prefixes for an embedding model.
-
-    Nomic embedding models expect ``search_query:`` / ``search_document:``
-    prefixes; other models embed the text unmodified.
-
-    Args:
-        modelo_embedding: Ollama embedding model name.
-
-    Returns:
-        Tuple ``(query_prefix, doc_prefix)``.
-    """
-    nombre = modelo_embedding.lower().split(":")[0]
-    if "nomic" in nombre:
-        return "search_query: ", "search_document: "
-    return "", ""
-
-
-EMBED_PREFIX_QUERY, EMBED_PREFIX_DOC = _derivar_prefijos_embedding(MODELO_EMBEDDING)
-
-
 # Indexing, retrieval and ranking parameters
 
 CONTEXTUAL_DOC_CHARS = _leer_env_int("CONTEXTUAL_DOC_CHARS", 24000)
 CHUNK_SIZE = _leer_env_int("RAG_CHUNK_SIZE", 2000)
 CHUNK_OVERLAP = _leer_env_int("RAG_CHUNK_OVERLAP", 400)
 MIN_CHUNK_LENGTH = _leer_env_int("RAG_MIN_CHUNK_LENGTH", 150)
-MAX_IMAGENES_POR_PAGINA = _leer_env_int("RAG_MAX_IMAGES_PER_PAGE", 5)
-MIN_IMAGEN_SIZE_PX = _leer_env_int("RAG_MIN_IMAGE_SIZE_PX", 100)
-CAPTION_MARGIN_PX = _leer_env_int("RAG_CAPTION_MARGIN_PX", 80)
 _IMAGEN_CHUNK_OFFSET = 10_000
 
 N_RESULTADOS_SEMANTICOS = _leer_env_int("RAG_N_RESULTADOS_SEMANTICOS", 80)
@@ -328,7 +289,6 @@ TOP_K_RERANK_CANDIDATES = _leer_env_int("RAG_TOP_K_RERANK_CANDIDATES", 200)
 TOP_K_FINAL = _leer_env_int("RAG_TOP_K_FINAL", 8)
 N_TOP_PARA_EXPANSION = _leer_env_int("RAG_N_TOP_PARA_EXPANSION", 3)
 
-RERANKER_MODEL_QUALITY = os.getenv("RERANKER_QUALITY", "quality")
 UMBRAL_SCORE_RERANKER = _leer_env_float("RAG_UMBRAL_SCORE_RERANKER", 0.65)
 
 RRF_K = _leer_env_int("RAG_RRF_K", 60)
@@ -348,7 +308,7 @@ LOG_LEVEL = logging.ERROR
 logging.basicConfig(level=LOG_LEVEL, format="%(levelname)s: %(message)s")
 
 for _logger_name in (
-    "httpx", "chromadb", "chromadb.telemetry", "urllib3", "requests",
+    "httpx", "urllib3", "requests",
     "sentence_transformers", "transformers", "huggingface_hub",
     "tqdm", "filelock",
 ):
@@ -369,10 +329,8 @@ os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 MODEL_ROLE_VARS = {
     "rag": "MODELO_RAG",
     "chat": "MODELO_CHAT",
-    "embedding": "MODELO_EMBEDDING",
     "contextual": "MODELO_CONTEXTUAL",
     "recomp": "MODELO_RECOMP",
-    "ocr": "MODELO_OCR",
 }
 
 
@@ -383,12 +341,6 @@ def get_model_roles() -> Dict[str, str]:
 
 def set_model_roles_runtime(overrides: Dict[str, str]) -> Dict[str, str]:
     """Reassign pipeline model roles for the current process.
-
-    Changing the ``embedding`` role also recomputes ``PATH_DB``,
-    ``COLLECTION_NAME`` and the embedding task prefixes, because the vector store
-    path is namespaced by the embedding model. Callers must rebind any cached
-    Chroma collection afterwards and re-index, since embeddings from different
-    models are not comparable.
 
     Args:
         overrides: Mapping of role keys (see ``MODEL_ROLE_VARS``) to Ollama model
@@ -405,25 +357,16 @@ def set_model_roles_runtime(overrides: Dict[str, str]) -> Dict[str, str]:
         valid = ", ".join(MODEL_ROLE_VARS)
         raise ValueError(f"Unsupported model role(s): {', '.join(invalid)}. Valid: {valid}")
 
-    global MODELO_RAG, MODELO_CHAT, MODELO_EMBEDDING, MODELO_CONTEXTUAL
-    global MODELO_RECOMP, MODELO_OCR, MODELO_DESC
-    global PATH_DB, COLLECTION_NAME, EMBED_PREFIX_QUERY, EMBED_PREFIX_DOC
+    global MODELO_RAG, MODELO_CHAT, MODELO_CONTEXTUAL, MODELO_RECOMP, MODELO_DESC
 
-    embedding_changed = False
     for role, modelo in overrides.items():
         modelo = (modelo or "").strip()
         if not modelo:
             continue
         globals()[MODEL_ROLE_VARS[role]] = modelo
-        if role == "embedding":
-            embedding_changed = True
 
     if (overrides.get("rag") or "").strip():
         MODELO_DESC = _inferir_descripcion_modelo(MODELO_RAG)
-    if embedding_changed:
-        PATH_DB, COLLECTION_NAME = _derivar_paths_db(CARPETA_DOCS, MODELO_EMBEDDING)
-        EMBED_PREFIX_QUERY, EMBED_PREFIX_DOC = _derivar_prefijos_embedding(MODELO_EMBEDDING)
-
     return get_model_roles()
 
 
@@ -437,7 +380,7 @@ Your purpose is to help users query indexed PDF documents and understand the sys
 ---
 
 ### SYSTEM OVERVIEW
-- **Architecture:** Runs fully locally using Ollama (LLM inference) and ChromaDB (vector store).
+- **Architecture:** Runs fully locally using Ollama for generation and FAISS for retrieval.
 - **Model configuration:** All model roles are configurable through environment variables. Explain roles and variables, not fixed model names.
 - **Modes:**
   1. **CHAT**: General conversation, project guidance, and command help. Maintains local history.
@@ -451,17 +394,17 @@ Use this reference to explain how the system works or which parts are mandatory 
 
 #### 1. INDEXING PHASE
 * **CORE (Mandatory):**
-    * **Extraction & Chunking:** Reading PDFs and splitting text (`dividir_en_chunks`).
-    * **Embeddings:** Converting text to vectors with `MODELO_EMBEDDING` configured through `OLLAMA_EMBED_MODEL`, then saving them to ChromaDB.
+    * **Extraction & Chunking:** MinerU preserves text, tables and figures.
+    * **Embeddings:** jina-clip-v2 embeds text and images in one shared space and stores them in FAISS.
 * **OPTIONAL (Flag: `USAR_CONTEXTUAL_RETRIEVAL`):**
     * **Contextual Retrieval:** Uses `MODELO_CONTEXTUAL` configured through `OLLAMA_CONTEXTUAL_MODEL` to generate summary/context for each chunk before indexing to improve retrieval accuracy.
 * **OPTIONAL (Flag: `USAR_EMBEDDINGS_IMAGEN`):**
-    * **Image Indexing:** Extracts raster images from each PDF page with PyMuPDF (fitz), describes them with `MODELO_OCR` configured through `OLLAMA_OCR_MODEL` using a structured OCR prompt that transcribes tables cell by cell, chart axes and legends, diagram components, and equations, then stores the result as a regular text chunk in ChromaDB.
+    * **Image Indexing:** MinerU extracts figures and jina-clip-v2 embeds them directly.
 
 #### 2. RETRIEVAL PHASE
 Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; optional components extend it.
 * **CORE (Mandatory):**
-    * **Semantic Search:** Vector distance lookup using `MODELO_EMBEDDING`; always performed.
+    * **Semantic Search:** Cosine search in the shared jina-clip-v2 space; always performed.
 * **OPTIONAL (execution order):**
     * **Query Decomposition** (`USAR_LLM_QUERY_DECOMPOSITION`): Uses `MODELO_CHAT` configured through `OLLAMA_CHAT_MODEL` to generate sub-queries before semantic search; activates for long questions (>60 chars).
     * **Hybrid Search** (`USAR_BUSQUEDA_HIBRIDA`): Adds Okapi BM25 lexical search (Robertson & Zaragoza 2009) over the indexed chunks, then fuses the BM25 ranking with semantic retrieval using Reciprocal Rank Fusion (RRF).
@@ -485,7 +428,7 @@ Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; o
 2. **Honesty:** Never fabricate system state or document contents. If you don't know, say so.
 3. **Guidance:** If a user asks "what should I do?", provide concrete next steps (e.g., suggest switching to RAG mode to search their PDFs).
 4. **Mode Enforcement:** If the user asks for information contained in the documents while in CHAT mode, redirect them to use RAG mode for document-grounded answers.
-5. **Configuration framing:** When explaining the pipeline, describe configurable roles (`OLLAMA_*`, `RERANKER_QUALITY`) instead of presenting any specific model as required.
+5. **Configuration framing:** Distinguish the configurable Ollama generation roles from the fixed MinerU, Jina CLIP, FAISS and BGE retrieval stack.
 6. **Language:** Always respond in the exact same language the user uses. If they write in Spanish, respond in Spanish. If they write in Catalan, respond in Catalan. If they write in English, respond in English. Never switch languages mid-conversation.
 7. **Tone:** Professional, academic, yet approachable.
 8. **Math formatting:** Use LaTeX notation for all formulas: $...$ inline, $$...$$ for display equations.
@@ -538,6 +481,16 @@ from rag.engine.generation import (
     evaluar_pregunta_rag,
 )
 from rag.engine.indexing import indexar_documentos, obtener_documentos_indexados
+from rag.engine.wiring import (
+    app_config_from_runtime,
+    reset_vector_store_cache,
+    vector_store,
+)
+
+
+def obtener_vector_store():
+    """Return the FAISS store for the active corpus."""
+    return vector_store(app_config_from_runtime())
 
 
 def main():

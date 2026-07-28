@@ -1,11 +1,8 @@
-"""RerankingConfig -- Cross-Encoder relevance threshold.
+"""RerankingConfig -- BGE Cross-Encoder relevance threshold.
 
 Default is a copy of ``rag/chat_pdfs.py`` section 3.7
-(``RAG_UMBRAL_SCORE_RERANKER``). The reranker *model variant*
-(``RERANKER_QUALITY``, "quality"/"fast") lives in ``config.models.ModelsConfig
-.reranker_quality`` instead: it selects which Cross-Encoder checkpoint
-loads, the same kind of decision as any other ``MODELO_*`` role, not a
-reranking-behavior parameter.
+(``RAG_UMBRAL_SCORE_RERANKER``). The model itself is fixed to
+``BAAI/bge-reranker-v2-m3`` by the adapter.
 """
 
 from dataclasses import dataclass

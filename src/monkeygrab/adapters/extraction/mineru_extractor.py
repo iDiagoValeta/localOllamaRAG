@@ -25,7 +25,7 @@ monkeygrab-v2.md, section 3: "Las tablas se indexan como texto HTML, no como
 imagenes").
 
 **Hard-fail policy** (issue #6, this adapter's other reason for existing): the
-old pymupdf4llm -> pypdf fallback chain hid the fact that MinerU integration
+previous fallback chain hid the fact that MinerU integration
 had never actually worked, for months, by silently degrading to a lower-
 fidelity extractor and producing plausible-looking output. ``_run_mineru``
 raises with an actionable message on every failure mode (CLI missing, exit
@@ -34,7 +34,7 @@ code != 0, no output directory, empty Markdown) instead. ``MineruExtractor``
 port's hard-fail contract. ``MineruImageExtractor`` (the ``ImageExtractor``
 adapter) is the one documented exception in this codebase's hard-fail policy:
 its port's own docstring specifies that extraction failures are swallowed and
-logged, matching ``PymupdfImageExtractor``'s fitz-open failure carve-out --
+logged, matching the image port's per-file failure carve-out --
 see SECTION 4 for why that is not a contradiction of the above.
 """
 
@@ -47,7 +47,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import fitz
+from PIL import Image
 
 from monkeygrab.domain.extracted_image import ExtractedImage
 from monkeygrab.domain.extracted_page import ExtractedPage
@@ -148,8 +148,7 @@ def _validate_output(dest: Path, pdf_stem: str) -> Tuple[Path, Path]:
     if not md_path.is_file() or not md_path.read_text(encoding="utf-8").strip():
         raise RuntimeError(
             f"MinerU produced an empty Markdown file: {md_path}. "
-            "This is the exact failure mode the pymupdf4llm/pypdf fallback "
-            "used to hide -- this adapter does not degrade, fix the MinerU "
+            "This adapter does not degrade; fix the MinerU "
             "installation or its model cache (MINERU_MODEL_SOURCE)."
         )
 
@@ -294,7 +293,7 @@ def _content_list_to_pages(blocks: List[Dict[str, Any]]) -> List[ExtractedPage]:
         blocks: Parsed ``*_content_list.json`` -- a flat list of blocks, each
             carrying a zero-based ``page_idx`` (MinerU's own convention,
             already matching ``ExtractedPage.page``'s -- no offset needed,
-            unlike pymupdf4llm's 1-based page numbers).
+            without an offset).
 
     Returns:
         One ``ExtractedPage`` per ``page_idx`` that produced at least one
@@ -353,8 +352,10 @@ def _content_list_to_images(
         image_path = auto_dir / rel_path
         try:
             image_bytes = image_path.read_bytes()
-            pixmap = fitz.Pixmap(str(image_path))
-            width, height = pixmap.width, pixmap.height
+            from io import BytesIO
+
+            with Image.open(BytesIO(image_bytes)) as image:
+                width, height = image.size
         except Exception as exc:
             logger.warning("Skipping unreadable MinerU figure %s: %s", image_path, exc)
             continue
@@ -377,7 +378,7 @@ class MineruExtractor:
     """Extracts PDF pages as text via the MinerU CLI, tables kept as HTML.
 
     Hard-fail, per the ``PdfExtractor`` port and this adapter's whole reason
-    for existing (module docstring, issue #6): never falls back to pymupdf.
+    for existing (module docstring, issue #6): never falls back.
     """
 
     def __init__(
@@ -438,7 +439,7 @@ class MineruImageExtractor:
     Per the ``ImageExtractor`` port's documented carve-out from this
     project's hard-fail default, CLI-level failures (binary missing, exit
     code != 0, empty output) are logged and swallowed here, returning ``{}``
-    -- exactly like ``PymupdfImageExtractor``'s "fitz cannot open the file"
+    -- exactly like the image port's "cannot open the file"
     case. This does not reopen the hard-fail question SECTION 3 exists to
     close: ``IndexCorpus`` always calls the ``PdfExtractor`` first, so a
     broken MinerU installation already aborts the whole PDF via

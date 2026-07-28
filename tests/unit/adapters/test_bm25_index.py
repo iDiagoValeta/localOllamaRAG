@@ -1,6 +1,6 @@
 """Unit tests for monkeygrab.adapters.lexical.bm25_index.Bm25LexicalIndex.
 
-Uses a hand-written fake VectorStore -- no ChromaDB, no chunk collection on
+Uses a hand-written fake VectorStore -- no FAISS index on
 disk -- so these run in milliseconds and never touch real infrastructure.
 """
 

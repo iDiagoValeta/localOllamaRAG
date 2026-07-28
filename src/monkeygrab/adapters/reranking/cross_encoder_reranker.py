@@ -8,17 +8,13 @@ from typing import List, Optional, Sequence, Tuple
 
 from sentence_transformers import CrossEncoder
 
-from monkeygrab.config.models import ModelsConfig
 from monkeygrab.domain.fragment import Fragment
 
 # Not subclassed from monkeygrab.ports.reranker.Reranker: Protocol conformance
 # here is structural (duck typing), the same contract every other adapter in
 # this package satisfies without inheriting its port.
 
-_MODEL_NAMES = {
-    "quality": "BAAI/bge-reranker-v2-m3",
-    "fast": "cross-encoder/ms-marco-MiniLM-L-6-v2",
-}
+_MODEL_NAME = "BAAI/bge-reranker-v2-m3"
 
 
 def resolve_reranker_device(override: Optional[str] = None) -> Tuple[str, bool]:
@@ -26,9 +22,7 @@ def resolve_reranker_device(override: Optional[str] = None) -> Tuple[str, bool]:
 
     An explicit argument wins, then the ``RERANKER_DEVICE`` environment
     variable, then CUDA availability. The second return value reports whether
-    the choice was pinned by one of the first two: a pinned device must fail
-    loudly if it cannot be used, while an auto-detected GPU may fall back to
-    CPU.
+    the choice was pinned by one of the first two.
 
     Args:
         override: Force ``"cpu"`` or ``"cuda"``, bypassing the environment
@@ -56,45 +50,30 @@ def resolve_reranker_device(override: Optional[str] = None) -> Tuple[str, bool]:
 class CrossEncoderReranker:
     """Re-scores retrieval candidates with a Cross-Encoder loaded once, lazily.
 
-    Model variant comes from ``ModelsConfig.reranker_quality`` (``"quality"``
-    -> BAAI/bge-reranker-v2-m3, ``"fast"`` -> cross-encoder/ms-marco-MiniLM-
-    L-6-v2). The model is loaded on first ``rerank()``
-    call rather than at construction time, so building this adapter (e.g. in
-    a test with a stubbed ``sentence_transformers.CrossEncoder``) never
-    touches a GPU or downloads weights until it is actually asked to score
-    something.
+    The model is fixed to ``BAAI/bge-reranker-v2-m3`` and loaded on the first
+    ``rerank()`` call. Construction never touches a GPU or downloads weights.
 
     Device selection honours the ``RERANKER_DEVICE`` environment variable;
     the optional ``device`` constructor argument takes precedence over it,
     for callers and tests that want to force a device without touching the
     environment.
 
-    Failure policy: hard-fail, with the explicit two-step device fallback the
-    ``Reranker`` port docstring allows -- "if GPU-with-CPU-fallback is still
-    wanted operationally, it is the adapter's own explicit two-step logic".
-    That fallback only applies when the device was auto-detected (GPU
-    available, no override): if ``RERANKER_DEVICE``/``device`` pins a
-    specific device, that device is used as-is and a load failure raises
-    immediately. Either way, a load failure that survives the allowed
-    fallback raises rather than disabling reranking behind the caller's
-    back. A scoring-time failure -- the model loads but ``.rank()`` raises
-    -- also raises, instead of returning the input untouched.
+    Failure policy: hard-fail. The selected device is tried once; a load or
+    scoring failure raises instead of changing device or disabling reranking.
     """
 
-    def __init__(self, models: ModelsConfig, device: Optional[str] = None):
+    def __init__(self, device: Optional[str] = None):
         """Args:
-            models: Model-role config; only ``models.reranker_quality`` is read.
             device: Force ``"cpu"`` or ``"cuda"``, bypassing ``RERANKER_DEVICE``
-                and CUDA auto-detection. ``None`` (default) preserves today's
-                behavior.
+                and CUDA auto-detection.
         """
-        self._model_name = _MODEL_NAMES[models.reranker_quality]
+        self._model_name = _MODEL_NAME
         self._device_override = device
         self._model: Optional[CrossEncoder] = None
         self._loaded_device: Optional[str] = None
 
     def _resolve_device(self) -> Tuple[str, bool]:
-        """Return ``(device, forced)``. ``forced`` disables the CUDA->CPU fallback."""
+        """Return the selected device and whether it was explicitly forced."""
         return resolve_reranker_device(self._device_override)
 
     def _load(self, device: str) -> CrossEncoder:
@@ -106,26 +85,16 @@ class CrossEncoderReranker:
         if self._model is not None:
             return self._model
 
-        device, forced = self._resolve_device()
+        device, _forced = self._resolve_device()
         try:
             self._model = self._load(device)
             self._loaded_device = device
             return self._model
         except Exception as exc:
-            if forced or device != "cuda":
-                raise RuntimeError(
-                    f"Cross-Encoder {self._model_name!r} failed to load on "
-                    f"{device!r}: {exc}"
-                ) from exc
-            try:
-                self._model = self._load("cpu")
-                self._loaded_device = "cpu"
-                return self._model
-            except Exception as exc2:
-                raise RuntimeError(
-                    f"Cross-Encoder {self._model_name!r} failed to load on GPU "
-                    f"({exc}) and the CPU fallback also failed: {exc2}"
-                ) from exc2
+            raise RuntimeError(
+                f"Cross-Encoder {self._model_name!r} failed to load on "
+                f"{device!r}: {exc}"
+            ) from exc
 
     def release(self) -> None:
         """Drop the loaded model and return its GPU memory.

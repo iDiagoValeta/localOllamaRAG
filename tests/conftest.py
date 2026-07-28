@@ -29,10 +29,9 @@ from pathlib import Path
 # run; being too lax would let collection fail outright.
 _ENGINE_REQUIREMENTS = (
     "requests",
-    "chromadb",
+    "faiss",
     "ollama",
-    "fitz",
-    "pymupdf4llm",
+    "PIL",
     "rank_bm25",
     "sentence_transformers",
 )
@@ -56,8 +55,8 @@ def _is_infrastructure_import(module: str) -> bool:
 
     ``rag`` is the old engine, whose facade imports the whole stack at module
     level. ``monkeygrab.adapters`` is infrastructure by definition: an adapter
-    exists to wrap a library, so importing one imports chromadb, ollama or
-    pymupdf4llm even when the test doubles the object afterwards. Everything
+    exists to wrap a library, so importing one imports FAISS, Ollama or
+    sentence-transformers even when the test doubles the object afterwards. Everything
     else under ``monkeygrab`` is pure and safe to collect anywhere.
     """
     if not module:

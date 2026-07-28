@@ -45,8 +45,7 @@ class ChatModel(Protocol):
         Args:
             prompt: User/task prompt.
             system: Optional system prompt.
-            images: Optional raw image bytes to condition generation on
-                (vision models only; empty for every non-OCR role).
+            images: Optional raw image bytes for a vision-capable chat model.
 
         Returns:
             The complete generated text.

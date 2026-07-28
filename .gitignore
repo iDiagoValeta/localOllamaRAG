@@ -32,7 +32,6 @@ rag/debug_rag/
 # from the corpus, so only the code that produces them belongs in git.
 rag/experiments/**/faiss_stores/
 rag/experiments/**/results/
-rag/experiments/chroma_*/
 rag/experiments/faiss_*/
 
 rag/web/frontend/node_modules/
@@ -50,6 +49,9 @@ tests/eval/papers_cache/
 # the resulting index caches under rag/vector_db/ (already ignored) matter.
 tests/eval/blind_docs/
 tests/eval/runs/
+
+# Local test/evaluation scratch output.
+/pipeline/output/
 
 # PyInstaller desktop-app build output (multi-GB bundle; never committed).
 /build/
@@ -84,11 +86,10 @@ media/
 .codex
 .cursor/
 AGENTS.md
-.codegraph/
-
 # Assistant instructions for this project are versioned so any clone (or CI
 # runner) picks them up; local session state and scratch files are not. This
 # block stays last: a later rule would otherwise re-ignore the file.
 CLAUDE.md
 .claude/*
 !.claude/CLAUDE.md
+**/.claude/settings.local.json

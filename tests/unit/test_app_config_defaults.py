@@ -34,21 +34,15 @@ from monkeygrab.config import AppConfig  # noqa: E402
 _FIELD_MAP = [
     ("models.rag", "MODELO_RAG"),
     ("models.chat", "MODELO_CHAT"),
-    ("models.embedding", "MODELO_EMBEDDING"),
     ("models.contextual", "MODELO_CONTEXTUAL"),
     ("models.recomp", "MODELO_RECOMP"),
-    ("models.ocr", "MODELO_OCR"),
     ("models.desc", "MODELO_DESC"),
-    ("models.embed_prefix_query", "EMBED_PREFIX_QUERY"),
-    ("models.embed_prefix_doc", "EMBED_PREFIX_DOC"),
-    ("models.reranker_quality", "RERANKER_MODEL_QUALITY"),
     ("models.ollama.num_ctx", "OLLAMA_NUM_CTX"),
     ("models.ollama.rag_num_ctx", "OLLAMA_RAG_NUM_CTX"),
     ("models.ollama.aux_num_ctx", "OLLAMA_AUX_NUM_CTX"),
     ("models.ollama.query_num_ctx", "OLLAMA_QUERY_NUM_CTX"),
     ("models.ollama.recomp_num_ctx", "OLLAMA_RECOMP_NUM_CTX"),
     ("models.ollama.contextual_num_ctx", "OLLAMA_CONTEXTUAL_NUM_CTX"),
-    ("models.ollama.ocr_num_ctx", "OLLAMA_OCR_NUM_CTX"),
     ("models.ollama.request_timeout", "OLLAMA_REQUEST_TIMEOUT"),
     ("models.ollama.keep_alive", "OLLAMA_KEEP_ALIVE"),
     ("models.ollama.generate_retries", "OLLAMA_GENERATE_RETRIES"),
@@ -57,9 +51,6 @@ _FIELD_MAP = [
     ("chunking.chunk_overlap", "CHUNK_OVERLAP"),
     ("chunking.min_chunk_length", "MIN_CHUNK_LENGTH"),
     ("chunking.contextual_doc_chars", "CONTEXTUAL_DOC_CHARS"),
-    ("chunking.max_images_per_page", "MAX_IMAGENES_POR_PAGINA"),
-    ("chunking.min_image_size_px", "MIN_IMAGEN_SIZE_PX"),
-    ("chunking.caption_margin_px", "CAPTION_MARGIN_PX"),
     ("retrieval.n_semantic_results", "N_RESULTADOS_SEMANTICOS"),
     ("retrieval.n_keyword_results", "N_RESULTADOS_KEYWORD"),
     ("retrieval.top_k_rerank_candidates", "TOP_K_RERANK_CANDIDATES"),
@@ -103,11 +94,7 @@ _FIELD_MAP = [
 # implementation, which is why swapping one meant editing wiring code. Their
 # defaults are covered by tests/unit/test_stack_selection.py, which asserts that
 # an unset environment reproduces the current production stack.
-_FIELDS_WITHOUT_ENGINE_COUNTERPART = {
-    "stack.extractor",
-    "stack.vector_store",
-    "stack.embedder",
-}
+_FIELDS_WITHOUT_ENGINE_COUNTERPART = set()
 
 
 def _resolve(obj, dotted_path):

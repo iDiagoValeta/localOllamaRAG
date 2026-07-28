@@ -14,18 +14,16 @@ BM25 corpus would otherwise be rebuilt on every question.
 
 from typing import Any, Dict, Optional
 
-import chromadb
-
 from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel
 from monkeygrab.adapters.chat.ollama_model_unloader import OllamaModelUnloader
-from monkeygrab.adapters.embedding.ollama_embedder import OllamaEmbedder
 from monkeygrab.adapters.lexical.bm25_index import Bm25LexicalIndex
 from monkeygrab.adapters.reranking.cross_encoder_reranker import CrossEncoderReranker
-from monkeygrab.adapters.vectorstore.chroma_store import ChromaVectorStore
 from monkeygrab.application.answer import Answer
+from monkeygrab.composition import build_embedder, build_vector_store
 from monkeygrab.config.app_config import AppConfig
 from monkeygrab.domain.chunk_metadata import ChunkMetadata
 from monkeygrab.domain.fragment import Fragment
+from monkeygrab.ports.vector_store import VectorStore
 from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
@@ -37,10 +35,8 @@ _RUNTIME_OVERRIDES = {
     "paths.docs_folder": "CARPETA_DOCS",
     "models.rag": "MODELO_RAG",
     "models.chat": "MODELO_CHAT",
-    "models.embedding": "MODELO_EMBEDDING",
     "models.contextual": "MODELO_CONTEXTUAL",
     "models.recomp": "MODELO_RECOMP",
-    "models.ocr": "MODELO_OCR",
     "flags.usar_contextual_retrieval": "USAR_CONTEXTUAL_RETRIEVAL",
     "flags.usar_embeddings_imagen": "USAR_EMBEDDINGS_IMAGEN",
     "flags.usar_llm_query_decomposition": "USAR_LLM_QUERY_DECOMPOSITION",
@@ -57,9 +53,9 @@ _RUNTIME_OVERRIDES = {
 def app_config_from_runtime() -> AppConfig:
     """Build an ``AppConfig`` reflecting the current runtime state.
 
-    Stack selection (extractor, vector store, embedder) comes from the process
-    environment via ``AppConfig.from_env``. Paths, model roles and pipeline
-    flags are then overridden from the live ``rag.chat_pdfs`` globals, so
+    The fixed MinerU, Jina CLIP and FAISS composition sits outside this
+    configuration object. Paths, model roles and pipeline flags are overridden
+    from the live ``rag.chat_pdfs`` globals, so
     ``set_docs_folder_runtime``, ``set_model_roles_runtime`` and
     ``set_pipeline_flags`` keep working exactly as before.
 
@@ -71,25 +67,27 @@ def app_config_from_runtime() -> AppConfig:
     )
 
 
-def vector_store(collection: chromadb.Collection) -> ChromaVectorStore:
-    """Adapt a caller-owned Chroma collection to the ``VectorStore`` port.
-
-    The CLI, the web app and the evaluation runner all open the collection
-    themselves and pass it in; wrapping that same object keeps their own
-    ``count``/``get`` views consistent with what the pipeline reads and writes.
-
-    Args:
-        collection: An open ChromaDB collection.
-
-    Returns:
-        The port-conforming wrapper.
-    """
-    return ChromaVectorStore.wrap_collection(collection)
+_store_cache: Dict[str, Any] = {"key": None, "store": None}
+_embedder_cache: Dict[str, Any] = {"embedder": None}
 
 
-def embedder(config: AppConfig) -> OllamaEmbedder:
-    """Build the query/document embedder for the configured embedding model."""
-    return OllamaEmbedder(config.models)
+def vector_store(config: AppConfig) -> VectorStore:
+    """Return the FAISS store for the active corpus."""
+    key = (config.paths.path_db, config.paths.collection_name)
+    if _store_cache["key"] != key:
+        _store_cache.update(key=key, store=build_vector_store(config))
+    return _store_cache["store"]
+
+
+def reset_vector_store_cache() -> None:
+    _store_cache.update(key=None, store=None)
+
+
+def embedder(config: AppConfig):
+    """Return the reusable jina-clip-v2 worker."""
+    if _embedder_cache["embedder"] is None:
+        _embedder_cache["embedder"] = build_embedder(config)
+    return _embedder_cache["embedder"]
 
 
 def rag_chat_model(config: AppConfig) -> OllamaChatModel:
@@ -164,12 +162,10 @@ def query_decomposer(config: AppConfig) -> OllamaChatModel:
 # module level because the interfaces call the pipeline as free functions and
 # have nowhere else to keep them for the life of the process.
 _lexical_cache: Dict[str, Any] = {"key": None, "index": None}
-_reranker_cache: Dict[str, Any] = {"key": None, "reranker": None}
+_reranker_cache: Dict[str, Any] = {"reranker": None}
 
 
-def lexical_index(
-    collection: chromadb.Collection, config: AppConfig
-) -> Bm25LexicalIndex:
+def lexical_index(store: VectorStore, config: AppConfig) -> Bm25LexicalIndex:
     """Return the BM25 index for this collection, building it only when needed.
 
     The index itself re-scans the corpus when the chunk count changes; this
@@ -186,12 +182,11 @@ def lexical_index(
     """
     # Real collections have a stable name; fall back to object identity so two
     # unnamed collections (test doubles, typically) never share a cache entry.
-    collection_key = getattr(collection, "name", None) or id(collection)
-    key = (collection_key, config.retrieval.bm25_k1, config.retrieval.bm25_b)
+    key = (id(store), config.retrieval.bm25_k1, config.retrieval.bm25_b)
 
     if _lexical_cache["key"] != key:
         _lexical_cache.update(
-            key=key, index=Bm25LexicalIndex(vector_store(collection), config.retrieval)
+            key=key, index=Bm25LexicalIndex(store, config.retrieval)
         )
     return _lexical_cache["index"]
 
@@ -200,28 +195,22 @@ def reranker(config: AppConfig) -> CrossEncoderReranker:
     """Return the Cross-Encoder reranker, loading its weights at most once.
 
     Rebuilding this per query would reload hundreds of megabytes of model
-    weights each time, so the instance is cached until the configured quality
-    tier changes. The adapter loads lazily, so holding one costs nothing until
-    something is actually reranked.
+    weights each time. The fixed BGE adapter loads lazily, so holding one costs
+    nothing until something is actually reranked.
 
     Args:
-        config: Current config; the reranker quality tier is read from it.
+        config: Current pipeline configuration.
 
     Returns:
         A cached or freshly built reranker.
     """
-    key = config.models.reranker_quality
-    if _reranker_cache["key"] != key:
-        # Switching tiers strands the previous model's weights in VRAM, which
-        # on an 8 GB card is enough to stop the generator from loading at all.
-        outgoing: Optional[CrossEncoderReranker] = _reranker_cache["reranker"]
-        if outgoing is not None:
-            outgoing.release()
-        _reranker_cache.update(key=key, reranker=CrossEncoderReranker(config.models))
+    del config
+    if _reranker_cache["reranker"] is None:
+        _reranker_cache["reranker"] = CrossEncoderReranker()
     return _reranker_cache["reranker"]
 
 
-def answer(collection: chromadb.Collection, config: AppConfig) -> Answer:
+def answer(store: VectorStore, config: AppConfig) -> Answer:
     """Build the generation use case for this collection.
 
     RECOMP synthesis is wired only when its flag is on: an absent model means
@@ -236,7 +225,7 @@ def answer(collection: chromadb.Collection, config: AppConfig) -> Answer:
         A ready-to-run ``Answer``.
     """
     return Answer(
-        vector_store(collection),
+        store,
         rag_chat_model(config),
         config,
         recomp_chat_model=recomp_chat_model(config) if config.flags.usar_recomp_synthesis else None,
@@ -248,7 +237,7 @@ def metadata_to_dict(metadata) -> Dict[str, Any]:
     """Serialize ``ChunkMetadata`` back into the dict shape the interfaces read.
 
     The CLI, the web app and the debug dump all index into fragment metadata
-    as a plain dict, which is also how ChromaDB stores it. Optional fields
+    as a plain dict for the interfaces. Optional fields
     that are unset are omitted rather than written as ``None``, matching what
     is on disk.
 
@@ -364,7 +353,7 @@ def retrieval_metrics_to_legacy(metrics: Dict[str, Any], config: AppConfig) -> D
         "fase_semantica": {
             "queries_generadas": len(metrics["query_variants"]),
             "fragmentos_unicos": distances["unique_fragments"],
-            "modelo_embedding": config.models.embedding,
+            "modelo_embedding": "jinaai/jina-clip-v2",
             "n_resultados_por_query": retrieval.n_semantic_results,
             "resultados_por_query": metrics["semantic_hits_per_query"],
             "distancia_l2_min": distances["l2_min"],
@@ -387,7 +376,7 @@ def retrieval_metrics_to_legacy(metrics: Dict[str, Any], config: AppConfig) -> D
             "candidatos_entrada": metrics["fused_candidates"],
             "resultados_salida": metrics["final_count"],
             "tiempo_reranking": metrics["rerank_seconds"],
-            "modelo_usado": config.models.reranker_quality,
+            "modelo_usado": "BAAI/bge-reranker-v2-m3",
         } if metrics["reranked"] else {},
         "candidatos_fusion": metrics["fused_candidates"],
         "resultados_finales": metrics["final_count"],
@@ -409,6 +398,7 @@ __all__ = [
     "rag_chat_model",
     "recomp_chat_model",
     "reranker",
+    "reset_vector_store_cache",
     "retrieval_metrics_to_legacy",
     "vector_store",
 ]

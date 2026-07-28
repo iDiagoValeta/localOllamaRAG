@@ -2,7 +2,7 @@
 
 Covers the orchestration -- which query variants get embedded, which optional
 stages run, and how reranking interacts with the relevance threshold -- using
-hand-written port fakes, so nothing here touches Ollama, ChromaDB or a GPU.
+hand-written port fakes, so nothing here touches Ollama, FAISS or a GPU.
 
 The pieces Retrieve delegates to have their own files: RRF fusion in
 test_rrf_fusion.py, the threshold filter in test_retrieve_threshold_equivalence.py,
