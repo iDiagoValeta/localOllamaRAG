@@ -50,9 +50,13 @@ web interface, and nothing leaves the machine.
 <summary><strong>See it in action</strong></summary>
 <br/>
 
-**Web interface:** https://github.com/user-attachments/assets/f5f8fa1d-b193-4f94-85c2-8f903afa2348
+**Web interface**
 
-**CLI:** https://github.com/user-attachments/assets/a27b6fef-52c1-4d4a-846e-7c4cd36863fa
+https://github.com/user-attachments/assets/f5f8fa1d-b193-4f94-85c2-8f903afa2348
+
+**CLI**
+
+https://github.com/user-attachments/assets/a27b6fef-52c1-4d4a-846e-7c4cd36863fa
 
 **LaTeX rendering** (formulas via [KaTeX](https://katex.org/) in the web UI):
 
