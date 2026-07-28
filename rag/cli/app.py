@@ -20,7 +20,7 @@ import difflib
 import os
 import signal
 from collections import Counter
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from rag.cli.commands import ALIASES, COMMANDS, primary_commands
 from rag.cli.display import QueryTimer, SessionStats, ui

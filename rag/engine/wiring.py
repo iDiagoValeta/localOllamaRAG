@@ -12,7 +12,7 @@ not cheap is cached here instead: the Cross-Encoder weights and the tokenized
 BM25 corpus would otherwise be rebuilt on every question.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel
 from monkeygrab.adapters.chat.ollama_model_unloader import OllamaModelUnloader
