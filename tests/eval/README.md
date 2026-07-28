@@ -105,10 +105,13 @@ something is missing:
    not Ollama roles.
 2. Downloads any missing blind-set arXiv papers (reusing `fetch_papers.py`)
    and stages them under `blind_docs/<paper-slug>.pdf`.
-3. Indexes whatever is not already indexed -- dev-set papers into the
-   existing `rag/docs/en/` collection, blind-set papers into their own
-   collection under `blind_docs/` -- via the real `indexar_documentos`
-   pipeline. Already-indexed papers are never reprocessed.
+3. Indexes whatever is not already indexed -- dev-set papers read from
+   `rag/docs/en/` but stored in the eval's own isolated collection, blind-set
+   papers into their own collection under `blind_docs/` -- via the real
+   `indexar_documentos` pipeline. A paper is reused only when the store's
+   recorded index recipe (chunking, embeddings, index-time flags) matches
+   the configuration this run will use; a changed recipe discards the store
+   and rebuilds it.
 4. Verifies every paper referenced by a gold case actually has an index
    entry before running anything.
 5. Runs every case through the real retrieval + (for factual cases)

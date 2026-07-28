@@ -67,6 +67,18 @@ RESULTS_DIR = EVAL_DIR / "runs"
 BLIND_DOCS_DIR = EVAL_DIR / "blind_docs"
 DEV_DOCS_DIR = REPO_ROOT / "rag" / "docs" / "en"
 
+# Fed into derive_db_paths in place of DEV_DOCS_DIR when building the dev-set
+# config (see _eval_app_config's path_label) -- never read from disk, only its
+# basename matters. Deriving the FAISS collection from DEV_DOCS_DIR directly
+# would give this run the same "docs_en" collection the product's own store
+# uses, and that store has a second writer: the web UI's indexing path writes
+# chunks into it under its own flags and never records this gate's fingerprint.
+# Reusing it here would silently measure a mixture of two pipelines, and the
+# first eval run after a user adds a document there would call store.clear()
+# on a store that still has product data in it. The blind set never needed
+# this because BLIND_DOCS_DIR's basename already differs from "en".
+EVAL_DEV_LABEL = EVAL_DIR / "dev_docs"
+
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 # The baseline was calibrated with this model. Other models can be measured
@@ -230,7 +242,13 @@ def should_rebuild(stored: Optional[str], expected: str) -> bool:
     return stored != expected
 
 
-def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str):
+def ensure_indexed(
+    rag,
+    carpeta: Path,
+    required_pdfs: Iterable[str],
+    label: str,
+    path_label: Optional[Path] = None,
+):
     """Index missing PDFs into the multimodal stack; return its use cases.
 
     Args:
@@ -238,6 +256,8 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
         carpeta: PDF directory to index.
         required_pdfs: Filenames that must end up indexed.
         label: Short name for log lines ("dev set", "blind set").
+        path_label: Forwarded to _eval_app_config to isolate the FAISS
+            collection from carpeta's own basename (see EVAL_DEV_LABEL).
 
     Returns:
         ``(Retrieve, Stack)`` for this corpus. Caller should ``close()`` the
@@ -259,7 +279,7 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
     required = set(required_pdfs)
     rag.set_docs_folder_runtime(str(carpeta))
     try:
-        config = _eval_app_config(rag, carpeta)
+        config = _eval_app_config(rag, carpeta, path_label=path_label)
         stack = build_stack(config)
         store = stack.vector_store
         expected_fingerprint = compute_index_fingerprint(config)
@@ -395,9 +415,19 @@ def _fragment_to_dict(fragment) -> Dict[str, Any]:
     return fragment_to_dict(fragment)
 
 
-def _eval_app_config(rag, carpeta: Path):
-    """Build the fixed multimodal evaluation configuration."""
+def _eval_app_config(rag, carpeta: Path, path_label: Optional[Path] = None):
+    """Build the fixed multimodal evaluation configuration.
+
+    Args:
+        rag: The imported rag.chat_pdfs module (runtime model/flag source).
+        carpeta: PDF directory this run indexes from.
+        path_label: When given, derive the FAISS store location/collection
+            name from this path's basename instead of carpeta's, without
+            changing which folder is actually indexed. See EVAL_DEV_LABEL for
+            why the dev set needs this and the blind set does not.
+    """
     from monkeygrab.config.app_config import AppConfig
+    from monkeygrab.config.paths import derive_db_paths
 
     config = AppConfig.from_env().with_overrides(
         **{
@@ -416,7 +446,13 @@ def _eval_app_config(rag, carpeta: Path):
             "flags.usar_recomp_synthesis": rag.USAR_RECOMP_SYNTHESIS,
         }
     )
-    return config.with_overrides(**{"flags.usar_contextual_retrieval": False})
+    config = config.with_overrides(**{"flags.usar_contextual_retrieval": False})
+    if path_label is not None:
+        path_db, collection_name = derive_db_paths(str(path_label), config.paths.data_dir)
+        config = config.with_overrides(
+            **{"paths.path_db": path_db, "paths.collection_name": collection_name}
+        )
+    return config
 
 
 def _sources_in_store(store) -> set[str]:
@@ -730,7 +766,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         dev_required = set(_required_pdfs(cases, "corpus"))
 
         retrieve_dev, evidence_dev, stack_dev = ensure_indexed(
-            rag, DEV_DOCS_DIR, dev_required, "dev set"
+            rag, DEV_DOCS_DIR, dev_required, "dev set", path_label=EVAL_DEV_LABEL
         )
         stacks_to_close.append(stack_dev)
         retrieve_blind = None
