@@ -17,11 +17,15 @@ from typing import Any, Dict, Optional
 import chromadb
 
 from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel
+from monkeygrab.adapters.chat.ollama_model_unloader import OllamaModelUnloader
 from monkeygrab.adapters.embedding.ollama_embedder import OllamaEmbedder
 from monkeygrab.adapters.lexical.bm25_index import Bm25LexicalIndex
 from monkeygrab.adapters.reranking.cross_encoder_reranker import CrossEncoderReranker
 from monkeygrab.adapters.vectorstore.chroma_store import ChromaVectorStore
+from monkeygrab.application.answer import Answer
 from monkeygrab.config.app_config import AppConfig
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
+from monkeygrab.domain.fragment import Fragment
 from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
@@ -86,6 +90,55 @@ def vector_store(collection: chromadb.Collection) -> ChromaVectorStore:
 def embedder(config: AppConfig) -> OllamaEmbedder:
     """Build the query/document embedder for the configured embedding model."""
     return OllamaEmbedder(config.models)
+
+
+def rag_chat_model(config: AppConfig) -> OllamaChatModel:
+    """Build the model that writes the final answer.
+
+    Sampling is cold and repetition-penalised: the answer must stay inside the
+    retrieved evidence, and a wandering generator is worse than a terse one.
+    ``num_predict`` is unbounded because a truncated answer to a document
+    question is indistinguishable from a wrong one.
+
+    The unloader is wired in here because this model runs last and needs the
+    VRAM the embedder and reranker were holding.
+    """
+    ollama = config.models.ollama
+    return OllamaChatModel(
+        config.models.rag,
+        num_ctx=ollama.rag_num_ctx,
+        keep_alive=ollama.keep_alive,
+        request_timeout=ollama.request_timeout,
+        generate_retries=ollama.generate_retries,
+        generate_retry_delay=ollama.generate_retry_delay,
+        options={
+            "temperature": 0.15,
+            "top_p": 0.9,
+            "repeat_penalty": 1.15,
+            "repeat_last_n": 64,
+            "num_predict": -1,
+        },
+        model_unloader=OllamaModelUnloader(config.models),
+    )
+
+
+def recomp_chat_model(config: AppConfig) -> OllamaChatModel:
+    """Build the model that compresses retrieved evidence before generation."""
+    ollama = config.models.ollama
+    return OllamaChatModel(
+        config.models.recomp,
+        num_ctx=ollama.recomp_num_ctx,
+        keep_alive=ollama.keep_alive,
+        request_timeout=ollama.request_timeout,
+        generate_retries=ollama.generate_retries,
+        generate_retry_delay=ollama.generate_retry_delay,
+        options={
+            "temperature": 0.1,
+            "num_predict": 1500,
+            "top_p": 0.9,
+            "repeat_penalty": 1.15,
+        },
+    )
 
 
 def query_decomposer(config: AppConfig) -> OllamaChatModel:
@@ -168,6 +221,29 @@ def reranker(config: AppConfig) -> CrossEncoderReranker:
     return _reranker_cache["reranker"]
 
 
+def answer(collection: chromadb.Collection, config: AppConfig) -> Answer:
+    """Build the generation use case for this collection.
+
+    RECOMP synthesis is wired only when its flag is on: an absent model means
+    the stage is skipped, which is how the use case expresses "not configured"
+    without consulting a flag it was not given.
+
+    Args:
+        collection: Collection used for neighbour-chunk expansion.
+        config: Current config.
+
+    Returns:
+        A ready-to-run ``Answer``.
+    """
+    return Answer(
+        vector_store(collection),
+        rag_chat_model(config),
+        config,
+        recomp_chat_model=recomp_chat_model(config) if config.flags.usar_recomp_synthesis else None,
+        system_prompt=cfg.SYSTEM_PROMPT_RAG,
+    )
+
+
 def metadata_to_dict(metadata) -> Dict[str, Any]:
     """Serialize ``ChunkMetadata`` back into the dict shape the interfaces read.
 
@@ -208,18 +284,61 @@ def fragment_to_dict(fragment) -> Dict[str, Any]:
     Returns:
         The fragment as a plain dict, including its derived ``id``.
     """
-    return {
+    data = {
         "doc": fragment.doc,
         "metadata": metadata_to_dict(fragment.metadata),
         "distancia": fragment.distancia,
         "id": fragment.id,
         "score_semantic": fragment.score_semantic,
         "score_keyword": fragment.score_keyword,
-        "score_reranker": fragment.score_reranker,
         "matches": list(fragment.matches),
         "query_matches": list(fragment.query_matches),
         "score_final": fragment.score_final,
     }
+    # Absent rather than None when the fragment was never reranked. Readers do
+    # `frag.get("score_reranker", frag["score_final"])`, and a present None
+    # defeats that fallback -- the web app's source panel then compares None
+    # against None and raises. Only reachable with reranking off, which the
+    # control panel can do at runtime.
+    if fragment.score_reranker is not None:
+        data["score_reranker"] = fragment.score_reranker
+    return data
+
+
+def fragment_from_dict(data: Dict[str, Any]) -> Fragment:
+    """Rebuild a ``Fragment`` from the dict shape the interfaces pass around.
+
+    The inverse of ``fragment_to_dict``. Needed because the facade's public API
+    is dict-based while the core speaks domain entities: fragments cross that
+    boundary out of retrieval and back in at generation.
+
+    Args:
+        data: A fragment dict, as produced by retrieval or neighbour expansion.
+
+    Returns:
+        The equivalent domain fragment.
+    """
+    meta = data.get("metadata") or {}
+    return Fragment(
+        doc=data.get("doc", ""),
+        metadata=ChunkMetadata(
+            source=meta.get("source", ""),
+            page=meta.get("page", 0),
+            chunk=meta.get("chunk", 0),
+            total_chunks_in_page=meta.get("total_chunks_in_page"),
+            format=meta.get("format"),
+            section_header=meta.get("section_header", ""),
+            image_width=meta.get("image_width"),
+            image_height=meta.get("image_height"),
+        ),
+        distancia=data.get("distancia", float("inf")),
+        score_semantic=data.get("score_semantic", 0.0),
+        score_keyword=data.get("score_keyword", 0.0),
+        score_final=data.get("score_final", 0.0),
+        score_reranker=data.get("score_reranker"),
+        matches=tuple(data.get("matches") or ()),
+        query_matches=tuple(data.get("query_matches") or ()),
+    )
 
 
 def retrieval_metrics_to_legacy(metrics: Dict[str, Any], config: AppConfig) -> Dict[str, Any]:
@@ -279,12 +398,16 @@ def retrieval_metrics_to_legacy(metrics: Dict[str, Any], config: AppConfig) -> D
 
 
 __all__ = [
+    "answer",
     "app_config_from_runtime",
     "embedder",
+    "fragment_from_dict",
     "fragment_to_dict",
     "lexical_index",
     "metadata_to_dict",
     "query_decomposer",
+    "rag_chat_model",
+    "recomp_chat_model",
     "reranker",
     "retrieval_metrics_to_legacy",
     "vector_store",

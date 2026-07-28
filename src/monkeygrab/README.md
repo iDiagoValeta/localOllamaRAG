@@ -31,19 +31,23 @@ not by convention.
 
 ## Current wiring (read before assuming more than this)
 
-**Indexing and retrieval run through the core.** `rag/engine/indexing.py`
-builds its ports via `composition.build_stack` (env: `PDF_EXTRACTOR`,
-`VECTOR_STORE`, `EMBEDDER`; the default is still pymupdf + Ollama + Chroma)
-and runs `IndexCorpus`. `rag/engine/retrieval.py` builds its ports via
-`rag/engine/wiring.py` and runs `Retrieve` — the same use case
-`tests/eval/run_eval.py` constructs, so the evaluation gate and the shipped
-product cannot measure different retrieval.
+**All three stages run through the core.** `rag/engine/indexing.py` runs
+`IndexCorpus` with backends from `composition.build_stack` (env:
+`PDF_EXTRACTOR`, `VECTOR_STORE`, `EMBEDDER`; the default is still pymupdf +
+Ollama + Chroma). `rag/engine/retrieval.py` runs `Retrieve` and
+`rag/engine/generation.py` runs `Answer`. `tests/eval/run_eval.py` constructs
+the same use cases, so the evaluation gate and the shipped product cannot
+measure different behaviour.
 
-**Generation does not.** `rag/engine/generation.py` and `rag/engine/context.py`
-still own the answer path, importing pure helpers out of `application/` but
-not the `Answer` use case, which is unit-tested and unwired. Wiring it is the
-next phase and needs the full GPU evaluation gate to sign off, since it moves
-the code that produces answers. Do not describe `Answer` as in use.
+Each entry point under `rag/engine/` is wiring plus conversion between the
+domain entities the core speaks and the dicts the interfaces consume. None of
+them holds pipeline logic.
+
+`Answer` exposes its three steps separately — `select_evidence`,
+`build_user_message`, `stream` — as well as a `run` that composes them. The
+split exists because a caller streaming to a web client sends the cited
+sources before the first token arrives, which it cannot do if preparing the
+prompt and generating from it are one call.
 
 `rag/engine/wiring.py` is the only bridge between the mutable runtime globals
 in `rag/chat_pdfs.py` and the immutable `AppConfig` this package takes. It

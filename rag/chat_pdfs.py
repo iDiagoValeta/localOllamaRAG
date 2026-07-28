@@ -529,7 +529,6 @@ from rag.engine.context import (
 from rag.engine.debug import guardar_debug_rag
 from rag.engine.generation import (
     OLLAMA_BASE_URL,
-    _ollama_generate_stream,
     _preparar_mensaje_usuario_rag,
     generar_tokens_respuesta,
     _generar_respuesta_stream,

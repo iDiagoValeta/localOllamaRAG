@@ -222,6 +222,7 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
     from monkeygrab.adapters.extraction.pymupdf_image_extractor import PymupdfImageExtractor
     from monkeygrab.adapters.lexical.bm25_index import Bm25LexicalIndex
     from monkeygrab.adapters.reranking.cross_encoder_reranker import CrossEncoderReranker
+    from monkeygrab.application.answer import Answer
     from monkeygrab.application.index_corpus import IndexCorpus
     from monkeygrab.application.retrieve import Retrieve
     from monkeygrab.composition import build_stack
@@ -304,12 +305,21 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
             reranker=reranker,
             query_decomposer=None,
         )
+        # The product does not generate straight from what retrieval returned:
+        # it expands the top fragments with their neighbours and trims to the
+        # character budget first. Building the same use case here is what keeps
+        # this runner from grading answers written off evidence no user's query
+        # would have produced.
+        from rag.engine import wiring
+
+        evidence = Answer(store, wiring.rag_chat_model(config), config)
+
         print(
             f"[index] {label}: stack={config.stack.slug} "
             f"chunks={store.count()} chroma={config.stack.vector_store == VECTOR_STORE_CHROMA}",
             flush=True,
         )
-        return retrieve, stack
+        return retrieve, evidence, stack
     finally:
         rag.set_docs_folder_runtime(None)
 
@@ -503,6 +513,8 @@ def run_all_cases(
     cases: Sequence[Dict[str, Any]],
     retrieve_dev,
     retrieve_blind,
+    evidence_dev,
+    evidence_blind,
     models: Sequence[str],
 ) -> List[Dict[str, Any]]:
     """Run every gold case via ``Retrieve``, retrieving everything before
@@ -525,11 +537,14 @@ def run_all_cases(
 
     print("[phase 1/2] retrieval for every case (embedder + reranker on GPU)", flush=True)
     for case in cases:
-        retrieve = retrieve_dev if case["source"] == "corpus" else retrieve_blind
+        is_dev = case["source"] == "corpus"
+        retrieve = retrieve_dev if is_dev else retrieve_blind
+        evidence = evidence_dev if is_dev else evidence_blind
         t0 = time.perf_counter()
         try:
             result = retrieve.run(case["question"])
-            fragments = [_fragment_to_dict(f) for f in result.fragments]
+            selected, _metrics = evidence.select_evidence(result.fragments)
+            fragments = [_fragment_to_dict(f) for f in selected]
         except Exception as exc:
             records.append({
                 "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
@@ -683,12 +698,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         blind_required = stage_blind_papers(cases)
         dev_required = set(_required_pdfs(cases, "corpus"))
 
-        retrieve_dev, stack_dev = ensure_indexed(rag, DEV_DOCS_DIR, dev_required, "dev set")
+        retrieve_dev, evidence_dev, stack_dev = ensure_indexed(
+            rag, DEV_DOCS_DIR, dev_required, "dev set"
+        )
         stacks_to_close.append(stack_dev)
         retrieve_blind = None
+        evidence_blind = None
         stack_blind = None
         if blind_required:
-            retrieve_blind, stack_blind = ensure_indexed(
+            retrieve_blind, evidence_blind, stack_blind = ensure_indexed(
                 rag, BLIND_DOCS_DIR, set(blind_required), "blind set"
             )
             stacks_to_close.append(stack_blind)
@@ -704,7 +722,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             f"up to {len(args.models)} model(s)\n",
             flush=True,
         )
-        records = run_all_cases(rag, cases, retrieve_dev, retrieve_blind, args.models)
+        records = run_all_cases(
+            rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, args.models
+        )
     except EvalSetupError as exc:
         print(f"\nSETUP FAILED: {exc}", file=sys.stderr)
         return 1
