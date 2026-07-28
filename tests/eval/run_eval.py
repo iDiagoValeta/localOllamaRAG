@@ -542,17 +542,44 @@ def run_factual_case(
 # Measured in issue #27 (2026-07-29): with the product default KEEP_ALIVE=0,
 # Ollama discards the model's weights after every call, so each factual case
 # in phase 2 paid a ~200s cold load -- a fixed per-call cost, not variance.
-# That reload buys nothing here specifically: run_all_cases already calls
-# _release_gpu_models() before phase 2 starts, so Ollama owns the GPU alone
-# from that point and there is nothing else waiting on the VRAM it would
-# free. 120s comfortably survives the sub-second gap between one case's
-# generation calls and the next (grading plus a dict lookup, no GPU work),
-# without pinning the model in memory once the harness itself exits.
+# The reload is pure waste only when every Ollama role resolves to one model
+# -- true for DEFAULT_MODELS, since AUX_MODEL is the same "gemma4:e2b", which
+# makes OllamaModelUnloader.unload_all_except a no-op. A --models sweep whose
+# generator differs from AUX_MODEL still pays RECOMP's own reload each case
+# (stream() unloads every other configured role before it runs) and puts two
+# models on an 8 GB card -- see _release_gpu_models's docstring for what a
+# short-on-VRAM Ollama does instead of failing fast. 120s survives the
+# sub-second gap between one case's calls and the next (grading, a dict
+# lookup, no GPU work) without pinning a model once the harness itself exits.
 _EVAL_GENERATION_KEEP_ALIVE_SECONDS = "120"
 
 
+def _release_ollama_models(model_names: Iterable[str]) -> None:
+    """POST keep_alive=0 for each model, best-effort.
+
+    Same request shape as OllamaModelUnloader.unload_all_except (see
+    src/monkeygrab/adapters/chat/ollama_model_unloader.py) -- reused rather
+    than reinvented. Restoring OLLAMA_KEEP_ALIVE only changes what the *next*
+    request will ask for; it does not reach back and shorten the 120s the
+    last request already told Ollama to hold the model for, so the run has
+    to ask explicitly to free the card before it exits. A failure here must
+    not mask the run's results, so exceptions are logged and swallowed.
+    """
+    import requests
+
+    for name in sorted(set(model_names)):
+        try:
+            requests.post(
+                f"{OLLAMA_BASE_URL}/api/generate",
+                json={"model": name, "keep_alive": 0},
+                timeout=30,
+            )
+        except Exception as exc:  # noqa: BLE001 - best-effort, see docstring
+            print(f"[phase] failed to release {name!r}: {exc}", flush=True)
+
+
 @contextlib.contextmanager
-def _generation_keep_alive():
+def _generation_keep_alive(models_used: Iterable[str]):
     """Scope OLLAMA_KEEP_ALIVE to this process, for phase 2's generation calls only.
 
     generar_respuesta_silenciosa (rag/engine/generation.py) builds a fresh
@@ -562,13 +589,19 @@ def _generation_keep_alive():
     reaches that call, so the environment is the only lever available here.
 
     Deliberately scoped to the phase 2 block (set after _release_gpu_models,
-    restored once generation finishes) rather than the whole run: phase 1
-    never touches Ollama, so it cannot benefit, and leaving it set past
-    main() would let a non-zero keep-alive leak into anything else importing
-    rag.chat_pdfs afterwards. Does not touch the product default -- see
-    issue #27: keep_alive=0 exists because the embedder and reranker
+    environment variable restored once generation finishes -- that restore
+    only affects future requests, so ``models_used`` is explicitly released
+    below to free Ollama's own 120s hold on them) rather than the whole run:
+    phase 1 never touches Ollama, so it cannot benefit, and leaving it set
+    past main() would let a non-zero keep-alive leak into anything else
+    importing rag.chat_pdfs afterwards. Does not touch the product default --
+    see issue #27: keep_alive=0 exists because the embedder and reranker
     contend for the same 8 GB (issue #25), and raising it globally would
     make that contention worse.
+
+    Args:
+        models_used: Every Ollama model name this phase may have loaded
+            (generator(s) under test plus AUX_MODEL), released on exit.
     """
     previous = os.environ.get("OLLAMA_KEEP_ALIVE")
     os.environ["OLLAMA_KEEP_ALIVE"] = _EVAL_GENERATION_KEEP_ALIVE_SECONDS
@@ -579,6 +612,7 @@ def _generation_keep_alive():
             os.environ.pop("OLLAMA_KEEP_ALIVE", None)
         else:
             os.environ["OLLAMA_KEEP_ALIVE"] = previous
+        _release_ollama_models(models_used)
 
 
 def _release_gpu_models(*retrievers) -> None:
@@ -680,7 +714,7 @@ def run_all_cases(
     _release_gpu_models(retrieve_dev, retrieve_blind)
 
     print(f"\n[phase 2/2] generation for {len(pending)} case(s) (Ollama alone on GPU)", flush=True)
-    with _generation_keep_alive():
+    with _generation_keep_alive(set(models) | {AUX_MODEL}):
         for item in pending:
             records.extend(
                 run_factual_case(rag, item["case"], item["fragments"], models, item["elapsed"])

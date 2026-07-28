@@ -104,11 +104,14 @@ el conjunto ciego se consumiría en la primera iteración.
 > 195 a 210 s por caso, de forma uniforme. La estimación original asumía
 > ~32 s/caso, extrapolados de un informe (2026-07-27) cuya cifra por caso no
 > aislaba generación de recuperación. Los números de la tabla y del diagrama
-> siguientes quedan corregidos con ese factor ~4, aplicado a las cifras
-> originales del diseño. Son una corrección, no una medición directa de este
-> conjunto de búsqueda (que aún no existe): la cifra real, una vez aplicado el
-> Cambio 1 (keep-alive del generador acotado a la fase de evaluación,
-> `tests/eval/run_eval.py`), queda pendiente de medir.
+> siguientes quedan corregidos con ese factor ~4, aplicado de forma plana a
+> las cifras originales del diseño -- incluidos los casos `figure_retrieval`
+> y `table_retrieval`, que nunca llaman al generador, así que la cifra
+> corregida es un límite superior, no una medición por tipo de caso. Son una
+> corrección, no una medición directa de este conjunto de búsqueda (que aún
+> no existe): la cifra real, una vez aplicado el Cambio 1 (keep-alive del
+> generador acotado a la fase de evaluación, `tests/eval/run_eval.py`), queda
+> pendiente de medir.
 
 | Conjunto | Papel | Cuándo se toca | Tamaño |
 |---|---|---|---|
@@ -195,14 +198,14 @@ ajustables y con qué valores. Escrito a mano, no inferido por introspección:
 añadir un parámetro debe ser una decisión visible, porque cada uno multiplica el
 espacio contra un presupuesto de evaluaciones muy corto.
 
-**Proponente.** A ~4 horas por evaluación completa (nivel rápido más conjunto de
-búsqueda; corregido con el factor de la nota de la sección 3, pendiente de
-remedir tras el Cambio 1 del issue #27), una noche da del orden de tres o cuatro
-candidatos, no diez o quince como asumía la estimación original. La búsqueda
-aleatoria es inútil con ese presupuesto, así que el proponente natural es un LLM
-que lea los fallos concretos y razone qué mover. Para saber si ese razonamiento
-aporta algo, el arnés incluye un proponente determinista como control y el
-criterio 5 se corre con ambos.
+**Proponente.** A ~2.8 horas por evaluación completa (32 + 136 min: nivel
+rápido más conjunto de búsqueda; corregido con el factor de la nota de la
+sección 3, pendiente de remedir tras el Cambio 1 del issue #27), una noche da
+del orden de tres o cuatro candidatos, no diez o quince como asumía la
+estimación original. La búsqueda aleatoria es inútil con ese presupuesto, así
+que el proponente natural es un LLM que lea los fallos concretos y razone qué
+mover. Para saber si ese razonamiento aporta algo, el arnés incluye un
+proponente determinista como control y el criterio 5 se corre con ambos.
 
 **Evaluador.** Aplica la configuración, corre el nivel rápido, descarta si hay
 regresión, y sólo entonces paga el conjunto de búsqueda completo. Devuelve el
