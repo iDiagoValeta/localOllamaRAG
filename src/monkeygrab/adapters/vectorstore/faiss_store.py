@@ -34,6 +34,11 @@ _INDEX_FILENAME = "index.faiss"
 _META_FILENAME = "meta.jsonl"
 _VERSION_FILENAME = "version.txt"
 
+# Deliberately outside the all-or-none rule in _load_or_init: every store
+# written before fingerprinting existed lacks this file, and those stores must
+# keep loading. Absent means "recipe unknown", which callers treat as stale.
+_FINGERPRINT_FILENAME = "fingerprint.txt"
+
 
 # METADATA CONVERSION
 
@@ -198,6 +203,7 @@ class FaissVectorStore:
         self._index_path = os.path.join(self._dir, _INDEX_FILENAME)
         self._meta_path = os.path.join(self._dir, _META_FILENAME)
         self._version_path = os.path.join(self._dir, _VERSION_FILENAME)
+        self._fingerprint_path = os.path.join(self._dir, _FINGERPRINT_FILENAME)
 
         self._index, self._rows = _load_or_init(self._dir)
         self._id_to_pos: Dict[str, int] = {row[0]: i for i, row in enumerate(self._rows)}
@@ -277,6 +283,33 @@ class FaissVectorStore:
     def count(self) -> int:
         return len(self._rows)
 
+    def read_fingerprint(self) -> Optional[str]:
+        """Return the index recipe fingerprint this store recorded, if any.
+
+        Returns:
+            The stored value, or ``None`` when the store predates
+            fingerprinting or recorded a blank one. ``None`` means *unknown*,
+            never *matches*: an index whose recipe cannot be established is
+            precisely the one that must not be trusted.
+        """
+        if not os.path.exists(self._fingerprint_path):
+            return None
+        with open(self._fingerprint_path, "r", encoding="utf-8") as f:
+            return f.read().strip() or None
+
+    def write_fingerprint(self, fingerprint: str) -> None:
+        """Record the fingerprint of the recipe that produced this content.
+
+        The value is opaque to this adapter: it persists the string and never
+        interprets it. What it means lives in
+        ``monkeygrab.application.index_fingerprint``.
+
+        Args:
+            fingerprint: The digest to record.
+        """
+        with open(self._fingerprint_path, "w", encoding="utf-8") as f:
+            f.write(fingerprint + "\n")
+
     def delete_source(self, source: str) -> int:
         positions = [
             position
@@ -304,7 +337,12 @@ class FaissVectorStore:
         self._index = None
         self._rows = []
         self._id_to_pos = {}
-        for path in (self._index_path, self._meta_path, self._version_path):
+        for path in (
+            self._index_path,
+            self._meta_path,
+            self._version_path,
+            self._fingerprint_path,
+        ):
             if os.path.exists(path):
                 os.remove(path)
 
