@@ -606,15 +606,31 @@ def _bucket_stats(records: Sequence[Dict[str, Any]], key_fn) -> Dict[str, Dict[s
     }
 
 
-def build_summary(records: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
-    """Build the overall / by-case-type / by-model / cross summary blocks."""
+# Case types decided entirely by retrieval: they never call a generator, so a
+# pass says a fragment of the right kind was surfaced -- not that any answer
+# used it. Blending them into one figure reads as answer quality and is not.
+_RETRIEVAL_ONLY_CASE_TYPES = ("figure_retrieval", "table_retrieval")
+
+
+def _rate(records: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Pass/total/rate over ``records``; an empty bucket rates 0.0, not an error."""
     total = len(records)
     passed = sum(1 for r in records if r["passed"])
     return {
-        "overall": {
-            "total": total, "passed": passed,
-            "pass_rate": round(passed / total, 4) if total else 0.0,
-        },
+        "total": total,
+        "passed": passed,
+        "pass_rate": round(passed / total, 4) if total else 0.0,
+    }
+
+
+def build_summary(records: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Build the overall / by-case-type / by-model / cross summary blocks."""
+    retrieval_only = [r for r in records if r["case_type"] in _RETRIEVAL_ONLY_CASE_TYPES]
+    answered = [r for r in records if r["case_type"] not in _RETRIEVAL_ONLY_CASE_TYPES]
+    return {
+        "overall": _rate(records),
+        "retrieval_only": _rate(retrieval_only),
+        "answer": _rate(answered),
         "by_case_type": _bucket_stats(records, lambda r: r["case_type"]),
         "by_model": _bucket_stats(records, lambda r: r["model"] or "n/a (retrieval)"),
         "by_case_type_and_model": _bucket_stats(
@@ -627,6 +643,9 @@ def print_summary(summary: Dict[str, Any]) -> None:
     """Print a compact human-readable table -- the CI log's actual payoff."""
     o = summary["overall"]
     print(f"\n=== RESULT: {o['passed']}/{o['total']} passed ({o['pass_rate']:.1%}) ===\n")
+    r, a = summary["retrieval_only"], summary["answer"]
+    print(f"  retrieval only  {r['passed']:>3}/{r['total']:<3} ({r['pass_rate']:.1%})")
+    print(f"  answered        {a['passed']:>3}/{a['total']:<3} ({a['pass_rate']:.1%})\n")
     print("-- by case type --")
     for key, b in sorted(summary["by_case_type"].items()):
         print(f"  {key:<20} {b['passed']:>3}/{b['total']:<3} ({b['pass_rate']:.1%})")
