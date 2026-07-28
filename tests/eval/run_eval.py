@@ -86,9 +86,9 @@ BASELINE_MARGIN = 0.05
 
 # Case types decided entirely by retrieval: they skip generation in
 # run_all_cases (a pass says a fragment of the right kind was surfaced, not
-# that any answer used it) and are reported in their own build_summary bucket
-# so blending them into "answer" would not read as answer quality that it
-# isn't. One definition drives both, so a third retrieval-only type can't be
+# that any answer used it) and are reported in their own build_summary bucket,
+# because blending them into "answer" would read as answer quality that isn't
+# there. One definition drives both, so a third retrieval-only type can't be
 # added to the dispatch without also changing how it's reported.
 _RETRIEVAL_ONLY_CASE_TYPES = ("figure_retrieval", "table_retrieval")
 
