@@ -75,17 +75,21 @@ docs/README.md             Documentation standard
 
 **Wiring today, not aspirational:**
 
-- **Indexing and retrieval run through the core.** `rag/engine/indexing.py`
-  runs `IndexCorpus`; `rag/engine/retrieval.py` runs `Retrieve` — the same use
-  case `tests/eval/run_eval.py` constructs, which is what stops the evaluation
-  gate and the shipped product from measuring different retrieval. Both build
-  their ports through `rag/engine/wiring.py`, the single bridge between this
+- **All three stages run through the core.** `rag/engine/indexing.py` runs
+  `IndexCorpus`, `rag/engine/retrieval.py` runs `Retrieve`, and
+  `rag/engine/generation.py` runs `Answer` — the same use cases
+  `tests/eval/run_eval.py` constructs, which is what stops the evaluation gate
+  and the shipped product from measuring different behavior. Every one builds
+  its ports through `rag/engine/wiring.py`, the single bridge between this
   package's mutable globals and the immutable `AppConfig` the core takes.
-- **Generation does not.** `rag/engine/generation.py` and
-  `rag/engine/context.py` own the answer path and import only pure helpers out
-  of `monkeygrab.application`. The `Answer` use case is unit-tested and
-  unwired; do not describe it as in use. Wiring it needs the full gate (§5),
-  since it moves the code that produces answers.
+- **`rag/engine/` is wiring, not logic.** Each module builds adapters, calls a
+  use case, and converts between domain entities and the dicts the interfaces
+  consume. `rag/engine/context.py` remains the home of the pure context-
+  assembly helpers the core imports.
+- `Answer` exposes `select_evidence` / `build_user_message` / `stream`
+  separately as well as a composing `run`. The split is load-bearing: the web
+  layer sends cited sources before the first token, so it cannot have prompt
+  preparation and generation in one call.
 - `rag/engine/wiring.py` caches the Cross-Encoder and the tokenized BM25
   corpus. Anything else it builds is cheap and rebuilt per call, which is what
   makes a runtime model or flag change take effect on the next query.

@@ -132,13 +132,16 @@ is that two runs are always comparable.
 
 ### What is wired today
 
-| Stage | Runs through the core? |
-|---|---|
-| **Indexing** | Yes — [`IndexCorpus`](src/monkeygrab/application/index_corpus.py), built by [`composition.build_stack`](src/monkeygrab/composition.py) |
-| **Retrieval** | Yes — [`Retrieve`](src/monkeygrab/application/retrieve.py), the same use case the [evaluation gate](tests/eval/README.md) constructs |
-| **Generation** | Not yet — [`rag/engine/generation.py`](rag/engine/generation.py) still owns it; [`Answer`](src/monkeygrab/application/answer.py) is tested but unwired |
+All three stages run through the core. Each entry point under `rag/engine/`
+builds its adapters and calls a use case; none of them holds pipeline logic.
 
-That retrieval runs through one path is the point: the CLI, the web app and the
+| Stage | Use case | Entry point |
+|---|---|---|
+| **Indexing** | [`IndexCorpus`](src/monkeygrab/application/index_corpus.py) | [`indexing.py`](rag/engine/indexing.py), backends from [`composition.build_stack`](src/monkeygrab/composition.py) |
+| **Retrieval** | [`Retrieve`](src/monkeygrab/application/retrieve.py) | [`retrieval.py`](rag/engine/retrieval.py) |
+| **Generation** | [`Answer`](src/monkeygrab/application/answer.py) | [`generation.py`](rag/engine/generation.py) |
+
+That there is one path per stage is the point: the CLI, the web app and the
 acceptance gate cannot measure different behaviour, because there is only one
 implementation to measure.
 

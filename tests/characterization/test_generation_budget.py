@@ -1,10 +1,12 @@
-"""Characterization tests for the post-retrieval filters in
-rag/engine/generation.py -- pre-migration snapshot.
+"""Characterization tests for the two post-retrieval filters.
 
-Covers ``_filtrar_por_umbral_reranker`` (relevance threshold) and
-``_limitar_fragmentos_por_chars`` (context character budget). Both are pure
-functions of their inputs plus a couple of cfg flags, so no doubles are
-needed beyond monkeypatching those flags.
+The relevance threshold decides what evidence is good enough to answer from,
+and the character budget decides how much of it fits in the prompt. Both are
+pure functions of their inputs, so no doubles are needed.
+
+They used to live behind dict-shaped wrappers in ``rag/engine/generation.py``;
+the wrappers are gone and the functions are called directly. The boundaries
+asserted here are the contract and predate that move: do not edit them.
 """
 
 import sys
@@ -14,108 +16,107 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import rag.chat_pdfs as rag
-from rag.engine.generation import _filtrar_por_umbral_reranker, _limitar_fragmentos_por_chars
+from monkeygrab.application.answer import _limit_by_char_budget
+from monkeygrab.application.retrieve import _filter_by_reranker_threshold
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
+from monkeygrab.domain.fragment import Fragment
+
+THRESHOLD = 0.65
 
 
-def test_reranker_threshold_keeps_scores_strictly_at_or_above_threshold(monkeypatch):
+def _fragment(name, doc="", **scores):
+    """A fragment whose id starts with ``name``, so assertions stay readable."""
+    return Fragment(doc=doc, metadata=ChunkMetadata(source=name, page=0, chunk=0), **scores)
+
+
+def _names(fragments):
+    return [f.metadata.source for f in fragments]
+
+
+def test_reranker_threshold_keeps_scores_strictly_at_or_above_threshold():
     """Boundary is inclusive (``>=``): a fragment scoring exactly the
     threshold is kept, one just below it is dropped."""
-    monkeypatch.setattr(rag, "USAR_RERANKER", True)
-    monkeypatch.setattr(rag, "UMBRAL_SCORE_RERANKER", 0.65)
-
     fragmentos = [
-        {"id": "above", "score_reranker": 0.9},
-        {"id": "at_threshold", "score_reranker": 0.65},
-        {"id": "just_below", "score_reranker": 0.649999},
-        {"id": "far_below", "score_reranker": 0.1},
+        _fragment("above", score_reranker=0.9),
+        _fragment("at_threshold", score_reranker=0.65),
+        _fragment("just_below", score_reranker=0.649999),
+        _fragment("far_below", score_reranker=0.1),
     ]
 
-    kept = _filtrar_por_umbral_reranker(fragmentos)
+    kept = _filter_by_reranker_threshold(fragmentos, True, THRESHOLD)
 
-    assert [f["id"] for f in kept] == ["above", "at_threshold"]
+    assert _names(kept) == ["above", "at_threshold"]
 
 
-def test_reranker_threshold_falls_back_to_score_final_when_score_reranker_absent(monkeypatch):
-    """A fragment that was never reranked (e.g. reranker skipped upstream for
-    this candidate) is still evaluated against the threshold, using
-    ``score_final`` (RRF score) as the stand-in relevance signal."""
-    monkeypatch.setattr(rag, "USAR_RERANKER", True)
-    monkeypatch.setattr(rag, "UMBRAL_SCORE_RERANKER", 0.65)
-
+def test_reranker_threshold_falls_back_to_score_final_when_score_reranker_absent():
+    """A fragment that was never reranked is still evaluated against the
+    threshold, using ``score_final`` (the RRF score) as the stand-in relevance
+    signal."""
     fragmentos = [
-        {"id": "no_reranker_score_ok", "score_final": 0.7},
-        {"id": "no_reranker_score_low", "score_final": 0.2},
+        _fragment("no_reranker_score_ok", score_final=0.7),
+        _fragment("no_reranker_score_low", score_final=0.2),
     ]
 
-    kept = _filtrar_por_umbral_reranker(fragmentos)
+    kept = _filter_by_reranker_threshold(fragmentos, True, THRESHOLD)
 
-    assert [f["id"] for f in kept] == ["no_reranker_score_ok"]
-
-
-def test_reranker_threshold_disabled_flag_passes_everything_through_unfiltered(monkeypatch):
-    """When USAR_RERANKER is off, the threshold filter is a strict no-op --
-    even fragments with a score of 0 or missing scores survive."""
-    monkeypatch.setattr(rag, "USAR_RERANKER", False)
-    monkeypatch.setattr(rag, "UMBRAL_SCORE_RERANKER", 0.65)
-
-    fragmentos = [{"id": "a", "score_reranker": 0.9}, {"id": "b"}, {"id": "c", "score_final": 0.0}]
-
-    kept = _filtrar_por_umbral_reranker(fragmentos)
-
-    assert [f["id"] for f in kept] == ["a", "b", "c"]
+    assert _names(kept) == ["no_reranker_score_ok"]
 
 
-def test_reranker_threshold_all_below_returns_empty_list(monkeypatch):
-    monkeypatch.setattr(rag, "USAR_RERANKER", True)
-    monkeypatch.setattr(rag, "UMBRAL_SCORE_RERANKER", 0.65)
+def test_reranker_threshold_disabled_flag_passes_everything_through_unfiltered():
+    """With reranking off there are no reranker scores to threshold on, so the
+    filter is a strict no-op -- even fragments scoring 0 survive."""
+    fragmentos = [
+        _fragment("a", score_reranker=0.9),
+        _fragment("b"),
+        _fragment("c", score_final=0.0),
+    ]
 
-    fragmentos = [{"id": "a", "score_reranker": 0.1}, {"id": "b", "score_reranker": 0.2}]
+    kept = _filter_by_reranker_threshold(fragmentos, False, THRESHOLD)
 
-    assert _filtrar_por_umbral_reranker(fragmentos) == []
+    assert _names(kept) == ["a", "b", "c"]
 
 
-def test_char_budget_no_truncation_when_total_fits(monkeypatch):
-    monkeypatch.setattr(rag, "MAX_CONTEXTO_CHARS", 100)
+def test_reranker_threshold_all_below_returns_empty_list():
+    fragmentos = [_fragment("a", score_reranker=0.1), _fragment("b", score_reranker=0.2)]
 
-    fragmentos = [{"id": "a", "doc": "x" * 50}, {"id": "b", "doc": "y" * 50}]
+    assert _filter_by_reranker_threshold(fragmentos, True, THRESHOLD) == []
 
-    kept, n_discarded = _limitar_fragmentos_por_chars(fragmentos)
+
+def test_char_budget_no_truncation_when_total_fits():
+    fragmentos = [_fragment("a", doc="x" * 50), _fragment("b", doc="y" * 50)]
+
+    kept, n_discarded = _limit_by_char_budget(fragmentos, 100)
 
     assert kept == fragmentos
     assert n_discarded == 0
 
 
-def test_char_budget_boundary_is_inclusive_then_drops_the_next_fragment(monkeypatch):
-    """A running total that lands EXACTLY on MAX_CONTEXTO_CHARS is kept; the
-    fragment that would push it over the limit is dropped, along with
-    everything after it (fragments are consumed in input order, not
-    re-sorted by size to better fill the budget)."""
-    monkeypatch.setattr(rag, "MAX_CONTEXTO_CHARS", 100)
-
+def test_char_budget_boundary_is_inclusive_then_drops_the_next_fragment():
+    """A running total landing EXACTLY on the budget is kept; the fragment that
+    would push it over is dropped, along with everything after it. Fragments
+    are consumed in rank order, never re-sorted by size to pack the budget
+    better -- the best evidence goes in first."""
     fragmentos = [
-        {"id": "a", "doc": "x" * 60},
-        {"id": "b", "doc": "y" * 40},  # 60 + 40 == 100: exactly at budget, kept
-        {"id": "c", "doc": "z" * 1},   # would push to 101: dropped
+        _fragment("a", doc="x" * 60),
+        _fragment("b", doc="y" * 40),  # 60 + 40 == 100: exactly at budget, kept
+        _fragment("c", doc="z" * 1),   # would push to 101: dropped
     ]
 
-    kept, n_discarded = _limitar_fragmentos_por_chars(fragmentos)
+    kept, n_discarded = _limit_by_char_budget(fragmentos, 100)
 
-    assert [f["id"] for f in kept] == ["a", "b"]
+    assert _names(kept) == ["a", "b"]
     assert n_discarded == 1
 
 
-def test_char_budget_drops_from_first_fragment_that_overflows_onward(monkeypatch):
-    """Once one fragment overflows the budget, the loop ``break``s -- later
-    fragments that would individually still fit are NOT backfilled."""
-    monkeypatch.setattr(rag, "MAX_CONTEXTO_CHARS", 50)
-
+def test_char_budget_drops_from_first_fragment_that_overflows_onward():
+    """Once one fragment overflows the budget the loop stops; later fragments
+    that would individually still fit are NOT backfilled."""
     fragmentos = [
-        {"id": "a", "doc": "x" * 60},  # overflows immediately: 60 > 50
-        {"id": "b", "doc": "y" * 10},  # would fit alone, but never considered
+        _fragment("a", doc="x" * 60),  # overflows immediately: 60 > 50
+        _fragment("b", doc="y" * 10),  # would fit alone, but never considered
     ]
 
-    kept, n_discarded = _limitar_fragmentos_por_chars(fragmentos)
+    kept, n_discarded = _limit_by_char_budget(fragmentos, 50)
 
     assert kept == []
     assert n_discarded == 2

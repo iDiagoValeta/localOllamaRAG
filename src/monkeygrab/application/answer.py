@@ -33,7 +33,7 @@ built by the caller out of two ports", not a silently degrading adapter.
 
 import dataclasses
 import re
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence
 
 from monkeygrab.application.context_assembly import (
     RECOMP_FACTS_HEADER,
@@ -216,6 +216,71 @@ class Answer:
         self._system_prompt = system_prompt
         self._config = config
 
+    def select_evidence(
+        self, fragments: Sequence[Fragment]
+    ) -> "tuple[List[Fragment], Dict[str, Any]]":
+        """Turn ranked fragments into the evidence the generator will see.
+
+        Expands the top fragments with their neighbours, recovering sentences
+        the chunk boundary cut in half, then trims the result to the character
+        budget so the prompt cannot outgrow the model's context window.
+
+        Args:
+            fragments: Ranked, threshold-filtered fragments from ``Retrieve``.
+
+        Returns:
+            Tuple of (evidence fragments, metrics).
+        """
+        config = self._config
+
+        expanded, n_expanded = _expand_with_neighbors(
+            fragments, self._vector_store, config.retrieval.n_top_for_expansion
+        ) if config.flags.expandir_contexto else (list(fragments), 0)
+
+        limited, n_discarded = _limit_by_char_budget(expanded, config.context.max_context_chars)
+
+        metrics = {
+            "fragments_expanded": n_expanded,
+            "fragments_discarded_by_chars": n_discarded,
+            "fragments_final": len(limited),
+        }
+        return limited, metrics
+
+    def build_user_message(
+        self, question: str, fragments: Sequence[Fragment]
+    ) -> "tuple[str, Dict[str, Any]]":
+        """Build the message the generator answers, question plus context.
+
+        The context is either the formatted chunks or, when RECOMP synthesis
+        is enabled, a compressed briefing of the facts they contain.
+
+        Args:
+            question: User question, also the focus RECOMP synthesizes toward.
+            fragments: Evidence from ``select_evidence``.
+
+        Returns:
+            Tuple of (user message, context metrics).
+        """
+        context_str, metrics = self._build_context(fragments, question, self._config.flags)
+        return f"{question}\n\n<context>{context_str}</context>", metrics
+
+    def stream(self, user_message: str) -> "Iterator[GenerationChunk]":
+        """Stream the generator's answer to an already-built user message.
+
+        Kept separate from ``build_user_message`` because a caller streaming to
+        a web client needs to send the cited sources before the first token
+        arrives, and cannot do that if preparing the prompt and generating are
+        one call.
+
+        Args:
+            user_message: Output of ``build_user_message``.
+
+        Yields:
+            Generation chunks; the final one carries the timing and token
+            counts.
+        """
+        return self._rag_chat_model.stream(user_message, system=self._system_prompt)
+
     def run(
         self,
         question: str,
@@ -223,6 +288,9 @@ class Answer:
         on_token: Optional[Callable[[str], None]] = None,
     ) -> AnswerResult:
         """Run neighbor expansion, char budgeting, context synthesis and generation.
+
+        The whole path in one call, for callers that do not need to do anything
+        between preparing the evidence and generating from it.
 
         Args:
             question: User question (also used as the RECOMP synthesis focus).
@@ -232,22 +300,12 @@ class Answer:
         Returns:
             ``AnswerResult`` with the complete answer text and metrics.
         """
-        config = self._config
-        flags = config.flags
-
-        expanded, n_expanded = _expand_with_neighbors(
-            fragments, self._vector_store, config.retrieval.n_top_for_expansion
-        ) if flags.expandir_contexto else (list(fragments), 0)
-
-        limited, n_discarded = _limit_by_char_budget(expanded, config.context.max_context_chars)
-
-        context_str, context_metrics = self._build_context(limited, question, flags)
-
-        user_message = f"{question}\n\n<context>{context_str}</context>"
+        limited, evidence_metrics = self.select_evidence(fragments)
+        user_message, context_metrics = self.build_user_message(question, limited)
 
         text = ""
         generation_stats: Dict[str, Any] = {}
-        for chunk in self._rag_chat_model.stream(user_message, system=self._system_prompt):
+        for chunk in self.stream(user_message):
             if chunk.text:
                 text += chunk.text
                 if on_token is not None:
@@ -256,9 +314,7 @@ class Answer:
                 generation_stats = _generation_stats(chunk)
 
         metrics: Dict[str, Any] = {
-            "fragments_expanded": n_expanded,
-            "fragments_discarded_by_chars": n_discarded,
-            "fragments_final": len(limited),
+            **evidence_metrics,
             "generation": generation_stats,
             **context_metrics,
         }
