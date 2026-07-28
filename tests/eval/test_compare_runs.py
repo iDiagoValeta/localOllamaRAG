@@ -50,3 +50,23 @@ def test_cases_missing_from_one_run_are_rejected():
     b = _report({"x": True})
     with pytest.raises(ValueError, match="y / m"):
         compare(a, b)
+
+
+def test_inconclusive_run_is_rejected():
+    # A record with infrastructure_error is a case that never ran -- an
+    # Ollama timeout or dead server, not a real pass/fail. Comparing it as an
+    # ordinary failure would inflate the measured noise floor with a fluke.
+    a = _report({"x": True, "y": True})
+    b = _report({"x": True, "y": True})
+    b["results"][1]["infrastructure_error"] = True
+    with pytest.raises(ValueError, match="report_b.*inconclusive"):
+        compare(a, b)
+
+
+def test_empty_run_is_rejected():
+    # Zero cases is the most complete crash of all -- it must not compare as
+    # "0 case(s) unchanged", which reads as a clean, noise-free result.
+    a = _report({})
+    b = _report({"x": True})
+    with pytest.raises(ValueError, match="report_a.*no cases"):
+        compare(a, b)

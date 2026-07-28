@@ -145,10 +145,23 @@ python tests/eval/compare_runs.py tests/eval/runs/<first>.json tests/eval/runs/<
 Every flip is noise. Record the observed number: no delta at or below it counts
 as a real change, and an optimisation loop must not treat one as an improvement.
 
-**Sensitivity.** Compare a healthy run against a deliberately degraded one:
+**Sensitivity.** Compare a healthy run (either one from the noise-floor pair
+above) against a deliberately degraded one:
 
 ```bash
-RAG_TOP_K_FINAL=1 python tests/eval/run_eval.py
+RAG_TOP_K_FINAL=1 python tests/eval/run_eval.py                       # POSIX (bash/zsh)
+```
+
+```powershell
+$env:RAG_TOP_K_FINAL = "1"                                            # PowerShell
+python tests/eval/run_eval.py
+```
+
+`$env:RAG_TOP_K_FINAL` persists for the rest of the PowerShell session --
+clear it (`Remove-Item Env:RAG_TOP_K_FINAL`) or restart the shell before
+running a healthy config again.
+
+```bash
 python tests/eval/compare_runs.py tests/eval/runs/<healthy>.json tests/eval/runs/<degraded>.json
 ```
 

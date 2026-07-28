@@ -37,6 +37,34 @@ def _outcomes(report: Dict[str, Any]) -> Dict[str, bool]:
     }
 
 
+def _reject_unusable(report: Dict[str, Any], label: str) -> None:
+    """Refuse a report that never produced a real measurement.
+
+    ``run_eval.py`` draws this same distinction itself -- it prints
+    INCONCLUSIVE and skips the baseline check for a run with infrastructure
+    errors -- but it writes the report to disk before doing so, so an
+    inconclusive or empty report is otherwise indistinguishable from a
+    healthy one once it is sitting in ``runs/``.
+
+    Args:
+        report: The parsed report to check.
+        label: Which of the two reports this is, for the error message.
+
+    Raises:
+        ValueError: The report has no cases, or has cases that never
+            completed (an Ollama timeout, a dead server, a retrieval crash).
+    """
+    results = report["results"]
+    if not results:
+        raise ValueError(f"{label} has no cases and cannot be compared")
+    broken = [r for r in results if r.get("infrastructure_error")]
+    if broken:
+        raise ValueError(
+            f"{label} is inconclusive: {len(broken)} case(s) hit an "
+            "infrastructure error and cannot be compared"
+        )
+
+
 def compare(report_a: Dict[str, Any], report_b: Dict[str, Any]) -> Dict[str, Any]:
     """Compare two run reports case by case.
 
@@ -49,9 +77,13 @@ def compare(report_a: Dict[str, Any], report_b: Dict[str, Any]) -> Dict[str, Any
         ``stable`` (count unchanged) and ``pass_rate_delta`` (b minus a).
 
     Raises:
-        ValueError: The two runs do not cover the same cases. A partial run
-            would otherwise compare as a large improvement or regression.
+        ValueError: The two runs do not cover the same cases (a partial run
+            would otherwise compare as a large improvement or regression),
+            or either run is inconclusive or empty -- a run that measured
+            nothing must not be treated as a noise-free result.
     """
+    _reject_unusable(report_a, "report_a")
+    _reject_unusable(report_b, "report_b")
     a, b = _outcomes(report_a), _outcomes(report_b)
     if a.keys() != b.keys():
         difference = sorted(set(a) ^ set(b))
