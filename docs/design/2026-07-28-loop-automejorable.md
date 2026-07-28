@@ -96,9 +96,23 @@ Un loop es un optimizador: todo aquello contra lo que optimiza deja de ser una
 muestra independiente. Si el loop usara el gate completo como función objetivo,
 el conjunto ciego se consumiría en la primera iteración.
 
+> [!WARNING]
+> **Los tiempos de esta sección estaban mal por un factor de ~4.** Medido la
+> noche del 2026-07-29 (issue #27): con `OLLAMA_KEEP_ALIVE=0` (el default del
+> producto), Ollama descarta los pesos del generador tras cada llamada, así que
+> cada caso factual paga una carga en frío completa en la fase de generación:
+> 195 a 210 s por caso, de forma uniforme. La estimación original asumía
+> ~32 s/caso, extrapolados de un informe (2026-07-27) cuya cifra por caso no
+> aislaba generación de recuperación. Los números de la tabla y del diagrama
+> siguientes quedan corregidos con ese factor ~4, aplicado a las cifras
+> originales del diseño. Son una corrección, no una medición directa de este
+> conjunto de búsqueda (que aún no existe): la cifra real, una vez aplicado el
+> Cambio 1 (keep-alive del generador acotado a la fase de evaluación,
+> `tests/eval/run_eval.py`), queda pendiente de medir.
+
 | Conjunto | Papel | Cuándo se toca | Tamaño |
 |---|---|---|---|
-| **Búsqueda** | Función objetivo del loop | Cada iteración | ~11 docs · ~60 casos · ~34 min |
+| **Búsqueda** | Función objetivo del loop | Cada iteración | ~11 docs · ~60 casos · ~136 min (corregido ~4x; pendiente de medir tras el Cambio 1) |
 | **Validación** | Detecta sobreajuste al conjunto de búsqueda | Al cerrar una tanda | ~4 docs · ~22 casos |
 | **Ciego** | Acepta una versión | Sólo para aceptar; nunca dentro del loop | ~5 docs · ~28 casos |
 
@@ -162,9 +176,9 @@ espacio de acción se amplíe a código.
 
 ```mermaid
 flowchart LR
-    P[Proponente] -->|configuración| F[Nivel rápido<br/>~15 casos · ~8 min]
+    P[Proponente] -->|configuración| F[Nivel rápido<br/>~15 casos · ~32 min]
     F -->|regresión| X[Descartado]
-    F -->|sin regresión| G[Conjunto de búsqueda<br/>~60 casos · ~34 min]
+    F -->|sin regresión| G[Conjunto de búsqueda<br/>~60 casos · ~136 min]
     G --> L[(Libro de evidencias<br/>versionado)]
     L --> P
 
@@ -181,11 +195,14 @@ ajustables y con qué valores. Escrito a mano, no inferido por introspección:
 añadir un parámetro debe ser una decisión visible, porque cada uno multiplica el
 espacio contra un presupuesto de evaluaciones muy corto.
 
-**Proponente.** A una hora por evaluación completa, una noche da del orden de
-diez o quince candidatos. La búsqueda aleatoria es inútil con ese presupuesto, así
-que el proponente natural es un LLM que lea los fallos concretos y razone qué
-mover. Para saber si ese razonamiento aporta algo, el arnés incluye un proponente
-determinista como control y el criterio 5 se corre con ambos.
+**Proponente.** A ~4 horas por evaluación completa (nivel rápido más conjunto de
+búsqueda; corregido con el factor de la nota de la sección 3, pendiente de
+remedir tras el Cambio 1 del issue #27), una noche da del orden de tres o cuatro
+candidatos, no diez o quince como asumía la estimación original. La búsqueda
+aleatoria es inútil con ese presupuesto, así que el proponente natural es un LLM
+que lea los fallos concretos y razone qué mover. Para saber si ese razonamiento
+aporta algo, el arnés incluye un proponente determinista como control y el
+criterio 5 se corre con ambos.
 
 **Evaluador.** Aplica la configuración, corre el nivel rápido, descarta si hay
 regresión, y sólo entonces paga el conjunto de búsqueda completo. Devuelve el
