@@ -18,7 +18,12 @@ gets documented where, what doesn't get documented at all): `docs/README.md`.
 
 ## 1. Behavior rules
 
-1. **Never commit or push without asking first.** No exceptions.
+1. **Autonomous delivery.** Branch, PR, CI, squash-merge and post-merge
+   verification run without asking. Stop for explicit approval only where the
+   global protocol says to — production data or migrations, destructive
+   operations, auth/PII/secrets, irreversible external integrations, anything
+   without trivial rollback — or where a rule below demands agreement
+   (5, 6, 9). Repo conventions win over any plan that contradicts them.
 2. **The current design lives in `docs/design/2026-07-26-monkeygrab-v2.md`.** It takes precedence over any other architecture instruction in this repo. `docs/README.md` governs *how* things get documented.
 3. **Always respond in Spanish** to the user.
 4. **Follow the code patterns in §6** when writing new code in `rag/`; §7 lists what `src/monkeygrab/` does differently.
