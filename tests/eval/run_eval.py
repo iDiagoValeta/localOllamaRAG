@@ -39,8 +39,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
-import requests
-
 # CONSTANTS
 
 EVAL_DIR = Path(__file__).resolve().parent
@@ -57,7 +55,6 @@ if str(REPO_ROOT / "src") not in sys.path:
 if str(EVAL_DIR) not in sys.path:
     sys.path.insert(0, str(EVAL_DIR))
 
-import fetch_papers  # noqa: E402  (tests/eval sibling module)
 import grade  # noqa: E402  (tests/eval sibling module)
 
 GOLD_FILE = EVAL_DIR / "gold_cases.jsonl"
@@ -69,6 +66,18 @@ RESULTS_DIR = EVAL_DIR / "runs"
 # does not match the corpus filename convention indexar_documentos expects).
 BLIND_DOCS_DIR = EVAL_DIR / "blind_docs"
 DEV_DOCS_DIR = REPO_ROOT / "rag" / "docs" / "en"
+
+# Fed into derive_db_paths in place of DEV_DOCS_DIR when building the dev-set
+# config (see _eval_app_config's path_label) -- never read from disk, only its
+# basename matters. Deriving the FAISS collection from DEV_DOCS_DIR directly
+# would give this run the same "docs_en" collection the product's own store
+# uses, and that store has a second writer: the web UI's indexing path writes
+# chunks into it under its own flags and never records this gate's fingerprint.
+# Reusing it here would silently measure a mixture of two pipelines, and the
+# first eval run after a user adds a document there would call store.clear()
+# on a store that still has product data in it. The blind set never needed
+# this because BLIND_DOCS_DIR's basename already differs from "en".
+EVAL_DEV_LABEL = EVAL_DIR / "dev_docs"
 
 OLLAMA_BASE_URL = "http://localhost:11434"
 
@@ -86,6 +95,14 @@ AUX_MODEL = "gemma4:e2b"
 # the new baseline floor (see _update_baseline) -- keeps normal run-to-run
 # variance (model sampling, Ollama warmup) from flipping the gate red.
 BASELINE_MARGIN = 0.05
+
+# Case types decided entirely by retrieval: they skip generation in
+# run_all_cases (a pass says a fragment of the right kind was surfaced, not
+# that any answer used it) and are reported in their own build_summary bucket,
+# because blending them into "answer" would read as answer quality that isn't
+# there. One definition drives both, so a third retrieval-only type can't be
+# added to the dispatch without also changing how it's reported.
+_RETRIEVAL_ONLY_CASE_TYPES = ("figure_retrieval", "table_retrieval")
 
 
 class EvalSetupError(RuntimeError):
@@ -105,6 +122,12 @@ def _installed_ollama_models() -> List[str]:
     Raises:
         EvalSetupError: Ollama is not reachable at OLLAMA_BASE_URL.
     """
+    # Deferred so importing this module -- which test_index_reuse.py and
+    # test_summary_split.py do, to reach pure helpers like should_rebuild and
+    # build_summary -- never requires requests. The fast CI gate installs
+    # only pytest, precisely to prove those helpers need nothing else.
+    import requests
+
     try:
         response = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
         response.raise_for_status()
@@ -173,6 +196,13 @@ def stage_blind_papers(cases: Sequence[Dict[str, Any]]) -> Dict[str, str]:
     Returns:
         ``{"<paper>.pdf": arxiv_id}`` for every blind-set paper, staged.
     """
+    # Deferred for the same reason as the `requests` import in
+    # _installed_ollama_models: fetch_papers.py itself imports requests at
+    # module level, so importing it eagerly here would defeat the
+    # dependency-free fast CI gate just as much as importing requests
+    # directly would.
+    import fetch_papers
+
     required = _required_pdfs(cases, "arxiv")
     if not required:
         return {}
@@ -196,7 +226,29 @@ def stage_blind_papers(cases: Sequence[Dict[str, Any]]) -> Dict[str, str]:
     return required
 
 
-def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str):
+def should_rebuild(stored: Optional[str], expected: str) -> bool:
+    """Whether a store must be discarded and rebuilt before it can be measured.
+
+    Args:
+        stored: The fingerprint the store recorded, or ``None`` if it recorded
+            none.
+        expected: The fingerprint of the configuration this run will use.
+
+    Returns:
+        True unless the store provably matches. An unknown recipe rebuilds:
+        reusing chunks whose provenance cannot be established would report one
+        number for a mixture of two pipelines.
+    """
+    return stored != expected
+
+
+def ensure_indexed(
+    rag,
+    carpeta: Path,
+    required_pdfs: Iterable[str],
+    label: str,
+    path_label: Optional[Path] = None,
+):
     """Index missing PDFs into the multimodal stack; return its use cases.
 
     Args:
@@ -204,6 +256,8 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
         carpeta: PDF directory to index.
         required_pdfs: Filenames that must end up indexed.
         label: Short name for log lines ("dev set", "blind set").
+        path_label: Forwarded to _eval_app_config to isolate the FAISS
+            collection from carpeta's own basename (see EVAL_DEV_LABEL).
 
     Returns:
         ``(Retrieve, Stack)`` for this corpus. Caller should ``close()`` the
@@ -218,16 +272,30 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
     from monkeygrab.adapters.reranking.cross_encoder_reranker import CrossEncoderReranker
     from monkeygrab.application.answer import Answer
     from monkeygrab.application.index_corpus import IndexCorpus
+    from monkeygrab.application.index_fingerprint import compute_index_fingerprint
     from monkeygrab.application.retrieve import Retrieve
     from monkeygrab.composition import build_stack
 
     required = set(required_pdfs)
     rag.set_docs_folder_runtime(str(carpeta))
     try:
-        config = _eval_app_config(rag, carpeta)
+        config = _eval_app_config(rag, carpeta, path_label=path_label)
         stack = build_stack(config)
         store = stack.vector_store
-        existing = _sources_in_store(store)
+        expected_fingerprint = compute_index_fingerprint(config)
+        stored_fingerprint = store.read_fingerprint()
+        existing = set()
+        if should_rebuild(stored_fingerprint, expected_fingerprint):
+            if store.count():
+                print(
+                    f"[index] {label}: recipe changed "
+                    f"({stored_fingerprint or 'unrecorded'} -> {expected_fingerprint}), "
+                    "discarding and rebuilding",
+                    flush=True,
+                )
+                store.clear()
+        else:
+            existing = _sources_in_store(store)
         missing = sorted(required - existing)
         if not missing:
             print(f"[index] {label}: cache hit, {len(required)} paper(s) already indexed")
@@ -264,6 +332,12 @@ def ensure_indexed(rag, carpeta: Path, required_pdfs: Iterable[str], label: str)
                 f"{label}: {still_missing} still not indexed after an indexing attempt "
                 "-- check the [index] log above for the underlying error"
             )
+
+        # Written only after every required paper is confirmed present, so an
+        # aborted indexing run never leaves a fingerprint claiming a complete
+        # index. A half-built store keeps its old (or absent) value and gets
+        # rebuilt on the next run.
+        store.write_fingerprint(expected_fingerprint)
 
         lexical = Bm25LexicalIndex(store, config.retrieval)
         # Reranking runs on whatever device the adapter detects, which is CUDA
@@ -341,9 +415,19 @@ def _fragment_to_dict(fragment) -> Dict[str, Any]:
     return fragment_to_dict(fragment)
 
 
-def _eval_app_config(rag, carpeta: Path):
-    """Build the fixed multimodal evaluation configuration."""
+def _eval_app_config(rag, carpeta: Path, path_label: Optional[Path] = None):
+    """Build the fixed multimodal evaluation configuration.
+
+    Args:
+        rag: The imported rag.chat_pdfs module (runtime model/flag source).
+        carpeta: PDF directory this run indexes from.
+        path_label: When given, derive the FAISS store location/collection
+            name from this path's basename instead of carpeta's, without
+            changing which folder is actually indexed. See EVAL_DEV_LABEL for
+            why the dev set needs this and the blind set does not.
+    """
     from monkeygrab.config.app_config import AppConfig
+    from monkeygrab.config.paths import derive_db_paths
 
     config = AppConfig.from_env().with_overrides(
         **{
@@ -362,7 +446,13 @@ def _eval_app_config(rag, carpeta: Path):
             "flags.usar_recomp_synthesis": rag.USAR_RECOMP_SYNTHESIS,
         }
     )
-    return config.with_overrides(**{"flags.usar_contextual_retrieval": False})
+    config = config.with_overrides(**{"flags.usar_contextual_retrieval": False})
+    if path_label is not None:
+        path_db, collection_name = derive_db_paths(str(path_label), config.paths.data_dir)
+        config = config.with_overrides(
+            **{"paths.path_db": path_db, "paths.collection_name": collection_name}
+        )
+    return config
 
 
 def _sources_in_store(store) -> set[str]:
@@ -527,7 +617,7 @@ def run_all_cases(
         # figure sitting next to a retrieved paragraph would otherwise count as
         # "retrieved" and quietly inflate the figure and table scores -- the
         # two the multimodal stack exists to move.
-        if case["case_type"] in ("figure_retrieval", "table_retrieval"):
+        if case["case_type"] in _RETRIEVAL_ONLY_CASE_TYPES:
             record = run_retrieval_case(case, retrieved, elapsed)
             records.append(record)
             status = "PASS" if record["passed"] else "FAIL"
@@ -570,15 +660,25 @@ def _bucket_stats(records: Sequence[Dict[str, Any]], key_fn) -> Dict[str, Dict[s
     }
 
 
-def build_summary(records: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
-    """Build the overall / by-case-type / by-model / cross summary blocks."""
+def _rate(records: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Pass/total/rate over ``records``; an empty bucket rates 0.0, not an error."""
     total = len(records)
     passed = sum(1 for r in records if r["passed"])
     return {
-        "overall": {
-            "total": total, "passed": passed,
-            "pass_rate": round(passed / total, 4) if total else 0.0,
-        },
+        "total": total,
+        "passed": passed,
+        "pass_rate": round(passed / total, 4) if total else 0.0,
+    }
+
+
+def build_summary(records: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Build the overall / by-case-type / by-model / cross summary blocks."""
+    retrieval_only = [r for r in records if r["case_type"] in _RETRIEVAL_ONLY_CASE_TYPES]
+    answered = [r for r in records if r["case_type"] not in _RETRIEVAL_ONLY_CASE_TYPES]
+    return {
+        "overall": _rate(records),
+        "retrieval_only": _rate(retrieval_only),
+        "answer": _rate(answered),
         "by_case_type": _bucket_stats(records, lambda r: r["case_type"]),
         "by_model": _bucket_stats(records, lambda r: r["model"] or "n/a (retrieval)"),
         "by_case_type_and_model": _bucket_stats(
@@ -591,6 +691,9 @@ def print_summary(summary: Dict[str, Any]) -> None:
     """Print a compact human-readable table -- the CI log's actual payoff."""
     o = summary["overall"]
     print(f"\n=== RESULT: {o['passed']}/{o['total']} passed ({o['pass_rate']:.1%}) ===\n")
+    r, a = summary["retrieval_only"], summary["answer"]
+    print(f"  retrieval only  {r['passed']:>3}/{r['total']:<3} ({r['pass_rate']:.1%})")
+    print(f"  answered        {a['passed']:>3}/{a['total']:<3} ({a['pass_rate']:.1%})\n")
     print("-- by case type --")
     for key, b in sorted(summary["by_case_type"].items()):
         print(f"  {key:<20} {b['passed']:>3}/{b['total']:<3} ({b['pass_rate']:.1%})")
@@ -663,7 +766,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         dev_required = set(_required_pdfs(cases, "corpus"))
 
         retrieve_dev, evidence_dev, stack_dev = ensure_indexed(
-            rag, DEV_DOCS_DIR, dev_required, "dev set"
+            rag, DEV_DOCS_DIR, dev_required, "dev set", path_label=EVAL_DEV_LABEL
         )
         stacks_to_close.append(stack_dev)
         retrieve_blind = None

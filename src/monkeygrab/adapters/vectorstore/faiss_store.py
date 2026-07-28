@@ -34,6 +34,11 @@ _INDEX_FILENAME = "index.faiss"
 _META_FILENAME = "meta.jsonl"
 _VERSION_FILENAME = "version.txt"
 
+# Deliberately outside the all-or-none rule in _load_or_init: every store
+# written before fingerprinting existed lacks this file, and those stores must
+# keep loading. Absent means "recipe unknown", which callers treat as stale.
+_FINGERPRINT_FILENAME = "fingerprint.txt"
+
 
 # METADATA CONVERSION
 
@@ -153,7 +158,7 @@ class FaissVectorStore:
     L2-normalized before insertion and before querying, which turns the
     index's raw inner product into cosine similarity.
 
-    Persistence layout: three files under ``<path_db>/<collection_name>/``
+    Persistence layout: four files under ``<path_db>/<collection_name>/``
     (one client path holding several named collections):
 
     - ``index.faiss`` -- the FAISS index itself (``faiss.write_index``).
@@ -162,6 +167,15 @@ class FaissVectorStore:
     - ``version.txt`` -- the on-disk format version, checked on load so a
       future layout change fails loudly on old stores instead of
       misreading them.
+    - ``fingerprint.txt`` -- an opaque recipe fingerprint the caller hands
+      this adapter to persist; this store never interprets it (meaning
+      lives in ``monkeygrab.application.index_fingerprint``). Deliberately
+      optional, and deliberately excluded from ``_load_or_init``'s
+      all-or-none presence check: every store written before fingerprinting
+      existed lacks this file and must keep loading. Do not fold it into
+      that check -- doing so would turn every pre-existing index into a
+      hard failure. Its absence means "recipe unknown", which callers
+      treat as stale.
 
     Id-to-position mapping: FAISS indexes by integer position, but chunk ids
     are strings (``Chunk.id``, e.g. ``"paper.pdf_pag2_chunk3"``). Row *i* of
@@ -198,6 +212,7 @@ class FaissVectorStore:
         self._index_path = os.path.join(self._dir, _INDEX_FILENAME)
         self._meta_path = os.path.join(self._dir, _META_FILENAME)
         self._version_path = os.path.join(self._dir, _VERSION_FILENAME)
+        self._fingerprint_path = os.path.join(self._dir, _FINGERPRINT_FILENAME)
 
         self._index, self._rows = _load_or_init(self._dir)
         self._id_to_pos: Dict[str, int] = {row[0]: i for i, row in enumerate(self._rows)}
@@ -277,6 +292,33 @@ class FaissVectorStore:
     def count(self) -> int:
         return len(self._rows)
 
+    def read_fingerprint(self) -> Optional[str]:
+        """Return the index recipe fingerprint this store recorded, if any.
+
+        Returns:
+            The stored value, or ``None`` when the store predates
+            fingerprinting or recorded a blank one. ``None`` means *unknown*,
+            never *matches*: an index whose recipe cannot be established is
+            precisely the one that must not be trusted.
+        """
+        if not os.path.exists(self._fingerprint_path):
+            return None
+        with open(self._fingerprint_path, "r", encoding="utf-8") as f:
+            return f.read().strip() or None
+
+    def write_fingerprint(self, fingerprint: str) -> None:
+        """Record the fingerprint of the recipe that produced this content.
+
+        The value is opaque to this adapter: it persists the string and never
+        interprets it. What it means lives in
+        ``monkeygrab.application.index_fingerprint``.
+
+        Args:
+            fingerprint: The digest to record.
+        """
+        with open(self._fingerprint_path, "w", encoding="utf-8") as f:
+            f.write(fingerprint + "\n")
+
     def delete_source(self, source: str) -> int:
         positions = [
             position
@@ -304,7 +346,12 @@ class FaissVectorStore:
         self._index = None
         self._rows = []
         self._id_to_pos = {}
-        for path in (self._index_path, self._meta_path, self._version_path):
+        for path in (
+            self._index_path,
+            self._meta_path,
+            self._version_path,
+            self._fingerprint_path,
+        ):
             if os.path.exists(path):
                 os.remove(path)
 

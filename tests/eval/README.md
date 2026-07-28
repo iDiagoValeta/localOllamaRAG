@@ -105,10 +105,13 @@ something is missing:
    not Ollama roles.
 2. Downloads any missing blind-set arXiv papers (reusing `fetch_papers.py`)
    and stages them under `blind_docs/<paper-slug>.pdf`.
-3. Indexes whatever is not already indexed -- dev-set papers into the
-   existing `rag/docs/en/` collection, blind-set papers into their own
-   collection under `blind_docs/` -- via the real `indexar_documentos`
-   pipeline. Already-indexed papers are never reprocessed.
+3. Indexes whatever is not already indexed -- dev-set papers read from
+   `rag/docs/en/` but stored in the eval's own isolated collection, blind-set
+   papers into their own collection under `blind_docs/` -- via the real
+   `indexar_documentos` pipeline. A paper is reused only when the store's
+   recorded index recipe (chunking, embeddings, index-time flags) matches
+   the configuration this run will use; a changed recipe discards the store
+   and rebuilds it.
 4. Verifies every paper referenced by a gold case actually has an index
    entry before running anything.
 5. Runs every case through the real retrieval + (for factual cases)
@@ -128,3 +131,43 @@ something is missing:
 
 Infrastructure failures leave the run inconclusive. Only a complete run with
 the calibrated generator model is compared against the baseline.
+
+## Measuring the noise floor and the gate's sensitivity
+
+Both need a GPU machine with Ollama running — the fast CI gate cannot run
+them. `compare_runs.py` itself is pure and is covered by the fast gate.
+
+**Noise floor.** Run the identical configuration twice and compare:
+
+```bash
+python tests/eval/run_eval.py
+python tests/eval/run_eval.py
+python tests/eval/compare_runs.py tests/eval/runs/<first>.json tests/eval/runs/<second>.json
+```
+
+Every flip is noise. Record the observed number: no delta at or below it counts
+as a real change, and an optimisation loop must not treat one as an improvement.
+
+**Sensitivity.** Compare a healthy run (either one from the noise-floor pair
+above) against a deliberately degraded one:
+
+```bash
+RAG_TOP_K_FINAL=1 python tests/eval/run_eval.py                       # POSIX (bash/zsh)
+```
+
+```powershell
+$env:RAG_TOP_K_FINAL = "1"                                            # PowerShell
+python tests/eval/run_eval.py
+```
+
+`$env:RAG_TOP_K_FINAL` persists for the rest of the PowerShell session --
+clear it (`Remove-Item Env:RAG_TOP_K_FINAL`) or restart the shell before
+running a healthy config again.
+
+```bash
+python tests/eval/compare_runs.py tests/eval/runs/<healthy>.json tests/eval/runs/<degraded>.json
+```
+
+The degraded run must flip a clearly larger number of cases to FAIL than the
+noise floor. A gate that barely moves under a known degradation cannot detect
+an improvement either.
