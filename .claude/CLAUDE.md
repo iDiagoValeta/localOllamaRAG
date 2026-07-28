@@ -2,13 +2,13 @@
 
 Local RAG over PDFs, with hybrid retrieval and a local Ollama LLM. Production
 product only — the thesis research layer was defended and removed from HEAD
-(history preserved at tag `v1.0.0-tfg`).
+(history preserved at tag `tfg-final`).
 
-Mid-migration to hexagonal architecture: `src/monkeygrab/` holds domain,
-ports, application use cases and adapters; `rag/` holds the interfaces (CLI,
-web) and increasingly delegates pure logic to `src/monkeygrab/application/`.
-See §2 for the dependency rule, the layout and what's wired today versus
-what isn't yet.
+Hexagonal architecture: `src/monkeygrab/` holds domain, ports, application use
+cases and adapters; `rag/` holds the interfaces (CLI, web) and the wiring that
+builds the adapters and runs the use cases. All three pipeline stages —
+indexing, retrieval, generation — go through the core. See §2 for the
+dependency rule and the layout.
 
 User-facing doc lives in `README.md`. Architecture entry points:
 `src/monkeygrab/README.md` and `rag/README.md`. Documentation standard (what

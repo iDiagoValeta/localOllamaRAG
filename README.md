@@ -155,20 +155,30 @@ implementation to measure.
 
 ## What it runs on
 
-Everything below is a default you can change. Model roles are separate on
-purpose: a small model is enough to rewrite a query, and a large one is wasted
-on it.
+Six [Ollama](https://ollama.com/library) roles, each its own environment
+variable. They are separate on purpose: a small model is enough to rewrite a
+query, and a large one is wasted on it.
 
-| Role | Default | Change with |
+| Role | What it does | Set with |
 |---|---|---|
-| **Answer generation** | `gemma4:e4b` on [Ollama](https://ollama.com/library) | `OLLAMA_RAG_MODEL` |
-| **Chat & query decomposition** | `gemma4:e4b` | `OLLAMA_CHAT_MODEL` |
-| **Embeddings** | [`embeddinggemma`](https://ollama.com/library/embeddinggemma) | `OLLAMA_EMBED_MODEL` |
-| **Contextual enrichment** | `gemma4:e4b` | `OLLAMA_CONTEXTUAL_MODEL` |
-| **Context synthesis (RECOMP)** | `gemma4:e4b` | `OLLAMA_RECOMP_MODEL` |
-| **Vision / OCR** | `gemma4:e4b` | `OLLAMA_OCR_MODEL` |
-| **Reranker** | [`BAAI/bge-reranker-v2-m3`](https://huggingface.co/BAAI/bge-reranker-v2-m3) · `fast` tier is [`ms-marco-MiniLM-L-6-v2`](https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2) | `RERANKER_QUALITY` |
-| **Lexical search** | [Okapi BM25](https://github.com/dorianbrown/rank_bm25) | always on when hybrid search is enabled |
+| **Answer generation** | Writes the final answer from the retrieved evidence | `OLLAMA_RAG_MODEL` |
+| **Chat & query decomposition** | Free conversation, and rewriting a question into sub-queries | `OLLAMA_CHAT_MODEL` |
+| **Embeddings** | Vectorises chunks at indexing and queries at search time | `OLLAMA_EMBED_MODEL` |
+| **Contextual enrichment** | Summarises each chunk's place in its document, at indexing | `OLLAMA_CONTEXTUAL_MODEL` |
+| **Context synthesis (RECOMP)** | Compresses the evidence into a briefing before generation | `OLLAMA_RECOMP_MODEL` |
+| **Vision / OCR** | Describes figures and tables so they become searchable | `OLLAMA_OCR_MODEL` |
+
+> [!TIP]
+> The current default for each is in [`.env.example`](.env.example), next to
+> every other variable. They are deliberately not repeated here: a default
+> copied into prose is a default that goes stale the first time it changes.
+
+The rest of the stack is not an Ollama model:
+
+| Component | What it is | Set with |
+|---|---|---|
+| **Reranker** | [`BAAI/bge-reranker-v2-m3`](https://huggingface.co/BAAI/bge-reranker-v2-m3), or [`ms-marco-MiniLM-L-6-v2`](https://huggingface.co/cross-encoder/ms-marco-MiniLM-L-6-v2) on the `fast` tier. Downloaded from Hugging Face on first use. | `RERANKER_QUALITY` |
+| **Lexical search** | [Okapi BM25](https://github.com/dorianbrown/rank_bm25), always on when hybrid search is | — |
 | **Vector store** | [ChromaDB](https://www.trychroma.com/) | `VECTOR_STORE` |
 | **PDF extraction** | [PyMuPDF4LLM](https://pymupdf.readthedocs.io/en/latest/pymupdf4llm/) | `PDF_EXTRACTOR` |
 

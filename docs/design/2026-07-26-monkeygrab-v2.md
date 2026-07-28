@@ -7,16 +7,19 @@ capa de investigación, CI verificable por fases, y adopción del stack MinerU +
 multimodales + FAISS detrás de puertos sustituibles.
 
 > [!NOTE]
-> **Estado a 2026-07-27.** F0, F1 y F2 están en `main`. Los adaptadores de F3
-> existen y están verificados, pero el default del stack sigue siendo
-> pymupdf + Ollama + Chroma.
+> **Estado a 2026-07-28 (release `v2.0.0`).** F0, F1 y F2 están en `main`. Los
+> adaptadores de F3 existen y están verificados, pero el default del stack sigue
+> siendo pymupdf + Ollama + Chroma, tal y como decide §3: puertos primero, el
+> default cambia solo cuando el gate lo respalde.
 >
-> Del núcleo hexagonal, **indexación y recuperación** se ejecutan a través de
-> sus casos de uso (`IndexCorpus`, `Retrieve`); **generación no**, y `Answer`
-> sigue sin cablear. `get_runtime()` no ha desaparecido: `rag/engine/wiring.py`
-> lo encapsula como único puente hacia `AppConfig`, en lugar de que cada módulo
-> lo consulte por su cuenta. La aceptación de F1 describe el objetivo, no lo
-> que hay hoy.
+> Las **tres etapas** se ejecutan a través de sus casos de uso (`IndexCorpus`,
+> `Retrieve`, `Answer`). `get_runtime()` no ha desaparecido:
+> `rag/engine/wiring.py` lo encapsula como único puente hacia `AppConfig`, en
+> lugar de que cada módulo lo consulte por su cuenta, así que la aceptación de
+> F1 se cumple en efecto aunque no en la letra.
+>
+> Gate completo: **36/51 (70,6%)**, baseline en 0,65. Tablas siguen 0/5, que es
+> lo que F3 existe para mover.
 
 ---
 
@@ -63,7 +66,7 @@ estructura impide evolucionarlo:
 | Default del stack en v2.0 | Puertos primero; el default cambia a MinerU/jina/FAISS solo cuando el gate completo pase en verde | La app queda funcional en todo momento y los dos stacks son comparables con el mismo juez |
 | Licencia de embeddings | `jinaai/jina-clip-v2` (CC BY-NC) | Uso personal/portfolio; es la mejor torre multilingüe para en/es/ca. Restricción documentada en el README |
 | Rust | Fuera de v2.0, issue con criterios de medición | El tiempo está en la inferencia de Ollama y en MinerU, ambos ya nativos. Reescribir el pegamento Python movería lo que no cuesta |
-| `research/` | Eliminado de HEAD | TFG defendido. La historia y el tag `v1.0.0-tfg` lo preservan |
+| `research/` | Eliminado de HEAD | TFG defendido. La historia y el tag `tfg-final` lo preservan |
 | Submódulo `llama.cpp` | Eliminado | Servía para cuantizar los GGUF de los fine-tunes, ya abandonados |
 | Modelos fine-tuneados | Retirados de la configuración y borrados de Ollama | Un modelo stock con instrucciones claras rinde igual o mejor. Libera 25 GB |
 | Extractor de PDF | MinerU como CLI externo, no como dependencia Python | Ya se invoca por `subprocess`. Sus pins chocan con los del producto |
@@ -128,7 +131,7 @@ Cada fase es una rama, un PR y un merge independiente. Ninguna deja la app inuti
 
 Sin cambios en código productivo.
 
-- Tag anotado `v1.0.0-tfg` en el último commit que contiene `research/`, antes de borrar.
+- Tag anotado `tfg-final` en el último commit que contiene `research/`, antes de borrar.
 - **Rescata los tests del producto antes de borrar.** `research/tests/core/` contiene nueve tests
   que ejercitan `rag.*` (BM25 y su caché, RAG sobre imágenes, streaming sin *thinking*, rutas web,
   TTY de la CLI): se mueven a `tests/` y `pytest.ini` se reapunta. Los cuatro de
@@ -146,7 +149,7 @@ Sin cambios en código productivo.
 - `.gitignore` unificado.
 
 **Aceptación:** `pytest` pasa igual que antes del cambio; la web y la CLI arrancan e indexan;
-`git log v1.0.0-tfg -- research/` sigue mostrando la historia.
+`git log tfg-final -- research/` sigue mostrando la historia.
 
 ### F1 — Núcleo hexagonal con adaptadores actuales · `refactor/clean-architecture-core`
 
@@ -273,7 +276,7 @@ máquina concreta — el spike actual sí las tiene cableadas y eso desaparece.
 ### 7.3 Autorización de merge
 
 El usuario autoriza merge a `main` de cada fase cuyo CI esté verde, incluida F0 con la eliminación
-de `research/` (que además queda preservada en el tag `v1.0.0-tfg`). Verde significa: gate rápido en
+de `research/` (que además queda preservada en el tag `tfg-final`). Verde significa: gate rápido en
 verde **y** gate completo en verde sobre el corpus de papers, no solo el primero.
 
 ## 8. Riesgos
