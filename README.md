@@ -201,7 +201,8 @@ by queries whose wording appears nowhere in it.
 
 ## Running it
 
-Requires [Python 3.10+](https://www.python.org/downloads/) and
+Requires [Python 3.10+](https://www.python.org/downloads/), a CUDA GPU (the
+multimodal embedder hard-fails without one; details below), and
 [Ollama](https://ollama.com/download) running locally, with at least a generator
 model pulled. Drop PDFs into `rag/docs/en/` — the index builds itself on first
 run.
@@ -217,8 +218,18 @@ python rag/web/app.py      # web UI at http://localhost:5000
 
 Dependencies are in [`rag/requirements.txt`](rag/requirements.txt) (core) and
 [`rag/web/requirements.txt`](rag/web/requirements.txt) (web UI). Pull the Ollama
-models selected in your configuration. MinerU, Jina CLIP and the reranker are
-installed or downloaded separately as documented by their linked projects.
+models selected in your configuration. The reranker downloads itself on first use.
+
+MinerU and Jina CLIP v2 do not run in that environment: their dependencies
+collide with the product's, so both are installed together into one isolated
+interpreter at `.venv-mineru/Scripts/python.exe` (Windows) or
+`.venv-mineru/bin/python` (Linux/Mac), at the project root, following each
+project's own install instructions. That interpreter needs a CUDA GPU: Jina
+CLIP v2 refuses to start on CPU (measured at roughly 100 seconds per document,
+impractical for indexing), so a GPU is required, not merely recommended.
+There is no setup script for this yet; see
+[`src/monkeygrab/README.md`](src/monkeygrab/README.md) for how the isolation
+is used.
 
 Copy [`.env.example`](.env.example) to `.env` at the project root; it documents
 every supported variable with its default. The shell environment always wins over
@@ -234,8 +245,8 @@ Each corpus has its own Jina CLIP and FAISS index under `rag/vector_db/`. Run
 
 The **CLI** takes slash commands: `/rag` and `/chat` switch mode, `/docs` lists
 what is indexed, `/temas` shows corpus topics, `/stats` the active pipeline
-configuration, `/reindex` rebuilds the index, `/limpiar` clears history and
-`/ayuda` lists everything. Each has English and Valencian aliases.
+configuration, `/reindex` rebuilds the index, `/limpiar` clears history, `/salir`
+exits and `/ayuda` lists everything. Each has English and Valencian aliases.
 
 The **web UI** adds document upload, per-role model assignment, the pipeline
 toggles, and an inline PDF viewer that opens cited sources at the right page.
@@ -244,8 +255,10 @@ language stores — English, Castellano, Valencià — map to `rag/docs/{en,es,c
 
 The **desktop app** wraps the web interface in a Windows executable with
 [PyInstaller](https://pyinstaller.org/) and [pywebview](https://pywebview.flowrl.com/).
-The current bundle still needs the isolated MinerU/Jina runtime beside the
-executable; see [`packaging/README.md`](packaging/README.md).
+It needs the isolated MinerU/Jina runtime beside the executable, and the
+packaged build cannot start that worker yet even when the runtime is present
+([#26](https://github.com/iDiagoValeta/localOllamaRAG/issues/26)); use the CLI
+or web app in the meantime. See [`packaging/README.md`](packaging/README.md).
 
 ---
 
@@ -258,6 +271,9 @@ executable; see [`packaging/README.md`](packaging/README.md).
 > - **The reranker downloads its model on first use**, a one-time step that needs internet. Everything after runs offline; turn reranking off if you need a fully air-gapped first run.
 > - **Optional stages fail loudly.** If an enabled stage cannot run, the query raises instead of silently returning worse results. Turn the stage off to proceed without it.
 > - **Indexing cost** grows with corpus size, contextual enrichment and the number of extracted images.
+> - **Concurrent web requests can disable the embedder.** Two overlapping queries can desynchronize the Jina CLIP worker's protocol, which permanently disables it until the process restarts ([#24](https://github.com/iDiagoValeta/localOllamaRAG/issues/24)).
+> - **VRAM from the embedder and reranker is not freed before generation.** On memory-constrained GPUs this can make Ollama hang for minutes instead of failing fast ([#25](https://github.com/iDiagoValeta/localOllamaRAG/issues/25)).
+> - **The packaged desktop build cannot start the multimodal worker yet.** Indexing and retrieval fail even with the isolated runtime present ([#26](https://github.com/iDiagoValeta/localOllamaRAG/issues/26)).
 
 ---
 
