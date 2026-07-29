@@ -5,9 +5,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class OllamaRuntimeConfig:
-    num_ctx: int = 8192
     rag_num_ctx: int = 16384
-    aux_num_ctx: int = 8192
     query_num_ctx: int = 2048
     recomp_num_ctx: int = 8192
     contextual_num_ctx: int = 32768
