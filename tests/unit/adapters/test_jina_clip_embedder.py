@@ -10,6 +10,7 @@ timeout code path the real worker talks to, just without a real pipe.
 import json
 import queue
 import sys
+import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -383,6 +384,84 @@ def test_l2_normalize_returns_a_unit_vector():
 def test_l2_normalize_rejects_a_zero_vector():
     with pytest.raises(RuntimeError, match="zero vector"):
         module._l2_normalize([0.0, 0.0, 0.0])
+
+
+def test_concurrent_embed_calls_each_get_their_own_vector_and_the_worker_survives(monkeypatch):
+    """Two overlapping embed() calls must not race on the shared response queue (issue #24).
+
+    Without a lock around the whole request round-trip (worker start, stdin
+    write, and the matching queue pop), a second caller's write can land
+    while a first caller's reply is still unclaimed; the shared queue does
+    not know whose reply is whose, so a caller can pop the OTHER caller's
+    message. The id check then reports "protocol desynchronized" and
+    _fail_dead kills the worker -- an availability bug, not a wrong-vector
+    one, but a real one: every later call fails until the process restarts.
+
+    This is made deterministic with events instead of sleeps: call-a's fake
+    reply handler waits (bounded) to see whether call-b's write ever lands
+    while call-a's own request is still open. Only an unsynchronized
+    caller can make that observable within the window; under the fix,
+    call-b is blocked on the lock before it ever reaches the write, so the
+    wait always times out and both calls simply succeed in isolation. If
+    call-b's write DOES land early, call-a's handler queues only call-a's
+    reply and lets call-b's write() return -- so call-b's very next step,
+    popping the queue, steals it. That is exactly how the real bug
+    manifests, reproduced without hoping two OS threads happen to collide.
+    """
+    a_write_seen = threading.Event()
+    b_write_seen = threading.Event()
+    b_may_return = threading.Event()
+    vector_a = _vector(0.11)
+    vector_b = _vector(0.22)
+
+    def behavior(process, request):
+        text = request.get("text")
+        if text == "call-a":
+            a_write_seen.set()
+            interleaved = b_write_seen.wait(timeout=0.3)
+            process.stdout.push(
+                json.dumps({"id": request["id"], "ok": True, "vector": vector_a}) + "\n"
+            )
+            if interleaved:
+                b_may_return.set()  # let call-b's write() return -- it will steal this reply
+        elif text == "call-b":
+            b_write_seen.set()
+            if b_may_return.wait(timeout=0.3):
+                return  # a's reply is already queued for us to steal; nothing to push
+            process.stdout.push(
+                json.dumps({"id": request["id"], "ok": True, "vector": vector_b}) + "\n"
+            )
+        else:
+            # The priming call below, or the final aliveness check -- plain echo.
+            process.stdout.push(
+                json.dumps({"id": request["id"], "ok": True, "vector": _vector()}) + "\n"
+            )
+
+    embedder, _ = _embedder(monkeypatch, behavior, request_timeout_s=2.0)
+    embedder.embed("prime the worker")  # start the worker before the race, out of band
+
+    results = {}
+    errors = {}
+
+    def run(label, text):
+        try:
+            results[label] = embedder.embed(text)
+        except Exception as exc:  # noqa: BLE001 -- captured for the assertion below
+            errors[label] = exc
+
+    t_a = threading.Thread(target=run, args=("a", "call-a"))
+    t_b = threading.Thread(target=run, args=("b", "call-b"))
+    t_a.start()
+    t_b.start()
+    t_a.join(timeout=5)
+    t_b.join(timeout=5)
+
+    assert not errors, f"concurrent embed() calls raised: {errors}"
+    assert results["a"] == vector_a
+    assert results["b"] == vector_b
+
+    assert embedder._dead_reason is None
+    assert embedder.embed("still alive") == _vector()
 
 
 if __name__ == "__main__":
