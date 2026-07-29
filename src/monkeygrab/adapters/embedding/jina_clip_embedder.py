@@ -114,6 +114,17 @@ class JinaClipEmbedder:
         self._stderr_tail: List[str] = []
         self._next_id = itertools.count(1)
         self._dead_reason: Optional[str] = None
+        # Serialises the whole request path (worker startup + stdin write +
+        # matching response pop), not just the write: two overlapping callers
+        # racing through _ensure_worker/_start_worker could each spawn or
+        # consume a worker, and even with one worker, an unserialised writer
+        # could pop the OTHER caller's response off _responses -- the id
+        # check then reports "protocol desynchronized" and _fail_dead kills
+        # the worker, so a concurrency bug shows up as a permanent outage.
+        # Plain Lock, not RLock: nothing inside the critical section
+        # (including _fail_dead) re-enters it, and a stray re-entrant
+        # acquire here should deadlock loudly rather than mask a bug.
+        self._lock = threading.Lock()
 
     # lifecycle
 
@@ -224,18 +235,24 @@ class JinaClipEmbedder:
         raise RuntimeError(reason)
 
     def close(self) -> None:
-        """Terminate the worker process, if one is running. Safe to call more than once."""
-        process, self._process = self._process, None
-        if process is None or process.poll() is not None:
-            return
-        try:
-            process.stdin.close()
-        except Exception:
-            pass
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
+        """Terminate the worker process, if one is running. Safe to call more than once.
+
+        Takes the same lock as ``_request`` so a concurrent close() waits for
+        an in-flight request to finish instead of closing stdin underneath
+        an in-progress write.
+        """
+        with self._lock:
+            process, self._process = self._process, None
+            if process is None or process.poll() is not None:
+                return
+            try:
+                process.stdin.close()
+            except Exception:
+                pass
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
 
     def __del__(self):
         # Best-effort only: an orphaned GPU process is worse than a slightly
@@ -248,45 +265,53 @@ class JinaClipEmbedder:
     # request/response
 
     def _request(self, op: str, payload: Dict[str, str]) -> List[float]:
-        self._ensure_worker()
-        request_id = next(self._next_id)
-        message = {"id": request_id, "op": op, **payload}
+        # Held across worker startup, the stdin write and the matching
+        # response pop: this is the whole round-trip that must not
+        # interleave with another caller's (see _lock's comment in __init__).
+        # `with` releases on any exit path, including _fail_dead raising
+        # partway through, so a failed request never leaves the lock held.
+        with self._lock:
+            self._ensure_worker()
+            request_id = next(self._next_id)
+            message = {"id": request_id, "op": op, **payload}
 
-        try:
-            self._process.stdin.write(json.dumps(message) + "\n")
-            self._process.stdin.flush()
-        except (BrokenPipeError, OSError) as exc:
-            self._fail_dead(f"jina-clip worker's stdin pipe is broken: {exc}")
+            try:
+                self._process.stdin.write(json.dumps(message) + "\n")
+                self._process.stdin.flush()
+            except (BrokenPipeError, OSError) as exc:
+                self._fail_dead(f"jina-clip worker's stdin pipe is broken: {exc}")
 
-        response = self._await_message(self._request_timeout_s, phase=f"handling op={op!r}")
-
-        if "event" in response:
-            # A startup-shaped message ("fatal", or a non-JSON line the reader
-            # thread couldn't parse) arriving mid-request is a protocol
-            # violation, not a normal id-keyed response -- report it as such
-            # instead of falling through to a confusing id-mismatch error.
-            self._fail_dead(
-                f"jina-clip worker protocol violation while handling op={op!r}: "
-                f"{response.get('error', response)}"
-            )
-        if response.get("id") != request_id:
-            self._fail_dead(
-                f"jina-clip worker response id {response.get('id')!r} does not match "
-                f"request id {request_id!r} -- protocol desynchronized"
-            )
-        if not response.get("ok"):
-            raise RuntimeError(
-                f"jina-clip worker reported an error for op={op!r}: {response.get('error')}"
+            response = self._await_message(
+                self._request_timeout_s, phase=f"handling op={op!r}"
             )
 
-        vector = response.get("vector")
-        if not isinstance(vector, list) or len(vector) != _TRUNCATE_DIM:
-            got = len(vector) if isinstance(vector, list) else type(vector).__name__
-            raise RuntimeError(
-                f"jina-clip worker returned a vector of unexpected shape for op={op!r}: "
-                f"expected {_TRUNCATE_DIM} floats, got {got}"
-            )
-        return vector
+            if "event" in response:
+                # A startup-shaped message ("fatal", or a non-JSON line the reader
+                # thread couldn't parse) arriving mid-request is a protocol
+                # violation, not a normal id-keyed response -- report it as such
+                # instead of falling through to a confusing id-mismatch error.
+                self._fail_dead(
+                    f"jina-clip worker protocol violation while handling op={op!r}: "
+                    f"{response.get('error', response)}"
+                )
+            if response.get("id") != request_id:
+                self._fail_dead(
+                    f"jina-clip worker response id {response.get('id')!r} does not match "
+                    f"request id {request_id!r} -- protocol desynchronized"
+                )
+            if not response.get("ok"):
+                raise RuntimeError(
+                    f"jina-clip worker reported an error for op={op!r}: {response.get('error')}"
+                )
+
+            vector = response.get("vector")
+            if not isinstance(vector, list) or len(vector) != _TRUNCATE_DIM:
+                got = len(vector) if isinstance(vector, list) else type(vector).__name__
+                raise RuntimeError(
+                    f"jina-clip worker returned a vector of unexpected shape for op={op!r}: "
+                    f"expected {_TRUNCATE_DIM} floats, got {got}"
+                )
+            return vector
 
     # ADAPTER
 
@@ -344,6 +369,13 @@ class JinaClipEmbedder:
         if not os.path.isfile(image_path):
             raise RuntimeError(f"jina-clip: image file not found: {image_path!r}")
 
+        # These two _request calls are each individually locked but not
+        # atomic AS A PAIR -- another caller's request can run between them.
+        # That's fine: every request carries its own id and is matched to
+        # its own response before _request returns, so an interleaved
+        # request from another thread can never hand this call the wrong
+        # vector. The only effect of interleaving is ordering on the wire,
+        # not correctness.
         image_vector = _l2_normalize(self._request("image", {"path": image_path}))
 
         caption = caption.strip()
