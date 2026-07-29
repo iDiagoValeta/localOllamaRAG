@@ -101,9 +101,7 @@ class AppConfig:
             recomp=env.read_env_str("OLLAMA_RECOMP_MODEL", "gemma4:e4b"),
             desc=env.read_env_str("MODELO_DESC", infer_model_description(rag_model)),
             ollama=OllamaRuntimeConfig(
-                num_ctx=env.read_env_int("OLLAMA_NUM_CTX", 8192),
                 rag_num_ctx=env.read_env_int("OLLAMA_RAG_NUM_CTX", 16384),
-                aux_num_ctx=env.read_env_int("OLLAMA_AUX_NUM_CTX", 8192),
                 query_num_ctx=env.read_env_int("OLLAMA_QUERY_NUM_CTX", 2048),
                 recomp_num_ctx=env.read_env_int("OLLAMA_RECOMP_NUM_CTX", 8192),
                 contextual_num_ctx=env.read_env_int("OLLAMA_CONTEXTUAL_NUM_CTX", 32768),
