@@ -203,8 +203,13 @@ an improvement either.
 `tests/eval/runs/20260729T020233Z_mineru-jina_clip-faiss.json` (44/51 =
 0.8627, the same run used for the noise-floor pair above) against degraded run
 `tests/eval/runs/20260729T081129Z_mineru-jina_clip-faiss.json`
-(`RAG_TOP_K_FINAL=1`, 39/51 = 0.7647, 121.1 min). Same code, same index (both
-logged `cache hit`). These are local, gitignored artifacts (`tests/eval/runs/`)
+(`RAG_TOP_K_FINAL=1`, 39/51 = 0.7647, 121.1 min). Both logged `cache hit`,
+which bounds the index, not the code: that only a docs-only commit sits
+between the two runs is true, but nothing cited here supports it, and neither
+report records the `RAG_TOP_K_FINAL` value each run actually used, so the
+degraded configuration is asserted, not captured -- exactly the gap the
+evidence ledger (design doc section 4) and acceptance criterion 7 exist to
+close. These are local, gitignored artifacts (`tests/eval/runs/`)
 same as the noise-floor pair -- nobody cloning the repo can reproduce this
 check from them directly. `compare_runs.py` over the pair: 2 flipped to PASS,
 7 flipped to FAIL, 42 unchanged, pass rate delta -0.0980. All seven flips to
@@ -214,14 +219,26 @@ FAIL are retrieval-only cases (`att-arch-figure`, `att-arch-figure-es`,
 `planck-sigma8-es` and `resnet-top1-34layer`. By metric: retrieval-only fell
 from 11/15 (0.7333) to 4/15 (0.2667); answer rose from 33/36 (0.9167) to 35/36
 (0.9722). The degraded run also failed the baseline floor (0.7647 < 0.77),
-which is the gate behaving correctly under a known degradation.
+which is the gate behaving correctly under a known degradation -- but by a
+margin of 0.0053, against 0.0196 for a single case: at 40/51 = 0.7843
+(retrieval-only at 5/15 instead of 4/15, still just as collapsed) the gate
+would have passed the same catastrophic degradation. The aggregate fell 0.098
+while retrieval fell 0.47; this is the sharpest evidence for the point the
+consequence paragraph below already makes: an aggregate that barely notices a
+retrieval collapse this severe is precisely what makes a loop maximising it
+dangerous.
 
 This result is only interpretable because the noise floor measured above is
 zero flips -- seven flips against a floor of zero is unambiguous signal.
 Retrieval and answering moved in opposite directions: retrieval collapsed
-while answering improved slightly. A plausible reading is that less context
-distracts less on narrow factual questions, but that is a hypothesis, not a
-finding -- nothing here tested it. One degraded configuration was tested
+with 7 flips -- above the roughly six net flips the criterion-1 note cites
+(set in design doc section 3) as the bar for a difference to be demonstrable
+-- while answering improved slightly with only 2 net flips: above the
+zero-flip noise floor but below that same bar, so this measurement does not
+demonstrate the answer-side gain is real. A plausible reading is that less
+context distracts less on narrow factual questions, but that is a
+hypothesis, not a finding -- nothing here tested it. One degraded
+configuration was tested
 (`RAG_TOP_K_FINAL=1`), not a sweep; the design also lists disabling the
 reranker as a separate sabotage, still unmeasured. This uses the
 retrieval/answer split `run_eval.py` already reports, but it measures
@@ -235,4 +252,7 @@ that aggregate could favor configurations that trade retrieval quality for
 factual-answering accuracy without anyone noticing -- the aggregate alone does
 not distinguish a genuine improvement from that trade. Separated metrics are
 what make the trade visible; the design's objective function currently
-targets the aggregate, not the split.
+targets the aggregate, not the split. Five of the seven flips to FAIL are
+figure-retrieval cases, and design doc section 3 ("Margen inalcanzable")
+already places part of those cases outside the scalar the loop maximises --
+which makes the warning stronger, not weaker.

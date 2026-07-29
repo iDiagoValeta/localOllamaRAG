@@ -91,8 +91,13 @@ del LLM aporta algo sobre un control determinista.
 > `tests/eval/runs/20260729T020233Z_mineru-jina_clip-faiss.json` (44/51 =
 > 0.8627), degradado
 > `tests/eval/runs/20260729T081129Z_mineru-jina_clip-faiss.json` (39/51 =
-> 0.7647, 121.1 min). Mismo código, mismo índice: los dos registraron `cache
-> hit`. Son artefactos locales, igual que en la nota del criterio 1:
+> 0.7647, 121.1 min). Los dos registraron `cache hit`, lo cual acota el
+> índice, no el código: que entre ambos runs sólo medie un commit de
+> documentación es cierto, pero nada citado aquí lo respalda, y ningún informe
+> registra el valor de `RAG_TOP_K_FINAL` con el que corrió cada uno, así que la
+> configuración degradada queda afirmada, no capturada -- exactamente el hueco
+> que el libro de evidencias (§4) y el criterio 7 existen para cerrar. Son
+> artefactos locales, igual que en la nota del criterio 1:
 > `tests/eval/runs/` está en `.gitignore`, nadie que clone el repo puede
 > verlos directamente. `compare_runs.py` sobre el par: **2 vuelcos a PASS, 7
 > vuelcos a FAIL, 42 sin cambio, delta de tasa de acierto -0.0980**. Los siete
@@ -103,7 +108,14 @@ del LLM aporta algo sobre un control determinista.
 > recuperación sola pasa de 11/15 (0.7333) a 4/15 (0.2667); respuesta pasa de
 > 33/36 (0.9167) a 35/36 (0.9722). El run degradado también incumple el suelo
 > de `baseline_min_pass_rate.txt` (0.7647 < 0.77), que es el gate
-> comportándose correctamente ante una degradación conocida.
+> comportándose correctamente ante una degradación conocida -- pero por un
+> margen de 0.0053, frente a los 0.0196 que vale un solo caso: con 40/51 =
+> 0.7843 (recuperación en 5/15 en vez de 4/15, igual de hundida) el gate
+> habría aprobado la misma degradación catastrófica. El agregado cayó 0.098
+> mientras que la recuperación cayó 0.47; es la evidencia más nítida del punto
+> que ya hace el párrafo de consecuencia más abajo: un agregado que apenas
+> nota un desplome de recuperación de esta magnitud es justo lo que vuelve
+> peligroso a un loop que lo maximiza.
 >
 > Esta medición sólo es interpretable porque el suelo de ruido que fija la
 > nota del criterio 1, con el mismo par de runs sanos, es cero vuelcos. Siete
@@ -111,9 +123,14 @@ del LLM aporta algo sobre un control determinista.
 > distinto de cero habría que descontarlo antes de leer nada.
 >
 > Recuperación y respuesta se movieron en direcciones opuestas: recuperación
-> se desploma, respuesta mejora. Una lectura plausible es que menos contexto
-> distrae menos en preguntas factuales concretas -- pero eso es una hipótesis,
-> no un hallazgo: nada en esta medición la puso a prueba.
+> se desploma con 7 vuelcos -- por encima del umbral de unos seis vuelcos
+> netos que la nota del criterio 1 cita (fijado en la sección 3) para que una
+> diferencia sea demostrable --, mientras que respuesta mejora con sólo 2
+> vuelcos netos: por encima del suelo de ruido de cero pero por debajo de ese
+> mismo umbral, así que esta medición no demuestra que la mejora en respuesta
+> sea real. Una lectura plausible es que menos contexto distrae menos en
+> preguntas factuales concretas -- pero eso es una hipótesis, no un hallazgo:
+> nada en esta medición la puso a prueba.
 >
 > Se probó una única configuración degradada (`RAG_TOP_K_FINAL=1`), no un
 > barrido; el otro sabotaje que enumera el criterio (apagar el reranker) sigue
@@ -127,7 +144,10 @@ del LLM aporta algo sobre un control determinista.
 > factual sin que nadie lo note -- el agregado por sí solo no distingue esa
 > compensación de una mejora real. Las métricas separadas del criterio 4 son
 > las que hacen visible el intercambio; hoy la función objetivo del diseño
-> sigue apuntando al agregado.
+> sigue apuntando al agregado. Cinco de los siete vuelcos a FAIL son casos de
+> figura, y la sección 3 (Margen inalcanzable) ya deja parte de esos casos
+> fuera del escalar que el loop maximiza -- lo que hace la advertencia más
+> fuerte, no menos.
 >
 > **Criterio 3, evidencia de campo del mismo par de runs.** Los dos runs
 > registraron `cache hit` en ambos corpus; la línea `chunks={store.count()}`
