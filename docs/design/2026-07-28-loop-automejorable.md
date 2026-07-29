@@ -43,9 +43,9 @@ produce mejoras: produce basura reproducible.
 
 | # | Criterio | Cómo se comprueba |
 |---|---|---|
-| 1 | **Repetibilidad** | La misma configuración corrida dos veces aprueba el mismo conjunto de casos. Si no, la dispersión observada queda declarada como suelo de ruido y ningún delta por debajo cuenta como mejora. |
+| 1 | **Repetibilidad** (medido 2026-07-29, ver nota abajo) | La misma configuración corrida dos veces aprueba el mismo conjunto de casos. Si no, la dispersión observada queda declarada como suelo de ruido y ningún delta por debajo cuenta como mejora. |
 | 2 | **Sensibilidad** | Un sabotaje conocido y acotado (recuperar un solo fragmento; apagar el reranker) hace caer el gate de forma inequívoca. |
-| 3 | **No engañable** | Alterar el troceado obliga a reindexar en el run siguiente, en vez de reutilizar el índice por nombre de fichero. |
+| 3 | **No engañable** (evidencia de campo 2026-07-29, ver nota abajo) | Alterar el troceado obliga a reindexar en el run siguiente, en vez de reutilizar el índice por nombre de fichero. |
 | 4 | **Métricas separadas** | Un caso de figura que acierta la recuperación no cuenta como respuesta correcta. |
 | 5 | **Búsqueda efectiva** | Partiendo de una configuración deliberadamente empeorada, el loop recupera al menos hasta el rendimiento actual sin intervención. |
 | 6 | **Techo respetado** | Un candidato que acierta más pero excede la latencia se rechaza, y el informe registra el motivo. |
@@ -54,6 +54,49 @@ produce mejoras: produce basura reproducible.
 
 El criterio 5 se corre con dos proponentes (ver §4) para saber si el razonamiento
 del LLM aporta algo sobre un control determinista.
+
+> [!NOTE]
+> **Criterio 1, medido el 2026-07-29.** Dos runs del gate completo, misma
+> configuración y mismo código, mismo índice (los dos registraron `cache hit`
+> en el conjunto dev y en el ciego, así que ninguno reindexó):
+> `tests/eval/runs/20260729T020233Z_mineru-jina_clip-faiss.json` y
+> `tests/eval/runs/20260729T040824Z_mineru-jina_clip-faiss.json`. Son
+> artefactos locales: `tests/eval/runs/` está en `.gitignore`, así que nadie
+> que clone el repo puede verificarlos por sí mismo. Ambos 44/51 = 0.8627
+> global. `compare_runs.py` sobre el par: `identical: 51 case(s) unchanged`,
+> delta de tasa de acierto +0.0000, cero vuelcos. `compare_runs.py` compara el
+> vector de aprobado/fallado por caso, no el texto generado, así que eso acota
+> la **clasificación**, no la salida del generador. Prueba directa en el
+> propio par: `planck-sigma8-es` falla en los dos runs y, al fallar, guarda la
+> respuesta generada -- los dos textos difieren (uno termina en "Planck
+> lensing", el otro añade una frase completa sobre las preferencias de
+> amplitud de Planck). El generador corre a temperatura 0.15 y varió, como
+> cabía esperar; lo medido es que el criterio de acierto de `grade.py` absorbe
+> esa variación, no que la salida fuera idéntica. Eso acota el suelo de ruido
+> de la clasificación por debajo de un caso; no demuestra que el pipeline sea
+> determinista en general, y dos runs es una muestra pequeña, así que una
+> afirmación más amplia exige más pares. El suelo queda medido para este
+> `grade.py`: un cambio en las reglas de puntuación puede moverlo y exigiría
+> remedirlo. Bajo este suelo, un vuelco de un solo caso deja de ser explicable
+> por ruido -- lo cual no es lo mismo que una diferencia entre dos
+> configuraciones sea demostrable: la sección 3 sitúa ese segundo umbral en
+> unos seis vuelcos netos, con un margen aprovechable de unos cinco casos
+> descontadas las figuras. Esta nota no retracta esa cuenta, sólo fija el
+> suelo bajo el que se interpreta; la inferencia, además, descansa en un único
+> par de runs.
+>
+> **Criterio 3, evidencia de campo del mismo par de runs.** Los dos runs
+> registraron `cache hit` en ambos corpus; la línea `chunks={store.count()}`
+> que sigue a cada cache hit en el log es la que reportó 884 y 218 fragmentos
+> respectivamente -- el mensaje de cache hit en sí no cuenta fragmentos. Con
+> la configuración sin cambios, un cache hit ejerce la ruta de
+> **coincidencia** de la huella del índice, no la ruta de **detección** que
+> pide el criterio 3 (que alterar el troceado fuerce un reindexado en el run
+> siguiente). Es evidencia de que la huella no invalida en falso un índice
+> real, cobertura que hasta ahora sólo daban los dobles de prueba; no
+> ejercita el camino que el criterio exige. No se marca el criterio como
+> cerrado por esto solo; sólo añade esa evidencia de campo a la que ya daban
+> los tests unitarios.
 
 ---
 

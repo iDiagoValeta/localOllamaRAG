@@ -148,6 +148,33 @@ python tests/eval/compare_runs.py tests/eval/runs/<first>.json tests/eval/runs/<
 Every flip is noise. Record the observed number: no delta at or below it counts
 as a real change, and an optimisation loop must not treat one as an improvement.
 
+**Measured 2026-07-29**, two full-gate runs, identical configuration and code,
+same index (both logged `cache hit` on the dev and blind sets, so neither
+reindexed): `tests/eval/runs/20260729T020233Z_mineru-jina_clip-faiss.json` and
+`tests/eval/runs/20260729T040824Z_mineru-jina_clip-faiss.json`. These are
+local, gitignored artifacts (`tests/eval/runs/`) -- nobody cloning the repo
+can reproduce this check from them directly. Both 44/51 = 0.8627 overall.
+`compare_runs.py` over the pair reports `identical: 51 case(s) unchanged`,
+pass rate delta +0.0000, zero flips. `compare_runs.py` compares the per-case
+pass/fail vector, not the generated text, so this bounds the
+**classification**, not the output. Direct counterevidence sits in the same
+pair: `planck-sigma8-es` fails in both runs, and a failure stores the
+generated answer -- the two texts differ (one ends on "Planck lensing", the
+other appends a full sentence on Planck's preferred amplitudes). The
+generator runs at temperature 0.15 and varied, as expected; what's measured
+is that `grade.py`'s literal-match criterion absorbs that variance, not that
+the output was identical. This bounds the noise floor of the classification
+below one case; it does not prove the pipeline is deterministic in general,
+and two runs is a small sample, so a wider claim needs more pairs. The floor
+is measured for this `grade.py`: changing the grading rules could move it
+and would require re-measuring. Under this floor, a single-case flip stops
+being explainable by noise, which is not the same as a difference between two
+configurations being demonstrable: design doc section 3 puts that second
+threshold at roughly six net flips, with a usable margin of about five cases
+once figure cases are excluded. This note does not retract that count, it
+only sets the floor it is interpreted against; the inference also rests on a
+single pair of runs.
+
 **Sensitivity.** Compare a healthy run (either one from the noise-floor pair
 above) against a deliberately degraded one:
 
