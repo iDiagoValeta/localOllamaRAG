@@ -148,6 +148,20 @@ python tests/eval/compare_runs.py tests/eval/runs/<first>.json tests/eval/runs/<
 Every flip is noise. Record the observed number: no delta at or below it counts
 as a real change, and an optimisation loop must not treat one as an improvement.
 
+**Measured 2026-07-29**, two full-gate runs, identical configuration and code,
+same index (both logged `cache hit` on the dev and blind sets, so neither
+reindexed): `tests/eval/runs/20260729T020233Z_mineru-jina_clip-faiss.json` and
+`tests/eval/runs/20260729T040824Z_mineru-jina_clip-faiss.json`, both
+44/51 = 0.8627 overall. `compare_runs.py` over the pair reports
+`identical: 51 case(s) unchanged`, pass rate delta +0.0000, i.e. zero flips.
+This bounds the noise floor below one case; it does not prove the pipeline is
+deterministic in general, and two runs is a small sample, so a wider claim
+needs more pairs. Genuinely surprising given the generator runs at temperature
+0.15: identical output across a full run was not a given. Under this floor, a
+single-case flip in either direction is signal, not noise, so the nine-case
+headroom this design computes (`docs/design/2026-07-28-loop-automejorable.md`
+§3) is usable as-is.
+
 **Sensitivity.** Compare a healthy run (either one from the noise-floor pair
 above) against a deliberately degraded one:
 

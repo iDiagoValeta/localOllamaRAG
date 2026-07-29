@@ -43,9 +43,9 @@ produce mejoras: produce basura reproducible.
 
 | # | Criterio | Cómo se comprueba |
 |---|---|---|
-| 1 | **Repetibilidad** | La misma configuración corrida dos veces aprueba el mismo conjunto de casos. Si no, la dispersión observada queda declarada como suelo de ruido y ningún delta por debajo cuenta como mejora. |
+| 1 | **Repetibilidad** (medido 2026-07-29, ver nota abajo) | La misma configuración corrida dos veces aprueba el mismo conjunto de casos. Si no, la dispersión observada queda declarada como suelo de ruido y ningún delta por debajo cuenta como mejora. |
 | 2 | **Sensibilidad** | Un sabotaje conocido y acotado (recuperar un solo fragmento; apagar el reranker) hace caer el gate de forma inequívoca. |
-| 3 | **No engañable** | Alterar el troceado obliga a reindexar en el run siguiente, en vez de reutilizar el índice por nombre de fichero. |
+| 3 | **No engañable** (evidencia de campo 2026-07-29, ver nota abajo) | Alterar el troceado obliga a reindexar en el run siguiente, en vez de reutilizar el índice por nombre de fichero. |
 | 4 | **Métricas separadas** | Un caso de figura que acierta la recuperación no cuenta como respuesta correcta. |
 | 5 | **Búsqueda efectiva** | Partiendo de una configuración deliberadamente empeorada, el loop recupera al menos hasta el rendimiento actual sin intervención. |
 | 6 | **Techo respetado** | Un candidato que acierta más pero excede la latencia se rechaza, y el informe registra el motivo. |
@@ -54,6 +54,29 @@ produce mejoras: produce basura reproducible.
 
 El criterio 5 se corre con dos proponentes (ver §4) para saber si el razonamiento
 del LLM aporta algo sobre un control determinista.
+
+> [!NOTE]
+> **Criterio 1, medido el 2026-07-29.** Dos runs del gate completo, misma
+> configuración y mismo código, mismo índice (los dos registraron `cache hit`
+> en el conjunto dev y en el ciego, así que ninguno reindexó):
+> `tests/eval/runs/20260729T020233Z_mineru-jina_clip-faiss.json` y
+> `tests/eval/runs/20260729T040824Z_mineru-jina_clip-faiss.json`, ambos
+> 44/51 = 0.8627 global. `compare_runs.py` sobre el par: `identical: 51 case(s)
+> unchanged`, delta de tasa de acierto +0.0000, es decir cero vuelcos. Eso acota
+> el suelo de ruido por debajo de un caso; no demuestra que el pipeline sea
+> determinista en general, y dos runs es una muestra pequeña, así que una
+> afirmación más amplia exige más pares. Dato llamativo: el generador corre a
+> temperatura 0.15, así que una salida idéntica en un run completo no estaba
+> garantizada de antemano. Con este suelo, un vuelco de un solo caso ya es
+> señal y no ruido, así que el margen de nueve casos que calcula este diseño
+> (§3) es aprovechable tal cual.
+>
+> **Criterio 3, evidencia de campo del mismo par de runs.** Los dos runs
+> registraron `cache hit` en ambos corpus (884 y 218 fragmentos), lo cual es
+> evidencia de que la huella del índice funciona sobre un corpus real y no
+> sólo bajo dobles de prueba, que era la única cobertura que tenía hasta
+> ahora. No se marca el criterio como cerrado por esto solo; sólo añade
+> evidencia de campo a la que ya daban los tests unitarios.
 
 ---
 
