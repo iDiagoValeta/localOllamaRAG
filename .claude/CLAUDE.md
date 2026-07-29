@@ -14,6 +14,11 @@ User-facing doc lives in `README.md`. Architecture entry points:
 `src/monkeygrab/README.md` and `rag/README.md`. Documentation standard (what
 gets documented where, what doesn't get documented at all): `docs/README.md`.
 
+This file is the operating contract for **any** agent working here, not just
+Claude. `.codex/AGENTS.md` exists only to point at it and must stay a pointer:
+it once held a second copy and spent months describing a research layer,
+fine-tuned models and evaluation hooks that had already been deleted.
+
 ---
 
 ## 1. Behavior rules
@@ -24,7 +29,7 @@ gets documented where, what doesn't get documented at all): `docs/README.md`.
    operations, auth/PII/secrets, irreversible external integrations, anything
    without trivial rollback — or where a rule below demands agreement
    (5, 6, 9). Repo conventions win over any plan that contradicts them.
-2. **The current design lives in `docs/design/2026-07-26-monkeygrab-v2.md`.** It takes precedence over any other architecture instruction in this repo. `docs/README.md` governs *how* things get documented.
+2. **Two design docs are current and they do not overlap.** `docs/design/2026-07-26-monkeygrab-v2.md` governs the product architecture and takes precedence over any other architecture instruction in this repo. `docs/design/2026-07-28-loop-automejorable.md` governs the evaluation gate and the self-improving loop built on it. Neither outranks the other; they answer different questions. `docs/README.md` governs *how* things get documented.
 3. **Always respond in Spanish** to the user.
 4. **Follow the code patterns in §6** when writing new code in `rag/`; §7 lists what `src/monkeygrab/` does differently.
 5. **Do not modify any `requirements.txt`** without confirmation — versions are pinned.
