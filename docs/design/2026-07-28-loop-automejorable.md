@@ -60,23 +60,43 @@ del LLM aporta algo sobre un control determinista.
 > configuración y mismo código, mismo índice (los dos registraron `cache hit`
 > en el conjunto dev y en el ciego, así que ninguno reindexó):
 > `tests/eval/runs/20260729T020233Z_mineru-jina_clip-faiss.json` y
-> `tests/eval/runs/20260729T040824Z_mineru-jina_clip-faiss.json`, ambos
-> 44/51 = 0.8627 global. `compare_runs.py` sobre el par: `identical: 51 case(s)
-> unchanged`, delta de tasa de acierto +0.0000, es decir cero vuelcos. Eso acota
-> el suelo de ruido por debajo de un caso; no demuestra que el pipeline sea
+> `tests/eval/runs/20260729T040824Z_mineru-jina_clip-faiss.json`. Son
+> artefactos locales: `tests/eval/runs/` está en `.gitignore`, así que nadie
+> que clone el repo puede verificarlos por sí mismo. Ambos 44/51 = 0.8627
+> global. `compare_runs.py` sobre el par: `identical: 51 case(s) unchanged`,
+> delta de tasa de acierto +0.0000, cero vuelcos. `compare_runs.py` compara el
+> vector de aprobado/fallado por caso, no el texto generado, así que eso acota
+> la **clasificación**, no la salida del generador. Prueba directa en el
+> propio par: `planck-sigma8-es` falla en los dos runs y, al fallar, guarda la
+> respuesta generada -- los dos textos difieren (uno termina en "Planck
+> lensing", el otro añade una frase completa sobre las preferencias de
+> amplitud de Planck). El generador corre a temperatura 0.15 y varió, como
+> cabía esperar; lo medido es que el criterio de acierto de `grade.py` absorbe
+> esa variación, no que la salida fuera idéntica. Eso acota el suelo de ruido
+> de la clasificación por debajo de un caso; no demuestra que el pipeline sea
 > determinista en general, y dos runs es una muestra pequeña, así que una
-> afirmación más amplia exige más pares. Dato llamativo: el generador corre a
-> temperatura 0.15, así que una salida idéntica en un run completo no estaba
-> garantizada de antemano. Con este suelo, un vuelco de un solo caso ya es
-> señal y no ruido, así que el margen de nueve casos que calcula este diseño
-> (§3) es aprovechable tal cual.
+> afirmación más amplia exige más pares. El suelo queda medido para este
+> `grade.py`: un cambio en las reglas de puntuación puede moverlo y exigiría
+> remedirlo. Bajo este suelo, un vuelco de un solo caso deja de ser explicable
+> por ruido -- lo cual no es lo mismo que una diferencia entre dos
+> configuraciones sea demostrable: la sección 3 sitúa ese segundo umbral en
+> unos seis vuelcos netos, con un margen aprovechable de unos cinco casos
+> descontadas las figuras. Esta nota no retracta esa cuenta, sólo fija el
+> suelo bajo el que se interpreta; la inferencia, además, descansa en un único
+> par de runs.
 >
 > **Criterio 3, evidencia de campo del mismo par de runs.** Los dos runs
-> registraron `cache hit` en ambos corpus (884 y 218 fragmentos), lo cual es
-> evidencia de que la huella del índice funciona sobre un corpus real y no
-> sólo bajo dobles de prueba, que era la única cobertura que tenía hasta
-> ahora. No se marca el criterio como cerrado por esto solo; sólo añade
-> evidencia de campo a la que ya daban los tests unitarios.
+> registraron `cache hit` en ambos corpus; la línea `chunks={store.count()}`
+> que sigue a cada cache hit en el log es la que reportó 884 y 218 fragmentos
+> respectivamente -- el mensaje de cache hit en sí no cuenta fragmentos. Con
+> la configuración sin cambios, un cache hit ejerce la ruta de
+> **coincidencia** de la huella del índice, no la ruta de **detección** que
+> pide el criterio 3 (que alterar el troceado fuerce un reindexado en el run
+> siguiente). Es evidencia de que la huella no invalida en falso un índice
+> real, cobertura que hasta ahora sólo daban los dobles de prueba; no
+> ejercita el camino que el criterio exige. No se marca el criterio como
+> cerrado por esto solo; sólo añade esa evidencia de campo a la que ya daban
+> los tests unitarios.
 
 ---
 
