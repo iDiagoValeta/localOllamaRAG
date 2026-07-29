@@ -198,3 +198,41 @@ python tests/eval/compare_runs.py tests/eval/runs/<healthy>.json tests/eval/runs
 The degraded run must flip a clearly larger number of cases to FAIL than the
 noise floor. A gate that barely moves under a known degradation cannot detect
 an improvement either.
+
+**Measured 2026-07-29.** Healthy run
+`tests/eval/runs/20260729T020233Z_mineru-jina_clip-faiss.json` (44/51 =
+0.8627, the same run used for the noise-floor pair above) against degraded run
+`tests/eval/runs/20260729T081129Z_mineru-jina_clip-faiss.json`
+(`RAG_TOP_K_FINAL=1`, 39/51 = 0.7647, 121.1 min). Same code, same index (both
+logged `cache hit`). These are local, gitignored artifacts (`tests/eval/runs/`)
+same as the noise-floor pair -- nobody cloning the repo can reproduce this
+check from them directly. `compare_runs.py` over the pair: 2 flipped to PASS,
+7 flipped to FAIL, 42 unchanged, pass rate delta -0.0980. All seven flips to
+FAIL are retrieval-only cases (`att-arch-figure`, `att-arch-figure-es`,
+`att-bleu-table`, `dpo-pipeline-figure`, `resnet-block-figure`,
+`vit-comparison-table`, `vit-overview-figure`); the two flips to PASS are
+`planck-sigma8-es` and `resnet-top1-34layer`. By metric: retrieval-only fell
+from 11/15 (0.7333) to 4/15 (0.2667); answer rose from 33/36 (0.9167) to 35/36
+(0.9722). The degraded run also failed the baseline floor (0.7647 < 0.77),
+which is the gate behaving correctly under a known degradation.
+
+This result is only interpretable because the noise floor measured above is
+zero flips -- seven flips against a floor of zero is unambiguous signal.
+Retrieval and answering moved in opposite directions: retrieval collapsed
+while answering improved slightly. A plausible reading is that less context
+distracts less on narrow factual questions, but that is a hypothesis, not a
+finding -- nothing here tested it. One degraded configuration was tested
+(`RAG_TOP_K_FINAL=1`), not a sweep; the design also lists disabling the
+reranker as a separate sabotage, still unmeasured. This uses the
+retrieval/answer split `run_eval.py` already reports, but it measures
+sensitivity only -- it does not by itself close acceptance criterion 4
+(separated metrics).
+
+Consequence for the optimisation loop:
+`docs/design/2026-07-28-loop-automejorable.md` section 1 defines the
+objective function as a single aggregate pass rate. A loop maximising only
+that aggregate could favor configurations that trade retrieval quality for
+factual-answering accuracy without anyone noticing -- the aggregate alone does
+not distinguish a genuine improvement from that trade. Separated metrics are
+what make the trade visible; the design's objective function currently
+targets the aggregate, not the split.
