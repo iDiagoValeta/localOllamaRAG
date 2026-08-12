@@ -73,7 +73,7 @@ _state = {
 }
 _indexing_lock = threading.RLock()
 
-_CORPUS_PRESET_IDS = frozenset({"es", "ca", "en"})
+_CORPUS_PRESET_IDS = frozenset(rag_engine.STORE_IDS)
 
 # Vector-store layout: three fixed stores, one per language, each bound to a
 # versioned docs folder under rag/docs/. There are no user-created stores and no
@@ -91,10 +91,6 @@ _BUILTIN_STORES = {
 # generates against; resolving it twice is how the two used to disagree.
 OLLAMA_BASE_URL = rag_engine.OLLAMA_BASE_URL
 _model_caps_cache: dict = {}  # digest -> capabilities list
-
-# Persisted UI choices (model roles, active store, pipeline flags) so the desktop
-# app remembers them across restarts. Lives in the writable data dir.
-_SETTINGS_FILE = os.path.join(rag_engine.DATA_DIR, "settings.json")
 
 
 def _infer_corpus_preset() -> str | None:
@@ -444,14 +440,6 @@ def _all_stores() -> list:
     return stores
 
 
-def _resolve_store_folder(name: str) -> Optional[str]:
-    """Return the absolute docs folder for a store name, or ``None`` if unknown."""
-    if name in _BUILTIN_STORES:
-        folder = os.path.join(_DOCS_ROOT, name)
-        return folder if os.path.isdir(folder) else None
-    return None
-
-
 def _active_store_name() -> str:
     """Basename of the active docs folder (the store identifier)."""
     return os.path.basename(os.path.abspath(rag_engine.CARPETA_DOCS))
@@ -469,63 +457,6 @@ def _switch_store_folder(folder: str) -> None:
         _state["indexing_done_empty"] = False
         _state["indexing_progress"] = None
     gc.collect()
-
-
-def _save_persisted_settings() -> None:
-    """Persist model roles, active store and pipeline flags to the data dir.
-
-    Best-effort: lets the desktop app reopen with the user's last choices instead
-    of the startup defaults.
-    """
-    try:
-        data = {
-            "roles": rag_engine.get_model_roles(),
-            "active_store": _active_store_name(),
-            "flags": {var: bool(getattr(rag_engine, var, False)) for var in _SETTINGS_MAP.values()},
-        }
-        os.makedirs(os.path.dirname(_SETTINGS_FILE), exist_ok=True)
-        with open(_SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-
-def _load_persisted_settings() -> None:
-    """Apply persisted settings at startup: model roles, then store, then flags.
-
-    Roles are applied before the store. Missing or invalid entries are skipped;
-    the engine defaults stand when nothing is saved.
-    """
-    try:
-        # utf-8-sig tolerates a BOM if the file was hand-edited with a Windows tool.
-        with open(_SETTINGS_FILE, "r", encoding="utf-8-sig") as f:
-            data = json.load(f)
-    except (OSError, ValueError):
-        return
-
-    roles = data.get("roles") or {}
-    valid = {
-        k: v for k, v in roles.items()
-        if k in rag_engine.MODEL_ROLE_VARS and isinstance(v, str) and v.strip()
-    }
-    if valid:
-        try:
-            rag_engine.set_model_roles_runtime(valid)
-        except Exception:
-            pass
-
-    store = data.get("active_store")
-    if store and store != _active_store_name():
-        folder = _resolve_store_folder(store)
-        if folder:
-            try:
-                rag_engine.set_docs_folder_runtime(folder)
-            except Exception:
-                pass
-
-    for var, val in (data.get("flags") or {}).items():
-        if var in _SETTINGS_MAP.values():
-            setattr(rag_engine, var, bool(val))
 
 
 def _ollama_error_payload(exc: Exception) -> dict:
@@ -1103,7 +1034,7 @@ def api_settings_post():
                 continue
             setattr(rag_engine, engine_var, val)
             updated[fe_key] = val
-    _save_persisted_settings()
+    rag_engine.guardar_ajustes_persistidos()
     # contextualRetrieval and imageIndexing are index-time flags (part of
     # index_recipe): flipping either one is the most likely way a store goes
     # stale mid-session, with no restart and no store switch to otherwise
@@ -1172,7 +1103,7 @@ def api_models_post():
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 400
 
-    _save_persisted_settings()
+    rag_engine.guardar_ajustes_persistidos()
     # The contextual role only enters index_recipe while contextual retrieval
     # is on (the default) -- reassigning it mid-session is just as likely to
     # make the active store stale as toggling the flag itself; see
@@ -1202,11 +1133,11 @@ def api_stores_select():
         return jsonify({"ok": False, "error": "indexing_in_progress"}), 409
     data = request.get_json() or {}
     name = (data.get("name") or "").strip()
-    folder = _resolve_store_folder(name)
+    folder = rag_engine.resolver_carpeta_store(name)
     if not folder:
         return jsonify({"ok": False, "error": "unknown_store"}), 404
     _switch_store_folder(folder)
-    _save_persisted_settings()
+    rag_engine.guardar_ajustes_persistidos()
     coll = _get_collection()
     total = coll.count()
     if total == 0:
@@ -1226,7 +1157,10 @@ def api_stores_select():
 
 
 # Apply any persisted UI choices (model roles / store / flags) before serving.
-_load_persisted_settings()
+# The reader and the file live in rag/engine/settings.py because the CLI applies
+# the same choices at startup: two interfaces over one index must not run under
+# two configurations (issue #36 follow-up).
+rag_engine.cargar_ajustes_persistidos()
 
 
 # ENTRY POINT

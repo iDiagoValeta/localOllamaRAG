@@ -240,6 +240,12 @@ the file. `MONKEYGRAB_LANG` sets the interface language (`es`, `en`, `ca`),
 another machine and every call follows, generation included, which is the way
 out when the local card cannot hold the generator you want.
 
+The model roles, pipeline toggles and active store you pick in the web UI are
+saved to `settings.json` in the data directory, and the CLI starts from that
+same file: one configuration per machine, not one per interface. The precedence
+is environment, then saved choices, then defaults, so an exported
+`OLLAMA_*_MODEL` or `DOCS_FOLDER` still describes the run you are starting.
+
 Each corpus has its own Jina CLIP and FAISS index under `rag/vector_db/`. Both
 interfaces detect when a stored index no longer matches the active chunking,
 extraction or index-time flags and warn about it, but never reindex on their
