@@ -12,6 +12,12 @@ candidate so a run can be reconstructed. Implements
 > `gold_cases.jsonl` and `baseline_min_pass_rate.txt` stay byte-identical —
 > enforced by `harness/tests/test_harness_boundaries.py`, which parses every
 > harness module's imports and write calls with `ast`, not by convention.
+> Proven, not assumed: `test_adversarial_bypass_module_is_caught_by_every_check`
+> parses a module doing everything a #65 PR review found the first version
+> of these checks missed (`importlib.import_module("grade")`, a dotted
+> `import tests.eval.grade`, `shutil.copyfile`/`os.replace`/`os.remove`
+> against the three protected files, a `"grade" + ".py"` string built to
+> dodge a literal match) and asserts each attack is caught.
 
 ## Why this is not product
 
@@ -46,19 +52,33 @@ tests/                  Unit tests — no GPU, no Ollama, no model downloads (se
 ## The declared search space
 
 Written by hand as data in `search_space.py`, never inferred by
-introspecting `AppConfig` — each parameter multiplies the space against a
-budget of three or four full-search-set candidates per night (~2.8 h each).
-Validated at import time: every declared value is applied via
+introspecting `AppConfig` — each parameter is a visible decision about what
+the loop is allowed to search, independent of how expensive an evaluation
+is. Validated at import time: every declared value is applied via
 `AppConfig().with_overrides(**{key: value})`, which raises `ValueError` on
 an unknown section or field — confirmed in this PR that it really does raise
 on every unknown field, so the space cannot drift from the config it
 searches without a red test.
 
+> [!NOTE]
+> **The design's original evaluation-time estimate was wrong by a factor of
+> ~6.** Section 4 assumed ~2.8 h/candidate (three or four candidates a
+> night); issue #27's keep-alive fix removed a per-case cold model load
+> that estimate baked in. A full search-set evaluation (32 cases) now costs
+> ~13 min, measured 2026-08-12 against
+> `tests/eval/runs/20260812T194812Z_mineru-jina_clip-faiss.json` (local,
+> gitignored) — a night now fits dozens of candidates, not three or four.
+> This does not change anything about how the space is declared (see
+> above); it does change the case for the LLM proposer, see "Proposers"
+> below.
+
 **Index-time keys are excluded and the exclusion is enforced,** not
 remembered: `chunking.*` and `flags.usar_contextual_retrieval`/
 `usar_embeddings_imagen` change what gets stored, forcing a full MinerU +
-jina-clip reindex on top of the 2.8 h a candidate already costs. Declaring
-one is a red test (`INDEX_TIME_KEYS`, checked by `_validate_declared_space`).
+jina-clip reindex per candidate — far more expensive than the ~13 min a
+retrieval/generation-only evaluation now costs, whatever the exact multiple
+turns out to be once block B (#30) measures it. Declaring one is a red test
+(`INDEX_TIME_KEYS`, checked by `_validate_declared_space`).
 
 **`weight_semantic_rrf`/`weight_bm25_rrf` are one knob, not two.**
 `src/monkeygrab/application/rrf_fusion.py::fuse_semantic_and_keyword` computes
@@ -145,11 +165,14 @@ fake evaluator that raises on a declared key makes startup fail loudly
   `harness/tests/test_evaluator.py` asserts the blind set is disjoint from
   both the search set and the fast tier.
 - **Fast tier** (13 fixed ids, `fast_tier.txt`) — regression filter only, it
-  **never declares an improvement**. 8 answered cases (~200 s each) + 5
-  retrieval-only cases (~4.5 s each) ≈ 27 min, matching the design's ~32 min
-  budget. Includes all 5 of today's known search-set failures (three
-  figure-retrieval failures cost ~4 s each, nearly free to include, and give
-  the regression filter real signal on the retrieval side).
+  **never declares an improvement**. Costs ~4 min at current measured rates
+  (8 answered cases × ~28.5 s + 5 retrieval-only × ~4.1 s), against a ~13 min
+  full search set — a real but much smaller saving than the design's ~32 min
+  estimate assumed (see the search-space note above); its job is rejecting a
+  bad candidate before it can contaminate the ratchet, not the minutes it
+  happens to save. Includes all 5 of today's known search-set failures
+  (three figure-retrieval failures cost ~4 s each, nearly free to include,
+  and give the regression filter real signal on the retrieval side).
 
 ## Objective, constraint, noise floor
 
@@ -169,13 +192,43 @@ tracked alongside so the exclusion mechanism is auditable before it is ever
 needed — today `raw == adjusted`.
 
 **Constraint, per bucket, not blended.** Answered cases (`factual_number`/
-`factual_concept`) cost ~200 s; retrieval-only cases (`figure_retrieval`/
-`table_retrieval`) cost ~4 s — a ~50x gap. A single blended median is
-dominated by whichever bucket is larger and would let a candidate trade
-retrieval quality for fewer generator calls without the constraint
-noticing. `loop.py` checks each bucket's median against
-`1.20 ×` its own reference median independently; a breach in either bucket
-is `rejected_latency`, even if the candidate scored higher.
+`factual_concept`) cost ~28.5 s; retrieval-only cases (`figure_retrieval`/
+`table_retrieval`) cost ~4.1 s (both measured 2026-08-12, same run cited
+above; the gap was ~50x before issue #27's keep-alive fix and is ~7x now —
+narrower, not gone). A single blended median is dominated by whichever
+bucket is larger and would let a candidate trade retrieval quality for
+fewer/cheaper generator calls without the constraint noticing. `loop.py`
+checks each bucket's median against `1.20 ×` its own reference median
+independently; a breach in either bucket is `rejected_latency`, even if the
+candidate scored higher.
+
+**A candidate cannot buy the objective with the retrieval-only bucket.**
+The blended objective by itself has the same blind spot as a blended
+latency median: a candidate that flips several `figure_retrieval`/
+`table_retrieval` cases to FAIL while flipping more answered cases to PASS
+would otherwise read as a plain improvement — exactly the trade design doc
+§2's "Consecuencia para el arnés" warns a blended score would hide. Found
+in a #65 PR review; `loop.py` now also rejects (`rejected_regression`, at
+the search-set stage) any candidate whose retrieval-only bucket loses cases
+net against the reference, paired by id, regardless of the blended
+objective. `LedgerEntry.summary` also carries a `by_case_type` breakdown
+(mirroring `run_eval.py`'s own `build_summary`) so the trade is visible in
+the ledger even for an iteration this check does not reject.
+
+**An `inconclusive` verdict, never a false "improvement" or "regression".**
+`tests/eval/run_eval.py` marks a case `infrastructure_error` when it could
+not be evaluated at all (dead/overloaded Ollama, a retrieval exception) and
+refuses to compare such a run against the baseline. Reading those records
+as ordinary failures would let a dead Ollama masquerade as a retrieval
+collapse (fast tier: a good candidate wrongly `rejected_regression`) or
+silently deflate the reference and inflate every later candidate into a
+false `accepted` — found in the same review, and precisely the "loop sobre
+una medida que miente produce basura reproducible" failure the design doc
+opens with. `loop.py` gives any iteration with such a record the
+`inconclusive` verdict (no ratchet move, still written to the ledger, still
+counts toward `--patience`) and raises `evaluator.InconclusiveEvaluationError`
+before the loop even starts if the **reference** measurement itself carries
+one — no ratchet baseline can be trusted in that case.
 
 **Noise floor: 0 cases.** Measured 2026-07-29 (design doc, criterion 1
 note): two runs of the same configuration and code, same index, zero flips
@@ -199,10 +252,15 @@ the quantitative case for block B (#30, corpus expansion) — sharper than the
 design doc's own estimate — not a reason to withhold the harness.
 
 > [!NOTE]
-> All of the numbers above come from three local, gitignored artifacts
+> All of the numbers above come from four local, gitignored artifacts
 > (`tests/eval/runs/20260729T020233Z_...json`, `...040824Z...`,
-> `...081129Z...json`) — `tests/eval/runs/` is in `.gitignore`, so they are
-> not reproducible from a fresh clone. They are cited, not shipped.
+> `...081129Z...json`, `...20260812T194812Z...json`) — `tests/eval/runs/` is
+> in `.gitignore`, so they are not reproducible from a fresh clone. They are
+> cited, not shipped. The three 2026-07-29 runs predate issue #27's
+> keep-alive fix and are cited for their PASS/FAIL evidence (noise floor,
+> sabotage flips, resolution limit), which the fix did not touch
+> (`compare_runs.py` against the healthy 2026-07-29 run reports 51 cases
+> unchanged); the 2026-08-12 run is cited for current timing.
 
 ## Proposers
 
@@ -210,6 +268,37 @@ design doc's own estimate — not a reason to withhold the harness.
 reference configuration, one field at a time, in `proposal_order()`,
 skipping infeasible points and points already in the ledger. Reproducible
 from the ledger alone.
+
+> [!NOTE]
+> **Why keep an LLM proposer at all, now that evaluation is cheap.** Design
+> doc §4 originally argued: ~2.8 h/evaluation, three or four candidates a
+> night, blind/grid search is useless at that budget, therefore an LLM
+> reading actual failures is the natural fit. That argument no longer holds
+> at ~13 min/evaluation (a night fits dozens of candidates, see "The
+> declared search space" above) — corrected in the design doc, PR #68. This
+> is **not** evidence the deterministic proposer is sufficient on its own,
+> and it is not a reason to drop `LlmProposer`: it means criterion 5's
+> controlled comparison between the two (design doc §2) is now cheap enough
+> to settle with evidence instead of an argument from budget. Keeping both
+> was the right call before this correction and is better justified after
+> it, not worse.
+
+> [!IMPORTANT]
+> **Scope, stated plainly (a #65 PR review asked for this explicitly):
+> stage 1 is a single-field sweep from a fixed reference, not a compounding
+> hill climb.** `reference` never changes during a `run_loop` call, even
+> after an acceptance — matching `GridProposer`'s own spec-given definition
+> ("coordinate descent from **the reference configuration**", issue #31 spec
+> §5.4). Two accepted single-field changes cannot combine into one
+> two-field configuration within a run, and after the first acceptance the
+> ratchet has already risen, so a further single-field change measured from
+> the *original* reference is unlikely to clear it — `--patience` typically
+> fires not long after the first success. This matches criterion 5 (recover
+> from one deliberately worsened point) and the design doc's framing of
+> block C as proving the search mechanism works, not as shipping a
+> multi-step optimizer. Rebinding the reference to an accepted candidate
+> (a real hill climb) is future work, not something "ratchet" already
+> implies.
 
 `LlmProposer` prompts a local Ollama model (default `gemma4:e4b`,
 `http://localhost:11434`) with the declared space, the ledger history and
@@ -241,18 +330,51 @@ python -m harness.cli --proposer llm --max-iterations 8 --patience 3
 in-process synthetic landscape. It exercises the wiring, not the pipeline —
 it has no opinion about which real configuration is better.
 
+> [!NOTE]
+> **The default `--ledger-dir` (`harness/ledger/`) is meant to be the same
+> directory across many invocations over time** — a #65 PR review asked
+> this explicitly. "Append-only, versioned, one entry per iteration" (design
+> doc §4) spans the whole history a team accumulates, not one run:
+> `GridProposer`'s "already tried" check and `next_iteration_number` both
+> read the directory back via `ledger.read_history` to continue where the
+> last invocation left off. `--dry-run` deliberately does NOT default to
+> this directory (a fresh temp dir instead), precisely so demo runs never
+> mix into that history. A second real invocation against a non-empty
+> `--ledger-dir` — including the default, after one real run — used to
+> crash (`ledger.read_history` fed `cli.py`'s own `report.json` to
+> `LedgerEntry(**data)`); fixed, see `harness/tests/test_ledger.py`'s
+> `test_read_history_ignores_a_report_json_in_the_same_directory`.
+
+`evaluator.real_evaluate` maps `run_eval.evaluate()`'s actual return shape
+(`{"records": [...], "config": {"dev": ..., "blind": ...}}`, confirmed
+against the sibling PR's contract) — an earlier draft of this adapter
+assumed `{"results": [...], "effective_config": ...}` and would have raised
+`KeyError` on the very first real call, found in the same review before
+`evaluate()` had even landed. `harness/tests/test_evaluator.py` exercises
+the mapping against a stub `run_eval` module carrying the real contract, so
+this stays checked rather than only checked once #56 merges.
+
 ## Testing
 
 All 13 required behaviors from the implementation spec are covered under
 `harness/tests/`, entirely against fake/deterministic evaluators — no GPU,
 no Ollama, no model downloads, matching this repo's fast CI gate (`tests/
 conftest.py`'s pattern of skipping engine-dependent tests where the stack is
-absent; `harness/tests` needs nothing from that stack at all).
+absent; `harness/tests` needs nothing from that stack at all). A #65 PR
+review added coverage the original 13 did not require but a real multi-hour
+run depends on: `LlmProposer._real_call`'s bounded timeout and its fallback
+on a connection failure/non-2xx status/non-JSON body/missing `requests`
+install (all against a fake `requests` module, never a real Ollama server),
+`real_evaluate`'s mapping of the sibling PR's actual return shape (against a
+stub `run_eval` module), the `inconclusive` verdict, the retrieval-only
+net-loss rejection, and the adversarial-module regression test for the
+boundary checks.
 
 > [!IMPORTANT]
 > `harness/tests/test_criterion5_simulated.py` proves the **search logic**
 > recovers from a deliberately worsened point in a synthetic, fully
 > controlled landscape — for both proposers. It does **not** prove the real
-> pipeline improves. The real criterion-5 run (design doc §2) needs the GPU
-> and ~2.8 h/candidate and is pending measurement; nothing in this PR claims
-> it ran.
+> pipeline improves. The real criterion-5 run (design doc §2) still needs
+> the GPU and Ollama — now at ~13 min/full-search-set-evaluation rather than
+> the ~2.8 h originally assumed (see "The declared search space" above) —
+> and is pending measurement; nothing in this PR claims it ran.

@@ -3,6 +3,7 @@ plus the objective/latency helpers those tests and loop.py both rely on.
 """
 
 import sys
+import types
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -140,3 +141,80 @@ def test_retrieval_only_case_types_match_run_eval():
     import run_eval
 
     assert ev.RETRIEVAL_ONLY_CASE_TYPES == tuple(run_eval._RETRIEVAL_ONLY_CASE_TYPES)
+
+
+def test_every_declared_search_space_key_is_honoured_by_the_real_evaluate_contract():
+    """Cross-checks search_space.DECLARED_KEYS against tests/eval/run_eval.py's
+    real, merged evaluate() contract (issue #31 sibling PR #56, merged as
+    commit 8069724) -- not a stub this time, the actual module. #56 built
+    describe_config_overrides()/validate_config_overrides() as public,
+    pure, side-effect-free functions specifically so this harness could
+    check its declared space against evaluate()'s real reachable surface
+    (see that function's own docstring) -- both do a plain dict/set lookup,
+    no I/O, so this needs no GPU, no Ollama, no model downloads.
+    """
+    eval_dir = REPO_ROOT / "tests" / "eval"
+    if str(eval_dir) not in sys.path:
+        sys.path.insert(0, str(eval_dir))
+    import run_eval
+
+    from harness import search_space
+
+    honoured = set(run_eval.describe_config_overrides()["honoured"])
+    unreachable = run_eval.describe_config_overrides()["unreachable"]
+
+    missing = {key: unreachable.get(key, "not in evaluate()'s honoured set") for key in search_space.DECLARED_KEYS if key not in honoured}
+    assert not missing, f"declared key(s) evaluate() does not honour: {missing}"
+
+    probe_overrides = {key: search_space.ALLOWED_VALUES[key][0] for key in search_space.DECLARED_KEYS}
+    run_eval.validate_config_overrides(probe_overrides)  # must not raise
+
+
+# real_evaluate() -- HIGH 1 regression (#65 PR review): mapped raw["results"]/
+# raw.get("effective_config") from an earlier sketch of #56's API. The
+# actual contract #56 returns is {"records": [...], "config": {"dev": ...,
+# "blind": ...}}; the old mapping raised KeyError on the very first real
+# call. A stub `run_eval` module carrying the real shape is injected into
+# sys.modules so this is exercised without landing #56 or touching Ollama
+# (this round's constraint: no GPU/Ollama -- the full eval gate owns the card).
+
+
+def _fake_run_eval_module(records, config_dev):
+    """A stub `run_eval` module whose evaluate() carries #56's real return shape."""
+    module = types.ModuleType("run_eval")
+    module.DEFAULT_MODELS = ["gemma4:e2b"]
+
+    def evaluate(*, models, case_ids=None, config_overrides=None, update_baseline=False, write_report=True):
+        del models, case_ids, config_overrides, update_baseline, write_report
+        return {"records": records, "config": {"dev": config_dev, "blind": {}}}
+
+    module.evaluate = evaluate
+    return module
+
+
+def test_real_evaluate_maps_the_actual_56_contract(monkeypatch):
+    records = [
+        {"id": "a", "case_type": "factual_number", "passed": True, "elapsed_seconds": 200.0},
+        {
+            "id": "b", "case_type": "figure_retrieval", "passed": False, "elapsed_seconds": 4.0,
+            "infrastructure_error": True,
+        },
+    ]
+    config_dev = {"retrieval": {"top_k_final": 8}}
+    monkeypatch.setitem(sys.modules, "run_eval", _fake_run_eval_module(records, config_dev))
+
+    result = ev.real_evaluate({"retrieval.top_k_final": 8}, ("a", "b"))
+
+    assert result.effective_config == config_dev
+    by_id = {r.id: r for r in result.records}
+    assert by_id["a"].passed is True
+    assert by_id["a"].infrastructure_error is False
+    assert by_id["b"].infrastructure_error is True
+
+
+def test_real_evaluate_raises_not_implemented_without_an_evaluate_function(monkeypatch):
+    stub = types.ModuleType("run_eval")  # no .evaluate attribute -- matches pre-#56 main
+    monkeypatch.setitem(sys.modules, "run_eval", stub)
+
+    with pytest.raises(NotImplementedError):
+        ev.real_evaluate({}, ())

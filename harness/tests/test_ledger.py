@@ -3,6 +3,7 @@ the append-only read/write mechanics loop.py depends on.
 """
 
 import dataclasses
+import json
 import sys
 from pathlib import Path
 
@@ -107,6 +108,33 @@ def test_read_history_is_sorted_by_iteration(tmp_path):
 
 def test_read_history_on_a_missing_directory_is_empty(tmp_path):
     assert ledger.read_history(tmp_path / "does_not_exist") == []
+
+
+def test_read_history_ignores_a_report_json_in_the_same_directory(tmp_path):
+    """HIGH 3 regression (#65 PR review): cli.py writes report.json into the
+    same ledger_dir as the entry files. A bare `*.json` glob fed it to
+    LedgerEntry(**data) and crashed with "unexpected keyword argument
+    'generated_at'" on the second invocation against a non-empty
+    ledger_dir -- which the default harness/ledger/ becomes after one real
+    run, since the ledger is meant to persist across many nights (see
+    loop.run_loop's ledger_dir docstring)."""
+    ledger.write_entry(_entry(iteration=1), ledger_dir=tmp_path)
+    report_like = {
+        "generated_at": "2026-08-12T00:00:00+00:00",
+        "reference": {"objective_adjusted": 27},
+        "ratchet": 27,
+        "best_iteration": None,
+        "iterations_run": 1,
+        "termination_reason": "patience",
+        "resolution_warning": {},
+        "iterations": [],
+    }
+    (tmp_path / "report.json").write_text(json.dumps(report_like), encoding="utf-8")
+
+    history = ledger.read_history(tmp_path)  # must not raise
+
+    assert [e.iteration for e in history] == [1]
+    assert ledger.next_iteration_number(tmp_path) == 2
 
 
 # GIT COMMIT: no subprocess, best-effort.

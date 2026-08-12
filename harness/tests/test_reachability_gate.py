@@ -28,6 +28,7 @@ import pytest
 
 from monkeygrab.config.app_config import AppConfig
 from harness import evaluator as ev
+from harness import search_space
 from harness import loop
 
 
@@ -62,6 +63,38 @@ def test_verify_reachable_names_the_offending_key_in_its_message():
     bad_key = "flags.usar_recomp_synthesis"
     with pytest.raises(ev.ReachabilityError, match=bad_key.replace(".", r"\.")):
         ev.verify_reachable(_RejectsOneKey(bad_key))
+
+
+def test_verify_reachable_lets_non_valueerror_exceptions_propagate_unwrapped():
+    """LOW 1 (#65 PR review): evaluate() raises EvalSetupError for a missing
+    Ollama/model/index -- a setup problem, not a reachability problem.
+    Wrapping it as ReachabilityError would point an operator at "which
+    search-space key is broken" for a failure that has nothing to do with
+    the declared space. Only ValueError (what AppConfig.with_overrides
+    raises, and the plausible shape of a real "override not honoured"
+    check) becomes ReachabilityError; everything else propagates as itself.
+    """
+
+    class _FakeEvalSetupError(RuntimeError):
+        pass
+
+    def _raises_setup_error(overrides, case_ids):
+        raise _FakeEvalSetupError("Ollama is not reachable at http://localhost:11434")
+
+    with pytest.raises(_FakeEvalSetupError):
+        ev.verify_reachable(_raises_setup_error)
+
+
+def test_reachability_probe_overrides_are_themselves_feasible():
+    """Test gap #65 PR review flagged: nothing asserted the combined probe
+    (every declared key at its first allowed value, all at once) is a
+    feasible AppConfig. If a future SEARCH_SPACE edit reordered one
+    declared tuple so the "all first values" combination violated the
+    feasibility predicate, every real startup would fail with a confusing
+    ReachabilityError that has nothing to do with reachability.
+    """
+    probe_overrides = {key: search_space.ALLOWED_VALUES[key][0] for key in search_space.DECLARED_KEYS}
+    assert search_space.is_feasible(probe_overrides, AppConfig())
 
 
 class _FixedProposer:

@@ -25,11 +25,14 @@ a local, gitignored artifact -- see harness/README.md):
   ``gold_cases.jsonl`` by ``source``) and never from anything a proposer or
   an evaluation result controls. That is what makes the blind set
   structurally unreachable (spec section 4, test 5).
-- Per-case-type latency differs by roughly a factor of fifty (answered
-  ~200 s vs. retrieval-only ~4 s), so a single blended median is dominated by
+- Per-case-type latency differs enough (answered ~28.5 s vs. retrieval-only
+  ~4.1 s as of the latest measurement, 2026-08-12,
+  ``tests/eval/runs/20260812T194812Z_mineru-jina_clip-faiss.json``, local/
+  gitignored -- issue #27's keep-alive fix narrowed this gap from ~50x to
+  ~7x, but did not close it) that a single blended median is dominated by
   which bucket happened to be larger and would mask a retrieval-quality
-  collapse a candidate paid for with fewer generator calls. The latency
-  constraint (``loop.py``) is therefore per-bucket, not blended --
+  collapse a candidate paid for with fewer/cheaper generator calls. The
+  latency constraint (``loop.py``) is therefore per-bucket, not blended --
   ``median_latency_by_bucket`` is what makes that possible.
 """
 
@@ -71,12 +74,21 @@ class CaseRecord:
         passed: Grading verdict.
         elapsed_seconds: Wall time for this case (retrieval, and generation
             when the case type calls the generator).
+        infrastructure_error: True when ``run_eval.py`` could not evaluate
+            this case at all (dead/overloaded Ollama, retrieval exception --
+            see ``run_eval.run_factual_case``/``run_all_cases``), as opposed
+            to a real grading failure. ``run_eval.main`` itself refuses to
+            compare such a run against the baseline ("this run measured
+            nothing"); ``loop.py`` applies the same refusal per iteration
+            (verdict ``inconclusive``) rather than silently reading a dead
+            Ollama as "every case failed."
     """
 
     id: str
     case_type: str
     passed: bool
     elapsed_seconds: float
+    infrastructure_error: bool = False
 
 
 @dataclass(frozen=True)
@@ -103,8 +115,8 @@ def median_latency_by_bucket(records: Sequence[CaseRecord]) -> Dict[str, Optiona
     """Median wall time, split into the answered and retrieval-only buckets.
 
     Per-bucket, not blended -- see this module's docstring for why a single
-    median over case types that differ by ~50x in cost is not a meaningful
-    latency signal.
+    median over case types that differ enough in cost (~7x as of the latest
+    measurement) is not a meaningful latency signal.
 
     Args:
         records: Case records from one evaluation.
@@ -233,6 +245,19 @@ class ReachabilityError(RuntimeError):
     """
 
 
+class InconclusiveEvaluationError(RuntimeError):
+    """Raised when the REFERENCE evaluation itself carries an ``infrastructure_error`` record.
+
+    ``tests/eval/run_eval.py``'s own gate refuses to compare an inconclusive
+    run against the baseline ("this run measured nothing" -- see
+    ``run_eval.main``). A candidate iteration gets the softer ``inconclusive``
+    ledger verdict (``loop.run_loop`` handles it per iteration and keeps
+    going), but the reference measurement has no verdict to fall back on: if
+    it is unreliable, no ratchet baseline exists at all, so the loop must not
+    start.
+    """
+
+
 def verify_reachable(evaluate: EvaluatorFn, probe_case_ids: Sequence[str] = ()) -> None:
     """Fail loudly if ``evaluate`` cannot honour a declared search-space key.
 
@@ -274,7 +299,16 @@ def verify_reachable(evaluate: EvaluatorFn, probe_case_ids: Sequence[str] = ()) 
     probe_overrides = {key: search_space.ALLOWED_VALUES[key][0] for key in search_space.DECLARED_KEYS}
     try:
         evaluate(probe_overrides, tuple(probe_case_ids))
-    except Exception as exc:  # noqa: BLE001 -- any failure here must name the key, never be swallowed
+    except ValueError as exc:
+        # ValueError is what AppConfig.with_overrides raises for an unknown
+        # field, and the shape a hard-fail "override not honoured end to
+        # end" check would plausibly take too -- that is what this gate
+        # exists to catch. Anything else (EvalSetupError for a missing
+        # Ollama/model/index, a bare RuntimeError, ...) is a setup or
+        # infrastructure problem, not a reachability problem, and propagates
+        # as itself: wrapping it here would send an operator chasing "which
+        # search-space key is broken" for a problem that has nothing to do
+        # with the declared space.
         raise ReachabilityError(
             "evaluate() rejected one or more declared search-space keys at startup "
             f"(see search_space.PENDING_REACHABILITY_KEYS): {exc}"
@@ -301,6 +335,15 @@ def _run_eval_module():
 
 def real_evaluate(config_overrides: Mapping[str, Any], case_ids: Sequence[str]) -> EvaluationResult:
     """Adapt ``tests/eval/run_eval.evaluate()`` (issue #31 spec section 5.2) to ``EvaluatorFn``.
+
+    Return shape confirmed against #56's actual contract (not the spec
+    sketch): ``{"records": [...], "config": {"dev": <AppConfig-as-dict>,
+    "blind": <...>}, ...}`` -- ``"results"``/``"effective_config"`` from an
+    earlier draft of this function do not exist on that dict and would raise
+    ``KeyError`` on the first real call. This harness only ever requests
+    ``source: corpus`` (dev-corpus) case ids -- see ``search_set_case_ids``/
+    ``load_fast_tier`` -- so ``config["dev"]`` is always the config this
+    evaluation actually ran with; ``config["blind"]`` is never read here.
 
     TODO: depends on the sibling PR (#56) landing ``run_eval.evaluate()`` on
     main. Guarded rather than imported at module level so importing
@@ -340,10 +383,11 @@ def real_evaluate(config_overrides: Mapping[str, Any], case_ids: Sequence[str]) 
             case_type=r["case_type"],
             passed=bool(r["passed"]),
             elapsed_seconds=float(r["elapsed_seconds"]),
+            infrastructure_error=bool(r.get("infrastructure_error", False)),
         )
-        for r in raw["results"]
+        for r in raw["records"]
     )
-    return EvaluationResult(records=records, effective_config=raw.get("effective_config", {}))
+    return EvaluationResult(records=records, effective_config=raw["config"]["dev"])
 
 
 # DEMO EVALUATOR (no GPU, no Ollama -- harness/cli.py --dry-run)

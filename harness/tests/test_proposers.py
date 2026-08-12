@@ -175,3 +175,100 @@ def test_llm_proposer_fallback_does_not_hang_or_retry_past_max_retries():
     proposer = LlmProposer(AppConfig(), max_retries=3, call=_always_malformed)
     proposer.propose(search_space, [], None)
     assert calls["count"] == 3
+
+
+# _real_call -- test gap #65 PR review flagged: the bounded timeout (what
+# stops a stalled Ollama from hanging the loop -- this repo has a
+# documented history of exactly that failure mode) was asserted only by a
+# docstring. A fake `requests` module is injected into sys.modules so this
+# is exercised without touching a real Ollama server (this round's
+# constraint: no GPU/Ollama -- the full eval gate owns the card).
+
+
+class _FakeRequestsModule:
+    """Enough of the `requests` surface for LlmProposer._real_call."""
+
+    class RequestException(Exception):
+        pass
+
+    def __init__(self, response=None, raises=None):
+        self._response = response
+        self._raises = raises
+        self.calls = []
+
+    def post(self, url, json, timeout):  # noqa: A002 -- matches requests.post's real signature
+        self.calls.append({"url": url, "json": json, "timeout": timeout})
+        if self._raises is not None:
+            raise self._raises
+        return self._response
+
+
+class _FakeResponse:
+    def __init__(self, body="", raise_for_status_error=None, json_error=None):
+        self._body = body
+        self._raise_for_status_error = raise_for_status_error
+        self._json_error = json_error
+
+    def raise_for_status(self):
+        if self._raise_for_status_error is not None:
+            raise self._raise_for_status_error
+
+    def json(self):
+        if self._json_error is not None:
+            raise self._json_error
+        return {"response": self._body}
+
+
+def test_llm_proposer_real_call_passes_the_bounded_timeout(monkeypatch):
+    fake_requests = _FakeRequestsModule(response=_FakeResponse(body='{"overrides": {}, "rationale": "x"}'))
+    monkeypatch.setitem(sys.modules, "requests", fake_requests)
+
+    proposer = LlmProposer(AppConfig(), timeout=17.5)
+    result = proposer._real_call("prompt text")
+
+    assert fake_requests.calls[0]["timeout"] == 17.5
+    assert "/api/generate" in fake_requests.calls[0]["url"]
+    assert result == '{"overrides": {}, "rationale": "x"}'
+
+
+def test_llm_proposer_real_call_wraps_a_connection_failure(monkeypatch):
+    fake_requests = _FakeRequestsModule(raises=_FakeRequestsModule.RequestException("connection refused"))
+    monkeypatch.setitem(sys.modules, "requests", fake_requests)
+
+    proposer = LlmProposer(AppConfig())
+    with pytest.raises(OllamaUnreachableError):
+        proposer._real_call("prompt")
+
+
+def test_llm_proposer_real_call_wraps_a_non_2xx_status(monkeypatch):
+    fake_requests = _FakeRequestsModule(
+        response=_FakeResponse(raise_for_status_error=_FakeRequestsModule.RequestException("500 Server Error"))
+    )
+    monkeypatch.setitem(sys.modules, "requests", fake_requests)
+
+    proposer = LlmProposer(AppConfig())
+    with pytest.raises(OllamaUnreachableError):
+        proposer._real_call("prompt")
+
+
+def test_llm_proposer_real_call_wraps_a_non_json_response_body(monkeypatch):
+    # A 200 whose body is not JSON (a proxy error page, an empty body) --
+    # the fix this test guards: response.json() used to sit outside the
+    # try/except that converts failures to OllamaUnreachableError.
+    fake_requests = _FakeRequestsModule(response=_FakeResponse(json_error=ValueError("not valid JSON")))
+    monkeypatch.setitem(sys.modules, "requests", fake_requests)
+
+    proposer = LlmProposer(AppConfig())
+    with pytest.raises(OllamaUnreachableError):
+        proposer._real_call("prompt")
+
+
+def test_llm_proposer_real_call_wraps_a_missing_requests_dependency(monkeypatch):
+    # sys.modules[name] = None is how CPython represents "this import
+    # previously failed" -- `import requests` then raises ImportError,
+    # simulating requests not being installed at all.
+    monkeypatch.setitem(sys.modules, "requests", None)
+
+    proposer = LlmProposer(AppConfig())
+    with pytest.raises(OllamaUnreachableError):
+        proposer._real_call("prompt")

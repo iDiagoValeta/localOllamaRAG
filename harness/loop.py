@@ -1,18 +1,22 @@
 """loop -- the ratchet, the latency constraint and termination for block C.
 
-Implements issue #31 spec section 5.5, with two corrections applied after
+Implements issue #31 spec section 5.5, with corrections applied after
 measuring against the real reference gate runs (local, gitignored --
-tests/eval/runs/{20260729T020233Z,20260729T040824Z,20260729T081129Z}_
-mineru-jina_clip-faiss.json; see harness/README.md for the full numbers and
-why they cannot be re-derived from a fresh clone):
+tests/eval/runs/{20260729T020233Z,20260729T040824Z,20260729T081129Z,
+20260812T194812Z}_mineru-jina_clip-faiss.json; see harness/README.md for the
+full numbers and why they cannot be re-derived from a fresh clone):
 
 1. **Per-bucket latency, not one blended median.** Answered cases (call the
-   generator) cost ~200s; retrieval-only cases (figure_retrieval,
-   table_retrieval) cost ~4s -- a ~50x gap. A single median over both is
-   dominated by which bucket happens to be larger and would let a candidate
-   trade retrieval quality for fewer generator calls without the constraint
-   noticing. ``_latency_breach`` checks each bucket against its own
-   reference median independently.
+   generator) and retrieval-only cases (figure_retrieval, table_retrieval)
+   differ enough in cost -- ~28.5s vs. ~4.1s as of the latest measurement
+   (2026-08-12, tests/eval/runs/20260812T194812Z_mineru-jina_clip-faiss.json,
+   local/gitignored; this gap was ~50x before issue #27's keep-alive fix and
+   is ~7x now, but the fix only ever changed the *magnitude*, not whether it
+   exists) -- that a single median over both is dominated by which bucket
+   happens to be larger and would let a candidate trade retrieval quality
+   for fewer/cheaper generator calls without the constraint noticing.
+   ``_latency_breach`` checks each bucket against its own reference median
+   independently.
 2. **``resolution_warning`` in the final report.** The search set (32
    ``source: corpus`` cases) can win at most 5 cases today, and moved only 3
    net flips under the most destructive single-field change anyone has
@@ -20,6 +24,47 @@ why they cannot be re-derived from a fresh clone):
    design doc section 3 sets for a paired difference not attributable to
    chance. Every report says so, so an accepted improvement reads as a
    candidate for confirmation, not a demonstrated result.
+3. **A ``rejected_regression`` verdict also fires at the search-set stage**
+   when the retrieval-only bucket loses cases net against the reference
+   (paired by id), even if the blended ``objective_adjusted`` still went up.
+   Blended acceptance alone is exactly the trade design doc section 2's
+   "Consecuencia para el arnés" warns about: a candidate that swaps
+   retrieval quality for factual-answer luck would otherwise read as a plain
+   improvement. The fast tier's own regression check only weakly guards
+   this (of its 5 retrieval-only ids, 3 already fail today, leaving 2 to
+   catch a regression) -- this check runs over all ~9 retrieval-only ids in
+   the full search set instead.
+4. **A ``inconclusive`` verdict when any record carries
+   ``infrastructure_error``.** ``tests/eval/run_eval.py`` marks a case this
+   way when it could not be evaluated at all (dead/overloaded Ollama, a
+   retrieval exception) and refuses to compare such a run against the
+   baseline ("this run measured nothing" -- see ``run_eval.main``). Reading
+   those records as ordinary failures would let a dead Ollama read as a
+   quality collapse (fast tier: a good candidate wrongly
+   ``rejected_regression``) or an artificially low reference silently
+   inflate every later candidate into a false ``accepted`` -- exactly the
+   "loop sobre una medida que miente produce basura reproducible" failure
+   the design doc opens with. The reference measurement itself gets no
+   verdict to fall back on: if it carries an infrastructure error,
+   ``run_loop`` raises before entering the loop at all, since no ratchet
+   baseline can be trusted.
+
+**Scope, stated plainly (not fixed by this PR): stage 1 is a single-field
+sweep from a fixed reference, not a compounding hill climb.**
+``GridProposer`` always perturbs ``reference`` (per its own docstring,
+"coordinate descent from the reference configuration" -- issue #31 spec
+section 5.4's own wording), and ``run_loop`` never rebinds ``reference`` or
+the reference latency medians to an accepted candidate. Two accepted
+single-field changes cannot compound into one two-field configuration
+within a single run, and after the first acceptance the ratchet has already
+risen, so a further single-field change measured from the *original*
+reference is unlikely to clear it -- in practice this makes `patience`
+likely to fire not long after the first acceptance. This matches criterion
+5 (search recovers from one deliberately worsened point) and the design
+doc's own framing of block C as proving the search mechanism works, not as
+delivering a multi-step optimizer; widening it to rebind the reference (a
+real hill climb) or to search combinations is future work, not silently
+implied by "ratchet".
 
 The evaluator is always a callable injected by the caller (``cli.py`` for a
 real or demo run, a test double in ``harness/tests/``) -- this module never
@@ -81,10 +126,39 @@ RESOLUTION_WARNING: Dict[str, Any] = {
 }
 
 
+def _bucket_stats(records: Sequence[evaluator_mod.CaseRecord], key_fn) -> Dict[str, Dict[str, Any]]:
+    buckets: Dict[str, Dict[str, int]] = {}
+    for r in records:
+        key = key_fn(r)
+        b = buckets.setdefault(key, {"total": 0, "passed": 0})
+        b["total"] += 1
+        b["passed"] += int(r.passed)
+    return {
+        key: {**b, "pass_rate": round(b["passed"] / b["total"], 4) if b["total"] else 0.0}
+        for key, b in buckets.items()
+    }
+
+
 def _summary(records: Sequence[evaluator_mod.CaseRecord]) -> Dict[str, Any]:
+    """Overall pass/total/rate, plus a per-case-type breakdown.
+
+    The per-case-type split (MEDIUM 3 in the #65 review) is what makes a
+    retrieval-quality-for-factual-luck trade visible in the ledger even when
+    the blended ``objective_adjusted`` does not show it -- mirrors
+    ``run_eval.py``'s own ``build_summary``/``_bucket_stats`` shape.
+    """
     total = len(records)
     passed = sum(1 for r in records if r.passed)
-    return {"total": total, "passed": passed, "pass_rate": round(passed / total, 4) if total else 0.0}
+    return {
+        "total": total,
+        "passed": passed,
+        "pass_rate": round(passed / total, 4) if total else 0.0,
+        "by_case_type": _bucket_stats(records, lambda r: r.case_type),
+    }
+
+
+def _has_infrastructure_error(records: Sequence[evaluator_mod.CaseRecord]) -> bool:
+    return any(r.infrastructure_error for r in records)
 
 
 def _regressed_ids(
@@ -94,6 +168,31 @@ def _regressed_ids(
     """Case ids that passed for the reference and failed for the candidate (paired)."""
     reference_passed = {r.id: r.passed for r in reference_records}
     return [r.id for r in candidate_records if reference_passed.get(r.id) and not r.passed]
+
+
+def _retrieval_only_net_change(
+    reference_records: Sequence[evaluator_mod.CaseRecord],
+    candidate_records: Sequence[evaluator_mod.CaseRecord],
+) -> int:
+    """Net change (candidate minus reference) in retrieval-only passing count, paired by id.
+
+    Positive: more retrieval-only cases pass than in the reference. Negative:
+    fewer do -- what ``run_loop`` refuses to accept regardless of the
+    blended objective (see module docstring point 3).
+    """
+    reference_passed = {
+        r.id: r.passed for r in reference_records if r.case_type in evaluator_mod.RETRIEVAL_ONLY_CASE_TYPES
+    }
+    net = 0
+    for r in candidate_records:
+        if r.case_type not in evaluator_mod.RETRIEVAL_ONLY_CASE_TYPES:
+            continue
+        was_passing = reference_passed.get(r.id, False)
+        if r.passed and not was_passing:
+            net += 1
+        elif not r.passed and was_passing:
+            net -= 1
+    return net
 
 
 def _latency_breach(
@@ -178,7 +277,8 @@ def run_loop(
     Args:
         reference: The ``AppConfig`` the loop's ratchet, feasibility checks
             and latency ceiling are all measured against (typically
-            ``AppConfig.from_env()``).
+            ``AppConfig.from_env()``). Fixed for the whole run -- see the
+            module docstring's "Scope" note.
         evaluate: Injected ``EvaluatorFn`` -- never imported here (spec
             section 5.1).
         proposer: A ``GridProposer`` or ``LlmProposer`` instance.
@@ -189,7 +289,14 @@ def run_loop(
         patience: Consecutive non-accepted iterations before stopping, or
             ``None`` for no cap. At least one of ``max_iterations``/
             ``patience`` must be set, so the loop is guaranteed to terminate.
+            An ``inconclusive`` verdict counts toward patience like any other
+            non-accepted outcome.
         ledger_dir: Where to write ledger entries (default: ``harness/ledger/``).
+            Meant to be the SAME directory across many invocations over time
+            (design doc section 4: "append-only, versioned" spans the whole
+            history, not one run) -- ``GridProposer``'s "already tried"
+            check and ``next_iteration_number`` both depend on reading it
+            back via ``ledger.read_history``.
         verify_reachability: Run ``evaluator.verify_reachable`` before
             measuring the reference. Disabling this is only for tests that
             intentionally use an evaluator too narrow to answer the probe
@@ -206,6 +313,9 @@ def run_loop(
         ValueError: Neither ``max_iterations`` nor ``patience`` is set.
         evaluator.ReachabilityError: ``evaluate`` rejects a declared key at
             startup (only when ``verify_reachability`` is True).
+        evaluator.InconclusiveEvaluationError: The reference measurement
+            itself carries an ``infrastructure_error`` record -- no ratchet
+            baseline can be trusted, so the loop never starts.
     """
     if max_iterations is None and patience is None:
         raise ValueError("run_loop needs max_iterations and/or patience to guarantee termination")
@@ -215,6 +325,11 @@ def run_loop(
 
     reference_full = evaluate({}, tuple(search_set_ids))
     reference_fast = evaluate({}, tuple(fast_tier_ids))
+    if _has_infrastructure_error(reference_full.records) or _has_infrastructure_error(reference_fast.records):
+        raise evaluator_mod.InconclusiveEvaluationError(
+            "reference evaluation carries at least one infrastructure_error record -- "
+            "no ratchet baseline can be trusted; fix Ollama/the index and retry"
+        )
     reference_objective_raw, reference_objective_adjusted = evaluator_mod.compute_objective(
         reference_full.records, unreachable_ids
     )
@@ -251,46 +366,70 @@ def run_loop(
         git_commit = ledger_mod.read_git_commit()
 
         fast_result = evaluate(overrides, tuple(fast_tier_ids))
-        regressed = _regressed_ids(reference_fast.records, fast_result.records)
 
-        if regressed:
+        if _has_infrastructure_error(fast_result.records):
             entry = _build_entry(
                 iteration=iteration, parent_iteration=parent_iteration, git_commit=git_commit,
                 overrides=overrides, meta=meta, evaluated_case_set="fast_tier",
                 result=fast_result, unreachable_ids=unreachable_ids,
-                reference_latency=reference_latency, verdict="rejected_regression",
-                reason=f"fast-tier regression on {regressed}",
+                reference_latency=reference_latency, verdict="inconclusive",
+                reason="fast-tier evaluation carries infrastructure_error record(s) -- not scored",
             )
         else:
-            full_result = evaluate(overrides, tuple(search_set_ids))
-            candidate_latency = evaluator_mod.median_latency_by_bucket(full_result.records)
-            breach = _latency_breach(candidate_latency, reference_latency)
-            _objective_raw, objective_adjusted = evaluator_mod.compute_objective(
-                full_result.records, unreachable_ids
-            )
+            regressed = _regressed_ids(reference_fast.records, fast_result.records)
 
-            if breach:
-                verdict, reason = "rejected_latency", breach
-            elif objective_adjusted - ratchet <= NOISE_FLOOR_CASES:
-                verdict = "rejected_no_gain"
-                reason = (
-                    f"objective_adjusted {objective_adjusted} did not exceed ratchet "
-                    f"{ratchet} beyond the noise floor ({NOISE_FLOOR_CASES})"
+            if regressed:
+                entry = _build_entry(
+                    iteration=iteration, parent_iteration=parent_iteration, git_commit=git_commit,
+                    overrides=overrides, meta=meta, evaluated_case_set="fast_tier",
+                    result=fast_result, unreachable_ids=unreachable_ids,
+                    reference_latency=reference_latency, verdict="rejected_regression",
+                    reason=f"fast-tier regression on {regressed}",
                 )
             else:
-                verdict = "accepted"
-                reason = f"objective_adjusted {objective_adjusted} exceeds ratchet {ratchet}"
-                ratchet = objective_adjusted
-                best_iteration = iteration
+                full_result = evaluate(overrides, tuple(search_set_ids))
+                last_result = full_result
 
-            entry = _build_entry(
-                iteration=iteration, parent_iteration=parent_iteration, git_commit=git_commit,
-                overrides=overrides, meta=meta, evaluated_case_set="search_set",
-                result=full_result, unreachable_ids=unreachable_ids,
-                reference_latency=reference_latency, verdict=verdict, reason=reason,
-                candidate_latency=candidate_latency,
-            )
-            last_result = full_result
+                if _has_infrastructure_error(full_result.records):
+                    entry = _build_entry(
+                        iteration=iteration, parent_iteration=parent_iteration, git_commit=git_commit,
+                        overrides=overrides, meta=meta, evaluated_case_set="search_set",
+                        result=full_result, unreachable_ids=unreachable_ids,
+                        reference_latency=reference_latency, verdict="inconclusive",
+                        reason="search-set evaluation carries infrastructure_error record(s) -- not scored",
+                    )
+                else:
+                    candidate_latency = evaluator_mod.median_latency_by_bucket(full_result.records)
+                    breach = _latency_breach(candidate_latency, reference_latency)
+                    retrieval_net = _retrieval_only_net_change(reference_full.records, full_result.records)
+                    _objective_raw, objective_adjusted = evaluator_mod.compute_objective(
+                        full_result.records, unreachable_ids
+                    )
+
+                    if breach:
+                        verdict, reason = "rejected_latency", breach
+                    elif retrieval_net < 0:
+                        verdict = "rejected_regression"
+                        reason = f"retrieval-only bucket lost cases net vs reference ({retrieval_net:+d})"
+                    elif objective_adjusted - ratchet <= NOISE_FLOOR_CASES:
+                        verdict = "rejected_no_gain"
+                        reason = (
+                            f"objective_adjusted {objective_adjusted} did not exceed ratchet "
+                            f"{ratchet} beyond the noise floor ({NOISE_FLOOR_CASES})"
+                        )
+                    else:
+                        verdict = "accepted"
+                        reason = f"objective_adjusted {objective_adjusted} exceeds ratchet {ratchet}"
+                        ratchet = objective_adjusted
+                        best_iteration = iteration
+
+                    entry = _build_entry(
+                        iteration=iteration, parent_iteration=parent_iteration, git_commit=git_commit,
+                        overrides=overrides, meta=meta, evaluated_case_set="search_set",
+                        result=full_result, unreachable_ids=unreachable_ids,
+                        reference_latency=reference_latency, verdict=verdict, reason=reason,
+                        candidate_latency=candidate_latency,
+                    )
 
         ledger_mod.write_entry(entry, ledger_dir)
         entries_so_far.append(entry)

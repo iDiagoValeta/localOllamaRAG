@@ -196,10 +196,22 @@ class LlmProposer:
         return call(prompt)
 
     def _real_call(self, prompt: str) -> str:
-        """Real Ollama call: ``/api/generate``, non-streaming, JSON-formatted output."""
-        import requests  # lazy: keeps this module importable with no engine deps
+        """Real Ollama call: ``/api/generate``, non-streaming, JSON-formatted output.
 
+        Everything that can go wrong here -- ``requests`` missing, the
+        connection failing, a non-2xx status, or a 200 whose body is not
+        JSON (a proxy error page, an empty response) -- becomes
+        ``OllamaUnreachableError`` and triggers the grid fallback (see
+        ``propose``), rather than crashing a run that might otherwise run
+        unattended for hours. Import and response-parsing both sit inside
+        the same ``try`` for exactly that reason (issue #65 PR review, LOW
+        2): the earlier version only wrapped the network call, so a missing
+        ``requests`` install or a malformed-but-200 response killed the loop
+        outright instead of falling back.
+        """
         try:
+            import requests  # lazy: keeps this module importable with no engine deps
+
             response = requests.post(
                 f"{self._base_url}/api/generate",
                 json={
@@ -209,9 +221,9 @@ class LlmProposer:
                 timeout=self._timeout,
             )
             response.raise_for_status()
-        except requests.RequestException as exc:
+            return response.json().get("response", "")
+        except Exception as exc:  # noqa: BLE001 -- any failure here must degrade to fallback, never crash the run
             raise OllamaUnreachableError(str(exc)) from exc
-        return response.json().get("response", "")
 
     @staticmethod
     def _parse(raw_text: str) -> Optional[Tuple[Dict[str, Any], str]]:

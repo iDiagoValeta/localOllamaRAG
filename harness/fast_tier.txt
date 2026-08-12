@@ -1,11 +1,27 @@
 # Fast tier -- regression filter only (never declares an improvement).
 # Fixed, versioned subset of the search set: 13 cases spanning every
-# case_type and every paper. Sizing arithmetic (issue #31 spec section 4,
-# corrected against measured per-case-type cost from the reference gate run,
-# tests/eval/runs/20260729T020233Z_mineru-jina_clip-faiss.json, local/gitignored):
-#   8 answered cases  x ~200s (factual_number/factual_concept median 201.1s/198.4s) = ~1600s
-#   5 retrieval-only  x ~4.5s (figure_retrieval/table_retrieval median 3.9s/4.5s)   =   ~23s
-#   total ~1623s ~= 27 min, matching the design doc's ~32 min budget.
+# case_type and every paper.
+#
+# Its job is not to save minutes -- it is to reject a bad candidate without
+# contaminating the ratchet, before paying for the full search set. Earlier
+# revisions of this file justified the tier by an evaluation-time budget
+# (the design's original ~2.8 h/candidate estimate); that budget was wrong
+# by a factor of ~6 (issue #27's keep-alive fix removed a per-case cold
+# model load the original figure baked in -- measured 2026-08-12,
+# tests/eval/runs/20260812T194812Z_mineru-jina_clip-faiss.json, local and
+# gitignored) and the saving this tier buys is correspondingly smaller than
+# assumed. The tier stays regardless: its function (a regression filter the
+# ratchet needs) does not depend on how many minutes it happens to save.
+#
+# Sizing arithmetic, recomputed against the 2026-08-12 measurement's bucket
+# medians (answered 28.5 s, retrieval-only 4.1 s -- both down from the
+# 2026-07-29 reference's 201.1 s/198.4 s and 3.9 s/4.5 s respectively; only
+# the answered bucket moved, since retrieval-only cases never call the
+# generator the keep-alive fix affects):
+#   8 answered cases  x ~28.5s = ~228s
+#   5 retrieval-only  x ~4.1s  =  ~21s
+#   total ~249s ~= 4 min, against a ~13 min full search set (32 cases) --
+#   still worth running first, just not for the reason originally assumed.
 #
 # Includes all 5 of today's known search-set failures (dpo-pipeline-figure-es,
 # higgs-diphoton-figure, planck-contours-figure, planck-sigma8-es,

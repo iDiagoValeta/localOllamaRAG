@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -28,7 +29,17 @@ SCHEMA_VERSION = 1
 LEDGER_DIR = Path(__file__).resolve().parent / "ledger"
 INDEX_FILE_NAME = "index.jsonl"
 
-VERDICTS = ("accepted", "rejected_regression", "rejected_latency", "rejected_no_gain")
+# Matches exactly what write_entry names an entry file (f"{iteration:04d}_{timestamp}.json"),
+# so next_iteration_number/read_history never pick up another *.json file a
+# caller happens to drop in the same directory -- cli.py's own report.json
+# lives right next to these (issue #65 PR review, HIGH 3): a naive `*.json`
+# glob fed report.json into LedgerEntry.from_dict and crashed with
+# "unexpected keyword argument 'generated_at'" on the very next invocation
+# against a non-empty ledger_dir, which the default harness/ledger/ becomes
+# after one real run.
+_ENTRY_FILENAME_RE = re.compile(r"^\d{4}_.*\.json$")
+
+VERDICTS = ("accepted", "rejected_regression", "rejected_latency", "rejected_no_gain", "inconclusive")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -210,16 +221,24 @@ def read_git_commit(start: Optional[Path] = None) -> Optional[str]:
         return None
 
 
+def _entry_files(ledger_dir: Path) -> List[Path]:
+    """Every ``NNNN_<timestamp>.json`` file directly under ``ledger_dir``.
+
+    Deliberately NOT a bare ``*.json`` glob: ``harness/cli.py`` writes
+    ``report.json`` into the same directory as a normal part of a run, and a
+    naive glob would feed it (and anything else dropped in later) to
+    ``LedgerEntry.from_dict`` -- see ``_ENTRY_FILENAME_RE``'s comment.
+    """
+    if not ledger_dir.exists():
+        return []
+    return [p for p in ledger_dir.glob("*.json") if _ENTRY_FILENAME_RE.match(p.name)]
+
+
 def next_iteration_number(ledger_dir: Path = LEDGER_DIR) -> int:
     """1 for an empty/missing ledger dir, else one past the highest recorded iteration."""
-    if not ledger_dir.exists():
-        return 1
     highest = 0
-    for path in ledger_dir.glob("*.json"):
-        try:
-            highest = max(highest, int(path.name.split("_", 1)[0]))
-        except ValueError:
-            continue
+    for path in _entry_files(ledger_dir):
+        highest = max(highest, int(path.name.split("_", 1)[0]))
     return highest + 1
 
 
@@ -268,9 +287,8 @@ def read_history(ledger_dir: Path = LEDGER_DIR) -> List[LedgerEntry]:
 
     Reads the full per-entry JSON files (not just the index summary), since
     proposers need each entry's ``config_overrides`` to avoid repeating a
-    point already tried (criterion-adjacent to spec test 7).
+    point already tried (criterion-adjacent to spec test 7). Only files
+    matching the entry naming pattern are read -- see ``_entry_files``.
     """
-    if not ledger_dir.exists():
-        return []
-    entries = [read_entry(p) for p in ledger_dir.glob("*.json")]
+    entries = [read_entry(p) for p in _entry_files(ledger_dir)]
     return sorted(entries, key=lambda e: e.iteration)

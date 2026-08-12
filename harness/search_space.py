@@ -1,9 +1,17 @@
 """search_space -- the declared configuration space block C searches over.
 
 Written by hand as data, never inferred by introspecting ``AppConfig``:
-adding a parameter is a visible decision here because each one multiplies the
-space against a budget of three or four full-search-set candidates per night
-(docs/design/2026-07-28-loop-automejorable.md section 4 -- 2.8 h/candidate).
+adding a parameter is a visible decision, not a budget-driven one. The
+design's original evaluation-time estimate (docs/design/2026-07-28-loop-
+automejorable.md section 4: ~2.8 h/candidate, three or four candidates a
+night) was wrong by a factor of ~6 -- issue #27's keep-alive fix removed a
+per-case cold model load the estimate baked in. A full search-set evaluation
+now costs ~13 min (measured 2026-08-12,
+tests/eval/runs/20260812T194812Z_mineru-jina_clip-faiss.json, local and
+gitignored -- a night now fits dozens of candidates). Declaring the space by
+hand stays the right call regardless of which budget is true: each
+parameter is still a visible decision about what the loop is allowed to
+search, independent of how many candidates fit in a night.
 
 Validated at import time against the real ``AppConfig``: every declared value
 is applied via ``AppConfig().with_overrides(**{key: value})``, which already
@@ -27,12 +35,13 @@ Four things live here besides the declared tunables:
 
 - ``INDEX_TIME_KEYS``: excluded from stage 1 (issue #31 spec section 2.1).
   Any of these changes what is stored, which moves the index fingerprint and
-  forces a full MinerU + jina-clip reindex -- a full evaluation already costs
-  ~2.8 h, and a reindex on top of that turns a night's three or four
-  candidates into one. They get their own slower tier once block B (#30)
-  lands and the timings are remeasured. ``_validate_declared_space`` raises
-  if any of them appears in ``SEARCH_SPACE``, so a future contributor who
-  adds one gets a red test instead of a silent overnight reindex.
+  forces a full MinerU + jina-clip reindex per candidate -- far more
+  expensive than the ~13 min a retrieval/generation-only evaluation now
+  costs (see above), whatever the exact multiple turns out to be once it is
+  measured. They get their own slower tier once block B (#30) lands and
+  reindex timing is measured. ``_validate_declared_space`` raises if any of
+  them appears in ``SEARCH_SPACE``, so a future contributor who adds one
+  gets a red test instead of a silent overnight reindex.
 - ``expand_overrides`` / ``is_feasible``: ``weight_semantic_rrf`` and
   ``weight_bm25_rrf`` are coupled (see the docstring on ``expand_overrides``),
   and three declared parameters interact (section 2.3). Neither coupling is
