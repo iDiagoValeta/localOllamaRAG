@@ -246,6 +246,11 @@ same file: one configuration per machine, not one per interface. The precedence
 is environment, then saved choices, then defaults, so an exported
 `OLLAMA_*_MODEL` or `DOCS_FOLDER` still describes the run you are starting.
 
+`OLLAMA_KEEP_ALIVE` keeps the generator's weights in VRAM for that many seconds
+after each call, since loading them back is most of a query's latency — on a
+small or shared GPU that also means the model squats on VRAM for that long
+afterward, so lower it (or set it to `0`) there.
+
 Each corpus has its own Jina CLIP and FAISS index under `rag/vector_db/`. Both
 interfaces detect when a stored index no longer matches the active chunking,
 extraction or index-time flags and warn about it, but never reindex on their
@@ -291,7 +296,7 @@ or web app in the meantime. See [`packaging/README.md`](packaging/README.md).
 > - **Optional stages fail loudly.** If an enabled stage cannot run, the query raises instead of silently returning worse results. Turn the stage off to proceed without it.
 > - **Indexing cost** grows with corpus size, contextual enrichment and the number of extracted images.
 > - **Concurrent web requests can disable the embedder.** Two overlapping queries can desynchronize the Jina CLIP worker's protocol, which permanently disables it until the process restarts ([#24](https://github.com/iDiagoValeta/localOllamaRAG/issues/24)).
-> - **VRAM from the embedder and reranker is not freed before generation.** On memory-constrained GPUs this can make Ollama hang for minutes instead of failing fast ([#25](https://github.com/iDiagoValeta/localOllamaRAG/issues/25)).
+> - **VRAM from the embedder and reranker is not freed before generation**, but measurement found Ollama offloads rather than blocking: contention cost single-digit seconds, not the multi-minute hang once suspected ([#25](https://github.com/iDiagoValeta/localOllamaRAG/issues/25)).
 > - **The packaged desktop build cannot start the multimodal worker yet.** Indexing and retrieval fail even with the isolated runtime present ([#26](https://github.com/iDiagoValeta/localOllamaRAG/issues/26)).
 
 ---

@@ -153,11 +153,24 @@ MODELO_DESC = os.getenv("MODELO_DESC", _inferir_descripcion_modelo(MODELO_RAG))
 
 OLLAMA_RAG_NUM_CTX = _leer_env_int("OLLAMA_RAG_NUM_CTX", 16384)
 OLLAMA_QUERY_NUM_CTX = _leer_env_int("OLLAMA_QUERY_NUM_CTX", 2048)
-OLLAMA_RECOMP_NUM_CTX = _leer_env_int("OLLAMA_RECOMP_NUM_CTX", 8192)
+# Matches OLLAMA_RAG_NUM_CTX on purpose: RECOMP and the final generation both
+# run on the same model (see MODELO_RECOMP/MODELO_RAG), and Ollama keys a
+# resident runner by model AND num_ctx, so a mismatch here forces a second
+# cold load per query even with OLLAMA_KEEP_ALIVE set. Measured in issue #25
+# (2026-07-29): a num_ctx change alone reloads a 1 GB model in ~82s. Verified
+# with a paired gate run (tests/eval/runs/): this alignment alone is what
+# turns a 20.4 min run into 16.4 min -- reverting only this (keep_alive
+# unchanged) reproduced the reference run exactly, 44/51 with zero flips.
+OLLAMA_RECOMP_NUM_CTX = _leer_env_int("OLLAMA_RECOMP_NUM_CTX", 16384)
 OLLAMA_CONTEXTUAL_NUM_CTX = _leer_env_int("OLLAMA_CONTEXTUAL_NUM_CTX", 32768)
 OLLAMA_REQUEST_TIMEOUT = _leer_env_int("OLLAMA_REQUEST_TIMEOUT", 900)
 # Seconds to keep weights in VRAM after each Ollama call; 0 unloads immediately.
-OLLAMA_KEEP_ALIVE = _leer_env_int("OLLAMA_KEEP_ALIVE", 0)
+# Model load is 93-95% of query wall time (issue #25, 2026-07-29): at 120s,
+# queries within that window of each other reuse the resident weights instead
+# of paying a ~170s cold load again. Costs VRAM residency for that long after
+# every call -- lower it (or set 0) on a card that needs the headroom back
+# sooner, e.g. the packaged desktop app on an unknown GPU.
+OLLAMA_KEEP_ALIVE = _leer_env_int("OLLAMA_KEEP_ALIVE", 120)
 OLLAMA_GENERATE_RETRIES = _leer_env_int("OLLAMA_GENERATE_RETRIES", 2)
 OLLAMA_GENERATE_RETRY_DELAY = _leer_env_int("OLLAMA_GENERATE_RETRY_DELAY", 3)
 
