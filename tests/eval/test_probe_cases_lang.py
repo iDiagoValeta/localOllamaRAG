@@ -3,10 +3,10 @@
 probe_cases_lang.jsonl is the language-axis diagnostic batch from
 docs/design/2026-07-28-loop-automejorable.md section 3 ("Sonda previa"): a
 proposal pending human audit, deliberately kept separate from
-gold_cases.jsonl (see that file and tests/eval/README.md's "Sonda de
-idioma" section for why). This test only pins that the file parses and has
-the fields run_probe_lang.py and grade.py need -- it does not run the
-pipeline and does not touch gold_cases.jsonl.
+gold_cases.jsonl (see that file and tests/eval/README.md's "Language-axis
+probe (diagnostic, not the gate)" section for why). This test only pins
+that the file parses and has the fields run_probe_lang.py and grade.py
+need -- it does not run the pipeline and does not touch gold_cases.jsonl.
 """
 
 import json
@@ -95,3 +95,27 @@ def test_probe_is_mostly_factual_with_a_couple_of_retrieval_cases():
     factual = [c for c in cases if c["case_type"] not in _RETRIEVAL_CASE_TYPES]
     assert len(factual) > len(retrieval), "expected factual cases to dominate the batch"
     assert 1 <= len(retrieval) <= 6, f"expected a handful of retrieval-only cases, got {len(retrieval)}"
+
+
+def test_run_probe_lang_pins_the_run_eval_privates_it_reuses():
+    """run_probe_lang.run_probe borrows five leading-underscore run_eval.py
+    symbols (_RETRIEVAL_ONLY_CASE_TYPES, _fragment_to_dict,
+    _scoped_model_roles, _release_gpu_models, _generation_keep_alive)
+    instead of recomposing run_eval.run_all_cases's two-phase retrieve/
+    generate split by hand. run_eval.py documents leading underscore as
+    "private to this module"; nothing pinned that run_probe_lang.py depends
+    on it. A rename would pass the fast gate silently and only surface once
+    run_probe_lang.py is actually run against the GPU. Mirrors the pin
+    pattern in harness/tests/test_evaluator.py's
+    test_retrieval_only_case_types_match_run_eval.
+    """
+    import run_eval
+
+    for name in (
+        "_RETRIEVAL_ONLY_CASE_TYPES",
+        "_fragment_to_dict",
+        "_scoped_model_roles",
+        "_release_gpu_models",
+        "_generation_keep_alive",
+    ):
+        assert hasattr(run_eval, name), f"run_eval.{name} no longer exists -- run_probe_lang.py depends on it"

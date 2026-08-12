@@ -65,9 +65,9 @@ PROBE_CASES_FILE = EVAL_DIR / "probe_cases_lang.jsonl"
 # both `carpeta` and `path_label` -- distinct from "es"/"ca" (the product's
 # own stores), "dev_docs"/"blind_docs" (run_eval.py's gate stores), and
 # everything else under rag/vector_db/. This is the isolation the design doc
-# requires (section 3, "Sonda previa": "indexats en la seua propia col·lecció
-# aïllada per a no alterar els stores contra els quals es mesura el
-# producte").
+# requires (section 3, "Sonda previa": "indexados en su propia colección
+# aislada para no alterar los stores contra los que se mide el
+# producto").
 PROBE_DOCS_DIR = EVAL_DIR / "probe_docs_lang"
 PROBE_RESULTS_DIR = EVAL_DIR / "probe_runs_lang"
 

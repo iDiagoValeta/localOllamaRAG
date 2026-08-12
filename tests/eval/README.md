@@ -322,5 +322,5 @@ Reading the result is a human step: record a verdict per axis in
 summary and the JSON report under `probe_runs_lang/`. **No verdict has been
 measured yet; this section only describes how to produce one.** If the
 language axis comes back viable, these 18 cases are written to survive
-promotion (per section 3's "los casos de la sonda se redacten para
+promotion (per section 3's "los casos de la sonda se redactan para
 sobrevivir"): they are the seed of the full batch, not throwaway material.
