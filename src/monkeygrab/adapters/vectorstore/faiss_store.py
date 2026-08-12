@@ -2,7 +2,7 @@
 
 import json
 import os
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 import faiss
 import numpy as np
@@ -16,11 +16,40 @@ from monkeygrab.domain.fragment import Fragment
 # conformance here is structural (duck typing), the same contract every other
 # adapter in this package satisfies without inheriting its port.
 
-# A row kept in memory per stored chunk: (id, doc text, metadata). Position in
-# this list is always the FAISS vector's position in the index -- both grow by
-# one, together, on every add() -- so no separate id<->position table needs
-# its own persistence; it is rebuilt from this list on load (see SECTION 3).
-_Row = Tuple[str, str, ChunkMetadata]
+
+class _Row(NamedTuple):
+    """One stored chunk: id, doc text, metadata, plus its pre-serialized
+    ``meta.jsonl`` line (including the trailing newline).
+
+    Position in the owning list is always the FAISS vector's position in the
+    index -- both grow by one, together, on every add() -- so no separate
+    id<->position table needs its own persistence; it is rebuilt from this
+    list on load (see ``_load_or_init``).
+
+    ``line`` is cached here, not recomputed from ``doc``/``metadata`` on every
+    write, because re-running ``json.dumps`` over every previously stored row
+    on every ``add`` was the redundant cost issue #55 measured. Caching it on
+    the row itself, set once at construction and never rebuilt in place, means
+    ``line`` always decodes to a row that reproduces these fields -- but that
+    is not the same as "``line`` equals ``_serialize_row(chunk_id, doc,
+    metadata)``". For a row loaded from a legacy file (``_load_or_init``
+    caches the on-disk bytes verbatim; ``_metadata_from_dict`` fills in
+    defaults for keys that row never had), those two can legitimately differ
+    while still describing the same content. One side effect worth knowing:
+    the sidecar no longer self-normalizes a legacy row to the current key set
+    on rewrite -- ``_FORMAT_VERSION`` is the only lever left for that.
+
+    Trade-off: carrying ``line`` roughly doubles ``self._rows``'s resident
+    memory over a version without it (single-digit MB at the corpus sizes
+    this product plausibly sees), and ``_write_meta_file`` now builds the
+    whole sidecar as one string before writing it, so its peak memory is the
+    full file rather than one line at a time.
+    """
+
+    chunk_id: str
+    doc: str
+    metadata: ChunkMetadata
+    line: str
 
 
 # PERSISTENCE FORMAT
@@ -74,21 +103,40 @@ def _metadata_from_dict(meta: Dict[str, Any]) -> ChunkMetadata:
     )
 
 
+def _serialize_row(chunk_id: str, doc: str, metadata: ChunkMetadata) -> str:
+    """Build the on-disk JSONL line for one row, including its trailing newline.
+
+    ``ensure_ascii=False``: the default (``True``) escapes every non-ASCII
+    character (e.g. accented Castilian/Valencian text) to a ``\\uXXXX``
+    sequence, which roughly doubles the sidecar's size on those corpora for
+    no benefit -- ``json.loads`` parses both forms identically, so this is
+    safe on the read path. It only changes bytes written from here forward:
+    rows already on disk keep whatever form they were written in (see
+    ``_load_or_init``, which caches the original line instead of
+    re-serializing it), so one file can legitimately hold a mix of both --
+    each line is decoded independently, and the index fingerprint
+    (``monkeygrab.application.index_fingerprint.index_recipe``) never reads
+    ``meta.jsonl`` content, so this has no effect on fingerprint comparability
+    either.
+    """
+    return json.dumps(
+        {"id": chunk_id, "doc": doc, "metadata": _metadata_to_dict(metadata)},
+        ensure_ascii=False,
+    ) + "\n"
+
+
 def _write_meta_file(path: str, rows: List[_Row]) -> None:
     """Write every row in ``rows`` to ``path`` as JSONL, one object per line.
 
     Shared by ``_save`` and ``_rewrite``: both stage a full sidecar snapshot
     to a temp path before any ``os.replace``, rather than mutating
-    ``meta.jsonl`` in place.
+    ``meta.jsonl`` in place. Each row's line is already serialized (see
+    ``_Row``), so this is one string join and one write -- no per-row
+    ``json.dumps`` on rows that were already serialized on an earlier
+    ``add`` (issue #55).
     """
     with open(path, "w", encoding="utf-8") as f:
-        for chunk_id, doc, metadata in rows:
-            f.write(json.dumps({
-                "id": chunk_id,
-                "doc": doc,
-                "metadata": _metadata_to_dict(metadata),
-            }))
-            f.write("\n")
+        f.write("".join(row.line for row in rows))
 
 
 # DISK I/O
@@ -144,11 +192,21 @@ def _load_or_init(store_dir: str) -> Tuple[Optional["faiss.Index"], List[_Row]]:
     try:
         with open(meta_path, "r", encoding="utf-8") as f:
             for line in f:
-                line = line.strip()
-                if not line:
+                stripped = line.strip()
+                if not stripped:
                     continue
-                row = json.loads(line)
-                rows.append((row["id"], row["doc"], _metadata_from_dict(row["metadata"])))
+                row = json.loads(stripped)
+                # Cache the exact line already on disk rather than
+                # re-serializing the parsed dict: cheaper (no json.dumps for
+                # rows nothing has changed about), and it preserves whatever
+                # ensure_ascii form this row was originally written in --
+                # see _serialize_row's docstring.
+                rows.append(_Row(
+                    chunk_id=row["id"],
+                    doc=row["doc"],
+                    metadata=_metadata_from_dict(row["metadata"]),
+                    line=stripped + "\n",
+                ))
     except (json.JSONDecodeError, KeyError) as e:
         raise _corrupt(store_dir, f"{_META_FILENAME} could not be parsed: {e}") from e
 
@@ -237,7 +295,7 @@ class FaissVectorStore:
         self._fingerprint_path = os.path.join(self._dir, _FINGERPRINT_FILENAME)
 
         self._index, self._rows = _load_or_init(self._dir)
-        self._id_to_pos: Dict[str, int] = {row[0]: i for i, row in enumerate(self._rows)}
+        self._id_to_pos: Dict[str, int] = {row.chunk_id: i for i, row in enumerate(self._rows)}
 
     def add(self, chunk: Chunk, embedding: Sequence[float]) -> None:
         if chunk.id in self._id_to_pos:
@@ -257,9 +315,17 @@ class FaissVectorStore:
             )
 
         faiss.normalize_L2(vector)
+        # Serialize before mutating the index: if this ever raised, an index
+        # already grown by one with no matching row would be a desync that
+        # _load_or_init's count check rejects forever on the next reopen.
+        row = _Row(
+            chunk_id=chunk.id,
+            doc=chunk.text,
+            metadata=chunk.metadata,
+            line=_serialize_row(chunk.id, chunk.text, chunk.metadata),
+        )
         self._index.add(vector)
         position = len(self._rows)
-        row: _Row = (chunk.id, chunk.text, chunk.metadata)
         self._rows.append(row)
         self._id_to_pos[chunk.id] = position
         self._save()
@@ -282,19 +348,19 @@ class FaissVectorStore:
         k = self._index.ntotal
         scores, positions = self._index.search(vector, k)
         candidates = [
-            (float(scores[0][j]), self._rows[positions[0][j]][0], int(positions[0][j]))
+            (float(scores[0][j]), self._rows[positions[0][j]].chunk_id, int(positions[0][j]))
             for j in range(k)
         ]
         candidates.sort(key=lambda c: (-c[0], c[1]))
 
         fragments = []
         for score, _chunk_id, position in candidates[:n_results]:
-            _, doc, metadata = self._rows[position]
+            row = self._rows[position]
             # Cosine distance (1 - cosine similarity) on the normalized
             # vectors this store indexes -- not a literal L2 magnitude like
             # "Smaller is nearer", matching the Fragment.distancia contract; ordering is
             # what downstream ranking (RRF, min/max/mean debug stats) uses.
-            fragments.append(Fragment(doc=doc, metadata=metadata, distancia=1.0 - score))
+            fragments.append(Fragment(doc=row.doc, metadata=row.metadata, distancia=1.0 - score))
         return fragments
 
     def get_by_ids(self, ids: Sequence[str]) -> List[Fragment]:
@@ -303,13 +369,13 @@ class FaissVectorStore:
             position = self._id_to_pos.get(chunk_id)
             if position is None:
                 continue
-            _, doc, metadata = self._rows[position]
-            fragments.append(Fragment(doc=doc, metadata=metadata))
+            row = self._rows[position]
+            fragments.append(Fragment(doc=row.doc, metadata=row.metadata))
         return fragments
 
     def get_page(self, limit: Optional[int], offset: int) -> List[Fragment]:
         rows = self._rows[offset:] if limit is None else self._rows[offset : offset + limit]
-        return [Fragment(doc=doc, metadata=metadata) for _, doc, metadata in rows]
+        return [Fragment(doc=row.doc, metadata=row.metadata) for row in rows]
 
     def count(self) -> int:
         return len(self._rows)
@@ -358,8 +424,8 @@ class FaissVectorStore:
     def delete_source(self, source: str) -> int:
         positions = [
             position
-            for position, (_, _, metadata) in enumerate(self._rows)
-            if metadata.source != source
+            for position, row in enumerate(self._rows)
+            if row.metadata.source != source
         ]
         removed = len(self._rows) - len(positions)
         if removed == 0:
@@ -374,7 +440,7 @@ class FaissVectorStore:
         else:
             self._index = None
         self._rows = kept_rows
-        self._id_to_pos = {row[0]: i for i, row in enumerate(self._rows)}
+        self._id_to_pos = {row.chunk_id: i for i, row in enumerate(self._rows)}
         self._rewrite()
         return removed
 
