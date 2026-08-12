@@ -75,6 +75,7 @@ def indexar_documentos(
             generate_retries=ollama.generate_retries,
             generate_retry_delay=ollama.generate_retry_delay,
             options={"temperature": 0.1, "num_predict": 250},
+            base_url=ollama.base_url,
         )
 
     image_extractor = None

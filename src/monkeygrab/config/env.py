@@ -13,6 +13,33 @@ never had to handle correctly because nobody had set it yet.
 
 import os
 
+DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
+
+
+def read_env_ollama_base_url() -> str:
+    """Resolve the Ollama HTTP endpoint every component must talk to.
+
+    ``OLLAMA_BASE_URL`` is this project's own name for it and the one
+    ``.env.example`` documents. ``OLLAMA_HOST`` is Ollama's own name, honoured
+    by the ``ollama`` client and by the web control panel's probes before this
+    was wired, so it stays as a fallback rather than silently ceasing to work.
+
+    Ollama documents ``OLLAMA_HOST`` without a scheme (``127.0.0.1:11434``),
+    which the raw ``requests`` calls in the adapters would reject as an invalid
+    URL. A missing scheme is filled in instead, and a trailing slash dropped,
+    so that ``f"{base_url}/api/generate"`` is well-formed for every accepted
+    spelling.
+
+    Returns:
+        The base URL, without a trailing slash.
+    """
+    raw = (os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST") or "").strip()
+    if not raw:
+        return DEFAULT_OLLAMA_BASE_URL
+    if "://" not in raw:
+        raw = f"http://{raw}"
+    return raw.rstrip("/")
+
 
 def read_env_int(name: str, default: int) -> int:
     """Read an integer environment variable, or ``default`` if unset.

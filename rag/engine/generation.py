@@ -16,14 +16,19 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from rag.engine import wiring
+from monkeygrab.config.env import read_env_ollama_base_url
 from monkeygrab.ports.vector_store import VectorStore
 from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
 
-# The generator's HTTP endpoint. Kept as a module constant, not an AppConfig
-# field, because the web layer reads it to report Ollama's reachability.
-OLLAMA_BASE_URL = "http://localhost:11434"
+# The generator's HTTP endpoint, re-exported by rag/chat_pdfs.py because the
+# CLI health check and the web control panel both report Ollama's reachability
+# from it. Resolved through the same reader AppConfig uses for
+# models.ollama.base_url, so what those two report is the server the adapters
+# actually send generation to -- it used to be a literal, which made setting
+# OLLAMA_BASE_URL move the diagnostic without moving the traffic.
+OLLAMA_BASE_URL = read_env_ollama_base_url()
 
 
 class _NoCollection:

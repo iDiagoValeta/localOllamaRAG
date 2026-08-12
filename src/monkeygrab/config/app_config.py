@@ -109,6 +109,7 @@ class AppConfig:
                 keep_alive=env.read_env_int("OLLAMA_KEEP_ALIVE", 0),
                 generate_retries=env.read_env_int("OLLAMA_GENERATE_RETRIES", 2),
                 generate_retry_delay=env.read_env_int("OLLAMA_GENERATE_RETRY_DELAY", 3),
+                base_url=env.read_env_ollama_base_url(),
             ),
         )
 

@@ -120,7 +120,9 @@ the defaults. Jina CLIP v2 and BGE Reranker v2 M3 are fixed.
 | RECOMP synthesis | `OLLAMA_RECOMP_MODEL` | Pre-generation context synthesis (`USAR_RECOMP_SYNTHESIS`) |
 | Reranker | fixed | `BAAI/bge-reranker-v2-m3`; not an Ollama model |
 
-Other env vars: `DOCS_FOLDER` (default `rag/docs/en/`), `MONKEYGRAB_DATA_DIR` (writable root for `vector_db`/history/debug; defaults to the package dir in dev, `%LOCALAPPDATA%/MonkeyGrab` in the packaged app), `MONKEYGRAB_LANG` (default `es`; `en`/`ca`).
+Other env vars: `DOCS_FOLDER` (default `rag/docs/en/`), `MONKEYGRAB_DATA_DIR` (writable root for `vector_db`/history/debug; defaults to the package dir in dev, `%LOCALAPPDATA%/MonkeyGrab` in the packaged app), `MONKEYGRAB_LANG` (default `es`; `en`/`ca`), `OLLAMA_BASE_URL` (default `http://localhost:11434`, falling back to Ollama's own `OLLAMA_HOST`).
+
+The Ollama endpoint has exactly one reader, `monkeygrab.config.env.read_env_ollama_base_url`, feeding `AppConfig.models.ollama.base_url` and `rag.chat_pdfs.OLLAMA_BASE_URL`. Every generation call, both `/chat` modes and both reachability checks (CLI startup, web control panel) resolve through it. Do not re-read the variable at a call site: a second resolution is how the CLI health check ended up reporting a server the pipeline never talked to.
 
 Desktop app: `rag/web/desktop.py` is the pywebview entry point frozen by PyInstaller (`packaging/MonkeyGrab.spec`, `packaging/build_exe.py`) into `MonkeyGrab.exe`. Built-in corpora ship in the bundle; Ollama is an external prerequisite. See [`packaging/README.md`](../packaging/README.md).
 

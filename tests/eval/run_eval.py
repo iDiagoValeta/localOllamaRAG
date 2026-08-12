@@ -907,6 +907,11 @@ _UNREACHABLE_CONFIG_OVERRIDE_REASONS = {
     ),
     "models.ollama.generate_retries": "see models.ollama.rag_num_ctx",
     "models.ollama.generate_retry_delay": "see models.ollama.rag_num_ctx",
+    "models.ollama.base_url": (
+        "see models.ollama.rag_num_ctx; and this module posts its per-case "
+        "generations to its own OLLAMA_BASE_URL constant, so the endpoint the "
+        "gate uses would not move with the threaded config either"
+    ),
     "retrieval.min_question_length": "not read anywhere in src/monkeygrab -- Retrieve.run() has no question-length gate",
     "flags.usar_llm_query_decomposition": (
         "ensure_indexed hardcodes query_decomposer=None, so this flag can "

@@ -235,8 +235,10 @@ is used.
 
 Copy [`.env.example`](.env.example) to `.env` at the project root; it documents
 every supported variable with its default. The shell environment always wins over
-the file. `MONKEYGRAB_LANG` sets the interface language (`es`, `en`, `ca`) and
-`DOCS_FOLDER` the corpus.
+the file. `MONKEYGRAB_LANG` sets the interface language (`es`, `en`, `ca`),
+`DOCS_FOLDER` the corpus, and `OLLAMA_BASE_URL` the Ollama server — point it at
+another machine and every call follows, generation included, which is the way
+out when the local card cannot hold the generator you want.
 
 Each corpus has its own Jina CLIP and FAISS index under `rag/vector_db/`. Both
 interfaces detect when a stored index no longer matches the active chunking,

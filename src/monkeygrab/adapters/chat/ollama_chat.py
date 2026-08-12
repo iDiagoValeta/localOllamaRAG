@@ -4,11 +4,13 @@ import base64
 import json
 import logging
 import time
+from functools import lru_cache
 from typing import Any, Dict, Iterator, Optional, Sequence
 
 import ollama
 import requests
 
+from monkeygrab.config.env import DEFAULT_OLLAMA_BASE_URL
 from monkeygrab.domain.generation_chunk import GenerationChunk
 from monkeygrab.ports.model_unloader import ModelUnloader
 
@@ -16,11 +18,25 @@ from monkeygrab.ports.model_unloader import ModelUnloader
 # conformance here is structural (duck typing), the same contract every other
 # adapter in this package satisfies without inheriting its port.
 
-# Not derived from AppConfig: rag/engine/generation.py hardcodes this same
-# value (`OLLAMA_BASE_URL = "http://localhost:11434"`) rather than reading it
-# from an env var, so there is no config field to source it from without
-# inventing one outside this task's scope.
-_DEFAULT_BASE_URL = "http://localhost:11434"
+# Only the fallback for a caller that names no endpoint; the pipeline always
+# passes config.models.ollama.base_url, which is where OLLAMA_BASE_URL lands.
+_DEFAULT_BASE_URL = DEFAULT_OLLAMA_BASE_URL
+
+
+@lru_cache(maxsize=None)
+def ollama_client_for(base_url: str) -> ollama.Client:
+    """Return the shared ``ollama.Client`` for one endpoint.
+
+    Cached per URL because ``wiring`` builds a fresh adapter for every query:
+    a client per instance would open a new HTTP connection pool per question
+    and never close it. The module-level ``ollama.chat`` this replaced had the
+    same one-client-per-process behaviour, minus the configurable host.
+
+    Public because the CLI and web ``/chat`` modes call ``ollama.chat``
+    directly instead of going through this adapter, and they must reach the
+    same server the RAG pipeline does.
+    """
+    return ollama.Client(host=base_url)
 
 
 class OllamaChatModel:
@@ -39,7 +55,8 @@ class OllamaChatModel:
     shapes: a one-turn prompt, and a system plus user message with optional
     image bytes. ``stream`` instead talks to ``/api/generate`` over raw HTTP,
     because it needs line-by-line JSON and a retry policy limited to 5xx --
-    neither of which the client exposes.
+    neither of which the client exposes. Both are bound to ``base_url``, so
+    the two paths cannot end up talking to different servers.
 
     ``model_unloader`` frees VRAM before streaming starts, and again before
     retrying a 5xx. It is injected rather than computed here because
@@ -76,9 +93,10 @@ class OllamaChatModel:
             options: Role-specific sampling defaults (temperature,
                 num_predict, top_p, repeat_penalty, stop, ...), merged with
                 ``num_ctx`` on every call.
-            base_url: Ollama HTTP server base URL, used by ``stream`` only
-                (``generate`` goes through the ``ollama`` client, which reads
-                its own ``OLLAMA_HOST``).
+            base_url: Ollama HTTP server base URL, used by both ``generate``
+                and ``stream``. Passing it explicitly to the client is what
+                makes it win over the ambient ``OLLAMA_HOST`` the client would
+                otherwise read on its own.
             model_unloader: ``ModelUnloader`` used by ``stream`` to free VRAM
                 before generating (and before retrying a 5xx), or ``None`` to
                 skip that entirely -- see the class docstring.
@@ -127,7 +145,7 @@ class OllamaChatModel:
             messages.insert(0, {"role": "system", "content": system})
 
         try:
-            response = ollama.chat(
+            response = ollama_client_for(self._base_url).chat(
                 model=self._model,
                 messages=messages,
                 think=False,

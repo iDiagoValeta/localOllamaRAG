@@ -137,7 +137,8 @@ def rag_chat_model(config: AppConfig) -> OllamaChatModel:
             "repeat_last_n": 64,
             "num_predict": -1,
         },
-        model_unloader=OllamaModelUnloader(config.models),
+        base_url=ollama.base_url,
+        model_unloader=OllamaModelUnloader(config.models, base_url=ollama.base_url),
     )
 
 
@@ -157,6 +158,7 @@ def recomp_chat_model(config: AppConfig) -> OllamaChatModel:
             "top_p": 0.9,
             "repeat_penalty": 1.15,
         },
+        base_url=ollama.base_url,
     )
 
 
@@ -176,6 +178,7 @@ def query_decomposer(config: AppConfig) -> OllamaChatModel:
         generate_retries=ollama.generate_retries,
         generate_retry_delay=ollama.generate_retry_delay,
         options={"temperature": 0.5, "num_predict": 400, "stop": ["\n\n\n"]},
+        base_url=ollama.base_url,
     )
 
 
