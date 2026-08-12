@@ -464,6 +464,45 @@ def test_concurrent_embed_calls_each_get_their_own_vector_and_the_worker_survive
     assert embedder.embed("still alive") == _vector()
 
 
+def _recording_thread_class(created_threads):
+    """Return a threading.Thread subclass that records every instance it makes.
+
+    Each entry is (thread, target, args) captured from the constructor
+    kwargs, not read back off the Thread object afterwards -- so a caller
+    can later identify a specific thread by which bound method and which
+    worker it was started for, instead of trusting creation order (which
+    silently breaks if any other thread gets created in between).
+    """
+    real_thread = threading.Thread
+
+    class _RecordingThread(real_thread):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            created_threads.append((self, kwargs.get("target"), kwargs.get("args", ())))
+
+    return _RecordingThread
+
+
+def _find_pump_thread(created_threads, target, worker_process):
+    """Identify the recorded Thread for `target` bound to `worker_process`.
+
+    Matches on the target function and on `args[0] is worker_process`
+    (every pump thread's first argument is the process it belongs to)
+    rather than on position in `created_threads`, so the test still finds
+    the right thread even if unrelated threads are created around it.
+    """
+    matches = [
+        thread
+        for thread, recorded_target, args in created_threads
+        if recorded_target == target and args and args[0] is worker_process
+    ]
+    assert len(matches) == 1, (
+        f"expected exactly one recorded thread for {target!r} on {worker_process!r}, "
+        f"found {len(matches)}"
+    )
+    return matches[0]
+
+
 def test_a_stale_pump_thread_cannot_poison_a_fresh_workers_response_queue(monkeypatch):
     """Regression test for #47.
 
@@ -485,17 +524,10 @@ def test_a_stale_pump_thread_cannot_poison_a_fresh_workers_response_queue(monkey
     relying on a sleep or guessing at internal state.
     """
     created_threads = []
-    real_thread = threading.Thread
-
-    class _RecordingThread(real_thread):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            created_threads.append(self)
-
-    monkeypatch.setattr(module.threading, "Thread", _RecordingThread)
+    monkeypatch.setattr(module.threading, "Thread", _recording_thread_class(created_threads))
 
     embedder, calls = _embedder(monkeypatch)
-    embedder.embed("one")  # starts worker A (calls[0]); created_threads[0] is its stdout pump
+    embedder.embed("one")  # starts worker A (calls[0])
     assert len(calls) == 1
 
     embedder.close()  # worker A is "closed" from the adapter's point of view, but this
@@ -506,9 +538,11 @@ def test_a_stale_pump_thread_cannot_poison_a_fresh_workers_response_queue(monkey
     embedder.embed("two")  # starts a fresh worker B (calls[1]); self._responses now
     assert len(calls) == 2  # points at a brand-new Queue.
 
+    worker_a_stdout_pump = _find_pump_thread(created_threads, embedder._pump_stdout, calls[0])
+
     calls[0].stdout.close()  # worker A's stale pump thread unblocks and runs its finally.
-    created_threads[0].join(timeout=2.0)
-    assert not created_threads[0].is_alive(), "stale pump thread from worker A never finished"
+    worker_a_stdout_pump.join(timeout=2.0)
+    assert not worker_a_stdout_pump.is_alive(), "stale pump thread from worker A never finished"
 
     # Worker B is alive and was never touched -- a real call against it must succeed.
     result = embedder.embed("three")
@@ -516,6 +550,40 @@ def test_a_stale_pump_thread_cannot_poison_a_fresh_workers_response_queue(monkey
     assert result == _vector()
     assert len(calls) == 2  # no extra worker was spawned to recover
     assert embedder._dead_reason is None  # not permanently marked dead (issue #24's failure mode)
+
+
+def test_a_stale_pump_thread_does_not_leak_its_stderr_into_a_fresh_workers_tail(monkeypatch):
+    """Regression test for #47 (the _stderr_tail half of the same bug).
+
+    Same reassignment hazard as _responses, but for _stderr_tail: pre-fix, a
+    stale worker's stderr pump appended into whatever self._stderr_tail
+    pointed at, so a DEAD worker's stderr lines could end up reported by
+    _format_stderr() inside a LIVE worker's eventual failure message --
+    misleading diagnostics on exactly the permanent-outage path this
+    adapter's hard-fail policy exists to serve.
+    """
+    created_threads = []
+    monkeypatch.setattr(module.threading, "Thread", _recording_thread_class(created_threads))
+
+    embedder, calls = _embedder(monkeypatch)
+    embedder.embed("one")  # starts worker A (calls[0])
+    assert len(calls) == 1
+
+    embedder.close()
+    calls[0]._returncode = 0
+
+    embedder.embed("two")  # starts a fresh worker B (calls[1]); self._stderr_tail now
+    assert len(calls) == 2  # points at a brand-new list.
+
+    worker_a_stderr_pump = _find_pump_thread(created_threads, embedder._pump_stderr, calls[0])
+
+    calls[0].stderr.push("stale worker A traceback\n")
+    calls[0].stderr.close()  # unblocks the stale pump so it finishes deterministically
+    worker_a_stderr_pump.join(timeout=2.0)
+    assert not worker_a_stderr_pump.is_alive(), "stale stderr pump from worker A never finished"
+
+    # Worker B's own tail must stay untouched by worker A's stale line.
+    assert embedder._stderr_tail == []
 
 
 if __name__ == "__main__":

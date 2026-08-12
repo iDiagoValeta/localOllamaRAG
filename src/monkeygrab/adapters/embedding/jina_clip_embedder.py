@@ -207,9 +207,7 @@ class JinaClipEmbedder:
         finally:
             # The pipe closed (worker exited). Unblock whoever is waiting
             # immediately instead of making them sit through the full
-            # timeout to discover the same thing. `responses` is the queue
-            # this specific worker was started with, passed as an argument
-            # rather than read from self -- see the comment in _start_worker.
+            # timeout to discover the same thing.
             responses.put(_EOF)
 
     def _pump_stderr(self, process: subprocess.Popen, stderr_tail: List[str]) -> None:
