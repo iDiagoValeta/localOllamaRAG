@@ -184,6 +184,52 @@ el que el loop puede demostrar algo es de unos cinco casos.
 > El corpus crece porque el medidor necesita resolución, no por completitud
 > temática. Ésa es la única justificación que fija el tamaño.
 
+> [!CAUTION]
+> **Medido el 2026-08-12: el conjunto de búsqueda no sólo tiene poco margen,
+> es que tampoco detecta un sabotaje conocido.** La cuenta de arriba mira el
+> gate entero. Lo que el loop optimiza es el conjunto de búsqueda, y ahí los
+> números son peores.
+>
+> Los tres artefactos que ya citan las notas del criterio 1 y 2, cruzados por
+> `id` contra `gold_cases.jsonl` (el campo `source` vive sólo en el fichero de
+> casos, no en los registros del run), separan un conjunto de búsqueda de 32
+> casos `source: corpus` sobre 6 papers y un ciego de 19 casos `source: arxiv`
+> sobre 3. Esa partición ya es **por documento**, que es lo que pide la sección
+> de Partición, así que sirve hasta que el bloque B entregue una propia.
+>
+> - Del run sano `20260729T020233Z`: búsqueda **27/32**, ciego 17/19. **Cinco
+>   fallos disponibles en el conjunto de búsqueda**, no nueve. Tres de esos
+>   cinco son casos de figura.
+> - Sano contra sano, restringido al conjunto de búsqueda: **0 vuelcos**. El
+>   suelo de ruido de la nota del criterio 1 se sostiene también aquí, que es
+>   lo que hace legible el punto siguiente.
+> - Sano contra el saboteado `RAG_TOP_K_FINAL=1`, restringido al conjunto de
+>   búsqueda: **4 vuelcos a FAIL y 1 a PASS, 3 netos** -- frente a los 7 y 2
+>   que da el gate entero.
+>
+> Tres vuelcos netos contra un umbral de demostrabilidad de unos seis, y la
+> configuración saboteada colapsa la recuperación a un solo fragmento: es el
+> cambio más destructivo que se ha probado. El conjunto de búsqueda está
+> infrapotenciado frente a un efecto enorme y conocido, no sólo frente a
+> mejoras sutiles.
+>
+> Son dos cotas distintas y conviene no confundirlas: cinco fallos acotan lo
+> que el loop puede **ganar**; tres vuelcos frente a un sabotaje catastrófico
+> acotan lo que el loop puede **ver**. La segunda es la que obliga a que el
+> arnés declare su propio límite de resolución en cada informe, en vez de
+> dejar la advertencia en un hilo de issues.
+>
+> Ninguno de los cinco fallos del conjunto de búsqueda es margen inalcanzable:
+> los tres de figura fallan con `wanted one of ['image'], got ['text']`, es
+> decir por **ranking**, y son casos `figure_retrieval` que nunca llaman al
+> generador. Los otros dos son un número presente en el resumen del paper que
+> no sobrevive a la respuesta. Todos caen dentro del espacio de acción de la
+> primera etapa, así que la lista de casos inalcanzables nace vacía y eso es
+> una afirmación con evidencia, no un hueco por rellenar.
+>
+> Artefactos locales, igual que en las notas anteriores: `tests/eval/runs/`
+> está en `.gitignore` y nadie que clone el repo puede verificarlos.
+
 ### Tamaño
 
 Para que el loop demuestre varias mejoras sucesivas antes de agotarse, el pozo de
@@ -318,6 +364,20 @@ proponente determinista como control y el criterio 5 se corre con ambos.
 regresión, y sólo entonces paga el conjunto de búsqueda completo. Devuelve el
 registro en vez de sólo imprimirlo.
 
+> [!IMPORTANT]
+> **El evaluador debe fallar ante una configuración que no puede aplicar.**
+> Al extraer la API de biblioteca (§6.1) se encontró que los `config_overrides`
+> llegan a recuperación e indexado, pero no a la generación: ésta construye su
+> propio `AppConfig` por llamada leyendo los globales de `rag/chat_pdfs.py` y el
+> entorno del proceso. Un override de `context.max_context_chars` o de
+> `flags.usar_recomp_synthesis` que se ignore en silencio hace que el loop mida
+> "este parámetro no hace nada" y lo escriba en el libro de evidencias como si
+> fuera un hallazgo. Por la política de fallo duro del repo, un override que no
+> se pueda honrar de extremo a extremo debe levantar excepción, y el arnés debe
+> comprobar al arrancar que cada clave de su espacio declarado es una que el
+> evaluador acepta. Un espacio de búsqueda con un mando inerte es peor que uno
+> que no lo incluye.
+
 El nivel rápido es un **subconjunto fijo del conjunto de búsqueda** (unos 15
 casos elegidos por dar señal: figuras, dominios nuevos, formas difíciles), no una
 muestra rotatoria. Una muestra que cambia entre iteraciones introduce varianza en
@@ -358,7 +418,17 @@ Adoptados por defecto; cualquiera es revisable.
 - **El loop propone, el humano integra.** Nunca fusiona ni despliega solo
   (regla 1 del repo).
 - **Techo de latencia:** ningún candidato puede empeorar la latencia mediana por
-  consulta más de un 20 % sobre la configuración vigente.
+  consulta más de un 20 % sobre la configuración vigente. **La mediana se toma
+  por tipo de caso, no sobre el conjunto entero** (medido 2026-08-12): el coste
+  por caso es bimodal -- `factual_number` 201,1 s y `factual_concept` 198,4 s
+  frente a `figure_retrieval` 3,9 s y `table_retrieval` 4,5 s, un factor de
+  cincuenta --, así que una mediana única sobre casos mezclados informa poco más
+  que de qué tipo era el caso central. Un candidato que hunda la calidad de
+  recuperación apenas la movería: en el par sano contra saboteado, la mediana de
+  casos respondidos pasó de 201,0 s a 195,8 s y la de sólo recuperación de 4,1 s
+  a 4,8 s, ambas holgadamente dentro del 20 %, mientras la recuperación se
+  desplomaba. Cada bucket se compara contra su propio techo y basta con que uno
+  lo incumpla para descalificar al candidato.
 - **Terminación:** presupuesto de iteraciones, o parada tras varias iteraciones
   seguidas sin superar el suelo de ruido.
 - **Comparación pareada** sobre los mismos casos, nunca entre tasas de runs
