@@ -82,19 +82,23 @@ def vector_store(config: AppConfig) -> VectorStore:
     once the lock is held. The cheap, unlocked check outside the lock keeps
     the common case (cache already valid) lock-free.
 
-    The key and the store live in one ``(key, store)`` tuple under a single
-    dict slot, read with one subscript rather than two (#57). Under
-    CPython's GIL, a dict lookup by an immutable, C-hashable key -- our key
-    is a tuple of strings -- runs to completion without releasing the GIL,
-    so that single read is atomic: no other thread's write can be
-    interleaved partway through it. Two separate reads (key, then store)
-    would not have that guarantee -- a thread could validate the key,
-    lose the GIL to a concurrent corpus switch that republishes the slot,
-    and then read back a store belonging to the *new* key. The result
-    would look like a normal answer while silently citing the wrong
-    corpus, with nothing to log or raise. Splitting the read into "check"
-    and "return" of a local variable, rather than reading the dict twice,
-    closes the window entirely instead of narrowing it.
+    The key and the store live in one ``(key, store)`` tuple under a
+    single dict slot (``_store_cache["entry"]``), read with one subscript
+    instead of two (#57). That subscript is not itself atomic -- on this
+    interpreter it compiles to a dict lookup followed by a separate tuple
+    unpack, and a thread switch can land between them. What makes the
+    read safe is that it yields an *immutable* ``(key, store)`` pair,
+    which from then on lives only in this thread's own locals: a
+    concurrent corpus switch can swap which pair the slot holds next, but
+    it cannot reach into the pair this thread already pulled off the slot
+    and change it. The old two-slot cache had no such guarantee -- with
+    the key and the store as separate dict entries, a thread could
+    validate its key against one slot, get preempted, have a second
+    thread republish both slots for a different corpus, and then read the
+    *other* slot back holding the new corpus's store, silently
+    disagreeing with the key this thread already checked. The result was
+    a well-formed answer retrieved from the wrong corpus, with nothing to
+    log or raise.
     """
     key = (config.paths.path_db, config.paths.collection_name)
     cached_key, store = _store_cache["entry"]
@@ -120,6 +124,20 @@ def embedder(config: AppConfig):
     subprocess and loads jina-clip on first use (~29s), and the losing
     instance is unreachable yet pinned alive by its own stdout/stderr pump
     threads once its worker has started, so nothing ever closes it (#46).
+
+    Unlike ``vector_store``/``lexical_index``, this slot is never re-keyed
+    or republished -- there is no corpus- or config-dependent identity to
+    switch, and nothing today ever resets it, so once built it holds the
+    one instance that will ever exist for the process's life. The #57
+    read race (validate one value, return another) has nothing to attach
+    to here. That reasoning is conditional on there staying no
+    invalidation path: a future GPU-release routine that swaps this slot
+    back to ``None`` to free VRAM would reopen the window, and the
+    ``(key, value)`` tuple trick used above would not close it here --
+    returning a locally-captured reference cannot stop a concurrent
+    ``close()`` on the very object it points to. That would need an
+    ownership rule (e.g. refcounting callers, or not invalidating the
+    slot until nothing still holds it), not just an atomic-looking read.
     """
     if _embedder_cache["embedder"] is None:
         with _embedder_cache_lock:
@@ -220,10 +238,12 @@ def lexical_index(store: VectorStore, config: AppConfig) -> Bm25LexicalIndex:
     concurrent callers racing the same new key build only one index (#46).
 
     The key and the index live in one ``(key, index)`` tuple under a single
-    dict slot instead of two separate slots, so the check and the value a
-    caller ultimately returns come from the same atomic read rather than
-    two -- see ``vector_store`` above for why the two-read version could
-    hand a caller an index that belongs to a BM25 retune racing it (#57).
+    dict slot instead of two separate slots, unpacked into this thread's
+    own locals in one subscript. The pair is immutable once read, so a
+    concurrent BM25 retune republishing the slot cannot alter the pair
+    this thread already has -- see ``vector_store`` above for the exact
+    reasoning, and for why the old two-slot cache could hand a caller an
+    index that belonged to a retune racing it (#57).
 
     Args:
         collection: Collection whose chunks form the BM25 corpus.
@@ -257,6 +277,11 @@ def reranker(config: AppConfig) -> CrossEncoderReranker:
     construct one, since each duplicate would separately load hundreds of
     megabytes of weights on first ``rerank()`` call, competing for the same
     GPU (#46).
+
+    Like ``embedder``, this slot is a singleton with no reset path today,
+    so the #57 read race does not apply -- see that function's docstring
+    for why, and for what adding an invalidation path here would require
+    instead of the tuple trick used by ``vector_store``/``lexical_index``.
 
     Args:
         config: Current pipeline configuration.
