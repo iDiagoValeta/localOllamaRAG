@@ -41,3 +41,18 @@ def test_overall_keeps_its_existing_meaning():
 def test_empty_buckets_do_not_divide_by_zero():
     summary = build_summary([_record("figure_retrieval", True)])
     assert summary["answer"] == {"total": 0, "passed": 0, "pass_rate": 0.0}
+
+
+def test_overall_equals_retrieval_plus_answer_for_an_unknown_case_type():
+    # A case_type this module has never seen is not one of
+    # _RETRIEVAL_ONLY_CASE_TYPES, so it must land in "answer" -- the
+    # partition has to stay exhaustive for a case type added later, or it
+    # would silently vanish from both buckets while still counting in
+    # "overall".
+    records = [
+        _record("figure_retrieval", True),
+        _record("some_future_case_type", True, "m"),
+    ]
+    summary = build_summary(records)
+    assert summary["overall"]["total"] == summary["retrieval_only"]["total"] + summary["answer"]["total"]
+    assert summary["answer"]["total"] == 1

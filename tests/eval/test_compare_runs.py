@@ -52,6 +52,16 @@ def test_cases_missing_from_one_run_are_rejected():
         compare(a, b)
 
 
+def test_cases_missing_from_one_run_are_rejected_the_other_way_too():
+    # Mirror of the above with the extra case on b instead of a -- the
+    # symmetric-difference check must catch either direction, not just "b is
+    # missing something a has".
+    a = _report({"x": True})
+    b = _report({"x": True, "y": True})
+    with pytest.raises(ValueError, match="y / m"):
+        compare(a, b)
+
+
 def test_inconclusive_run_is_rejected():
     # A record with infrastructure_error is a case that never ran -- an
     # Ollama timeout or dead server, not a real pass/fail. Comparing it as an
@@ -63,6 +73,17 @@ def test_inconclusive_run_is_rejected():
         compare(a, b)
 
 
+def test_inconclusive_run_is_rejected_on_the_other_side_too():
+    # Mirror of the above with the infrastructure error on a instead of b --
+    # _reject_unusable is called for both reports, but only one side had
+    # coverage.
+    a = _report({"x": True, "y": True})
+    b = _report({"x": True, "y": True})
+    a["results"][1]["infrastructure_error"] = True
+    with pytest.raises(ValueError, match="report_a.*inconclusive"):
+        compare(a, b)
+
+
 def test_empty_run_is_rejected():
     # Zero cases is the most complete crash of all -- it must not compare as
     # "0 case(s) unchanged", which reads as a clean, noise-free result.
@@ -70,3 +91,21 @@ def test_empty_run_is_rejected():
     b = _report({"x": True})
     with pytest.raises(ValueError, match="report_a.*no cases"):
         compare(a, b)
+
+
+def test_empty_run_is_rejected_on_the_other_side_too():
+    # Mirror of the above with the empty report on b instead of a.
+    a = _report({"x": True})
+    b = _report({})
+    with pytest.raises(ValueError, match="report_b.*no cases"):
+        compare(a, b)
+
+
+def test_rejection_messages_name_the_files_when_labels_are_given():
+    # compare_runs.main() passes the real report paths as labels so a
+    # rejection names the actual file instead of the generic parameter name
+    # "report_a"/"report_b".
+    a = _report({})
+    b = _report({"x": True})
+    with pytest.raises(ValueError, match="runs/2026-01-01.json"):
+        compare(a, b, label_a="runs/2026-01-01.json", label_b="runs/2026-01-02.json")

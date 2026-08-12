@@ -8,6 +8,13 @@ whatever it happened to change last. This module names exactly which
 configuration decides an index's content, so a mismatch can force a rebuild
 instead of being discovered as an unexplained score.
 
+Configuration is not the only thing that decides stored content, though --
+the CODE that turns a config into stored text can change too, and nothing
+above catches that: editing the chunking algorithm or the contextual-
+enrichment prompt changes what gets stored without moving a single config
+value. ``_RECIPE_VERSION`` closes that gap (see its docstring for what counts
+as a version bump and what does not).
+
 Pure: no I/O and no infrastructure imports. Persisting the value is the vector
 store's job; deciding what it means is this module's.
 """
@@ -24,6 +31,27 @@ from monkeygrab.config.app_config import AppConfig
 # that has to invalidate every index built before it.
 _EXTRACTOR_ID = "mineru"
 _EMBEDDING_ID = "jinaai/jina-clip-v2@512"
+
+# Bumped BY HAND when the code that turns a recipe into stored content
+# changes -- never for a configuration change, since every config value this
+# module cares about already has its own recipe key and invalidates on its
+# own. Counts as a bump: the chunking algorithm (how text is split into
+# chunks), the contextual-enrichment prompt template, the image-extraction
+# logic -- anything that can make the SAME configuration produce different
+# stored text or vectors than it used to. Does not count: a comment, a log
+# line, a refactor that leaves stored output byte-identical, or adding a new
+# *configuration* field (that already invalidates through its own recipe key,
+# e.g. contextual_num_ctx below).
+#
+# Serialized by omission at version 1: version 1 is defined as "the recipe
+# exactly as it existed before recipe_version was introduced", so the key is
+# left out of the dict entirely while this constant is 1 -- adding it costs
+# zero reindexing on its own. The key starts appearing only once a human
+# bumps this past 1, which is also the point every existing index legitimately
+# needs rebuilding. See
+# tests/unit/application/test_index_fingerprint.py::test_recipe_version_is_omitted_at_v1_and_matches_pre_change_main
+# for the test that makes this safe rather than clever.
+_RECIPE_VERSION = 1
 
 _FINGERPRINT_CHARS = 16
 
@@ -51,12 +79,16 @@ def index_recipe(config: AppConfig) -> Dict[str, Any]:
         "contextual_retrieval": config.flags.usar_contextual_retrieval,
         "image_embeddings": config.flags.usar_embeddings_imagen,
     }
-    # The contextual model and its document sample only reach stored text when
-    # that stage actually runs. Including them unconditionally would make an
-    # index built with the stage OFF depend on a model that never got called.
+    if _RECIPE_VERSION != 1:
+        recipe["recipe_version"] = _RECIPE_VERSION
+    # The contextual model, its context window and its document sample only
+    # reach stored text when that stage actually runs. Including them
+    # unconditionally would make an index built with the stage OFF depend on
+    # a model call that never happened.
     if config.flags.usar_contextual_retrieval:
         recipe["contextual_model"] = config.models.contextual
         recipe["contextual_doc_chars"] = config.chunking.contextual_doc_chars
+        recipe["contextual_num_ctx"] = config.models.ollama.contextual_num_ctx
     return recipe
 
 
