@@ -9,11 +9,14 @@ from monkeygrab.domain.fragment import Fragment
 class VectorStore(Protocol):
     """Storage and retrieval of embedded chunks.
 
-    Seven operations, each backing one thing the pipeline actually does:
+    Nine operations, each backing one thing the pipeline actually does:
     ``add`` stores a chunk during indexing, ``query`` is semantic search,
     ``get_by_ids`` fetches neighbor chunks for context expansion,
     ``get_page`` supports full-corpus scans, ``count`` reports corpus size,
-    ``delete_source`` removes one document and ``clear`` resets a corpus.
+    ``delete_source`` removes one document, ``clear`` resets a corpus, and
+    ``read_fingerprint``/``write_fingerprint`` persist the opaque recipe
+    digest ``monkeygrab.application.index_fingerprint`` computes and
+    ``rag/engine/indexing.py`` reads back.
 
     There is no ``where`` filter because nothing in the pipeline filters by
     metadata. Keeping it out means a plain vector index with a metadata
@@ -102,4 +105,18 @@ class VectorStore(Protocol):
 
     def clear(self) -> None:
         """Remove every chunk from the store."""
+        ...
+
+    def read_fingerprint(self) -> Optional[str]:
+        """Return the recorded index-recipe digest, or ``None`` if unset.
+
+        Opaque to this port: the store persists whatever string it is given
+        and never interprets it. ``None`` covers both an empty store and one
+        written before this method existed -- either way, "unknown", never
+        "matches".
+        """
+        ...
+
+    def write_fingerprint(self, fingerprint: str) -> None:
+        """Record the index-recipe digest that produced the current content."""
         ...

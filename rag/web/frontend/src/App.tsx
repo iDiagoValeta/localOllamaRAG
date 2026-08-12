@@ -132,7 +132,7 @@ const STRINGS = {
     storesLabel: 'Almacén vectorial',
     storeNotIndexed: 'sin indexar',
     storeEmptyHint: 'Almacén vacío. Sube PDFs y reindexa para activarlo.',
-    fingerprintStaleWarning: 'El índice no coincide con la configuración actual. Reindexa para actualizarlo.',
+    fingerprintStaleWarning: 'El índice guardado no coincide con la configuración activa, pero la app sigue funcionando con él. Reindexa cuando quieras: puede tardar una hora o más.',
     modelsRoles: 'Roles de modelo',
     ollamaTitle: 'Servidor Ollama',
     ollamaOnline: 'En ejecución',
@@ -200,7 +200,7 @@ const STRINGS = {
     storesLabel: 'Vector store',
     storeNotIndexed: 'not indexed',
     storeEmptyHint: 'Empty store. Upload PDFs and re-index to activate it.',
-    fingerprintStaleWarning: 'The index no longer matches the current configuration. Re-index to update it.',
+    fingerprintStaleWarning: 'The saved index no longer matches the active configuration, but the app keeps working with it. Re-index whenever you like: it can take an hour or more.',
     modelsRoles: 'Model roles',
     ollamaTitle: 'Ollama server',
     ollamaOnline: 'Running',
@@ -268,7 +268,7 @@ const STRINGS = {
     storesLabel: 'Magatzem vectorial',
     storeNotIndexed: 'sense indexar',
     storeEmptyHint: 'Magatzem buit. Puja PDFs i reindexa per a activar-lo.',
-    fingerprintStaleWarning: "L'índex no coincideix amb la configuració actual. Reindexa per a actualitzar-lo.",
+    fingerprintStaleWarning: "L'índex guardat no coincideix amb la configuració activa, però l'app continua funcionant amb ell. Reindexa quan vulgues: pot trigar una hora o més.",
     modelsRoles: 'Rols de model',
     ollamaTitle: 'Servidor Ollama',
     ollamaOnline: 'En execució',
@@ -810,6 +810,10 @@ export default function App() {
     if (result?.ok && key in result.settings) {
       // Server may override (e.g. reranker unavailable)
       setSettings(prev => ({ ...prev, [key]: result.settings[key] }));
+      // contextualRetrieval / imageIndexing are index-time flags: flipping
+      // either can make the active store stale right here, mid-session, with
+      // no restart or store switch to otherwise trigger a fresh check.
+      setFingerprintStale(result.fingerprint_stale || false);
     } else {
       setSettings(prev => ({ ...prev, [key]: previousVal }));
       setSettingsError(result?.error || T.settingsSaveError);
@@ -959,6 +963,10 @@ export default function App() {
         return;
       }
       setModelRoles(res.roles);
+      // The contextual role enters index_recipe whenever contextual retrieval
+      // is on (the default) -- reassigning it can make the active store
+      // stale mid-session just like toggling the flag itself.
+      setFingerprintStale(res.fingerprint_stale || false);
     } catch {
       setModelRoles(prev);
       setModelError(T.modelSaveError);

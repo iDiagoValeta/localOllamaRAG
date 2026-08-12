@@ -126,3 +126,18 @@ def test_no_mismatch_when_fingerprint_is_unknown(monkeypatch):
     store = _FakeStore(fingerprint=None)
 
     assert indexing.index_fingerprint_mismatch(store) is False
+
+
+def test_mismatch_check_never_blocks_startup_on_a_read_failure(monkeypatch):
+    # A diagnostic must not be able to take the app down with it: an
+    # antivirus-locked sidecar file on Windows (the platform the packaged
+    # .exe ships on) must not abort the CLI before the prompt or poison
+    # /api/init. Same fallback shape as obtener_documentos_indexados below.
+    config = _config()
+    monkeypatch.setattr(wiring, "app_config_from_runtime", lambda: config)
+
+    class _BrokenStore:
+        def read_fingerprint(self):
+            raise OSError("sidecar file is locked")
+
+    assert indexing.index_fingerprint_mismatch(_BrokenStore()) is False

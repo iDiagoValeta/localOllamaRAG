@@ -244,7 +244,10 @@ extraction or index-time flags and warn about it, but never reindex on their
 own — a settings change must not silently trigger a MinerU + jina-clip pass
 over the corpus, which can take an hour. Run `/reindex` (or the web UI's
 reindex action) explicitly to rebuild after changing the corpus, extraction
-behaviour or chunking rules.
+behaviour or chunking rules. This detection needs an index built with this
+feature present: an index built by an older version has no recorded recipe to
+compare against and is never flagged, however much its actual recipe may have
+drifted.
 
 </details>
 

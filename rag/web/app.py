@@ -1103,7 +1103,15 @@ def api_settings_post():
             setattr(rag_engine, engine_var, val)
             updated[fe_key] = val
     _save_persisted_settings()
-    return jsonify({"ok": True, "settings": updated})
+    # contextualRetrieval and imageIndexing are index-time flags (part of
+    # index_recipe): flipping either one is the most likely way a store goes
+    # stale mid-session, with no restart and no store switch to otherwise
+    # trigger a fresh check -- see /api/init's own fingerprint_stale field.
+    return jsonify({
+        "ok": True,
+        "settings": updated,
+        "fingerprint_stale": rag_engine.index_fingerprint_mismatch(_get_collection()),
+    })
 
 
 @app.route("/api/ollama", methods=["GET"])
@@ -1164,7 +1172,15 @@ def api_models_post():
         return jsonify({"ok": False, "error": str(e)}), 400
 
     _save_persisted_settings()
-    return jsonify({"ok": True, "roles": roles})
+    # The contextual role only enters index_recipe while contextual retrieval
+    # is on (the default) -- reassigning it mid-session is just as likely to
+    # make the active store stale as toggling the flag itself; see
+    # api_settings_post's comment.
+    return jsonify({
+        "ok": True,
+        "roles": roles,
+        "fingerprint_stale": rag_engine.index_fingerprint_mismatch(_get_collection()),
+    })
 
 
 @app.route("/api/stores", methods=["GET"])

@@ -120,6 +120,17 @@ def indexar_documentos(
     # recorded untouched: overwriting it here would let a partial add
     # silently launder away a real mismatch from an earlier config change,
     # exactly what index_fingerprint_mismatch exists to catch.
+    #
+    # Written even when some individual files failed above (per-file
+    # exceptions are caught and logged, not re-raised): the fingerprint
+    # asserts the *recipe* whatever ended up stored was built under, not that
+    # every requested file is present -- unlike run_eval.ensure_indexed, whose
+    # write-after-verify exists to guarantee a specific set of gold-case
+    # papers landed, a different property. Every chunk actually added this
+    # pass did go through `config`, so the recipe claim holds regardless of
+    # which files errored; a fully failed run leaves an empty store, which the
+    # `collection.count() == 0` branch in the CLI/web re-attempts on next
+    # launch without ever consulting this fingerprint.
     if solo_archivos is None:
         collection.write_fingerprint(compute_index_fingerprint(config))
 
@@ -137,16 +148,28 @@ def index_fingerprint_mismatch(collection: VectorStore) -> bool:
     index built before this feature existed) reads as *unknown*, not stale --
     see ``fingerprint_is_stale``'s docstring.
 
+    This is a diagnostic, not a pipeline step: unlike an adapter (see the
+    hard-fail policy in .claude/CLAUDE.md section 1 rule 8), it must never be
+    able to take startup down with it. A locked or unreadable sidecar file
+    (e.g. an antivirus holding it open on Windows, the platform the packaged
+    .exe ships on) reads as "cannot tell" rather than aborting the CLI before
+    the prompt or the web app's /api/init -- same fallback shape as
+    ``obtener_documentos_indexados`` below.
+
     Args:
         collection: FAISS store to check.
 
     Returns:
         True only when the store recorded a fingerprint that actively
-        disagrees with the current configuration.
+        disagrees with the current configuration. False if the check itself
+        could not be completed.
     """
-    config = wiring.app_config_from_runtime()
-    expected = compute_index_fingerprint(config)
-    return fingerprint_is_stale(collection.read_fingerprint(), expected)
+    try:
+        config = wiring.app_config_from_runtime()
+        expected = compute_index_fingerprint(config)
+        return fingerprint_is_stale(collection.read_fingerprint(), expected)
+    except Exception:
+        return False
 
 
 def obtener_documentos_indexados(collection: VectorStore) -> List[str]:
