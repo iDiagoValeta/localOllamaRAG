@@ -75,15 +75,24 @@ def _capture_run_all_cases(monkeypatch, seen_cases):
 def _stub_pipeline(monkeypatch):
     """Fake Ollama preflight, blind-set staging and the post-index paper
     check, and neutralize the one call that mutates rag.chat_pdfs's real
-    module globals -- evaluate() calls set_model_roles_runtime
-    unconditionally, and leaving that mutation in place would leak into
-    whatever test runs next in the same process (e.g.
+    module globals unconditionally -- evaluate() always calls
+    set_model_roles_runtime, and leaving that mutation in place would leak
+    into whatever test runs next in the same process (e.g.
     tests/unit/test_app_config_defaults.py, which reads those same globals).
+
+    Pipeline flags (set_pipeline_flags) are NOT neutralized here -- several
+    tests below exercise _generation_config_overrides, which calls the real
+    set_pipeline_flags on purpose. Snapshotting and restoring them instead
+    means a bug in that restoration shows up as THIS test's own assertions
+    failing, not as unrelated flakiness two files later.
     """
     monkeypatch.setattr(run_eval, "preflight_ollama", lambda *_a, **_kw: None)
     monkeypatch.setattr(run_eval, "stage_blind_papers", lambda cases: {})
     monkeypatch.setattr(run_eval, "verify_all_papers_indexed", lambda *_a, **_kw: None)
     monkeypatch.setattr(rag.chat_pdfs, "set_model_roles_runtime", lambda *_a, **_kw: None)
+    previous_flags = rag.chat_pdfs.get_pipeline_flags()
+    yield
+    rag.chat_pdfs.set_pipeline_flags(previous_flags)
 
 
 def test_case_ids_runs_exactly_those_cases(monkeypatch):
@@ -226,3 +235,107 @@ def test_config_is_none_for_a_corpus_never_staged(monkeypatch):
 
     assert result["config"]["dev"] is not None
     assert result["config"]["blind"] is None
+
+
+def test_config_overrides_rejects_a_single_unreachable_key(monkeypatch):
+    ensure_calls = []
+    _capture_ensure_indexed(monkeypatch, ensure_calls)
+    seen = []
+    _capture_run_all_cases(monkeypatch, seen)
+
+    with pytest.raises(ValueError, match="models.rag"):
+        evaluate(
+            models=["m"], case_ids=[_DEV_CASE_ID],
+            config_overrides={"models.rag": "other-model"}, write_report=False,
+        )
+
+    # Fails before any staging/indexing/execution -- a caller-usage error,
+    # not a partial run.
+    assert ensure_calls == []
+    assert seen == []
+
+
+def test_config_overrides_rejects_every_unreachable_key_by_name(monkeypatch):
+    _capture_ensure_indexed(monkeypatch, [])
+    _capture_run_all_cases(monkeypatch, [])
+
+    with pytest.raises(ValueError) as excinfo:
+        evaluate(
+            models=["m"], case_ids=[_DEV_CASE_ID],
+            config_overrides={
+                "models.rag": "x",
+                "paths.docs_folder": "/tmp/y",
+                "models.ollama.keep_alive": 30,
+            },
+            write_report=False,
+        )
+
+    message = str(excinfo.value)
+    assert "models.rag" in message
+    assert "paths.docs_folder" in message
+    assert "models.ollama.keep_alive" in message
+
+
+def test_config_overrides_accepts_every_key_evaluate_claims_to_honour(monkeypatch):
+    """_APPCONFIG_OVERRIDE_KEYS / _GENERATION_FLAG_OVERRIDE_KEYS is the map
+    reported alongside this test; this pins that _validate_config_overrides
+    agrees with it (a key present in the map but rejected here would be a
+    silent regression the map itself would not catch)."""
+    _capture_ensure_indexed(monkeypatch, [])
+    _capture_run_all_cases(monkeypatch, [])
+    honored = run_eval._APPCONFIG_OVERRIDE_KEYS | set(run_eval._GENERATION_FLAG_OVERRIDE_KEYS)
+
+    run_eval._validate_config_overrides({key: None for key in honored})  # must not raise
+
+
+def test_generation_flag_override_reaches_rag_chat_pdfs_during_case_execution(monkeypatch):
+    """The AppConfig path is already covered by
+    test_config_overrides_reach_the_appconfig_and_ensure_indexed; this is the
+    runtime-setter path's equivalent proof, for the two flags
+    generar_respuesta_silenciosa can only see through rag.chat_pdfs's live
+    globals (see evaluate()'s docstring)."""
+    observed = {}
+
+    def _fake_run_all_cases(rag_module, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, models):
+        observed["usar_recomp_synthesis"] = rag_module.USAR_RECOMP_SYNTHESIS
+        observed["usar_optimizacion_contexto"] = rag_module.USAR_OPTIMIZACION_CONTEXTO
+        return []
+
+    monkeypatch.setattr(run_eval, "run_all_cases", _fake_run_all_cases)
+    _capture_ensure_indexed(monkeypatch, [])
+    before = (rag.chat_pdfs.USAR_RECOMP_SYNTHESIS, rag.chat_pdfs.USAR_OPTIMIZACION_CONTEXTO)
+
+    evaluate(
+        models=["m"], case_ids=[_DEV_CASE_ID],
+        config_overrides={
+            "flags.usar_recomp_synthesis": not before[0],
+            "flags.usar_optimizacion_contexto": not before[1],
+        },
+        write_report=False,
+    )
+
+    assert observed == {
+        "usar_recomp_synthesis": not before[0],
+        "usar_optimizacion_contexto": not before[1],
+    }
+    # Restored once evaluate() returns.
+    assert (rag.chat_pdfs.USAR_RECOMP_SYNTHESIS, rag.chat_pdfs.USAR_OPTIMIZACION_CONTEXTO) == before
+
+
+def test_generation_flag_override_restores_on_exception_mid_evaluation(monkeypatch):
+    _capture_ensure_indexed(monkeypatch, [])
+    before = rag.chat_pdfs.get_pipeline_flags()
+
+    def _raise(*_a, **_kw):
+        raise RuntimeError("simulated failure mid-evaluation")
+
+    monkeypatch.setattr(run_eval, "run_all_cases", _raise)
+
+    with pytest.raises(RuntimeError, match="simulated failure"):
+        evaluate(
+            models=["m"], case_ids=[_DEV_CASE_ID],
+            config_overrides={"flags.usar_recomp_synthesis": not before["USAR_RECOMP_SYNTHESIS"]},
+            write_report=False,
+        )
+
+    assert rag.chat_pdfs.get_pipeline_flags() == before

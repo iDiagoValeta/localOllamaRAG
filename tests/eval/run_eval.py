@@ -823,6 +823,173 @@ def _update_baseline(pass_rate: float) -> None:
 
 # LIBRARY API
 
+# The dotted AppConfig keys evaluate()'s threaded config_overrides carries end
+# to end via _eval_app_config -> Retrieve / Answer.select_evidence /
+# IndexCorpus, all built from the SAME config object ensure_indexed produces.
+# Being a real AppConfig field is not sufficient on its own to belong here --
+# e.g. retrieval.min_question_length is a real field nothing in
+# src/monkeygrab reads; see _UNREACHABLE_CONFIG_OVERRIDE_REASONS. Two fields
+# are conditional: models.contextual and chunking.contextual_doc_chars only
+# take effect when flags.usar_contextual_retrieval is also overridden True
+# (ensure_indexed forces it False otherwise).
+_APPCONFIG_OVERRIDE_KEYS = frozenset({
+    "models.contextual",
+    "chunking.chunk_size",
+    "chunking.chunk_overlap",
+    "chunking.min_chunk_length",
+    "chunking.contextual_doc_chars",
+    "retrieval.n_semantic_results",
+    "retrieval.n_keyword_results",
+    "retrieval.top_k_rerank_candidates",
+    "retrieval.top_k_final",
+    "retrieval.n_top_for_expansion",
+    "retrieval.rrf_k",
+    "retrieval.bm25_k1",
+    "retrieval.bm25_b",
+    "retrieval.weight_semantic_rrf",
+    "retrieval.weight_bm25_rrf",
+    "reranking.score_threshold",
+    "context.max_context_chars",
+    "flags.usar_contextual_retrieval",
+    "flags.usar_embeddings_imagen",
+    "flags.usar_busqueda_hibrida",
+    "flags.usar_reranker",
+    "flags.expandir_contexto",
+})
+
+# Generation-side flags reachable only by scoping rag.chat_pdfs's runtime
+# globals for the duration of case execution (_generation_config_overrides):
+# generar_respuesta_silenciosa builds its own AppConfig per call via
+# wiring.app_config_from_runtime(), which reads these two flags straight from
+# rag.chat_pdfs -- the threaded config _eval_app_config builds never reaches
+# that call (see evaluate()'s docstring). Values are the exact
+# PIPELINE_RUNTIME_FLAGS name set_pipeline_flags expects. This is the
+# sanctioned use of repo rule 6 (don't flip pipeline flags without agreement):
+# scoped to one evaluate() call and restored on exit, per the owner's
+# authorization of block C (docs/design/2026-07-28-loop-automejorable.md
+# section 6.1) -- not a change to the product's own defaults.
+_GENERATION_FLAG_OVERRIDE_KEYS = {
+    "flags.usar_recomp_synthesis": "USAR_RECOMP_SYNTHESIS",
+    "flags.usar_optimizacion_contexto": "USAR_OPTIMIZACION_CONTEXTO",
+}
+
+# Known AppConfig fields evaluate() cannot honour end to end, with why -- so
+# the error _validate_config_overrides raises names the field instead of
+# leaving a caller to guess. A field missing from this dict still raises (via
+# the generic fallback message in _validate_config_overrides), just without a
+# specific reason -- this map is for a better message, not the source of
+# truth for what is rejected.
+_UNREACHABLE_CONFIG_OVERRIDE_REASONS = {
+    "models.rag": (
+        "generation uses the `models` parameter's per-case role switch; the "
+        "Answer object built from the threaded config is never invoked"
+    ),
+    "models.chat": "ensure_indexed hardcodes query_decomposer=None, so this role is never read",
+    "models.recomp": (
+        "reachable via the same runtime-setter mechanism as "
+        "flags.usar_recomp_synthesis, but not wired -- out of scope for this pass"
+    ),
+    "models.desc": "derived automatically from models.rag; nothing evaluate() runs reads it",
+    "models.ollama.rag_num_ctx": (
+        "AppConfig.with_overrides supports one level of section.field nesting; "
+        "models.ollama.* would need replacing the whole models.ollama object"
+    ),
+    "models.ollama.query_num_ctx": "see models.ollama.rag_num_ctx",
+    "models.ollama.recomp_num_ctx": "see models.ollama.rag_num_ctx",
+    "models.ollama.contextual_num_ctx": "see models.ollama.rag_num_ctx",
+    "models.ollama.request_timeout": "see models.ollama.rag_num_ctx",
+    "models.ollama.keep_alive": (
+        "see models.ollama.rag_num_ctx; run_eval.py scopes its own keep-alive "
+        "separately (_generation_keep_alive), unrelated to config_overrides"
+    ),
+    "models.ollama.generate_retries": "see models.ollama.rag_num_ctx",
+    "models.ollama.generate_retry_delay": "see models.ollama.rag_num_ctx",
+    "retrieval.min_question_length": "not read anywhere in src/monkeygrab -- Retrieve.run() has no question-length gate",
+    "flags.usar_llm_query_decomposition": (
+        "ensure_indexed hardcodes query_decomposer=None, so this flag can "
+        "never trigger decomposition regardless of its value"
+    ),
+    "flags.logging_metricas": "generar_respuesta_silenciosa never calls the debug-dump path this flag gates",
+    "flags.guardar_debug_rag": "generar_respuesta_silenciosa skips the debug dump entirely",
+    "paths.base_dir": "underlies every derived path; not something a candidate config should touch",
+    "paths.data_dir": "see paths.base_dir",
+    "paths.docs_folder": (
+        "_eval_app_config sets this to isolate the eval's FAISS collection "
+        "from the product's live store (see EVAL_DEV_LABEL); overriding it "
+        "risks reading or writing the wrong store"
+    ),
+    "paths.path_db": "see paths.docs_folder",
+    "paths.collection_name": "see paths.docs_folder",
+    "paths.historial_path": "CLI /chat history; unrelated to anything evaluate() runs",
+    "paths.max_historial_mensajes": "see paths.historial_path",
+    "paths.carpeta_debug_rag": "generar_respuesta_silenciosa skips the debug dump entirely",
+}
+
+
+def _validate_config_overrides(config_overrides: Optional[Mapping[str, Any]]) -> None:
+    """Raise on any config_overrides key evaluate() cannot honour end to end.
+
+    Silently accepting a key outside evaluate()'s reachable surface would let
+    a run change nothing while still reporting a pass rate -- the "measuring
+    instrument that lies" failure docs/design/2026-07-28-loop-automejorable.md
+    section 2 warns a search loop cannot recover from. See
+    _APPCONFIG_OVERRIDE_KEYS / _GENERATION_FLAG_OVERRIDE_KEYS for what IS
+    honoured, and by which route.
+
+    Args:
+        config_overrides: evaluate()'s config_overrides argument.
+
+    Raises:
+        ValueError: One or more keys are outside the honoured set, naming
+            each and, when known, why.
+    """
+    if not config_overrides:
+        return
+    honored = _APPCONFIG_OVERRIDE_KEYS | set(_GENERATION_FLAG_OVERRIDE_KEYS)
+    unreachable = {
+        key: _UNREACHABLE_CONFIG_OVERRIDE_REASONS.get(key, "not part of evaluate()'s honoured override surface")
+        for key in config_overrides
+        if key not in honored
+    }
+    if unreachable:
+        detail = "; ".join(f"{key!r}: {reason}" for key, reason in sorted(unreachable.items()))
+        raise ValueError(
+            f"config_overrides has {len(unreachable)} key(s) evaluate() cannot honour end to end: {detail}"
+        )
+
+
+@contextlib.contextmanager
+def _generation_config_overrides(rag, config_overrides: Optional[Mapping[str, Any]]):
+    """Scope _GENERATION_FLAG_OVERRIDE_KEYS onto rag.chat_pdfs's live globals.
+
+    generar_respuesta_silenciosa builds its own AppConfig per call via
+    wiring.app_config_from_runtime(), which reads these two flags straight
+    from rag.chat_pdfs -- the threaded config _eval_app_config builds never
+    reaches that call (see evaluate()'s docstring). Restoration runs in a
+    finally so a failed evaluation cannot leak an overridden flag into
+    whatever runs next in the same process.
+
+    Args:
+        rag: The imported rag.chat_pdfs module.
+        config_overrides: evaluate()'s config_overrides argument; only the
+            keys in _GENERATION_FLAG_OVERRIDE_KEYS are applied here -- the
+            rest were already validated (and rejected, if unreachable) by
+            _validate_config_overrides.
+    """
+    overrides = {
+        _GENERATION_FLAG_OVERRIDE_KEYS[key]: value
+        for key, value in (config_overrides or {}).items()
+        if key in _GENERATION_FLAG_OVERRIDE_KEYS
+    }
+    if not overrides:
+        yield
+        return
+    previous = rag.set_pipeline_flags(overrides)
+    try:
+        yield
+    finally:
+        rag.set_pipeline_flags({name: previous[name] for name in overrides})
+
 
 def evaluate(
     *,
@@ -849,18 +1016,19 @@ def evaluate(
             after loading, before any corpus is staged or indexed, so a
             subset that only touches one corpus (dev or blind) never forces
             the other one to be staged/indexed.
-        config_overrides: Dotted ``"section.field"`` overrides
-            (``AppConfig.with_overrides``) applied to the retrieval/indexing
-            ``AppConfig`` this run builds via ``_eval_app_config``.
-            Generation does not read this config: ``generar_respuesta_silenciosa``
-            builds its own ``AppConfig`` per call via
-            ``wiring.app_config_from_runtime()``, which reads model roles and
-            flags straight from ``rag.chat_pdfs``'s module globals and the
-            process environment (see ``_generation_keep_alive``'s
-            docstring). An override meant to change what the generator sees
-            has no effect through this parameter -- use
-            ``rag.set_model_roles_runtime`` / ``rag.set_pipeline_flags`` or
-            the matching env var instead.
+        config_overrides: Dotted ``"section.field"`` overrides. Only keys in
+            ``_APPCONFIG_OVERRIDE_KEYS`` (applied via ``AppConfig.with_overrides``
+            to the retrieval/indexing config ``_eval_app_config`` builds) or
+            ``_GENERATION_FLAG_OVERRIDE_KEYS`` (``flags.usar_recomp_synthesis``,
+            ``flags.usar_optimizacion_contexto`` -- scoped onto
+            ``rag.chat_pdfs``'s runtime globals for case execution via
+            ``_generation_config_overrides``, since
+            ``generar_respuesta_silenciosa`` builds its own ``AppConfig`` per
+            call via ``wiring.app_config_from_runtime()`` and never sees the
+            threaded one) are accepted; anything else raises ``ValueError``
+            naming the key rather than being silently ignored -- an override
+            with no observable effect would let a run report a pass rate for
+            a candidate it never actually measured.
         update_baseline: Raise ``baseline_min_pass_rate.txt`` to this run's
             pass rate minus ``BASELINE_MARGIN``, same as ``--update-baseline``
             -- only when the run is conclusive (no infrastructure errors);
@@ -886,7 +1054,8 @@ def evaluate(
         EvalSetupError: A prerequisite (Ollama, a required model, an index)
             is missing. Raised before any case runs, same as the CLI.
         ValueError: ``case_ids`` names an id that is not in
-            ``gold_cases.jsonl``.
+            ``gold_cases.jsonl``, or ``config_overrides`` names a key
+            evaluate() cannot honour end to end.
     """
     run_started = time.perf_counter()
 
@@ -897,6 +1066,7 @@ def evaluate(
         unknown = wanted - {c["id"] for c in cases}
         if unknown:
             raise ValueError(f"unknown gold case id(s): {sorted(unknown)}")
+    _validate_config_overrides(config_overrides)
 
     required_models = set(models) | {AUX_MODEL}
     stack_slug = "mineru-jina_clip-faiss"
@@ -956,9 +1126,10 @@ def evaluate(
             f"up to {len(models)} model(s)\n",
             flush=True,
         )
-        records = run_all_cases(
-            rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, models
-        )
+        with _generation_config_overrides(rag, config_overrides):
+            records = run_all_cases(
+                rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, models
+            )
     finally:
         for stack in stacks_to_close:
             closer = getattr(stack.embedder, "close", None)
