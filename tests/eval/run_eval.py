@@ -874,9 +874,9 @@ _GENERATION_FLAG_OVERRIDE_KEYS = {
 }
 
 # Known AppConfig fields evaluate() cannot honour end to end, with why -- so
-# the error _validate_config_overrides raises names the field instead of
+# the error validate_config_overrides raises names the field instead of
 # leaving a caller to guess. A field missing from this dict still raises (via
-# the generic fallback message in _validate_config_overrides), just without a
+# the generic fallback message in validate_config_overrides), just without a
 # specific reason -- this map is for a better message, not the source of
 # truth for what is rejected.
 _UNREACHABLE_CONFIG_OVERRIDE_REASONS = {
@@ -884,7 +884,10 @@ _UNREACHABLE_CONFIG_OVERRIDE_REASONS = {
         "generation uses the `models` parameter's per-case role switch; the "
         "Answer object built from the threaded config is never invoked"
     ),
-    "models.chat": "ensure_indexed hardcodes query_decomposer=None, so this role is never read",
+    "models.chat": (
+        "ensure_indexed hardcodes query_decomposer=None, so this role is "
+        "never read (see #64)"
+    ),
     "models.recomp": (
         "reachable via the same runtime-setter mechanism as "
         "flags.usar_recomp_synthesis, but not wired -- out of scope for this pass"
@@ -907,7 +910,7 @@ _UNREACHABLE_CONFIG_OVERRIDE_REASONS = {
     "retrieval.min_question_length": "not read anywhere in src/monkeygrab -- Retrieve.run() has no question-length gate",
     "flags.usar_llm_query_decomposition": (
         "ensure_indexed hardcodes query_decomposer=None, so this flag can "
-        "never trigger decomposition regardless of its value"
+        "never trigger decomposition regardless of its value (see #64)"
     ),
     "flags.logging_metricas": "generar_respuesta_silenciosa never calls the debug-dump path this flag gates",
     "flags.guardar_debug_rag": "generar_respuesta_silenciosa skips the debug dump entirely",
@@ -926,18 +929,24 @@ _UNREACHABLE_CONFIG_OVERRIDE_REASONS = {
 }
 
 
-def _validate_config_overrides(config_overrides: Optional[Mapping[str, Any]]) -> None:
+def validate_config_overrides(config_overrides: Optional[Mapping[str, Any]]) -> None:
     """Raise on any config_overrides key evaluate() cannot honour end to end.
+
+    Public so a caller (the block-C search harness) can validate its
+    declared search space against evaluate()'s actual reachable surface
+    without importing this module's private key sets -- evaluate() calls
+    this same function internally, so there is exactly one place this
+    contract is enforced.
 
     Silently accepting a key outside evaluate()'s reachable surface would let
     a run change nothing while still reporting a pass rate -- the "measuring
     instrument that lies" failure docs/design/2026-07-28-loop-automejorable.md
     section 2 warns a search loop cannot recover from. See
-    _APPCONFIG_OVERRIDE_KEYS / _GENERATION_FLAG_OVERRIDE_KEYS for what IS
-    honoured, and by which route.
+    describe_config_overrides() for the full map of what IS honoured, and by
+    which route.
 
     Args:
-        config_overrides: evaluate()'s config_overrides argument.
+        config_overrides: A candidate evaluate() config_overrides argument.
 
     Raises:
         ValueError: One or more keys are outside the honoured set, naming
@@ -958,6 +967,31 @@ def _validate_config_overrides(config_overrides: Optional[Mapping[str, Any]]) ->
         )
 
 
+def describe_config_overrides() -> Dict[str, Any]:
+    """Public map of evaluate()'s config_overrides surface, for a harness's
+    own startup reachability check against its declared search space.
+
+    Returns:
+        A dict with:
+            "honoured": ``{dotted_key: route}``, route one of
+                ``"appconfig"`` (threaded through _eval_app_config -- reaches
+                retrieval/indexing) or ``"runtime_setter"`` (scoped onto
+                rag.chat_pdfs's globals for case execution -- reaches
+                generation).
+            "unreachable": ``{dotted_key: reason}`` for every known field
+                validate_config_overrides rejects. A key present in AppConfig
+                but absent from both dicts here is a gap in this map, not a
+                third category -- see the equivalence test that pins the two
+                dicts against dataclasses.fields(AppConfig) recursively.
+    """
+    honored = {key: "appconfig" for key in _APPCONFIG_OVERRIDE_KEYS}
+    honored.update({key: "runtime_setter" for key in _GENERATION_FLAG_OVERRIDE_KEYS})
+    return {
+        "honoured": honored,
+        "unreachable": dict(_UNREACHABLE_CONFIG_OVERRIDE_REASONS),
+    }
+
+
 @contextlib.contextmanager
 def _generation_config_overrides(rag, config_overrides: Optional[Mapping[str, Any]]):
     """Scope _GENERATION_FLAG_OVERRIDE_KEYS onto rag.chat_pdfs's live globals.
@@ -974,7 +1008,7 @@ def _generation_config_overrides(rag, config_overrides: Optional[Mapping[str, An
         config_overrides: evaluate()'s config_overrides argument; only the
             keys in _GENERATION_FLAG_OVERRIDE_KEYS are applied here -- the
             rest were already validated (and rejected, if unreachable) by
-            _validate_config_overrides.
+            validate_config_overrides.
     """
     overrides = {
         _GENERATION_FLAG_OVERRIDE_KEYS[key]: value
@@ -989,6 +1023,31 @@ def _generation_config_overrides(rag, config_overrides: Optional[Mapping[str, An
         yield
     finally:
         rag.set_pipeline_flags({name: previous[name] for name in overrides})
+
+
+@contextlib.contextmanager
+def _scoped_model_roles(rag, overrides: Dict[str, str]):
+    """Apply model-role overrides to rag.chat_pdfs's globals for the
+    duration of the block, restoring the previous roles in a finally.
+
+    evaluate() sets the aux roles ("chat"/"contextual"/"recomp") once up
+    front, and run_factual_case (inside run_all_cases, called within this
+    block) reassigns "rag" per case/model on top of that -- both mutate the
+    same rag.chat_pdfs globals _generation_config_overrides already protects
+    for its two flags, and neither role change was being undone: a second
+    in-process evaluate() call inherited whichever roles the previous one
+    left behind.
+
+    Args:
+        rag: The imported rag.chat_pdfs module.
+        overrides: Passed straight to set_model_roles_runtime.
+    """
+    previous = rag.get_model_roles()
+    rag.set_model_roles_runtime(overrides)
+    try:
+        yield
+    finally:
+        rag.set_model_roles_runtime(previous)
 
 
 def evaluate(
@@ -1008,6 +1067,11 @@ def evaluate(
     stdout or a report file off disk. ``main()`` is a thin wrapper around
     this function: the CLI's own behavior (stdout, report file, exit code,
     baseline semantics) is unchanged by this refactor.
+
+    Not re-entrant and not thread-safe: it mutates rag.chat_pdfs's model-role
+    and pipeline-flag globals for its duration (restored on exit, including
+    on an exception) -- two overlapping calls in the same process corrupt
+    each other's restore.
 
     Args:
         models: Ollama generator models to evaluate.
@@ -1046,9 +1110,16 @@ def evaluate(
         ``None``), ``infrastructure_errors``, ``baseline_updated``,
         ``exit_code`` (what the CLI would have returned), ``report_path``
         (``str`` or ``None``), and ``config`` -- ``{"dev": ..., "blind":
-        ...}``, each the effective ``AppConfig`` as a plain dict
-        (``dataclasses.asdict``), or ``None`` if that corpus was never
-        staged/indexed for this run.
+        ...}``, each the retrieval/indexing ``AppConfig`` ``_eval_app_config``
+        built, as a plain dict (``dataclasses.asdict``), or ``None`` if that
+        corpus was never staged/indexed for this run. This is NOT the
+        authoritative record of the generator: fields
+        describe_config_overrides()'s "unreachable" map lists (notably
+        ``config[...]["models"]["rag"]``) reflect rag.chat_pdfs's state at
+        the moment ``_eval_app_config`` ran, not what actually generated any
+        answer -- read ``result["models"]`` (the generators this run
+        evaluated) and ``records[*]["model"]`` (which one produced that
+        record) instead.
 
     Raises:
         EvalSetupError: A prerequisite (Ollama, a required model, an index)
@@ -1066,9 +1137,20 @@ def evaluate(
         unknown = wanted - {c["id"] for c in cases}
         if unknown:
             raise ValueError(f"unknown gold case id(s): {sorted(unknown)}")
-    _validate_config_overrides(config_overrides)
+    validate_config_overrides(config_overrides)
 
     required_models = set(models) | {AUX_MODEL}
+    # An overridden models.contextual is otherwise invisible to preflight:
+    # ensure_indexed builds an OllamaChatModel from it unconditionally once
+    # flags.usar_contextual_retrieval is on, and IndexCorpus swallows that
+    # call's failure (an unpulled model raises there) into an empty
+    # situational-context string instead of aborting -- then writes a
+    # fingerprint claiming the enrichment succeeded. Every later run on the
+    # same corpus gets a cache hit on an index labelled enriched that isn't.
+    if config_overrides and config_overrides.get("flags.usar_contextual_retrieval"):
+        contextual_override = config_overrides.get("models.contextual")
+        if contextual_override:
+            required_models.add(contextual_override)
     stack_slug = "mineru-jina_clip-faiss"
 
     stacks_to_close = []
@@ -1080,56 +1162,56 @@ def evaluate(
         # after the cheap network/model preflight has already passed.
         import rag.chat_pdfs as rag
 
-        rag.set_model_roles_runtime({
-            "chat": AUX_MODEL, "contextual": AUX_MODEL, "recomp": AUX_MODEL,
-        })
+        with _scoped_model_roles(
+            rag, {"chat": AUX_MODEL, "contextual": AUX_MODEL, "recomp": AUX_MODEL}
+        ):
+            blind_required = stage_blind_papers(cases)
+            dev_required = set(_required_pdfs(cases, "corpus"))
 
-        blind_required = stage_blind_papers(cases)
-        dev_required = set(_required_pdfs(cases, "corpus"))
+            retrieve_dev = evidence_dev = stack_dev = None
+            retrieve_blind = evidence_blind = stack_blind = None
 
-        retrieve_dev = evidence_dev = stack_dev = None
-        retrieve_blind = evidence_blind = stack_blind = None
-
-        # Dev indexing is skipped, not just left idle, when a case_ids subset
-        # references no "corpus"-source case -- unlike the blind set, it was
-        # unconditional before case_ids existed, since the unfiltered run
-        # (main()'s only caller) always has at least one such case.
-        if dev_required:
-            retrieve_dev, evidence_dev, stack_dev = ensure_indexed(
-                rag, DEV_DOCS_DIR, dev_required, "dev set",
-                path_label=EVAL_DEV_LABEL, config_overrides=config_overrides,
-            )
-            stacks_to_close.append(stack_dev)
-            config_effective["dev"] = dataclasses.asdict(
-                _eval_app_config(
-                    rag, DEV_DOCS_DIR, path_label=EVAL_DEV_LABEL, config_overrides=config_overrides
+            # Dev indexing is skipped, not just left idle, when a case_ids
+            # subset references no "corpus"-source case -- unlike the blind
+            # set, it was unconditional before case_ids existed, since the
+            # unfiltered run (main()'s only caller) always has at least one
+            # such case.
+            if dev_required:
+                retrieve_dev, evidence_dev, stack_dev = ensure_indexed(
+                    rag, DEV_DOCS_DIR, dev_required, "dev set",
+                    path_label=EVAL_DEV_LABEL, config_overrides=config_overrides,
                 )
-            )
-        if blind_required:
-            retrieve_blind, evidence_blind, stack_blind = ensure_indexed(
-                rag, BLIND_DOCS_DIR, set(blind_required), "blind set",
-                config_overrides=config_overrides,
-            )
-            stacks_to_close.append(stack_blind)
-            config_effective["blind"] = dataclasses.asdict(
-                _eval_app_config(rag, BLIND_DOCS_DIR, config_overrides=config_overrides)
+                stacks_to_close.append(stack_dev)
+                config_effective["dev"] = dataclasses.asdict(
+                    _eval_app_config(
+                        rag, DEV_DOCS_DIR, path_label=EVAL_DEV_LABEL, config_overrides=config_overrides
+                    )
+                )
+            if blind_required:
+                retrieve_blind, evidence_blind, stack_blind = ensure_indexed(
+                    rag, BLIND_DOCS_DIR, set(blind_required), "blind set",
+                    config_overrides=config_overrides,
+                )
+                stacks_to_close.append(stack_blind)
+                config_effective["blind"] = dataclasses.asdict(
+                    _eval_app_config(rag, BLIND_DOCS_DIR, config_overrides=config_overrides)
+                )
+
+            verify_all_papers_indexed(
+                cases,
+                _sources_in_store(stack_dev.vector_store) if stack_dev else set(),
+                _sources_in_store(stack_blind.vector_store) if stack_blind else set(),
             )
 
-        verify_all_papers_indexed(
-            cases,
-            _sources_in_store(stack_dev.vector_store) if stack_dev else set(),
-            _sources_in_store(stack_blind.vector_store) if stack_blind else set(),
-        )
-
-        print(
-            f"\n[run] stack={stack_slug} {len(cases)} cases x "
-            f"up to {len(models)} model(s)\n",
-            flush=True,
-        )
-        with _generation_config_overrides(rag, config_overrides):
-            records = run_all_cases(
-                rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, models
+            print(
+                f"\n[run] stack={stack_slug} {len(cases)} cases x "
+                f"up to {len(models)} model(s)\n",
+                flush=True,
             )
+            with _generation_config_overrides(rag, config_overrides):
+                records = run_all_cases(
+                    rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, models
+                )
     finally:
         for stack in stacks_to_close:
             closer = getattr(stack.embedder, "close", None)

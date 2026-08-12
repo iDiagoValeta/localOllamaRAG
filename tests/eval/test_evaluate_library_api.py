@@ -11,6 +11,7 @@ staging, indexing, case execution) is faked, so no GPU, Ollama server or
 network access is needed to run these.
 """
 
+import dataclasses
 import json
 import sys
 from pathlib import Path
@@ -22,7 +23,24 @@ import pytest  # noqa: E402
 
 import rag.chat_pdfs  # noqa: E402,F401  (see module docstring)
 import run_eval  # noqa: E402
+from monkeygrab.config.app_config import AppConfig  # noqa: E402
 from run_eval import evaluate  # noqa: E402
+
+
+def _iter_appconfig_dotted_fields(obj=None, prefix=""):
+    """Yield every leaf dotted field path AppConfig actually has, recursing
+    into nested dataclass fields (e.g. models.ollama.keep_alive) -- the same
+    granularity tests/unit/test_app_config_defaults.py's _FIELD_MAP uses for
+    the same structure."""
+    if obj is None:
+        obj = AppConfig()
+    for f in dataclasses.fields(obj):
+        value = getattr(obj, f.name)
+        dotted = f"{prefix}{f.name}"
+        if dataclasses.is_dataclass(value):
+            yield from _iter_appconfig_dotted_fields(value, prefix=f"{dotted}.")
+        else:
+            yield dotted
 
 _DEV_CASE_ID = "att-bleu-ende"  # source: "corpus"
 _BLIND_CASE_ID = "resnet-top1-34layer"  # source: "arxiv"
@@ -74,24 +92,24 @@ def _capture_run_all_cases(monkeypatch, seen_cases):
 @pytest.fixture(autouse=True)
 def _stub_pipeline(monkeypatch):
     """Fake Ollama preflight, blind-set staging and the post-index paper
-    check, and neutralize the one call that mutates rag.chat_pdfs's real
-    module globals unconditionally -- evaluate() always calls
-    set_model_roles_runtime, and leaving that mutation in place would leak
-    into whatever test runs next in the same process (e.g.
-    tests/unit/test_app_config_defaults.py, which reads those same globals).
+    check.
 
-    Pipeline flags (set_pipeline_flags) are NOT neutralized here -- several
-    tests below exercise _generation_config_overrides, which calls the real
-    set_pipeline_flags on purpose. Snapshotting and restoring them instead
-    means a bug in that restoration shows up as THIS test's own assertions
-    failing, not as unrelated flakiness two files later.
+    Model roles (set_model_roles_runtime) and pipeline flags
+    (set_pipeline_flags) are NOT neutralized -- evaluate()'s own
+    _scoped_model_roles / _generation_config_overrides are what restore both
+    on exit now, and several tests below exercise that restoration on
+    purpose. Snapshotting and restoring both here as well means a bug in
+    evaluate()'s own restoration shows up as THIS test's own assertions
+    failing, not as unrelated flakiness two files later (e.g.
+    tests/unit/test_app_config_defaults.py, which reads these same globals).
     """
     monkeypatch.setattr(run_eval, "preflight_ollama", lambda *_a, **_kw: None)
     monkeypatch.setattr(run_eval, "stage_blind_papers", lambda cases: {})
     monkeypatch.setattr(run_eval, "verify_all_papers_indexed", lambda *_a, **_kw: None)
-    monkeypatch.setattr(rag.chat_pdfs, "set_model_roles_runtime", lambda *_a, **_kw: None)
+    previous_roles = rag.chat_pdfs.get_model_roles()
     previous_flags = rag.chat_pdfs.get_pipeline_flags()
     yield
+    rag.chat_pdfs.set_model_roles_runtime(previous_roles)
     rag.chat_pdfs.set_pipeline_flags(previous_flags)
 
 
@@ -276,16 +294,51 @@ def test_config_overrides_rejects_every_unreachable_key_by_name(monkeypatch):
     assert "models.ollama.keep_alive" in message
 
 
-def test_config_overrides_accepts_every_key_evaluate_claims_to_honour(monkeypatch):
-    """_APPCONFIG_OVERRIDE_KEYS / _GENERATION_FLAG_OVERRIDE_KEYS is the map
-    reported alongside this test; this pins that _validate_config_overrides
-    agrees with it (a key present in the map but rejected here would be a
-    silent regression the map itself would not catch)."""
-    _capture_ensure_indexed(monkeypatch, [])
-    _capture_run_all_cases(monkeypatch, [])
-    honored = run_eval._APPCONFIG_OVERRIDE_KEYS | set(run_eval._GENERATION_FLAG_OVERRIDE_KEYS)
+def test_config_override_key_sets_are_complete_and_every_honoured_key_is_real():
+    """Pins the classification the PR's reachability map is built from,
+    against a future AppConfig field being added, renamed or reclassified.
 
-    run_eval._validate_config_overrides({key: None for key in honored})  # must not raise
+    The previous version of this test fed
+    ``_APPCONFIG_OVERRIDE_KEYS | _GENERATION_FLAG_OVERRIDE_KEYS`` straight
+    into a validator whose entire job is membership in that same set --
+    S subseteq S, structurally unable to fail. This checks the actual
+    claims instead: every honoured key is a real AppConfig field that
+    survives ``with_overrides`` (not just a plausible-looking string), and
+    honoured + unreachable together cover every field AppConfig has -- no
+    field silently unclassified, none claimed twice.
+    """
+    honored = run_eval._APPCONFIG_OVERRIDE_KEYS | set(run_eval._GENERATION_FLAG_OVERRIDE_KEYS)
+    unreachable = set(run_eval._UNREACHABLE_CONFIG_OVERRIDE_REASONS)
+    all_fields = set(_iter_appconfig_dotted_fields())
+
+    assert honored & unreachable == set(), "a key cannot be both honoured and unreachable"
+    assert honored | unreachable == all_fields, (
+        f"map/AppConfig drift -- missing: {all_fields - (honored | unreachable)}, "
+        f"stale: {(honored | unreachable) - all_fields}"
+    )
+
+    run_eval.validate_config_overrides({key: None for key in honored})  # must not raise
+
+    default = AppConfig()
+    for key in honored:
+        section, field = key.split(".", 1)
+        current_value = getattr(getattr(default, section), field)
+        updated = default.with_overrides(**{key: current_value})
+        assert getattr(getattr(updated, section), field) == current_value
+
+
+def test_describe_config_overrides_matches_the_internal_classification():
+    """describe_config_overrides() is the public accessor a harness uses
+    instead of importing the underscore-private key sets directly; this
+    pins that it actually reflects them."""
+    described = run_eval.describe_config_overrides()
+
+    assert set(described["honoured"]) == (
+        run_eval._APPCONFIG_OVERRIDE_KEYS | set(run_eval._GENERATION_FLAG_OVERRIDE_KEYS)
+    )
+    assert set(described["unreachable"]) == set(run_eval._UNREACHABLE_CONFIG_OVERRIDE_REASONS)
+    assert described["honoured"]["retrieval.top_k_final"] == "appconfig"
+    assert described["honoured"]["flags.usar_recomp_synthesis"] == "runtime_setter"
 
 
 def test_generation_flag_override_reaches_rag_chat_pdfs_during_case_execution(monkeypatch):
@@ -339,3 +392,87 @@ def test_generation_flag_override_restores_on_exception_mid_evaluation(monkeypat
         )
 
     assert rag.chat_pdfs.get_pipeline_flags() == before
+
+
+def test_model_roles_change_during_the_run_and_are_restored_after(monkeypatch):
+    """run_factual_case reassigns the "rag" role per case/model on top of
+    evaluate()'s own aux-role assignment -- both must be undone once
+    evaluate() returns, not just the aux one. Asserts the change actually
+    happened first, so this cannot pass vacuously if a future default
+    happens to already match."""
+    _capture_ensure_indexed(monkeypatch, [])
+    observed = {}
+
+    def _fake_run_all_cases(rag_module, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, models):
+        rag_module.set_model_roles_runtime({"rag": models[0]})
+        observed["during"] = rag_module.get_model_roles()
+        return []
+
+    monkeypatch.setattr(run_eval, "run_all_cases", _fake_run_all_cases)
+    before = rag.chat_pdfs.get_model_roles()
+
+    evaluate(models=["a-generator-nobody-defaults-to"], case_ids=[_DEV_CASE_ID], write_report=False)
+
+    assert observed["during"] != before
+    assert rag.chat_pdfs.get_model_roles() == before
+
+
+def test_model_roles_restore_on_exception_mid_evaluation(monkeypatch):
+    _capture_ensure_indexed(monkeypatch, [])
+    before = rag.chat_pdfs.get_model_roles()
+
+    def _raise(*_a, **_kw):
+        raise RuntimeError("simulated failure mid-evaluation")
+
+    monkeypatch.setattr(run_eval, "run_all_cases", _raise)
+
+    with pytest.raises(RuntimeError, match="simulated failure"):
+        evaluate(models=["m"], case_ids=[_DEV_CASE_ID], write_report=False)
+
+    assert rag.chat_pdfs.get_model_roles() == before
+
+
+def test_models_contextual_override_is_preflighted_when_contextual_retrieval_is_on(monkeypatch):
+    """HIGH finding: an overridden models.contextual that preflight never
+    sees lets ensure_indexed call an unpulled model, whose swallowed
+    RuntimeError (IndexCorpus._generate_situational_context) writes an empty
+    situational context under a fingerprint that claims enrichment
+    succeeded -- a silent, cached lie. required_models must include the
+    override whenever contextual retrieval will actually be on."""
+    preflight_calls = []
+    monkeypatch.setattr(
+        run_eval, "preflight_ollama", lambda required: preflight_calls.append(set(required))
+    )
+    _capture_ensure_indexed(monkeypatch, [])
+    _capture_run_all_cases(monkeypatch, [])
+
+    evaluate(
+        models=["m"], case_ids=[_DEV_CASE_ID],
+        config_overrides={
+            "flags.usar_contextual_retrieval": True,
+            "models.contextual": "definitely-not-pulled:0b",
+        },
+        write_report=False,
+    )
+
+    assert preflight_calls == [{"m", run_eval.AUX_MODEL, "definitely-not-pulled:0b"}]
+
+
+def test_models_contextual_override_not_preflighted_when_contextual_retrieval_stays_off(monkeypatch):
+    """The override is still honoured in the threaded AppConfig (see the map:
+    models.contextual only takes effect when usar_contextual_retrieval is
+    also True) -- preflight has nothing to add when that never happens."""
+    preflight_calls = []
+    monkeypatch.setattr(
+        run_eval, "preflight_ollama", lambda required: preflight_calls.append(set(required))
+    )
+    _capture_ensure_indexed(monkeypatch, [])
+    _capture_run_all_cases(monkeypatch, [])
+
+    evaluate(
+        models=["m"], case_ids=[_DEV_CASE_ID],
+        config_overrides={"models.contextual": "definitely-not-pulled:0b"},
+        write_report=False,
+    )
+
+    assert preflight_calls == [{"m", run_eval.AUX_MODEL}]
