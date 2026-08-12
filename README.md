@@ -170,7 +170,7 @@ The rest of the stack is not an Ollama model:
 
 > [!NOTE]
 > MinerU is an external CLI, and `jina_clip` runs in an isolated interpreter
-> because its dependencies
+> that requires a CUDA GPU, because its dependencies
 > conflict with the product's — see [`src/monkeygrab/README.md`](src/monkeygrab/README.md).
 
 ---

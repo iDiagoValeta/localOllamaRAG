@@ -15,7 +15,6 @@ partial output.
 
 import base64
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -164,12 +163,40 @@ def test_default_mineru_bin_reads_the_mineru_bin_env_var(monkeypatch, tmp_path):
     assert module._default_mineru_bin() == str(bin_path)
 
 
-def test_default_mineru_bin_falls_back_to_the_project_venv(monkeypatch):
+def test_default_mineru_bin_falls_back_to_the_windows_venv_layout(monkeypatch, tmp_path):
+    """Windows layout is probed first, mirroring composition._isolated_python."""
     monkeypatch.delenv("MINERU_BIN", raising=False)
+    monkeypatch.setattr(module, "_PROJECT_ROOT", str(tmp_path))
+    windows_bin = tmp_path / ".venv-mineru" / "Scripts" / "mineru.exe"
+    windows_bin.parent.mkdir(parents=True)
+    windows_bin.write_text("fake binary", encoding="utf-8")
 
-    resolved = module._default_mineru_bin()
+    assert module._default_mineru_bin() == str(windows_bin)
 
-    assert resolved.endswith(os.path.join(".venv-mineru", "Scripts", "mineru.exe"))
+
+def test_default_mineru_bin_falls_back_to_the_posix_venv_layout(monkeypatch, tmp_path):
+    """Non-Windows layout: only ``.venv-mineru/bin/mineru`` exists.
+
+    Driven by creating (or not creating) files under a monkeypatched
+    ``_PROJECT_ROOT`` rather than the host OS, since this suite runs on
+    Windows -- the Windows candidate is deliberately absent so the function
+    must fall through to the POSIX one.
+    """
+    monkeypatch.delenv("MINERU_BIN", raising=False)
+    monkeypatch.setattr(module, "_PROJECT_ROOT", str(tmp_path))
+    posix_bin = tmp_path / ".venv-mineru" / "bin" / "mineru"
+    posix_bin.parent.mkdir(parents=True)
+    posix_bin.write_text("fake binary", encoding="utf-8")
+
+    assert module._default_mineru_bin() == str(posix_bin)
+
+
+def test_default_mineru_bin_raises_when_neither_venv_layout_exists(monkeypatch, tmp_path):
+    monkeypatch.delenv("MINERU_BIN", raising=False)
+    monkeypatch.setattr(module, "_PROJECT_ROOT", str(tmp_path))
+
+    with pytest.raises(RuntimeError, match="MinerU binary not found"):
+        module._default_mineru_bin()
 
 
 def test_missing_binary_raises_an_actionable_error(tmp_path):
