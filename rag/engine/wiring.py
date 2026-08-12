@@ -98,11 +98,11 @@ def reset_vector_store_cache() -> None:
 def embedder(config: AppConfig):
     """Return the reusable jina-clip-v2 worker.
 
-    Double-checked locking: building this spins up a worker subprocess and
-    loads a full model onto the GPU (~29s), so two concurrent first callers
-    must not both build one -- the loser would be orphaned, since its own
-    stdout/stderr pump threads keep it alive with nothing left to close it
-    (see #46).
+    Double-checked locking: two concurrent first callers must not both
+    construct one, since each duplicate later starts its own worker
+    subprocess and loads jina-clip on first use (~29s), and the losing
+    instance is unreachable yet pinned alive by its own stdout/stderr pump
+    threads once its worker has started, so nothing ever closes it (#46).
     """
     if _embedder_cache["embedder"] is None:
         with _embedder_cache_lock:
@@ -226,9 +226,10 @@ def reranker(config: AppConfig) -> CrossEncoderReranker:
     weights each time. The fixed BGE adapter loads lazily, so holding one costs
     nothing until something is actually reranked.
 
-    Double-checked locking: two concurrent first callers must not both load
-    the weights -- that's hundreds of megabytes loaded twice on a shared GPU
-    (#46).
+    Double-checked locking: two concurrent first callers must not both
+    construct one, since each duplicate would separately load hundreds of
+    megabytes of weights on first ``rerank()`` call, competing for the same
+    GPU (#46).
 
     Args:
         config: Current pipeline configuration.
