@@ -86,9 +86,10 @@ _BUILTIN_STORES = {
     "ca": "Valencià",
 }
 
-# Ollama runtime control. The ollama client honours OLLAMA_HOST itself; we use
-# the same value for the version/start probes exposed to the control panel.
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
+# Ollama runtime control. Taken from the engine rather than re-read from the
+# environment so the endpoint the control panel probes is the one the pipeline
+# generates against; resolving it twice is how the two used to disagree.
+OLLAMA_BASE_URL = rag_engine.OLLAMA_BASE_URL
 _model_caps_cache: dict = {}  # digest -> capabilities list
 
 # Persisted UI choices (model roles, active store, pipeline flags) so the desktop
@@ -214,14 +215,14 @@ def _chat_stream(pregunta: str) -> Generator[str, None, None]:
     Yields:
         Token strings as they are produced by the model.
     """
-    import ollama
+    from monkeygrab.adapters.chat.ollama_chat import ollama_client_for
 
     messages = [{"role": "system", "content": rag_engine.SYSTEM_PROMPT_CHAT}]
     mensajes_recientes = _state["historial_chat"][-(rag_engine.MAX_HISTORIAL_MENSAJES):]
     messages.extend(mensajes_recientes)
     messages.append({"role": "user", "content": pregunta})
 
-    stream = ollama.chat(
+    stream = ollama_client_for(OLLAMA_BASE_URL).chat(
         model=rag_engine.MODELO_CHAT,
         messages=messages,
         stream=True,
@@ -315,7 +316,7 @@ def _collection_document_details(coll) -> list:
 def _ollama_version() -> Optional[str]:
     """Return the running Ollama version string, or ``None`` if unreachable."""
     try:
-        r = requests.get(f"{OLLAMA_HOST}/api/version", timeout=2)
+        r = requests.get(f"{OLLAMA_BASE_URL}/api/version", timeout=2)
         if r.ok:
             return r.json().get("version")
     except requests.RequestException:
@@ -326,7 +327,7 @@ def _ollama_version() -> Optional[str]:
 def _ollama_capabilities(name: str) -> list:
     """Best-effort capability list (``embedding``/``vision``/...) for a model."""
     try:
-        r = requests.post(f"{OLLAMA_HOST}/api/show", json={"model": name}, timeout=5)
+        r = requests.post(f"{OLLAMA_BASE_URL}/api/show", json={"model": name}, timeout=5)
         if r.ok:
             return r.json().get("capabilities") or []
     except requests.RequestException:
@@ -340,7 +341,7 @@ def _ollama_models() -> list:
     Capabilities come from ``/api/show`` and are cached by digest so repeated
     panel refreshes stay cheap.
     """
-    r = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=5)
+    r = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
     r.raise_for_status()
     models = []
     for m in r.json().get("models", []):
@@ -1118,7 +1119,7 @@ def api_settings_post():
 def api_ollama_status():
     """Report whether the local Ollama server is reachable."""
     version = _ollama_version()
-    return jsonify({"ok": True, "running": version is not None, "version": version, "host": OLLAMA_HOST})
+    return jsonify({"ok": True, "running": version is not None, "version": version, "host": OLLAMA_BASE_URL})
 
 
 @app.route("/api/ollama/start", methods=["POST"])

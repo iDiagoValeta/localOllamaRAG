@@ -5,13 +5,16 @@ from typing import Optional, Set
 
 import requests
 
+from monkeygrab.config.env import DEFAULT_OLLAMA_BASE_URL
 from monkeygrab.config.models import ModelsConfig
 
 # Not subclassed from monkeygrab.ports.model_unloader.ModelUnloader: Protocol
 # conformance here is structural (duck typing), the same contract every other
 # adapter in this package satisfies without inheriting its port.
 
-_DEFAULT_BASE_URL = "http://localhost:11434"
+# Only the fallback for a caller that names no endpoint; the pipeline always
+# passes config.models.ollama.base_url, which is where OLLAMA_BASE_URL lands.
+_DEFAULT_BASE_URL = DEFAULT_OLLAMA_BASE_URL
 
 
 class OllamaModelUnloader:

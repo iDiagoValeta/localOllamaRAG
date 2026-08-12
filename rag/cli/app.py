@@ -218,14 +218,14 @@ class MonkeyGrabCLI:
         Returns:
             The full assembled response text.
         """
-        import ollama
+        from monkeygrab.adapters.chat.ollama_chat import ollama_client_for
 
         messages = [{"role": "system", "content": self.rag.SYSTEM_PROMPT_CHAT}]
         mensajes_recientes = self.historial_chat[-(self.rag.MAX_HISTORIAL_MENSAJES):]
         messages.extend(mensajes_recientes)
         messages.append({"role": "user", "content": pregunta})
 
-        stream = ollama.chat(
+        stream = ollama_client_for(self.rag.OLLAMA_BASE_URL).chat(
             model=self.rag.MODELO_CHAT,
             messages=messages,
             stream=True,
@@ -602,11 +602,11 @@ class MonkeyGrabCLI:
         reported once at startup without blocking the rest of initialization,
         so the user understands why later calls will fail.
         """
-        base = (
-            os.getenv("OLLAMA_BASE_URL")
-            or getattr(self.rag, "OLLAMA_BASE_URL", None)
-            or "http://localhost:11434"
-        )
+        # Read off the engine rather than the environment: the engine already
+        # resolved OLLAMA_BASE_URL/OLLAMA_HOST into the endpoint its adapters
+        # generate against, and re-reading the raw variable here is how this
+        # check used to report a server the pipeline never talked to.
+        base = getattr(self.rag, "OLLAMA_BASE_URL", None) or "http://localhost:11434"
         try:
             import requests
             r = requests.get(f"{base}/api/tags", timeout=timeout)

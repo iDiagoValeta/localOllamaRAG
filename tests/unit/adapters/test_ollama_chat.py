@@ -1,7 +1,7 @@
 """Unit tests for monkeygrab.adapters.chat.ollama_chat.OllamaChatModel.
 
-Stubs ollama.chat and requests.post entirely -- no Ollama server, no network
--- so these run in milliseconds.
+Stubs the ollama client and requests.post entirely -- no Ollama server, no
+network -- so these run in milliseconds.
 """
 
 import logging
@@ -19,12 +19,28 @@ from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel
 from monkeygrab.domain.generation_chunk import GenerationChunk
 
 
+def _stub_chat(monkeypatch, calls, content="", error=None):
+    """Replace the cached client factory with one recording every chat call.
+
+    Each recorded call carries the ``host`` its client was built for, so a test
+    can assert which server the adapter would have talked to.
+    """
+    class _FakeClient:
+        def __init__(self, host):
+            self._host = host
+
+        def chat(self, **kwargs):
+            calls.append({**kwargs, "host": self._host})
+            if error is not None:
+                raise error
+            return {"message": {"content": content}}
+
+    monkeypatch.setattr(module, "ollama_client_for", _FakeClient)
+
+
 def test_generate_uses_the_injected_model_and_num_ctx_not_frozen_defaults(monkeypatch):
     calls = []
-    monkeypatch.setattr(
-        module.ollama, "chat",
-        lambda **kwargs: calls.append(kwargs) or {"message": {"content": "answer"}},
-    )
+    _stub_chat(monkeypatch, calls, content="answer")
 
     chat_model = OllamaChatModel(
         "my-role-model:latest", num_ctx=1234, options={"temperature": 0.5}
@@ -39,22 +55,28 @@ def test_generate_uses_the_injected_model_and_num_ctx_not_frozen_defaults(monkey
 
 def test_generate_always_disables_thinking(monkeypatch):
     calls = []
-    monkeypatch.setattr(
-        module.ollama, "chat",
-        lambda **kwargs: calls.append(kwargs) or {"message": {"content": ""}},
-    )
+    _stub_chat(monkeypatch, calls)
 
     OllamaChatModel("m", num_ctx=100).generate("hello")
 
     assert calls[0]["think"] is False
 
 
+def test_generate_talks_to_the_configured_base_url(monkeypatch):
+    """Single-shot generation (RECOMP, query decomposition, contextual
+    enrichment) must reach the same server streaming does -- it used to go
+    wherever the client's ambient OLLAMA_HOST pointed."""
+    calls = []
+    _stub_chat(monkeypatch, calls)
+
+    OllamaChatModel("m", num_ctx=100, base_url="http://gpu-box:11434").generate("hello")
+
+    assert calls[0]["host"] == "http://gpu-box:11434"
+
+
 def test_generate_puts_the_system_prompt_first(monkeypatch):
     calls = []
-    monkeypatch.setattr(
-        module.ollama, "chat",
-        lambda **kwargs: calls.append(kwargs) or {"message": {"content": ""}},
-    )
+    _stub_chat(monkeypatch, calls)
 
     OllamaChatModel("m", num_ctx=100).generate("question", system="be concise")
 
@@ -66,10 +88,7 @@ def test_generate_puts_the_system_prompt_first(monkeypatch):
 
 def test_generate_without_system_sends_a_single_user_message(monkeypatch):
     calls = []
-    monkeypatch.setattr(
-        module.ollama, "chat",
-        lambda **kwargs: calls.append(kwargs) or {"message": {"content": ""}},
-    )
+    _stub_chat(monkeypatch, calls)
 
     OllamaChatModel("m", num_ctx=100).generate("question")
 
@@ -80,10 +99,7 @@ def test_generate_base64_encodes_images(monkeypatch):
     import base64
 
     calls = []
-    monkeypatch.setattr(
-        module.ollama, "chat",
-        lambda **kwargs: calls.append(kwargs) or {"message": {"content": ""}},
-    )
+    _stub_chat(monkeypatch, calls)
 
     OllamaChatModel("m", num_ctx=100).generate("describe this", images=[b"\x89PNG raw bytes"])
 
@@ -92,10 +108,7 @@ def test_generate_base64_encodes_images(monkeypatch):
 
 
 def test_generate_hard_fails_on_ollama_error(monkeypatch):
-    monkeypatch.setattr(
-        module.ollama, "chat",
-        lambda **kwargs: (_ for _ in ()).throw(ConnectionError("ollama down")),
-    )
+    _stub_chat(monkeypatch, [], error=ConnectionError("ollama down"))
 
     with pytest.raises(RuntimeError, match="ollama down"):
         OllamaChatModel("m", num_ctx=100).generate("hello")
@@ -140,6 +153,21 @@ def test_stream_uses_the_injected_model_and_num_ctx(monkeypatch):
     assert calls[0]["json"]["options"]["num_ctx"] == 777
     assert calls[0]["timeout"] == 42
     assert calls[0]["json"]["think"] is False
+
+
+def test_stream_posts_to_the_configured_base_url(monkeypatch):
+    calls = []
+    import json as jsonlib
+
+    def fake_post(url, json, stream, timeout):
+        calls.append(url)
+        return _FakeStreamResponse([jsonlib.dumps({"response": "hi", "done": True}).encode()])
+
+    monkeypatch.setattr(module.requests, "post", fake_post)
+
+    list(OllamaChatModel("m", num_ctx=100, base_url="http://gpu-box:11434").stream("prompt"))
+
+    assert calls == ["http://gpu-box:11434/api/generate"]
 
 
 def test_stream_yields_a_generation_chunk_per_line_including_the_empty_done_line(monkeypatch):

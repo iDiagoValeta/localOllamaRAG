@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from monkeygrab.config.env import DEFAULT_OLLAMA_BASE_URL
+
 
 @dataclass(frozen=True)
 class OllamaRuntimeConfig:
@@ -13,6 +15,7 @@ class OllamaRuntimeConfig:
     keep_alive: int = 0
     generate_retries: int = 2
     generate_retry_delay: int = 3
+    base_url: str = DEFAULT_OLLAMA_BASE_URL
 
 
 @dataclass(frozen=True)
