@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import dataclasses
 import json
 import math
 import os
@@ -39,7 +40,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 # CONSTANTS
 
@@ -250,6 +251,7 @@ def ensure_indexed(
     required_pdfs: Iterable[str],
     label: str,
     path_label: Optional[Path] = None,
+    config_overrides: Optional[Mapping[str, Any]] = None,
 ):
     """Index missing PDFs into the multimodal stack; return its use cases.
 
@@ -260,10 +262,14 @@ def ensure_indexed(
         label: Short name for log lines ("dev set", "blind set").
         path_label: Forwarded to _eval_app_config to isolate the FAISS
             collection from carpeta's own basename (see EVAL_DEV_LABEL).
+        config_overrides: Forwarded to _eval_app_config -- lets evaluate()
+            reshape the retrieval/indexing AppConfig for this corpus without
+            mutating rag's module globals.
 
     Returns:
-        ``(Retrieve, Stack)`` for this corpus. Caller should ``close()`` the
-        stack embedder when finished if it exposes that method.
+        ``(Retrieve, Answer, Stack)`` for this corpus. Caller should
+        ``close()`` the stack embedder when finished if it exposes that
+        method.
 
     Raises:
         EvalSetupError: A required PDF is still missing after indexing.
@@ -281,7 +287,9 @@ def ensure_indexed(
     required = set(required_pdfs)
     rag.set_docs_folder_runtime(str(carpeta))
     try:
-        config = _eval_app_config(rag, carpeta, path_label=path_label)
+        config = _eval_app_config(
+            rag, carpeta, path_label=path_label, config_overrides=config_overrides
+        )
         stack = build_stack(config)
         store = stack.vector_store
         expected_fingerprint = compute_index_fingerprint(config)
@@ -417,7 +425,12 @@ def _fragment_to_dict(fragment) -> Dict[str, Any]:
     return fragment_to_dict(fragment)
 
 
-def _eval_app_config(rag, carpeta: Path, path_label: Optional[Path] = None):
+def _eval_app_config(
+    rag,
+    carpeta: Path,
+    path_label: Optional[Path] = None,
+    config_overrides: Optional[Mapping[str, Any]] = None,
+):
     """Build the fixed multimodal evaluation configuration.
 
     Args:
@@ -427,6 +440,11 @@ def _eval_app_config(rag, carpeta: Path, path_label: Optional[Path] = None):
             name from this path's basename instead of carpeta's, without
             changing which folder is actually indexed. See EVAL_DEV_LABEL for
             why the dev set needs this and the blind set does not.
+        config_overrides: Dotted ``"section.field"`` overrides applied last,
+            on top of every override above -- lets a caller (evaluate())
+            reshape the retrieval/indexing config without touching rag's
+            module globals. Does not reach generation's own config; see
+            evaluate()'s docstring for why that path is separate.
     """
     from monkeygrab.config.app_config import AppConfig
     from monkeygrab.config.paths import derive_db_paths
@@ -454,6 +472,8 @@ def _eval_app_config(rag, carpeta: Path, path_label: Optional[Path] = None):
         config = config.with_overrides(
             **{"paths.path_db": path_db, "paths.collection_name": collection_name}
         )
+    if config_overrides:
+        config = config.with_overrides(**config_overrides)
     return config
 
 
@@ -801,6 +821,480 @@ def _update_baseline(pass_rate: float) -> None:
     print(f"[baseline] {verb} to {candidate:.2f} (observed {pass_rate:.4f} minus {BASELINE_MARGIN:.2f} margin)")
 
 
+# LIBRARY API
+
+# The dotted AppConfig keys evaluate()'s threaded config_overrides carries end
+# to end via _eval_app_config -> Retrieve / Answer.select_evidence /
+# IndexCorpus, all built from the SAME config object ensure_indexed produces.
+# Being a real AppConfig field is not sufficient on its own to belong here --
+# e.g. retrieval.min_question_length is a real field nothing in
+# src/monkeygrab reads; see _UNREACHABLE_CONFIG_OVERRIDE_REASONS. Two fields
+# are conditional: models.contextual and chunking.contextual_doc_chars only
+# take effect when flags.usar_contextual_retrieval is also overridden True
+# (ensure_indexed forces it False otherwise).
+_APPCONFIG_OVERRIDE_KEYS = frozenset({
+    "models.contextual",
+    "chunking.chunk_size",
+    "chunking.chunk_overlap",
+    "chunking.min_chunk_length",
+    "chunking.contextual_doc_chars",
+    "retrieval.n_semantic_results",
+    "retrieval.n_keyword_results",
+    "retrieval.top_k_rerank_candidates",
+    "retrieval.top_k_final",
+    "retrieval.n_top_for_expansion",
+    "retrieval.rrf_k",
+    "retrieval.bm25_k1",
+    "retrieval.bm25_b",
+    "retrieval.weight_semantic_rrf",
+    "retrieval.weight_bm25_rrf",
+    "reranking.score_threshold",
+    "context.max_context_chars",
+    "flags.usar_contextual_retrieval",
+    "flags.usar_embeddings_imagen",
+    "flags.usar_busqueda_hibrida",
+    "flags.usar_reranker",
+    "flags.expandir_contexto",
+})
+
+# Generation-side flags reachable only by scoping rag.chat_pdfs's runtime
+# globals for the duration of case execution (_generation_config_overrides):
+# generar_respuesta_silenciosa builds its own AppConfig per call via
+# wiring.app_config_from_runtime(), which reads these two flags straight from
+# rag.chat_pdfs -- the threaded config _eval_app_config builds never reaches
+# that call (see evaluate()'s docstring). Values are the exact
+# PIPELINE_RUNTIME_FLAGS name set_pipeline_flags expects. This is the
+# sanctioned use of repo rule 6 (don't flip pipeline flags without agreement):
+# scoped to one evaluate() call and restored on exit, per the owner's
+# authorization of block C (docs/design/2026-07-28-loop-automejorable.md
+# section 6.1) -- not a change to the product's own defaults.
+_GENERATION_FLAG_OVERRIDE_KEYS = {
+    "flags.usar_recomp_synthesis": "USAR_RECOMP_SYNTHESIS",
+    "flags.usar_optimizacion_contexto": "USAR_OPTIMIZACION_CONTEXTO",
+}
+
+# Known AppConfig fields evaluate() cannot honour end to end, with why -- so
+# the error validate_config_overrides raises names the field instead of
+# leaving a caller to guess. A field missing from this dict still raises (via
+# the generic fallback message in validate_config_overrides), just without a
+# specific reason -- this map is for a better message, not the source of
+# truth for what is rejected.
+_UNREACHABLE_CONFIG_OVERRIDE_REASONS = {
+    "models.rag": (
+        "generation uses the `models` parameter's per-case role switch; the "
+        "Answer object built from the threaded config is never invoked"
+    ),
+    "models.chat": (
+        "ensure_indexed hardcodes query_decomposer=None, so this role is "
+        "never read (see #64)"
+    ),
+    "models.recomp": (
+        "reachable via the same runtime-setter mechanism as "
+        "flags.usar_recomp_synthesis, but not wired -- out of scope for this pass"
+    ),
+    "models.desc": "derived automatically from models.rag; nothing evaluate() runs reads it",
+    "models.ollama.rag_num_ctx": (
+        "AppConfig.with_overrides supports one level of section.field nesting; "
+        "models.ollama.* would need replacing the whole models.ollama object"
+    ),
+    "models.ollama.query_num_ctx": "see models.ollama.rag_num_ctx",
+    "models.ollama.recomp_num_ctx": "see models.ollama.rag_num_ctx",
+    "models.ollama.contextual_num_ctx": "see models.ollama.rag_num_ctx",
+    "models.ollama.request_timeout": "see models.ollama.rag_num_ctx",
+    "models.ollama.keep_alive": (
+        "see models.ollama.rag_num_ctx; run_eval.py scopes its own keep-alive "
+        "separately (_generation_keep_alive), unrelated to config_overrides"
+    ),
+    "models.ollama.generate_retries": "see models.ollama.rag_num_ctx",
+    "models.ollama.generate_retry_delay": "see models.ollama.rag_num_ctx",
+    "retrieval.min_question_length": "not read anywhere in src/monkeygrab -- Retrieve.run() has no question-length gate",
+    "flags.usar_llm_query_decomposition": (
+        "ensure_indexed hardcodes query_decomposer=None, so this flag can "
+        "never trigger decomposition regardless of its value (see #64)"
+    ),
+    "flags.logging_metricas": "generar_respuesta_silenciosa never calls the debug-dump path this flag gates",
+    "flags.guardar_debug_rag": "generar_respuesta_silenciosa skips the debug dump entirely",
+    "paths.base_dir": "underlies every derived path; not something a candidate config should touch",
+    "paths.data_dir": "see paths.base_dir",
+    "paths.docs_folder": (
+        "_eval_app_config sets this to isolate the eval's FAISS collection "
+        "from the product's live store (see EVAL_DEV_LABEL); overriding it "
+        "risks reading or writing the wrong store"
+    ),
+    "paths.path_db": "see paths.docs_folder",
+    "paths.collection_name": "see paths.docs_folder",
+    "paths.historial_path": "CLI /chat history; unrelated to anything evaluate() runs",
+    "paths.max_historial_mensajes": "see paths.historial_path",
+    "paths.carpeta_debug_rag": "generar_respuesta_silenciosa skips the debug dump entirely",
+}
+
+
+def validate_config_overrides(config_overrides: Optional[Mapping[str, Any]]) -> None:
+    """Raise on any config_overrides key evaluate() cannot honour end to end.
+
+    Public so a caller (the block-C search harness) can validate its
+    declared search space against evaluate()'s actual reachable surface
+    without importing this module's private key sets -- evaluate() calls
+    this same function internally, so there is exactly one place this
+    contract is enforced.
+
+    Silently accepting a key outside evaluate()'s reachable surface would let
+    a run change nothing while still reporting a pass rate -- the "measuring
+    instrument that lies" failure docs/design/2026-07-28-loop-automejorable.md
+    section 2 warns a search loop cannot recover from. See
+    describe_config_overrides() for the full map of what IS honoured, and by
+    which route.
+
+    Args:
+        config_overrides: A candidate evaluate() config_overrides argument.
+
+    Raises:
+        ValueError: One or more keys are outside the honoured set, naming
+            each and, when known, why.
+    """
+    if not config_overrides:
+        return
+    honored = _APPCONFIG_OVERRIDE_KEYS | set(_GENERATION_FLAG_OVERRIDE_KEYS)
+    unreachable = {
+        key: _UNREACHABLE_CONFIG_OVERRIDE_REASONS.get(key, "not part of evaluate()'s honoured override surface")
+        for key in config_overrides
+        if key not in honored
+    }
+    if unreachable:
+        detail = "; ".join(f"{key!r}: {reason}" for key, reason in sorted(unreachable.items()))
+        raise ValueError(
+            f"config_overrides has {len(unreachable)} key(s) evaluate() cannot honour end to end: {detail}"
+        )
+
+
+def describe_config_overrides() -> Dict[str, Any]:
+    """Public map of evaluate()'s config_overrides surface, for a harness's
+    own startup reachability check against its declared search space.
+
+    Returns:
+        A dict with:
+            "honoured": ``{dotted_key: route}``, route one of
+                ``"appconfig"`` (threaded through _eval_app_config -- reaches
+                retrieval/indexing) or ``"runtime_setter"`` (scoped onto
+                rag.chat_pdfs's globals for case execution -- reaches
+                generation).
+            "unreachable": ``{dotted_key: reason}`` for every known field
+                validate_config_overrides rejects. A key present in AppConfig
+                but absent from both dicts here is a gap in this map, not a
+                third category -- see the equivalence test that pins the two
+                dicts against dataclasses.fields(AppConfig) recursively.
+    """
+    honored = {key: "appconfig" for key in _APPCONFIG_OVERRIDE_KEYS}
+    honored.update({key: "runtime_setter" for key in _GENERATION_FLAG_OVERRIDE_KEYS})
+    return {
+        "honoured": honored,
+        "unreachable": dict(_UNREACHABLE_CONFIG_OVERRIDE_REASONS),
+    }
+
+
+@contextlib.contextmanager
+def _generation_config_overrides(rag, config_overrides: Optional[Mapping[str, Any]]):
+    """Scope _GENERATION_FLAG_OVERRIDE_KEYS onto rag.chat_pdfs's live globals.
+
+    generar_respuesta_silenciosa builds its own AppConfig per call via
+    wiring.app_config_from_runtime(), which reads these two flags straight
+    from rag.chat_pdfs -- the threaded config _eval_app_config builds never
+    reaches that call (see evaluate()'s docstring). Restoration runs in a
+    finally so a failed evaluation cannot leak an overridden flag into
+    whatever runs next in the same process.
+
+    Args:
+        rag: The imported rag.chat_pdfs module.
+        config_overrides: evaluate()'s config_overrides argument; only the
+            keys in _GENERATION_FLAG_OVERRIDE_KEYS are applied here -- the
+            rest were already validated (and rejected, if unreachable) by
+            validate_config_overrides.
+    """
+    overrides = {
+        _GENERATION_FLAG_OVERRIDE_KEYS[key]: value
+        for key, value in (config_overrides or {}).items()
+        if key in _GENERATION_FLAG_OVERRIDE_KEYS
+    }
+    if not overrides:
+        yield
+        return
+    previous = rag.set_pipeline_flags(overrides)
+    try:
+        yield
+    finally:
+        rag.set_pipeline_flags({name: previous[name] for name in overrides})
+
+
+@contextlib.contextmanager
+def _scoped_model_roles(rag, overrides: Dict[str, str]):
+    """Apply model-role overrides to rag.chat_pdfs's globals for the
+    duration of the block, restoring the previous roles in a finally.
+
+    evaluate() sets the aux roles ("chat"/"contextual"/"recomp") once up
+    front, and run_factual_case (inside run_all_cases, called within this
+    block) reassigns "rag" per case/model on top of that -- both mutate the
+    same rag.chat_pdfs globals _generation_config_overrides already protects
+    for its two flags, and neither role change was being undone: a second
+    in-process evaluate() call inherited whichever roles the previous one
+    left behind.
+
+    Args:
+        rag: The imported rag.chat_pdfs module.
+        overrides: Passed straight to set_model_roles_runtime.
+    """
+    previous = rag.get_model_roles()
+    rag.set_model_roles_runtime(overrides)
+    try:
+        yield
+    finally:
+        rag.set_model_roles_runtime(previous)
+
+
+def evaluate(
+    *,
+    models: Sequence[str],
+    case_ids: Optional[Sequence[str]] = None,
+    config_overrides: Optional[Mapping[str, Any]] = None,
+    update_baseline: bool = False,
+    write_report: bool = True,
+) -> Dict[str, Any]:
+    """Run the gate and return its record instead of only printing it.
+
+    This is main()'s own implementation, factored out so a caller other than
+    the CLI -- e.g. the search harness a self-improving loop drives (see
+    docs/design/2026-07-28-loop-automejorable.md section 6.1) -- can run an
+    evaluation in-process and get a return value back, instead of parsing
+    stdout or a report file off disk. ``main()`` is a thin wrapper around
+    this function: the CLI's own behavior (stdout, report file, exit code,
+    baseline semantics) is unchanged by this refactor.
+
+    Not re-entrant and not thread-safe: it mutates rag.chat_pdfs's model-role
+    and pipeline-flag globals for its duration (restored on exit, including
+    on an exception) -- two overlapping calls in the same process corrupt
+    each other's restore.
+
+    Args:
+        models: Ollama generator models to evaluate.
+        case_ids: ``gold_cases.jsonl`` ``"id"`` values to run. ``None`` runs
+            every case (the CLI's behavior). Filtering happens immediately
+            after loading, before any corpus is staged or indexed, so a
+            subset that only touches one corpus (dev or blind) never forces
+            the other one to be staged/indexed.
+        config_overrides: Dotted ``"section.field"`` overrides. Only keys in
+            ``_APPCONFIG_OVERRIDE_KEYS`` (applied via ``AppConfig.with_overrides``
+            to the retrieval/indexing config ``_eval_app_config`` builds) or
+            ``_GENERATION_FLAG_OVERRIDE_KEYS`` (``flags.usar_recomp_synthesis``,
+            ``flags.usar_optimizacion_contexto`` -- scoped onto
+            ``rag.chat_pdfs``'s runtime globals for case execution via
+            ``_generation_config_overrides``, since
+            ``generar_respuesta_silenciosa`` builds its own ``AppConfig`` per
+            call via ``wiring.app_config_from_runtime()`` and never sees the
+            threaded one) are accepted; anything else raises ``ValueError``
+            naming the key rather than being silently ignored -- an override
+            with no observable effect would let a run report a pass rate for
+            a candidate it never actually measured.
+        update_baseline: Raise ``baseline_min_pass_rate.txt`` to this run's
+            pass rate minus ``BASELINE_MARGIN``, same as ``--update-baseline``
+            -- only when the run is conclusive (no infrastructure errors);
+            an inconclusive run leaves the baseline untouched regardless of
+            this flag, exactly like the CLI.
+        write_report: Write the timestamped JSON report under
+            ``tests/eval/runs/``. ``False`` writes nothing to disk, so a
+            caller can decide where its own evidence lives.
+
+    Returns:
+        A dict with ``summary`` (``build_summary()``'s blocks), ``records``
+        (every per-case result dict), ``models``, ``aux_model``,
+        ``num_cases``, ``num_records``, ``elapsed_seconds``, ``pass_rate``,
+        ``baseline`` (the threshold this run was compared against, or
+        ``None``), ``infrastructure_errors``, ``baseline_updated``,
+        ``exit_code`` (what the CLI would have returned), ``report_path``
+        (``str`` or ``None``), and ``config`` -- ``{"dev": ..., "blind":
+        ...}``, each the retrieval/indexing ``AppConfig`` ``_eval_app_config``
+        built, as a plain dict (``dataclasses.asdict``), or ``None`` if that
+        corpus was never staged/indexed for this run. This is NOT the
+        authoritative record of the generator: fields
+        describe_config_overrides()'s "unreachable" map lists (notably
+        ``config[...]["models"]["rag"]``) reflect rag.chat_pdfs's state at
+        the moment ``_eval_app_config`` ran, not what actually generated any
+        answer -- read ``result["models"]`` (the generators this run
+        evaluated) and ``records[*]["model"]`` (which one produced that
+        record) instead.
+
+    Raises:
+        EvalSetupError: A prerequisite (Ollama, a required model, an index)
+            is missing. Raised before any case runs, same as the CLI.
+        ValueError: ``case_ids`` names an id that is not in
+            ``gold_cases.jsonl``, or ``config_overrides`` names a key
+            evaluate() cannot honour end to end.
+    """
+    run_started = time.perf_counter()
+
+    cases = load_gold_cases()
+    if case_ids is not None:
+        wanted = set(case_ids)
+        cases = [c for c in cases if c["id"] in wanted]
+        unknown = wanted - {c["id"] for c in cases}
+        if unknown:
+            raise ValueError(f"unknown gold case id(s): {sorted(unknown)}")
+    validate_config_overrides(config_overrides)
+
+    required_models = set(models) | {AUX_MODEL}
+    # An overridden models.contextual is otherwise invisible to preflight:
+    # ensure_indexed builds an OllamaChatModel from it unconditionally once
+    # flags.usar_contextual_retrieval is on, and IndexCorpus swallows that
+    # call's failure (an unpulled model raises there) into an empty
+    # situational-context string instead of aborting -- then writes a
+    # fingerprint claiming the enrichment succeeded. Every later run on the
+    # same corpus gets a cache hit on an index labelled enriched that isn't.
+    if config_overrides and config_overrides.get("flags.usar_contextual_retrieval"):
+        contextual_override = config_overrides.get("models.contextual")
+        if contextual_override:
+            required_models.add(contextual_override)
+    stack_slug = "mineru-jina_clip-faiss"
+
+    stacks_to_close = []
+    config_effective: Dict[str, Any] = {"dev": None, "blind": None}
+    try:
+        preflight_ollama(required_models)
+
+        # Heavy import (FAISS, sentence-transformers, rank-bm25...) only
+        # after the cheap network/model preflight has already passed.
+        import rag.chat_pdfs as rag
+
+        with _scoped_model_roles(
+            rag, {"chat": AUX_MODEL, "contextual": AUX_MODEL, "recomp": AUX_MODEL}
+        ):
+            blind_required = stage_blind_papers(cases)
+            dev_required = set(_required_pdfs(cases, "corpus"))
+
+            retrieve_dev = evidence_dev = stack_dev = None
+            retrieve_blind = evidence_blind = stack_blind = None
+
+            # Dev indexing is skipped, not just left idle, when a case_ids
+            # subset references no "corpus"-source case -- unlike the blind
+            # set, it was unconditional before case_ids existed, since the
+            # unfiltered run (main()'s only caller) always has at least one
+            # such case.
+            if dev_required:
+                retrieve_dev, evidence_dev, stack_dev = ensure_indexed(
+                    rag, DEV_DOCS_DIR, dev_required, "dev set",
+                    path_label=EVAL_DEV_LABEL, config_overrides=config_overrides,
+                )
+                stacks_to_close.append(stack_dev)
+                config_effective["dev"] = dataclasses.asdict(
+                    _eval_app_config(
+                        rag, DEV_DOCS_DIR, path_label=EVAL_DEV_LABEL, config_overrides=config_overrides
+                    )
+                )
+            if blind_required:
+                retrieve_blind, evidence_blind, stack_blind = ensure_indexed(
+                    rag, BLIND_DOCS_DIR, set(blind_required), "blind set",
+                    config_overrides=config_overrides,
+                )
+                stacks_to_close.append(stack_blind)
+                config_effective["blind"] = dataclasses.asdict(
+                    _eval_app_config(rag, BLIND_DOCS_DIR, config_overrides=config_overrides)
+                )
+
+            verify_all_papers_indexed(
+                cases,
+                _sources_in_store(stack_dev.vector_store) if stack_dev else set(),
+                _sources_in_store(stack_blind.vector_store) if stack_blind else set(),
+            )
+
+            print(
+                f"\n[run] stack={stack_slug} {len(cases)} cases x "
+                f"up to {len(models)} model(s)\n",
+                flush=True,
+            )
+            with _generation_config_overrides(rag, config_overrides):
+                records = run_all_cases(
+                    rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, models
+                )
+    finally:
+        for stack in stacks_to_close:
+            closer = getattr(stack.embedder, "close", None)
+            if callable(closer):
+                try:
+                    closer()
+                except Exception:
+                    pass
+
+    summary = build_summary(records)
+    elapsed_total = time.perf_counter() - run_started
+
+    report_path: Optional[Path] = None
+    if write_report:
+        RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        report_path = RESULTS_DIR / f"{timestamp}_{stack_slug}.json"
+        report_path.write_text(json.dumps({
+            "run": {
+                "timestamp": timestamp,
+                "stack": stack_slug,
+                "models": list(models),
+                "aux_model": AUX_MODEL,
+                "num_cases": len(cases),
+                "num_records": len(records),
+                "elapsed_seconds": round(elapsed_total, 1),
+                "retrieval_path": "monkeygrab.application.retrieve.Retrieve",
+            },
+            "summary": summary,
+            "results": records,
+        }, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    print_summary(summary)
+    if report_path is not None:
+        print(f"\nfull results: {report_path}")
+    print(f"total elapsed: {elapsed_total / 60:.1f} min")
+
+    pass_rate = summary["overall"]["pass_rate"]
+    threshold = _read_baseline()
+    broken = [r for r in records if r.get("infrastructure_error")]
+    baseline_updated = False
+
+    if broken:
+        print(f"\n[gate] INCONCLUSIVE: {len(broken)} case(s) could not be evaluated")
+        for record in broken[:5]:
+            print(f"        {record['id']}: {record['reason']}")
+        if len(broken) > 5:
+            print(f"        ... and {len(broken) - 5} more")
+        print("        Not compared against the baseline: this run measured nothing.")
+        exit_code = 1
+    else:
+        if threshold is None:
+            print("\n[gate] no baseline yet (tests/eval/baseline_min_pass_rate.txt missing) -- not gating this run")
+            exit_code = 0
+        elif pass_rate < threshold:
+            print(f"\n[gate] FAILED: pass_rate {pass_rate:.4f} < baseline {threshold:.2f}")
+            exit_code = 1
+        else:
+            print(f"\n[gate] PASSED: pass_rate {pass_rate:.4f} >= baseline {threshold:.2f}")
+            exit_code = 0
+
+        if update_baseline:
+            _update_baseline(pass_rate)
+            baseline_updated = True
+
+    return {
+        "summary": summary,
+        "records": records,
+        "models": list(models),
+        "aux_model": AUX_MODEL,
+        "num_cases": len(cases),
+        "num_records": len(records),
+        "elapsed_seconds": round(elapsed_total, 1),
+        "pass_rate": pass_rate,
+        "baseline": threshold,
+        "infrastructure_errors": broken,
+        "baseline_updated": baseline_updated,
+        "exit_code": exit_code,
+        "report_path": str(report_path) if report_path is not None else None,
+        "config": config_effective,
+    }
+
+
 # CLI
 
 
@@ -823,118 +1317,12 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
-    run_started = time.perf_counter()
-
-    cases = load_gold_cases()
-    required_models = set(args.models) | {AUX_MODEL}
-    stack_slug = "mineru-jina_clip-faiss"
-
-    stacks_to_close = []
     try:
-        preflight_ollama(required_models)
-
-        # Heavy import (FAISS, sentence-transformers, rank-bm25...) only
-        # after the cheap network/model preflight has already passed.
-        import rag.chat_pdfs as rag
-
-        rag.set_model_roles_runtime({
-            "chat": AUX_MODEL, "contextual": AUX_MODEL, "recomp": AUX_MODEL,
-        })
-
-        blind_required = stage_blind_papers(cases)
-        dev_required = set(_required_pdfs(cases, "corpus"))
-
-        retrieve_dev, evidence_dev, stack_dev = ensure_indexed(
-            rag, DEV_DOCS_DIR, dev_required, "dev set", path_label=EVAL_DEV_LABEL
-        )
-        stacks_to_close.append(stack_dev)
-        retrieve_blind = None
-        evidence_blind = None
-        stack_blind = None
-        if blind_required:
-            retrieve_blind, evidence_blind, stack_blind = ensure_indexed(
-                rag, BLIND_DOCS_DIR, set(blind_required), "blind set"
-            )
-            stacks_to_close.append(stack_blind)
-
-        verify_all_papers_indexed(
-            cases,
-            _sources_in_store(stack_dev.vector_store),
-            _sources_in_store(stack_blind.vector_store) if stack_blind else set(),
-        )
-
-        print(
-            f"\n[run] stack={stack_slug} {len(cases)} cases x "
-            f"up to {len(args.models)} model(s)\n",
-            flush=True,
-        )
-        records = run_all_cases(
-            rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, args.models
-        )
+        result = evaluate(models=args.models, update_baseline=args.update_baseline)
     except EvalSetupError as exc:
         print(f"\nSETUP FAILED: {exc}", file=sys.stderr)
         return 1
-    finally:
-        for stack in stacks_to_close:
-            closer = getattr(stack.embedder, "close", None)
-            if callable(closer):
-                try:
-                    closer()
-                except Exception:
-                    pass
-
-    summary = build_summary(records)
-    elapsed_total = time.perf_counter() - run_started
-
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out_path = RESULTS_DIR / f"{timestamp}_{stack_slug}.json"
-    out_path.write_text(json.dumps({
-        "run": {
-            "timestamp": timestamp,
-            "stack": stack_slug,
-            "models": args.models,
-            "aux_model": AUX_MODEL,
-            "num_cases": len(cases),
-            "num_records": len(records),
-            "elapsed_seconds": round(elapsed_total, 1),
-            "retrieval_path": "monkeygrab.application.retrieve.Retrieve",
-        },
-        "summary": summary,
-        "results": records,
-    }, indent=2, ensure_ascii=False), encoding="utf-8")
-
-    print_summary(summary)
-    print(f"\nfull results: {out_path}")
-    print(f"total elapsed: {elapsed_total / 60:.1f} min")
-
-    pass_rate = summary["overall"]["pass_rate"]
-    threshold = _read_baseline()
-
-    broken = [r for r in records if r.get("infrastructure_error")]
-    if broken:
-        print(f"\n[gate] INCONCLUSIVE: {len(broken)} case(s) could not be evaluated")
-        for record in broken[:5]:
-            print(f"        {record['id']}: {record['reason']}")
-        if len(broken) > 5:
-            print(f"        ... and {len(broken) - 5} more")
-        print("        Not compared against the baseline: this run measured nothing.")
-        return 1
-
-    if threshold is None:
-        print("\n[gate] no baseline yet (tests/eval/baseline_min_pass_rate.txt missing) -- not gating this run")
-        gate_exit = 0
-    elif pass_rate < threshold:
-        print(f"\n[gate] FAILED: pass_rate {pass_rate:.4f} < baseline {threshold:.2f}")
-        gate_exit = 1
-    else:
-        print(f"\n[gate] PASSED: pass_rate {pass_rate:.4f} >= baseline {threshold:.2f}")
-        gate_exit = 0
-
-    if args.update_baseline:
-        _update_baseline(pass_rate)
-
-    return gate_exit
+    return result["exit_code"]
 
 
 if __name__ == "__main__":
