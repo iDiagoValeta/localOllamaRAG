@@ -168,8 +168,18 @@ class JinaClipEmbedder:
         self._process = process
         self._responses = queue.Queue()
         self._stderr_tail = []
-        threading.Thread(target=self._pump_stdout, args=(process,), daemon=True).start()
-        threading.Thread(target=self._pump_stderr, args=(process,), daemon=True).start()
+        # The queue and stderr list are passed as thread arguments -- exactly like
+        # `process` already is -- rather than resolved via self._responses /
+        # self._stderr_tail inside the thread. Otherwise a pump thread from a
+        # previous worker (e.g. after close() + reuse) that reaches this point
+        # AFTER a new worker has replaced those attributes would write into the
+        # NEW worker's queue/list instead of its own -- see #47.
+        threading.Thread(
+            target=self._pump_stdout, args=(process, self._responses), daemon=True
+        ).start()
+        threading.Thread(
+            target=self._pump_stderr, args=(process, self._stderr_tail), daemon=True
+        ).start()
 
         ready = self._await_message(self._startup_timeout_s, phase="starting up")
 
@@ -183,7 +193,7 @@ class JinaClipEmbedder:
                 f"{_TRUNCATE_DIM} (truncate_dim mismatch between adapter and worker)"
             )
 
-    def _pump_stdout(self, process: subprocess.Popen) -> None:
+    def _pump_stdout(self, process: subprocess.Popen, responses: "queue.Queue") -> None:
         try:
             for line in process.stdout:
                 line = line.strip()
@@ -193,18 +203,20 @@ class JinaClipEmbedder:
                     message = json.loads(line)
                 except json.JSONDecodeError:
                     message = {"event": "fatal", "error": f"worker sent a non-JSON line: {line!r}"}
-                self._responses.put(message)
+                responses.put(message)
         finally:
             # The pipe closed (worker exited). Unblock whoever is waiting
             # immediately instead of making them sit through the full
-            # timeout to discover the same thing.
-            self._responses.put(_EOF)
+            # timeout to discover the same thing. `responses` is the queue
+            # this specific worker was started with, passed as an argument
+            # rather than read from self -- see the comment in _start_worker.
+            responses.put(_EOF)
 
-    def _pump_stderr(self, process: subprocess.Popen) -> None:
+    def _pump_stderr(self, process: subprocess.Popen, stderr_tail: List[str]) -> None:
         try:
             for line in process.stderr:
-                self._stderr_tail.append(line.rstrip())
-                del self._stderr_tail[:-20]  # keep only the tail for the eventual error message
+                stderr_tail.append(line.rstrip())
+                del stderr_tail[:-20]  # keep only the tail for the eventual error message
         except Exception:
             pass
 

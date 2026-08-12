@@ -464,5 +464,59 @@ def test_concurrent_embed_calls_each_get_their_own_vector_and_the_worker_survive
     assert embedder.embed("still alive") == _vector()
 
 
+def test_a_stale_pump_thread_cannot_poison_a_fresh_workers_response_queue(monkeypatch):
+    """Regression test for #47.
+
+    _start_worker reassigns self._responses to a brand-new Queue every time
+    it (re)spawns a worker, but _pump_stdout used to resolve self._responses
+    dynamically through self instead of a value captured when the thread was
+    created. So a pump thread left over from a worker that was close()'d --
+    still blocked reading its own (dead) process's stdout -- could reach its
+    `finally: self._responses.put(_EOF)` only AFTER a fresh worker had
+    already been started, and end up dropping the EOF sentinel into the NEW
+    worker's queue instead of its own. The next real call against the new,
+    perfectly healthy worker then popped that stale EOF and failed with
+    "exited unexpectedly", permanently killing a live process.
+
+    Made deterministic by recording the actual Thread object the first
+    worker's stdout pump runs on and join()-ing it -- so the test knows for
+    certain that pump has finished running (including its finally block)
+    before the second worker is asked to handle a real request, without
+    relying on a sleep or guessing at internal state.
+    """
+    created_threads = []
+    real_thread = threading.Thread
+
+    class _RecordingThread(real_thread):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            created_threads.append(self)
+
+    monkeypatch.setattr(module.threading, "Thread", _RecordingThread)
+
+    embedder, calls = _embedder(monkeypatch)
+    embedder.embed("one")  # starts worker A (calls[0]); created_threads[0] is its stdout pump
+    assert len(calls) == 1
+
+    embedder.close()  # worker A is "closed" from the adapter's point of view, but this
+    calls[0]._returncode = 0  # fake never closes its stdout pipe on its own -- the test
+    # drives that closure explicitly below, once a new worker already exists, to pin down
+    # exactly the interleaving the bug depends on.
+
+    embedder.embed("two")  # starts a fresh worker B (calls[1]); self._responses now
+    assert len(calls) == 2  # points at a brand-new Queue.
+
+    calls[0].stdout.close()  # worker A's stale pump thread unblocks and runs its finally.
+    created_threads[0].join(timeout=2.0)
+    assert not created_threads[0].is_alive(), "stale pump thread from worker A never finished"
+
+    # Worker B is alive and was never touched -- a real call against it must succeed.
+    result = embedder.embed("three")
+
+    assert result == _vector()
+    assert len(calls) == 2  # no extra worker was spawned to recover
+    assert embedder._dead_reason is None  # not permanently marked dead (issue #24's failure mode)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
