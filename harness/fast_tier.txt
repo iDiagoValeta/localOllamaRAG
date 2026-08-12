@@ -1,0 +1,32 @@
+# Fast tier -- regression filter only (never declares an improvement).
+# Fixed, versioned subset of the search set: 13 cases spanning every
+# case_type and every paper. Sizing arithmetic (issue #31 spec section 4,
+# corrected against measured per-case-type cost from the reference gate run,
+# tests/eval/runs/20260729T020233Z_mineru-jina_clip-faiss.json, local/gitignored):
+#   8 answered cases  x ~200s (factual_number/factual_concept median 201.1s/198.4s) = ~1600s
+#   5 retrieval-only  x ~4.5s (figure_retrieval/table_retrieval median 3.9s/4.5s)   =   ~23s
+#   total ~1623s ~= 27 min, matching the design doc's ~32 min budget.
+#
+# Includes all 5 of today's known search-set failures (dpo-pipeline-figure-es,
+# higgs-diphoton-figure, planck-contours-figure, planck-sigma8-es,
+# planck-h0-tension) -- the three figure failures cost ~4s each, so including
+# them is nearly free and gives the regression filter real signal on the
+# retrieval side; the two answered failures satisfy "at least two of five"
+# before the figures are even counted.
+
+# -- answered (8): factual_number / factual_concept --
+planck-sigma8-es
+planck-h0-tension
+att-n-layers
+dpo-acronym
+gw-snr
+gw-site
+higgs-significance
+ricci-hamilton-intro
+
+# -- retrieval-only (5): figure_retrieval / table_retrieval --
+att-bleu-table
+dpo-pipeline-figure-es
+higgs-diphoton-figure
+planck-contours-figure
+gw-strain-figure

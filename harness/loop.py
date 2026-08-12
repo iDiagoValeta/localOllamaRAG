@@ -1,0 +1,318 @@
+"""loop -- the ratchet, the latency constraint and termination for block C.
+
+Implements issue #31 spec section 5.5, with two corrections applied after
+measuring against the real reference gate runs (local, gitignored --
+tests/eval/runs/{20260729T020233Z,20260729T040824Z,20260729T081129Z}_
+mineru-jina_clip-faiss.json; see harness/README.md for the full numbers and
+why they cannot be re-derived from a fresh clone):
+
+1. **Per-bucket latency, not one blended median.** Answered cases (call the
+   generator) cost ~200s; retrieval-only cases (figure_retrieval,
+   table_retrieval) cost ~4s -- a ~50x gap. A single median over both is
+   dominated by which bucket happens to be larger and would let a candidate
+   trade retrieval quality for fewer generator calls without the constraint
+   noticing. ``_latency_breach`` checks each bucket against its own
+   reference median independently.
+2. **``resolution_warning`` in the final report.** The search set (32
+   ``source: corpus`` cases) can win at most 5 cases today, and moved only 3
+   net flips under the most destructive single-field change anyone has
+   measured (``RAG_TOP_K_FINAL=1``) -- both below the ~6-flip threshold
+   design doc section 3 sets for a paired difference not attributable to
+   chance. Every report says so, so an accepted improvement reads as a
+   candidate for confirmation, not a demonstrated result.
+
+The evaluator is always a callable injected by the caller (``cli.py`` for a
+real or demo run, a test double in ``harness/tests/``) -- this module never
+imports ``tests.eval.run_eval`` or anything that would let it, which is the
+decision that makes the whole harness testable with no GPU and no Ollama
+(issue #31 spec section 5.1).
+"""
+
+from __future__ import annotations
+
+import dataclasses
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Sequence
+
+from harness import evaluator as evaluator_mod
+from harness import ledger as ledger_mod
+from harness import proposers as proposers_mod
+from harness import search_space
+
+# NOISE FLOOR
+
+# Measured 2026-07-29 (docs/design/2026-07-28-loop-automejorable.md,
+# criterion 1 note): two runs of the same configuration and code, same index
+# (both recorded a cache hit), zero flips across all 51 gold cases --
+# tests/eval/runs/20260729T020233Z_mineru-jina_clip-faiss.json and
+# tests/eval/runs/20260729T040824Z_mineru-jina_clip-faiss.json (both local,
+# gitignored, so not reproducible from a fresh clone -- see harness/README.md).
+# Independently re-verified in this PR restricted to just the 32-case search
+# set this harness actually uses: still 0 flips. A delta of zero cases is not
+# an improvement. If tests/eval/grade.py's scoring rules ever change, this
+# floor must be remeasured -- it is specific to that grader, not a law of the
+# pipeline.
+NOISE_FLOOR_CASES = 0
+
+# The latency constraint's multiplier (design doc section 5).
+LATENCY_CEILING_MULTIPLIER = 1.20
+
+# RESOLUTION LIMIT (see module docstring point 2)
+
+SEARCH_SET_AVAILABLE_FAILURES = 5
+DEMONSTRABILITY_FLIP_THRESHOLD = 6
+SEARCH_SET_NET_FLIPS_UNDER_KNOWN_SABOTAGE = 3
+SEARCH_SET_SABOTAGE_DESCRIPTION = "RAG_TOP_K_FINAL=1 (single fragment retrieved; criterion 2, 2026-07-29)"
+
+RESOLUTION_WARNING: Dict[str, Any] = {
+    "available_search_set_failures": SEARCH_SET_AVAILABLE_FAILURES,
+    "demonstrability_flip_threshold": DEMONSTRABILITY_FLIP_THRESHOLD,
+    "net_flips_under_known_sabotage": SEARCH_SET_NET_FLIPS_UNDER_KNOWN_SABOTAGE,
+    "sabotage_description": SEARCH_SET_SABOTAGE_DESCRIPTION,
+    "message": (
+        "The search set can win at most 5 cases and moved only 3 net flips under "
+        "a known-catastrophic single-field sabotage, below the ~6-flip threshold "
+        "design doc section 3 sets for a demonstrable paired difference. An "
+        "accepted improvement on today's corpus is a candidate for confirmation, "
+        "not a demonstrated result -- see "
+        "docs/design/2026-07-28-loop-automejorable.md section 3 and issue #30 "
+        "(block B, the corpus expansion this harness is sized against)."
+    ),
+}
+
+
+def _summary(records: Sequence[evaluator_mod.CaseRecord]) -> Dict[str, Any]:
+    total = len(records)
+    passed = sum(1 for r in records if r.passed)
+    return {"total": total, "passed": passed, "pass_rate": round(passed / total, 4) if total else 0.0}
+
+
+def _regressed_ids(
+    reference_records: Sequence[evaluator_mod.CaseRecord],
+    candidate_records: Sequence[evaluator_mod.CaseRecord],
+) -> List[str]:
+    """Case ids that passed for the reference and failed for the candidate (paired)."""
+    reference_passed = {r.id: r.passed for r in reference_records}
+    return [r.id for r in candidate_records if reference_passed.get(r.id) and not r.passed]
+
+
+def _latency_breach(
+    candidate: Dict[str, Optional[float]], reference: Dict[str, Optional[float]]
+) -> Optional[str]:
+    """``None`` if both buckets are within ``LATENCY_CEILING_MULTIPLIER`` of reference, else why not."""
+    for bucket in ("answered", "retrieval_only"):
+        ref_value = reference.get(bucket)
+        cand_value = candidate.get(bucket)
+        if ref_value is None or cand_value is None:
+            continue
+        ceiling = ref_value * LATENCY_CEILING_MULTIPLIER
+        if cand_value > ceiling:
+            return (
+                f"{bucket} median {cand_value:.1f}s exceeds ceiling {ceiling:.1f}s "
+                f"({LATENCY_CEILING_MULTIPLIER}x reference {ref_value:.1f}s)"
+            )
+    return None
+
+
+def _build_entry(
+    *,
+    iteration: int,
+    parent_iteration: Optional[int],
+    git_commit: Optional[str],
+    overrides: Dict[str, Any],
+    meta: Dict[str, Any],
+    evaluated_case_set: str,
+    result: evaluator_mod.EvaluationResult,
+    unreachable_ids: Sequence[str],
+    reference_latency: Dict[str, Optional[float]],
+    verdict: str,
+    reason: str,
+    candidate_latency: Optional[Dict[str, Optional[float]]] = None,
+) -> ledger_mod.LedgerEntry:
+    objective_raw, objective_adjusted = evaluator_mod.compute_objective(result.records, unreachable_ids)
+    if candidate_latency is None:
+        candidate_latency = evaluator_mod.median_latency_by_bucket(result.records)
+    return ledger_mod.LedgerEntry(
+        schema_version=ledger_mod.SCHEMA_VERSION,
+        iteration=iteration,
+        parent_iteration=parent_iteration,
+        git_commit=git_commit,
+        config_overrides=dict(overrides),
+        effective_config=dict(result.effective_config),
+        proposer=meta.get("proposer", "unknown"),
+        proposer_rationale=meta.get("rationale"),
+        proposer_model=meta.get("model"),
+        proposer_fallback=bool(meta.get("fallback", False)),
+        proposer_fallback_reason=meta.get("fallback_reason"),
+        evaluated_case_set=evaluated_case_set,
+        case_records=[dataclasses.asdict(r) for r in result.records],
+        summary=_summary(result.records),
+        objective_raw=objective_raw,
+        objective_adjusted=objective_adjusted,
+        median_latency_answered_s=candidate_latency.get("answered"),
+        median_latency_retrieval_only_s=candidate_latency.get("retrieval_only"),
+        reference_median_latency_answered_s=reference_latency.get("answered"),
+        reference_median_latency_retrieval_only_s=reference_latency.get("retrieval_only"),
+        latency_ceiling_multiplier=LATENCY_CEILING_MULTIPLIER,
+        verdict=verdict,
+        reason=reason,
+    )
+
+
+def run_loop(
+    *,
+    reference: Any,
+    evaluate: evaluator_mod.EvaluatorFn,
+    proposer: Any,
+    search_set_ids: Sequence[str],
+    fast_tier_ids: Sequence[str],
+    unreachable_ids: Sequence[str] = (),
+    max_iterations: Optional[int] = None,
+    patience: Optional[int] = 3,
+    ledger_dir=ledger_mod.LEDGER_DIR,
+    verify_reachability: bool = True,
+    reachability_probe_case_ids: Sequence[str] = (),
+) -> Dict[str, Any]:
+    """Run the search until termination, writing one ledger entry per iteration.
+
+    Args:
+        reference: The ``AppConfig`` the loop's ratchet, feasibility checks
+            and latency ceiling are all measured against (typically
+            ``AppConfig.from_env()``).
+        evaluate: Injected ``EvaluatorFn`` -- never imported here (spec
+            section 5.1).
+        proposer: A ``GridProposer`` or ``LlmProposer`` instance.
+        search_set_ids: Case ids the objective is computed over.
+        fast_tier_ids: Case ids the cheap regression filter runs over.
+        unreachable_ids: Case ids excluded from the adjusted objective.
+        max_iterations: Hard iteration budget, or ``None`` for no cap.
+        patience: Consecutive non-accepted iterations before stopping, or
+            ``None`` for no cap. At least one of ``max_iterations``/
+            ``patience`` must be set, so the loop is guaranteed to terminate.
+        ledger_dir: Where to write ledger entries (default: ``harness/ledger/``).
+        verify_reachability: Run ``evaluator.verify_reachable`` before
+            measuring the reference. Disabling this is only for tests that
+            intentionally use an evaluator too narrow to answer the probe
+            (e.g. one that only ever sees a fixed, tiny case set).
+        reachability_probe_case_ids: Forwarded to ``evaluator.verify_reachable``.
+
+    Returns:
+        The final report: reference stats, ratchet, best iteration, iteration
+        count, termination reason, ``resolution_warning``, and every entry
+        written this run. Always returned, on every termination path
+        (criterion 8) -- including when the search space is exhausted.
+
+    Raises:
+        ValueError: Neither ``max_iterations`` nor ``patience`` is set.
+        evaluator.ReachabilityError: ``evaluate`` rejects a declared key at
+            startup (only when ``verify_reachability`` is True).
+    """
+    if max_iterations is None and patience is None:
+        raise ValueError("run_loop needs max_iterations and/or patience to guarantee termination")
+
+    if verify_reachability:
+        evaluator_mod.verify_reachable(evaluate, reachability_probe_case_ids)
+
+    reference_full = evaluate({}, tuple(search_set_ids))
+    reference_fast = evaluate({}, tuple(fast_tier_ids))
+    reference_objective_raw, reference_objective_adjusted = evaluator_mod.compute_objective(
+        reference_full.records, unreachable_ids
+    )
+    reference_latency = evaluator_mod.median_latency_by_bucket(reference_full.records)
+
+    ratchet = reference_objective_adjusted
+    best_iteration: Optional[int] = None
+
+    entries_so_far: List[ledger_mod.LedgerEntry] = list(ledger_mod.read_history(ledger_dir))
+    iteration = ledger_mod.next_iteration_number(ledger_dir)
+    parent_iteration: Optional[int] = entries_so_far[-1].iteration if entries_so_far else None
+
+    consecutive_non_accepted = 0
+    iterations_run = 0
+    last_result = reference_full
+    new_entries: List[ledger_mod.LedgerEntry] = []
+    termination_reason = "unknown"
+
+    while True:
+        if max_iterations is not None and iterations_run >= max_iterations:
+            termination_reason = "max_iterations"
+            break
+        if patience is not None and consecutive_non_accepted >= patience:
+            termination_reason = "patience"
+            break
+
+        try:
+            overrides = proposer.propose(search_space, entries_so_far, last_result)
+        except proposers_mod.SearchSpaceExhausted:
+            termination_reason = "search_space_exhausted"
+            break
+
+        meta = dict(getattr(proposer, "last_meta", {}))
+        git_commit = ledger_mod.read_git_commit()
+
+        fast_result = evaluate(overrides, tuple(fast_tier_ids))
+        regressed = _regressed_ids(reference_fast.records, fast_result.records)
+
+        if regressed:
+            entry = _build_entry(
+                iteration=iteration, parent_iteration=parent_iteration, git_commit=git_commit,
+                overrides=overrides, meta=meta, evaluated_case_set="fast_tier",
+                result=fast_result, unreachable_ids=unreachable_ids,
+                reference_latency=reference_latency, verdict="rejected_regression",
+                reason=f"fast-tier regression on {regressed}",
+            )
+        else:
+            full_result = evaluate(overrides, tuple(search_set_ids))
+            candidate_latency = evaluator_mod.median_latency_by_bucket(full_result.records)
+            breach = _latency_breach(candidate_latency, reference_latency)
+            _objective_raw, objective_adjusted = evaluator_mod.compute_objective(
+                full_result.records, unreachable_ids
+            )
+
+            if breach:
+                verdict, reason = "rejected_latency", breach
+            elif objective_adjusted - ratchet <= NOISE_FLOOR_CASES:
+                verdict = "rejected_no_gain"
+                reason = (
+                    f"objective_adjusted {objective_adjusted} did not exceed ratchet "
+                    f"{ratchet} beyond the noise floor ({NOISE_FLOOR_CASES})"
+                )
+            else:
+                verdict = "accepted"
+                reason = f"objective_adjusted {objective_adjusted} exceeds ratchet {ratchet}"
+                ratchet = objective_adjusted
+                best_iteration = iteration
+
+            entry = _build_entry(
+                iteration=iteration, parent_iteration=parent_iteration, git_commit=git_commit,
+                overrides=overrides, meta=meta, evaluated_case_set="search_set",
+                result=full_result, unreachable_ids=unreachable_ids,
+                reference_latency=reference_latency, verdict=verdict, reason=reason,
+                candidate_latency=candidate_latency,
+            )
+            last_result = full_result
+
+        ledger_mod.write_entry(entry, ledger_dir)
+        entries_so_far.append(entry)
+        new_entries.append(entry)
+
+        consecutive_non_accepted = 0 if entry.verdict == "accepted" else consecutive_non_accepted + 1
+        parent_iteration = entry.iteration
+        iteration += 1
+        iterations_run += 1
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "reference": {
+            "objective_raw": reference_objective_raw,
+            "objective_adjusted": reference_objective_adjusted,
+            "median_latency_answered_s": reference_latency.get("answered"),
+            "median_latency_retrieval_only_s": reference_latency.get("retrieval_only"),
+        },
+        "ratchet": ratchet,
+        "best_iteration": best_iteration,
+        "iterations_run": iterations_run,
+        "termination_reason": termination_reason,
+        "resolution_warning": RESOLUTION_WARNING,
+        "iterations": [e.to_dict() for e in new_entries],
+    }
