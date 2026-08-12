@@ -28,6 +28,13 @@ required ports and run `IndexCorpus`, `Retrieve` and `Answer` from
 package's mutable runtime configuration and the immutable `AppConfig` the core
 expects. MinerU, Jina CLIP and FAISS are built by the fixed composition root.
 
+`wiring.py` also owns freeing what it cached: `release_gpu_models()` closes
+the jina-clip worker and drops the reranker's weights, and
+`engine/generation.py` calls it right before every RAG generation call, so
+retrieval's GPU tenants are gone before Ollama is asked to load the
+generator. `/chat` mode never reaches this — it calls Ollama directly — so
+nothing needs to guard the call by mode.
+
 The consequence worth knowing: the CLI, web app, desktop wrapper and evaluation
 gate execute the same indexing, retrieval and generation implementations.
 

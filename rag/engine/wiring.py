@@ -219,6 +219,42 @@ def lexical_index(store: VectorStore, config: AppConfig) -> Bm25LexicalIndex:
     return _lexical_cache["index"]
 
 
+def release_gpu_models() -> None:
+    """Free the cached embedder worker and reranker weights, if either is loaded.
+
+    Called from the generation entry points (rag/engine/generation.py) right
+    before Ollama is asked to load the generator, never from the retrieval
+    path itself: on an 8 GB card, an idle jina-clip worker or a resident
+    Cross-Encoder is enough to keep Ollama from loading at all, and Ollama
+    does not fail fast when memory is short -- it blocks until the request
+    times out (#25). This mirrors tests/eval/run_eval.py's
+    _release_gpu_models, which does the same thing for the embedder/reranker
+    instances its own Retrieve use case holds; this function releases this
+    module's caches instead, since the CLI and the web app get their
+    embedder/reranker through embedder()/reranker() above rather than
+    holding their own references.
+
+    Safe to call with nothing cached (both hooks are then no-ops) and safe
+    to call more than once (a second call finds the slot already cleared).
+    Each cache slot is swapped for ``None`` while holding its own lock --
+    the same lock embedder()/reranker() take to build -- so a build racing
+    this call either wins the swap and gets the live instance back (release
+    then closes the now-orphaned one), or loses it and rebuilds against an
+    empty slot; either way nothing ever calls close()/release() on an
+    instance another thread is mid-build on, or hands out a reference to one
+    that is mid-close.
+    """
+    with _embedder_cache_lock:
+        emb, _embedder_cache["embedder"] = _embedder_cache["embedder"], None
+    if emb is not None:
+        emb.close()
+
+    with _reranker_cache_lock:
+        rer, _reranker_cache["reranker"] = _reranker_cache["reranker"], None
+    if rer is not None:
+        rer.release()
+
+
 def reranker(config: AppConfig) -> CrossEncoderReranker:
     """Return the Cross-Encoder reranker, loading its weights at most once.
 
@@ -432,6 +468,7 @@ __all__ = [
     "query_decomposer",
     "rag_chat_model",
     "recomp_chat_model",
+    "release_gpu_models",
     "reranker",
     "reset_vector_store_cache",
     "retrieval_metrics_to_legacy",

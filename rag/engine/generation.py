@@ -114,6 +114,21 @@ def generar_tokens_respuesta(mensaje_usuario: str, stats: Optional[Dict[str, Any
     config = wiring.app_config_from_runtime()
     use_case = wiring.answer(_NO_COLLECTION, config)
 
+    # Retrieval (embedder worker, reranker weights) is already done by the
+    # time any caller reaches this point -- preparar_fragmentos_para_generacion
+    # and _preparar_mensaje_usuario_rag only touch the vector store and CPU-side
+    # text assembly. Releasing here, right before the generator's own stream()
+    # call, is what stops the embedder/reranker from still holding VRAM while
+    # Ollama tries to load: Ollama does not fail fast when memory is short, it
+    # blocks until the request times out (#25). Scoped to this function alone
+    # (not the retrieval path) because this is the one place every RAG
+    # generation call funnels through -- CLI and web streaming call this
+    # directly, CLI's non-streaming reply and web's non-streaming reply reach
+    # it via _generar_respuesta_stream below -- while /chat mode never calls
+    # into rag/engine/generation.py at all (it talks to Ollama directly), so
+    # nothing needs to guard this call against firing outside RAG mode.
+    wiring.release_gpu_models()
+
     for chunk in use_case.stream(mensaje_usuario):
         if chunk.text:
             yield chunk.text
