@@ -12,6 +12,7 @@ not cheap is cached here instead: the Cross-Encoder weights and the tokenized
 BM25 corpus would otherwise be rebuilt on every question.
 """
 
+import threading
 from typing import Any, Dict
 
 from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel
@@ -68,25 +69,45 @@ def app_config_from_runtime() -> AppConfig:
 
 
 _store_cache: Dict[str, Any] = {"key": None, "store": None}
+_store_cache_lock = threading.Lock()
 _embedder_cache: Dict[str, Any] = {"embedder": None}
+_embedder_cache_lock = threading.Lock()
 
 
 def vector_store(config: AppConfig) -> VectorStore:
-    """Return the FAISS store for the active corpus."""
+    """Return the FAISS store for the active corpus.
+
+    Double-checked locking: two concurrent callers racing a corpus switch
+    must not both open the same FAISS index, so the key check is repeated
+    once the lock is held. The cheap, unlocked check outside the lock keeps
+    the common case (cache already valid) lock-free.
+    """
     key = (config.paths.path_db, config.paths.collection_name)
     if _store_cache["key"] != key:
-        _store_cache.update(key=key, store=build_vector_store(config))
+        with _store_cache_lock:
+            if _store_cache["key"] != key:
+                _store_cache.update(key=key, store=build_vector_store(config))
     return _store_cache["store"]
 
 
 def reset_vector_store_cache() -> None:
-    _store_cache.update(key=None, store=None)
+    with _store_cache_lock:
+        _store_cache.update(key=None, store=None)
 
 
 def embedder(config: AppConfig):
-    """Return the reusable jina-clip-v2 worker."""
+    """Return the reusable jina-clip-v2 worker.
+
+    Double-checked locking: two concurrent first callers must not both
+    construct one, since each duplicate later starts its own worker
+    subprocess and loads jina-clip on first use (~29s), and the losing
+    instance is unreachable yet pinned alive by its own stdout/stderr pump
+    threads once its worker has started, so nothing ever closes it (#46).
+    """
     if _embedder_cache["embedder"] is None:
-        _embedder_cache["embedder"] = build_embedder(config)
+        with _embedder_cache_lock:
+            if _embedder_cache["embedder"] is None:
+                _embedder_cache["embedder"] = build_embedder(config)
     return _embedder_cache["embedder"]
 
 
@@ -162,7 +183,9 @@ def query_decomposer(config: AppConfig) -> OllamaChatModel:
 # module level because the interfaces call the pipeline as free functions and
 # have nowhere else to keep them for the life of the process.
 _lexical_cache: Dict[str, Any] = {"key": None, "index": None}
+_lexical_cache_lock = threading.Lock()
 _reranker_cache: Dict[str, Any] = {"reranker": None}
+_reranker_cache_lock = threading.Lock()
 
 
 def lexical_index(store: VectorStore, config: AppConfig) -> Bm25LexicalIndex:
@@ -172,6 +195,9 @@ def lexical_index(store: VectorStore, config: AppConfig) -> Bm25LexicalIndex:
     cache exists one level up, so that swapping corpora or retuning the BM25
     parameters gets a fresh index while ordinary queries reuse the tokenized
     one.
+
+    Double-checked locking: the key is re-read once the lock is held so two
+    concurrent callers racing the same new key build only one index (#46).
 
     Args:
         collection: Collection whose chunks form the BM25 corpus.
@@ -185,9 +211,11 @@ def lexical_index(store: VectorStore, config: AppConfig) -> Bm25LexicalIndex:
     key = (id(store), config.retrieval.bm25_k1, config.retrieval.bm25_b)
 
     if _lexical_cache["key"] != key:
-        _lexical_cache.update(
-            key=key, index=Bm25LexicalIndex(store, config.retrieval)
-        )
+        with _lexical_cache_lock:
+            if _lexical_cache["key"] != key:
+                _lexical_cache.update(
+                    key=key, index=Bm25LexicalIndex(store, config.retrieval)
+                )
     return _lexical_cache["index"]
 
 
@@ -198,6 +226,11 @@ def reranker(config: AppConfig) -> CrossEncoderReranker:
     weights each time. The fixed BGE adapter loads lazily, so holding one costs
     nothing until something is actually reranked.
 
+    Double-checked locking: two concurrent first callers must not both
+    construct one, since each duplicate would separately load hundreds of
+    megabytes of weights on first ``rerank()`` call, competing for the same
+    GPU (#46).
+
     Args:
         config: Current pipeline configuration.
 
@@ -206,7 +239,9 @@ def reranker(config: AppConfig) -> CrossEncoderReranker:
     """
     del config
     if _reranker_cache["reranker"] is None:
-        _reranker_cache["reranker"] = CrossEncoderReranker()
+        with _reranker_cache_lock:
+            if _reranker_cache["reranker"] is None:
+                _reranker_cache["reranker"] = CrossEncoderReranker()
     return _reranker_cache["reranker"]
 
 
