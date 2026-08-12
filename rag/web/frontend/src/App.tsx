@@ -132,6 +132,7 @@ const STRINGS = {
     storesLabel: 'Almacén vectorial',
     storeNotIndexed: 'sin indexar',
     storeEmptyHint: 'Almacén vacío. Sube PDFs y reindexa para activarlo.',
+    fingerprintStaleWarning: 'El índice no coincide con la configuración actual. Reindexa para actualizarlo.',
     modelsRoles: 'Roles de modelo',
     ollamaTitle: 'Servidor Ollama',
     ollamaOnline: 'En ejecución',
@@ -199,6 +200,7 @@ const STRINGS = {
     storesLabel: 'Vector store',
     storeNotIndexed: 'not indexed',
     storeEmptyHint: 'Empty store. Upload PDFs and re-index to activate it.',
+    fingerprintStaleWarning: 'The index no longer matches the current configuration. Re-index to update it.',
     modelsRoles: 'Model roles',
     ollamaTitle: 'Ollama server',
     ollamaOnline: 'Running',
@@ -266,6 +268,7 @@ const STRINGS = {
     storesLabel: 'Magatzem vectorial',
     storeNotIndexed: 'sense indexar',
     storeEmptyHint: 'Magatzem buit. Puja PDFs i reindexa per a activar-lo.',
+    fingerprintStaleWarning: "L'índex no coincideix amb la configuració actual. Reindexa per a actualitzar-lo.",
     modelsRoles: 'Rols de model',
     ollamaTitle: 'Servidor Ollama',
     ollamaOnline: 'En execució',
@@ -656,6 +659,10 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'docs' | 'models' | 'settings'>('docs');
   const [documents, setDocuments] = useState<string[]>([]);
   const [totalFragments, setTotalFragments] = useState(0);
+  // True when the active store's recorded index fingerprint disagrees with
+  // the configuration in force (issue #36). Detection only -- the backend
+  // never reindexes automatically on this; the user re-indexes explicitly.
+  const [fingerprintStale, setFingerprintStale] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
   const [indexingProgress, setIndexingProgress] = useState<IndexingProgress | null>(null);
@@ -756,6 +763,7 @@ export default function App() {
           setMode(initData.mode || 'rag');
           setDocuments(initData.documents || []);
           setTotalFragments(initData.total_fragments || 0);
+          setFingerprintStale(initData.fingerprint_stale || false);
           setActiveStore(initData.active_store || 'en');
           setUserName(initData.user || '');
           setIsInitialized(true);
@@ -927,6 +935,7 @@ export default function App() {
       }
       setDocuments(res.documents || []);
       setTotalFragments(res.total_fragments || 0);
+      setFingerprintStale(res.fingerprint_stale || false);
     } catch {
       setActiveStore(prev);
       setStoreError(T.corpusConnError);
@@ -1117,6 +1126,7 @@ export default function App() {
         setMode(result.mode || 'rag');
         setDocuments(result.documents || []);
         setTotalFragments(result.total_fragments || 0);
+        setFingerprintStale(result.fingerprint_stale || false);
         setActiveStore(result.active_store || 'en');
         setIndexingError(null);
         setIndexingProgress(null);
@@ -1502,6 +1512,12 @@ export default function App() {
                     })}
                   </div>
                   {storeError && <p className="pl-2 text-[11px] text-red-400">{storeError}</p>}
+                  {fingerprintStale && !isIndexing && (
+                    <p className="flex items-start gap-1.5 pl-2 text-[11px] text-amber-400">
+                      <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                      <span>{T.fingerprintStaleWarning}</span>
+                    </p>
+                  )}
                 </div>
 
                 {/* Documents list */}

@@ -478,7 +478,11 @@ from rag.engine.generation import (
     generar_respuesta_silenciosa,
     evaluar_pregunta_rag,
 )
-from rag.engine.indexing import indexar_documentos, obtener_documentos_indexados
+from rag.engine.indexing import (
+    index_fingerprint_mismatch,
+    indexar_documentos,
+    obtener_documentos_indexados,
+)
 from rag.engine.wiring import (
     app_config_from_runtime,
     reset_vector_store_cache,

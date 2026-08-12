@@ -219,6 +219,7 @@ _ES: dict = {
     "no_config":                "no configurado",
     "indexing.done":            "{total} fragmentos indexados",
     "indexing.none":            "No se indexaron documentos.",
+    "index.fingerprint_mismatch": "El índice no coincide con la configuración actual (p. ej. tamaño de fragmento). Usa /reindex para reconstruirlo.",
 }
 
 
@@ -409,6 +410,7 @@ _EN: dict = {
     "no_config":                "not configured",
     "indexing.done":            "{total} fragments indexed",
     "indexing.none":            "No documents were indexed.",
+    "index.fingerprint_mismatch": "The index no longer matches the current configuration (e.g. chunk size). Use /reindex to rebuild it.",
 }
 
 
@@ -599,6 +601,7 @@ _CA: dict = {
     "no_config":                "no configurat",
     "indexing.done":            "{total} fragments indexats",
     "indexing.none":            "No s'han indexat documents.",
+    "index.fingerprint_mismatch": "L'índex no coincideix amb la configuració actual (p. ex. mida de fragment). Usa /reindex per a reconstruir-lo.",
 }
 
 

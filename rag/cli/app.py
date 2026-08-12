@@ -120,6 +120,11 @@ class MonkeyGrabCLI:
                 ui.warning(ui._s("indexing.none"))
                 return
             ui.success(ui._s("indexing.done", total=total_chunks))
+        else:
+            # A store just built by indexar_documentos above always matches
+            # (indexar_documentos writes the fingerprint after a full run);
+            # only a reused store can be stale, so the check only runs here.
+            self._check_index_fingerprint()
 
         self._show_init_info(pdfs_count, self.collection.count())
 
@@ -433,6 +438,19 @@ class MonkeyGrabCLI:
         return True
 
     # HELPERS
+
+    def _check_index_fingerprint(self) -> None:
+        """Warn if the reused store no longer matches the active configuration.
+
+        Detection only: reindexing stays an explicit user action (/reindex)
+        because a settings change (e.g. chunk size) must never silently
+        trigger a MinerU + jina-clip pass over the corpus, which can take an
+        hour. A store with no recorded fingerprint (every index built before
+        this feature existed) is an unknown recipe, not a mismatch, and stays
+        silent -- see index_fingerprint_mismatch's docstring.
+        """
+        if self.rag.index_fingerprint_mismatch(self.collection):
+            ui.warning(ui._s("index.fingerprint_mismatch"))
 
     def _show_init_info(self, total_documentos: int = 0, total_fragmentos: int = 0) -> None:
         ui.init_panel(self._runtime_info(total_documentos, total_fragmentos))

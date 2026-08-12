@@ -643,6 +643,10 @@ def _api_init_logic():
         "documents": docs,
         "document_details": _collection_document_details(coll),
         "history_count": len(_state["historial_chat"]),
+        # Detection only -- a mismatch is never auto-reindexed here (issue #36):
+        # a settings change must not silently trigger a MinerU + jina-clip pass.
+        # Reindexing stays the explicit /api/reindex action.
+        "fingerprint_stale": rag_engine.index_fingerprint_mismatch(coll),
         **_init_paths_payload(),
     }, 200
 
@@ -1198,6 +1202,7 @@ def api_stores_select():
         "total_fragments": total,
         "documents": docs,
         "document_details": _collection_document_details(coll) if total > 0 else [],
+        "fingerprint_stale": rag_engine.index_fingerprint_mismatch(coll) if total > 0 else False,
         "stores": _all_stores(),
         **_init_paths_payload(),
     })

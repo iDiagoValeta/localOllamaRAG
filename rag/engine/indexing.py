@@ -13,6 +13,7 @@ from typing import List, Optional
 from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel
 from monkeygrab.adapters.extraction.mineru_extractor import MineruImageExtractor
 from monkeygrab.application.index_corpus import IndexCorpus
+from monkeygrab.application.index_fingerprint import compute_index_fingerprint, fingerprint_is_stale
 from monkeygrab.composition import build_extractor
 from monkeygrab.config.app_config import AppConfig
 from monkeygrab.ports.vector_store import VectorStore
@@ -110,9 +111,42 @@ def indexar_documentos(
             if not silent:
                 ui.error(f"error in {archivo}: {e}")
 
+    # Only a full-folder run (solo_archivos=None) can vouch for the *entire*
+    # store having been produced under `config`'s recipe -- every call site
+    # only makes that call against an already-empty collection (fresh start,
+    # or cleared first by /reindex), which is what FaissVectorStore.add's
+    # duplicate-id guard would otherwise reject. An incremental add
+    # (solo_archivos given) leaves whatever the rest of the store already
+    # recorded untouched: overwriting it here would let a partial add
+    # silently launder away a real mismatch from an earlier config change,
+    # exactly what index_fingerprint_mismatch exists to catch.
+    if solo_archivos is None:
+        collection.write_fingerprint(compute_index_fingerprint(config))
+
     if not silent:
         ui.pipeline_stop()
     return total_chunks
+
+
+def index_fingerprint_mismatch(collection: VectorStore) -> bool:
+    """Whether the store's recorded fingerprint disagrees with the config in force.
+
+    Detection only -- callers decide what to do with the answer (the product
+    warns and leaves reindexing to the user; see rag/cli/app.py and
+    rag/web/app.py). A store that has never recorded a fingerprint (every
+    index built before this feature existed) reads as *unknown*, not stale --
+    see ``fingerprint_is_stale``'s docstring.
+
+    Args:
+        collection: FAISS store to check.
+
+    Returns:
+        True only when the store recorded a fingerprint that actively
+        disagrees with the current configuration.
+    """
+    config = wiring.app_config_from_runtime()
+    expected = compute_index_fingerprint(config)
+    return fingerprint_is_stale(collection.read_fingerprint(), expected)
 
 
 def obtener_documentos_indexados(collection: VectorStore) -> List[str]:
