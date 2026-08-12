@@ -74,6 +74,23 @@ def _metadata_from_dict(meta: Dict[str, Any]) -> ChunkMetadata:
     )
 
 
+def _write_meta_file(path: str, rows: List[_Row]) -> None:
+    """Write every row in ``rows`` to ``path`` as JSONL, one object per line.
+
+    Shared by ``_save`` and ``_rewrite``: both stage a full sidecar snapshot
+    to a temp path before any ``os.replace``, rather than mutating
+    ``meta.jsonl`` in place.
+    """
+    with open(path, "w", encoding="utf-8") as f:
+        for chunk_id, doc, metadata in rows:
+            f.write(json.dumps({
+                "id": chunk_id,
+                "doc": doc,
+                "metadata": _metadata_to_dict(metadata),
+            }))
+            f.write("\n")
+
+
 # DISK I/O
 
 
@@ -240,7 +257,7 @@ class FaissVectorStore:
         row: _Row = (chunk.id, chunk.text, chunk.metadata)
         self._rows.append(row)
         self._id_to_pos[chunk.id] = position
-        self._save(row)
+        self._save()
 
     def query(self, embedding: Sequence[float], n_results: int) -> List[Fragment]:
         if self._index is None or self._index.ntotal == 0:
@@ -355,26 +372,42 @@ class FaissVectorStore:
             if os.path.exists(path):
                 os.remove(path)
 
-    def _save(self, new_row: _Row) -> None:
-        """Persist the just-added row: rewrite the index, append to the sidecar.
+    def _save(self) -> None:
+        """Persist the current state by staging both files, then replacing.
 
         The index has no incremental on-disk append, so each ``add`` rewrites
-        it whole (written to a temp path, then ``os.replace``d in, so a failed
-        write never leaves a half-written ``index.faiss``); the JSONL sidecar
-        only ever grows, so it is opened in append mode. If the index write
-        fails, this raises before the sidecar is touched, leaving the
-        directory exactly as it was before this ``add`` -- still consistent
-        and reloadable, just missing the chunk that failed to persist.
+        it whole; the sidecar is now rewritten whole too (``_write_meta_file``
+        over ``self._rows``, which already includes the row this ``add`` just
+        appended) instead of being opened in append mode. Both are written to
+        temp paths first -- ``index.faiss.tmp`` and ``meta.jsonl.tmp`` -- and
+        only then ``os.replace``d into place, index first then sidecar,
+        mirroring ``_rewrite``'s own ordering.
+
+        Staging both before touching either real file is what closes the
+        window #35 reported: previously the index was replaced immediately,
+        then the sidecar was appended to in place, so a failed sidecar write
+        (e.g. a full disk) left a durably-replaced index.faiss with N+1
+        vectors next to a meta.jsonl still at N rows -- caught, but only by
+        refusing to ever load the store again. Now a write failure on either
+        temp file leaves both real files untouched, exactly as they were
+        before this ``add``: still consistent and reloadable, just missing
+        the chunk that failed to persist. The only remaining window is
+        between the two ``os.replace`` calls themselves; each is individually
+        atomic, so only a hard crash in that exact instant -- not an ordinary
+        write failure -- can still leave the counts mismatched. That is the
+        same residual risk ``_rewrite`` already carries, and it is still
+        caught loudly by the ``index.ntotal != len(rows)`` check on the next
+        load rather than silently accepted.
         """
         try:
-            tmp_path = self._index_path + ".tmp"
-            faiss.write_index(self._index, tmp_path)
-            os.replace(tmp_path, self._index_path)
+            index_tmp = self._index_path + ".tmp"
+            faiss.write_index(self._index, index_tmp)
 
-            with open(self._meta_path, "a", encoding="utf-8") as f:
-                chunk_id, doc, metadata = new_row
-                f.write(json.dumps({"id": chunk_id, "doc": doc, "metadata": _metadata_to_dict(metadata)}))
-                f.write("\n")
+            meta_tmp = self._meta_path + ".tmp"
+            _write_meta_file(meta_tmp, self._rows)
+
+            os.replace(index_tmp, self._index_path)
+            os.replace(meta_tmp, self._meta_path)
 
             if not os.path.exists(self._version_path):
                 with open(self._version_path, "w", encoding="utf-8") as f:
@@ -391,14 +424,7 @@ class FaissVectorStore:
             meta_tmp = self._meta_path + ".tmp"
             version_tmp = self._version_path + ".tmp"
             faiss.write_index(self._index, index_tmp)
-            with open(meta_tmp, "w", encoding="utf-8") as f:
-                for chunk_id, doc, metadata in self._rows:
-                    f.write(json.dumps({
-                        "id": chunk_id,
-                        "doc": doc,
-                        "metadata": _metadata_to_dict(metadata),
-                    }))
-                    f.write("\n")
+            _write_meta_file(meta_tmp, self._rows)
             with open(version_tmp, "w", encoding="utf-8") as f:
                 f.write(_FORMAT_VERSION)
             os.replace(index_tmp, self._index_path)
