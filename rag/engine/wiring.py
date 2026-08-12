@@ -68,7 +68,7 @@ def app_config_from_runtime() -> AppConfig:
     )
 
 
-_store_cache: Dict[str, Any] = {"key": None, "store": None}
+_store_cache: Dict[str, Any] = {"entry": (None, None)}
 _store_cache_lock = threading.Lock()
 _embedder_cache: Dict[str, Any] = {"embedder": None}
 _embedder_cache_lock = threading.Lock()
@@ -81,18 +81,39 @@ def vector_store(config: AppConfig) -> VectorStore:
     must not both open the same FAISS index, so the key check is repeated
     once the lock is held. The cheap, unlocked check outside the lock keeps
     the common case (cache already valid) lock-free.
+
+    The key and the store live in one ``(key, store)`` tuple under a
+    single dict slot (``_store_cache["entry"]``), read with one subscript
+    instead of two (#57). That subscript is not itself atomic -- on this
+    interpreter it compiles to a dict lookup followed by a separate tuple
+    unpack, and a thread switch can land between them. What makes the
+    read safe is that it yields an *immutable* ``(key, store)`` pair,
+    which from then on lives only in this thread's own locals: a
+    concurrent corpus switch can swap which pair the slot holds next, but
+    it cannot reach into the pair this thread already pulled off the slot
+    and change it. The old two-slot cache had no such guarantee -- with
+    the key and the store as separate dict entries, a thread could
+    validate its key against one slot, get preempted, have a second
+    thread republish both slots for a different corpus, and then read the
+    *other* slot back holding the new corpus's store, silently
+    disagreeing with the key this thread already checked. The result was
+    a well-formed answer retrieved from the wrong corpus, with nothing to
+    log or raise.
     """
     key = (config.paths.path_db, config.paths.collection_name)
-    if _store_cache["key"] != key:
+    cached_key, store = _store_cache["entry"]
+    if cached_key != key:
         with _store_cache_lock:
-            if _store_cache["key"] != key:
-                _store_cache.update(key=key, store=build_vector_store(config))
-    return _store_cache["store"]
+            cached_key, store = _store_cache["entry"]
+            if cached_key != key:
+                store = build_vector_store(config)
+                _store_cache["entry"] = (key, store)
+    return store
 
 
 def reset_vector_store_cache() -> None:
     with _store_cache_lock:
-        _store_cache.update(key=None, store=None)
+        _store_cache["entry"] = (None, None)
 
 
 def embedder(config: AppConfig):
@@ -103,6 +124,20 @@ def embedder(config: AppConfig):
     subprocess and loads jina-clip on first use (~29s), and the losing
     instance is unreachable yet pinned alive by its own stdout/stderr pump
     threads once its worker has started, so nothing ever closes it (#46).
+
+    Unlike ``vector_store``/``lexical_index``, this slot is never re-keyed
+    or republished -- there is no corpus- or config-dependent identity to
+    switch, and nothing today ever resets it, so once built it holds the
+    one instance that will ever exist for the process's life. The #57
+    read race (validate one value, return another) has nothing to attach
+    to here. That reasoning is conditional on there staying no
+    invalidation path: a future GPU-release routine that swaps this slot
+    back to ``None`` to free VRAM would reopen the window, and the
+    ``(key, value)`` tuple trick used above would not close it here --
+    returning a locally-captured reference cannot stop a concurrent
+    ``close()`` on the very object it points to. That would need an
+    ownership rule (e.g. refcounting callers, or not invalidating the
+    slot until nothing still holds it), not just an atomic-looking read.
     """
     if _embedder_cache["embedder"] is None:
         with _embedder_cache_lock:
@@ -185,7 +220,7 @@ def query_decomposer(config: AppConfig) -> OllamaChatModel:
 # Expensive, reusable components keyed by what would invalidate them. Held at
 # module level because the interfaces call the pipeline as free functions and
 # have nowhere else to keep them for the life of the process.
-_lexical_cache: Dict[str, Any] = {"key": None, "index": None}
+_lexical_cache: Dict[str, Any] = {"entry": (None, None)}
 _lexical_cache_lock = threading.Lock()
 _reranker_cache: Dict[str, Any] = {"reranker": None}
 _reranker_cache_lock = threading.Lock()
@@ -202,6 +237,14 @@ def lexical_index(store: VectorStore, config: AppConfig) -> Bm25LexicalIndex:
     Double-checked locking: the key is re-read once the lock is held so two
     concurrent callers racing the same new key build only one index (#46).
 
+    The key and the index live in one ``(key, index)`` tuple under a single
+    dict slot instead of two separate slots, unpacked into this thread's
+    own locals in one subscript. The pair is immutable once read, so a
+    concurrent BM25 retune republishing the slot cannot alter the pair
+    this thread already has -- see ``vector_store`` above for the exact
+    reasoning, and for why the old two-slot cache could hand a caller an
+    index that belonged to a retune racing it (#57).
+
     Args:
         collection: Collection whose chunks form the BM25 corpus.
         config: Current config; the BM25 parameters are read from it.
@@ -213,13 +256,14 @@ def lexical_index(store: VectorStore, config: AppConfig) -> Bm25LexicalIndex:
     # unnamed collections (test doubles, typically) never share a cache entry.
     key = (id(store), config.retrieval.bm25_k1, config.retrieval.bm25_b)
 
-    if _lexical_cache["key"] != key:
+    cached_key, index = _lexical_cache["entry"]
+    if cached_key != key:
         with _lexical_cache_lock:
-            if _lexical_cache["key"] != key:
-                _lexical_cache.update(
-                    key=key, index=Bm25LexicalIndex(store, config.retrieval)
-                )
-    return _lexical_cache["index"]
+            cached_key, index = _lexical_cache["entry"]
+            if cached_key != key:
+                index = Bm25LexicalIndex(store, config.retrieval)
+                _lexical_cache["entry"] = (key, index)
+    return index
 
 
 def reranker(config: AppConfig) -> CrossEncoderReranker:
@@ -233,6 +277,11 @@ def reranker(config: AppConfig) -> CrossEncoderReranker:
     construct one, since each duplicate would separately load hundreds of
     megabytes of weights on first ``rerank()`` call, competing for the same
     GPU (#46).
+
+    Like ``embedder``, this slot is a singleton with no reset path today,
+    so the #57 read race does not apply -- see that function's docstring
+    for why, and for what adding an invalidation path here would require
+    instead of the tuple trick used by ``vector_store``/``lexical_index``.
 
     Args:
         config: Current pipeline configuration.

@@ -93,13 +93,13 @@ def _race_two_callers(target, args, builder):
 def _reset_wiring_caches():
     """Isolate each test from cache state left by others in the same process."""
     wiring._embedder_cache.update(embedder=None)
-    wiring._store_cache.update(key=None, store=None)
-    wiring._lexical_cache.update(key=None, index=None)
+    wiring._store_cache.update(entry=(None, None))
+    wiring._lexical_cache.update(entry=(None, None))
     wiring._reranker_cache.update(reranker=None)
     yield
     wiring._embedder_cache.update(embedder=None)
-    wiring._store_cache.update(key=None, store=None)
-    wiring._lexical_cache.update(key=None, index=None)
+    wiring._store_cache.update(entry=(None, None))
+    wiring._lexical_cache.update(entry=(None, None))
     wiring._reranker_cache.update(reranker=None)
 
 
