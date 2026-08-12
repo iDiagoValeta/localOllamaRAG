@@ -643,6 +643,10 @@ def _api_init_logic():
         "documents": docs,
         "document_details": _collection_document_details(coll),
         "history_count": len(_state["historial_chat"]),
+        # Detection only -- a mismatch is never auto-reindexed here (issue #36):
+        # a settings change must not silently trigger a MinerU + jina-clip pass.
+        # Reindexing stays the explicit /api/reindex action.
+        "fingerprint_stale": rag_engine.index_fingerprint_mismatch(coll),
         **_init_paths_payload(),
     }, 200
 
@@ -1099,7 +1103,15 @@ def api_settings_post():
             setattr(rag_engine, engine_var, val)
             updated[fe_key] = val
     _save_persisted_settings()
-    return jsonify({"ok": True, "settings": updated})
+    # contextualRetrieval and imageIndexing are index-time flags (part of
+    # index_recipe): flipping either one is the most likely way a store goes
+    # stale mid-session, with no restart and no store switch to otherwise
+    # trigger a fresh check -- see /api/init's own fingerprint_stale field.
+    return jsonify({
+        "ok": True,
+        "settings": updated,
+        "fingerprint_stale": rag_engine.index_fingerprint_mismatch(_get_collection()),
+    })
 
 
 @app.route("/api/ollama", methods=["GET"])
@@ -1160,7 +1172,15 @@ def api_models_post():
         return jsonify({"ok": False, "error": str(e)}), 400
 
     _save_persisted_settings()
-    return jsonify({"ok": True, "roles": roles})
+    # The contextual role only enters index_recipe while contextual retrieval
+    # is on (the default) -- reassigning it mid-session is just as likely to
+    # make the active store stale as toggling the flag itself; see
+    # api_settings_post's comment.
+    return jsonify({
+        "ok": True,
+        "roles": roles,
+        "fingerprint_stale": rag_engine.index_fingerprint_mismatch(_get_collection()),
+    })
 
 
 @app.route("/api/stores", methods=["GET"])
@@ -1198,6 +1218,7 @@ def api_stores_select():
         "total_fragments": total,
         "documents": docs,
         "document_details": _collection_document_details(coll) if total > 0 else [],
+        "fingerprint_stale": rag_engine.index_fingerprint_mismatch(coll) if total > 0 else False,
         "stores": _all_stores(),
         **_init_paths_payload(),
     })

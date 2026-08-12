@@ -132,6 +132,7 @@ const STRINGS = {
     storesLabel: 'Almacén vectorial',
     storeNotIndexed: 'sin indexar',
     storeEmptyHint: 'Almacén vacío. Sube PDFs y reindexa para activarlo.',
+    fingerprintStaleWarning: 'El índice guardado no coincide con la configuración activa, pero la app sigue funcionando con él. Reindexa cuando quieras: puede tardar una hora o más.',
     modelsRoles: 'Roles de modelo',
     ollamaTitle: 'Servidor Ollama',
     ollamaOnline: 'En ejecución',
@@ -199,6 +200,7 @@ const STRINGS = {
     storesLabel: 'Vector store',
     storeNotIndexed: 'not indexed',
     storeEmptyHint: 'Empty store. Upload PDFs and re-index to activate it.',
+    fingerprintStaleWarning: 'The saved index no longer matches the active configuration, but the app keeps working with it. Re-index whenever you like: it can take an hour or more.',
     modelsRoles: 'Model roles',
     ollamaTitle: 'Ollama server',
     ollamaOnline: 'Running',
@@ -266,6 +268,7 @@ const STRINGS = {
     storesLabel: 'Magatzem vectorial',
     storeNotIndexed: 'sense indexar',
     storeEmptyHint: 'Magatzem buit. Puja PDFs i reindexa per a activar-lo.',
+    fingerprintStaleWarning: "L'índex guardat no coincideix amb la configuració activa, però l'app continua funcionant amb ell. Reindexa quan vulgues: pot trigar una hora o més.",
     modelsRoles: 'Rols de model',
     ollamaTitle: 'Servidor Ollama',
     ollamaOnline: 'En execució',
@@ -656,6 +659,10 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'docs' | 'models' | 'settings'>('docs');
   const [documents, setDocuments] = useState<string[]>([]);
   const [totalFragments, setTotalFragments] = useState(0);
+  // True when the active store's recorded index fingerprint disagrees with
+  // the configuration in force (issue #36). Detection only -- the backend
+  // never reindexes automatically on this; the user re-indexes explicitly.
+  const [fingerprintStale, setFingerprintStale] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
   const [indexingProgress, setIndexingProgress] = useState<IndexingProgress | null>(null);
@@ -756,6 +763,7 @@ export default function App() {
           setMode(initData.mode || 'rag');
           setDocuments(initData.documents || []);
           setTotalFragments(initData.total_fragments || 0);
+          setFingerprintStale(initData.fingerprint_stale || false);
           setActiveStore(initData.active_store || 'en');
           setUserName(initData.user || '');
           setIsInitialized(true);
@@ -802,6 +810,10 @@ export default function App() {
     if (result?.ok && key in result.settings) {
       // Server may override (e.g. reranker unavailable)
       setSettings(prev => ({ ...prev, [key]: result.settings[key] }));
+      // contextualRetrieval / imageIndexing are index-time flags: flipping
+      // either can make the active store stale right here, mid-session, with
+      // no restart or store switch to otherwise trigger a fresh check.
+      setFingerprintStale(result.fingerprint_stale || false);
     } else {
       setSettings(prev => ({ ...prev, [key]: previousVal }));
       setSettingsError(result?.error || T.settingsSaveError);
@@ -927,6 +939,7 @@ export default function App() {
       }
       setDocuments(res.documents || []);
       setTotalFragments(res.total_fragments || 0);
+      setFingerprintStale(res.fingerprint_stale || false);
     } catch {
       setActiveStore(prev);
       setStoreError(T.corpusConnError);
@@ -950,6 +963,10 @@ export default function App() {
         return;
       }
       setModelRoles(res.roles);
+      // The contextual role enters index_recipe whenever contextual retrieval
+      // is on (the default) -- reassigning it can make the active store
+      // stale mid-session just like toggling the flag itself.
+      setFingerprintStale(res.fingerprint_stale || false);
     } catch {
       setModelRoles(prev);
       setModelError(T.modelSaveError);
@@ -1117,6 +1134,7 @@ export default function App() {
         setMode(result.mode || 'rag');
         setDocuments(result.documents || []);
         setTotalFragments(result.total_fragments || 0);
+        setFingerprintStale(result.fingerprint_stale || false);
         setActiveStore(result.active_store || 'en');
         setIndexingError(null);
         setIndexingProgress(null);
@@ -1502,6 +1520,12 @@ export default function App() {
                     })}
                   </div>
                   {storeError && <p className="pl-2 text-[11px] text-red-400">{storeError}</p>}
+                  {fingerprintStale && !isIndexing && (
+                    <p className="flex items-start gap-1.5 pl-2 text-[11px] text-amber-400">
+                      <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                      <span>{T.fingerprintStaleWarning}</span>
+                    </p>
+                  )}
                 </div>
 
                 {/* Documents list */}

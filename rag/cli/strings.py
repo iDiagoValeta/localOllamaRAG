@@ -219,6 +219,7 @@ _ES: dict = {
     "no_config":                "no configurado",
     "indexing.done":            "{total} fragmentos indexados",
     "indexing.none":            "No se indexaron documentos.",
+    "index.fingerprint_mismatch": "El índice guardado no coincide con la configuración activa, pero la aplicación sigue funcionando con él. Usa /reindex para reconstruirlo cuando quieras: puede tardar una hora o más.",
 }
 
 
@@ -409,6 +410,7 @@ _EN: dict = {
     "no_config":                "not configured",
     "indexing.done":            "{total} fragments indexed",
     "indexing.none":            "No documents were indexed.",
+    "index.fingerprint_mismatch": "The saved index no longer matches the active configuration, but the app keeps working with it. Use /reindex to rebuild it whenever you like: it can take an hour or more.",
 }
 
 
@@ -599,6 +601,7 @@ _CA: dict = {
     "no_config":                "no configurat",
     "indexing.done":            "{total} fragments indexats",
     "indexing.none":            "No s'han indexat documents.",
+    "index.fingerprint_mismatch": "L'índex guardat no coincideix amb la configuració activa, però l'aplicació continua funcionant amb ell. Usa /reindex per a reconstruir-lo quan vulgues: pot trigar una hora o més.",
 }
 
 

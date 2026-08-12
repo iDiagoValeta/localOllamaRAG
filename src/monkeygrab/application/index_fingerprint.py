@@ -21,7 +21,7 @@ store's job; deciding what it means is this module's.
 
 import hashlib
 import json
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from monkeygrab.config.app_config import AppConfig
 
@@ -113,3 +113,25 @@ def compute_index_fingerprint(config: AppConfig) -> str:
     """
     canonical = json.dumps(index_recipe(config), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:_FINGERPRINT_CHARS]
+
+
+def fingerprint_is_stale(stored: Optional[str], expected: str) -> bool:
+    """Whether a stored index provably no longer matches the active recipe.
+
+    Distinct from ``run_eval.should_rebuild`` (tests/eval/run_eval.py), which
+    treats "unknown" the same as "mismatch" because an eval run must never
+    measure a mixture of two pipelines. The product instead has to tell the
+    two apart: a missing fingerprint means every index built before this
+    feature existed, which is not something the user did, and warning about
+    it at every launch would be noise, not information. Only a fingerprint
+    that actively disagrees is something the user changed a setting since.
+
+    Args:
+        stored: The fingerprint the store recorded, or ``None`` if it never
+            recorded one.
+        expected: The fingerprint of the configuration currently in force.
+
+    Returns:
+        True only when ``stored`` is present and differs from ``expected``.
+    """
+    return stored is not None and stored != expected

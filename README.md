@@ -238,8 +238,16 @@ every supported variable with its default. The shell environment always wins ove
 the file. `MONKEYGRAB_LANG` sets the interface language (`es`, `en`, `ca`) and
 `DOCS_FOLDER` the corpus.
 
-Each corpus has its own Jina CLIP and FAISS index under `rag/vector_db/`. Run
-`/reindex` after changing the corpus, extraction behaviour or chunking rules.
+Each corpus has its own Jina CLIP and FAISS index under `rag/vector_db/`. Both
+interfaces detect when a stored index no longer matches the active chunking,
+extraction or index-time flags and warn about it, but never reindex on their
+own — a settings change must not silently trigger a MinerU + jina-clip pass
+over the corpus, which can take an hour. Run `/reindex` (or the web UI's
+reindex action) explicitly to rebuild after changing the corpus, extraction
+behaviour or chunking rules. This detection needs an index built with this
+feature present: an index built by an older version has no recorded recipe to
+compare against and is never flagged, however much its actual recipe may have
+drifted.
 
 </details>
 

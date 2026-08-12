@@ -5,6 +5,7 @@ import dataclasses
 from monkeygrab.application import index_fingerprint
 from monkeygrab.application.index_fingerprint import (
     compute_index_fingerprint,
+    fingerprint_is_stale,
     index_recipe,
 )
 from monkeygrab.config.app_config import AppConfig
@@ -172,3 +173,25 @@ def test_recipe_is_json_serializable_and_names_the_fixed_stack():
     recipe = index_recipe(AppConfig())
     assert recipe["extractor"] == "mineru"
     assert recipe["embedding"].startswith("jinaai/jina-clip-v2")
+
+
+# fingerprint_is_stale -- the product-facing tri-state read of a comparison
+# (match / mismatch / unknown), as opposed to run_eval.should_rebuild's binary
+# "rebuild unless proven identical" (tests/eval/run_eval.py). The product must
+# not warn about an index nobody has touched under this feature yet.
+
+
+def test_stale_when_stored_disagrees_with_expected():
+    assert fingerprint_is_stale("old-recipe", "new-recipe") is True
+
+
+def test_not_stale_when_stored_matches_expected():
+    assert fingerprint_is_stale("same-recipe", "same-recipe") is False
+
+
+def test_missing_fingerprint_is_unknown_not_stale():
+    # Every index built before this feature existed has no fingerprint.txt at
+    # all -- that must read as "unknown", never as "mismatch", or upgrading
+    # the product would warn every single existing user at their next launch
+    # for a config they never touched.
+    assert fingerprint_is_stale(None, "any-recipe") is False
