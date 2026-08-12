@@ -110,7 +110,12 @@ def _load_or_init(store_dir: str) -> Tuple[Optional["faiss.Index"], List[_Row]]:
     valid empty store (``add`` has simply never been called yet) -- returns
     ``(None, [])``. Any other partial combination of the three files is
     corruption: a complete store is always all-three-or-none, because
-    ``_save`` only ever leaves the directory in one of those two states.
+    ``_save`` and ``_rewrite`` both stage every file to a temp path before
+    replacing any of the real ones, so an ordinary write failure never
+    leaves the directory in a partial state -- only a process crash between
+    two of the ``os.replace`` calls can, and that residual case is still
+    caught below, either here (a missing file) or by the count check
+    further down (``index.ntotal != len(rows)``).
     """
     index_path = os.path.join(store_dir, _INDEX_FILENAME)
     meta_path = os.path.join(store_dir, _META_FILENAME)
@@ -373,31 +378,39 @@ class FaissVectorStore:
                 os.remove(path)
 
     def _save(self) -> None:
-        """Persist the current state by staging both files, then replacing.
+        """Persist the current state by staging all three files, then replacing.
 
         The index has no incremental on-disk append, so each ``add`` rewrites
         it whole; the sidecar is now rewritten whole too (``_write_meta_file``
         over ``self._rows``, which already includes the row this ``add`` just
-        appended) instead of being opened in append mode. Both are written to
-        temp paths first -- ``index.faiss.tmp`` and ``meta.jsonl.tmp`` -- and
-        only then ``os.replace``d into place, index first then sidecar,
-        mirroring ``_rewrite``'s own ordering.
+        appended) instead of being opened in append mode, and the version
+        marker is written unconditionally rather than only when absent. All
+        three are written to temp paths first -- ``index.faiss.tmp``,
+        ``meta.jsonl.tmp``, ``version.txt.tmp`` -- and only then
+        ``os.replace``d into place, in the same order ``_rewrite`` already
+        uses: index, sidecar, version.
 
-        Staging both before touching either real file is what closes the
+        Staging all three before touching any real file is what closes the
         window #35 reported: previously the index was replaced immediately,
         then the sidecar was appended to in place, so a failed sidecar write
-        (e.g. a full disk) left a durably-replaced index.faiss with N+1
+        (e.g. a full disk) left an atomically-replaced index.faiss with N+1
         vectors next to a meta.jsonl still at N rows -- caught, but only by
-        refusing to ever load the store again. Now a write failure on either
-        temp file leaves both real files untouched, exactly as they were
-        before this ``add``: still consistent and reloadable, just missing
-        the chunk that failed to persist. The only remaining window is
-        between the two ``os.replace`` calls themselves; each is individually
-        atomic, so only a hard crash in that exact instant -- not an ordinary
-        write failure -- can still leave the counts mismatched. That is the
-        same residual risk ``_rewrite`` already carries, and it is still
-        caught loudly by the ``index.ntotal != len(rows)`` check on the next
-        load rather than silently accepted.
+        refusing to ever load the store again. Now a write failure on any of
+        the three temp files leaves every real file untouched, exactly as
+        they were before this ``add``: still consistent and reloadable, just
+        missing the chunk that failed to persist. The only remaining window
+        is between the three ``os.replace`` calls themselves; each is
+        individually atomic, so only a hard crash in one of those exact
+        instants -- not an ordinary write failure -- can still leave the
+        directory in a partial state. That is the same residual risk
+        ``_rewrite`` already carries, and it is still caught loudly on the
+        next load (missing-file or ``index.ntotal != len(rows)``) rather than
+        silently accepted.
+
+        Note "atomically replaced" is not "durably written": nothing in this
+        adapter calls ``fsync``, so a power loss (as opposed to a process
+        crash) can still surface a stale or zero-length file despite every
+        ``os.replace`` here being atomic at the filesystem level.
         """
         try:
             index_tmp = self._index_path + ".tmp"
@@ -406,12 +419,13 @@ class FaissVectorStore:
             meta_tmp = self._meta_path + ".tmp"
             _write_meta_file(meta_tmp, self._rows)
 
+            version_tmp = self._version_path + ".tmp"
+            with open(version_tmp, "w", encoding="utf-8") as f:
+                f.write(_FORMAT_VERSION)
+
             os.replace(index_tmp, self._index_path)
             os.replace(meta_tmp, self._meta_path)
-
-            if not os.path.exists(self._version_path):
-                with open(self._version_path, "w", encoding="utf-8") as f:
-                    f.write(_FORMAT_VERSION)
+            os.replace(version_tmp, self._version_path)
         except OSError as e:
             raise RuntimeError(f"failed to persist FAISS store at {self._dir!r}: {e}") from e
 
