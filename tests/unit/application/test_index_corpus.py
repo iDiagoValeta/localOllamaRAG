@@ -7,6 +7,7 @@ against hand-written port fakes, so no Ollama server, PDF or vector store is
 touched.
 """
 
+import hashlib
 import sys
 from pathlib import Path
 
@@ -194,6 +195,39 @@ def test_contextual_model_failure_falls_back_to_no_enrichment():
     assert len(store.added) == 1
     chunk, _embedding = store.added[0]
     assert chunk.text == "Enough content here to clear the small test threshold easily."
+
+
+def test_contextual_prompt_template_is_pinned(monkeypatch):
+    """Pins the situational-context prompt's fixed wording via a hash, so an
+    edit to it fails a test instead of shipping silently.
+
+    monkeygrab.application.index_fingerprint._RECIPE_VERSION exists
+    precisely because this prompt template is one of the things that can
+    change stored chunk text without moving a single AppConfig value (see
+    that module's docstring). This test can't stop someone from editing the
+    template, but it can force the edit through a test failure instead of
+    past it.
+
+    The hash covers only the fixed wording, not the per-call values
+    (chunk_text/texto_base/idioma_doc are held fixed here) that get
+    interpolated into it on a real call.
+
+    If this fails because you intentionally changed the prompt: update the
+    hash below AND bump index_fingerprint._RECIPE_VERSION in the same
+    change -- do not update just this hash.
+    """
+    contextual = FakeContextualModel()
+    use_case = IndexCorpus(
+        FakeExtractor([]), FakeEmbedder(), FakeVectorStore(), AppConfig(), contextual_model=contextual
+    )
+
+    use_case._generate_situational_context(
+        chunk_text="a fixed chunk of text", texto_base="a fixed document sample", idioma_doc="English",
+    )
+
+    system_prompt, user_prompt = contextual.calls[0]["system"], contextual.calls[0]["prompt"]
+    digest = hashlib.sha256((system_prompt + "\x00" + user_prompt).encode("utf-8")).hexdigest()[:16]
+    assert digest == "9c4a5743523304fe"
 
 
 def _no_text_config(**overrides):

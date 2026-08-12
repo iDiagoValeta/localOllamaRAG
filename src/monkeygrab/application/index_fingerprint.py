@@ -50,7 +50,16 @@ _EMBEDDING_ID = "jinaai/jina-clip-v2@512"
 # bumps this past 1, which is also the point every existing index legitimately
 # needs rebuilding. See
 # tests/unit/application/test_index_fingerprint.py::test_recipe_version_is_omitted_at_v1_and_matches_pre_change_main
-# for the test that makes this safe rather than clever.
+# for the test that makes this safe rather than clever, and
+# ::test_recipe_version_bump_actually_changes_the_recipe_and_the_fingerprint
+# for proof the mechanism itself is live, not just its state at v1.
+#
+# When you bump this: test_recipe_version_is_omitted_at_v1_and_matches_pre_change_main
+# will fail on its hardcoded hash -- DELETE it, do not "fix" it by pasting in
+# the new hash. Its only job was to pin v1's zero-cost guarantee, which no
+# longer applies once this is 2+. ::test_default_app_config_fingerprint_is_pinned
+# is a different kind of pin (the default config's current fingerprint, not
+# v1's zero-cost property) and DOES need its hash updated, not deleted.
 _RECIPE_VERSION = 1
 
 _FINGERPRINT_CHARS = 16

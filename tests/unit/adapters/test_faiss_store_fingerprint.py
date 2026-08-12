@@ -88,3 +88,24 @@ def test_write_fingerprint_hard_fails_when_persistence_write_fails(tmp_path, mon
 
     with pytest.raises(RuntimeError, match="failed to persist"):
         store.write_fingerprint("abc123")
+
+
+def test_write_fingerprint_failure_does_not_destroy_the_previous_value(tmp_path, monkeypatch):
+    # This is the actual reason write_fingerprint moved to temp-file-then-
+    # os.replace: a failed write must leave the last successfully recorded
+    # fingerprint in place, not a corrupted or half-written file.
+    from monkeygrab.adapters.vectorstore import faiss_store as module
+
+    store = _store(tmp_path)
+    store.write_fingerprint("abc123")
+
+    def _boom(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(module.os, "replace", _boom)
+
+    with pytest.raises(RuntimeError, match="failed to persist"):
+        store.write_fingerprint("def456")
+
+    assert store.read_fingerprint() == "abc123"
+    assert _store(tmp_path).read_fingerprint() == "abc123"
