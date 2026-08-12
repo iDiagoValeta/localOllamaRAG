@@ -266,9 +266,43 @@ el conjunto ciego se consumiría en la primera iteración.
 > generador acotado a la fase de evaluación, `tests/eval/run_eval.py`), queda
 > pendiente de medir.
 
+> [!NOTE]
+> **Medido el 2026-08-12 (issue #54): el Cambio 1 sí surte efecto, y la
+> corrección de arriba hay que deshacerla.** Run completo del gate sobre `main`
+> en `8924110`, `gemma4:e2b` (el mismo modelo que los runs de referencia), los
+> dos corpus con cache hit:
+> `tests/eval/runs/20260812T194812Z_mineru-jina_clip-faiss.json`.
+>
+> | Bucket | 2026-07-29 | 2026-08-12 |
+> |---|---|---|
+> | Mediana de casos respondidos (n=36) | 201,0 s | **28,5 s** |
+> | Mediana de sólo recuperación (n=15) | 4,1 s | 4,1 s |
+> | Total | 124,0 min | **20,4 min** |
+> | Casos `source: corpus` (32) | 78,9 min | **12,6 min** |
+>
+> La comprobación de coherencia es la segunda fila: los casos de sólo
+> recuperación nunca llaman al generador, no tenían nada que ganar, y no
+> ganaron nada. Toda la mejora cae exactamente donde la hipótesis de la carga
+> en frío decía que caería, así que los 195-210 s que midió el issue #27 eran
+> carga en frío y el keep-alive la elimina.
+>
+> Eso resuelve la ambigüedad que dejaba abierta la nota de arriba: los runs de
+> referencia se lanzaron desde un árbol anterior a `d36c943`, pese a que el
+> commit aterrizó cuatro minutos antes del primero.
+>
+> El resultado no se movió: `compare_runs.py` contra el run sano del
+> 2026-07-29 da `identical: 51 case(s) unchanged`, delta +0.0000. Es además el
+> tercer run sano consecutivo con cero vuelcos, lo que refuerza el suelo de
+> ruido del criterio 1 más allá del único par sobre el que descansaba.
+>
+> Sigue sin registrarse el valor de `OLLAMA_KEEP_ALIVE` con el que corre cada
+> run: es el mismo hueco que hizo esta pregunta irresoluble desde los
+> artefactos, y el que el criterio 7 y el libro de evidencias existen para
+> cerrar.
+
 | Conjunto | Papel | Cuándo se toca | Tamaño |
 |---|---|---|---|
-| **Búsqueda** | Función objetivo del loop | Cada iteración | ~11 docs · ~60 casos · ~136 min (corregido ~4x; pendiente de medir tras el Cambio 1) |
+| **Búsqueda** | Función objetivo del loop | Cada iteración | ~11 docs · ~60 casos · **~24 min** (extrapolado de los 12,6 min medidos sobre 32 casos) |
 | **Validación** | Detecta sobreajuste al conjunto de búsqueda | Al cerrar una tanda | ~4 docs · ~22 casos |
 | **Ciego** | Acepta una versión | Sólo para aceptar; nunca dentro del loop | ~5 docs · ~28 casos |
 
@@ -332,9 +366,9 @@ espacio de acción se amplíe a código.
 
 ```mermaid
 flowchart LR
-    P[Proponente] -->|configuración| F[Nivel rápido<br/>~15 casos · ~32 min]
+    P[Proponente] -->|configuración| F[Nivel rápido<br/>~15 casos · ~6 min]
     F -->|regresión| X[Descartado]
-    F -->|sin regresión| G[Conjunto de búsqueda<br/>~60 casos · ~136 min]
+    F -->|sin regresión| G[Conjunto de búsqueda<br/>~60 casos · ~24 min]
     G --> L[(Libro de evidencias<br/>versionado)]
     L --> P
 
@@ -351,14 +385,24 @@ ajustables y con qué valores. Escrito a mano, no inferido por introspección:
 añadir un parámetro debe ser una decisión visible, porque cada uno multiplica el
 espacio contra un presupuesto de evaluaciones muy corto.
 
-**Proponente.** A ~2.8 horas por evaluación completa (32 + 136 min: nivel
-rápido más conjunto de búsqueda; corregido con el factor de la nota de la
-sección 3, pendiente de remedir tras el Cambio 1 del issue #27), una noche da
-del orden de tres o cuatro candidatos, no diez o quince como asumía la
-estimación original. La búsqueda aleatoria es inútil con ese presupuesto, así
-que el proponente natural es un LLM que lea los fallos concretos y razone qué
-mover. Para saber si ese razonamiento aporta algo, el arnés incluye un
-proponente determinista como control y el criterio 5 se corre con ambos.
+**Proponente.** El argumento original decía: a ~2,8 horas por evaluación
+completa una noche da tres o cuatro candidatos, la búsqueda ciega es inútil con
+ese presupuesto, luego el proponente natural es un LLM que lea los fallos y
+razone qué mover.
+
+> [!IMPORTANT]
+> **Ese argumento ya no se sostiene (medido el 2026-08-12, ver la nota de la
+> sección 3).** El conjunto de búsqueda tarda **12,6 min** sobre los 32 casos
+> actuales, no 136. Una evaluación completa es el nivel rápido más eso, del
+> orden de un cuarto de hora, así que una noche da **decenas** de candidatos.
+> El presupuesto que volvía inútil la búsqueda ciega, y con ello obligatorio el
+> proponente LLM, desapareció.
+
+Esto **no** demuestra que el proponente determinista baste, y no es motivo para
+retirar el LLM. Lo que cambia es que la comparación controlada entre ambos que
+ya exige el criterio 5 pasa a ser barata, así que la pregunta se zanja con
+evidencia en vez de con un argumento de presupuesto. El arnés mantiene los dos
+proponentes justamente para eso.
 
 **Evaluador.** Aplica la configuración, corre el nivel rápido, descarta si hay
 regresión, y sólo entonces paga el conjunto de búsqueda completo. Devuelve el
