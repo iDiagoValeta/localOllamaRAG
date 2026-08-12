@@ -5,6 +5,7 @@ exception is test_add_hard_fails_when_persistence_write_fails, which injects
 a write failure that cannot be reliably reproduced with a real disk.
 """
 
+import json
 import math
 import os
 import sys
@@ -129,6 +130,65 @@ def test_persists_to_disk_and_reopening_matches(tmp_path):
     assert reopened.count() == store.count() == 2
     assert reopened.get_page(limit=None, offset=0) == store.get_page(limit=None, offset=0)
     assert reopened.query(_unit([1.0, 0.0]), n_results=1) == store.query(_unit([1.0, 0.0]), n_results=1)
+
+
+def test_accented_text_and_non_ascii_filename_round_trip_without_escapes(tmp_path):
+    """Regression test for #55/#75: rows are now serialized with
+    ensure_ascii=False, so accented text is written as raw UTF-8 rather than
+    \\uXXXX escapes. A plain field-equality check would pass either way
+    (json.loads parses both forms identically) -- the point of this test is
+    inspecting the actual bytes on disk, not just what comes back out."""
+    paths = _paths(tmp_path, "accented")
+    store = FaissVectorStore(paths)
+    chunk = _chunk(
+        "informe_técnico_año_2026.pdf", 0, 0, "Texto con áéíóúñ y ¿preguntas?"
+    )
+    store.add(chunk, _unit([1.0, 0.0]))
+
+    meta_path = Path(paths.path_db) / paths.collection_name / "meta.jsonl"
+    raw = meta_path.read_text(encoding="utf-8")
+    assert "\\u" not in raw
+    assert "informe_técnico_año_2026.pdf" in raw
+    assert "áéíóúñ" in raw
+
+    reopened = FaissVectorStore(paths)
+    fragment = reopened.get_by_ids([chunk.id])[0]
+    assert fragment.doc == "Texto con áéíóúñ y ¿preguntas?"
+    assert fragment.metadata.source == "informe_técnico_año_2026.pdf"
+
+
+def test_reopening_a_legacy_ascii_escaped_sidecar_alongside_a_new_utf8_row(tmp_path):
+    """Every store already on a user's disk was written pre-#75, with every
+    row \\uXXXX-escaped (ensure_ascii=True). This simulates reopening one:
+    a legacy line is rewritten into its escaped form by hand, a new chunk is
+    then added through the normal API (raw UTF-8, per #75), and both lines
+    must still decode to identical text -- the mixed-encoding file the
+    ensure_ascii=False decision explicitly allows, since _load_or_init caches
+    each row's on-disk bytes verbatim instead of re-encoding them."""
+    paths = _paths(tmp_path, "legacy")
+    store = FaissVectorStore(paths)
+    legacy_chunk = _chunk("legacy.pdf", 0, 0, "café con leche")
+    store.add(legacy_chunk, _unit([1.0, 0.0]))
+
+    meta_path = Path(paths.path_db) / paths.collection_name / "meta.jsonl"
+    row = json.loads(meta_path.read_text(encoding="utf-8"))
+    legacy_line = json.dumps(row, ensure_ascii=True) + "\n"
+    assert "\\u" in legacy_line  # sanity: café's accent actually gets escaped
+    meta_path.write_text(legacy_line, encoding="utf-8")
+
+    reopened = FaissVectorStore(paths)
+    new_chunk = _chunk("new.pdf", 0, 0, "nouvelle ligne UTF-8 : 日本語")
+    reopened.add(new_chunk, _unit([0.0, 1.0]))
+
+    lines = [line for line in meta_path.read_text(encoding="utf-8").splitlines() if line]
+    assert len(lines) == 2
+    assert "\\u" in lines[0]  # legacy row untouched -- still escaped
+    assert "\\u" not in lines[1]  # freshly added row -- raw UTF-8
+
+    healed = FaissVectorStore(paths)
+    fragments = {f.id: f for f in healed.get_by_ids([legacy_chunk.id, new_chunk.id])}
+    assert fragments[legacy_chunk.id].doc == "café con leche"
+    assert fragments[new_chunk.id].doc == "nouvelle ligne UTF-8 : 日本語"
 
 
 def test_version_mismatch_hard_fails_on_reopen(tmp_path):

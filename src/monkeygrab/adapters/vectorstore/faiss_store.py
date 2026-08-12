@@ -28,17 +28,22 @@ class _Row(NamedTuple):
 
     ``line`` is cached here, not recomputed from ``doc``/``metadata`` on every
     write, because re-running ``json.dumps`` over every previously stored row
-    on every ``add`` is exactly the redundant cost issue #55 measured (~90%
-    of the sidecar's write time). Caching it on the row itself rather than in
-    a side list keyed by position makes staleness structurally impossible
-    instead of a convention to maintain: a ``_Row`` is only ever constructed
-    once, at the single point where a chunk is either freshly added
-    (``add``, which serializes it) or loaded from disk (``_load_or_init``,
-    which keeps the exact bytes already on disk instead of re-serializing
-    them). Nothing ever mutates a field in place or rebuilds ``line`` from
-    the other three after the fact, so ``line`` and (``chunk_id``, ``doc``,
-    ``metadata``) can never drift apart -- there is no code path that could
-    change one without the other.
+    on every ``add`` was the redundant cost issue #55 measured. Caching it on
+    the row itself, set once at construction and never rebuilt in place, means
+    ``line`` always decodes to a row that reproduces these fields -- but that
+    is not the same as "``line`` equals ``_serialize_row(chunk_id, doc,
+    metadata)``". For a row loaded from a legacy file (``_load_or_init``
+    caches the on-disk bytes verbatim; ``_metadata_from_dict`` fills in
+    defaults for keys that row never had), those two can legitimately differ
+    while still describing the same content. One side effect worth knowing:
+    the sidecar no longer self-normalizes a legacy row to the current key set
+    on rewrite -- ``_FORMAT_VERSION`` is the only lever left for that.
+
+    Trade-off: carrying ``line`` roughly doubles ``self._rows``'s resident
+    memory over a version without it (single-digit MB at the corpus sizes
+    this product plausibly sees), and ``_write_meta_file`` now builds the
+    whole sidecar as one string before writing it, so its peak memory is the
+    full file rather than one line at a time.
     """
 
     chunk_id: str
@@ -290,7 +295,7 @@ class FaissVectorStore:
         self._fingerprint_path = os.path.join(self._dir, _FINGERPRINT_FILENAME)
 
         self._index, self._rows = _load_or_init(self._dir)
-        self._id_to_pos: Dict[str, int] = {row[0]: i for i, row in enumerate(self._rows)}
+        self._id_to_pos: Dict[str, int] = {row.chunk_id: i for i, row in enumerate(self._rows)}
 
     def add(self, chunk: Chunk, embedding: Sequence[float]) -> None:
         if chunk.id in self._id_to_pos:
@@ -310,14 +315,17 @@ class FaissVectorStore:
             )
 
         faiss.normalize_L2(vector)
-        self._index.add(vector)
-        position = len(self._rows)
+        # Serialize before mutating the index: if this ever raised, an index
+        # already grown by one with no matching row would be a desync that
+        # _load_or_init's count check rejects forever on the next reopen.
         row = _Row(
             chunk_id=chunk.id,
             doc=chunk.text,
             metadata=chunk.metadata,
             line=_serialize_row(chunk.id, chunk.text, chunk.metadata),
         )
+        self._index.add(vector)
+        position = len(self._rows)
         self._rows.append(row)
         self._id_to_pos[chunk.id] = position
         self._save()
@@ -340,7 +348,7 @@ class FaissVectorStore:
         k = self._index.ntotal
         scores, positions = self._index.search(vector, k)
         candidates = [
-            (float(scores[0][j]), self._rows[positions[0][j]][0], int(positions[0][j]))
+            (float(scores[0][j]), self._rows[positions[0][j]].chunk_id, int(positions[0][j]))
             for j in range(k)
         ]
         candidates.sort(key=lambda c: (-c[0], c[1]))
@@ -432,7 +440,7 @@ class FaissVectorStore:
         else:
             self._index = None
         self._rows = kept_rows
-        self._id_to_pos = {row[0]: i for i, row in enumerate(self._rows)}
+        self._id_to_pos = {row.chunk_id: i for i, row in enumerate(self._rows)}
         self._rewrite()
         return removed
 
