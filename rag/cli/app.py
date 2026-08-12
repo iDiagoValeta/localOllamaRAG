@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Tuple
 from rag.cli.commands import ALIASES, COMMANDS, primary_commands
 from rag.cli.display import QueryTimer, SessionStats, ui
 from rag.cli.strings import s
+from rag.engine import settings_store
 
 
 # MAIN CLI CLASS
@@ -98,6 +99,8 @@ class MonkeyGrabCLI:
         # runs.
         if os.name == "nt":
             signal.signal(signal.SIGINT, signal.default_int_handler)
+
+        self._load_persisted_settings()
 
         ui.logo()
 
@@ -438,6 +441,32 @@ class MonkeyGrabCLI:
         return True
 
     # HELPERS
+
+    def _load_persisted_settings(self) -> None:
+        """Adopt model roles and pipeline flags the web control panel persisted.
+
+        Before this existed, the CLI always started from rag.chat_pdfs's
+        hardcoded defaults even after a session on the web UI changed the
+        contextual model or turned contextual retrieval off -- exactly the
+        divergence that can make ``_check_index_fingerprint`` warn for a
+        reason nothing in *this* CLI session explains, and that would make a
+        CLI-initiated reindex fix the symptom while quietly re-recording the
+        wrong recipe. See ``rag/engine/settings_store.py`` for the precedence
+        rule (env var > settings.json > default) and why the active store is
+        not part of what gets adopted here.
+
+        A missing or corrupt settings.json is a no-op, not a startup failure
+        -- same precedent as ``_check_index_fingerprint`` below. This session
+        never writes the file back (the CLI has no runtime control that would
+        change a role or a flag), so there is nothing for two processes to
+        race over.
+        """
+        try:
+            data = settings_store.load_settings(self.rag)
+            settings_store.apply_model_roles(self.rag, data)
+            settings_store.apply_pipeline_flags(self.rag, data)
+        except Exception:
+            pass
 
     def _check_index_fingerprint(self) -> None:
         """Warn if the reused store no longer matches the active configuration.

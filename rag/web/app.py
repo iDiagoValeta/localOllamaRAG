@@ -43,6 +43,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 import rag.chat_pdfs as rag_engine
+from rag.engine import settings_store
 
 _web_dir = os.path.dirname(os.path.abspath(__file__))
 _react_dist = os.path.join(_web_dir, "frontend", "dist")
@@ -93,8 +94,13 @@ OLLAMA_BASE_URL = rag_engine.OLLAMA_BASE_URL
 _model_caps_cache: dict = {}  # digest -> capabilities list
 
 # Persisted UI choices (model roles, active store, pipeline flags) so the desktop
-# app remembers them across restarts. Lives in the writable data dir.
-_SETTINGS_FILE = os.path.join(rag_engine.DATA_DIR, "settings.json")
+# app remembers them across restarts, and so the CLI (rag/cli/app.py, via
+# rag/engine/settings_store.py) observes the same runtime config instead of
+# always starting from the hardcoded defaults. Lives in the writable data dir,
+# at settings_store.settings_path(rag_engine) -- resolved fresh in
+# _load_persisted_settings and _save_persisted_settings below rather than
+# cached in a module constant, so the two can never read/write different
+# paths even in the hypothetical where DATA_DIR changed after import.
 
 
 def _infer_corpus_preset() -> str | None:
@@ -475,16 +481,19 @@ def _save_persisted_settings() -> None:
     """Persist model roles, active store and pipeline flags to the data dir.
 
     Best-effort: lets the desktop app reopen with the user's last choices instead
-    of the startup defaults.
+    of the startup defaults. The CLI reads roles and flags back through
+    rag/engine/settings_store.py but never writes here -- see that module's
+    docstring for why there is no write race to worry about.
     """
     try:
         data = {
             "roles": rag_engine.get_model_roles(),
             "active_store": _active_store_name(),
-            "flags": {var: bool(getattr(rag_engine, var, False)) for var in _SETTINGS_MAP.values()},
+            "flags": {var: bool(getattr(rag_engine, var, False)) for var in rag_engine.PERSISTABLE_FLAG_VARS},
         }
-        os.makedirs(os.path.dirname(_SETTINGS_FILE), exist_ok=True)
-        with open(_SETTINGS_FILE, "w", encoding="utf-8") as f:
+        path = settings_store.settings_path(rag_engine)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
@@ -493,26 +502,20 @@ def _save_persisted_settings() -> None:
 def _load_persisted_settings() -> None:
     """Apply persisted settings at startup: model roles, then store, then flags.
 
-    Roles are applied before the store. Missing or invalid entries are skipped;
-    the engine defaults stand when nothing is saved.
+    Roles and flags go through rag/engine/settings_store.py, the same helper
+    the CLI uses. Roles are applied with ``prefer_env_var=False``: this is the
+    web app restoring its OWN prior state (the user picked it through this
+    same control panel, which never consulted the environment either), not a
+    remembered default an env var should outrank -- see settings_store's
+    module docstring for why applying the CLI's env-first precedence here
+    would silently revert, and then permanently erase, an explicit UI choice.
+    The active store has no CLI equivalent and stays handled here, between
+    the two shared steps to match the order this always ran in. A missing or
+    corrupt file is a no-op: the engine defaults stand when nothing is saved.
     """
-    try:
-        # utf-8-sig tolerates a BOM if the file was hand-edited with a Windows tool.
-        with open(_SETTINGS_FILE, "r", encoding="utf-8-sig") as f:
-            data = json.load(f)
-    except (OSError, ValueError):
-        return
+    data = settings_store.load_settings(rag_engine)
 
-    roles = data.get("roles") or {}
-    valid = {
-        k: v for k, v in roles.items()
-        if k in rag_engine.MODEL_ROLE_VARS and isinstance(v, str) and v.strip()
-    }
-    if valid:
-        try:
-            rag_engine.set_model_roles_runtime(valid)
-        except Exception:
-            pass
+    settings_store.apply_model_roles(rag_engine, data, prefer_env_var=False)
 
     store = data.get("active_store")
     if store and store != _active_store_name():
@@ -523,9 +526,7 @@ def _load_persisted_settings() -> None:
             except Exception:
                 pass
 
-    for var, val in (data.get("flags") or {}).items():
-        if var in _SETTINGS_MAP.values():
-            setattr(rag_engine, var, bool(val))
+    settings_store.apply_pipeline_flags(rag_engine, data)
 
 
 def _ollama_error_payload(exc: Exception) -> dict:

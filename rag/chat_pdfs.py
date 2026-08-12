@@ -208,6 +208,27 @@ def set_pipeline_flags(overrides: Dict[str, bool]) -> Dict[str, bool]:
     return previous
 
 
+# Index-time flags the web control panel can also flip at runtime (unlike
+# set_pipeline_flags above, without a fair-comparison guard, which is exactly
+# what makes them the most likely way a store goes stale -- see
+# index_fingerprint_mismatch and rag/engine/settings_store.py). Listed
+# separately from PIPELINE_RUNTIME_FLAGS rather than folded into it because
+# mixing them would let a caller flip an index recipe field through the
+# runtime-only API and believe the comparison stayed fair.
+INDEX_TIME_FLAGS = (
+    "USAR_CONTEXTUAL_RETRIEVAL",
+    "USAR_EMBEDDINGS_IMAGEN",
+)
+
+# Every flag rag/engine/settings_store.py may persist to and restore from
+# settings.json -- the union of what is safe to switch mid-session and what
+# only changes fairly after a reindex. Restoring a remembered index-time flag
+# is not the same guarantee as set_pipeline_flags's runtime-safe switch: it
+# only saves the user from re-clicking a control panel toggle, and the
+# fingerprint check still catches a store that predates the restored value.
+PERSISTABLE_FLAG_VARS = PIPELINE_RUNTIME_FLAGS + INDEX_TIME_FLAGS
+
+
 # Paths and persistence
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -329,6 +350,19 @@ MODEL_ROLE_VARS = {
     "chat": "MODELO_CHAT",
     "contextual": "MODELO_CONTEXTUAL",
     "recomp": "MODELO_RECOMP",
+}
+
+# The environment variable each role would have been read from at import time
+# (see the MODELO_* assignments above). rag/engine/settings_store.py consults
+# this to decide precedence when a persisted settings.json choice and an
+# explicit env var both want to set the same role: the env var always wins
+# (.claude/CLAUDE.md section 3), settings.json only fills in where the
+# process environment left the hardcoded default standing.
+MODEL_ROLE_ENV_VARS = {
+    "rag": "OLLAMA_RAG_MODEL",
+    "chat": "OLLAMA_CHAT_MODEL",
+    "contextual": "OLLAMA_CONTEXTUAL_MODEL",
+    "recomp": "OLLAMA_RECOMP_MODEL",
 }
 
 

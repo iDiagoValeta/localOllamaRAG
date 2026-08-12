@@ -251,6 +251,22 @@ feature present: an index built by an older version has no recorded recipe to
 compare against and is never flagged, however much its actual recipe may have
 drifted.
 
+Model roles and pipeline flags chosen in the web UI persist to
+`settings.json` in the writable data dir, and the CLI reads that file at
+startup too, so a contextual model or an index-time flag changed in one
+interface does not silently diverge from what the other runs with (a stale
+index otherwise looks like a bug for no reason the current CLI session can
+explain). Pipeline flags always take the persisted choice over the built-in
+default. Model roles differ by interface: the **CLI** treats settings.json as
+just another implicit source and gives way to an explicit `OLLAMA_*_MODEL`
+variable set for that invocation — including one supplied through `.env`,
+since the shell environment and the file are indistinguishable once loaded;
+the **web app** always takes the persisted role, because there it is not a
+remembered default but the app's own prior state, chosen through that same
+control panel. The active document store is a web-only concept — the CLI has
+no store picker — and keeps following `DOCS_FOLDER` regardless of what the
+web UI last selected.
+
 </details>
 
 ### Interfaces
