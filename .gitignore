@@ -50,6 +50,13 @@ tests/eval/papers_cache/
 tests/eval/blind_docs/
 tests/eval/runs/
 
+# Language-axis probe (tests/eval/run_probe_lang.py, docs/design/2026-07-28-
+# loop-automejorable.md section 3 "Sonda previa"): PDFs staged into their own
+# isolated collection and its dated JSON reports, same reasoning as blind_docs/
+# and runs/ above.
+tests/eval/probe_docs_lang/
+tests/eval/probe_runs_lang/
+
 # Local test/evaluation scratch output.
 /pipeline/output/
 
