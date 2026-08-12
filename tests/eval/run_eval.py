@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import dataclasses
 import json
 import math
 import os
@@ -39,7 +40,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 # CONSTANTS
 
@@ -250,6 +251,7 @@ def ensure_indexed(
     required_pdfs: Iterable[str],
     label: str,
     path_label: Optional[Path] = None,
+    config_overrides: Optional[Mapping[str, Any]] = None,
 ):
     """Index missing PDFs into the multimodal stack; return its use cases.
 
@@ -260,10 +262,14 @@ def ensure_indexed(
         label: Short name for log lines ("dev set", "blind set").
         path_label: Forwarded to _eval_app_config to isolate the FAISS
             collection from carpeta's own basename (see EVAL_DEV_LABEL).
+        config_overrides: Forwarded to _eval_app_config -- lets evaluate()
+            reshape the retrieval/indexing AppConfig for this corpus without
+            mutating rag's module globals.
 
     Returns:
-        ``(Retrieve, Stack)`` for this corpus. Caller should ``close()`` the
-        stack embedder when finished if it exposes that method.
+        ``(Retrieve, Answer, Stack)`` for this corpus. Caller should
+        ``close()`` the stack embedder when finished if it exposes that
+        method.
 
     Raises:
         EvalSetupError: A required PDF is still missing after indexing.
@@ -281,7 +287,9 @@ def ensure_indexed(
     required = set(required_pdfs)
     rag.set_docs_folder_runtime(str(carpeta))
     try:
-        config = _eval_app_config(rag, carpeta, path_label=path_label)
+        config = _eval_app_config(
+            rag, carpeta, path_label=path_label, config_overrides=config_overrides
+        )
         stack = build_stack(config)
         store = stack.vector_store
         expected_fingerprint = compute_index_fingerprint(config)
@@ -417,7 +425,12 @@ def _fragment_to_dict(fragment) -> Dict[str, Any]:
     return fragment_to_dict(fragment)
 
 
-def _eval_app_config(rag, carpeta: Path, path_label: Optional[Path] = None):
+def _eval_app_config(
+    rag,
+    carpeta: Path,
+    path_label: Optional[Path] = None,
+    config_overrides: Optional[Mapping[str, Any]] = None,
+):
     """Build the fixed multimodal evaluation configuration.
 
     Args:
@@ -427,6 +440,11 @@ def _eval_app_config(rag, carpeta: Path, path_label: Optional[Path] = None):
             name from this path's basename instead of carpeta's, without
             changing which folder is actually indexed. See EVAL_DEV_LABEL for
             why the dev set needs this and the blind set does not.
+        config_overrides: Dotted ``"section.field"`` overrides applied last,
+            on top of every override above -- lets a caller (evaluate())
+            reshape the retrieval/indexing config without touching rag's
+            module globals. Does not reach generation's own config; see
+            evaluate()'s docstring for why that path is separate.
     """
     from monkeygrab.config.app_config import AppConfig
     from monkeygrab.config.paths import derive_db_paths
@@ -454,6 +472,8 @@ def _eval_app_config(rag, carpeta: Path, path_label: Optional[Path] = None):
         config = config.with_overrides(
             **{"paths.path_db": path_db, "paths.collection_name": collection_name}
         )
+    if config_overrides:
+        config = config.with_overrides(**config_overrides)
     return config
 
 
@@ -801,6 +821,227 @@ def _update_baseline(pass_rate: float) -> None:
     print(f"[baseline] {verb} to {candidate:.2f} (observed {pass_rate:.4f} minus {BASELINE_MARGIN:.2f} margin)")
 
 
+# LIBRARY API
+
+
+def evaluate(
+    *,
+    models: Sequence[str],
+    case_ids: Optional[Sequence[str]] = None,
+    config_overrides: Optional[Mapping[str, Any]] = None,
+    update_baseline: bool = False,
+    write_report: bool = True,
+) -> Dict[str, Any]:
+    """Run the gate and return its record instead of only printing it.
+
+    This is main()'s own implementation, factored out so a caller other than
+    the CLI -- e.g. the search harness a self-improving loop drives (see
+    docs/design/2026-07-28-loop-automejorable.md section 6.1) -- can run an
+    evaluation in-process and get a return value back, instead of parsing
+    stdout or a report file off disk. ``main()`` is a thin wrapper around
+    this function: the CLI's own behavior (stdout, report file, exit code,
+    baseline semantics) is unchanged by this refactor.
+
+    Args:
+        models: Ollama generator models to evaluate.
+        case_ids: ``gold_cases.jsonl`` ``"id"`` values to run. ``None`` runs
+            every case (the CLI's behavior). Filtering happens immediately
+            after loading, before any corpus is staged or indexed, so a
+            subset that only touches one corpus (dev or blind) never forces
+            the other one to be staged/indexed.
+        config_overrides: Dotted ``"section.field"`` overrides
+            (``AppConfig.with_overrides``) applied to the retrieval/indexing
+            ``AppConfig`` this run builds via ``_eval_app_config``.
+            Generation does not read this config: ``generar_respuesta_silenciosa``
+            builds its own ``AppConfig`` per call via
+            ``wiring.app_config_from_runtime()``, which reads model roles and
+            flags straight from ``rag.chat_pdfs``'s module globals and the
+            process environment (see ``_generation_keep_alive``'s
+            docstring). An override meant to change what the generator sees
+            has no effect through this parameter -- use
+            ``rag.set_model_roles_runtime`` / ``rag.set_pipeline_flags`` or
+            the matching env var instead.
+        update_baseline: Raise ``baseline_min_pass_rate.txt`` to this run's
+            pass rate minus ``BASELINE_MARGIN``, same as ``--update-baseline``
+            -- only when the run is conclusive (no infrastructure errors);
+            an inconclusive run leaves the baseline untouched regardless of
+            this flag, exactly like the CLI.
+        write_report: Write the timestamped JSON report under
+            ``tests/eval/runs/``. ``False`` writes nothing to disk, so a
+            caller can decide where its own evidence lives.
+
+    Returns:
+        A dict with ``summary`` (``build_summary()``'s blocks), ``records``
+        (every per-case result dict), ``models``, ``aux_model``,
+        ``num_cases``, ``num_records``, ``elapsed_seconds``, ``pass_rate``,
+        ``baseline`` (the threshold this run was compared against, or
+        ``None``), ``infrastructure_errors``, ``baseline_updated``,
+        ``exit_code`` (what the CLI would have returned), ``report_path``
+        (``str`` or ``None``), and ``config`` -- ``{"dev": ..., "blind":
+        ...}``, each the effective ``AppConfig`` as a plain dict
+        (``dataclasses.asdict``), or ``None`` if that corpus was never
+        staged/indexed for this run.
+
+    Raises:
+        EvalSetupError: A prerequisite (Ollama, a required model, an index)
+            is missing. Raised before any case runs, same as the CLI.
+        ValueError: ``case_ids`` names an id that is not in
+            ``gold_cases.jsonl``.
+    """
+    run_started = time.perf_counter()
+
+    cases = load_gold_cases()
+    if case_ids is not None:
+        wanted = set(case_ids)
+        cases = [c for c in cases if c["id"] in wanted]
+        unknown = wanted - {c["id"] for c in cases}
+        if unknown:
+            raise ValueError(f"unknown gold case id(s): {sorted(unknown)}")
+
+    required_models = set(models) | {AUX_MODEL}
+    stack_slug = "mineru-jina_clip-faiss"
+
+    stacks_to_close = []
+    config_effective: Dict[str, Any] = {"dev": None, "blind": None}
+    try:
+        preflight_ollama(required_models)
+
+        # Heavy import (FAISS, sentence-transformers, rank-bm25...) only
+        # after the cheap network/model preflight has already passed.
+        import rag.chat_pdfs as rag
+
+        rag.set_model_roles_runtime({
+            "chat": AUX_MODEL, "contextual": AUX_MODEL, "recomp": AUX_MODEL,
+        })
+
+        blind_required = stage_blind_papers(cases)
+        dev_required = set(_required_pdfs(cases, "corpus"))
+
+        retrieve_dev = evidence_dev = stack_dev = None
+        retrieve_blind = evidence_blind = stack_blind = None
+
+        # Dev indexing is skipped, not just left idle, when a case_ids subset
+        # references no "corpus"-source case -- unlike the blind set, it was
+        # unconditional before case_ids existed, since the unfiltered run
+        # (main()'s only caller) always has at least one such case.
+        if dev_required:
+            retrieve_dev, evidence_dev, stack_dev = ensure_indexed(
+                rag, DEV_DOCS_DIR, dev_required, "dev set",
+                path_label=EVAL_DEV_LABEL, config_overrides=config_overrides,
+            )
+            stacks_to_close.append(stack_dev)
+            config_effective["dev"] = dataclasses.asdict(
+                _eval_app_config(
+                    rag, DEV_DOCS_DIR, path_label=EVAL_DEV_LABEL, config_overrides=config_overrides
+                )
+            )
+        if blind_required:
+            retrieve_blind, evidence_blind, stack_blind = ensure_indexed(
+                rag, BLIND_DOCS_DIR, set(blind_required), "blind set",
+                config_overrides=config_overrides,
+            )
+            stacks_to_close.append(stack_blind)
+            config_effective["blind"] = dataclasses.asdict(
+                _eval_app_config(rag, BLIND_DOCS_DIR, config_overrides=config_overrides)
+            )
+
+        verify_all_papers_indexed(
+            cases,
+            _sources_in_store(stack_dev.vector_store) if stack_dev else set(),
+            _sources_in_store(stack_blind.vector_store) if stack_blind else set(),
+        )
+
+        print(
+            f"\n[run] stack={stack_slug} {len(cases)} cases x "
+            f"up to {len(models)} model(s)\n",
+            flush=True,
+        )
+        records = run_all_cases(
+            rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, models
+        )
+    finally:
+        for stack in stacks_to_close:
+            closer = getattr(stack.embedder, "close", None)
+            if callable(closer):
+                try:
+                    closer()
+                except Exception:
+                    pass
+
+    summary = build_summary(records)
+    elapsed_total = time.perf_counter() - run_started
+
+    report_path: Optional[Path] = None
+    if write_report:
+        RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        report_path = RESULTS_DIR / f"{timestamp}_{stack_slug}.json"
+        report_path.write_text(json.dumps({
+            "run": {
+                "timestamp": timestamp,
+                "stack": stack_slug,
+                "models": list(models),
+                "aux_model": AUX_MODEL,
+                "num_cases": len(cases),
+                "num_records": len(records),
+                "elapsed_seconds": round(elapsed_total, 1),
+                "retrieval_path": "monkeygrab.application.retrieve.Retrieve",
+            },
+            "summary": summary,
+            "results": records,
+        }, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    print_summary(summary)
+    if report_path is not None:
+        print(f"\nfull results: {report_path}")
+    print(f"total elapsed: {elapsed_total / 60:.1f} min")
+
+    pass_rate = summary["overall"]["pass_rate"]
+    threshold = _read_baseline()
+    broken = [r for r in records if r.get("infrastructure_error")]
+    baseline_updated = False
+
+    if broken:
+        print(f"\n[gate] INCONCLUSIVE: {len(broken)} case(s) could not be evaluated")
+        for record in broken[:5]:
+            print(f"        {record['id']}: {record['reason']}")
+        if len(broken) > 5:
+            print(f"        ... and {len(broken) - 5} more")
+        print("        Not compared against the baseline: this run measured nothing.")
+        exit_code = 1
+    else:
+        if threshold is None:
+            print("\n[gate] no baseline yet (tests/eval/baseline_min_pass_rate.txt missing) -- not gating this run")
+            exit_code = 0
+        elif pass_rate < threshold:
+            print(f"\n[gate] FAILED: pass_rate {pass_rate:.4f} < baseline {threshold:.2f}")
+            exit_code = 1
+        else:
+            print(f"\n[gate] PASSED: pass_rate {pass_rate:.4f} >= baseline {threshold:.2f}")
+            exit_code = 0
+
+        if update_baseline:
+            _update_baseline(pass_rate)
+            baseline_updated = True
+
+    return {
+        "summary": summary,
+        "records": records,
+        "models": list(models),
+        "aux_model": AUX_MODEL,
+        "num_cases": len(cases),
+        "num_records": len(records),
+        "elapsed_seconds": round(elapsed_total, 1),
+        "pass_rate": pass_rate,
+        "baseline": threshold,
+        "infrastructure_errors": broken,
+        "baseline_updated": baseline_updated,
+        "exit_code": exit_code,
+        "report_path": str(report_path) if report_path is not None else None,
+        "config": config_effective,
+    }
+
+
 # CLI
 
 
@@ -823,118 +1064,12 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
-    run_started = time.perf_counter()
-
-    cases = load_gold_cases()
-    required_models = set(args.models) | {AUX_MODEL}
-    stack_slug = "mineru-jina_clip-faiss"
-
-    stacks_to_close = []
     try:
-        preflight_ollama(required_models)
-
-        # Heavy import (FAISS, sentence-transformers, rank-bm25...) only
-        # after the cheap network/model preflight has already passed.
-        import rag.chat_pdfs as rag
-
-        rag.set_model_roles_runtime({
-            "chat": AUX_MODEL, "contextual": AUX_MODEL, "recomp": AUX_MODEL,
-        })
-
-        blind_required = stage_blind_papers(cases)
-        dev_required = set(_required_pdfs(cases, "corpus"))
-
-        retrieve_dev, evidence_dev, stack_dev = ensure_indexed(
-            rag, DEV_DOCS_DIR, dev_required, "dev set", path_label=EVAL_DEV_LABEL
-        )
-        stacks_to_close.append(stack_dev)
-        retrieve_blind = None
-        evidence_blind = None
-        stack_blind = None
-        if blind_required:
-            retrieve_blind, evidence_blind, stack_blind = ensure_indexed(
-                rag, BLIND_DOCS_DIR, set(blind_required), "blind set"
-            )
-            stacks_to_close.append(stack_blind)
-
-        verify_all_papers_indexed(
-            cases,
-            _sources_in_store(stack_dev.vector_store),
-            _sources_in_store(stack_blind.vector_store) if stack_blind else set(),
-        )
-
-        print(
-            f"\n[run] stack={stack_slug} {len(cases)} cases x "
-            f"up to {len(args.models)} model(s)\n",
-            flush=True,
-        )
-        records = run_all_cases(
-            rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, args.models
-        )
+        result = evaluate(models=args.models, update_baseline=args.update_baseline)
     except EvalSetupError as exc:
         print(f"\nSETUP FAILED: {exc}", file=sys.stderr)
         return 1
-    finally:
-        for stack in stacks_to_close:
-            closer = getattr(stack.embedder, "close", None)
-            if callable(closer):
-                try:
-                    closer()
-                except Exception:
-                    pass
-
-    summary = build_summary(records)
-    elapsed_total = time.perf_counter() - run_started
-
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out_path = RESULTS_DIR / f"{timestamp}_{stack_slug}.json"
-    out_path.write_text(json.dumps({
-        "run": {
-            "timestamp": timestamp,
-            "stack": stack_slug,
-            "models": args.models,
-            "aux_model": AUX_MODEL,
-            "num_cases": len(cases),
-            "num_records": len(records),
-            "elapsed_seconds": round(elapsed_total, 1),
-            "retrieval_path": "monkeygrab.application.retrieve.Retrieve",
-        },
-        "summary": summary,
-        "results": records,
-    }, indent=2, ensure_ascii=False), encoding="utf-8")
-
-    print_summary(summary)
-    print(f"\nfull results: {out_path}")
-    print(f"total elapsed: {elapsed_total / 60:.1f} min")
-
-    pass_rate = summary["overall"]["pass_rate"]
-    threshold = _read_baseline()
-
-    broken = [r for r in records if r.get("infrastructure_error")]
-    if broken:
-        print(f"\n[gate] INCONCLUSIVE: {len(broken)} case(s) could not be evaluated")
-        for record in broken[:5]:
-            print(f"        {record['id']}: {record['reason']}")
-        if len(broken) > 5:
-            print(f"        ... and {len(broken) - 5} more")
-        print("        Not compared against the baseline: this run measured nothing.")
-        return 1
-
-    if threshold is None:
-        print("\n[gate] no baseline yet (tests/eval/baseline_min_pass_rate.txt missing) -- not gating this run")
-        gate_exit = 0
-    elif pass_rate < threshold:
-        print(f"\n[gate] FAILED: pass_rate {pass_rate:.4f} < baseline {threshold:.2f}")
-        gate_exit = 1
-    else:
-        print(f"\n[gate] PASSED: pass_rate {pass_rate:.4f} >= baseline {threshold:.2f}")
-        gate_exit = 0
-
-    if args.update_baseline:
-        _update_baseline(pass_rate)
-
-    return gate_exit
+    return result["exit_code"]
 
 
 if __name__ == "__main__":
