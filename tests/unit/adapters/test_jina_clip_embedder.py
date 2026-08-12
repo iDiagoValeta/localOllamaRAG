@@ -456,6 +456,17 @@ def test_concurrent_embed_calls_each_get_their_own_vector_and_the_worker_survive
     t_a.join(timeout=5)
     t_b.join(timeout=5)
 
+    # join(timeout=...) returns silently on overrun, so without these the two
+    # ways this test can go red under load are indistinguishable in the output:
+    # a request that exceeded request_timeout_s lands in errors{} and names the
+    # timeout, but a thread that simply never finished leaves results{} empty
+    # and the test dies on KeyError three lines down, pointing at nothing. Issue
+    # #50 saw one unexplained failure in a full-suite run and the output was not
+    # preserved; 176 reproduction attempts across three load profiles never
+    # recaptured it, so the next occurrence has to diagnose itself.
+    assert not t_a.is_alive(), "call-a's thread did not finish within 5s (hung, not slow)"
+    assert not t_b.is_alive(), "call-b's thread did not finish within 5s (hung, not slow)"
+
     assert not errors, f"concurrent embed() calls raised: {errors}"
     assert results["a"] == vector_a
     assert results["b"] == vector_b
