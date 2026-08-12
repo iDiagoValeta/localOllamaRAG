@@ -331,6 +331,17 @@ MODEL_ROLE_VARS = {
     "recomp": "MODELO_RECOMP",
 }
 
+# The variable that pins each role, mirroring the ``os.getenv`` calls that read
+# them above. A role listed here whose variable is set keeps its environment
+# value: persisted UI choices describe an earlier run, the environment describes
+# this one (see ``rag/engine/settings.py``).
+MODEL_ROLE_ENV_VARS = {
+    "rag": "OLLAMA_RAG_MODEL",
+    "chat": "OLLAMA_CHAT_MODEL",
+    "contextual": "OLLAMA_CONTEXTUAL_MODEL",
+    "recomp": "OLLAMA_RECOMP_MODEL",
+}
+
 
 def get_model_roles() -> Dict[str, str]:
     """Return the Ollama model currently assigned to each pipeline role."""
@@ -483,6 +494,12 @@ from rag.engine.indexing import (
     indexar_documentos,
     obtener_documentos_indexados,
 )
+from rag.engine.settings import (
+    STORE_IDS,
+    cargar_ajustes_persistidos,
+    guardar_ajustes_persistidos,
+    resolver_carpeta_store,
+)
 from rag.engine.wiring import (
     app_config_from_runtime,
     reset_vector_store_cache,
@@ -497,8 +514,23 @@ def obtener_vector_store():
 
 def main():
     """Launch the MonkeyGrab CLI application."""
-    import rag.chat_pdfs as rag_engine
     from rag.cli import MonkeyGrabCLI
+
+    # ``sys.modules[__name__]``, not ``import rag.chat_pdfs``: run as a script
+    # this file is ``__main__``, and importing it by name would execute a second
+    # copy whose globals nothing else reads -- the engine modules bind the
+    # ``__main__`` one (see rag/engine/runtime.py), and so does the settings
+    # loader below. Handing the CLI the other copy is how it would end up
+    # displaying, listing and indexing one configuration while retrieval and
+    # generation ran on another.
+    rag_engine = sys.modules[__name__]
+    # Same file the web control panel writes, applied here rather than inside
+    # the CLI because this is where the engine is composed -- the CLI receives a
+    # configured module, exactly as the Flask app does. Without it the CLI would
+    # start from this module's defaults while the index on disk was built from
+    # the UI's choices, which is what the fingerprint warning then reports with
+    # nothing in the session to explain it.
+    cargar_ajustes_persistidos()
     cli = MonkeyGrabCLI(rag_engine)
     cli.run()
 

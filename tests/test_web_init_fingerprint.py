@@ -87,7 +87,7 @@ def test_settings_change_reports_the_resulting_mismatch(monkeypatch):
     # the request sets it to (real mutation, not itself monkeypatched).
     monkeypatch.setattr(web_app.rag_engine, "USAR_CONTEXTUAL_RETRIEVAL", True)
     monkeypatch.setattr(web_app, "_get_collection", lambda: _FakeStore(count=5))
-    monkeypatch.setattr(web_app, "_save_persisted_settings", lambda: None)
+    monkeypatch.setattr(web_app.rag_engine, "guardar_ajustes_persistidos", lambda: None)
     monkeypatch.setattr(web_app.rag_engine, "index_fingerprint_mismatch", lambda coll: True)
 
     client = web_app.app.test_client()
@@ -103,7 +103,7 @@ def test_settings_change_does_not_report_a_mismatch_when_matching(monkeypatch):
     _reset_state(monkeypatch)
     monkeypatch.setattr(web_app.rag_engine, "USAR_CONTEXTUAL_RETRIEVAL", True)
     monkeypatch.setattr(web_app, "_get_collection", lambda: _FakeStore(count=5))
-    monkeypatch.setattr(web_app, "_save_persisted_settings", lambda: None)
+    monkeypatch.setattr(web_app.rag_engine, "guardar_ajustes_persistidos", lambda: None)
     monkeypatch.setattr(web_app.rag_engine, "index_fingerprint_mismatch", lambda coll: False)
 
     client = web_app.app.test_client()
@@ -116,7 +116,7 @@ def test_settings_change_does_not_report_a_mismatch_when_matching(monkeypatch):
 def test_model_role_change_reports_the_resulting_mismatch(monkeypatch):
     _reset_state(monkeypatch)
     monkeypatch.setattr(web_app, "_get_collection", lambda: _FakeStore(count=5))
-    monkeypatch.setattr(web_app, "_save_persisted_settings", lambda: None)
+    monkeypatch.setattr(web_app.rag_engine, "guardar_ajustes_persistidos", lambda: None)
     monkeypatch.setattr(web_app.rag_engine, "index_fingerprint_mismatch", lambda coll: True)
     monkeypatch.setattr(web_app.rag_engine, "set_model_roles_runtime", lambda overrides: {"contextual": "other-model"})
 

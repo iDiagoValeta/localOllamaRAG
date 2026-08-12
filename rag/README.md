@@ -31,6 +31,12 @@ expects. MinerU, Jina CLIP and FAISS are built by the fixed composition root.
 The consequence worth knowing: the CLI, web app, desktop wrapper and evaluation
 gate execute the same indexing, retrieval and generation implementations.
 
+[`engine/settings.py`](engine/settings.py) owns the other half of that
+agreement: the model roles, active store and pipeline flags the web control
+panel saves are read at startup by the CLI as well, so neither interface can run
+a pipeline the other's index was not built for. The environment outranks the
+file, the file outranks the defaults in `chat_pdfs.py`.
+
 - **Hexagonal core, layers, how to add an adapter:** [`src/monkeygrab/README.md`](../src/monkeygrab/README.md)
 - **Design rationale and phased rollout:** [`docs/design/2026-07-26-monkeygrab-v2.md`](../docs/design/2026-07-26-monkeygrab-v2.md)
 - **Pipeline behavior as currently observed:** [`tests/characterization/`](../tests/characterization/)
