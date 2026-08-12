@@ -143,6 +143,14 @@ def _make_popen(behavior=_echo_ok, *, startup_message="ready"):
 def _embedder(monkeypatch, behavior=_echo_ok, *, startup_message="ready", **kwargs):
     fake_popen, calls = _make_popen(behavior, startup_message=startup_message)
     monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
+    # worker_script="fake-worker.py" never exists on disk -- these tests are
+    # about the wire protocol against a doubled Popen, not about the worker
+    # script existence check (see the dedicated tests for that), so the
+    # existence check is patched to pass by default. embed_image's own
+    # image-file existence check uses the same os.path.isfile and is
+    # re-patched by the individual tests that care about it, which override
+    # this default.
+    monkeypatch.setattr(module.os.path, "isfile", lambda path: True)
     embedder = JinaClipEmbedder("fake-python", worker_script="fake-worker.py", **kwargs)
     return embedder, calls
 
@@ -174,6 +182,37 @@ def test_worker_is_not_started_at_construction(monkeypatch):
     JinaClipEmbedder("fake-python", worker_script="fake-worker.py")
 
     assert calls == []
+
+
+def test_default_worker_script_constant_resolves_to_the_real_dev_file():
+    """_WORKER_SCRIPT is Path(__file__).with_name("jina_clip_worker.py"), computed
+    once at import time -- the same shape as composition._isolated_python(), with
+    no sys.frozen/sys._MEIPASS branch. In dev that must land on the real sibling
+    file; a PyInstaller onedir experiment (see packaging/MonkeyGrab.spec's comment
+    on the jina_clip_worker.py datas entry, #26) confirmed the identical expression
+    also lands on the real file once it is shipped as bundled data, which is why
+    no frozen-specific code path exists here to test in isolation.
+    """
+    assert module._WORKER_SCRIPT.endswith("jina_clip_worker.py")
+    assert Path(module._WORKER_SCRIPT).is_file()
+
+
+def test_missing_worker_script_raises_naming_the_path_and_frozen_state(monkeypatch, tmp_path):
+    """Regression test for #26: a missing worker script must fail loudly and
+    specifically, not as an opaque "external interpreter died immediately"
+    error diagnosable only by reading foreign stderr.
+    """
+    missing_script = str(tmp_path / "jina_clip_worker.py")
+    fake_popen, calls = _make_popen()
+    monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(module.sys, "frozen", True, raising=False)
+    embedder = JinaClipEmbedder("fake-python", worker_script=missing_script)
+
+    with pytest.raises(RuntimeError, match=r"frozen=True") as excinfo:
+        embedder.embed("hello")
+
+    assert repr(missing_script) in str(excinfo.value)  # message embeds the path via !r
+    assert calls == []  # never even tried to spawn a process for a script that isn't there
 
 
 def test_worker_starts_once_and_is_reused_across_calls(monkeypatch):

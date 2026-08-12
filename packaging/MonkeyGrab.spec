@@ -43,6 +43,23 @@ if _SRC not in sys.path:
 hiddenimports += collect_submodules("rag")
 hiddenimports += collect_submodules("monkeygrab")
 
+# jina_clip_worker.py is never imported by the frozen app -- JinaClipEmbedder
+# launches it as a SCRIPT with the external .venv-mineru interpreter (see
+# src/monkeygrab/adapters/embedding/jina_clip_embedder.py). collect_submodules
+# above only bundles it as compiled bytecode inside the PYZ archive, which an
+# external interpreter cannot run as `python jina_clip_worker.py`. Ship it as
+# a literal data file at the same path it already has relative to its package
+# in the source tree (monkeygrab/adapters/embedding/), so JinaClipEmbedder's
+# existing Path(__file__).with_name("jina_clip_worker.py") lookup finds it
+# under sys._MEIPASS at runtime, exactly as it finds it beside the source
+# file in dev -- verified with a standalone PyInstaller onedir build that
+# __file__ for an archived module resolves to a real path mirroring the
+# source tree under sys._MEIPASS. No frozen/dev branch needed in the adapter,
+# same shape as composition._isolated_python() (#26).
+_worker_script = os.path.join(_SRC, "monkeygrab", "adapters", "embedding", "jina_clip_worker.py")
+if os.path.isfile(_worker_script):
+    datas.append((_worker_script, os.path.join("monkeygrab", "adapters", "embedding")))
+
 # --- Heavy third-party packages: collect data + binaries + submodules --------
 _collect = [
     "faiss", "sentence_transformers", "transformers", "tokenizers",
