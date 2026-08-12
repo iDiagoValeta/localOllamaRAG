@@ -1,0 +1,29 @@
+# Unreachable margin (issue #31 spec section 3; design doc section 3, "Margen
+# inalcanzable"): cases that fail because the generator never sees the visual
+# content -- the store holds a caption or the literal "[figure] page=N". No
+# stage-1 configuration can close that; it needs a code change outside the
+# declared search space.
+#
+# Starts empty, and stays empty as of 2026-08-12: the `reason` field of all
+# five of today's search-set failures was read against the reference gate run
+# (tests/eval/runs/20260729T020233Z_mineru-jina_clip-faiss.json, local and
+# gitignored, so not reproducible from a fresh clone):
+#   dpo-pipeline-figure-es   wanted image, got text
+#   higgs-diphoton-figure    wanted image, got table, text
+#   planck-contours-figure   wanted image, got text
+#   planck-sigma8-es         expected 0.811, not present in the generated answer
+#   planck-h0-tension        expected 3.6, not present in the generated answer
+#
+# None of these is the generator failing to answer over a figure it saw --
+# the three figure_retrieval cases never call the generator at all; they fail
+# because retrieval surfaced text where an image chunk was wanted, which is
+# exactly what fusion weights, top_k_final and the reranker threshold move,
+# so all three are inside stage 1's action space. The two answered failures
+# are a number present in the paper's abstract that did not survive into the
+# generated answer -- plausibly reachable by moving the context budget,
+# RECOMP synthesis or retrieval depth.
+#
+# A case earns a place below only with evidence that the stored chunk
+# provably contains no visual content. Do NOT pre-populate this with "every
+# figure_retrieval case": some figure cases pass today, and that would
+# discard real signal the search set is sized to capture.

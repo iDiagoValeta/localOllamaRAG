@@ -50,6 +50,11 @@ jobs:
     # tests that compare against the original implementation) are skipped by
     # tests/conftest.py, which detects that the stack is absent. No path list
     # lives here: it would go stale the moment a test is added.
+    #
+    # harness/tests belongs here, not in the "engine" job below: the block-C
+    # search harness (issue #31) is tested entirely against fake evaluators
+    # and AppConfig (pure stdlib), so it needs nothing this job does not
+    # already have.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -58,7 +63,7 @@ jobs:
       - name: Install test runner
         run: pip install pytest
       - name: Run
-        run: pytest tests/unit tests/eval -q --no-header
+        run: pytest tests/unit tests/eval harness/tests -q --no-header
 
   frontend:
     name: Frontend build

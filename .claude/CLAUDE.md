@@ -78,6 +78,7 @@ tests/
   unit/                      domain/ports/config/application + adapters, doubled infrastructure
   characterization/          pins current pipeline behavior — do not edit (§1 rule 9)
   eval/                      gold-case evaluation gate (§5) — do not touch without agreement
+harness/                  Configuration search harness (issue #31); not product — see harness/README.md
 packaging/                PyInstaller desktop app build (see §3)
 docs/design/               Architecture design docs; current: 2026-07-26-monkeygrab-v2.md
 docs/README.md             Documentation standard
@@ -140,13 +141,14 @@ Two gates, deliberately not one — a job that doubles infrastructure is never
 presented as pipeline coverage, and vice versa:
 
 - **Fast gate** (`.github/workflows/ci.yml`, every PR, hosted runner, no GPU/Ollama/model
-  downloads): lint (`ruff`), `tests/unit` + `tests/eval`'s grader against
-  test doubles (`architecture` job — must import nothing but the standard
-  library, since it exercises `domain`/`ports`/`config`/`application`),
-  frontend build (`pnpm install --frozen-lockfile` + `pnpm run lint` +
-  `pnpm run build`), and the full `pytest` suite with real dependencies but a
-  doubled/absent Ollama server (`engine` job — Ollama-dependent tests skip
-  themselves when no server answers).
+  downloads): lint (`ruff`), `tests/unit` + `tests/eval`'s grader + `harness/tests`
+  against test doubles (`architecture` job — must import nothing but the
+  standard library, since it exercises `domain`/`ports`/`config`/`application`
+  and the harness's own fake-evaluator tests), frontend build
+  (`pnpm install --frozen-lockfile` + `pnpm run lint` + `pnpm run build`), and
+  the full `pytest` suite with real dependencies but a doubled/absent Ollama
+  server (`engine` job — Ollama-dependent tests skip themselves when no
+  server answers).
 - **Full gate** (`.github/workflows/full-eval.yml`, `workflow_dispatch` only,
   self-hosted GPU runner with Ollama installed): runs the real pipeline —
   Ollama generation, Jina CLIP embeddings, hybrid BM25+semantic retrieval,
@@ -207,9 +209,12 @@ python rag/web/app.py                          # http://localhost:5000 (ES/EN/VA
 cd rag/web/frontend && pnpm install && pnpm run build
 
 # Tests / CI gates
-pytest                                          # full suite (unit + characterization + eval grader + loose tests)
-pytest tests/unit tests/eval --ignore=tests/unit/adapters   # what the fast "architecture" CI job runs
+pytest                                          # full suite (unit + characterization + eval grader + harness + loose tests)
+pytest tests/unit tests/eval harness/tests --ignore=tests/unit/adapters   # what the fast "architecture" CI job runs
 python tests/eval/run_eval.py --models <model...>           # full gate locally; needs Ollama + GPU
+
+# Configuration search harness (issue #31) — not product, see harness/README.md
+python -m harness.cli --dry-run --max-iterations 3          # smoke-test the loop, no GPU/Ollama needed
 
 # Misc
 git check-ignore -v <path>
