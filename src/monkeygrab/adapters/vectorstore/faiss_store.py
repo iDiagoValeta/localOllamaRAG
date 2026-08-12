@@ -335,11 +335,25 @@ class FaissVectorStore:
         interprets it. What it means lives in
         ``monkeygrab.application.index_fingerprint``.
 
+        Written to a temp path then ``os.replace``d in, same as every other
+        write in this class, and a failed write raises the same wrapped
+        ``RuntimeError`` naming the store directory instead of a raw
+        ``OSError`` -- consistent with ``_save``/``_rewrite`` rather than a
+        third persistence convention for one file.
+
         Args:
             fingerprint: The digest to record.
+
+        Raises:
+            RuntimeError: The write failed (e.g. disk full, permissions).
         """
-        with open(self._fingerprint_path, "w", encoding="utf-8") as f:
-            f.write(fingerprint + "\n")
+        try:
+            tmp_path = self._fingerprint_path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                f.write(fingerprint + "\n")
+            os.replace(tmp_path, self._fingerprint_path)
+        except OSError as e:
+            raise RuntimeError(f"failed to persist FAISS store at {self._dir!r}: {e}") from e
 
     def delete_source(self, source: str) -> int:
         positions = [

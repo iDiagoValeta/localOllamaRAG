@@ -65,12 +65,22 @@ def _reject_unusable(report: Dict[str, Any], label: str) -> None:
         )
 
 
-def compare(report_a: Dict[str, Any], report_b: Dict[str, Any]) -> Dict[str, Any]:
+def compare(
+    report_a: Dict[str, Any],
+    report_b: Dict[str, Any],
+    *,
+    label_a: str = "report_a",
+    label_b: str = "report_b",
+) -> Dict[str, Any]:
     """Compare two run reports case by case.
 
     Args:
         report_a: The earlier/reference run, parsed.
         report_b: The later/candidate run, parsed.
+        label_a: Name for ``report_a`` in a rejection message -- ``main()``
+            passes the actual file path so a failure names the file, not the
+            generic parameter name.
+        label_b: Same, for ``report_b``.
 
     Returns:
         ``flipped_to_pass`` and ``flipped_to_fail`` (sorted case keys),
@@ -82,8 +92,8 @@ def compare(report_a: Dict[str, Any], report_b: Dict[str, Any]) -> Dict[str, Any
             or either run is inconclusive or empty -- a run that measured
             nothing must not be treated as a noise-free result.
     """
-    _reject_unusable(report_a, "report_a")
-    _reject_unusable(report_b, "report_b")
+    _reject_unusable(report_a, label_a)
+    _reject_unusable(report_b, label_b)
     a, b = _outcomes(report_a), _outcomes(report_b)
     if a.keys() != b.keys():
         difference = sorted(set(a) ^ set(b))
@@ -94,7 +104,11 @@ def compare(report_a: Dict[str, Any], report_b: Dict[str, Any]) -> Dict[str, Any
     flipped_to_pass = sorted(k for k in a if not a[k] and b[k])
     flipped_to_fail = sorted(k for k in a if a[k] and not b[k])
     total = len(a)
-    delta = (sum(b.values()) - sum(a.values())) / total if total else 0.0
+    # total is always >= 1 here: _reject_unusable already raised above if
+    # report_a's results were empty, and a non-empty results list always
+    # yields at least one outcome key -- so there is no zero-total case left
+    # for this division to guard against.
+    delta = (sum(b.values()) - sum(a.values())) / total
     return {
         "flipped_to_pass": flipped_to_pass,
         "flipped_to_fail": flipped_to_fail,
@@ -127,7 +141,7 @@ def main(argv: List[str] | None = None) -> int:
 
     report_a = json.loads(args.report_a.read_text(encoding="utf-8"))
     report_b = json.loads(args.report_b.read_text(encoding="utf-8"))
-    _print(compare(report_a, report_b))
+    _print(compare(report_a, report_b, label_a=str(args.report_a), label_b=str(args.report_b)))
     return 0
 
 
