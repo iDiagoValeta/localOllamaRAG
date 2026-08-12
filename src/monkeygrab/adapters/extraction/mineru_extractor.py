@@ -459,13 +459,17 @@ class MineruImageExtractor:
     the CLI only once.
 
     Per the ``ImageExtractor`` port's documented carve-out from this
-    project's hard-fail default, CLI-level failures (binary missing, exit
-    code != 0, empty output) are logged and swallowed here, returning ``{}``
-    -- exactly like the image port's "cannot open the file"
-    case. This does not reopen the hard-fail question SECTION 3 exists to
-    close: ``IndexCorpus`` always calls the ``PdfExtractor`` first, so a
-    broken MinerU installation already aborts the whole PDF via
-    ``MineruExtractor`` before this adapter would ever run in production.
+    project's hard-fail default, CLI-level failures during ``extract`` (a
+    configured binary that turns out to be missing at run time, exit code
+    != 0, empty output) are logged and swallowed here, returning ``{}`` --
+    exactly like the image port's "cannot open the file" case. Resolving the
+    *default* binary (``mineru_bin=None``) happens eagerly at construction,
+    via ``_default_mineru_bin``, and raises there instead -- before this
+    carve-out ever applies. This does not reopen the hard-fail question
+    SECTION 3 exists to close: ``IndexCorpus`` always calls the
+    ``PdfExtractor`` first, so a broken MinerU installation already aborts
+    the whole PDF via ``MineruExtractor`` before this adapter would ever run
+    in production.
     """
 
     def __init__(

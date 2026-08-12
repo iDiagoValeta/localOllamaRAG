@@ -23,7 +23,7 @@ def _isolated_python() -> str:
             return str(candidate)
     raise FileNotFoundError(
         "The multimodal pipeline needs the isolated MinerU environment at "
-        f"{candidates[0]}"
+        f"{candidates[0]} or {candidates[1]}"
     )
 
 

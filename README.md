@@ -169,9 +169,9 @@ The rest of the stack is not an Ollama model:
 | **PDF extraction** | [MinerU](https://github.com/opendatalab/MinerU), structured text, tables and figures | fixed |
 
 > [!NOTE]
-> MinerU is an external CLI, and `jina_clip` runs in an isolated interpreter
-> that requires a CUDA GPU, because its dependencies
-> conflict with the product's — see [`src/monkeygrab/README.md`](src/monkeygrab/README.md).
+> MinerU is an external CLI, and `jina_clip` runs in an isolated interpreter,
+> which needs a CUDA GPU, because its dependencies conflict with the
+> product's — see [`src/monkeygrab/README.md`](src/monkeygrab/README.md).
 
 ---
 
