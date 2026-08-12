@@ -68,7 +68,7 @@ def app_config_from_runtime() -> AppConfig:
     )
 
 
-_store_cache: Dict[str, Any] = {"key": None, "store": None}
+_store_cache: Dict[str, Any] = {"entry": (None, None)}
 _store_cache_lock = threading.Lock()
 _embedder_cache: Dict[str, Any] = {"embedder": None}
 _embedder_cache_lock = threading.Lock()
@@ -81,18 +81,35 @@ def vector_store(config: AppConfig) -> VectorStore:
     must not both open the same FAISS index, so the key check is repeated
     once the lock is held. The cheap, unlocked check outside the lock keeps
     the common case (cache already valid) lock-free.
+
+    The key and the store live in one ``(key, store)`` tuple under a single
+    dict slot, read with one subscript rather than two (#57). Under
+    CPython's GIL, a dict lookup by an immutable, C-hashable key -- our key
+    is a tuple of strings -- runs to completion without releasing the GIL,
+    so that single read is atomic: no other thread's write can be
+    interleaved partway through it. Two separate reads (key, then store)
+    would not have that guarantee -- a thread could validate the key,
+    lose the GIL to a concurrent corpus switch that republishes the slot,
+    and then read back a store belonging to the *new* key. The result
+    would look like a normal answer while silently citing the wrong
+    corpus, with nothing to log or raise. Splitting the read into "check"
+    and "return" of a local variable, rather than reading the dict twice,
+    closes the window entirely instead of narrowing it.
     """
     key = (config.paths.path_db, config.paths.collection_name)
-    if _store_cache["key"] != key:
+    cached_key, store = _store_cache["entry"]
+    if cached_key != key:
         with _store_cache_lock:
-            if _store_cache["key"] != key:
-                _store_cache.update(key=key, store=build_vector_store(config))
-    return _store_cache["store"]
+            cached_key, store = _store_cache["entry"]
+            if cached_key != key:
+                store = build_vector_store(config)
+                _store_cache["entry"] = (key, store)
+    return store
 
 
 def reset_vector_store_cache() -> None:
     with _store_cache_lock:
-        _store_cache.update(key=None, store=None)
+        _store_cache["entry"] = (None, None)
 
 
 def embedder(config: AppConfig):
@@ -185,7 +202,7 @@ def query_decomposer(config: AppConfig) -> OllamaChatModel:
 # Expensive, reusable components keyed by what would invalidate them. Held at
 # module level because the interfaces call the pipeline as free functions and
 # have nowhere else to keep them for the life of the process.
-_lexical_cache: Dict[str, Any] = {"key": None, "index": None}
+_lexical_cache: Dict[str, Any] = {"entry": (None, None)}
 _lexical_cache_lock = threading.Lock()
 _reranker_cache: Dict[str, Any] = {"reranker": None}
 _reranker_cache_lock = threading.Lock()
@@ -202,6 +219,12 @@ def lexical_index(store: VectorStore, config: AppConfig) -> Bm25LexicalIndex:
     Double-checked locking: the key is re-read once the lock is held so two
     concurrent callers racing the same new key build only one index (#46).
 
+    The key and the index live in one ``(key, index)`` tuple under a single
+    dict slot instead of two separate slots, so the check and the value a
+    caller ultimately returns come from the same atomic read rather than
+    two -- see ``vector_store`` above for why the two-read version could
+    hand a caller an index that belongs to a BM25 retune racing it (#57).
+
     Args:
         collection: Collection whose chunks form the BM25 corpus.
         config: Current config; the BM25 parameters are read from it.
@@ -213,13 +236,14 @@ def lexical_index(store: VectorStore, config: AppConfig) -> Bm25LexicalIndex:
     # unnamed collections (test doubles, typically) never share a cache entry.
     key = (id(store), config.retrieval.bm25_k1, config.retrieval.bm25_b)
 
-    if _lexical_cache["key"] != key:
+    cached_key, index = _lexical_cache["entry"]
+    if cached_key != key:
         with _lexical_cache_lock:
-            if _lexical_cache["key"] != key:
-                _lexical_cache.update(
-                    key=key, index=Bm25LexicalIndex(store, config.retrieval)
-                )
-    return _lexical_cache["index"]
+            cached_key, index = _lexical_cache["entry"]
+            if cached_key != key:
+                index = Bm25LexicalIndex(store, config.retrieval)
+                _lexical_cache["entry"] = (key, index)
+    return index
 
 
 def reranker(config: AppConfig) -> CrossEncoderReranker:
