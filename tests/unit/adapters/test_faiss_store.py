@@ -6,6 +6,7 @@ a write failure that cannot be reliably reproduced with a real disk.
 """
 
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -235,6 +236,67 @@ def test_add_hard_fails_when_persistence_write_fails(tmp_path, monkeypatch):
 
     with pytest.raises(RuntimeError, match="failed to persist"):
         store.add(_chunk("x.pdf", 0, 0), _unit([1.0, 0.0]))
+
+
+def test_reopening_after_sidecar_write_failure_loads_consistently(tmp_path, monkeypatch):
+    """Regression test for #35.
+
+    Injects an OSError into whatever write touches the meta.jsonl sidecar
+    during a second ``add`` -- while the FAISS index write itself succeeds --
+    and asserts the directory is still load-consistent afterwards. On the
+    pre-fix code, the index write lands on disk before the sidecar write is
+    even attempted, so this failure leaves index.faiss at N+1 vectors and
+    meta.jsonl at N rows; reopening then hits the store's own
+    ``index.ntotal != len(rows)`` check and hard-fails with "corrupted",
+    which is exactly the bug #35 reports.
+
+    Also covers the recovery path this fix buys: rag/engine/indexing.py
+    catches per-PDF exceptions and keeps indexing on the *same* store
+    instance, so the chunk whose ``add`` raised is still sitting in
+    ``self._rows`` in memory. The next successful ``add`` rewrites both
+    real files from that full in-memory state, which must persist the
+    previously-failed chunk too -- not just the new one.
+    """
+    import builtins
+
+    paths = _paths(tmp_path, "sidecarfail")
+    store = FaissVectorStore(paths)
+    store.add(_chunk("a.pdf", 0, 0), _unit([1.0, 0.0]))
+    assert store.count() == 1
+
+    real_open = builtins.open
+
+    def _flaky_open(file, mode="r", *args, **kwargs):
+        # Only the sidecar's own write path is faulted -- reads (e.g. of
+        # meta.jsonl on a later, successful reopen) must go through untouched.
+        if "meta.jsonl" in os.fspath(file) and "r" not in mode:
+            raise OSError("disk full")
+        return real_open(file, mode, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", _flaky_open)
+
+    with pytest.raises(RuntimeError, match="failed to persist"):
+        store.add(_chunk("b.pdf", 0, 0), _unit([0.0, 1.0]))
+
+    monkeypatch.setattr(builtins, "open", real_open)
+
+    reopened = FaissVectorStore(paths)
+    assert reopened.count() == 1
+    assert [f.id for f in reopened.get_page(None, 0)] == ["a.pdf_pag0_chunk0"]
+
+    # The failed b.pdf add still mutated the *same* store's in-memory state
+    # (self._rows/self._index), which is exactly what rag/engine/indexing.py
+    # relies on when it catches a per-PDF exception and keeps going. The next
+    # successful add must heal the on-disk gap, persisting b.pdf as well.
+    store.add(_chunk("c.pdf", 0, 0), _unit([0.5, 0.5]))
+
+    healed = FaissVectorStore(paths)
+    assert healed.count() == 3
+    assert {f.id for f in healed.get_page(None, 0)} == {
+        "a.pdf_pag0_chunk0",
+        "b.pdf_pag0_chunk0",
+        "c.pdf_pag0_chunk0",
+    }
 
 
 def test_delete_source_rebuilds_index_and_persists(tmp_path):
