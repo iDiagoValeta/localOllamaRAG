@@ -28,6 +28,7 @@ import math
 import os
 import queue
 import subprocess
+import sys
 import threading
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -149,6 +150,18 @@ class JinaClipEmbedder:
         return self._process
 
     def _start_worker(self) -> None:
+        # Checked explicitly, before ever spawning the process: without this,
+        # a missing worker_script (e.g. packaging/MonkeyGrab.spec forgetting
+        # to ship it as a data file, see #26) surfaces as the *external*
+        # interpreter dying immediately with its own "can't open file"
+        # message on stderr -- technically diagnosable, but easy to miss
+        # since nothing about it names this adapter or the path it resolved.
+        if not os.path.isfile(self._worker_script):
+            raise RuntimeError(
+                f"jina-clip worker script not found at {self._worker_script!r} "
+                f"(frozen={getattr(sys, 'frozen', False)}); packaging/MonkeyGrab.spec "
+                "must ship jina_clip_worker.py as a data file next to this module"
+            )
         try:
             process = subprocess.Popen(
                 [self._python_executable, self._worker_script],
