@@ -40,7 +40,7 @@ fine-tuned models and evaluation hooks that had already been deleted.
    - **Support:** context assembly, debug dumps, chat history, `obtener_documentos_indexados`, and the text helpers re-exported from `monkeygrab.application.keywords` (`STOPWORDS`, `extract_keywords`, ...).
    - **Runtime switches (web control panel):** `get_pipeline_flags`, `set_pipeline_flags`, `set_docs_folder_runtime`, `MODEL_ROLE_VARS`, `MODEL_ROLE_ENV_VARS`, `get_model_roles`, `set_model_roles_runtime`, the path derivation helper `_derivar_paths_db`, and the persisted-choice API both interfaces use: `cargar_ajustes_persistidos`, `guardar_ajustes_persistidos`, `resolver_carpeta_store`, `STORE_IDS`.
 
-   The web API adds `/api/ollama[/start|/models]`, `/api/models`, `/api/stores` (GET) and `/api/stores/select` (POST). There are exactly three fixed language stores — `en` (English, default), `es` (Castellano), `ca` (Valencià) — each bound to `rag/docs/<id>/`. They always exist, possibly empty; there is no create/delete/hide/restore and no user-created stores. `settings.json` persists `active_store`, the model roles and the pipeline flags, falling back to the defaults for anything unknown. **Both interfaces read it** (`rag/engine/settings.py`): the web app at import, the CLI in `chat_pdfs.main()`, so a choice made in one is the configuration the other runs under. Precedence is environment > `settings.json` > module defaults, so an exported `OLLAMA_*_MODEL` or `DOCS_FOLDER` still describes the run that declares it. The active store is selectable, and documents can be viewed, added and removed per store.
+   The web API adds `/api/ollama[/start|/models]`, `/api/models`, `/api/stores` (GET) and `/api/stores/select` (POST). There are exactly three fixed language stores — `en` (English, default), `es` (Castellano), `ca` (Valencià) — each bound to `rag/docs/<id>/`. They always exist, possibly empty; there is no create/delete/hide/restore and no user-created stores. `settings.json` persists `active_store`, the model roles and the pipeline flags, falling back to the defaults for anything unknown. **Both interfaces read it** (`rag/engine/settings.py`): the web app at import, the CLI in `chat_pdfs.main()`, so a choice made in one is the configuration the other runs under. Precedence is environment > `settings.json` > module defaults, so an exported `OLLAMA_*_MODEL` or `DOCS_FOLDER` still describes the run that declares it. A save never writes an env-pinned role or store over the stored choice: the override lasts for this run, and unsetting the variable restores what the user picked rather than finding it erased. The active store is selectable, and documents can be viewed, added and removed per store.
 8. **Hard-fail policy, project-wide.** Every adapter under `src/monkeygrab/adapters/` raises on failure instead of degrading — no silent CUDA→CPU fallback, no silent extractor swap, no silent RECOMP-to-raw-context fallback. Do not add a fallback chain inside an adapter; if a caller needs one, it composes two ports explicitly. See `docs/design/2026-07-26-monkeygrab-v2.md` §3 ("Política de fallos").
 9. **Test boundaries are load-bearing, not incidental:**
    - `tests/characterization/` pins the *current* pipeline's observed behavior, including its known bugs. Do not edit these tests to make a change pass — if a change legitimately alters behavior, that's a signal to stop and confirm, not to update the test. The one documented exception is `test_stale_default_config_bug.py`, whose own docstring says exactly when and how it is allowed to change.
@@ -110,8 +110,10 @@ docs/README.md             Documentation standard
 ## 3. Models
 
 Ollama roles are configured via env vars; defaults are the second arg of
-`os.getenv` in `rag/chat_pdfs.py`. The process environment **always** wins over
-the defaults. Jina CLIP v2 and BGE Reranker v2 M3 are fixed.
+`os.getenv` in `rag/chat_pdfs.py`. Precedence is environment > `settings.json`
+> module defaults. The environment wins for this run, including over a
+choice saved in the web UI; a save does not persist that override as if the
+user had picked it (issue #79). Jina CLIP v2 and BGE Reranker v2 M3 are fixed.
 
 | Role | Env var | Notes |
 |------|---------|-------|

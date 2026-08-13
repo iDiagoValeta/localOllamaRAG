@@ -12,8 +12,9 @@ Precedence is environment > settings.json > module defaults. A variable exported
 for this run (or read from ``.env``) is an explicit statement about this run and
 outranks a choice saved during an earlier one; everything the environment leaves
 unset falls back to the persisted choice, and only then to the defaults in
-rag/chat_pdfs.py. This is the precedence the README already documents for the
-environment, now applied to persisted state as well.
+rag/chat_pdfs.py. The override is for this run only: a save never writes an
+env-pinned role (or ``DOCS_FOLDER``) over the stored choice, so unsetting the
+variable restores what the user picked rather than destroying it (issue #79).
 
 Best-effort by design: a missing, unreadable or corrupt file leaves the defaults
 standing instead of blocking startup, the same contract rag/engine/history.py
@@ -73,12 +74,57 @@ def resolver_carpeta_store(nombre: str) -> Optional[str]:
     return carpeta if os.path.isdir(carpeta) else None
 
 
+def _leer_ajustes() -> dict:
+    """Return the settings file as a dict, or ``{}`` if it is missing or unusable."""
+    try:
+        # utf-8-sig tolerates a BOM if the file was hand-edited with a Windows tool.
+        with open(ruta_ajustes(), "r", encoding="utf-8-sig") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _roles_a_persistir(on_disk: dict) -> dict:
+    """Effective roles, except any the environment is pinning this run.
+
+    ``get_model_roles`` reports what this process is running, which for an
+    env-pinned role is the override, not the user's stored pick. Writing that
+    back replaces the pick with the override, so the choice is gone when the
+    variable is unset -- issue #79. Keep the on-disk value when there is one;
+    omit the role when there is not, rather than freeze the override as if
+    the user had chosen it.
+    """
+    roles = dict(cfg.get_model_roles())
+    saved = on_disk.get("roles")
+    saved = saved if isinstance(saved, dict) else {}
+    for rol in list(roles):
+        if not _fijado_por_entorno(rol):
+            continue
+        previous = saved.get(rol)
+        if isinstance(previous, str) and previous.strip():
+            roles[rol] = previous
+        else:
+            roles.pop(rol, None)
+    return roles
+
+
+def _store_a_persistir(on_disk: dict) -> str:
+    """Active store, keeping the saved identifier while ``DOCS_FOLDER`` pins this run."""
+    if os.getenv(_DOCS_FOLDER_ENV):
+        saved = on_disk.get("active_store")
+        if isinstance(saved, str) and saved.strip():
+            return saved
+    return _nombre_store_activo()
+
+
 def guardar_ajustes_persistidos() -> None:
     """Write the active model roles, store and pipeline flags to the settings file."""
     try:
+        on_disk = _leer_ajustes()
         data = {
-            "roles": cfg.get_model_roles(),
-            "active_store": _nombre_store_activo(),
+            "roles": _roles_a_persistir(on_disk),
+            "active_store": _store_a_persistir(on_disk),
             "flags": {var: bool(getattr(cfg, var, False)) for var in PERSISTED_FLAGS},
         }
         ruta = ruta_ajustes()
@@ -96,13 +142,8 @@ def cargar_ajustes_persistidos() -> None:
     flags last. Entries the environment pins, and entries naming something this
     build does not have, are skipped.
     """
-    try:
-        # utf-8-sig tolerates a BOM if the file was hand-edited with a Windows tool.
-        with open(ruta_ajustes(), "r", encoding="utf-8-sig") as f:
-            data = json.load(f)
-    except (OSError, ValueError):
-        return
-    if not isinstance(data, dict):
+    data = _leer_ajustes()
+    if not data:
         return
 
     _aplicar_roles(data.get("roles"))

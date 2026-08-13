@@ -132,6 +132,53 @@ def test_the_environment_outranks_a_saved_role(data_dir, monkeypatch):
     assert rag_engine.MODELO_RAG == "saved-rag"
 
 
+def test_save_does_not_erase_a_role_the_environment_is_pinning(data_dir, monkeypatch):
+    """Issue #79: the override is defensible; destroying the stored pick is not.
+
+    Sequence: env pins contextual, settings.json records a different choice,
+    load (runtime follows the env), save (any other control also triggers this).
+    The file must still record the user's pick -- not the override, and not
+    drop the key -- so unsetting the variable restores what they chose.
+    """
+    monkeypatch.setenv("OLLAMA_CONTEXTUAL_MODEL", "pinned-by-env:1b")
+    monkeypatch.setattr(rag_engine, "MODELO_CONTEXTUAL", "pinned-by-env:1b")
+    _save(data_dir, roles={"contextual": "chosen-in-web-ui:9b", "rag": "saved-rag"})
+
+    settings.cargar_ajustes_persistidos()
+    settings.guardar_ajustes_persistidos()
+
+    on_disk = json.loads((Path(data_dir) / "settings.json").read_text(encoding="utf-8"))
+    assert on_disk["roles"]["contextual"] == "chosen-in-web-ui:9b"
+    assert on_disk["roles"]["rag"] == "saved-rag"
+    assert rag_engine.MODELO_CONTEXTUAL == "pinned-by-env:1b"
+
+
+def test_save_does_not_freeze_an_env_override_as_a_stored_choice(data_dir, monkeypatch):
+    """No prior pick for a pinned role: omit it rather than persist the override."""
+    monkeypatch.setenv("OLLAMA_CONTEXTUAL_MODEL", "pinned-by-env:1b")
+    monkeypatch.setattr(rag_engine, "MODELO_CONTEXTUAL", "pinned-by-env:1b")
+    _save(data_dir, roles={"rag": "saved-rag"})
+
+    settings.cargar_ajustes_persistidos()
+    settings.guardar_ajustes_persistidos()
+
+    on_disk = json.loads((Path(data_dir) / "settings.json").read_text(encoding="utf-8"))
+    assert "contextual" not in on_disk["roles"]
+    assert on_disk["roles"]["rag"] == "saved-rag"
+
+
+def test_save_does_not_erase_the_store_while_docs_folder_is_set(data_dir, monkeypatch):
+    monkeypatch.setenv("DOCS_FOLDER", str(DOCS_ROOT / "en"))
+    _save(data_dir, active_store="ca")
+
+    settings.cargar_ajustes_persistidos()
+    settings.guardar_ajustes_persistidos()
+
+    on_disk = json.loads((Path(data_dir) / "settings.json").read_text(encoding="utf-8"))
+    assert on_disk["active_store"] == "ca"
+    assert os.path.basename(rag_engine.CARPETA_DOCS) == "en"
+
+
 def test_docs_folder_pins_the_corpus_over_the_saved_store(data_dir, monkeypatch):
     monkeypatch.setenv("DOCS_FOLDER", str(DOCS_ROOT / "en"))
     _save(data_dir, active_store="ca")
