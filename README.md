@@ -245,6 +245,8 @@ saved to `settings.json` in the data directory, and the CLI starts from that
 same file: one configuration per machine, not one per interface. The precedence
 is environment, then saved choices, then defaults, so an exported
 `OLLAMA_*_MODEL` or `DOCS_FOLDER` still describes the run you are starting.
+That override does not overwrite the saved choice: unset the variable and the
+UI pick is still there.
 
 Each corpus has its own Jina CLIP and FAISS index under `rag/vector_db/`. Both
 interfaces detect when a stored index no longer matches the active chunking,
