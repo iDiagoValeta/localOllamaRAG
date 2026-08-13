@@ -138,6 +138,106 @@ def test_case_ids_none_selects_every_gold_case(monkeypatch):
     assert result["num_cases"] == len(all_cases)
 
 
+def test_empty_case_ids_is_a_reachability_probe_not_the_gate(monkeypatch, tmp_path):
+    """case_ids=() is verify_reachable's honour-check, not a 0/0 gold run.
+
+    Measured 2026-08-13 on the first real harness run (issue #71): falling
+    through preflighted Ollama, printed FAILED 0.00 < 0.77, and wrote a junk
+    report under tests/eval/runs/.
+    """
+    preflight_calls = []
+    monkeypatch.setattr(
+        run_eval, "preflight_ollama", lambda required: preflight_calls.append(set(required))
+    )
+    ensure_calls = []
+    _capture_ensure_indexed(monkeypatch, ensure_calls)
+    seen = []
+    _capture_run_all_cases(monkeypatch, seen)
+    runs_dir = tmp_path / "runs"
+    runs_dir.mkdir()
+    monkeypatch.setattr(run_eval, "RESULTS_DIR", runs_dir)
+    baseline = tmp_path / "baseline_min_pass_rate.txt"
+    baseline.write_text("0.77\n", encoding="utf-8")
+    monkeypatch.setattr(run_eval, "BASELINE_FILE", baseline)
+
+    result = evaluate(models=["m"], case_ids=(), write_report=True)
+
+    assert result["exit_code"] == 0
+    assert result["num_cases"] == 0
+    assert result["records"] == []
+    assert result["report_path"] is None
+    assert result["baseline_updated"] is False
+    assert preflight_calls == []
+    assert ensure_calls == []
+    assert seen == []
+    assert list(runs_dir.iterdir()) == []
+
+
+def test_empty_case_ids_still_rejects_an_unreachable_override(monkeypatch):
+    ensure_calls = []
+    _capture_ensure_indexed(monkeypatch, ensure_calls)
+
+    with pytest.raises(ValueError, match="models.rag"):
+        evaluate(
+            models=["m"], case_ids=(),
+            config_overrides={"models.rag": "other-model"}, write_report=False,
+        )
+
+    assert ensure_calls == []
+
+
+def _fail_every_case(monkeypatch):
+    def _fake(rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, models):
+        return [
+            {
+                "id": c["id"], "paper": c["paper"], "case_type": c["case_type"],
+                "lang": c["lang"], "model": None, "passed": False, "reason": "stub fail",
+                "elapsed_seconds": 0.0,
+            }
+            for c in cases
+        ]
+
+    monkeypatch.setattr(run_eval, "run_all_cases", _fake)
+
+
+def test_subset_below_the_floor_does_not_fail_the_gate(monkeypatch, capsys, tmp_path):
+    """The 0.77 floor is calibrated on 51 cases; an 8/13 fast tier is not it.
+
+    Measured 2026-08-13 (issue #71): a healthy fast-tier 8/13 = 0.6154 printed
+    [gate] FAILED against that floor. A 0/1 stub here is the same class of
+    mistake, cheaper to pin.
+    """
+    baseline = tmp_path / "baseline_min_pass_rate.txt"
+    baseline.write_text("0.77\n", encoding="utf-8")
+    monkeypatch.setattr(run_eval, "BASELINE_FILE", baseline)
+    _capture_ensure_indexed(monkeypatch, [])
+    _fail_every_case(monkeypatch)
+
+    result = evaluate(models=["m"], case_ids=[_DEV_CASE_ID], write_report=False)
+
+    assert result["pass_rate"] == 0.0
+    assert result["exit_code"] == 0
+    out = capsys.readouterr().out
+    assert "[gate] FAILED" not in out
+    assert "subset" in out
+
+
+def test_full_set_below_the_floor_still_fails_the_gate(monkeypatch, capsys, tmp_path):
+    """The CLI (case_ids is None) is still the 51-case gate -- this must not
+    accidentally disable it while fixing the subset path."""
+    baseline = tmp_path / "baseline_min_pass_rate.txt"
+    baseline.write_text("0.77\n", encoding="utf-8")
+    monkeypatch.setattr(run_eval, "BASELINE_FILE", baseline)
+    _capture_ensure_indexed(monkeypatch, [])
+    _fail_every_case(monkeypatch)
+
+    result = evaluate(models=["m"], write_report=False)
+
+    assert result["pass_rate"] == 0.0
+    assert result["exit_code"] == 1
+    assert "[gate] FAILED" in capsys.readouterr().out
+
+
 def test_unknown_case_id_raises_value_error(monkeypatch):
     _capture_ensure_indexed(monkeypatch, [])
     _capture_run_all_cases(monkeypatch, [])

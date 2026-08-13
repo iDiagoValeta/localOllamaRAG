@@ -133,8 +133,10 @@ something is missing:
    nearest 0.01) *after* the gate check, and only if that is higher than the
    current value -- the baseline never moves down automatically.
 
-Infrastructure failures leave the run inconclusive. Only a complete run with
-the calibrated generator model is compared against the baseline.
+Infrastructure failures leave the run inconclusive. Only an unfiltered gold-set
+run (`case_ids is None`, the CLI) is compared against the baseline. A subset
+(the harness search set / fast tier / empty reachability probe) still reports
+`pass_rate` and can raise the baseline when asked, but is not the 51-case gate.
 
 ## Measuring the noise floor and the gate's sensitivity
 
