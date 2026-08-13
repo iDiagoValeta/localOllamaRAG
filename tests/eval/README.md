@@ -319,8 +319,10 @@ python tests/eval/run_probe_lang.py                      # default: gemma4:e2b
 Reading the result is a human step: record a verdict per axis in
 `docs/design/2026-07-28-loop-automejorable.md` section 3 -- *viable*,
 *viable tras arreglo*, or *inviable con esta fuente* -- from the printed
-summary and the JSON report under `probe_runs_lang/`. **No verdict has been
-measured yet; this section only describes how to produce one.** If the
-language axis comes back viable, these 18 cases are written to survive
-promotion (per section 3's "los casos de la sonda se redactan para
-sobrevivir"): they are the seed of the full batch, not throwaway material.
+summary and the JSON report under `probe_runs_lang/`. Measured 2026-08-13
+(17/18, artefact gitignored): the design doc's note under "Sonda previa"
+records the per-axis verdict (*viable tras arreglo*) and why these 18 cases
+are not promoted into `gold_cases.jsonl`. If a later source on this axis
+comes back *viable*, its cases are written to survive promotion (per
+section 3's "los casos de la sonda se redactan para sobrevivir"): they are
+the seed of the full batch, not throwaway material.
