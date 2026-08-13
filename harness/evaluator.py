@@ -375,7 +375,10 @@ def real_evaluate(config_overrides: Mapping[str, Any], case_ids: Sequence[str]) 
         case_ids=tuple(case_ids),
         config_overrides=search_space.expand_overrides(config_overrides),
         update_baseline=False,
-        write_report=True,
+        # The harness ledger is the evidence; writing tests/eval/runs/*.json
+        # here littered five reports on the first real run (issue #71),
+        # including a 0-case reachability probe.
+        write_report=False,
     )
     records = tuple(
         CaseRecord(

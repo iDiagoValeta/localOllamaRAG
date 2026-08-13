@@ -179,13 +179,15 @@ def test_every_declared_search_space_key_is_honoured_by_the_real_evaluate_contra
 # (this round's constraint: no GPU/Ollama -- the full eval gate owns the card).
 
 
-def _fake_run_eval_module(records, config_dev):
+def _fake_run_eval_module(records, config_dev, seen=None):
     """A stub `run_eval` module whose evaluate() carries #56's real return shape."""
     module = types.ModuleType("run_eval")
     module.DEFAULT_MODELS = ["gemma4:e2b"]
 
     def evaluate(*, models, case_ids=None, config_overrides=None, update_baseline=False, write_report=True):
-        del models, case_ids, config_overrides, update_baseline, write_report
+        del models, case_ids, config_overrides, update_baseline
+        if seen is not None:
+            seen["write_report"] = write_report
         return {"records": records, "config": {"dev": config_dev, "blind": {}}}
 
     module.evaluate = evaluate
@@ -201,7 +203,8 @@ def test_real_evaluate_maps_the_actual_56_contract(monkeypatch):
         },
     ]
     config_dev = {"retrieval": {"top_k_final": 8}}
-    monkeypatch.setitem(sys.modules, "run_eval", _fake_run_eval_module(records, config_dev))
+    seen = {}
+    monkeypatch.setitem(sys.modules, "run_eval", _fake_run_eval_module(records, config_dev, seen))
 
     result = ev.real_evaluate({"retrieval.top_k_final": 8}, ("a", "b"))
 
@@ -210,6 +213,10 @@ def test_real_evaluate_maps_the_actual_56_contract(monkeypatch):
     assert by_id["a"].passed is True
     assert by_id["a"].infrastructure_error is False
     assert by_id["b"].infrastructure_error is True
+    # The harness ledger is the evidence; the first real run (issue #71)
+    # wrote five extra JSONs under tests/eval/runs/ because this defaulted
+    # to True -- including a 0-case reachability probe.
+    assert seen["write_report"] is False
 
 
 def test_real_evaluate_raises_not_implemented_without_an_evaluate_function(monkeypatch):

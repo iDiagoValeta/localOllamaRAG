@@ -350,9 +350,12 @@ it has no opinion about which real configuration is better.
 against the sibling PR's contract) — an earlier draft of this adapter
 assumed `{"results": [...], "effective_config": ...}` and would have raised
 `KeyError` on the very first real call, found in the same review before
-`evaluate()` had even landed. `harness/tests/test_evaluator.py` exercises
-the mapping against a stub `run_eval` module carrying the real contract, so
-this stays checked rather than only checked once #56 merges.
+`evaluate()` had even landed. It also passes `write_report=False`: the
+harness ledger is the evidence, and the first real run (issue #71) wrote
+five extra JSONs under `tests/eval/runs/` (including a 0-case reachability
+probe) while the loop ignored `evaluate()`'s `exit_code`. `harness/tests/
+test_evaluator.py` exercises the mapping against a stub `run_eval` module
+carrying the real contract, and pins `write_report=False`.
 
 ## Testing
 
