@@ -331,6 +331,27 @@ def test_update_baseline_true_raises_it_when_the_run_is_conclusive(monkeypatch, 
     assert baseline_file.read_text(encoding="utf-8").strip() != "0.10"
 
 
+def test_update_baseline_with_multiple_models_raises_before_any_work(monkeypatch):
+    """The ratchet is one number; mixing generators into it is the hole
+    issue #28 named. Fail before preflight/index so an exploratory sweep
+    cannot pollute the file by accident."""
+    ensure_calls = []
+    _capture_ensure_indexed(monkeypatch, ensure_calls)
+    seen = []
+    _capture_run_all_cases(monkeypatch, seen)
+
+    with pytest.raises(ValueError, match="multiple models"):
+        evaluate(
+            models=["gemma4:e2b", "gemma4:e4b"],
+            case_ids=[_DEV_CASE_ID],
+            write_report=False,
+            update_baseline=True,
+        )
+
+    assert ensure_calls == []
+    assert seen == []
+
+
 def test_config_overrides_reach_the_appconfig_and_ensure_indexed(monkeypatch):
     ensure_calls = []
     _capture_ensure_indexed(monkeypatch, ensure_calls)

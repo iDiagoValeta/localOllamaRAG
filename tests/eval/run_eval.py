@@ -1111,7 +1111,8 @@ def evaluate(
             pass rate minus ``BASELINE_MARGIN``, same as ``--update-baseline``
             -- only when the run is conclusive (no infrastructure errors);
             an inconclusive run leaves the baseline untouched regardless of
-            this flag, exactly like the CLI.
+            this flag, exactly like the CLI. Refuses more than one model:
+            the file holds one number, calibrated on ``DEFAULT_MODELS``.
         write_report: Write the timestamped JSON report under
             ``tests/eval/runs/``. ``False`` writes nothing to disk, so a
             caller can decide where its own evidence lives.
@@ -1140,9 +1141,18 @@ def evaluate(
             is missing. Raised before any case runs, same as the CLI.
         ValueError: ``case_ids`` names an id that is not in
             ``gold_cases.jsonl``, or ``config_overrides`` names a key
-            evaluate() cannot honour end to end.
+            evaluate() cannot honour end to end, or ``update_baseline``
+            is True with more than one model (the ratchet is one number;
+            mixing generators into it is what issue #28 exists to prevent).
     """
     run_started = time.perf_counter()
+
+    if update_baseline and len(models) != 1:
+        raise ValueError(
+            "refusing update_baseline with multiple models "
+            f"({list(models)}): the ratchet is one number and mixing "
+            "generators into it is what issue #28 exists to prevent"
+        )
 
     cases = load_gold_cases()
     if case_ids is not None:
