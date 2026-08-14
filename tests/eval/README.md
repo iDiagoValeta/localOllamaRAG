@@ -131,7 +131,9 @@ something is missing:
    exits non-zero if it dropped -- that comparison is the gate. `--update-baseline`
    additionally raises the file to `pass_rate - 0.05` (rounded down to the
    nearest 0.01) *after* the gate check, and only if that is higher than the
-   current value -- the baseline never moves down automatically.
+   current value -- the baseline never moves down automatically. It also
+   refuses more than one `--models` entry: the file holds one number,
+   calibrated on the default generator.
 
 Infrastructure failures leave the run inconclusive. Only an unfiltered gold-set
 run (`case_ids is None`, the CLI) is compared against the baseline. A subset
