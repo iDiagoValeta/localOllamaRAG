@@ -1,5 +1,5 @@
-"""Documentation drift check: enumerations in .claude/CLAUDE.md against the
-code that actually defines them.
+"""Documentation drift check: enumerations in docs against the code that
+actually defines them.
 
 docs/README.md states the rule -- "if a document and the code disagree, the
 code is right" -- but nothing enforced it (GitHub issue #32), and drift kept
@@ -12,7 +12,7 @@ fails, the fix is a human reading the diff and deciding whether the code or
 the doc is wrong, per docs/README.md's rule, and writing that sentence
 themselves.
 
-Two checks:
+Checks:
 
 1. ``.claude/CLAUDE.md`` rule 7's "Pipeline entry points" and "Runtime
    switches" bullets against the module-level names ``rag/chat_pdfs.py``
@@ -23,26 +23,40 @@ Two checks:
    ``rag/cli/commands.py``, which its own docstring calls the "single source
    of truth for slash-commands". Checked both ways: a documented command
    that no longer exists, and a registered command nobody documented.
+3. ``README.md``'s user-facing slash-command list against the same
+   ``COMMANDS`` registry -- the README is what an installing user reads, and
+   CLAUDE.md's check does not cover it.
+4. ``README.md``'s four Ollama-role environment variables against
+   ``MODEL_ROLE_ENV_VARS`` in ``rag/chat_pdfs.py``.
+5. ``FaissVectorStore``'s class-docstring persistence layout against the
+   ``_*_FILENAME`` constants the store actually writes. The incident that
+   motivated this file listed exactly this: the docstring said three files
+   while the store wrote four.
 
-Both source files are parsed with ``ast`` rather than imported: importing
+Python sources are parsed with ``ast`` rather than imported: importing
 ``rag.chat_pdfs`` or ``rag.cli.commands`` (the latter transitively, through
 ``rag/cli/__init__.py``) pulls in third-party packages (``dotenv``, ``rich``,
-...) that the fast CI gate's ``architecture`` job -- which runs this file --
-does not install.
+``faiss``, ...) that the fast CI gate's ``architecture`` job -- which runs
+this file -- does not install.
 """
 
 import ast
 import re
 from pathlib import Path
-from typing import Set
+from typing import Dict, Set
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 
 CLAUDE_MD = ROOT / ".claude" / "CLAUDE.md"
+README = ROOT / "README.md"
 CHAT_PDFS = ROOT / "rag" / "chat_pdfs.py"
 CLI_COMMANDS = ROOT / "rag" / "cli" / "commands.py"
+FAISS_STORE = (
+    ROOT / "src" / "monkeygrab" / "adapters" / "vectorstore" / "faiss_store.py"
+)
+ENV_EXAMPLE = ROOT / ".env.example"
 
 
 def _assign_target_names(target: ast.expr) -> Set[str]:
@@ -223,6 +237,155 @@ def _cli_registered_commands() -> Set[str]:
     return tokens
 
 
+def _module_str_constants(py_file: Path, names: Set[str]) -> Dict[str, str]:
+    """Module-level ``NAME = "literal"`` assignments for ``names``."""
+    tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+    found: Dict[str, str] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        else:
+            continue
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id in names:
+                try:
+                    value = ast.literal_eval(node.value)
+                except ValueError:
+                    pytest.fail(
+                        f"{py_file.name}'s {target.id} is no longer a "
+                        "literal ast.literal_eval can parse -- update this "
+                        "check's parsing."
+                    )
+                if not isinstance(value, str):
+                    pytest.fail(
+                        f"{py_file.name}'s {target.id} is {type(value).__name__}, "
+                        "not a string filename."
+                    )
+                found[target.id] = value
+    missing = names - found.keys()
+    if missing:
+        pytest.fail(
+            f"{py_file.name} no longer defines {sorted(missing)} at module "
+            "level -- update this check's parsing."
+        )
+    return found
+
+
+def _module_literal(py_file: Path, name: str):
+    """One module-level assignment evaluated with ``ast.literal_eval``."""
+    tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        else:
+            continue
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id == name:
+                try:
+                    return ast.literal_eval(node.value)
+                except ValueError:
+                    pytest.fail(
+                        f"{py_file.name}'s {name} is no longer a literal "
+                        "ast.literal_eval can parse -- update this check's parsing."
+                    )
+    pytest.fail(
+        f"{py_file.name} no longer defines {name} at module level -- "
+        "update this check's parsing."
+    )
+
+
+def _cli_primary_commands() -> Set[str]:
+    declared = _module_literal(CLI_COMMANDS, "COMMANDS")
+    return {token for token, *_ in declared}
+
+
+_FAISS_FILENAME_CONSTANTS = {
+    "_INDEX_FILENAME",
+    "_META_FILENAME",
+    "_VERSION_FILENAME",
+    "_FINGERPRINT_FILENAME",
+}
+
+# ``index.faiss``, ``meta.jsonl``, ... -- not IndexFlatIP or path_db.
+_FAISS_LAYOUT_FILE = re.compile(r"``([a-z0-9_.]+\.(?:faiss|jsonl|txt))``")
+
+
+def _faiss_docstring_layout_files() -> Set[str]:
+    """Filenames listed in ``FaissVectorStore``'s class docstring.
+
+    Restricted to the class docstring so persist()'s ``*.tmp`` working
+    copies cannot silently widen the set this check compares against the
+    on-disk layout constants.
+    """
+    tree = ast.parse(FAISS_STORE.read_text(encoding="utf-8"), filename=str(FAISS_STORE))
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name == "FaissVectorStore":
+            doc = ast.get_docstring(node) or ""
+            found = set(_FAISS_LAYOUT_FILE.findall(doc))
+            assert len(found) >= 3, (
+                "FaissVectorStore's class docstring now parses to only "
+                f"{len(found)} persistence file(s) ({sorted(found)}) -- "
+                "either the layout legitimately shrank (lower this floor) "
+                "or the capture regex silently narrowed."
+            )
+            return found
+    pytest.fail("faiss_store.py no longer defines class FaissVectorStore")
+
+
+def _readme_slash_commands() -> Set[str]:
+    text = README.read_text(encoding="utf-8")
+    found = set(re.findall(r"`(/[\w-]+)`", text))
+    assert len(found) >= 8, (
+        f"README.md now parses to only {len(found)} slash command(s) "
+        f"({sorted(found)}) -- the capture likely narrowed."
+    )
+    return found
+
+
+def _readme_env_vars() -> Set[str]:
+    """Backtick-quoted ``NAME_WITH_UNDERSCORE`` tokens in README.md.
+
+    A glob like ``OLLAMA_*_MODEL`` is not a variable name and is ignored
+    (the ``*`` fails the character class). ``es`` / ``en`` / ``ca`` have
+    no underscore and are ignored on purpose.
+    """
+    text = README.read_text(encoding="utf-8")
+    found = set(re.findall(r"`([A-Z][A-Z0-9]*_[A-Z0-9_]+)`", text))
+    assert len(found) >= 6, (
+        f"README.md now parses to only {len(found)} env var(s) "
+        f"({sorted(found)}) -- the capture likely narrowed."
+    )
+    return found
+
+
+def _readme_role_env_vars() -> Set[str]:
+    """The four Ollama-role variables in README.md's 'What it runs on' table."""
+    text = README.read_text(encoding="utf-8")
+    match = re.search(
+        r"## What it runs on\n(.*?)(?=\n## )",
+        text,
+        re.DOTALL,
+    )
+    if not match:
+        pytest.fail("README.md no longer has a '## What it runs on' section")
+    found = set(re.findall(r"`(OLLAMA_[A-Z_]+_MODEL)`", match.group(1)))
+    assert len(found) >= 4, (
+        "README.md's 'What it runs on' table now parses to only "
+        f"{len(found)} OLLAMA_*_MODEL var(s) ({sorted(found)})."
+    )
+    return found
+
+
+def _env_example_names() -> Set[str]:
+    if not ENV_EXAMPLE.is_file():
+        pytest.fail(f"{ENV_EXAMPLE} is missing -- nothing to check drift against.")
+    return set(re.findall(r"^#([A-Za-z_][A-Za-z0-9_]*)=", ENV_EXAMPLE.read_text(encoding="utf-8"), re.MULTILINE))
+
+
 def test_rule7_pipeline_entry_points_and_runtime_switches_are_exported():
     """Every symbol rule 7 promises under those two bullets must actually be
     bound at rag/chat_pdfs.py's module level -- otherwise the doc promises a
@@ -251,4 +414,66 @@ def test_cli_slash_commands_match_documentation():
         "rag/cli/commands.py disagree. "
         f"Documented but no longer registered: {missing_from_code}. "
         f"Registered but undocumented: {missing_from_docs}."
+    )
+
+
+def test_readme_slash_commands_match_the_cli_registry():
+    """Every primary COMMANDS token must appear in README.md, and every
+    slash token README.md backticks must actually be registered."""
+    documented = _readme_slash_commands()
+    registered = _cli_registered_commands()
+    primary = _cli_primary_commands()
+    missing_from_readme = sorted(primary - documented)
+    unknown = sorted(documented - registered)
+    assert not missing_from_readme and not unknown, (
+        "README.md's slash-command list and rag/cli/commands.py disagree. "
+        f"Primary commands missing from README.md: {missing_from_readme}. "
+        f"Documented in README.md but not registered: {unknown}."
+    )
+
+
+def test_readme_ollama_role_vars_match_model_role_env_vars():
+    """The role table in README.md is the user-facing copy of
+    MODEL_ROLE_ENV_VARS -- a fifth role, or a renamed variable, has to
+    show up in both."""
+    documented = _readme_role_env_vars()
+    declared = _module_literal(CHAT_PDFS, "MODEL_ROLE_ENV_VARS")
+    assert isinstance(declared, dict), (
+        "MODEL_ROLE_ENV_VARS is no longer a dict -- update this check's parsing."
+    )
+    code = set(declared.values())
+    assert documented == code, (
+        "README.md's Ollama-role table and rag/chat_pdfs.py's "
+        "MODEL_ROLE_ENV_VARS disagree. "
+        f"In README.md only: {sorted(documented - code)}. "
+        f"In MODEL_ROLE_ENV_VARS only: {sorted(code - documented)}."
+    )
+
+
+def test_readme_env_vars_are_in_env_example():
+    """A variable the README names must be a supported knob, i.e. appear
+    in .env.example. The other direction is not required: .env.example is
+    the complete list, the README is not."""
+    documented = _readme_env_vars()
+    in_example = _env_example_names()
+    unknown = sorted(documented - in_example)
+    assert not unknown, (
+        "README.md names these environment variables, but they are not in "
+        f".env.example: {unknown}. Either add them there, or stop naming "
+        "them in the README -- a documented default that nothing reads is "
+        "the class of drift issue #32 exists to catch."
+    )
+
+
+def test_faiss_docstring_persistence_layout_matches_filename_constants():
+    """The class docstring enumerates the on-disk files; the constants are
+    what persist() actually writes. The original #32 incident was the
+    docstring saying three files while the store wrote four."""
+    documented = _faiss_docstring_layout_files()
+    written = set(_module_str_constants(FAISS_STORE, _FAISS_FILENAME_CONSTANTS).values())
+    assert documented == written, (
+        "FaissVectorStore's class-docstring persistence layout and the "
+        "_*_FILENAME constants disagree. "
+        f"In the docstring only: {sorted(documented - written)}. "
+        f"In the constants only: {sorted(written - documented)}."
     )
