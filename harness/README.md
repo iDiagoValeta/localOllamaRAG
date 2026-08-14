@@ -324,6 +324,10 @@ python -m harness.cli --dry-run --max-iterations 3
 # Real run (needs the sibling PR's tests/eval/run_eval.evaluate() on main,
 # Ollama, and a GPU -- fails with an actionable message otherwise):
 python -m harness.cli --proposer llm --max-iterations 8 --patience 3
+
+# Criterion 7: reconstruct one ledger iteration and re-run its exact
+# overrides and case ids. Exit 0 iff the pass/fail vector matches.
+python -m harness.cli --replay 1 --ledger-dir /path/to/ledger
 ```
 
 `--dry-run` uses `evaluator.build_demo_evaluator()`: a tiny, deterministic,

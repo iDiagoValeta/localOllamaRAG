@@ -225,3 +225,79 @@ def test_real_evaluate_raises_not_implemented_without_an_evaluate_function(monke
 
     with pytest.raises(NotImplementedError):
         ev.real_evaluate({}, ())
+
+
+# CRITERION 7 -- reconstruct-and-rerun pass vector.
+
+
+def test_replay_identical_when_every_passed_bit_matches():
+    stored = [
+        {"id": "a", "passed": True},
+        {"id": "b", "passed": False},
+    ]
+
+    def evaluate(overrides, case_ids):
+        assert list(case_ids) == ["a", "b"]
+        assert dict(overrides) == {"retrieval.top_k_final": 4}
+        return ev.EvaluationResult(
+            records=(
+                _rec("a", passed=True),
+                _rec("b", passed=False),
+            ),
+            effective_config={},
+        )
+
+    result = ev.replay(evaluate, {"retrieval.top_k_final": 4}, stored)
+    assert result.identical is True
+    assert result.flips == ()
+    assert result.missing == ()
+    assert result.extra == ()
+    assert result.infrastructure_errors == ()
+
+
+def test_replay_reports_a_classification_flip():
+    stored = [{"id": "a", "passed": True}, {"id": "b", "passed": False}]
+
+    def evaluate(overrides, case_ids):
+        del overrides, case_ids
+        return ev.EvaluationResult(
+            records=(_rec("a", passed=True), _rec("b", passed=True)),
+            effective_config={},
+        )
+
+    result = ev.replay(evaluate, {}, stored)
+    assert result.identical is False
+    assert result.flips == ("b",)
+
+
+def test_replay_reports_missing_and_extra_ids():
+    stored = [{"id": "a", "passed": True}]
+
+    def evaluate(overrides, case_ids):
+        del overrides, case_ids
+        return ev.EvaluationResult(records=(_rec("b", passed=True),), effective_config={})
+
+    result = ev.replay(evaluate, {}, stored)
+    assert result.missing == ("a",)
+    assert result.extra == ("b",)
+    assert result.identical is False
+
+
+def test_replay_treats_an_infrastructure_error_as_not_identical():
+    stored = [{"id": "a", "passed": True}]
+
+    def evaluate_broken(overrides, case_ids):
+        del overrides, case_ids
+        return ev.EvaluationResult(
+            records=(
+                ev.CaseRecord(
+                    id="a", case_type="factual_number", passed=True,
+                    elapsed_seconds=1.0, infrastructure_error=True,
+                ),
+            ),
+            effective_config={},
+        )
+
+    result = ev.replay(evaluate_broken, {}, stored)
+    assert result.identical is False
+    assert result.infrastructure_errors == ("a",)

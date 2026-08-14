@@ -292,3 +292,19 @@ def read_history(ledger_dir: Path = LEDGER_DIR) -> List[LedgerEntry]:
     """
     entries = [read_entry(p) for p in _entry_files(ledger_dir)]
     return sorted(entries, key=lambda e: e.iteration)
+
+
+def read_entry_by_iteration(ledger_dir: Path, iteration: int) -> LedgerEntry:
+    """The entry whose ``iteration`` matches, or ``FileNotFoundError``.
+
+    Criterion 7's reconstruct-and-rerun path (``harness.cli --replay``)
+    looks an entry up this way rather than by filename: the filename's
+    timestamp is incidental, the iteration number is what the index and
+    ``parent_iteration`` links use.
+    """
+    for entry in read_history(ledger_dir):
+        if entry.iteration == iteration:
+            return entry
+    raise FileNotFoundError(
+        f"no ledger entry for iteration {iteration} under {ledger_dir}"
+    )
