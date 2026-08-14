@@ -159,6 +159,59 @@ def compute_objective(records: Sequence[CaseRecord], unreachable_ids: Iterable[s
     return raw, adjusted
 
 
+@dataclass(frozen=True)
+class ReplayResult:
+    """Pass/fail comparison of a ledger entry against a fresh evaluation.
+
+    Criterion 7 (design doc section 2): reconstruct the configuration from
+    the entry, re-run the same case ids, get the same classification within
+    the one-case noise floor. Latency and generated text are not compared
+    -- criterion 1 measured that the grader absorbs generator wording
+    changes; the bit that has to match is ``passed``.
+    """
+
+    flips: Tuple[str, ...]
+    missing: Tuple[str, ...]
+    extra: Tuple[str, ...]
+    infrastructure_errors: Tuple[str, ...]
+
+    @property
+    def identical(self) -> bool:
+        return not (
+            self.flips or self.missing or self.extra or self.infrastructure_errors
+        )
+
+
+def replay(
+    evaluate: EvaluatorFn,
+    config_overrides: Mapping[str, Any],
+    stored_records: Sequence[Mapping[str, Any]],
+) -> ReplayResult:
+    """Re-run ``evaluate`` on a ledger entry's overrides and case ids.
+
+    Args:
+        evaluate: Same adapter the loop uses (demo or real).
+        config_overrides: The entry's raw proposer deltas, not expanded.
+        stored_records: The entry's ``case_records`` (``id`` / ``passed``).
+
+    Returns:
+        The pass/fail diff. ``identical`` is True only when every stored
+        id came back with the same ``passed`` bit, no extras, and no
+        infrastructure errors.
+    """
+    case_ids = tuple(r["id"] for r in stored_records)
+    result = evaluate(config_overrides, case_ids)
+    stored = {r["id"]: bool(r["passed"]) for r in stored_records}
+    got = {r.id: r.passed for r in result.records}
+    flips = tuple(sorted(cid for cid in stored if cid in got and stored[cid] != got[cid]))
+    missing = tuple(sorted(set(stored) - set(got)))
+    extra = tuple(sorted(set(got) - set(stored)))
+    infra = tuple(sorted(r.id for r in result.records if r.infrastructure_error))
+    return ReplayResult(
+        flips=flips, missing=missing, extra=extra, infrastructure_errors=infra,
+    )
+
+
 # GOLD CASES / CASE SETS
 
 _gold_cases_cache: Optional[List[Dict[str, Any]]] = None
