@@ -64,12 +64,12 @@ searches without a red test.
 > **The design's original evaluation-time estimate was wrong by a factor of
 > ~6.** Section 4 assumed ~2.8 h/candidate (three or four candidates a
 > night); issue #27's keep-alive fix removed a per-case cold model load
-> that estimate baked in. A full search-set evaluation (32 cases) now costs
-> ~13 min, measured 2026-08-12 against
-> `tests/eval/runs/20260812T194812Z_mineru-jina_clip-faiss.json` (local,
-> gitignored) — a night now fits dozens of candidates, not three or four.
-> This does not change anything about how the space is declared (see
-> above); it does change the case for the LLM proposer, see "Proposers"
+> that estimate baked in. A full search-set evaluation (32 cases) cost
+> ~13 min on 2026-08-12 (before the gate wired query decomposition) and
+> **~20 min** on 2026-08-19 with the product decomposer on — local
+> gitignored artefacts under `tests/eval/runs/`. A night still fits many
+> candidates, not three or four. This does not change how the space is
+> declared; it does change the case for the LLM proposer, see "Proposers"
 > below.
 
 **Index-time keys are excluded and the exclusion is enforced,** not
@@ -379,7 +379,19 @@ boundary checks.
 > `harness/tests/test_criterion5_simulated.py` proves the **search logic**
 > recovers from a deliberately worsened point in a synthetic, fully
 > controlled landscape — for both proposers. It does **not** prove the real
-> pipeline improves. The real criterion-5 run (design doc §2) still needs
-> the GPU and Ollama — now at ~13 min/full-search-set-evaluation rather than
-> the ~2.8 h originally assumed (see "The declared search space" above) —
-> and is pending measurement; nothing in this PR claims it ran.
+> pipeline improves.
+>
+> **Field, 2026-08-19.** First real `GridProposer` loop from healthy
+> defaults (`tests/eval/runs/harness-loop/`, gitignored): 3 iterations
+> (`top_k_final` 4, 6, 12), all `rejected_no_gain`, ratchet 27/32, stopped
+> on `max_iterations`. `top_k_final=12` won `planck-contours-figure` and
+> lost `planck-h0` — net zero. The `resolution_warning` still applies:
+> an accepted improvement on today's search set is a candidate, not a
+> demonstrated result (#30).
+>
+> Criterion 5 on the real pipeline was started the same day
+> (`RAG_TOP_K_FINAL=1`, ledger `tests/eval/runs/harness-loop-c5/`) and
+> aborted after iteration 1. Sabotaged reference: **24/32**. First
+> proposal `top_k_final=4` was `rejected_regression` on the fast tier
+> (`planck-sigma8-es` — the sabotaged reference had passed it). Resume
+> from that ledger; do not delete it. Resume: issue #89.
