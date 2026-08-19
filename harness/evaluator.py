@@ -332,13 +332,12 @@ def verify_reachable(evaluate: EvaluatorFn, probe_case_ids: Sequence[str] = ()) 
     ``search_space.PENDING_REACHABILITY_KEYS`` is empty today -- #56 audited
     and closed the reachability gap it used to name -- but this gate stays:
     the same audit also found ``flags.usar_llm_query_decomposition`` silently
-    inert for a different reason (the gate hardcodes its collaborator to
-    ``None``, issue #64) and simply removed that key from
-    ``search_space.SEARCH_SPACE`` instead, since ``evaluate()`` would not
-    raise for it either. This gate is what turns a *future* key like either
-    of those into a loud startup failure the moment ``evaluate()`` starts
-    enforcing it, instead of a silent no-op discovered by reading a
-    suspiciously flat ledger.
+    inert for a different reason (the gate hardcoded its collaborator to
+    ``None``, issue #64). That flag is now in ``SEARCH_SPACE`` and honoured
+    end to end; this gate is what turns a *future* key like either of those
+    into a loud startup failure the moment ``evaluate()`` starts enforcing
+    it, instead of a silent no-op discovered by reading a suspiciously
+    flat ledger.
 
     Args:
         evaluate: The evaluator the loop is about to run with.

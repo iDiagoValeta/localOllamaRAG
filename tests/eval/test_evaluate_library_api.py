@@ -597,3 +597,61 @@ def test_models_contextual_override_not_preflighted_when_contextual_retrieval_st
     )
 
     assert preflight_calls == [{"m", run_eval.AUX_MODEL}]
+
+
+def test_query_decomposition_flag_is_an_honoured_override(monkeypatch):
+    """Issue #64: this flag used to be in _UNREACHABLE_CONFIG_OVERRIDE_REASONS
+    because ensure_indexed hardcoded query_decomposer=None. evaluate() must
+    now accept it and thread it through to ensure_indexed."""
+    ensure_calls = []
+    _capture_ensure_indexed(monkeypatch, ensure_calls)
+    _capture_run_all_cases(monkeypatch, [])
+    overrides = {"flags.usar_llm_query_decomposition": False}
+
+    evaluate(
+        models=["m"], case_ids=[_DEV_CASE_ID],
+        config_overrides=overrides, write_report=False,
+    )
+
+    assert ensure_calls[0]["config_overrides"] == overrides
+
+
+def test_models_chat_override_is_preflighted_when_query_decomposition_defaults_on(monkeypatch):
+    """The chat role feeds the query decomposer, and
+    usar_llm_query_decomposition defaults on -- unlike models.contextual,
+    no flag override is required for the override to reach a live Ollama
+    call during phase 1."""
+    preflight_calls = []
+    monkeypatch.setattr(
+        run_eval, "preflight_ollama", lambda required: preflight_calls.append(set(required))
+    )
+    _capture_ensure_indexed(monkeypatch, [])
+    _capture_run_all_cases(monkeypatch, [])
+
+    evaluate(
+        models=["m"], case_ids=[_DEV_CASE_ID],
+        config_overrides={"models.chat": "definitely-not-pulled:0b"},
+        write_report=False,
+    )
+
+    assert preflight_calls == [{"m", run_eval.AUX_MODEL, "definitely-not-pulled:0b"}]
+
+
+def test_models_chat_override_not_preflighted_when_query_decomposition_is_off(monkeypatch):
+    preflight_calls = []
+    monkeypatch.setattr(
+        run_eval, "preflight_ollama", lambda required: preflight_calls.append(set(required))
+    )
+    _capture_ensure_indexed(monkeypatch, [])
+    _capture_run_all_cases(monkeypatch, [])
+
+    evaluate(
+        models=["m"], case_ids=[_DEV_CASE_ID],
+        config_overrides={
+            "flags.usar_llm_query_decomposition": False,
+            "models.chat": "definitely-not-pulled:0b",
+        },
+        write_report=False,
+    )
+
+    assert preflight_calls == [{"m", run_eval.AUX_MODEL}]

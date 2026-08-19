@@ -21,15 +21,14 @@ drift away from the config it searches. That validation call checks field
 *existence*, not value legality -- ``with_overrides`` does not type-check.
 
 This space is NOT "every field ``AppConfig`` has" -- it is "every field the
-measurement can actually move", and those two sets differ. Two examples
-found auditing this PR: ``flags.usar_llm_query_decomposition`` exists on
-``AppConfig`` but is absent from ``SEARCH_SPACE`` because the gate hardcodes
-its collaborator to ``None`` regardless of the flag (issue #64, see the
-comment where it would otherwise sit); ``retrieval.min_question_length``
-exists on ``AppConfig`` but is never declared here either -- nothing under
-``src/monkeygrab/`` reads it, the real check lives in the legacy
-``rag.chat_pdfs`` globals, so it is decorative on this config object and
-tuning it would move nothing.
+measurement can actually move", and those two sets differ.
+``retrieval.min_question_length`` exists on ``AppConfig`` but is never
+declared here -- nothing under ``src/monkeygrab/`` reads it, the real check
+lives in the legacy ``rag.chat_pdfs`` globals, so it is decorative on this
+config object and tuning it would move nothing. ``flags.usar_llm_query_decomposition``
+used to be the other example (issue #64: the gate hardcoded
+``query_decomposer=None``); it is in the space now that the gate wires the
+collaborator the same way the product does.
 
 Four things live here besides the declared tunables:
 
@@ -185,17 +184,14 @@ SEARCH_SPACE: Tuple[Tuple[str, Tuple[Any, ...], str, str], ...] = (
         "Neighbour-chunk expansion on/off.",
         "generation",
     ),
-    # flags.usar_llm_query_decomposition is deliberately ABSENT (issue #64,
-    # filed while auditing search-space reachability with the sibling PR,
-    # #56): tests/eval/run_eval.py:358 builds Retrieve(..., query_decomposer=None)
-    # unconditionally, while the product wires it whenever the flag is on
-    # (rag/engine/retrieval.py:50, default on). The gate therefore measures a
-    # retrieval pipeline no user runs, and flipping this flag inside an
-    # evaluation cannot change anything -- it would not raise (evaluate()
-    # accepts the override) and would not move a single case either. Fixing
-    # the gate needs sign-off because it will move the pass rate; until then,
-    # this key stays out of the declared space rather than spend iterations
-    # on a knob proven to do nothing. Put it back once #64 closes.
+    (
+        "flags.usar_llm_query_decomposition",
+        (True, False),
+        "Product default is on (rag/engine/retrieval.py:50). The gate used "
+        "to hardcode query_decomposer=None (issue #64), so this flag was "
+        "inert in SEARCH_SPACE until the gate wired the same collaborator.",
+        "retrieval",
+    ),
     (
         "flags.usar_optimizacion_contexto",
         (True, False),
@@ -233,10 +229,10 @@ _STAGE_OF: dict = {key: stage for key, _values, _why, stage in SEARCH_SPACE}
 # drives -- evaluator.verify_reachable, proposal_order()'s reachable-first
 # walk -- caught two DIFFERENT failure classes during this same audit: this
 # one (a config silently not reaching a stage) and issue #64
-# (flags.usar_llm_query_decomposition, where the gate hardcodes
-# query_decomposer=None regardless of the flag -- see that key's removal
-# comment above). A future key added to SEARCH_SPACE gets the same startup
-# check for free; nobody has to remember to re-verify it by hand.
+# (flags.usar_llm_query_decomposition, where the gate hardcoded
+# query_decomposer=None regardless of the flag). #64 is closed in this
+# change -- the flag is declared above and evaluate() honours it -- but a
+# future key added to SEARCH_SPACE gets the same startup check for free.
 PENDING_REACHABILITY_KEYS: frozenset = frozenset()
 
 

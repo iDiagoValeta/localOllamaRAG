@@ -6,13 +6,13 @@ tests/eval/run_eval.evaluate() library API) was being built: four declared
 keys did not reach the generation stage through config_overrides at the
 time. #56 has since closed that gap (search_space.PENDING_REACHABILITY_KEYS
 is empty -- see its docstring for the full history), and a *different* key
-turned out inert for a different reason and was removed from the space
-entirely (flags.usar_llm_query_decomposition, issue #64). The gate itself
-stays: it is what turns a FUTURE case of either failure class into a loud
-startup failure naming the key, instead of the loop silently running on top
-of a knob that does nothing. The fake evaluators below use hypothetical key
-names to test the mechanism in isolation -- they do not assert anything is
-currently broken.
+turned out inert for a different reason (flags.usar_llm_query_decomposition,
+issue #64: the gate hardcoded query_decomposer=None). That flag is now in
+SEARCH_SPACE. The gate itself stays: it is what turns a FUTURE case of
+either failure class into a loud startup failure naming the key, instead of
+the loop silently running on top of a knob that does nothing. The fake
+evaluators below use hypothetical key names to test the mechanism in
+isolation -- they do not assert anything is currently broken.
 """
 
 import sys
