@@ -106,7 +106,9 @@ class AppConfig:
                 recomp_num_ctx=env.read_env_int("OLLAMA_RECOMP_NUM_CTX", 8192),
                 contextual_num_ctx=env.read_env_int("OLLAMA_CONTEXTUAL_NUM_CTX", 32768),
                 request_timeout=env.read_env_int("OLLAMA_REQUEST_TIMEOUT", 900),
-                keep_alive=env.read_env_int("OLLAMA_KEEP_ALIVE", 0),
+                # See rag/chat_pdfs.py's OLLAMA_KEEP_ALIVE comment (issue #25)
+                # for the measurement behind 120 and the VRAM residency trade-off.
+                keep_alive=env.read_env_int("OLLAMA_KEEP_ALIVE", 120),
                 generate_retries=env.read_env_int("OLLAMA_GENERATE_RETRIES", 2),
                 generate_retry_delay=env.read_env_int("OLLAMA_GENERATE_RETRY_DELAY", 3),
                 base_url=env.read_env_ollama_base_url(),

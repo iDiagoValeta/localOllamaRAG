@@ -629,10 +629,19 @@ def _generation_keep_alive(models_used: Iterable[str]):
     below to free Ollama's own 120s hold on them) rather than the whole run:
     phase 1 never touches Ollama, so it cannot benefit, and leaving it set
     past main() would let a non-zero keep-alive leak into anything else
-    importing rag.chat_pdfs afterwards. Does not touch the product default --
-    see issue #27: keep_alive=0 exists because the embedder and reranker
-    contend for the same 8 GB (issue #25), and raising it globally would
-    make that contention worse.
+    importing rag.chat_pdfs afterwards.
+
+    Independent of what the product default is: this scoping still matters
+    on its own terms (phase 1 shouldn't hold a keep-alive it can never use),
+    which is why it stays even now that OLLAMA_KEEP_ALIVE's product default
+    is also 120 (rag/chat_pdfs.py). That default used to be 0, on the theory
+    that the embedder and reranker contend for the same 8 GB (issue #27).
+    Issue #25's 2026-07-29 measurement found that contention costs 5.0s on
+    e4b and 2.0s on e2b, not the multi-minute stall once feared, with all
+    three tenants coexisting at 7514 of 8188 MiB; #25 was closed as not
+    reproduced on that basis. Raising the product default does not change
+    what this gate measures in phase 2 -- this context manager already
+    forced 120 for generation calls regardless.
 
     Args:
         models_used: Every Ollama model name this phase may have loaded

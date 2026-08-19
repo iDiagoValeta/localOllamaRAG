@@ -248,6 +248,11 @@ is environment, then saved choices, then defaults, so an exported
 That override does not overwrite the saved choice: unset the variable and the
 UI pick is still there.
 
+`OLLAMA_KEEP_ALIVE` keeps the generator's weights in VRAM for that many seconds
+after each call, since loading them back is most of a query's latency — on a
+small or shared GPU that also means the model squats on VRAM for that long
+afterward, so lower it (or set it to `0`) there.
+
 Each corpus has its own Jina CLIP and FAISS index under `rag/vector_db/`. Both
 interfaces detect when a stored index no longer matches the active chunking,
 extraction or index-time flags and warn about it, but never reindex on their

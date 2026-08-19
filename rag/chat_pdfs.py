@@ -157,7 +157,11 @@ OLLAMA_RECOMP_NUM_CTX = _leer_env_int("OLLAMA_RECOMP_NUM_CTX", 8192)
 OLLAMA_CONTEXTUAL_NUM_CTX = _leer_env_int("OLLAMA_CONTEXTUAL_NUM_CTX", 32768)
 OLLAMA_REQUEST_TIMEOUT = _leer_env_int("OLLAMA_REQUEST_TIMEOUT", 900)
 # Seconds to keep weights in VRAM after each Ollama call; 0 unloads immediately.
-OLLAMA_KEEP_ALIVE = _leer_env_int("OLLAMA_KEEP_ALIVE", 0)
+# Model load is 93-95% of query wall time (issue #25, 2026-07-29): at 120s,
+# queries within that window reuse the resident weights instead of paying a
+# ~170s cold load again. Costs VRAM residency for that long after every call
+# -- lower it (or set 0) on a card that needs the headroom back sooner.
+OLLAMA_KEEP_ALIVE = _leer_env_int("OLLAMA_KEEP_ALIVE", 120)
 OLLAMA_GENERATE_RETRIES = _leer_env_int("OLLAMA_GENERATE_RETRIES", 2)
 OLLAMA_GENERATE_RETRY_DELAY = _leer_env_int("OLLAMA_GENERATE_RETRY_DELAY", 3)
 
