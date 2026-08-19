@@ -281,10 +281,9 @@ language stores — English, Castellano, Valencià — map to `rag/docs/{en,es,c
 
 The **desktop app** wraps the web interface in a Windows executable with
 [PyInstaller](https://pyinstaller.org/) and [pywebview](https://pywebview.flowrl.com/).
-It needs the isolated MinerU/Jina runtime beside the executable, and the
-packaged build cannot start that worker yet even when the runtime is present
-([#26](https://github.com/iDiagoValeta/localOllamaRAG/issues/26)); use the CLI
-or web app in the meantime. See [`packaging/README.md`](packaging/README.md).
+It needs the isolated MinerU/Jina runtime (`.venv-mineru`) beside the
+executable; without it, indexing and retrieval fail visibly. The jina-clip
+worker ships inside the bundle. See [`packaging/README.md`](packaging/README.md).
 
 ---
 
@@ -297,9 +296,6 @@ or web app in the meantime. See [`packaging/README.md`](packaging/README.md).
 > - **The reranker downloads its model on first use**, a one-time step that needs internet. Everything after runs offline; turn reranking off if you need a fully air-gapped first run.
 > - **Optional stages fail loudly.** If an enabled stage cannot run, the query raises instead of silently returning worse results. Turn the stage off to proceed without it.
 > - **Indexing cost** grows with corpus size, contextual enrichment and the number of extracted images.
-> - **Concurrent web requests can disable the embedder.** Two overlapping queries can desynchronize the Jina CLIP worker's protocol, which permanently disables it until the process restarts ([#24](https://github.com/iDiagoValeta/localOllamaRAG/issues/24)).
-> - **VRAM from the embedder and reranker is not freed before generation.** On memory-constrained GPUs this can make Ollama hang for minutes instead of failing fast ([#25](https://github.com/iDiagoValeta/localOllamaRAG/issues/25)).
-> - **The packaged desktop build cannot start the multimodal worker yet.** Indexing and retrieval fail even with the isolated runtime present ([#26](https://github.com/iDiagoValeta/localOllamaRAG/issues/26)).
 
 ---
 
@@ -318,6 +314,7 @@ retrieval or generation, because the fast gate never exercises a real model.
 ```bash
 pytest                                              # full suite, no GPU required
 python tests/eval/run_eval.py --models <model...>   # full gate; needs Ollama + GPU
+python -m harness.cli --dry-run --max-iterations 3  # config-search wiring; see harness/README.md
 ```
 
 Tests are split by what they protect:
