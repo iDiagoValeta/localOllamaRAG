@@ -12,7 +12,7 @@ class OllamaRuntimeConfig:
     recomp_num_ctx: int = 8192
     contextual_num_ctx: int = 32768
     request_timeout: int = 900
-    keep_alive: int = 0
+    keep_alive: int = 120
     generate_retries: int = 2
     generate_retry_delay: int = 3
     base_url: str = DEFAULT_OLLAMA_BASE_URL
