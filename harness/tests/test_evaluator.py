@@ -179,13 +179,15 @@ def test_every_declared_search_space_key_is_honoured_by_the_real_evaluate_contra
 # (this round's constraint: no GPU/Ollama -- the full eval gate owns the card).
 
 
-def _fake_run_eval_module(records, config_dev):
+def _fake_run_eval_module(records, config_dev, seen=None):
     """A stub `run_eval` module whose evaluate() carries #56's real return shape."""
     module = types.ModuleType("run_eval")
     module.DEFAULT_MODELS = ["gemma4:e2b"]
 
     def evaluate(*, models, case_ids=None, config_overrides=None, update_baseline=False, write_report=True):
-        del models, case_ids, config_overrides, update_baseline, write_report
+        del models, case_ids, config_overrides, update_baseline
+        if seen is not None:
+            seen["write_report"] = write_report
         return {"records": records, "config": {"dev": config_dev, "blind": {}}}
 
     module.evaluate = evaluate
@@ -201,7 +203,8 @@ def test_real_evaluate_maps_the_actual_56_contract(monkeypatch):
         },
     ]
     config_dev = {"retrieval": {"top_k_final": 8}}
-    monkeypatch.setitem(sys.modules, "run_eval", _fake_run_eval_module(records, config_dev))
+    seen = {}
+    monkeypatch.setitem(sys.modules, "run_eval", _fake_run_eval_module(records, config_dev, seen))
 
     result = ev.real_evaluate({"retrieval.top_k_final": 8}, ("a", "b"))
 
@@ -210,6 +213,10 @@ def test_real_evaluate_maps_the_actual_56_contract(monkeypatch):
     assert by_id["a"].passed is True
     assert by_id["a"].infrastructure_error is False
     assert by_id["b"].infrastructure_error is True
+    # The harness ledger is the evidence; the first real run (issue #71)
+    # wrote five extra JSONs under tests/eval/runs/ because this defaulted
+    # to True -- including a 0-case reachability probe.
+    assert seen["write_report"] is False
 
 
 def test_real_evaluate_raises_not_implemented_without_an_evaluate_function(monkeypatch):
@@ -218,3 +225,79 @@ def test_real_evaluate_raises_not_implemented_without_an_evaluate_function(monke
 
     with pytest.raises(NotImplementedError):
         ev.real_evaluate({}, ())
+
+
+# CRITERION 7 -- reconstruct-and-rerun pass vector.
+
+
+def test_replay_identical_when_every_passed_bit_matches():
+    stored = [
+        {"id": "a", "passed": True},
+        {"id": "b", "passed": False},
+    ]
+
+    def evaluate(overrides, case_ids):
+        assert list(case_ids) == ["a", "b"]
+        assert dict(overrides) == {"retrieval.top_k_final": 4}
+        return ev.EvaluationResult(
+            records=(
+                _rec("a", passed=True),
+                _rec("b", passed=False),
+            ),
+            effective_config={},
+        )
+
+    result = ev.replay(evaluate, {"retrieval.top_k_final": 4}, stored)
+    assert result.identical is True
+    assert result.flips == ()
+    assert result.missing == ()
+    assert result.extra == ()
+    assert result.infrastructure_errors == ()
+
+
+def test_replay_reports_a_classification_flip():
+    stored = [{"id": "a", "passed": True}, {"id": "b", "passed": False}]
+
+    def evaluate(overrides, case_ids):
+        del overrides, case_ids
+        return ev.EvaluationResult(
+            records=(_rec("a", passed=True), _rec("b", passed=True)),
+            effective_config={},
+        )
+
+    result = ev.replay(evaluate, {}, stored)
+    assert result.identical is False
+    assert result.flips == ("b",)
+
+
+def test_replay_reports_missing_and_extra_ids():
+    stored = [{"id": "a", "passed": True}]
+
+    def evaluate(overrides, case_ids):
+        del overrides, case_ids
+        return ev.EvaluationResult(records=(_rec("b", passed=True),), effective_config={})
+
+    result = ev.replay(evaluate, {}, stored)
+    assert result.missing == ("a",)
+    assert result.extra == ("b",)
+    assert result.identical is False
+
+
+def test_replay_treats_an_infrastructure_error_as_not_identical():
+    stored = [{"id": "a", "passed": True}]
+
+    def evaluate_broken(overrides, case_ids):
+        del overrides, case_ids
+        return ev.EvaluationResult(
+            records=(
+                ev.CaseRecord(
+                    id="a", case_type="factual_number", passed=True,
+                    elapsed_seconds=1.0, infrastructure_error=True,
+                ),
+            ),
+            effective_config={},
+        )
+
+    result = ev.replay(evaluate_broken, {}, stored)
+    assert result.identical is False
+    assert result.infrastructure_errors == ("a",)

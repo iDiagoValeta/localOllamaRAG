@@ -21,6 +21,10 @@ implementation that happens to live in the test tree.
 | `papers_cache/` | Downloaded blind-set PDFs. Gitignored — reproduced from `arxiv_id`. |
 | `blind_docs/` | Blind-set PDFs staged under their `paper` slug for indexing. Gitignored. |
 | `runs/` | Dated JSON results from each `run_eval.py` run. Gitignored. |
+| `probe_cases_lang.jsonl` | Language-axis diagnostic probe (proposal, not part of the gate — see below). |
+| `run_probe_lang.py` | Runs the probe against its own isolated FAISS collection. |
+| `probe_docs_lang/` | PDFs staged for the probe, copied from `rag/docs/es\|ca/`. Gitignored. |
+| `probe_runs_lang/` | Dated JSON results from each `run_probe_lang.py` run. Gitignored. |
 
 ## Corpus
 
@@ -127,10 +131,14 @@ something is missing:
    exits non-zero if it dropped -- that comparison is the gate. `--update-baseline`
    additionally raises the file to `pass_rate - 0.05` (rounded down to the
    nearest 0.01) *after* the gate check, and only if that is higher than the
-   current value -- the baseline never moves down automatically.
+   current value -- the baseline never moves down automatically. It also
+   refuses more than one `--models` entry: the file holds one number,
+   calibrated on the default generator.
 
-Infrastructure failures leave the run inconclusive. Only a complete run with
-the calibrated generator model is compared against the baseline.
+Infrastructure failures leave the run inconclusive. Only an unfiltered gold-set
+run (`case_ids is None`, the CLI) is compared against the baseline. A subset
+(the harness search set / fast tier / empty reachability probe) still reports
+`pass_rate` and can raise the baseline when asked, but is not the 51-case gate.
 
 ## Measuring the noise floor and the gate's sensitivity
 
@@ -256,3 +264,69 @@ targets the aggregate, not the split. Five of the seven flips to FAIL are
 figure-retrieval cases, and design doc section 3 ("Margen inalcanzable")
 already places part of those cases outside the scalar the loop maximises --
 which makes the warning stronger, not weaker.
+
+## Language-axis probe (diagnostic, not the gate)
+
+Design doc section 3 ("El corpus, derivado del objetivo") measured on
+2026-08-12 that the loop's search set -- the 32 `source: "corpus"` cases,
+one of the two partitions block B still owes -- has only 5 available
+failures and registers just 3 net flips against a known-catastrophic
+sabotage (`RAG_TOP_K_FINAL=1`), against a ~6-flip threshold for a
+demonstrable paired difference. The fix is a larger, harder search-set
+corpus (~55 new cases, ~20 documents); before authoring that at scale,
+section 3 ("Sonda previa") asks for a small diagnostic batch per axis that
+decides whether it is worth it.
+
+This is that batch for the **language axis**: the `es/` (Castilian) and
+`ca/` (Valencian) document stores the product already ships in
+`rag/docs/es/` and `rag/docs/ca/` -- two of its three fixed language stores
+-- which `gold_cases.jsonl` never exercises today. Provisioning cost is
+zero, since the PDFs already ship; the domain and form axes are out of
+scope here (see the design doc's composition table).
+
+- **`probe_cases_lang.jsonl`**: 18 hand-verified cases (every
+  `verified_pages` checked against the actual PDF page) over 6 documents --
+  `Horchata_de_chufa`, `Parque_natural_de_la_Albufera`,
+  `Rodrigo_Díaz_de_Vivar` (`es`), `Llotja_de_la_Seda`, `Jaume_el_Conqueridor`,
+  `Pilota_valenciana` (`ca`). Same field shape as `gold_cases.jsonl`
+  (`id`/`paper`/`case_type`/`lang`/`question`/`accepted_answers` or
+  `expect_kind_any`/`verified_pages`/optional `notes`), plus `"source":
+  "lang_probe"` so it can never be mistaken for a `gold_cases.jsonl` row.
+  **This file is a proposal, not an addition to the gate.** Per the design
+  doc's assumptions (section 5, "Autoría de casos"), a batch like this needs
+  human audit before any of it could be promoted into `gold_cases.jsonl` --
+  nothing here does that promotion automatically, and nothing in this repo
+  reads this file except `run_probe_lang.py` and its own schema test.
+- **`run_probe_lang.py`**: stages the 6 PDFs into `probe_docs_lang/` (gitignored,
+  copied under each case's `paper` slug) and indexes them into their own
+  FAISS collection, derived from that directory's basename exactly the way
+  `run_eval.py` isolates its own dev-set collection from the product's
+  `docs_en` store (see the comment on `EVAL_DEV_LABEL` in `run_eval.py`).
+  The result is a collection that cannot collide with `docs_es`, `docs_ca`
+  (the product's live stores), `dev_docs`/`blind_docs` (this gate's own
+  stores), or any other `rag/vector_db/*` collection -- verified by reading
+  `derive_db_paths`: the collection name and store path are both derived
+  from `os.path.basename(docs_folder)`, and `probe_docs_lang` matches none
+  of those basenames. Reuses `run_eval.py`'s own indexing, retrieval and
+  grading code (`ensure_indexed`, `run_retrieval_case`, `run_factual_case`)
+  instead of re-implementing them, so results are directly comparable to a
+  `run_eval.py` report; `run_eval.py` itself is never modified. Prints a
+  pass/fail per case and a summary — no baseline, no gate, no automated
+  verdict.
+
+Run it once a GPU is free (never on the shared runner mid-search):
+
+```bash
+python tests/eval/run_probe_lang.py                      # default: gemma4:e2b
+```
+
+Reading the result is a human step: record a verdict per axis in
+`docs/design/2026-07-28-loop-automejorable.md` section 3 -- *viable*,
+*viable tras arreglo*, or *inviable con esta fuente* -- from the printed
+summary and the JSON report under `probe_runs_lang/`. Measured 2026-08-13
+(17/18, artefact gitignored): the design doc's note under "Sonda previa"
+records the per-axis verdict (*viable tras arreglo*) and why these 18 cases
+are not promoted into `gold_cases.jsonl`. If a later source on this axis
+comes back *viable*, its cases are written to survive promotion (per
+section 3's "los casos de la sonda se redactan para sobrevivir"): they are
+the seed of the full batch, not throwaway material.

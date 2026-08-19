@@ -3,6 +3,7 @@
 Usage:
     python -m harness.cli --dry-run --max-iterations 3
     python -m harness.cli --proposer llm --max-iterations 8 --patience 3
+    python -m harness.cli --replay 1 --ledger-dir /path/to/ledger
 
 ``--dry-run`` always works: it wires in a small deterministic in-process
 evaluator (``evaluator.build_demo_evaluator``) so the whole loop -- proposer,
@@ -65,7 +66,43 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                          help="Use the deterministic in-process demo evaluator instead of the real gate.")
     parser.add_argument("--llm-model", default=proposers_mod.LlmProposer.DEFAULT_MODEL,
                          help=f"Ollama model for --proposer llm. Default: {proposers_mod.LlmProposer.DEFAULT_MODEL}.")
+    parser.add_argument("--replay", type=int, metavar="ITERATION", default=None,
+                         help=(
+                             "Re-run ledger iteration ITERATION's overrides and case ids "
+                             "(criterion 7). Skips the search loop. Needs --ledger-dir "
+                             "pointing at the ledger that holds that entry."
+                         ))
     return parser.parse_args(argv)
+
+
+def _run_replay(iteration: int, evaluate, ledger_dir: Path) -> int:
+    """Criterion 7: reconstruct one ledger entry and compare the pass vector."""
+    try:
+        entry = ledger_mod.read_entry_by_iteration(ledger_dir, iteration)
+    except FileNotFoundError as exc:
+        print(f"REPLAY FAILED: {exc}", file=sys.stderr)
+        return 1
+    try:
+        result = evaluator_mod.replay(evaluate, entry.config_overrides, entry.case_records)
+    except NotImplementedError as exc:
+        print(f"NOT AVAILABLE: {exc}", file=sys.stderr)
+        return 1
+    except evaluator_mod.ReachabilityError as exc:
+        print(f"REACHABILITY GATE FAILED: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"replay iteration {entry.iteration} ({entry.evaluated_case_set}, {len(entry.case_records)} cases)")
+    print(f"overrides: {entry.config_overrides}")
+    print(f"identical: {result.identical}")
+    if result.flips:
+        print(f"flips: {list(result.flips)}")
+    if result.missing:
+        print(f"missing from replay: {list(result.missing)}")
+    if result.extra:
+        print(f"extra in replay: {list(result.extra)}")
+    if result.infrastructure_errors:
+        print(f"infrastructure errors: {list(result.infrastructure_errors)}")
+    return 0 if result.identical else 1
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -80,6 +117,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     else:
         evaluate = evaluator_mod.real_evaluate
         ledger_dir = args.ledger_dir or ledger_mod.LEDGER_DIR
+
+    if args.replay is not None:
+        return _run_replay(args.replay, evaluate, ledger_dir)
 
     search_set_ids = evaluator_mod.search_set_case_ids()
     fast_tier_ids = evaluator_mod.load_fast_tier()

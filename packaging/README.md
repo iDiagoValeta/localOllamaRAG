@@ -61,7 +61,10 @@ in source/dev runs the variable is unset and everything stays repo-relative.
   (one-time, needs internet) into the user cache.
 - A desktop bundle without `.venv-mineru` starts, but indexing and retrieval
   fail visibly because the fixed multimodal stack has no fallback.
-- The packaged build fails the same way even with `.venv-mineru` present:
-  the worker script never leaves the PyInstaller archive, so it cannot start
-  ([#26](https://github.com/iDiagoValeta/localOllamaRAG/issues/26)). Use the
-  CLI or web app until that is fixed.
+- `jina_clip_worker.py` ships as a PyInstaller data file (see the spec's
+  comment next to its `datas` entry), landing beside the frozen
+  `jina_clip_embedder` module under `_internal/`. `JinaClipEmbedder` resolves
+  it with the same `Path(__file__).with_name(...)` lookup it uses in a source
+  checkout, so no dev/frozen branch is needed — the two layouts mirror each
+  other by construction, the same way `_isolated_python()` already resolves
+  `.venv-mineru` in both ([#26](https://github.com/iDiagoValeta/localOllamaRAG/issues/26)).

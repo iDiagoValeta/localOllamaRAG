@@ -324,6 +324,10 @@ python -m harness.cli --dry-run --max-iterations 3
 # Real run (needs the sibling PR's tests/eval/run_eval.evaluate() on main,
 # Ollama, and a GPU -- fails with an actionable message otherwise):
 python -m harness.cli --proposer llm --max-iterations 8 --patience 3
+
+# Criterion 7: reconstruct one ledger iteration and re-run its exact
+# overrides and case ids. Exit 0 iff the pass/fail vector matches.
+python -m harness.cli --replay 1 --ledger-dir /path/to/ledger
 ```
 
 `--dry-run` uses `evaluator.build_demo_evaluator()`: a tiny, deterministic,
@@ -350,9 +354,12 @@ it has no opinion about which real configuration is better.
 against the sibling PR's contract) — an earlier draft of this adapter
 assumed `{"results": [...], "effective_config": ...}` and would have raised
 `KeyError` on the very first real call, found in the same review before
-`evaluate()` had even landed. `harness/tests/test_evaluator.py` exercises
-the mapping against a stub `run_eval` module carrying the real contract, so
-this stays checked rather than only checked once #56 merges.
+`evaluate()` had even landed. It also passes `write_report=False`: the
+harness ledger is the evidence, and the first real run (issue #71) wrote
+five extra JSONs under `tests/eval/runs/` (including a 0-case reachability
+probe) while the loop ignored `evaluate()`'s `exit_code`. `harness/tests/
+test_evaluator.py` exercises the mapping against a stub `run_eval` module
+carrying the real contract, and pins `write_report=False`.
 
 ## Testing
 

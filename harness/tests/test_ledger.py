@@ -13,6 +13,8 @@ if str(REPO_ROOT) not in sys.path:
 if str(REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
+import pytest
+
 from monkeygrab.config.app_config import AppConfig
 from harness import ledger, search_space
 
@@ -108,6 +110,20 @@ def test_read_history_is_sorted_by_iteration(tmp_path):
 
 def test_read_history_on_a_missing_directory_is_empty(tmp_path):
     assert ledger.read_history(tmp_path / "does_not_exist") == []
+
+
+def test_read_entry_by_iteration_returns_that_entry(tmp_path):
+    ledger.write_entry(_entry(iteration=1), ledger_dir=tmp_path)
+    ledger.write_entry(_entry(iteration=2, overrides={"retrieval.top_k_final": 4}), ledger_dir=tmp_path)
+    loaded = ledger.read_entry_by_iteration(tmp_path, 2)
+    assert loaded.iteration == 2
+    assert loaded.config_overrides == {"retrieval.top_k_final": 4}
+
+
+def test_read_entry_by_iteration_raises_when_missing(tmp_path):
+    ledger.write_entry(_entry(iteration=1), ledger_dir=tmp_path)
+    with pytest.raises(FileNotFoundError, match="iteration 9"):
+        ledger.read_entry_by_iteration(tmp_path, 9)
 
 
 def test_read_history_ignores_a_report_json_in_the_same_directory(tmp_path):

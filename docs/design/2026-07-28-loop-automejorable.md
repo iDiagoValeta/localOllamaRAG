@@ -348,6 +348,50 @@ la semilla de la fase completa, no material desechable.
 Veredicto por eje, explícito: *viable* · *viable tras arreglo* · *inviable con
 esta fuente*.
 
+> [!NOTE]
+> **Eje idioma, medido el 2026-08-13.** Primera corrida de
+> `tests/eval/run_probe_lang.py --models gemma4:e2b` sobre `origin/main`
+> (`5f136cb`). Colección aislada `probe_docs_lang` (426 fragmentos); no tocó
+> `docs_es`/`docs_ca` ni `dev_docs`/`blind_docs`. Artefacto local y gitignored:
+> `tests/eval/probe_runs_lang/20260813T213824Z_lang_probe.json`.
+>
+> | | |
+> |---|---|
+> | Total | **17/18 = 0.944** |
+> | Castellano (`lang: es`, 9 casos, 3 docs) | 9/9 |
+> | Valencià (`lang: ca`, 9 casos, 3 docs) | 8/9 |
+> | Retrieval-only | 4/4 |
+> | Answered | 13/14 |
+> | Indexación (primera vez) | 630 s |
+> | Wall | 20.1 min |
+>
+> El único fallo es `jaume-edat-mort`: el generador respondió que la
+> introducción no especifica la muerte. El sidecar de la colección aislada
+> *sí* guarda el literal en `jaume-conqueridor.pdf_pag0_chunk1` («regnà 58
+> anys i morí a l'edat de 68 anys»), y la recuperación devolvió fragmentos
+> de la página 0. Es un fallo de generación sobre evidencia recuperada, no
+> de extracción ni de idioma — el mismo tipo de margen que la primera etapa
+> del loop podría cerrar. Los tres `figure_retrieval` pasaron; sigue en pie
+> la limitación ya anotada en esos casos: `grade.grade_retrieval` acepta
+> cualquier hit `image` en el top-k, así que un PASS no prueba por sí solo
+> que se recuperó el árbol y no una foto vecina.
+>
+> **Veredicto: *viable tras arreglo*.** El eje no es *inviable con esta
+> fuente*: MinerU no destroza estos PDFs y el generador contesta en
+> castellano y en valenciano. Tampoco es *viable* tal cual como pozo de
+> fallos para las ~55 casos del bloque B. Diecisiete aciertos sobre
+> dieciocho, contra la tasa de fallo de ~4/10 que la sección Tamaño asume
+> para dimensionar el corpus, satura el medidor igual que las tablas LaTeX
+> a 5/5 del párrafo anterior: un caso que casi siempre aprueba no distingue
+> mejora de empeoramiento. El arreglo no es el pipeline ni el idioma; es la
+> fuente. Estos seis artículos de Wikipedia ya en `rag/docs/es|ca/` cubren
+> el hueco «dos stores que se shipean, hoy sin medir», pero no son el pozo.
+> Hace falta documentos más duros en es/ca (o dejar este eje como cobertura
+> de store y buscar el pozo en dominio/forma). Los 18 casos de la sonda no
+> se promueven a `gold_cases.jsonl`: la autoría humana del diseño sigue
+> pendiente, y promover un lote saturado gastaría minutos de cada iteración
+> a cambio de casi ningún vuelco.
+
 ### Margen inalcanzable
 
 Separar la métrica de figura (criterio 4) hará aflorar casos que fallan porque el

@@ -14,8 +14,9 @@ if str(ROOT) not in sys.path:
 
 from monkeygrab.domain.chunk_metadata import ChunkMetadata
 from monkeygrab.domain.fragment import Fragment
+from rag.engine.settings import PERSISTED_FLAGS, STORE_IDS
 from rag.engine.wiring import fragment_to_dict
-from rag.web.app import _format_sources, app
+from rag.web.app import _BUILTIN_STORES, _SETTINGS_MAP, _format_sources, app
 
 
 def test_upload_route_is_preserved_for_api_compatibility():
@@ -62,3 +63,20 @@ def test_sources_panel_prefers_the_reranker_score_when_there_is_one():
     sources = _format_sources(fragments)
 
     assert sources == [{"document": "paper.pdf", "pages": [1, 2], "best_page": 1}]
+
+
+def test_every_toggle_the_panel_exposes_is_persisted():
+    """The control panel's toggles and the saved flag list must be the same set.
+
+    They are written in two files on purpose -- the frontend keys belong to the
+    API, the engine variables to rag/engine/settings.py, which the CLI also
+    reads. A toggle missing from the saved list would apply to the running
+    session and silently vanish on restart; a saved flag with no toggle would
+    outlive the UI that set it.
+    """
+    assert set(_SETTINGS_MAP.values()) == set(PERSISTED_FLAGS)
+
+
+def test_the_labelled_stores_are_the_ones_the_engine_resolves():
+    """A label for a store the engine cannot resolve would list a corpus nothing can select."""
+    assert set(_BUILTIN_STORES) == set(STORE_IDS)

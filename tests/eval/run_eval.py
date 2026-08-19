@@ -1096,10 +1096,19 @@ def evaluate(
     Args:
         models: Ollama generator models to evaluate.
         case_ids: ``gold_cases.jsonl`` ``"id"`` values to run. ``None`` runs
-            every case (the CLI's behavior). Filtering happens immediately
-            after loading, before any corpus is staged or indexed, so a
-            subset that only touches one corpus (dev or blind) never forces
-            the other one to be staged/indexed.
+            every case (the CLI's behavior) and is the only mode compared
+            against the 51-case floor in ``baseline_min_pass_rate.txt``. A
+            non-empty subset still reports ``pass_rate`` and can raise that
+            file when ``update_baseline`` is True, but never prints FAILED
+            against 0.77 or sets ``exit_code=1`` for that reason -- the
+            first real harness run (issue #71) saw a healthy 8/13 fast tier
+            do exactly that. An empty sequence is the harness reachability
+            probe: ``validate_config_overrides`` still runs, then this
+            returns without preflight, indexing or a report. Filtering of a
+            non-empty subset happens immediately after loading, before any
+            corpus is staged or indexed, so a subset that only touches one
+            corpus (dev or blind) never forces the other one to be
+            staged/indexed.
         config_overrides: Dotted ``"section.field"`` overrides. Only keys in
             ``_APPCONFIG_OVERRIDE_KEYS`` (applied via ``AppConfig.with_overrides``
             to the retrieval/indexing config ``_eval_app_config`` builds) or
@@ -1117,7 +1126,8 @@ def evaluate(
             pass rate minus ``BASELINE_MARGIN``, same as ``--update-baseline``
             -- only when the run is conclusive (no infrastructure errors);
             an inconclusive run leaves the baseline untouched regardless of
-            this flag, exactly like the CLI.
+            this flag, exactly like the CLI. Refuses more than one model:
+            the file holds one number, calibrated on ``DEFAULT_MODELS``.
         write_report: Write the timestamped JSON report under
             ``tests/eval/runs/``. ``False`` writes nothing to disk, so a
             caller can decide where its own evidence lives.
@@ -1146,9 +1156,18 @@ def evaluate(
             is missing. Raised before any case runs, same as the CLI.
         ValueError: ``case_ids`` names an id that is not in
             ``gold_cases.jsonl``, or ``config_overrides`` names a key
-            evaluate() cannot honour end to end.
+            evaluate() cannot honour end to end, or ``update_baseline``
+            is True with more than one model (the ratchet is one number;
+            mixing generators into it is what issue #28 exists to prevent).
     """
     run_started = time.perf_counter()
+
+    if update_baseline and len(models) != 1:
+        raise ValueError(
+            "refusing update_baseline with multiple models "
+            f"({list(models)}): the ratchet is one number and mixing "
+            "generators into it is what issue #28 exists to prevent"
+        )
 
     cases = load_gold_cases()
     if case_ids is not None:
@@ -1158,6 +1177,29 @@ def evaluate(
         if unknown:
             raise ValueError(f"unknown gold case id(s): {sorted(unknown)}")
     validate_config_overrides(config_overrides)
+
+    # An empty case_ids tuple is the harness reachability probe: it exists to
+    # trip validate_config_overrides, not to run the pipeline. Falling through
+    # would still preflight Ollama, print 0/0, compare that against the 51-case
+    # floor (0.00 < 0.77) and write a junk report -- measured 2026-08-13 on
+    # the first real harness run (issue #71).
+    if case_ids is not None and not cases:
+        return {
+            "summary": build_summary([]),
+            "records": [],
+            "models": list(models),
+            "aux_model": AUX_MODEL,
+            "num_cases": 0,
+            "num_records": 0,
+            "elapsed_seconds": round(time.perf_counter() - run_started, 1),
+            "pass_rate": 0.0,
+            "baseline": None,
+            "infrastructure_errors": [],
+            "baseline_updated": False,
+            "exit_code": 0,
+            "report_path": None,
+            "config": {"dev": None, "blind": None},
+        }
 
     required_models = set(models) | {AUX_MODEL}
     # An overridden models.contextual is otherwise invisible to preflight:
@@ -1292,14 +1334,29 @@ def evaluate(
         print("        Not compared against the baseline: this run measured nothing.")
         exit_code = 1
     else:
-        if threshold is None:
-            print("\n[gate] no baseline yet (tests/eval/baseline_min_pass_rate.txt missing) -- not gating this run")
-            exit_code = 0
-        elif pass_rate < threshold:
-            print(f"\n[gate] FAILED: pass_rate {pass_rate:.4f} < baseline {threshold:.2f}")
-            exit_code = 1
+        # The floor in baseline_min_pass_rate.txt is for the unfiltered 51-case
+        # gold set. A subset's pass rate is a different statistic -- the first
+        # real harness run (issue #71) saw a healthy 8/13 fast tier print
+        # FAILED against 0.77, and a 0-case reachability probe do the same.
+        # Only case_ids is None (the CLI) is the gate.
+        if case_ids is None:
+            if threshold is None:
+                print("\n[gate] no baseline yet (tests/eval/baseline_min_pass_rate.txt missing) -- not gating this run")
+                exit_code = 0
+            elif pass_rate < threshold:
+                print(f"\n[gate] FAILED: pass_rate {pass_rate:.4f} < baseline {threshold:.2f}")
+                exit_code = 1
+            else:
+                print(f"\n[gate] PASSED: pass_rate {pass_rate:.4f} >= baseline {threshold:.2f}")
+                exit_code = 0
         else:
-            print(f"\n[gate] PASSED: pass_rate {pass_rate:.4f} >= baseline {threshold:.2f}")
+            if threshold is not None:
+                print(
+                    f"\n[gate] subset of {len(cases)} case(s) -- not compared against "
+                    f"the {threshold:.2f} floor, which is calibrated on the full gold set"
+                )
+            else:
+                print("\n[gate] subset run -- not the full-set gate")
             exit_code = 0
 
         if update_baseline:
