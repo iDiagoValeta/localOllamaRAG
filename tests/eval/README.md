@@ -119,7 +119,9 @@ something is missing:
 4. Verifies every paper referenced by a gold case actually has an index
    entry before running anything.
 5. Runs every case through the real retrieval + (for factual cases)
-   generation pipeline, grading with `grade.py`. Retrieval for a case is
+   generation pipeline, grading with `grade.py`. Retrieval wires the query
+   decomposer the same way the product does whenever
+   `usar_llm_query_decomposition` is on (issue #64). Retrieval for a case is
    computed once and reused across every `--models` entry -- retrieval does
    not depend on the generator, so re-running it per model would test
    nothing new. `figure_retrieval`/`table_retrieval` cases never call a

@@ -15,6 +15,7 @@ gate, the same way it already skips tests/unit/adapters/*.
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -92,3 +93,94 @@ def test_aborted_indexing_never_writes_a_fingerprint(monkeypatch, tmp_path):
         run_eval.ensure_indexed(_FakeRag(), tmp_path, ["missing.pdf"], "dev set")
 
     assert store.fingerprint_written is False
+
+
+class _PresentStore:
+    """Cache-hit store: fingerprint matches and the required paper is present."""
+
+    def __init__(self, source="paper.pdf"):
+        self.source = source
+        self.fingerprint_written = None
+
+    def count(self):
+        return 1
+
+    def read_fingerprint(self):
+        return "fp"
+
+    def write_fingerprint(self, value):
+        self.fingerprint_written = value
+
+    def get_page(self, *_a, **_kw):
+        return [SimpleNamespace(metadata=SimpleNamespace(source=self.source))]
+
+
+class _CapturingRetrieve:
+    calls = []
+
+    def __init__(self, *_a, **kwargs):
+        type(self).calls.append(kwargs)
+
+
+def _stub_cache_hit_collaborators(monkeypatch, store, config):
+    """Get ensure_indexed to the Retrieve constructor without a real index."""
+    monkeypatch.setattr(run_eval, "_eval_app_config", lambda rag, carpeta, **_kw: config)
+    monkeypatch.setattr("monkeygrab.composition.build_stack", lambda _c: _FakeStack(store))
+    monkeypatch.setattr(
+        "monkeygrab.application.index_fingerprint.compute_index_fingerprint",
+        lambda _c: "fp",
+    )
+    monkeypatch.setattr(
+        "monkeygrab.adapters.lexical.bm25_index.Bm25LexicalIndex",
+        lambda *_a, **_kw: object(),
+    )
+    monkeypatch.setattr("monkeygrab.application.answer.Answer", lambda *_a, **_kw: object())
+    monkeypatch.setattr("monkeygrab.application.retrieve.Retrieve", _CapturingRetrieve)
+    monkeypatch.setattr("rag.engine.wiring.query_decomposer", lambda _c: "decomposer-sentinel")
+    monkeypatch.setattr("rag.engine.wiring.rag_chat_model", lambda _c: object())
+    _CapturingRetrieve.calls = []
+
+
+def test_ensure_indexed_wires_query_decomposer_when_the_flag_is_on(monkeypatch, tmp_path):
+    """Issue #64: the product wires query_decomposer whenever the flag is
+    on; the gate used to pass None unconditionally. A test that only
+    inspects config_overrides would still pass that old bug."""
+    store = _PresentStore()
+    config = AppConfig().with_overrides(
+        **{
+            "flags.usar_embeddings_imagen": False,
+            "flags.usar_contextual_retrieval": False,
+            "flags.usar_reranker": False,
+            "flags.usar_llm_query_decomposition": True,
+        }
+    )
+    _stub_cache_hit_collaborators(monkeypatch, store, config)
+
+    run_eval.ensure_indexed(_FakeRag(), tmp_path, ["paper.pdf"], "dev set")
+
+    assert _CapturingRetrieve.calls[0]["query_decomposer"] == "decomposer-sentinel"
+
+
+def test_ensure_indexed_leaves_query_decomposer_off_when_the_flag_is_off(monkeypatch, tmp_path):
+    store = _PresentStore()
+    config = AppConfig().with_overrides(
+        **{
+            "flags.usar_embeddings_imagen": False,
+            "flags.usar_contextual_retrieval": False,
+            "flags.usar_reranker": False,
+            "flags.usar_llm_query_decomposition": False,
+        }
+    )
+    decomposer_calls = []
+
+    def _should_not_run(_config):
+        decomposer_calls.append(True)
+        return "decomposer-sentinel"
+
+    _stub_cache_hit_collaborators(monkeypatch, store, config)
+    monkeypatch.setattr("rag.engine.wiring.query_decomposer", _should_not_run)
+
+    run_eval.ensure_indexed(_FakeRag(), tmp_path, ["paper.pdf"], "dev set")
+
+    assert _CapturingRetrieve.calls[0]["query_decomposer"] is None
+    assert decomposer_calls == []

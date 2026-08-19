@@ -349,29 +349,44 @@ def ensure_indexed(
         # rebuilt on the next run.
         store.write_fingerprint(expected_fingerprint)
 
+        from rag.engine import wiring
+
         lexical = Bm25LexicalIndex(store, config.retrieval)
         # Reranking runs on whatever device the adapter detects, which is CUDA
         # here. It no longer has to share the card with the jina worker: the
         # runner retrieves every case first and only then generates, so the two
         # models are never resident at the same time.
         reranker = CrossEncoderReranker() if config.flags.usar_reranker else None
-        # Query decomposition stays off so Ollama never competes with the
-        # multimodal embedder for the same 8 GB of VRAM.
+        # Wired the same way rag/engine/retrieval.py:50 wires it for the
+        # product: on the "chat" role whenever the flag is set, off otherwise.
+        # Previously hardcoded to None regardless of the flag, which meant the
+        # gate never searched with the LLM sub-queries the product generates
+        # for any question over 60 characters (issue #64) -- the fourth
+        # instance of this gate measuring a retrieval pipeline no user runs.
+        # The "chat" role is AUX_MODEL for this whole evaluate() call (see
+        # _scoped_model_roles), so this never loads a second, unpreflighted
+        # model on top of the generator under test. It does put Ollama on the
+        # card alongside the resident embedder and reranker during phase 1
+        # (see run_all_cases) rather than only during phase 2 -- the same
+        # sharing the product accepts on every real query, so it is not a new
+        # failure mode, just one the phased gate previously avoided by never
+        # exercising this path at all.
+        query_decomposer = (
+            wiring.query_decomposer(config) if config.flags.usar_llm_query_decomposition else None
+        )
         retrieve = Retrieve(
             stack.embedder,
             store,
             config,
             lexical_index=lexical,
             reranker=reranker,
-            query_decomposer=None,
+            query_decomposer=query_decomposer,
         )
         # The product does not generate straight from what retrieval returned:
         # it expands the top fragments with their neighbours and trims to the
         # character budget first. Building the same use case here is what keeps
         # this runner from grading answers written off evidence no user's query
         # would have produced.
-        from rag.engine import wiring
-
         evidence = Answer(store, wiring.rag_chat_model(config), config)
 
         print(
@@ -828,12 +843,19 @@ def _update_baseline(pass_rate: float) -> None:
 # IndexCorpus, all built from the SAME config object ensure_indexed produces.
 # Being a real AppConfig field is not sufficient on its own to belong here --
 # e.g. retrieval.min_question_length is a real field nothing in
-# src/monkeygrab reads; see _UNREACHABLE_CONFIG_OVERRIDE_REASONS. Two fields
+# src/monkeygrab reads; see _UNREACHABLE_CONFIG_OVERRIDE_REASONS. Three fields
 # are conditional: models.contextual and chunking.contextual_doc_chars only
 # take effect when flags.usar_contextual_retrieval is also overridden True
-# (ensure_indexed forces it False otherwise).
+# (ensure_indexed forces it False otherwise); models.chat only feeds the query
+# decomposer ensure_indexed builds when flags.usar_llm_query_decomposition is
+# True -- which, unlike contextual retrieval, is the AppConfig default, so an
+# override is not required to make it reachable. A models.chat override is
+# folded into evaluate()'s required_models the same way models.contextual is
+# (see the comment there) -- both moved out of
+# _UNREACHABLE_CONFIG_OVERRIDE_REASONS once issue #64 wired the decomposer in.
 _APPCONFIG_OVERRIDE_KEYS = frozenset({
     "models.contextual",
+    "models.chat",
     "chunking.chunk_size",
     "chunking.chunk_overlap",
     "chunking.min_chunk_length",
@@ -855,6 +877,7 @@ _APPCONFIG_OVERRIDE_KEYS = frozenset({
     "flags.usar_busqueda_hibrida",
     "flags.usar_reranker",
     "flags.expandir_contexto",
+    "flags.usar_llm_query_decomposition",
 })
 
 # Generation-side flags reachable only by scoping rag.chat_pdfs's runtime
@@ -884,10 +907,6 @@ _UNREACHABLE_CONFIG_OVERRIDE_REASONS = {
         "generation uses the `models` parameter's per-case role switch; the "
         "Answer object built from the threaded config is never invoked"
     ),
-    "models.chat": (
-        "ensure_indexed hardcodes query_decomposer=None, so this role is "
-        "never read (see #64)"
-    ),
     "models.recomp": (
         "reachable via the same runtime-setter mechanism as "
         "flags.usar_recomp_synthesis, but not wired -- out of scope for this pass"
@@ -913,10 +932,6 @@ _UNREACHABLE_CONFIG_OVERRIDE_REASONS = {
         "gate uses would not move with the threaded config either"
     ),
     "retrieval.min_question_length": "not read anywhere in src/monkeygrab -- Retrieve.run() has no question-length gate",
-    "flags.usar_llm_query_decomposition": (
-        "ensure_indexed hardcodes query_decomposer=None, so this flag can "
-        "never trigger decomposition regardless of its value (see #64)"
-    ),
     "flags.logging_metricas": "generar_respuesta_silenciosa never calls the debug-dump path this flag gates",
     "flags.guardar_debug_rag": "generar_respuesta_silenciosa skips the debug dump entirely",
     "paths.base_dir": "underlies every derived path; not something a candidate config should touch",
@@ -1198,6 +1213,15 @@ def evaluate(
         contextual_override = config_overrides.get("models.contextual")
         if contextual_override:
             required_models.add(contextual_override)
+    # Same class of bug for models.chat, the query decomposer's role -- but
+    # unlike flags.usar_contextual_retrieval (forced off unless a caller opts
+    # back in), flags.usar_llm_query_decomposition defaults on, so a
+    # models.chat override can reach ensure_indexed's decomposer even with no
+    # flag override in play at all.
+    if (config_overrides or {}).get("flags.usar_llm_query_decomposition", True):
+        chat_override = (config_overrides or {}).get("models.chat")
+        if chat_override:
+            required_models.add(chat_override)
     stack_slug = "mineru-jina_clip-faiss"
 
     stacks_to_close = []

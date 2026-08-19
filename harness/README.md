@@ -125,19 +125,17 @@ mid-run still restores the previous globals). All four keys are honoured
 today; `search_space.PENDING_REACHABILITY_KEYS` is empty.
 
 The same audit found a *second*, different way for a declared key to be
-inert: `flags.usar_llm_query_decomposition` is on `AppConfig`, but
-`tests/eval/run_eval.py` builds `Retrieve(..., query_decomposer=None)`
-unconditionally while the product wires it whenever the flag is on and
-defaults to on — the gate measures a retrieval pipeline no user runs, so
-flipping the flag inside an evaluation cannot change anything.
-`evaluate()` would not raise for it either (unlike the first four, this
-isn't a hard-fail case), so it is simply **removed from `SEARCH_SPACE`**
-rather than relied on the gate to catch — filed as issue #64, needs
-sign-off to fix because it will move the pass rate.
+inert: `flags.usar_llm_query_decomposition` is on `AppConfig`, but the
+gate used to build `Retrieve(..., query_decomposer=None)` unconditionally
+while the product wires it whenever the flag is on (default on) — so the
+gate measured a retrieval pipeline no user runs. Issue #64 closed that:
+`ensure_indexed` now wires the decomposer the same way
+`rag/engine/retrieval.py` does, `evaluate()` honours the flag, and the
+key is back in `SEARCH_SPACE`.
 
-The gate itself stays for exactly this reason — two different failure
-classes turned up in one audit, and a future added key gets the same
-protection for free instead of needing someone to remember either lesson:
+The reachability gate itself stays — two different failure classes turned
+up in one audit, and a future added key gets the same protection for free
+instead of needing someone to remember either lesson:
 
 - `evaluator.verify_reachable` probes the injected evaluator once, at loop
   startup, with every declared key set simultaneously — before the
