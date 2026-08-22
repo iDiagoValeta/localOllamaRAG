@@ -278,6 +278,8 @@ The **web UI** adds document upload, per-role model assignment, the pipeline
 toggles, and an inline PDF viewer that opens cited sources at the right page.
 Ollama is started automatically if it is installed but not running. Three fixed
 language stores — English, Castellano, Valencià — map to `rag/docs/{en,es,ca}/`.
+The `es` and `ca` stores ship with a few sample articles so a fresh clone has
+something to show; treat them as demo content and replace them with your own PDFs.
 
 The **desktop app** wraps the web interface in a Windows executable with
 [PyInstaller](https://pyinstaller.org/) and [pywebview](https://pywebview.flowrl.com/).

@@ -78,6 +78,8 @@ tests/
   unit/                      domain/ports/config/application + adapters, doubled infrastructure
   characterization/          pins current pipeline behavior — do not edit (§1 rule 9)
   eval/                      gold-case evaluation gate (§5) — do not touch without agreement
+  test_*.py (loose)          tests coupled to the engine/web stack that cannot join the
+                             no-infra CI job; each module docstring says why it lives here
 harness/                  Configuration search harness (issue #31); not product — see harness/README.md
 packaging/                PyInstaller desktop app build (see §3)
 docs/design/               Architecture design docs; current: 2026-07-26-monkeygrab-v2.md
@@ -194,7 +196,7 @@ Items 1–5 of §6 apply here too. What differs:
 
 **Two `.gitignore` files only:** root + `rag/web/frontend/`. No scattered `.gitignore`. Version the minimum needed to reproduce the product — code, `Modelfile`, small metric JSONs, scripts, corpus PDFs — never weights or vector indices.
 
-- **`rag/docs/`** — all corpora versioned (`es/`, `ca/`, `en/`). `rag/vector_db/` fully ignored. Default chunk dumps go to `rag/show_fragments/exports/` (versioned); loose `*.txt` / `*.jsonl` under `rag/show_fragments/` (not `exports/`) and local scratch results under `pipeline/output/` are ignored.
+- **`rag/docs/`** — all corpora versioned (`es/`, `ca/`, `en/`). `rag/vector_db/` fully ignored. Local scratch results under `pipeline/output/` are ignored.
 
 ---
 
