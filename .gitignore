@@ -1,4 +1,4 @@
-﻿*.gguf
+*.gguf
 *.safetensors
 *.pt
 *.bin
@@ -84,9 +84,6 @@ rag/monkeygrab_server.port
 !.env.example
 
 .reasonix/
-
-rag/show_fragments/*.txt
-rag/show_fragments/*.jsonl
 
 media/
 
