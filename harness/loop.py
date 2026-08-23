@@ -256,7 +256,12 @@ def _comparable_config_view(effective_config: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "models": {key: models.get(key) for key in _MODEL_ROLE_KEYS},
         "chunking": effective_config.get("chunking"),
-        "index_time_flags": {key: flags.get(key) for key in _INDEX_TIME_FLAG_KEYS},
+        # bool(): entries written before an index-time flag existed lack the
+        # key entirely; every such flag ships default-off, so absent == off
+        # and an old ledger stays comparable across the schema's growth
+        # (issue #92 validation campaign hit exactly this against the
+        # 2026-08-19 healthy-campaign entries).
+        "index_time_flags": {key: bool(flags.get(key)) for key in _INDEX_TIME_FLAG_KEYS},
     }
 
 
