@@ -5,7 +5,8 @@
 | `README.md` (root) | A user installing and running MonkeyGrab. |
 | `src/monkeygrab/README.md` | The layers, the dependency rule, how to add an adapter. |
 | `rag/README.md` | What `rag/` is today and where the rest of the docs live. |
-| `.claude/CLAUDE.md` | Operating contract for any agent working in this repo. |
+| `AGENTS.md` (root) | Operating contract for any agent or human working in this repo; `.claude/CLAUDE.md` and `.codex/AGENTS.md` are pointers to it and must stay pointers. |
+| `CONTRIBUTING.md` | How to branch, open PRs and issues, what a change must carry, how issues get closed. |
 | `docs/design/*.md` | Current standing design decisions and their rationale; update them when architecture changes. |
 | Directory-local `README.md` | Only where a directory's purpose isn't obvious from its code — not one per folder by default. |
 

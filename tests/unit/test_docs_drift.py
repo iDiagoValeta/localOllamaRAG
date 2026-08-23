@@ -14,18 +14,18 @@ themselves.
 
 Checks:
 
-1. ``.claude/CLAUDE.md`` rule 7's "Pipeline entry points" and "Runtime
+1. ``AGENTS.md`` rule 7's "Pipeline entry points" and "Runtime
    switches" bullets against the module-level names ``rag/chat_pdfs.py``
    actually binds. Rule 7 calls the file's re-export block "the authoritative
    list" and warns that renaming a symbol there breaks the web app, the CLI
    and the tests at once.
-2. ``.claude/CLAUDE.md`` section 9's CLI slash-command line against
+2. ``AGENTS.md`` section 9's CLI slash-command line against
    ``rag/cli/commands.py``, which its own docstring calls the "single source
    of truth for slash-commands". Checked both ways: a documented command
    that no longer exists, and a registered command nobody documented.
 3. ``README.md``'s user-facing slash-command list against the same
    ``COMMANDS`` registry -- the README is what an installing user reads, and
-   CLAUDE.md's check does not cover it.
+   the contract file's check does not cover it.
 4. ``README.md``'s four Ollama-role environment variables against
    ``MODEL_ROLE_ENV_VARS`` in ``rag/chat_pdfs.py``.
 5. ``FaissVectorStore``'s class-docstring persistence layout against the
@@ -49,7 +49,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 
-CLAUDE_MD = ROOT / ".claude" / "CLAUDE.md"
+CONTRACT = ROOT / "AGENTS.md"
 README = ROOT / "README.md"
 CHAT_PDFS = ROOT / "rag" / "chat_pdfs.py"
 CLI_COMMANDS = ROOT / "rag" / "cli" / "commands.py"
@@ -120,7 +120,7 @@ def _module_level_names(py_file: Path) -> Set[str]:
 
 
 # Symbols documented today: 7 in "Pipeline entry points", 7 in "Runtime
-# switches" (count the backtick-quoted names in .claude/CLAUDE.md rule 7).
+# switches" (count the backtick-quoted names in AGENTS.md rule 7).
 # The floor is set below either total, so trimming a symbol or two from a
 # bullet doesn't trip it -- but if the capture regex below ever narrows (for
 # example because a reflowed bullet's continuation lines fall outside it),
@@ -141,7 +141,7 @@ def _rule7_documented_symbols() -> Set[str]:
     change to unrelated prose elsewhere in rule 7 cannot silently widen or
     narrow what gets checked.
     """
-    text = CLAUDE_MD.read_text(encoding="utf-8")
+    text = CONTRACT.read_text(encoding="utf-8")
     symbols: Set[str] = set()
     for label in ("Pipeline entry points:", "Runtime switches (web control panel):"):
         match = re.search(
@@ -151,12 +151,12 @@ def _rule7_documented_symbols() -> Set[str]:
         )
         if not match:
             pytest.fail(
-                f"CLAUDE.md rule 7 no longer has a '{label}' bullet in the "
+                f"AGENTS.md rule 7 no longer has a '{label}' bullet in the "
                 "expected '**label:** ...' form -- update this check's parsing."
             )
         found = set(re.findall(r"`([A-Za-z_][A-Za-z0-9_]*)`", match.group(1)))
         assert len(found) >= _RULE7_MIN_SYMBOLS_PER_BULLET, (
-            f"CLAUDE.md rule 7's '{label}' bullet now parses to only "
+            f"AGENTS.md rule 7's '{label}' bullet now parses to only "
             f"{len(found)} symbol(s) ({sorted(found)}) -- either the bullet "
             "legitimately shrank (lower this floor to match) or the capture "
             "regex silently narrowed (fix this check's parsing)."
@@ -174,7 +174,7 @@ def _documented_slash_commands() -> Set[str]:
     a single-line capture would report the wrapped commands as "registered
     but undocumented" while they sit one line below where the test just read.
     """
-    text = CLAUDE_MD.read_text(encoding="utf-8")
+    text = CONTRACT.read_text(encoding="utf-8")
     match = re.search(
         r"### CLI slash commands\s*\n\n(.*?)(?=\n\s*\n|\n#|\Z)",
         text,
@@ -182,7 +182,7 @@ def _documented_slash_commands() -> Set[str]:
     )
     if not match:
         pytest.fail(
-            "CLAUDE.md section 9 no longer has a 'CLI slash commands' line "
+            "AGENTS.md section 9 no longer has a 'CLI slash commands' line "
             "in the expected place -- update this check's parsing."
         )
     # [\w-]+, not [A-Za-z]+: a command token may contain digits, hyphens or
@@ -394,7 +394,7 @@ def test_rule7_pipeline_entry_points_and_runtime_switches_are_exported():
     exported = _module_level_names(CHAT_PDFS)
     missing = sorted(documented - exported)
     assert not missing, (
-        "CLAUDE.md rule 7 lists these symbols as part of rag/chat_pdfs.py's "
+        "AGENTS.md rule 7 lists these symbols as part of rag/chat_pdfs.py's "
         f"public API, but the module no longer binds them: {missing}. Fix "
         "whichever is wrong -- the code, if it dropped/renamed something "
         "callers rely on, or the doc, per docs/README.md's rule that the "
@@ -410,7 +410,7 @@ def test_cli_slash_commands_match_documentation():
     missing_from_code = sorted(documented - registered)
     missing_from_docs = sorted(registered - documented)
     assert not missing_from_code and not missing_from_docs, (
-        "CLAUDE.md section 9's CLI slash-command list and "
+        "AGENTS.md section 9's CLI slash-command list and "
         "rag/cli/commands.py disagree. "
         f"Documented but no longer registered: {missing_from_code}. "
         f"Registered but undocumented: {missing_from_docs}."
