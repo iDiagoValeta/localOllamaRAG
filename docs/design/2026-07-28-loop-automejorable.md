@@ -391,6 +391,40 @@ esta fuente*.
 > se promueven a `gold_cases.jsonl`: la autoría humana del diseño sigue
 > pendiente, y promover un lote saturado gastaría minutos de cada iteración
 > a cambio de casi ningún vuelco.
+>
+> **Eje dominio, medido el 2026-08-23.** Primera corrida de
+> `tests/eval/run_probe_domain.py --models gemma4:e2b` sobre `main`
+> (`c22a07d`). Colección aislada `probe_docs_domain` (278 fragmentos, tres
+> papers recientes de econometría y biomatemáticas, léxico ajeno al corpus);
+> no tocó los stores del producto ni del gate. Artefacto local y gitignored:
+> `tests/eval/probe_runs_domain/20260823T133223Z_domain_probe.json`.
+>
+> | | |
+> |---|---|
+> | Total | **9/10 = 0.900** |
+> | Retrieval-only (figura y tabla) | 2/2 |
+> | Answered | 7/8 |
+> | Indexación (primera vez, 3 PDFs) | 454 s |
+> | Wall | 15.0 min |
+>
+> El único fallo es `singleton-dominates-tests`: pregunta conceptual cuya
+> respuesta exige dos métodos aceptados y el generador no dio ninguno de los
+> dos literales. Fallo de generación sobre evidencia recuperada, no de
+> extracción ni de recuperación. La señal importante del eje es la ausencia
+> de colapso léxico: 0.900 fuera de dominio contra 0.8824 del gate dentro de
+> dominio el mismo día; extracción, troceado, recuperación y generación
+> generalizan sin ajustes.
+>
+> **Veredicto: *viable tras arreglo*.** Como demostración de que arXiv
+> cualquiera alimenta el pipeline, el eje es viable y cierra la duda de la
+> tabla de ejes («Bajo: arXiv cubre cualquier área» queda confirmado). Pero
+> como pozo de fallos hereda la misma advertencia de saturación que el eje
+> idioma: 9/10 tampoco distingue mejora de empeoramiento, y el dominio por
+> sí solo no fabrica la dificultad. La palanca está en la forma dentro del
+> dominio (tablas estadísticas densas, figuras escaneadas), que es justo el
+> eje forma y su riesgo alto ya anotado; los diez casos de esta sonda son
+> semilla válida para esa fase, no desechables, y tampoco se promueven a
+> `gold_cases.jsonl` mientras la autoría humana siga pendiente.
 
 ### Margen inalcanzable
 
