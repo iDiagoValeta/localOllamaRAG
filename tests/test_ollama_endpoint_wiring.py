@@ -53,7 +53,8 @@ def posted_urls(monkeypatch):
         return _FakeStreamResponse([json.dumps({"response": "hi", "done": True}).encode()])
 
     monkeypatch.setattr(
-        ollama_chat.requests, "post",
+        ollama_chat.requests,
+        "post",
         lambda url, **kwargs: fake_post(url, **kwargs),
     )
     return urls
@@ -66,6 +67,15 @@ def _wiring_with_env(monkeypatch, base_url=None, host=None):
     on every invocation, which is what lets a runtime config change take
     effect on the next query. Setting the variable and asking for a model is
     therefore the same sequence a running process goes through.
+
+    Role globals are pinned so these tests are hermetic against ambient
+    machine state (issue #96): collecting tests/test_web_routes.py imports
+    rag.web.app, whose import-time ``cargar_ajustes_persistidos()`` applies
+    the developer's real settings.json to the shared chat_pdfs globals. A
+    machine whose saved contextual role differs from the other roles then
+    made the rag model's VRAM unloader emit an extra keep_alive=0 POST here,
+    failing both redirect assertions -- in full-suite runs only, which read
+    as flakiness. The endpoint under test is the base URL, not the roles.
     """
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
     monkeypatch.delenv("OLLAMA_HOST", raising=False)
@@ -79,6 +89,9 @@ def _wiring_with_env(monkeypatch, base_url=None, host=None):
     # lands in a half-initialized module.
     import rag.chat_pdfs  # noqa: F401
     import rag.engine.wiring as wiring
+
+    for var in set(rag.chat_pdfs.MODEL_ROLE_VARS.values()) | {"MODELO_DESC"}:
+        monkeypatch.setattr(rag.chat_pdfs, var, "gemma4:e4b", raising=False)
 
     return wiring
 
