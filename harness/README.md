@@ -401,7 +401,40 @@ boundary checks.
 > the sabotage lucked into it. A paired fast-tier regression check measured
 > against a degraded reference therefore rejects every candidate that restores
 > healthy behaviour, because recovery re-fails the case the sabotage
-> coincidentally fixed. Stage-1 recovery from this sabotage is unreachable on
+> coincidentally fixed. Stage-1 recovery from this sabotage was unreachable on
 > today's search set regardless of proposer. Recorded per issue #89's
-> instruction ("record it, do not weaken `grade.py`"); the loop-level design
-> question this raises is tracked as issue #92.
+> instruction ("record it, do not weaken `grade.py`").
+
+## Recovery mode (issue #92, decided 2026-08-23)
+
+The field note above was the design question; this is the decision, now in
+`loop.py`. When the ledger's prior history contains a **comparable** state
+(`_comparable_config_view`: same model roles, chunking and index-time flags;
+retrieval knobs are excluded because they are exactly what candidates vary)
+whose objective strictly exceeds the in-run reference's, the loop starts in
+**recovery mode**: both regression checks pair against that high-water entry's
+per-case pass vector instead of the degraded reference. Losing a case only a
+degraded reference passed is not losing ground anyone earned.
+
+Fixed alongside:
+
+- The ratchet still starts at the degraded reference's objective — acceptance
+  still requires beating it, so "recovery" means climbing back past health,
+  not rubber-stamping it.
+- Latency stays paired against the in-run reference: a budget, not an earned
+  quality. (Residual limit, documented rather than solved: a sabotage that
+  *slowed* the reference would tighten the ceiling for recovery candidates;
+  no measured sabotage does.)
+- Without comparable history the behaviour is unchanged — the limit stands as
+  a documented limit, not a guessed way around.
+- Provenance: every scored entry records `regression_baseline_iteration`
+  (ledger schema v2; v1 entries read as `None` = paired against the run's own
+  reference), and every report carries a `recovery_mode` block with the
+  baseline iteration, its objective, and how many history entries were
+  eligible.
+- The high water is computed once at start from PRIOR history only; entries
+  written by the current campaign never move the pairing baseline mid-run.
+- Workflow note: because the ledger is meant to span campaigns (see "Running
+  it"), a healthy campaign's entries are what makes a later sabotaged run
+  recoverable. Pointing a criterion-5 campaign at the same `--ledger-dir` as
+  its healthy sibling is what arms recovery mode.

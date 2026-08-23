@@ -35,19 +35,38 @@ full numbers and why they cannot be re-derived from a fresh clone):
    catch a regression) -- this check runs over all ~9 retrieval-only ids in
    the full search set instead.
 4. **A ``inconclusive`` verdict when any record carries
-   ``infrastructure_error``.** ``tests/eval/run_eval.py`` marks a case this
-   way when it could not be evaluated at all (dead/overloaded Ollama, a
-   retrieval exception) and refuses to compare such a run against the
-   baseline ("this run measured nothing" -- see ``run_eval.main``). Reading
-   those records as ordinary failures would let a dead Ollama read as a
-   quality collapse (fast tier: a good candidate wrongly
-   ``rejected_regression``) or an artificially low reference silently
-   inflate every later candidate into a false ``accepted`` -- exactly the
-   "loop sobre una medida que miente produce basura reproducible" failure
-   the design doc opens with. The reference measurement itself gets no
-   verdict to fall back on: if it carries an infrastructure error,
-   ``run_loop`` raises before entering the loop at all, since no ratchet
-   baseline can be trusted.
+    ``infrastructure_error``.** ``tests/eval/run_eval.py`` marks a case this
+    way when it could not be evaluated at all (dead/overloaded Ollama, a
+    retrieval exception) and refuses to compare such a run against the
+    baseline ("this run measured nothing" -- see ``run_eval.main``). Reading
+    those records as ordinary failures would let a dead Ollama read as a
+    quality collapse (fast tier: a good candidate wrongly
+    ``rejected_regression``) or an artificially low reference silently
+    inflate every later candidate into a false ``accepted`` -- exactly the
+    "loop sobre una medida que miente produce basura reproducible" failure
+    the design doc opens with. The reference measurement itself gets no
+    verdict to fall back on: if it carries an infrastructure error,
+    ``run_loop`` raises before entering the loop at all, since no ratchet
+    baseline can be trusted.
+5. **Recovery mode (issue #92): regressions pair against earned passes, not
+    lucky ones.** The regression filters compare a candidate against the
+    in-run reference -- correct while that reference is healthy, but against
+    a deliberately worsened one (criterion 5's setup) it blocks recovery:
+    measured on the real pipeline 2026-08-22, the ``RAG_TOP_K_FINAL=1``
+    sabotage lucked into passing ``planck-sigma8-es``, a case every healthy
+    configuration fails, so every recovery candidate was
+    ``rejected_regression`` at the fast tier for re-failing exactly that
+    case. When the ledger's prior history contains a *comparable* state
+    (same models, chunking and index-time flags -- see
+    ``_comparable_config_view``) with a strictly higher objective than the
+    in-run reference, the loop starts in recovery mode and pairs both
+    regression checks against that high-water state's per-case pass vector
+    instead: losing a case only a degraded reference passed is not losing
+    ground anyone ever earned. The ratchet itself still starts at the
+    degraded reference's objective, so acceptance still requires beating
+    it; latency stays paired against the in-run reference (a hard budget,
+    not an earned quality). With no comparable history the loop behaves
+    exactly as before -- recovery mode is unavailable then, not guessed.
 
 **Scope, stated plainly (not fixed by this PR): stage 1 is a single-field
 sweep from a fixed reference, not a compounding hill climb.**
@@ -107,7 +126,9 @@ LATENCY_CEILING_MULTIPLIER = 1.20
 SEARCH_SET_AVAILABLE_FAILURES = 5
 DEMONSTRABILITY_FLIP_THRESHOLD = 6
 SEARCH_SET_NET_FLIPS_UNDER_KNOWN_SABOTAGE = 3
-SEARCH_SET_SABOTAGE_DESCRIPTION = "RAG_TOP_K_FINAL=1 (single fragment retrieved; criterion 2, 2026-07-29)"
+SEARCH_SET_SABOTAGE_DESCRIPTION = (
+    "RAG_TOP_K_FINAL=1 (single fragment retrieved; criterion 2, 2026-07-29)"
+)
 
 RESOLUTION_WARNING: Dict[str, Any] = {
     "available_search_set_failures": SEARCH_SET_AVAILABLE_FAILURES,
@@ -162,37 +183,107 @@ def _has_infrastructure_error(records: Sequence[evaluator_mod.CaseRecord]) -> bo
 
 
 def _regressed_ids(
-    reference_records: Sequence[evaluator_mod.CaseRecord],
+    reference_passed_by_id: Dict[str, bool],
     candidate_records: Sequence[evaluator_mod.CaseRecord],
 ) -> List[str]:
-    """Case ids that passed for the reference and failed for the candidate (paired)."""
-    reference_passed = {r.id: r.passed for r in reference_records}
-    return [r.id for r in candidate_records if reference_passed.get(r.id) and not r.passed]
+    """Case ids that passed for the pairing baseline and failed for the candidate (paired).
+
+    ``reference_passed_by_id`` is normally the in-run reference's fast-tier
+    pass vector; in recovery mode it is the high-water entry's instead
+    (module docstring point 5, issue #92).
+    """
+    return [r.id for r in candidate_records if reference_passed_by_id.get(r.id) and not r.passed]
 
 
 def _retrieval_only_net_change(
-    reference_records: Sequence[evaluator_mod.CaseRecord],
+    reference_passed_by_id: Dict[str, bool],
     candidate_records: Sequence[evaluator_mod.CaseRecord],
 ) -> int:
-    """Net change (candidate minus reference) in retrieval-only passing count, paired by id.
+    """Net change (candidate minus baseline) in retrieval-only passing count, paired by id.
 
-    Positive: more retrieval-only cases pass than in the reference. Negative:
+    Positive: more retrieval-only cases pass than in the baseline. Negative:
     fewer do -- what ``run_loop`` refuses to accept regardless of the
-    blended objective (see module docstring point 3).
+    blended objective (see module docstring point 3). The baseline map comes
+    from the in-run reference records, or from the high-water entry while in
+    recovery mode (point 5).
     """
-    reference_passed = {
-        r.id: r.passed for r in reference_records if r.case_type in evaluator_mod.RETRIEVAL_ONLY_CASE_TYPES
-    }
     net = 0
     for r in candidate_records:
         if r.case_type not in evaluator_mod.RETRIEVAL_ONLY_CASE_TYPES:
             continue
-        was_passing = reference_passed.get(r.id, False)
+        was_passing = bool(reference_passed_by_id.get(r.id, False))
         if r.passed and not was_passing:
             net += 1
         elif not r.passed and was_passing:
             net -= 1
     return net
+
+
+def _passed_by_id(records: Sequence[evaluator_mod.CaseRecord]) -> Dict[str, bool]:
+    return {r.id: r.passed for r in records}
+
+
+def _passed_by_id_from_dicts(case_records: Sequence[Dict[str, Any]]) -> Dict[str, bool]:
+    return {r["id"]: bool(r["passed"]) for r in case_records}
+
+
+# RECOVERY MODE (issue #92): what makes two ledger entries comparable.
+
+# Index-time flags decide stored chunk text; retrieval/generation flags are
+# what candidates vary by design and must never affect comparability. Model
+# roles matter (a different generator answers differently); Ollama runtime
+# knobs (num_ctx, timeouts, keep-alive) do not decide case outcomes.
+_INDEX_TIME_FLAG_KEYS = (
+    "usar_contextual_retrieval",
+    "usar_embeddings_imagen",
+    "usar_descripcion_imagen",
+)
+_MODEL_ROLE_KEYS = ("rag", "chat", "contextual", "recomp")
+
+
+def _comparable_config_view(effective_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Reduce an entry's effective config to what decides per-case outcomes.
+
+    Two entries are comparable when this view matches: same models, same
+    chunking, same index-time flags. Everything a proposer searches
+    (retrieval fan-out, fusion weights, reranker threshold) is deliberately
+    excluded -- those differences between historical entries are exactly the
+    evidence recovery mode needs. Test doubles may carry partial configs;
+    missing sections read as ``None`` and compare like-for-like.
+    """
+    models = effective_config.get("models") or {}
+    flags = effective_config.get("flags") or {}
+    return {
+        "models": {key: models.get(key) for key in _MODEL_ROLE_KEYS},
+        "chunking": effective_config.get("chunking"),
+        "index_time_flags": {key: flags.get(key) for key in _INDEX_TIME_FLAG_KEYS},
+    }
+
+
+def _historical_high_water(
+    entries: Sequence[ledger_mod.LedgerEntry],
+    comparable_view: Dict[str, Any],
+) -> Optional[ledger_mod.LedgerEntry]:
+    """The best comparable search-set state in prior ledger history, or ``None``.
+
+    Only complete, non-``inconclusive`` search-set evaluations count: a
+    fast-tier-rejected entry has no full pass vector, and an inconclusive one
+    may be measuring a dead Ollama rather than quality. Ties resolve to the
+    latest iteration so repeated measurements of one configuration converge.
+    Computed once at loop start from PRIOR history only -- entries written by
+    the current run never move the pairing baseline mid-campaign.
+    """
+    best: Optional[ledger_mod.LedgerEntry] = None
+    for entry in entries:
+        if entry.evaluated_case_set != "search_set":
+            continue
+        if entry.verdict == "inconclusive":
+            continue
+        if _comparable_config_view(entry.effective_config) != comparable_view:
+            continue
+        if best is None or entry.objective_adjusted >= best.objective_adjusted:
+            best = entry
+    return best
 
 
 def _latency_breach(
@@ -227,8 +318,39 @@ def _build_entry(
     verdict: str,
     reason: str,
     candidate_latency: Optional[Dict[str, Optional[float]]] = None,
+    regression_baseline_iteration: Optional[int] = None,
 ) -> ledger_mod.LedgerEntry:
-    objective_raw, objective_adjusted = evaluator_mod.compute_objective(result.records, unreachable_ids)
+    objective_raw, objective_adjusted = evaluator_mod.compute_objective(
+        result.records, unreachable_ids
+    )
+    if candidate_latency is None:
+        candidate_latency = evaluator_mod.median_latency_by_bucket(result.records)
+    return ledger_mod.LedgerEntry(
+        schema_version=ledger_mod.SCHEMA_VERSION,
+        iteration=iteration,
+        parent_iteration=parent_iteration,
+        git_commit=git_commit,
+        config_overrides=dict(overrides),
+        effective_config=dict(result.effective_config),
+        proposer=meta.get("proposer", "unknown"),
+        proposer_rationale=meta.get("rationale"),
+        proposer_model=meta.get("model"),
+        proposer_fallback=bool(meta.get("fallback", False)),
+        proposer_fallback_reason=meta.get("fallback_reason"),
+        evaluated_case_set=evaluated_case_set,
+        case_records=[dataclasses.asdict(r) for r in result.records],
+        summary=_summary(result.records),
+        objective_raw=objective_raw,
+        objective_adjusted=objective_adjusted,
+        median_latency_answered_s=candidate_latency.get("answered"),
+        median_latency_retrieval_only_s=candidate_latency.get("retrieval_only"),
+        reference_median_latency_answered_s=reference_latency.get("answered"),
+        reference_median_latency_retrieval_only_s=reference_latency.get("retrieval_only"),
+        latency_ceiling_multiplier=LATENCY_CEILING_MULTIPLIER,
+        verdict=verdict,
+        reason=reason,
+        regression_baseline_iteration=regression_baseline_iteration,
+    )
     if candidate_latency is None:
         candidate_latency = evaluator_mod.median_latency_by_bucket(result.records)
     return ledger_mod.LedgerEntry(
@@ -325,7 +447,9 @@ def run_loop(
 
     reference_full = evaluate({}, tuple(search_set_ids))
     reference_fast = evaluate({}, tuple(fast_tier_ids))
-    if _has_infrastructure_error(reference_full.records) or _has_infrastructure_error(reference_fast.records):
+    if _has_infrastructure_error(reference_full.records) or _has_infrastructure_error(
+        reference_fast.records
+    ):
         raise evaluator_mod.InconclusiveEvaluationError(
             "reference evaluation carries at least one infrastructure_error record -- "
             "no ratchet baseline can be trusted; fix Ollama/the index and retry"
@@ -335,12 +459,43 @@ def run_loop(
     )
     reference_latency = evaluator_mod.median_latency_by_bucket(reference_full.records)
 
-    ratchet = reference_objective_adjusted
-    best_iteration: Optional[int] = None
-
     entries_so_far: List[ledger_mod.LedgerEntry] = list(ledger_mod.read_history(ledger_dir))
     iteration = ledger_mod.next_iteration_number(ledger_dir)
     parent_iteration: Optional[int] = entries_so_far[-1].iteration if entries_so_far else None
+
+    # Recovery mode (issue #92): when prior comparable history measured a
+    # strictly better state than the in-run reference, the reference is
+    # degraded, so regression pairing switches to the high-water pass
+    # vector. Frozen here from PRIOR history; this run's own entries never
+    # move it mid-campaign.
+    high_water = _historical_high_water(
+        entries_so_far, _comparable_config_view(dataclasses.asdict(reference))
+    )
+    if high_water is not None and high_water.objective_adjusted > reference_objective_adjusted:
+        recovery_mode = True
+        # The high-water entry carries the full search-set pass vector, which
+        # covers every fast-tier id (the fast tier is a search-set subset).
+        recovery_pass_vector = _passed_by_id_from_dicts(high_water.case_records)
+        fast_regression_baseline = recovery_pass_vector
+        search_regression_baseline = recovery_pass_vector
+        recovery_baseline_iteration: Optional[int] = high_water.iteration
+        eligible_history_entries = sum(
+            1
+            for e in entries_so_far
+            if e.evaluated_case_set == "search_set"
+            and e.verdict != "inconclusive"
+            and _comparable_config_view(e.effective_config)
+            == _comparable_config_view(dataclasses.asdict(reference))
+        )
+    else:
+        recovery_mode = False
+        fast_regression_baseline = _passed_by_id(reference_fast.records)
+        search_regression_baseline = _passed_by_id(reference_full.records)
+        recovery_baseline_iteration = None
+        eligible_history_entries = 0
+
+    ratchet = reference_objective_adjusted
+    best_iteration: Optional[int] = None
 
     consecutive_non_accepted = 0
     iterations_run = 0
@@ -369,22 +524,40 @@ def run_loop(
 
         if _has_infrastructure_error(fast_result.records):
             entry = _build_entry(
-                iteration=iteration, parent_iteration=parent_iteration, git_commit=git_commit,
-                overrides=overrides, meta=meta, evaluated_case_set="fast_tier",
-                result=fast_result, unreachable_ids=unreachable_ids,
-                reference_latency=reference_latency, verdict="inconclusive",
+                iteration=iteration,
+                parent_iteration=parent_iteration,
+                git_commit=git_commit,
+                overrides=overrides,
+                meta=meta,
+                evaluated_case_set="fast_tier",
+                result=fast_result,
+                unreachable_ids=unreachable_ids,
+                reference_latency=reference_latency,
+                verdict="inconclusive",
                 reason="fast-tier evaluation carries infrastructure_error record(s) -- not scored",
             )
         else:
-            regressed = _regressed_ids(reference_fast.records, fast_result.records)
+            regressed = _regressed_ids(fast_regression_baseline, fast_result.records)
 
             if regressed:
+                baseline_note = (
+                    f" (paired against high-water iteration {recovery_baseline_iteration})"
+                    if recovery_mode
+                    else ""
+                )
                 entry = _build_entry(
-                    iteration=iteration, parent_iteration=parent_iteration, git_commit=git_commit,
-                    overrides=overrides, meta=meta, evaluated_case_set="fast_tier",
-                    result=fast_result, unreachable_ids=unreachable_ids,
-                    reference_latency=reference_latency, verdict="rejected_regression",
-                    reason=f"fast-tier regression on {regressed}",
+                    iteration=iteration,
+                    parent_iteration=parent_iteration,
+                    git_commit=git_commit,
+                    overrides=overrides,
+                    meta=meta,
+                    evaluated_case_set="fast_tier",
+                    result=fast_result,
+                    unreachable_ids=unreachable_ids,
+                    reference_latency=reference_latency,
+                    verdict="rejected_regression",
+                    reason=f"fast-tier regression on {regressed}{baseline_note}",
+                    regression_baseline_iteration=recovery_baseline_iteration,
                 )
             else:
                 full_result = evaluate(overrides, tuple(search_set_ids))
@@ -392,16 +565,24 @@ def run_loop(
 
                 if _has_infrastructure_error(full_result.records):
                     entry = _build_entry(
-                        iteration=iteration, parent_iteration=parent_iteration, git_commit=git_commit,
-                        overrides=overrides, meta=meta, evaluated_case_set="search_set",
-                        result=full_result, unreachable_ids=unreachable_ids,
-                        reference_latency=reference_latency, verdict="inconclusive",
+                        iteration=iteration,
+                        parent_iteration=parent_iteration,
+                        git_commit=git_commit,
+                        overrides=overrides,
+                        meta=meta,
+                        evaluated_case_set="search_set",
+                        result=full_result,
+                        unreachable_ids=unreachable_ids,
+                        reference_latency=reference_latency,
+                        verdict="inconclusive",
                         reason="search-set evaluation carries infrastructure_error record(s) -- not scored",
                     )
                 else:
                     candidate_latency = evaluator_mod.median_latency_by_bucket(full_result.records)
                     breach = _latency_breach(candidate_latency, reference_latency)
-                    retrieval_net = _retrieval_only_net_change(reference_full.records, full_result.records)
+                    retrieval_net = _retrieval_only_net_change(
+                        search_regression_baseline, full_result.records
+                    )
                     _objective_raw, objective_adjusted = evaluator_mod.compute_objective(
                         full_result.records, unreachable_ids
                     )
@@ -410,7 +591,12 @@ def run_loop(
                         verdict, reason = "rejected_latency", breach
                     elif retrieval_net < 0:
                         verdict = "rejected_regression"
-                        reason = f"retrieval-only bucket lost cases net vs reference ({retrieval_net:+d})"
+                        baseline_note = (
+                            f" vs high-water iteration {recovery_baseline_iteration}"
+                            if recovery_mode
+                            else " vs reference"
+                        )
+                        reason = f"retrieval-only bucket lost cases net{baseline_note} ({retrieval_net:+d})"
                     elif objective_adjusted - ratchet <= NOISE_FLOOR_CASES:
                         verdict = "rejected_no_gain"
                         reason = (
@@ -419,23 +605,38 @@ def run_loop(
                         )
                     else:
                         verdict = "accepted"
-                        reason = f"objective_adjusted {objective_adjusted} exceeds ratchet {ratchet}"
+                        reason = (
+                            f"objective_adjusted {objective_adjusted} exceeds ratchet {ratchet}"
+                        )
                         ratchet = objective_adjusted
                         best_iteration = iteration
 
                     entry = _build_entry(
-                        iteration=iteration, parent_iteration=parent_iteration, git_commit=git_commit,
-                        overrides=overrides, meta=meta, evaluated_case_set="search_set",
-                        result=full_result, unreachable_ids=unreachable_ids,
-                        reference_latency=reference_latency, verdict=verdict, reason=reason,
+                        iteration=iteration,
+                        parent_iteration=parent_iteration,
+                        git_commit=git_commit,
+                        overrides=overrides,
+                        meta=meta,
+                        evaluated_case_set="search_set",
+                        result=full_result,
+                        unreachable_ids=unreachable_ids,
+                        reference_latency=reference_latency,
+                        verdict=verdict,
+                        reason=reason,
                         candidate_latency=candidate_latency,
+                        # Provenance on every SCORED entry, accepted ones
+                        # included: which pass vector the regression checks
+                        # paired against is part of the evidence.
+                        regression_baseline_iteration=recovery_baseline_iteration,
                     )
 
         ledger_mod.write_entry(entry, ledger_dir)
         entries_so_far.append(entry)
         new_entries.append(entry)
 
-        consecutive_non_accepted = 0 if entry.verdict == "accepted" else consecutive_non_accepted + 1
+        consecutive_non_accepted = (
+            0 if entry.verdict == "accepted" else consecutive_non_accepted + 1
+        )
         parent_iteration = entry.iteration
         iteration += 1
         iterations_run += 1
@@ -452,6 +653,16 @@ def run_loop(
         "best_iteration": best_iteration,
         "iterations_run": iterations_run,
         "termination_reason": termination_reason,
+        "recovery_mode": {
+            # Issue #92: whether regression pairing ran against the ledger's
+            # historical high-water state instead of the in-run reference.
+            "active": recovery_mode,
+            "baseline_iteration": recovery_baseline_iteration,
+            "baseline_objective_adjusted": (
+                high_water.objective_adjusted if recovery_mode and high_water is not None else None
+            ),
+            "eligible_history_entries": eligible_history_entries,
+        },
         "resolution_warning": RESOLUTION_WARNING,
         "iterations": [e.to_dict() for e in new_entries],
     }

@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 LEDGER_DIR = Path(__file__).resolve().parent / "ledger"
 INDEX_FILE_NAME = "index.jsonl"
@@ -39,7 +39,13 @@ INDEX_FILE_NAME = "index.jsonl"
 # after one real run.
 _ENTRY_FILENAME_RE = re.compile(r"^\d{4}_.*\.json$")
 
-VERDICTS = ("accepted", "rejected_regression", "rejected_latency", "rejected_no_gain", "inconclusive")
+VERDICTS = (
+    "accepted",
+    "rejected_regression",
+    "rejected_latency",
+    "rejected_no_gain",
+    "inconclusive",
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -96,6 +102,15 @@ class LedgerEntry:
         reason: Human-readable explanation (which cases regressed, which
             bucket breached the ceiling and by how much, or the gain over the
             ratchet).
+        regression_baseline_iteration: The ledger iteration whose per-case
+            pass vector regressions were paired against, or ``None`` when
+            that was the in-run reference itself (schema v2; absent in v1
+            files, where it is always ``None``). Set to the high-water
+            entry's iteration when the loop ran in recovery mode -- issue
+            #92: against a degraded reference, pairing against the reference
+            would reject every candidate that restores healthy behaviour,
+            because the sabotage can luck into passing a case the healthy
+            pipeline fails. See ``loop._historical_high_water``.
     """
 
     schema_version: int
@@ -121,6 +136,7 @@ class LedgerEntry:
     latency_ceiling_multiplier: float
     verdict: str
     reason: str
+    regression_baseline_iteration: Optional[int] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return dataclasses.asdict(self)
@@ -261,16 +277,21 @@ def write_entry(entry: LedgerEntry, ledger_dir: Path = LEDGER_DIR) -> Path:
     ledger_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     entry_path = ledger_dir / f"{entry.iteration:04d}_{timestamp}.json"
-    entry_path.write_text(json.dumps(entry.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+    entry_path.write_text(
+        json.dumps(entry.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
+    )
 
-    index_line = json.dumps({
-        "iteration": entry.iteration,
-        "parent_iteration": entry.parent_iteration,
-        "proposer": entry.proposer,
-        "verdict": entry.verdict,
-        "objective_adjusted": entry.objective_adjusted,
-        "entry_file": entry_path.name,
-    }, ensure_ascii=False)
+    index_line = json.dumps(
+        {
+            "iteration": entry.iteration,
+            "parent_iteration": entry.parent_iteration,
+            "proposer": entry.proposer,
+            "verdict": entry.verdict,
+            "objective_adjusted": entry.objective_adjusted,
+            "entry_file": entry_path.name,
+        },
+        ensure_ascii=False,
+    )
     with (ledger_dir / INDEX_FILE_NAME).open("a", encoding="utf-8") as fh:
         fh.write(index_line + "\n")
 
@@ -305,6 +326,4 @@ def read_entry_by_iteration(ledger_dir: Path, iteration: int) -> LedgerEntry:
     for entry in read_history(ledger_dir):
         if entry.iteration == iteration:
             return entry
-    raise FileNotFoundError(
-        f"no ledger entry for iteration {iteration} under {ledger_dir}"
-    )
+    raise FileNotFoundError(f"no ledger entry for iteration {iteration} under {ledger_dir}")

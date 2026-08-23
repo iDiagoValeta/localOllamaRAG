@@ -34,7 +34,9 @@ def _entry(iteration=1, overrides=None, effective_config=None, verdict="accepted
         proposer_fallback=False,
         proposer_fallback_reason=None,
         evaluated_case_set="search_set",
-        case_records=[{"id": "a", "case_type": "factual_number", "passed": True, "elapsed_seconds": 1.0}],
+        case_records=[
+            {"id": "a", "case_type": "factual_number", "passed": True, "elapsed_seconds": 1.0}
+        ],
         summary={"total": 1, "passed": 1, "pass_rate": 1.0},
         objective_raw=1,
         objective_adjusted=1,
@@ -114,7 +116,9 @@ def test_read_history_on_a_missing_directory_is_empty(tmp_path):
 
 def test_read_entry_by_iteration_returns_that_entry(tmp_path):
     ledger.write_entry(_entry(iteration=1), ledger_dir=tmp_path)
-    ledger.write_entry(_entry(iteration=2, overrides={"retrieval.top_k_final": 4}), ledger_dir=tmp_path)
+    ledger.write_entry(
+        _entry(iteration=2, overrides={"retrieval.top_k_final": 4}), ledger_dir=tmp_path
+    )
     loaded = ledger.read_entry_by_iteration(tmp_path, 2)
     assert loaded.iteration == 2
     assert loaded.config_overrides == {"retrieval.top_k_final": 4}
@@ -151,6 +155,58 @@ def test_read_history_ignores_a_report_json_in_the_same_directory(tmp_path):
 
     assert [e.iteration for e in history] == [1]
     assert ledger.next_iteration_number(tmp_path) == 2
+
+
+def test_schema_v2_entry_records_the_regression_baseline(tmp_path):
+    ledger.write_entry(_entry(iteration=1, verdict="rejected_regression"), ledger_dir=tmp_path)
+    # Simulate loop.py's recovery-mode write (issue #92).
+    entry = ledger._entry_files(tmp_path)[0]
+    data = json.loads(entry.read_text(encoding="utf-8"))
+    data["regression_baseline_iteration"] = 7
+    entry.write_text(json.dumps(data), encoding="utf-8")
+
+    loaded = ledger.read_history(tmp_path)[0]
+    assert loaded.regression_baseline_iteration == 7
+
+
+def test_schema_v1_entry_without_regression_baseline_reads_as_none(tmp_path):
+    """Entries written before schema v2 have no regression_baseline_iteration
+    key; they must keep loading (and read as None = paired against the
+    in-run reference) so an old ledger stays usable across the upgrade."""
+    import dataclasses
+
+    from monkeygrab.config.app_config import AppConfig
+
+    v1_entry = ledger.LedgerEntry(
+        schema_version=1,
+        iteration=1,
+        parent_iteration=None,
+        git_commit=None,
+        config_overrides={},
+        effective_config=dataclasses.asdict(AppConfig()),
+        proposer="grid",
+        proposer_rationale=None,
+        proposer_model=None,
+        proposer_fallback=False,
+        proposer_fallback_reason=None,
+        evaluated_case_set="search_set",
+        case_records=[],
+        summary={"total": 0, "passed": 0, "pass_rate": 0.0},
+        objective_raw=0,
+        objective_adjusted=0,
+        median_latency_answered_s=200.0,
+        median_latency_retrieval_only_s=None,
+        reference_median_latency_answered_s=200.0,
+        reference_median_latency_retrieval_only_s=None,
+        latency_ceiling_multiplier=1.20,
+        verdict="accepted",
+        reason="old campaign",
+    )
+    path = tmp_path / "0001_x.json"
+    path.write_text(json.dumps(v1_entry.to_dict()), encoding="utf-8")
+
+    loaded = ledger.read_history(tmp_path)[0]
+    assert loaded.regression_baseline_iteration is None
 
 
 # GIT COMMIT: no subprocess, best-effort.
