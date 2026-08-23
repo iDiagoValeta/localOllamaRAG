@@ -336,6 +336,14 @@ RAG_TOP_K_FINAL=1 python -m harness.cli \
 python -m harness.cli --replay 1 --ledger-dir /path/to/ledger
 ```
 
+Every non-dry-run launch first prints what prior ledger history offers under
+this launch's config (model roles, chunking, index-time flags): how many
+entries are comparable search-set states, the historical high water, and --
+when history exists but nothing is comparable -- which concrete fields
+drifted. Recovery mode's arming additionally depends on the measured
+reference objective, so this line can warn about a silently incomparable
+ledger (#100) but never promises arming by itself.
+
 `--dry-run` uses `evaluator.build_demo_evaluator()`: a tiny, deterministic,
 in-process synthetic landscape. It exercises the wiring, not the pipeline —
 it has no opinion about which real configuration is better.

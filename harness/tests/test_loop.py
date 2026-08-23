@@ -839,3 +839,70 @@ def test_healthy_reference_at_or_above_high_water_keeps_reference_pairing(tmp_pa
     # Rejected against the REFERENCE's pass vector ('x' was earned here).
     assert entry["verdict"] == "rejected_regression"
     assert entry["regression_baseline_iteration"] is None
+
+
+# COMPARABILITY AT LAUNCH (issue #100): recovery mode pairs against comparable
+# prior history, and a silently incomparable ledger is how a campaign spends
+# hours fabricating evidence against its own fix. describe_ledger_comparability
+# is what the CLI prints BEFORE any evaluation is paid.
+
+
+def test_describe_comparability_on_an_empty_ledger():
+    info = loop.describe_ledger_comparability(AppConfig(), [])
+    assert info == {
+        "history_entries": 0,
+        "comparable_search_set_states": 0,
+        "high_water_objective_adjusted": None,
+        "incomparable_reasons": [],
+    }
+
+
+def test_describe_comparability_counts_a_matching_search_set_entry(tmp_path):
+    _seed_entry(tmp_path, 1, 27, [{"id": "a", "case_type": "factual_number", "passed": True, "elapsed_seconds": 200.0}])
+    from harness import ledger as ledger_mod
+
+    entries = list(ledger_mod.read_history(tmp_path))
+    info = loop.describe_ledger_comparability(AppConfig(), entries)
+    assert info["history_entries"] == 1
+    assert info["comparable_search_set_states"] == 1
+    assert info["high_water_objective_adjusted"] == 27
+    assert info["incomparable_reasons"] == []
+
+
+def test_describe_comparability_names_the_role_that_drifted(tmp_path):
+    """The 2026-08-23 trap: settings.json moved chat off the code default since
+    the healthy sibling ran; the launch line must name that field before hours
+    are paid."""
+    import dataclasses
+
+    drifted = dataclasses.asdict(AppConfig())
+    drifted["models"]["chat"] = "gemma4:e2b"
+    _seed_entry(
+        tmp_path, 1, 27,
+        [{"id": "a", "case_type": "factual_number", "passed": True, "elapsed_seconds": 200.0}],
+        effective_config=drifted,
+    )
+    from harness import ledger as ledger_mod
+
+    entries = list(ledger_mod.read_history(tmp_path))
+    info = loop.describe_ledger_comparability(AppConfig(), entries)
+    assert info["comparable_search_set_states"] == 0
+    assert info["incomparable_reasons"] == ["models.chat: this launch 'gemma4:e4b', ledger 'gemma4:e2b'"]
+
+
+def test_describe_comparability_explains_fast_tier_only_history(tmp_path):
+    """A config that matches but never produced a full search-set pass vector
+    is not usable as a high water -- say that instead of a config diff."""
+    _seed_entry(
+        tmp_path, 1, 8,
+        [{"id": "a", "case_type": "factual_number", "passed": True, "elapsed_seconds": 200.0}],
+        verdict="rejected_regression",
+        evaluated_case_set="fast_tier",
+    )
+    from harness import ledger as ledger_mod
+
+    info = loop.describe_ledger_comparability(AppConfig(), list(ledger_mod.read_history(tmp_path)))
+    assert info["comparable_search_set_states"] == 0
+    assert info["incomparable_reasons"] == [
+        "config matches the latest entry but it carries no complete search-set pass vector"
+    ]
