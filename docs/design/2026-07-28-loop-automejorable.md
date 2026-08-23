@@ -577,6 +577,26 @@ Adoptados por defecto; cualquiera es revisable.
 > registra en `regression_baseline_iteration` (schema v2) contra qué iteración
 > del libro se emparejó. Implementación: `harness/loop.py`
 > (`_historical_high_water`, `_comparable_config_view`).
+>
+> **Validación de campo, 2026-08-23 (cierra #92).** Tres campañas reales en un
+> día, cada fallo con su lección: (A) lanzar con los defaults de máquina hizo
+> que `usar_contextual_retrieval` derivara a True frente al ledger sano
+> (False), historia comparable cero, modo recuperación silenciosamente apagado
+> y candidatos bloqueados igual que en #89 -- la razón de ser de la línea de
+> arranque de #100; (B) el `--set` de #103 sólo tocaba el objeto de
+> contabilidad del arnés mientras la medición rederivaba su configuración desde
+> settings: la referencia «saboteada» puntuó 27 sano -- arreglado en #106, y el
+> gate de alcanzabilidad rechazó además los pines de rol que `evaluate()` no
+> honra; (C) con los pines llegando al pipeline (`overrides_applied` en el
+> informe lo prueba): referencia saboteada 24/32, recuperación armada contra la
+> marca de agua de 2026-08-19 (27, iteración 3), el candidato `top_k_final=8`
+> dejó de ser castigado por re-perder `planck-sigma8-es` y fue rechazado por
+> una pérdida REAL (`planck-contours-figure`) contra lo ganado y nombrada con
+> su iteración base. El emparejamiento queda validado; la recuperación completa
+> de etapa 1 choca aparte con una deriva real del stack descubierta ese mismo
+> día -- el caso `planck-contours-figure` pasa en el ledger de agosto, falla hoy
+> sin descripciones y pasa hoy con ellas -- registrada como problema de
+> envejecimiento del baseline (#107), no como defecto del emparejamiento.
 - **Terminación:** presupuesto de iteraciones, o parada tras varias iteraciones
   seguidas sin superar el suelo de ruido.
 - **Comparación pareada** sobre los mismos casos, nunca entre tasas de runs
