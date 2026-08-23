@@ -265,6 +265,82 @@ def _comparable_config_view(effective_config: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def is_comparable_search_set_entry(
+    entry: ledger_mod.LedgerEntry, comparable_view: Dict[str, Any]
+) -> bool:
+    """Whether ``entry`` can serve as a recovery-mode baseline for this view.
+
+    Only complete, non-``inconclusive`` search-set evaluations carry the full
+    pass vector recovery pairing needs; fast-tier-rejected entries do not.
+    """
+    return (
+        entry.evaluated_case_set == "search_set"
+        and entry.verdict != "inconclusive"
+        and _comparable_config_view(entry.effective_config) == comparable_view
+    )
+
+
+def _diff_comparable_views(
+    launch_view: Dict[str, Any], entry_view: Dict[str, Any]
+) -> List[str]:
+    """Human-readable field-level differences between two comparable views."""
+    diffs: List[str] = []
+    for role in _MODEL_ROLE_KEYS:
+        launch_value = launch_view["models"].get(role)
+        entry_value = entry_view["models"].get(role)
+        if launch_value != entry_value:
+            diffs.append(f"models.{role}: this launch {launch_value!r}, ledger {entry_value!r}")
+    if launch_view["chunking"] != entry_view["chunking"]:
+        diffs.append(
+            f"chunking: this launch {launch_view['chunking']!r}, ledger {entry_view['chunking']!r}"
+        )
+    for flag in _INDEX_TIME_FLAG_KEYS:
+        launch_flag = launch_view["index_time_flags"].get(flag)
+        entry_flag = entry_view["index_time_flags"].get(flag)
+        if launch_flag != entry_flag:
+            diffs.append(
+                f"index_time_flags.{flag}: this launch {launch_flag!r}, ledger {entry_flag!r}"
+            )
+    return diffs
+
+
+def describe_ledger_comparability(reference, entries) -> Dict[str, Any]:
+    """What an operator should know about prior history BEFORE paying evaluations.
+
+    Recovery mode's actual arming additionally depends on the reference
+    objective, which only a full search-set evaluation reveals -- so this
+    reports comparability only and never promises arming (issue #100: a
+    silently incomparable ledger is how a campaign spends hours fabricating
+    evidence against its own fix).
+
+    Returns:
+        A dict with ``history_entries``, ``comparable_search_set_states``,
+        ``high_water_objective_adjusted`` (max among comparable states, or
+        ``None``), and ``incomparable_reasons`` -- empty unless entries exist
+        and none of them is comparable, in which case it names the fields
+        that differ against the latest entry.
+    """
+    comparable_view = _comparable_config_view(dataclasses.asdict(reference))
+    comparable = [e for e in entries if is_comparable_search_set_entry(e, comparable_view)]
+    info: Dict[str, Any] = {
+        "history_entries": len(entries),
+        "comparable_search_set_states": len(comparable),
+        "high_water_objective_adjusted": max(
+            (e.objective_adjusted for e in comparable), default=None
+        ),
+        "incomparable_reasons": [],
+    }
+    if entries and not comparable:
+        latest = entries[-1]
+        diffs = _diff_comparable_views(
+            comparable_view, _comparable_config_view(latest.effective_config)
+        )
+        info["incomparable_reasons"] = diffs or [
+            "config matches the latest entry but it carries no complete search-set pass vector"
+        ]
+    return info
+
+
 def _historical_high_water(
     entries: Sequence[ledger_mod.LedgerEntry],
     comparable_view: Dict[str, Any],
@@ -280,14 +356,9 @@ def _historical_high_water(
     """
     best: Optional[ledger_mod.LedgerEntry] = None
     for entry in entries:
-        if entry.evaluated_case_set != "search_set":
-            continue
-        if entry.verdict == "inconclusive":
-            continue
-        if _comparable_config_view(entry.effective_config) != comparable_view:
-            continue
-        if best is None or entry.objective_adjusted >= best.objective_adjusted:
-            best = entry
+        if is_comparable_search_set_entry(entry, comparable_view):
+            if best is None or entry.objective_adjusted >= best.objective_adjusted:
+                best = entry
     return best
 
 
@@ -473,9 +544,8 @@ def run_loop(
     # degraded, so regression pairing switches to the high-water pass
     # vector. Frozen here from PRIOR history; this run's own entries never
     # move it mid-campaign.
-    high_water = _historical_high_water(
-        entries_so_far, _comparable_config_view(dataclasses.asdict(reference))
-    )
+    comparable_view = _comparable_config_view(dataclasses.asdict(reference))
+    high_water = _historical_high_water(entries_so_far, comparable_view)
     if high_water is not None and high_water.objective_adjusted > reference_objective_adjusted:
         recovery_mode = True
         # The high-water entry carries the full search-set pass vector, which
@@ -487,10 +557,7 @@ def run_loop(
         eligible_history_entries = sum(
             1
             for e in entries_so_far
-            if e.evaluated_case_set == "search_set"
-            and e.verdict != "inconclusive"
-            and _comparable_config_view(e.effective_config)
-            == _comparable_config_view(dataclasses.asdict(reference))
+            if is_comparable_search_set_entry(e, comparable_view)
         )
     else:
         recovery_mode = False

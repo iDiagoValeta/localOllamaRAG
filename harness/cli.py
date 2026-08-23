@@ -125,6 +125,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     fast_tier_ids = evaluator_mod.load_fast_tier()
     unreachable_ids = evaluator_mod.load_unreachable_ids()
 
+    # Issue #100: recovery mode pairs against comparable prior history, and a
+    # silently incomparable ledger is how a campaign spends hours fabricating
+    # evidence against its own fix. Say what the ledger offers BEFORE the
+    # reference measurement is paid; arming itself still depends on that
+    # measurement, so nothing here promises it.
+    if ledger_dir.exists():
+        comparability = loop_mod.describe_ledger_comparability(
+            reference, list(ledger_mod.read_history(ledger_dir))
+        )
+        print(
+            f"ledger history: {comparability['history_entries']} entry(ies), "
+            f"{comparability['comparable_search_set_states']} comparable search-set state(s)"
+        )
+        if comparability["high_water_objective_adjusted"] is not None:
+            print(
+                f"  historical high water: {comparability['high_water_objective_adjusted']} "
+                "(recovery mode arms only if the measured reference scores lower)"
+            )
+        for reason in comparability["incomparable_reasons"]:
+            print(f"  WARNING recovery-mode history mismatch -- {reason}")
+
     try:
         report = loop_mod.run_loop(
             reference=reference, evaluate=evaluate, proposer=proposer,
