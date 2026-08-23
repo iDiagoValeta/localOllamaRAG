@@ -715,6 +715,42 @@ def test_without_comparable_history_reference_pairing_is_kept(tmp_path):
     assert entry["regression_baseline_iteration"] is None
 
 
+def test_pre_flag_ledger_entries_stay_comparable(tmp_path):
+    """Entries written before an index-time flag existed lack the key; they
+    must still count as comparable history (absent == off), or every old
+    ledger stops arming recovery mode the moment a new flag ships (issue
+    #92's own validation campaign hit this against 2026-08 entries)."""
+    import dataclasses
+
+    stripped = dataclasses.asdict(AppConfig())
+    del stripped["flags"]["usar_descripcion_imagen"]  # pre-flag writer
+    _seed_entry(
+        tmp_path, 1, 2,
+        [
+            {"id": "lucky", "case_type": "factual_number", "passed": False, "elapsed_seconds": 200.0},
+            {"id": "a", "case_type": "factual_number", "passed": True, "elapsed_seconds": 200.0},
+        ],
+        effective_config=stripped,
+    )
+
+    def evaluate(overrides, case_ids):
+        healthy = bool(overrides)
+        records = [
+            _rec(cid, "factual_number", healthy if cid != "lucky" else not healthy, 200.0)
+            for cid in case_ids
+        ]
+        return ev.EvaluationResult(records=tuple(records), effective_config=dict(overrides))
+
+    proposer = _FixedProposer({"retrieval.top_k_final": 12})
+    report = loop.run_loop(
+        reference=AppConfig(), evaluate=evaluate, proposer=proposer,
+        search_set_ids=("lucky", "a"), fast_tier_ids=("lucky",), unreachable_ids=(),
+        max_iterations=1, patience=None, ledger_dir=tmp_path, verify_reachability=False,
+    )
+
+    assert report["recovery_mode"]["active"] is True
+
+
 def test_inconclusive_history_never_provides_the_high_water(tmp_path):
     """An inconclusive entry may be measuring a dead Ollama, not quality; its
     higher objective must not activate recovery mode."""
