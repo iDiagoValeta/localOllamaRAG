@@ -327,7 +327,8 @@ Tests are split by what they protect:
 [`tests/unit/`](tests/unit/) for the pure layers and the adapters,
 [`tests/characterization/`](tests/characterization/) to pin observed pipeline
 behaviour, and [`tests/eval/`](tests/eval/README.md) for the gold-case gate.
-Contributor rules are in [`.claude/CLAUDE.md`](.claude/CLAUDE.md).
+Contributor rules are in [`CONTRIBUTING.md`](CONTRIBUTING.md); the operating
+contract for humans and agents alike is [`AGENTS.md`](AGENTS.md).
 
 ---
 

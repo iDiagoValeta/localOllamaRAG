@@ -138,7 +138,7 @@ def optimizar_texto_contexto(texto: str) -> str:
     # (optimize_context_text) -- a literal port, no config dependency.
     # _reunir_parrafos/_es_continuacion_parrafo above are kept even though
     # this function no longer calls them: rag/chat_pdfs.py imports them by
-    # name as part of its frozen public facade (see CLAUDE.md rule 7).
+    # name as part of its frozen public facade (see AGENTS.md rule 7).
     return optimize_context_text(texto)
 
 

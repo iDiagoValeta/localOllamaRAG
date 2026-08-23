@@ -164,7 +164,7 @@ def index_fingerprint_mismatch(collection: VectorStore) -> bool:
     see ``fingerprint_is_stale``'s docstring.
 
     This is a diagnostic, not a pipeline step: unlike an adapter (see the
-    hard-fail policy in .claude/CLAUDE.md section 1 rule 8), it must never be
+    hard-fail policy in AGENTS.md section 1 rule 8), it must never be
     able to take startup down with it. A locked or unreadable sidecar file
     (e.g. an antivirus holding it open on Windows, the platform the packaged
     .exe ships on) reads as "cannot tell" rather than aborting the CLI before
