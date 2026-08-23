@@ -1,5 +1,6 @@
-"""Tests for harness.cli -- --replay (criterion 7) wiring."""
+"""Tests for harness.cli -- --replay (criterion 7) and --set wiring."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -84,8 +85,10 @@ def test_set_overrides_reach_the_reference_and_unknown_keys_fail_hard(tmp_path, 
         "--set", "retrieval.top_k_final=6",
     ])
     assert code == 0
-    report = (tmp_path / "report.json")
-    assert report.exists()
+    report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    # The pin reached the MEASURED pipeline, not only the bookkeeping object:
+    # the demo evaluator echoes its applied overrides as effective_config.
+    assert report["reference"]["overrides_applied"] == {"retrieval.top_k_final": 6}
 
     code = cli.main([
         "--dry-run", "--max-iterations", "1", "--ledger-dir", str(tmp_path),

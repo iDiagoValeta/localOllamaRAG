@@ -206,6 +206,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             unreachable_ids=unreachable_ids,
             max_iterations=args.max_iterations, patience=args.patience,
             ledger_dir=ledger_dir,
+            reference_overrides=set_overrides,
         )
     except evaluator_mod.ReachabilityError as exc:
         print(f"REACHABILITY GATE FAILED: {exc}", file=sys.stderr)

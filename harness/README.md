@@ -325,7 +325,9 @@ python -m harness.cli --proposer llm --max-iterations 8 --patience 3
 
 # Real campaign pinned to be comparable with prior ledger history -- e.g. a
 # criterion-5 recovery run against a sabotaged reference (--set is
-# repeatable; unknown keys abort at launch before any evaluation):
+# repeatable; unknown keys abort at launch; pins reach EVERY measured
+# evaluation, the reference's included -- not just the harness's bookkeeping
+# config):
 RAG_TOP_K_FINAL=1 python -m harness.cli \
     --ledger-dir tests/eval/runs/harness-loop \
     --set models.rag=gemma4:e4b --set models.chat=gemma4:e2b \
