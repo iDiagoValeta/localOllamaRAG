@@ -17,6 +17,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -62,7 +64,16 @@ def test_every_paper_slug_resolves_to_a_cached_arxiv_pdf():
     """Cross-check against run_probe_domain._SOURCE_PDFS, which is what
     actually stages each PDF for indexing. The cache is gitignored (the ids
     in the mapping are the reproducible part), so existence here means the
-    developer running the probe has fetched them via fetch_papers.py."""
+    developer running the probe has fetched them via fetch_papers.py -- on a
+    machine with no cache at all there is nothing to check, and CI must not
+    fail for that."""
+    cache_dir = next(iter(_SOURCE_PDFS.values())).parent
+    if not cache_dir.exists():
+        pytest.skip(
+            "arXiv cache never fetched on this machine -- fetch with "
+            "python tests/eval/fetch_papers.py --dest tests/eval/probe_cache_domain "
+            "2608.18973v1 2608.18375v1 2608.17955v1"
+        )
     cases = _load_probe_cases()
     for case in cases:
         slug = case["paper"]
