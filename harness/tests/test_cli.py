@@ -56,6 +56,45 @@ def test_parse_args_replay():
     assert args.ledger_dir == Path("somewhere")
 
 
+def test_parse_set_overrides_decodes_json_and_keeps_raw_strings():
+    """Ints and bools must survive the CLI; model pins stay strings."""
+    overrides = cli.parse_set_overrides([
+        "retrieval.top_k_final=1", "flags.usar_reranker=false", "models.rag=gemma4:e4b",
+    ])
+    assert overrides == {
+        "retrieval.top_k_final": 1,
+        "flags.usar_reranker": False,
+        "models.rag": "gemma4:e4b",
+    }
+
+
+def test_parse_set_overrides_rejects_a_pair_without_equals():
+    import pytest
+
+    for bad in ("retrieval.top_k_final", "=1"):
+        with pytest.raises(ValueError, match="KEY=VALUE"):
+            cli.parse_set_overrides([bad])
+
+
+def test_set_overrides_reach_the_reference_and_unknown_keys_fail_hard(tmp_path, capsys):
+    """--set feeds AppConfig.with_overrides: a known key changes the campaign's
+    reference, an unknown key aborts before any evaluation is paid."""
+    code = cli.main([
+        "--dry-run", "--max-iterations", "1", "--ledger-dir", str(tmp_path),
+        "--set", "retrieval.top_k_final=6",
+    ])
+    assert code == 0
+    report = (tmp_path / "report.json")
+    assert report.exists()
+
+    code = cli.main([
+        "--dry-run", "--max-iterations", "1", "--ledger-dir", str(tmp_path),
+        "--set", "retrieval.no_such_field=6",
+    ])
+    assert code == 2
+    assert "no_such_field" in capsys.readouterr().err
+
+
 def test_cli_replay_exits_zero_when_the_demo_evaluator_matches(tmp_path):
     """End-to-end criterion 7 against the in-process demo landscape.
 

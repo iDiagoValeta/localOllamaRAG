@@ -4,6 +4,14 @@ Usage:
     python -m harness.cli --dry-run --max-iterations 3
     python -m harness.cli --proposer llm --max-iterations 8 --patience 3
     python -m harness.cli --replay 1 --ledger-dir /path/to/ledger
+    python -m harness.cli --set retrieval.top_k_final=1 --ledger-dir tests/eval/runs/harness-loop
+
+``--set KEY=VALUE`` (repeatable) pins fields of the reference config the
+ratchet measures against, so a campaign that must be comparable with prior
+ledger history -- a criterion-5 recovery run, say -- does not need
+environment variables or a hand-written wrapper script. Unknown keys fail
+at launch (the repo's hard-fail policy); values are JSON-decoded when they
+parse as JSON and kept as raw strings otherwise.
 
 ``--dry-run`` always works: it wires in a small deterministic in-process
 evaluator (``evaluator.build_demo_evaluator``) so the whole loop -- proposer,
@@ -23,7 +31,7 @@ import json
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Any, Dict, Optional, Sequence
 
 from harness import evaluator as evaluator_mod
 from harness import ledger as ledger_mod
@@ -42,6 +50,29 @@ def _build_reference():
     from monkeygrab.config.app_config import AppConfig
 
     return AppConfig.from_env()
+
+
+def parse_set_overrides(pairs: Sequence[str]) -> Dict[str, Any]:
+    """Parse repeated ``KEY=VALUE`` strings into a dotted-key overrides dict.
+
+    Values are JSON-decoded so integers, floats and booleans survive the
+    command line; anything that is not valid JSON stays a raw string (which
+    is what every model-role pin needs).
+
+    Raises:
+        ValueError: A pair carries no ``=`` or an empty key.
+    """
+    overrides: Dict[str, Any] = {}
+    for pair in pairs:
+        key, sep, raw = pair.partition("=")
+        if not sep or not key.strip():
+            raise ValueError(f"--set expects KEY=VALUE, got {pair!r}")
+        try:
+            value: Any = json.loads(raw)
+        except json.JSONDecodeError:
+            value = raw
+        overrides[key.strip()] = value
+    return overrides
 
 
 def _build_proposer(name: str, reference, *, model: str):
@@ -71,6 +102,13 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                              "Re-run ledger iteration ITERATION's overrides and case ids "
                              "(criterion 7). Skips the search loop. Needs --ledger-dir "
                              "pointing at the ledger that holds that entry."
+                         ))
+    parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                         help=(
+                             "Pin a reference-config field for this campaign (repeatable), "
+                             "e.g. --set retrieval.top_k_final=1 --set models.chat=gemma4:e2b. "
+                             "Applied to the reference the ratchet measures against; unknown "
+                             "keys fail at launch."
                          ))
     return parser.parse_args(argv)
 
@@ -108,7 +146,22 @@ def _run_replay(iteration: int, evaluate, ledger_dir: Path) -> int:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
 
+    try:
+        set_overrides = parse_set_overrides(args.set)
+    except ValueError as exc:
+        print(f"USAGE: {exc}", file=sys.stderr)
+        return 2
+
     reference = _build_reference()
+    if set_overrides:
+        # with_overrides raises ValueError on an unknown section or field:
+        # a mistyped --set key must abort the campaign before any evaluation
+        # is paid, never silently measure a config that ignores it.
+        try:
+            reference = reference.with_overrides(**set_overrides)
+        except ValueError as exc:
+            print(f"SET FAILED: {exc}", file=sys.stderr)
+            return 2
     proposer = _build_proposer(args.proposer, reference, model=args.llm_model)
 
     if args.dry_run:

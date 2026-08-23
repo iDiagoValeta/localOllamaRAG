@@ -323,6 +323,14 @@ python -m harness.cli --dry-run --max-iterations 3
 # Ollama, and a GPU -- fails with an actionable message otherwise):
 python -m harness.cli --proposer llm --max-iterations 8 --patience 3
 
+# Real campaign pinned to be comparable with prior ledger history -- e.g. a
+# criterion-5 recovery run against a sabotaged reference (--set is
+# repeatable; unknown keys abort at launch before any evaluation):
+RAG_TOP_K_FINAL=1 python -m harness.cli \
+    --ledger-dir tests/eval/runs/harness-loop \
+    --set models.rag=gemma4:e4b --set models.chat=gemma4:e2b \
+    --set models.contextual=gemma4:e2b --set models.recomp=gemma4:e2b
+
 # Criterion 7: reconstruct one ledger iteration and re-run its exact
 # overrides and case ids. Exit 0 iff the pass/fail vector matches.
 python -m harness.cli --replay 1 --ledger-dir /path/to/ledger
