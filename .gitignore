@@ -56,6 +56,9 @@ tests/eval/runs/
 # and runs/ above.
 tests/eval/probe_docs_lang/
 tests/eval/probe_runs_lang/
+tests/eval/probe_docs_domain/
+tests/eval/probe_runs_domain/
+tests/eval/probe_cache_domain/
 
 # Local test/evaluation scratch output.
 /pipeline/output/
