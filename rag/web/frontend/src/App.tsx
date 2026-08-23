@@ -39,6 +39,7 @@ interface PipelineSettings {
   queryDecomposition: boolean;
   hybridSearch: boolean;
   imageIndexing: boolean;
+  imageDescription: boolean;
   reranker: boolean;
   expandContext: boolean;
   optimizeContext: boolean;
@@ -95,6 +96,7 @@ const STRINGS = {
     labelHybrid: 'Búsqueda híbrida', descHybrid: 'Semántica + BM25',
     labelQueryDecomp: 'Descomposición de consultas', descQueryDecomp: 'Subconsultas con LLM auxiliar',
     labelImageIndex: 'Indexado de imágenes', descImageIndex: 'Recuperación visual directa',
+    labelImageDesc: 'Descripción de figuras', descImageDesc: 'Texto descriptivo por visión (requiere reindexado y modelo con visión)',
     section3: '3. Ranking y contexto',
     labelReranker: 'Reordenador cross-encoder', descReranker: 'Reordenamiento de precisión',
     labelExpandContext: 'Expandir contexto', descExpandContext: 'Añade fragmentos adyacentes',
@@ -163,6 +165,7 @@ const STRINGS = {
     labelHybrid: 'Hybrid Search', descHybrid: 'Semantic + BM25',
     labelQueryDecomp: 'Query Decomposition', descQueryDecomp: 'Sub-queries via auxiliary LLM',
     labelImageIndex: 'Image indexing', descImageIndex: 'Direct visual retrieval',
+    labelImageDesc: 'Figure descriptions', descImageDesc: 'Vision-written figure text (needs reindex and a vision model)',
     section3: '3. Ranking & Context',
     labelReranker: 'Cross-Encoder Reranker', descReranker: 'Precision reordering',
     labelExpandContext: 'Expand Context', descExpandContext: 'Add adjacent chunks',
@@ -231,6 +234,7 @@ const STRINGS = {
     labelHybrid: 'Cerca híbrida', descHybrid: 'Semàntica + BM25',
     labelQueryDecomp: 'Descomposició de consultes', descQueryDecomp: 'Sub-consultes amb LLM auxiliar',
     labelImageIndex: 'Indexat d\'imatges', descImageIndex: 'Recuperació visual directa',
+    labelImageDesc: 'Descripció de figures', descImageDesc: 'Text descriptiu per visió (cal reindexar i model amb visió)',
     section3: '3. Rànquing i context',
     labelReranker: 'Reordenador cross-encoder', descReranker: 'Reordenament de precisió',
     labelExpandContext: 'Expandir context', descExpandContext: 'Afig fragments adjacents',
@@ -693,6 +697,7 @@ export default function App() {
     queryDecomposition: true,
     hybridSearch: true,
     imageIndexing: true,
+    imageDescription: false,
     reranker: true,
     expandContext: true,
     optimizeContext: true,
@@ -1345,6 +1350,7 @@ export default function App() {
           <div className="space-y-0.5">
             <Toggle label={T.labelContextual} checked={settings.contextualRetrieval} onChange={() => toggleSetting('contextualRetrieval')} desc={T.descContextual} />
             <Toggle label={T.labelImageIndex} checked={settings.imageIndexing} onChange={() => toggleSetting('imageIndexing')} desc={T.descImageIndex} />
+            <Toggle label={T.labelImageDesc} checked={settings.imageDescription} onChange={() => toggleSetting('imageDescription')} desc={T.descImageDesc} />
           </div>
         </section>
 

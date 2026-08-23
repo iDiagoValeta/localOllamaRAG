@@ -69,18 +69,43 @@ def detect_document_language(texto: str) -> str:
         ``'Catalan'``, or ``'English'``.
     """
     t = texto.lower()
-    ca = (t.count("però ") + t.count("també ") + t.count("molt ")
-          + t.count(" amb ") + t.count(" va ") + t.count("els ")
-          + t.count("l'") + t.count("d'") + t.count("s'")
-          + t.count("n'") + t.count("m'"))
-    es = (t.count("también ") + t.count("además ") + t.count("pero ")
-          + t.count("muy ") + t.count(" con ") + t.count("los ")
-          + t.count("las ") + t.count("así ") + t.count("sin ")
-          + t.count("después"))
-    en = (t.count(" the ") + t.count(" is ") + t.count(" are ")
-          + t.count(" was ") + t.count(" were ") + t.count(" have ")
-          + t.count(" this ") + t.count(" that ") + t.count(" from ")
-          + t.count(" with "))
+    ca = (
+        t.count("però ")
+        + t.count("també ")
+        + t.count("molt ")
+        + t.count(" amb ")
+        + t.count(" va ")
+        + t.count("els ")
+        + t.count("l'")
+        + t.count("d'")
+        + t.count("s'")
+        + t.count("n'")
+        + t.count("m'")
+    )
+    es = (
+        t.count("también ")
+        + t.count("además ")
+        + t.count("pero ")
+        + t.count("muy ")
+        + t.count(" con ")
+        + t.count("los ")
+        + t.count("las ")
+        + t.count("así ")
+        + t.count("sin ")
+        + t.count("después")
+    )
+    en = (
+        t.count(" the ")
+        + t.count(" is ")
+        + t.count(" are ")
+        + t.count(" was ")
+        + t.count(" were ")
+        + t.count(" have ")
+        + t.count(" this ")
+        + t.count(" that ")
+        + t.count(" from ")
+        + t.count(" with ")
+    )
     scores = {"Spanish": es, "Catalan": ca, "English": en}
     return max(scores, key=scores.get)
 
@@ -141,8 +166,12 @@ class IndexCorpus:
     ``Retrieve``'s and ``Answer``'s optional ports.
 
     ``image_extractor`` is required for image indexing. The configured Jina CLIP
-    adapter satisfies both the text and image embedding ports, so figures never
-    pass through a separate vision-caption model.
+    adapter satisfies both the text and image embedding ports. When
+    ``flags.usar_descripcion_imagen`` is on, an optional ``image_describer``
+    (a vision-capable ``ChatModel``) also writes a textual description of each
+    figure, which becomes part of the image chunk's stored text so BM25, the
+    reranker and the generator all see real content instead of
+    ``[figure] page=N`` (issue #34).
     """
 
     def __init__(
@@ -153,25 +182,30 @@ class IndexCorpus:
         config: AppConfig,
         contextual_model: Optional[ChatModel] = None,
         image_extractor: Optional[ImageExtractor] = None,
+        image_describer: Optional[ChatModel] = None,
     ):
         """Args:
-            extractor: Reads a PDF into per-page raw text.
-            embedder: Embeds each chunk's final text before storage.
-            vector_store: Stores each embedded chunk.
-            config: Root config; ``chunking``, ``flags`` and
-                the configured embedder is read fresh on every ``run()``.
-            contextual_model: ``ChatModel`` wired to the "contextual" role,
-                or ``None`` to disable contextual enrichment (text AND image
-                chunks).
-            image_extractor: Reads a PDF's raster images, or ``None`` to
-                disable image indexing regardless of
-                ``flags.usar_embeddings_imagen``.
+        extractor: Reads a PDF into per-page raw text.
+        embedder: Embeds each chunk's final text before storage.
+        vector_store: Stores each embedded chunk.
+        config: Root config; ``chunking``, ``flags`` and
+            the configured embedder is read fresh on every ``run()``.
+        contextual_model: ``ChatModel`` wired to the "contextual" role,
+            or ``None`` to disable contextual enrichment (text AND image
+            chunks).
+        image_extractor: Reads a PDF's raster images, or ``None`` to
+            disable image indexing regardless of
+            ``flags.usar_embeddings_imagen``.
+        image_describer: Vision-capable ``ChatModel`` that writes each
+            figure's stored text when ``flags.usar_descripcion_imagen``
+            is on, or ``None`` to keep captions/placeholder text.
         """
         self._extractor = extractor
         self._embedder = embedder
         self._vector_store = vector_store
         self._contextual_model = contextual_model
         self._image_extractor = image_extractor
+        self._image_describer = image_describer
         self._config = config
 
     def run(self, pdf_path: str, filename: str) -> IndexCorpusResult:
@@ -207,7 +241,10 @@ class IndexCorpus:
             total_pages_used += 1
 
             text_chunks = split_markdown_into_chunks(
-                page.text, chunking.chunk_size, chunking.chunk_overlap, chunking.min_chunk_length,
+                page.text,
+                chunking.chunk_size,
+                chunking.chunk_overlap,
+                chunking.min_chunk_length,
             )
 
             for chunk_idx, text_chunk in enumerate(text_chunks):
@@ -236,8 +273,11 @@ class IndexCorpus:
                 total_chunks += 1
 
         total_image_chunks = 0
+        image_description_failures = 0
         if flags.usar_embeddings_imagen and self._image_extractor is not None:
-            total_image_chunks = self._index_images(pdf_path, filename)
+            total_image_chunks, image_description_failures = self._index_images(
+                pdf_path, filename, idioma_doc
+            )
             total_chunks += total_image_chunks
 
         metrics = {
@@ -245,23 +285,37 @@ class IndexCorpus:
             "pages_indexed": total_pages_used,
             "detected_language": idioma_doc,
             "image_chunks_indexed": total_image_chunks,
+            # Nonzero means some figure's stored text degraded to its caption
+            # (or placeholder) because the describing model failed -- visible
+            # degradation, not a silent one.
+            "image_description_failures": image_description_failures,
         }
         return IndexCorpusResult(chunks_indexed=total_chunks, metrics=metrics)
 
-    def _index_images(self, pdf_path: str, filename: str) -> int:
+    def _index_images(self, pdf_path: str, filename: str, idioma_doc: str) -> tuple[int, int]:
         """Extract figures and embed them via ``ImageEmbedder.embed_image``.
 
         Writes each ``ExtractedImage``'s bytes to a temp file because the
         ``ImageEmbedder`` port takes a path (the jina worker loads from disk).
         Chunk ``text`` keeps the caption when present so lexical/debug views
         still have something readable; the vector itself is from pixels.
+        With ``flags.usar_descripcion_imagen`` and an ``image_describer``
+        wired in, the text instead leads with a vision-model description of
+        the figure's content (issue #34): BM25, the reranker and the
+        generator all read text, so without it a retrieved figure carries
+        nothing answerable. The embedding stays pixel-based either way.
+
+        Returns:
+            ``(n_indexed, n_description_failures)``.
         """
         import os
         import tempfile
 
         images_by_page = self._image_extractor.extract(pdf_path)
         n_indexed = 0
+        n_failed = 0
         embed_image = self._embedder.embed_image
+        describe = self._config.flags.usar_descripcion_imagen and self._image_describer is not None
 
         for page_num, page_images in images_by_page.items():
             for img_idx, image in enumerate(page_images):
@@ -277,8 +331,17 @@ class IndexCorpus:
                     except OSError:
                         pass
 
+                if describe:
+                    description = self._describe_image(image.image_bytes, idioma_doc)
+                    if not description:
+                        n_failed += 1
+                else:
+                    description = ""
                 caption = (image.caption or "").strip()
-                text = caption if caption else f"[figure] page={page_num} idx={img_idx}"
+                if description and caption:
+                    text = f"{description}\n\n{caption}"
+                else:
+                    text = description or caption or f"[figure] page={page_num} idx={img_idx}"
                 metadata = ChunkMetadata(
                     source=filename,
                     page=page_num,
@@ -291,9 +354,49 @@ class IndexCorpus:
                 self._vector_store.add(Chunk(text=text, metadata=metadata), embedding)
                 n_indexed += 1
 
-        return n_indexed
+        return n_indexed, n_failed
 
-    def _generate_situational_context(self, chunk_text: str, texto_base: str, idioma_doc: str) -> str:
+    def _describe_image(self, image_bytes: bytes, idioma_doc: str) -> str:
+        """Describe one figure's content via the vision-capable chat model.
+
+        Same use-case-level fallback as contextual enrichment (see that
+        method's comment): a failing description degrades this one chunk to
+        caption/placeholder text instead of aborting an hour-long index run
+        over a single flaky call. Failures are counted by the caller and
+        reported in the run metrics.
+
+        Args:
+            image_bytes: Raw raster bytes of the extracted figure.
+            idioma_doc: Document language ('Spanish', 'Catalan', 'English');
+                descriptions follow the document's language like contextual
+                enrichment does.
+
+        Returns:
+            The description text, or an empty string on failure.
+        """
+        system_prompt = (
+            "You are an expert at describing figures from academic documents "
+            "(charts, diagrams, tables rendered as images, photographs). "
+            f"Write 2-4 dense factual sentences describing what the figure shows: "
+            f"its kind, axes/labels, series, notable values and trends, or the parts of "
+            f"whatever is depicted. State only what is visible. Do NOT speculate about "
+            f"the paper's conclusions. MANDATORY: write in {idioma_doc}. No introductions, "
+            "no labels, no meta-commentary."
+        )
+        user_prompt = (
+            "Describe the content of this figure from an academic PDF. Answer with the "
+            "description only."
+        )
+        try:
+            return self._image_describer.generate(
+                user_prompt, system=system_prompt, images=[image_bytes]
+            ).strip()
+        except Exception:
+            return ""
+
+    def _generate_situational_context(
+        self, chunk_text: str, texto_base: str, idioma_doc: str
+    ) -> str:
         """Generate 2-3 sentences of situational context for a chunk via an LLM.
 
         Written in the document's own language,

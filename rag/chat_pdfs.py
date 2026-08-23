@@ -176,6 +176,8 @@ EXPANDIR_CONTEXTO = True
 USAR_OPTIMIZACION_CONTEXTO = True
 USAR_RECOMP_SYNTHESIS = True
 USAR_EMBEDDINGS_IMAGEN = True
+# Index-time; requires a vision-capable OLLAMA_CHAT_MODEL and a fresh index.
+USAR_DESCRIPCION_IMAGEN = False
 LOGGING_METRICAS = True
 GUARDAR_DEBUG_RAG = True
 
@@ -310,9 +312,14 @@ LOG_LEVEL = logging.ERROR
 logging.basicConfig(level=LOG_LEVEL, format="%(levelname)s: %(message)s")
 
 for _logger_name in (
-    "httpx", "urllib3", "requests",
-    "sentence_transformers", "transformers", "huggingface_hub",
-    "tqdm", "filelock",
+    "httpx",
+    "urllib3",
+    "requests",
+    "sentence_transformers",
+    "transformers",
+    "huggingface_hub",
+    "tqdm",
+    "filelock",
 ):
     logging.getLogger(_logger_name).setLevel(logging.CRITICAL)
 

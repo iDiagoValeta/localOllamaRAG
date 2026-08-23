@@ -195,7 +195,11 @@ interface and apply to the next query without a restart.
 
 At indexing time, [contextual retrieval](https://www.anthropic.com/news/contextual-retrieval)
 optionally prepends a short situational summary to each chunk so it can be found
-by queries whose wording appears nowhere in it.
+by queries whose wording appears nowhere in it. Figures indexed as image chunks
+can likewise get a vision-model description of their content stored as their
+text (default off, toggle "figure descriptions" in the web UI): the generator
+reads text, so without it a retrieved figure carries only its caption — or a
+placeholder — and nothing answerable.
 
 ---
 

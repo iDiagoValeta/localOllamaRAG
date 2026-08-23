@@ -156,9 +156,7 @@ def preflight_ollama(required_models: Iterable[str]) -> None:
     missing = sorted(set(required_models) - installed)
     if missing:
         pulls = "\n".join(f"  ollama pull {name}" for name in missing)
-        raise EvalSetupError(
-            f"{len(missing)} required Ollama model(s) not installed:\n{pulls}"
-        )
+        raise EvalSetupError(f"{len(missing)} required Ollama model(s) not installed:\n{pulls}")
 
 
 # CORPUS STAGING
@@ -324,6 +322,18 @@ def ensure_indexed(
                     keep_alive=ollama.keep_alive,
                     options={"temperature": 0.1, "num_predict": 250},
                 )
+            # Same wiring the product's indexing path uses (rag/engine/
+            # indexing.py): the vision-capable "chat" role describes each
+            # figure so its stored text carries content, not a placeholder.
+            image_describer = None
+            if config.flags.usar_descripcion_imagen:
+                ollama = config.models.ollama
+                image_describer = OllamaChatModel(
+                    config.models.chat,
+                    num_ctx=ollama.query_num_ctx,
+                    keep_alive=ollama.keep_alive,
+                    options={"temperature": 0.1, "num_predict": 400},
+                )
             indexer = IndexCorpus(
                 stack.extractor,
                 stack.embedder,
@@ -331,6 +341,7 @@ def ensure_indexed(
                 config,
                 contextual_model=contextual_model,
                 image_extractor=image_extractor,
+                image_describer=image_describer,
             )
             for filename in missing:
                 indexer.run(str(carpeta / filename), filename)
@@ -390,8 +401,7 @@ def ensure_indexed(
         evidence = Answer(store, wiring.rag_chat_model(config), config)
 
         print(
-            f"[index] {label}: stack=mineru-jina_clip-faiss "
-            f"chunks={store.count()}",
+            f"[index] {label}: stack=mineru-jina_clip-faiss chunks={store.count()}",
             flush=True,
         )
         return retrieve, evidence, stack
@@ -412,7 +422,9 @@ def verify_all_papers_indexed(
         if filename not in indexed:
             missing.append(f"{case['paper']} ({case['source']})")
     if missing:
-        raise EvalSetupError(f"papers referenced by gold cases but not indexed: {sorted(set(missing))}")
+        raise EvalSetupError(
+            f"papers referenced by gold cases but not indexed: {sorted(set(missing))}"
+        )
 
 
 # CASE EXECUTION
@@ -473,6 +485,7 @@ def _eval_app_config(
             "models.recomp": rag.MODELO_RECOMP,
             "flags.usar_contextual_retrieval": rag.USAR_CONTEXTUAL_RETRIEVAL,
             "flags.usar_embeddings_imagen": rag.USAR_EMBEDDINGS_IMAGEN,
+            "flags.usar_descripcion_imagen": rag.USAR_DESCRIPCION_IMAGEN,
             "flags.usar_llm_query_decomposition": rag.USAR_LLM_QUERY_DECOMPOSITION,
             "flags.usar_busqueda_hibrida": rag.USAR_BUSQUEDA_HIBRIDA,
             "flags.usar_reranker": rag.USAR_RERANKER,
@@ -501,18 +514,27 @@ def _fragment_diag(fragments: Sequence[Dict[str, Any]], limit: int = 8) -> List[
     out = []
     for f in fragments[:limit]:
         meta = f.get("metadata", {})
-        out.append({"source": meta.get("source"), "page": meta.get("page"), "format": meta.get("format")})
+        out.append(
+            {"source": meta.get("source"), "page": meta.get("page"), "format": meta.get("format")}
+        )
     return out
 
 
-def run_retrieval_case(case: Dict[str, Any], fragments: Sequence[Dict[str, Any]], elapsed: float) -> Dict[str, Any]:
+def run_retrieval_case(
+    case: Dict[str, Any], fragments: Sequence[Dict[str, Any]], elapsed: float
+) -> Dict[str, Any]:
     """Grade a figure_retrieval/table_retrieval case against retrieved content kinds."""
     hit_kinds = [_kind_from_format(f.get("metadata", {}).get("format")) for f in fragments]
     result = grade.grade_retrieval(hit_kinds, case)
     record = {
-        "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
-        "lang": case["lang"], "model": None, "passed": result["pass"],
-        "reason": result["reason"], "elapsed_seconds": round(elapsed, 2),
+        "id": case["id"],
+        "paper": case["paper"],
+        "case_type": case["case_type"],
+        "lang": case["lang"],
+        "model": None,
+        "passed": result["pass"],
+        "reason": result["reason"],
+        "elapsed_seconds": round(elapsed, 2),
     }
     if not result["pass"]:
         record["retrieved"] = _fragment_diag(fragments)
@@ -520,7 +542,11 @@ def run_retrieval_case(case: Dict[str, Any], fragments: Sequence[Dict[str, Any]]
 
 
 def run_factual_case(
-    rag, case: Dict[str, Any], fragments: Sequence[Dict[str, Any]], models: Sequence[str], retrieval_elapsed: float
+    rag,
+    case: Dict[str, Any],
+    fragments: Sequence[Dict[str, Any]],
+    models: Sequence[str],
+    retrieval_elapsed: float,
 ) -> List[Dict[str, Any]]:
     """Grade a factual_number/factual_concept case once per generator model.
 
@@ -530,11 +556,19 @@ def run_factual_case(
     waste (and, more importantly, would not exercise anything different).
     """
     if not fragments:
-        return [{
-            "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
-            "lang": case["lang"], "model": model, "passed": False,
-            "reason": "no fragments retrieved", "elapsed_seconds": round(retrieval_elapsed, 2),
-        } for model in models]
+        return [
+            {
+                "id": case["id"],
+                "paper": case["paper"],
+                "case_type": case["case_type"],
+                "lang": case["lang"],
+                "model": model,
+                "passed": False,
+                "reason": "no fragments retrieved",
+                "elapsed_seconds": round(retrieval_elapsed, 2),
+            }
+            for model in models
+        ]
 
     records = []
     for model in models:
@@ -548,20 +582,30 @@ def run_factual_case(
             # from "the system got worse". Marked as an infrastructure error so
             # the gate can refuse to compare against the baseline at all.
             gen_elapsed = time.perf_counter() - t0
-            records.append({
-                "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
-                "lang": case["lang"], "model": model, "passed": False,
-                "infrastructure_error": True,
-                "reason": f"{type(exc).__name__}: {exc}",
-                "elapsed_seconds": round(retrieval_elapsed + gen_elapsed, 2),
-            })
+            records.append(
+                {
+                    "id": case["id"],
+                    "paper": case["paper"],
+                    "case_type": case["case_type"],
+                    "lang": case["lang"],
+                    "model": model,
+                    "passed": False,
+                    "infrastructure_error": True,
+                    "reason": f"{type(exc).__name__}: {exc}",
+                    "elapsed_seconds": round(retrieval_elapsed + gen_elapsed, 2),
+                }
+            )
             print(f"  [ERROR] {case['id']} / {model} -- {type(exc).__name__}: {exc}", flush=True)
             continue
         gen_elapsed = time.perf_counter() - t0
         result = grade.grade_answer(answer, case)
         record = {
-            "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
-            "lang": case["lang"], "model": model, "passed": result["pass"],
+            "id": case["id"],
+            "paper": case["paper"],
+            "case_type": case["case_type"],
+            "lang": case["lang"],
+            "model": model,
+            "passed": result["pass"],
             "reason": result["reason"],
             "elapsed_seconds": round(retrieval_elapsed + gen_elapsed, 2),
         }
@@ -570,7 +614,10 @@ def run_factual_case(
             record["retrieved"] = _fragment_diag(fragments)
         records.append(record)
         status = "PASS" if result["pass"] else "FAIL"
-        print(f"  [{status}] {case['id']} / {model} ({gen_elapsed:.1f}s) -- {result['reason']}", flush=True)
+        print(
+            f"  [{status}] {case['id']} / {model} ({gen_elapsed:.1f}s) -- {result['reason']}",
+            flush=True,
+        )
     return records
 
 
@@ -720,13 +767,19 @@ def run_all_cases(
             selected, _metrics = evidence.select_evidence(result.fragments)
             fragments = [_fragment_to_dict(f) for f in selected]
         except Exception as exc:
-            records.append({
-                "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
-                "lang": case["lang"], "model": None, "passed": False,
-                "infrastructure_error": True,
-                "reason": f"retrieval failed -- {type(exc).__name__}: {exc}",
-                "elapsed_seconds": round(time.perf_counter() - t0, 2),
-            })
+            records.append(
+                {
+                    "id": case["id"],
+                    "paper": case["paper"],
+                    "case_type": case["case_type"],
+                    "lang": case["lang"],
+                    "model": None,
+                    "passed": False,
+                    "infrastructure_error": True,
+                    "reason": f"retrieval failed -- {type(exc).__name__}: {exc}",
+                    "elapsed_seconds": round(time.perf_counter() - t0, 2),
+                }
+            )
             print(f"  [ERROR] {case['id']} -- retrieval: {type(exc).__name__}: {exc}", flush=True)
             continue
         elapsed = time.perf_counter() - t0
@@ -842,7 +895,9 @@ def _update_baseline(pass_rate: float) -> None:
         return
     BASELINE_FILE.write_text(f"{candidate:.2f}\n", encoding="utf-8")
     verb = "seeded" if current is None else f"raised from {current:.2f}"
-    print(f"[baseline] {verb} to {candidate:.2f} (observed {pass_rate:.4f} minus {BASELINE_MARGIN:.2f} margin)")
+    print(
+        f"[baseline] {verb} to {candidate:.2f} (observed {pass_rate:.4f} minus {BASELINE_MARGIN:.2f} margin)"
+    )
 
 
 # LIBRARY API
@@ -858,36 +913,41 @@ def _update_baseline(pass_rate: float) -> None:
 # (ensure_indexed forces it False otherwise); models.chat only feeds the query
 # decomposer ensure_indexed builds when flags.usar_llm_query_decomposition is
 # True -- which, unlike contextual retrieval, is the AppConfig default, so an
-# override is not required to make it reachable. A models.chat override is
+# override is not required to make it reachable -- and, the same way, the
+# figure-describing model ensure_indexed builds when
+# flags.usar_descripcion_imagen is True. A models.chat override is
 # folded into evaluate()'s required_models the same way models.contextual is
 # (see the comment there) -- both moved out of
 # _UNREACHABLE_CONFIG_OVERRIDE_REASONS once issue #64 wired the decomposer in.
-_APPCONFIG_OVERRIDE_KEYS = frozenset({
-    "models.contextual",
-    "models.chat",
-    "chunking.chunk_size",
-    "chunking.chunk_overlap",
-    "chunking.min_chunk_length",
-    "chunking.contextual_doc_chars",
-    "retrieval.n_semantic_results",
-    "retrieval.n_keyword_results",
-    "retrieval.top_k_rerank_candidates",
-    "retrieval.top_k_final",
-    "retrieval.n_top_for_expansion",
-    "retrieval.rrf_k",
-    "retrieval.bm25_k1",
-    "retrieval.bm25_b",
-    "retrieval.weight_semantic_rrf",
-    "retrieval.weight_bm25_rrf",
-    "reranking.score_threshold",
-    "context.max_context_chars",
-    "flags.usar_contextual_retrieval",
-    "flags.usar_embeddings_imagen",
-    "flags.usar_busqueda_hibrida",
-    "flags.usar_reranker",
-    "flags.expandir_contexto",
-    "flags.usar_llm_query_decomposition",
-})
+_APPCONFIG_OVERRIDE_KEYS = frozenset(
+    {
+        "models.contextual",
+        "models.chat",
+        "chunking.chunk_size",
+        "chunking.chunk_overlap",
+        "chunking.min_chunk_length",
+        "chunking.contextual_doc_chars",
+        "retrieval.n_semantic_results",
+        "retrieval.n_keyword_results",
+        "retrieval.top_k_rerank_candidates",
+        "retrieval.top_k_final",
+        "retrieval.n_top_for_expansion",
+        "retrieval.rrf_k",
+        "retrieval.bm25_k1",
+        "retrieval.bm25_b",
+        "retrieval.weight_semantic_rrf",
+        "retrieval.weight_bm25_rrf",
+        "reranking.score_threshold",
+        "context.max_context_chars",
+        "flags.usar_contextual_retrieval",
+        "flags.usar_embeddings_imagen",
+        "flags.usar_descripcion_imagen",
+        "flags.usar_busqueda_hibrida",
+        "flags.usar_reranker",
+        "flags.expandir_contexto",
+        "flags.usar_llm_query_decomposition",
+    }
+)
 
 # Generation-side flags reachable only by scoping rag.chat_pdfs's runtime
 # globals for the duration of case execution (_generation_config_overrides):
@@ -985,7 +1045,9 @@ def validate_config_overrides(config_overrides: Optional[Mapping[str, Any]]) -> 
         return
     honored = _APPCONFIG_OVERRIDE_KEYS | set(_GENERATION_FLAG_OVERRIDE_KEYS)
     unreachable = {
-        key: _UNREACHABLE_CONFIG_OVERRIDE_REASONS.get(key, "not part of evaluate()'s honoured override surface")
+        key: _UNREACHABLE_CONFIG_OVERRIDE_REASONS.get(
+            key, "not part of evaluate()'s honoured override surface"
+        )
         for key in config_overrides
         if key not in honored
     }
@@ -1258,18 +1320,28 @@ def evaluate(
             # such case.
             if dev_required:
                 retrieve_dev, evidence_dev, stack_dev = ensure_indexed(
-                    rag, DEV_DOCS_DIR, dev_required, "dev set",
-                    path_label=EVAL_DEV_LABEL, config_overrides=config_overrides,
+                    rag,
+                    DEV_DOCS_DIR,
+                    dev_required,
+                    "dev set",
+                    path_label=EVAL_DEV_LABEL,
+                    config_overrides=config_overrides,
                 )
                 stacks_to_close.append(stack_dev)
                 config_effective["dev"] = dataclasses.asdict(
                     _eval_app_config(
-                        rag, DEV_DOCS_DIR, path_label=EVAL_DEV_LABEL, config_overrides=config_overrides
+                        rag,
+                        DEV_DOCS_DIR,
+                        path_label=EVAL_DEV_LABEL,
+                        config_overrides=config_overrides,
                     )
                 )
             if blind_required:
                 retrieve_blind, evidence_blind, stack_blind = ensure_indexed(
-                    rag, BLIND_DOCS_DIR, set(blind_required), "blind set",
+                    rag,
+                    BLIND_DOCS_DIR,
+                    set(blind_required),
+                    "blind set",
                     config_overrides=config_overrides,
                 )
                 stacks_to_close.append(stack_blind)
@@ -1284,8 +1356,7 @@ def evaluate(
             )
 
             print(
-                f"\n[run] stack={stack_slug} {len(cases)} cases x "
-                f"up to {len(models)} model(s)\n",
+                f"\n[run] stack={stack_slug} {len(cases)} cases x up to {len(models)} model(s)\n",
                 flush=True,
             )
             with _generation_config_overrides(rag, config_overrides):
@@ -1309,20 +1380,27 @@ def evaluate(
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         report_path = RESULTS_DIR / f"{timestamp}_{stack_slug}.json"
-        report_path.write_text(json.dumps({
-            "run": {
-                "timestamp": timestamp,
-                "stack": stack_slug,
-                "models": list(models),
-                "aux_model": AUX_MODEL,
-                "num_cases": len(cases),
-                "num_records": len(records),
-                "elapsed_seconds": round(elapsed_total, 1),
-                "retrieval_path": "monkeygrab.application.retrieve.Retrieve",
-            },
-            "summary": summary,
-            "results": records,
-        }, indent=2, ensure_ascii=False), encoding="utf-8")
+        report_path.write_text(
+            json.dumps(
+                {
+                    "run": {
+                        "timestamp": timestamp,
+                        "stack": stack_slug,
+                        "models": list(models),
+                        "aux_model": AUX_MODEL,
+                        "num_cases": len(cases),
+                        "num_records": len(records),
+                        "elapsed_seconds": round(elapsed_total, 1),
+                        "retrieval_path": "monkeygrab.application.retrieve.Retrieve",
+                    },
+                    "summary": summary,
+                    "results": records,
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
 
     print_summary(summary)
     if report_path is not None:
@@ -1350,7 +1428,9 @@ def evaluate(
         # Only case_ids is None (the CLI) is the gate.
         if case_ids is None:
             if threshold is None:
-                print("\n[gate] no baseline yet (tests/eval/baseline_min_pass_rate.txt missing) -- not gating this run")
+                print(
+                    "\n[gate] no baseline yet (tests/eval/baseline_min_pass_rate.txt missing) -- not gating this run"
+                )
                 exit_code = 0
             elif pass_rate < threshold:
                 print(f"\n[gate] FAILED: pass_rate {pass_rate:.4f} < baseline {threshold:.2f}")
@@ -1396,11 +1476,14 @@ def evaluate(
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
-        "--models", nargs="+", default=DEFAULT_MODELS,
+        "--models",
+        nargs="+",
+        default=DEFAULT_MODELS,
         help=f"Ollama generator models to evaluate (default: {DEFAULT_MODELS})",
     )
     parser.add_argument(
-        "--update-baseline", action="store_true",
+        "--update-baseline",
+        action="store_true",
         help=(
             "After this run, raise tests/eval/baseline_min_pass_rate.txt to this "
             "run's pass rate minus a safety margin. Only ever raises it -- a lower "

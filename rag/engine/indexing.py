@@ -82,6 +82,19 @@ def indexar_documentos(
     if config.flags.usar_embeddings_imagen:
         image_extractor = _build_image_extractor(config)
 
+    image_describer = None
+    if config.flags.usar_descripcion_imagen:
+        image_describer = OllamaChatModel(
+            config.models.chat,
+            num_ctx=ollama.query_num_ctx,
+            keep_alive=ollama.keep_alive,
+            request_timeout=ollama.request_timeout,
+            generate_retries=ollama.generate_retries,
+            generate_retry_delay=ollama.generate_retry_delay,
+            options={"temperature": 0.1, "num_predict": 400},
+            base_url=ollama.base_url,
+        )
+
     use_case = IndexCorpus(
         build_extractor(config),
         wiring.embedder(config),
@@ -89,6 +102,7 @@ def indexar_documentos(
         config,
         contextual_model=contextual_model,
         image_extractor=image_extractor,
+        image_describer=image_describer,
     )
 
     total_chunks = 0
@@ -183,10 +197,12 @@ def obtener_documentos_indexados(collection: VectorStore) -> List[str]:
         Sorted list of document filenames.
     """
     try:
-        return sorted({
-            fragment.metadata.source
-            for fragment in collection.get_page(None, 0)
-            if fragment.metadata.source
-        })
+        return sorted(
+            {
+                fragment.metadata.source
+                for fragment in collection.get_page(None, 0)
+                if fragment.metadata.source
+            }
+        )
     except Exception:
         return []

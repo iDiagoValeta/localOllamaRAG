@@ -71,6 +71,7 @@ _FIELD_MAP = [
     ("flags.usar_optimizacion_contexto", "USAR_OPTIMIZACION_CONTEXTO"),
     ("flags.usar_recomp_synthesis", "USAR_RECOMP_SYNTHESIS"),
     ("flags.usar_embeddings_imagen", "USAR_EMBEDDINGS_IMAGEN"),
+    ("flags.usar_descripcion_imagen", "USAR_DESCRIPCION_IMAGEN"),
     ("flags.logging_metricas", "LOGGING_METRICAS"),
     ("flags.guardar_debug_rag", "GUARDAR_DEBUG_RAG"),
     ("paths.base_dir", "BASE_DIR"),
@@ -148,9 +149,7 @@ def _fresh_rag_chat_pdfs_snapshot():
                 "rag.chat_pdfs cannot be imported here (missing engine "
                 f"dependency). Comparison skipped, not passed:\n{result.stderr.strip()[-300:]}"
             )
-        raise AssertionError(
-            f"failed to import rag.chat_pdfs in a subprocess:\n{result.stderr}"
-        )
+        raise AssertionError(f"failed to import rag.chat_pdfs in a subprocess:\n{result.stderr}")
     return json.loads(result.stdout)
 
 

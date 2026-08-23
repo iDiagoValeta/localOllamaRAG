@@ -40,6 +40,7 @@ _RUNTIME_OVERRIDES = {
     "models.recomp": "MODELO_RECOMP",
     "flags.usar_contextual_retrieval": "USAR_CONTEXTUAL_RETRIEVAL",
     "flags.usar_embeddings_imagen": "USAR_EMBEDDINGS_IMAGEN",
+    "flags.usar_descripcion_imagen": "USAR_DESCRIPCION_IMAGEN",
     "flags.usar_llm_query_decomposition": "USAR_LLM_QUERY_DECOMPOSITION",
     "flags.usar_busqueda_hibrida": "USAR_BUSQUEDA_HIBRIDA",
     "flags.usar_reranker": "USAR_RERANKER",

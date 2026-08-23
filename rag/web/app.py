@@ -15,7 +15,6 @@ Dependencies:
     - rag.chat_pdfs (project internal module)
 """
 
-
 import gc
 import os
 import sys
@@ -49,7 +48,9 @@ _react_dist = os.path.join(_web_dir, "frontend", "dist")
 
 app = Flask(
     __name__,
-    static_folder=os.path.join(_react_dist, "assets") if os.path.isdir(os.path.join(_react_dist, "assets")) else None,
+    static_folder=os.path.join(_react_dist, "assets")
+    if os.path.isdir(os.path.join(_react_dist, "assets"))
+    else None,
 )
 app.config["JSON_AS_ASCII"] = False
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
@@ -59,7 +60,10 @@ _cors_origins = os.getenv(
     "MONKEYGRAB_CORS_ORIGINS",
     "http://localhost:3000,http://127.0.0.1:3000",
 )
-CORS(app, resources={r"/api/*": {"origins": [o.strip() for o in _cors_origins.split(",") if o.strip()]}})
+CORS(
+    app,
+    resources={r"/api/*": {"origins": [o.strip() for o in _cors_origins.split(",") if o.strip()]}},
+)
 
 _state = {
     "mode": "chat",
@@ -67,9 +71,9 @@ _state = {
     "collection": None,
     "indexing": False,
     "indexing_error": None,
-    "indexing_failed": False,       # True if the last attempt failed permanently
-    "indexing_done_empty": False,   # True if indexing completed with 0 chunks (no PDFs)
-    "indexing_progress": None,      # {"file": str, "file_index": int, "total_files": int}
+    "indexing_failed": False,  # True if the last attempt failed permanently
+    "indexing_done_empty": False,  # True if indexing completed with 0 chunks (no PDFs)
+    "indexing_progress": None,  # {"file": str, "file_index": int, "total_files": int}
 }
 _indexing_lock = threading.RLock()
 
@@ -125,6 +129,7 @@ def _safe_pdf_basename(filename: str) -> str:
 
 
 # COLLECTION MANAGEMENT
+
 
 def _invalidate_collection_if_deleted():
     """Clear state to start fresh if the DB folder was deleted."""
@@ -186,7 +191,12 @@ def _ensure_indexed():
     coll = _get_collection()
     if coll.count() == 0 and not _state["indexing"]:
         with _indexing_lock:
-            if coll.count() == 0 and not _state["indexing"] and not _state["indexing_failed"] and not _state["indexing_done_empty"]:
+            if (
+                coll.count() == 0
+                and not _state["indexing"]
+                and not _state["indexing_failed"]
+                and not _state["indexing_done_empty"]
+            ):
                 _state["indexing"] = True
                 _state["indexing_error"] = None
                 _state["indexing_progress"] = None
@@ -202,6 +212,7 @@ def _reset_db():
 
 # STREAMING HELPERS
 
+
 def _chat_stream(pregunta: str) -> Generator[str, None, None]:
     """Generate tokens from chat mode via streaming.
 
@@ -214,7 +225,7 @@ def _chat_stream(pregunta: str) -> Generator[str, None, None]:
     from monkeygrab.adapters.chat.ollama_chat import ollama_client_for
 
     messages = [{"role": "system", "content": rag_engine.SYSTEM_PROMPT_CHAT}]
-    mensajes_recientes = _state["historial_chat"][-(rag_engine.MAX_HISTORIAL_MENSAJES):]
+    mensajes_recientes = _state["historial_chat"][-(rag_engine.MAX_HISTORIAL_MENSAJES) :]
     messages.extend(mensajes_recientes)
     messages.append({"role": "user", "content": pregunta})
 
@@ -269,10 +280,7 @@ def _format_sources(fragments: list) -> list:
 
 def _sse_event(event: str, payload: dict) -> str:
     """Serialize one Server-Sent Event with a named event type."""
-    return (
-        f"event: {event}\n"
-        f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-    )
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
 def _collection_document_details(coll) -> list:
@@ -300,12 +308,14 @@ def _collection_document_details(coll) -> list:
     normalized = []
     for doc in sorted(details):
         info = details[doc]
-        normalized.append({
-            "name": info["name"],
-            "fragments": info["fragments"],
-            "pages": len(info["pages"]),
-            "formats": sorted(info["formats"]),
-        })
+        normalized.append(
+            {
+                "name": info["name"],
+                "fragments": info["fragments"],
+                "pages": len(info["pages"]),
+                "formats": sorted(info["formats"]),
+            }
+        )
     return normalized
 
 
@@ -350,15 +360,17 @@ def _ollama_models() -> list:
         if caps is None:
             caps = _ollama_capabilities(name)
             _model_caps_cache[digest] = caps
-        models.append({
-            "name": name,
-            "size": m.get("size"),
-            "family": details.get("family"),
-            "parameter_size": details.get("parameter_size"),
-            "capabilities": caps,
-            "embedding": "embedding" in caps,
-            "vision": "vision" in caps,
-        })
+        models.append(
+            {
+                "name": name,
+                "size": m.get("size"),
+                "family": details.get("family"),
+                "parameter_size": details.get("parameter_size"),
+                "capabilities": caps,
+                "embedding": "embedding" in caps,
+                "vision": "vision" in caps,
+            }
+        )
     models.sort(key=lambda x: x["name"].lower())
     return models
 
@@ -370,7 +382,9 @@ def _start_ollama_process() -> Optional[str]:
         return None
     creationflags = 0
     if os.name == "nt":
-        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
+            subprocess, "DETACHED_PROCESS", 0
+        )
     subprocess.Popen(
         [exe, "serve"],
         stdout=subprocess.DEVNULL,
@@ -610,15 +624,17 @@ def api_corpus():
     if total_fragments == 0:
         _ensure_indexed()
     docs = rag_engine.obtener_documentos_indexados(coll) if total_fragments > 0 else []
-    return jsonify({
-        "ok": True,
-        "preset": preset,
-        "indexing": _state["indexing"],
-        "total_fragments": total_fragments,
-        "documents": docs,
-        "document_details": _collection_document_details(coll) if total_fragments > 0 else [],
-        **_init_paths_payload(),
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "preset": preset,
+            "indexing": _state["indexing"],
+            "total_fragments": total_fragments,
+            "documents": docs,
+            "document_details": _collection_document_details(coll) if total_fragments > 0 else [],
+            **_init_paths_payload(),
+        }
+    )
 
 
 @app.route("/api/init", methods=["GET"])
@@ -653,6 +669,7 @@ def api_chat():
         return jsonify({"ok": False, "error": "Mensaje vacío"}), 400
 
     if stream:
+
         def generate():
             full = ""
             try:
@@ -683,24 +700,26 @@ def api_rag():
     stream = data.get("stream", True)
 
     if len(pregunta) < rag_engine.MIN_LONGITUD_PREGUNTA_RAG:
-        return jsonify({
-            "ok": False,
-            "error": "question_too_short",
-            "message": "Pregunta demasiado corta. Formula una pregunta concreta.",
-        }), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "question_too_short",
+                "message": "Pregunta demasiado corta. Formula una pregunta concreta.",
+            }
+        ), 400
 
     coll = _get_collection()
     try:
-        fragmentos_ranked, _, metricas = rag_engine.realizar_busqueda_hibrida(
-            pregunta, coll
-        )
+        fragmentos_ranked, _, metricas = rag_engine.realizar_busqueda_hibrida(pregunta, coll)
 
         if not fragmentos_ranked:
-            return jsonify({
-                "ok": False,
-                "error": "no_results",
-                "message": "No se encontró información relevante en los documentos.",
-            }), 200
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "no_results",
+                    "message": "No se encontró información relevante en los documentos.",
+                }
+            ), 200
 
         fragmentos_finales, metricas_contexto = rag_engine.preparar_fragmentos_para_generacion(
             fragmentos_ranked,
@@ -708,22 +727,23 @@ def api_rag():
         )
         metricas = {**metricas, "fase_contexto": metricas_contexto}
         if not fragmentos_finales:
-            return jsonify({
-                "ok": False,
-                "error": "no_results",
-                "message": "No se encontró información relevante.",
-            }), 200
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": "no_results",
+                    "message": "No se encontró información relevante.",
+                }
+            ), 200
 
         sources = _format_sources(fragmentos_finales)
 
-        mensaje_usuario = rag_engine._preparar_mensaje_usuario_rag(
-            pregunta, fragmentos_finales
-        )
+        mensaje_usuario = rag_engine._preparar_mensaje_usuario_rag(pregunta, fragmentos_finales)
     except Exception as e:
         # Retrieval / context prep failed (commonly Ollama down for embeddings).
         return jsonify(_ollama_error_payload(e)), 200
 
     if stream:
+
         def generate():
             raw = ""
             try:
@@ -769,11 +789,13 @@ def api_rag():
         fragmentos_finales,
         metricas=metricas,
     )
-    return jsonify({
-        "ok": True,
-        "response": respuesta,
-        "sources": sources,
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "response": respuesta,
+            "sources": sources,
+        }
+    )
 
 
 @app.route("/api/mode", methods=["POST"])
@@ -800,13 +822,15 @@ def api_stats():
     """Return database statistics."""
     coll = _get_collection()
     docs = rag_engine.obtener_documentos_indexados(coll)
-    return jsonify({
-        "ok": True,
-        "total_fragments": coll.count(),
-        "documents": docs,
-        "document_details": _collection_document_details(coll),
-        "indexing": _state["indexing"],
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "total_fragments": coll.count(),
+            "documents": docs,
+            "document_details": _collection_document_details(coll),
+            "indexing": _state["indexing"],
+        }
+    )
 
 
 @app.route("/api/docs", methods=["GET"])
@@ -814,13 +838,15 @@ def api_docs():
     """List indexed documents."""
     coll = _get_collection()
     docs = rag_engine.obtener_documentos_indexados(coll)
-    return jsonify({
-        "ok": True,
-        "documents": docs,
-        "document_details": _collection_document_details(coll),
-        "total_fragments": coll.count(),
-        "indexing": _state["indexing"],
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "documents": docs,
+            "document_details": _collection_document_details(coll),
+            "total_fragments": coll.count(),
+            "indexing": _state["indexing"],
+        }
+    )
 
 
 @app.route("/api/docs/<path:filename>", methods=["DELETE"])
@@ -881,11 +907,9 @@ def api_topics():
                 texto = " ".join(fragment.doc for fragment in fragments[:20])
                 palabras = texto.split()
                 significativas = [
-                    p.strip('.,;:()[]{}"\'-\'').lower()
+                    p.strip(".,;:()[]{}\"'-'").lower()
                     for p in palabras
-                    if len(p) > 5
-                    and p.strip('.,;:()[]{}"\'-\'').lower()
-                    not in rag_engine.STOPWORDS
+                    if len(p) > 5 and p.strip(".,;:()[]{}\"'-'").lower() not in rag_engine.STOPWORDS
                 ]
                 frecuencias = Counter(significativas)
                 top = [w for w, _ in frecuencias.most_common(10)]
@@ -905,12 +929,14 @@ def api_reindex():
     """
     try:
         if _state["indexing"]:
-            return jsonify({
-                "ok": True,
-                "indexing": True,
-                "message": "Ya hay una indexación en curso.",
-                "progress": _state["indexing_progress"],
-            }), 202
+            return jsonify(
+                {
+                    "ok": True,
+                    "indexing": True,
+                    "message": "Ya hay una indexación en curso.",
+                    "progress": _state["indexing_progress"],
+                }
+            ), 202
 
         files = request.files.getlist("file") or []
         for f in files:
@@ -926,14 +952,16 @@ def api_reindex():
         _state["indexing_error"] = None
         _state["indexing_done_empty"] = False
         _ensure_indexed()
-        return jsonify({
-            "ok": True,
-            "indexing": True,
-            "message": "Re-indexación iniciada.",
-            "total_fragments": 0,
-            "documents": [],
-            "progress": _state["indexing_progress"],
-        }), 202
+        return jsonify(
+            {
+                "ok": True,
+                "indexing": True,
+                "message": "Re-indexación iniciada.",
+                "total_fragments": 0,
+                "documents": [],
+                "progress": _state["indexing_progress"],
+            }
+        ), 202
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -967,9 +995,7 @@ def api_upload():
     try:
         coll = _get_collection()
         if add_only:
-            rag_engine.indexar_documentos(
-                rag_engine.CARPETA_DOCS, coll, solo_archivos=saved
-            )
+            rag_engine.indexar_documentos(rag_engine.CARPETA_DOCS, coll, solo_archivos=saved)
             total = coll.count()
         else:
             _reset_db()
@@ -977,24 +1003,28 @@ def api_upload():
             _state["indexing_error"] = None
             _state["indexing_done_empty"] = False
             _ensure_indexed()
-            return jsonify({
-                "ok": True,
-                "indexing": True,
-                "message": "PDF guardado. Re-indexación iniciada.",
-                "files": saved,
-                "total_fragments": 0,
-                "documents": [],
-                "progress": _state["indexing_progress"],
-            }), 202
+            return jsonify(
+                {
+                    "ok": True,
+                    "indexing": True,
+                    "message": "PDF guardado. Re-indexación iniciada.",
+                    "files": saved,
+                    "total_fragments": 0,
+                    "documents": [],
+                    "progress": _state["indexing_progress"],
+                }
+            ), 202
         docs = rag_engine.obtener_documentos_indexados(coll)
-        return jsonify({
-            "ok": True,
-            "filename": saved[0] if len(saved) == 1 else None,
-            "files": saved,
-            "total_fragments": total,
-            "documents": docs,
-            "document_details": _collection_document_details(coll),
-        })
+        return jsonify(
+            {
+                "ok": True,
+                "filename": saved[0] if len(saved) == 1 else None,
+                "files": saved,
+                "total_fragments": total,
+                "documents": docs,
+                "document_details": _collection_document_details(coll),
+            }
+        )
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -1004,6 +1034,7 @@ _SETTINGS_MAP = {
     "queryDecomposition": "USAR_LLM_QUERY_DECOMPOSITION",
     "hybridSearch": "USAR_BUSQUEDA_HIBRIDA",
     "imageIndexing": "USAR_EMBEDDINGS_IMAGEN",
+    "imageDescription": "USAR_DESCRIPCION_IMAGEN",
     "reranker": "USAR_RERANKER",
     "expandContext": "EXPANDIR_CONTEXTO",
     "optimizeContext": "USAR_OPTIMIZACION_CONTEXTO",
@@ -1035,22 +1066,27 @@ def api_settings_post():
             setattr(rag_engine, engine_var, val)
             updated[fe_key] = val
     rag_engine.guardar_ajustes_persistidos()
-    # contextualRetrieval and imageIndexing are index-time flags (part of
-    # index_recipe): flipping either one is the most likely way a store goes
-    # stale mid-session, with no restart and no store switch to otherwise
-    # trigger a fresh check -- see /api/init's own fingerprint_stale field.
-    return jsonify({
-        "ok": True,
-        "settings": updated,
-        "fingerprint_stale": rag_engine.index_fingerprint_mismatch(_get_collection()),
-    })
+    # contextualRetrieval, imageIndexing and imageDescription are index-time
+    # flags (part of index_recipe): flipping any of them is the most likely
+    # way a store goes stale mid-session, with no restart and no store switch
+    # to otherwise trigger a fresh check -- see /api/init's own
+    # fingerprint_stale field.
+    return jsonify(
+        {
+            "ok": True,
+            "settings": updated,
+            "fingerprint_stale": rag_engine.index_fingerprint_mismatch(_get_collection()),
+        }
+    )
 
 
 @app.route("/api/ollama", methods=["GET"])
 def api_ollama_status():
     """Report whether the local Ollama server is reachable."""
     version = _ollama_version()
-    return jsonify({"ok": True, "running": version is not None, "version": version, "host": OLLAMA_BASE_URL})
+    return jsonify(
+        {"ok": True, "running": version is not None, "version": version, "host": OLLAMA_BASE_URL}
+    )
 
 
 @app.route("/api/ollama/start", methods=["POST"])
@@ -1092,7 +1128,8 @@ def api_models_post():
         return jsonify({"ok": False, "error": "indexing_in_progress"}), 409
     data = request.get_json() or {}
     overrides = {
-        k: v for k, v in data.items()
+        k: v
+        for k, v in data.items()
         if k in rag_engine.MODEL_ROLE_VARS and isinstance(v, str) and v.strip()
     }
     if not overrides:
@@ -1108,22 +1145,26 @@ def api_models_post():
     # is on (the default) -- reassigning it mid-session is just as likely to
     # make the active store stale as toggling the flag itself; see
     # api_settings_post's comment.
-    return jsonify({
-        "ok": True,
-        "roles": roles,
-        "fingerprint_stale": rag_engine.index_fingerprint_mismatch(_get_collection()),
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "roles": roles,
+            "fingerprint_stale": rag_engine.index_fingerprint_mismatch(_get_collection()),
+        }
+    )
 
 
 @app.route("/api/stores", methods=["GET"])
 def api_stores_list():
     """List the three fixed language stores (English, Castellano, Valencià)."""
-    return jsonify({
-        "ok": True,
-        "stores": _all_stores(),
-        "active": _active_store_name(),
-        "embedding": "jinaai/jina-clip-v2",
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "stores": _all_stores(),
+            "active": _active_store_name(),
+            "embedding": "jinaai/jina-clip-v2",
+        }
+    )
 
 
 @app.route("/api/stores/select", methods=["POST"])
@@ -1143,17 +1184,21 @@ def api_stores_select():
     if total == 0:
         _ensure_indexed()
     docs = rag_engine.obtener_documentos_indexados(coll) if total > 0 else []
-    return jsonify({
-        "ok": True,
-        "active": name,
-        "indexing": _state["indexing"],
-        "total_fragments": total,
-        "documents": docs,
-        "document_details": _collection_document_details(coll) if total > 0 else [],
-        "fingerprint_stale": rag_engine.index_fingerprint_mismatch(coll) if total > 0 else False,
-        "stores": _all_stores(),
-        **_init_paths_payload(),
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "active": name,
+            "indexing": _state["indexing"],
+            "total_fragments": total,
+            "documents": docs,
+            "document_details": _collection_document_details(coll) if total > 0 else [],
+            "fingerprint_stale": rag_engine.index_fingerprint_mismatch(coll)
+            if total > 0
+            else False,
+            "stores": _all_stores(),
+            **_init_paths_payload(),
+        }
+    )
 
 
 # Apply any persisted UI choices (model roles / store / flags) before serving.
@@ -1164,6 +1209,7 @@ rag_engine.cargar_ajustes_persistidos()
 
 
 # ENTRY POINT
+
 
 def main():
     port = int(os.getenv("MONKEYGRAB_PORT", "5000"))

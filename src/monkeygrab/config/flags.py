@@ -33,6 +33,11 @@ class PipelineFlagsConfig:
             feeding raw chunks to the generator (``USAR_RECOMP_SYNTHESIS``).
         usar_embeddings_imagen: Index-time. Extract and directly embed PDF
             images as extra chunks (``USAR_EMBEDDINGS_IMAGEN``).
+        usar_descripcion_imagen: Index-time. Describe each extracted figure
+            with the vision-capable chat model and store that description as
+            the image chunk's text (``USAR_DESCRIPCION_IMAGEN``). Requires
+            ``usar_embeddings_imagen`` -- there is nothing to describe
+            otherwise.
         logging_metricas: Log per-stage pipeline metrics (``LOGGING_METRICAS``).
         guardar_debug_rag: Write a debug dump per RAG interaction
             (``GUARDAR_DEBUG_RAG``).
@@ -46,5 +51,6 @@ class PipelineFlagsConfig:
     usar_optimizacion_contexto: bool = True
     usar_recomp_synthesis: bool = True
     usar_embeddings_imagen: bool = True
+    usar_descripcion_imagen: bool = False
     logging_metricas: bool = True
     guardar_debug_rag: bool = True
