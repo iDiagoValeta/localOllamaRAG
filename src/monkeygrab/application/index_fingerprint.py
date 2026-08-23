@@ -98,6 +98,11 @@ def index_recipe(config: AppConfig) -> Dict[str, Any]:
         recipe["contextual_model"] = config.models.contextual
         recipe["contextual_doc_chars"] = config.chunking.contextual_doc_chars
         recipe["contextual_num_ctx"] = config.models.ollama.contextual_num_ctx
+    # Same conditional inclusion as contextual retrieval: the describing model
+    # only reaches stored text when the stage runs. Default-off keeps the
+    # pinned default-config fingerprint valid.
+    if config.flags.usar_descripcion_imagen:
+        recipe["image_description_model"] = config.models.chat
     return recipe
 
 

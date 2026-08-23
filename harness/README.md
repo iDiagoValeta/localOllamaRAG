@@ -389,9 +389,19 @@ boundary checks.
 > an accepted improvement on today's search set is a candidate, not a
 > demonstrated result (#30).
 >
-> Criterion 5 on the real pipeline was started the same day
-> (`RAG_TOP_K_FINAL=1`, ledger `tests/eval/runs/harness-loop-c5/`) and
-> aborted after iteration 1. Sabotaged reference: **24/32**. First
-> proposal `top_k_final=4` was `rejected_regression` on the fast tier
-> (`planck-sigma8-es` — the sabotaged reference had passed it). Resume
-> from that ledger; do not delete it. Resume: issue #89.
+> Criterion 5 on the real pipeline, completed 2026-08-22 (`RAG_TOP_K_FINAL=1`,
+> ledger `tests/eval/runs/harness-loop-c5/`, resumed per issue #89). Sabotaged
+> reference re-measured at **24/32** (retrieval-only 2/9), matching the known
+> 3-net-flip sabotage. All four `top_k_final` candidates (4, 6, 8, 12) were
+> `rejected_regression` at the fast tier on the same single case,
+> `planck-sigma8-es`, and the loop stopped on `patience` with no candidate
+> ever reaching the search set. **The structural finding:** `planck-sigma8-es`
+> fails under the healthy configuration (both 2026-08 gate runs and all three
+> healthy-loop candidates above) and passes *only* under the `k=1` sabotage —
+> the sabotage lucked into it. A paired fast-tier regression check measured
+> against a degraded reference therefore rejects every candidate that restores
+> healthy behaviour, because recovery re-fails the case the sabotage
+> coincidentally fixed. Stage-1 recovery from this sabotage is unreachable on
+> today's search set regardless of proposer. Recorded per issue #89's
+> instruction ("record it, do not weaken `grade.py`"); the loop-level design
+> question this raises is tracked as issue #92.

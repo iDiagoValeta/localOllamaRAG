@@ -53,9 +53,7 @@ def test_retrieval_parameters_do_not_invalidate():
     # Retrieval fan-out is read at query time and never reaches stored chunks.
     # If this ever flips, the loop would reindex on every candidate it tries.
     base = AppConfig()
-    changed = base.with_overrides(
-        **{"retrieval.top_k_final": 3, "retrieval.weight_bm25_rrf": 0.9}
-    )
+    changed = base.with_overrides(**{"retrieval.top_k_final": 3, "retrieval.weight_bm25_rrf": 0.9})
     assert compute_index_fingerprint(base) == compute_index_fingerprint(changed)
 
 
@@ -93,6 +91,19 @@ def test_contextual_num_ctx_only_counts_when_the_stage_runs():
     on = AppConfig().with_overrides(**{"flags.usar_contextual_retrieval": True})
     on_other_ctx = _with_contextual_num_ctx(on, 9999)
     assert compute_index_fingerprint(on) != compute_index_fingerprint(on_other_ctx)
+
+
+def test_description_model_only_counts_when_the_stage_runs():
+    off = AppConfig()
+    assert off.flags.usar_descripcion_imagen is False
+    off_other_model = off.with_overrides(**{"models.chat": "some-other-model"})
+    assert compute_index_fingerprint(off) == compute_index_fingerprint(off_other_model)
+
+    on = off.with_overrides(**{"flags.usar_descripcion_imagen": True})
+    on_other_model = on.with_overrides(**{"models.chat": "some-other-model"})
+    assert compute_index_fingerprint(on) != compute_index_fingerprint(on_other_model)
+    # Flipping the flag itself invalidates: stored image-chunk text differs.
+    assert compute_index_fingerprint(off) != compute_index_fingerprint(on)
 
 
 def test_recipe_version_is_omitted_at_v1_and_matches_pre_change_main():
