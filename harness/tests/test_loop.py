@@ -721,7 +721,6 @@ def test_pre_flag_ledger_entries_stay_comparable(tmp_path):
     ledger stops arming recovery mode the moment a new flag ships (issue
     #92's own validation campaign hit this against 2026-08 entries)."""
     import dataclasses
-    import json as _json
 
     stripped = dataclasses.asdict(AppConfig())
     del stripped["flags"]["usar_descripcion_imagen"]  # pre-flag writer
