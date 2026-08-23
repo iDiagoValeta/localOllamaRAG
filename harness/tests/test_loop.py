@@ -906,3 +906,71 @@ def test_describe_comparability_explains_fast_tier_only_history(tmp_path):
     assert info["incomparable_reasons"] == [
         "config matches the latest entry but it carries no complete search-set pass vector"
     ]
+
+
+# REFERENCE OVERRIDES (issue #101, caught live 2026-08-23): --set pins used to
+# exist only on the harness's bookkeeping AppConfig, while the measured
+# pipeline re-derived its config from environment and settings.json -- a
+# sabotaged reference that scores healthy. The pins must reach every evaluate()
+# call this run makes.
+
+
+def test_reference_overrides_reach_every_evaluation(tmp_path):
+    """The reference measurement applies the pins; each candidate's evaluation
+    merges them under its own overrides."""
+    seen: list = []
+
+    def evaluate(overrides, case_ids):
+        seen.append(dict(overrides))
+        records = [_rec(cid, "factual_number", True, 200.0) for cid in case_ids]
+        return ev.EvaluationResult(records=tuple(records), effective_config=dict(overrides))
+
+    report = loop.run_loop(
+        reference=AppConfig(),
+        evaluate=evaluate,
+        proposer=_FixedProposer({"retrieval.top_k_final": 12}),
+        search_set_ids=("a", "b", "c"),
+        fast_tier_ids=("a",),
+        unreachable_ids=(),
+        max_iterations=1,
+        patience=None,
+        ledger_dir=tmp_path,
+        verify_reachability=False,
+        reference_overrides={"retrieval.top_k_final": 1},
+    )
+
+    # Calls in order: reference full, reference fast, candidate fast, candidate full.
+    assert seen[0] == {"retrieval.top_k_final": 1}
+    assert seen[1] == {"retrieval.top_k_final": 1}
+    # Candidate evaluations carry the pins under the candidate's own value.
+    assert seen[2] == {"retrieval.top_k_final": 12}
+    assert seen[3] == {"retrieval.top_k_final": 12}
+    # Provenance lands in the report so a pinned campaign is auditable.
+    assert report["reference"]["overrides_applied"] == {"retrieval.top_k_final": 1}
+
+
+def test_candidate_overrides_win_over_reference_pins(tmp_path):
+    """A candidate key colliding with a pin is the candidate's to decide --
+    the proposer owns the searched axes even when the reference pins one."""
+
+    def evaluate(overrides, case_ids):
+        records = [_rec(cid, "factual_number", True, 200.0) for cid in case_ids]
+        return ev.EvaluationResult(records=tuple(records), effective_config=dict(overrides))
+
+    report = loop.run_loop(
+        reference=AppConfig(),
+        evaluate=evaluate,
+        proposer=_FixedProposer({"retrieval.top_k_final": 8}),
+        search_set_ids=("a",),
+        fast_tier_ids=("a",),
+        unreachable_ids=(),
+        max_iterations=1,
+        patience=None,
+        ledger_dir=tmp_path,
+        verify_reachability=False,
+        reference_overrides={"retrieval.top_k_final": 1},
+    )
+
+    entry = report["iterations"][0]
+    # The candidate's own value reached the ledger's provenance.
+    assert entry["config_overrides"] == {"retrieval.top_k_final": 8}

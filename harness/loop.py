@@ -469,6 +469,7 @@ def run_loop(
     ledger_dir=ledger_mod.LEDGER_DIR,
     verify_reachability: bool = True,
     reachability_probe_case_ids: Sequence[str] = (),
+    reference_overrides: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Run the search until termination, writing one ledger entry per iteration.
 
@@ -500,6 +501,15 @@ def run_loop(
             intentionally use an evaluator too narrow to answer the probe
             (e.g. one that only ever sees a fixed, tiny case set).
         reachability_probe_case_ids: Forwarded to ``evaluator.verify_reachable``.
+        reference_overrides: Dotted-key pins (e.g. from ``cli --set``) applied
+            to EVERY evaluation this run makes, the reference's included, and
+            merged under each candidate's own overrides. Without them the
+            reference measurement would silently re-derive its config from
+            environment and settings.json while the harness's ``reference``
+            object claims otherwise -- a pin that never reaches the measured
+            pipeline is how a campaign fabricates a baseline (issue #101,
+            caught live 2026-08-23: the sabotaged reference scored healthy-27
+            because only the bookkeeping object saw the sabotage).
 
     Returns:
         The final report: reference stats, ratchet, best iteration, iteration
@@ -518,11 +528,13 @@ def run_loop(
     if max_iterations is None and patience is None:
         raise ValueError("run_loop needs max_iterations and/or patience to guarantee termination")
 
+    reference_overrides = dict(reference_overrides or {})
+
     if verify_reachability:
         evaluator_mod.verify_reachable(evaluate, reachability_probe_case_ids)
 
-    reference_full = evaluate({}, tuple(search_set_ids))
-    reference_fast = evaluate({}, tuple(fast_tier_ids))
+    reference_full = evaluate(dict(reference_overrides or {}), tuple(search_set_ids))
+    reference_fast = evaluate(dict(reference_overrides or {}), tuple(fast_tier_ids))
     if _has_infrastructure_error(reference_full.records) or _has_infrastructure_error(
         reference_fast.records
     ):
@@ -592,8 +604,9 @@ def run_loop(
         meta = dict(getattr(proposer, "last_meta", {}))
         git_commit = ledger_mod.read_git_commit()
 
-        fast_result = evaluate(overrides, tuple(fast_tier_ids))
-
+        fast_result = evaluate(
+            {**reference_overrides, **overrides}, tuple(fast_tier_ids)
+        )
         if _has_infrastructure_error(fast_result.records):
             entry = _build_entry(
                 iteration=iteration,
@@ -632,7 +645,9 @@ def run_loop(
                     regression_baseline_iteration=recovery_baseline_iteration,
                 )
             else:
-                full_result = evaluate(overrides, tuple(search_set_ids))
+                full_result = evaluate(
+                    {**reference_overrides, **overrides}, tuple(search_set_ids)
+                )
                 last_result = full_result
 
                 if _has_infrastructure_error(full_result.records):
@@ -720,6 +735,9 @@ def run_loop(
             "objective_adjusted": reference_objective_adjusted,
             "median_latency_answered_s": reference_latency.get("answered"),
             "median_latency_retrieval_only_s": reference_latency.get("retrieval_only"),
+            # Provenance: what every measurement this run actually applied,
+            # so a pinned campaign is auditable from the report alone.
+            "overrides_applied": dict(reference_overrides),
         },
         "ratchet": ratchet,
         "best_iteration": best_iteration,
