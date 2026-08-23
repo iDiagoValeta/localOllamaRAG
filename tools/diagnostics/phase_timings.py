@@ -147,6 +147,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--factual", type=int, default=6, help="answered cases to sample")
     parser.add_argument("--retrieval-only", type=int, default=2, help="retrieval-only cases to sample")
+    parser.add_argument(
+        "--eval-dev-set",
+        action="store_true",
+        help="measure the evaluation gate's dev-set store (tests/eval/run_eval.py's "
+        "EVAL_DEV_LABEL collection) instead of the product's live store",
+    )
     args = parser.parse_args()
 
     import rag.chat_pdfs as rag
@@ -155,10 +161,19 @@ def main() -> int:
     from rag.engine import wiring
 
     config = wiring.app_config_from_runtime()
+    if args.eval_dev_set:
+        from monkeygrab.config.paths import derive_db_paths
+
+        path_db, collection_name = derive_db_paths(
+            str(ROOT / "tests" / "eval" / "dev_docs"), config.paths.data_dir
+        )
+        config = config.with_overrides(
+            **{"paths.path_db": path_db, "paths.collection_name": collection_name}
+        )
     store = wiring.vector_store(config)
     if store.count() == 0:
         print(
-            f"The active store ({config.paths.db_path}) is empty. Run the CLI or the "
+            f"The active store ({config.paths.path_db}) is empty. Run the CLI or the "
             "eval gate once to build the index; this probe measures queries, not indexing."
         )
         return 1
