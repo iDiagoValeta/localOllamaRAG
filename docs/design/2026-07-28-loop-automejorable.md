@@ -517,6 +517,32 @@ Adoptados por defecto; cualquiera es revisable.
   a 4,8 s, ambas holgadamente dentro del 20 %, mientras la recuperación se
   desplomaba. Cada bucket se compara contra su propio techo y basta con que uno
   lo incumpla para descalificar al candidato.
+
+> [!IMPORTANT]
+> **Recuperación contra referencia degradada (decisión del 2026-08-23,
+> issue #92).** El emparejamiento de regresiones contra la referencia del
+> propio run es correcto mientras la referencia sea sana; pero el criterio 5
+> arranca con una referencia saboteada a propósito, y medido en el pipeline
+> real (2026-08-22, issue #89) el sabotaje k=1 tuvo la suerte de pasar
+> `planck-sigma8-es`, caso que toda configuración sana falla. Ese pase de
+> suerte hizo que el filtro de regresión del nivel rápido rechazara a todos
+> los candidatos que restauraban el comportamiento sano: recuperar es fallar
+> de nuevo el caso con el que el sabotaje tuvo fortuna. Decisión: cuando el
+> libro de evidencias contiene un estado **comparable** (mismos modelos,
+> troceado y flags de indexado; ver `_comparable_config_view`) con objetivo
+> estrictamente mayor que la referencia actual, el arnés arranca en **modo
+> recuperación** y las dos comprobaciones de regresión se emparejan contra el
+> vector de pases de esa marca de agua histórica en vez de contra la
+> referencia degradada. Perder un caso que sólo pasó la referencia degradada
+> no es perder terreno ganado. Dos propiedades quedan fijadas: el ratchet
+> sigue arrancando en el objetivo de la referencia, así que aceptar exige
+> superarla; y la latencia sigue emparejada contra la referencia del run,
+> porque es presupuesto duro y no calidad ganada. Sin historia comparable el
+> comportamiento es exactamente el de antes: el límite queda documentado como
+> límite, no se adivina una salida. Procedencia: cada entrada puntuada
+> registra en `regression_baseline_iteration` (schema v2) contra qué iteración
+> del libro se emparejó. Implementación: `harness/loop.py`
+> (`_historical_high_water`, `_comparable_config_view`).
 - **Terminación:** presupuesto de iteraciones, o parada tras varias iteraciones
   seguidas sin superar el suelo de ruido.
 - **Comparación pareada** sobre los mismos casos, nunca entre tasas de runs
