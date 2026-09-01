@@ -38,7 +38,12 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from monkeygrab.application.context_assembly import build_context_for_model
 from monkeygrab.config.app_config import AppConfig
-from monkeygrab.domain.document_summary import DocumentSummary, SummarySection
+from monkeygrab.domain.document_summary import (
+    DocumentOutline,
+    DocumentSummary,
+    OutlineNode,
+    SummarySection,
+)
 from monkeygrab.domain.fragment import Fragment
 from monkeygrab.ports.chat_model import ChatModel
 
@@ -68,6 +73,34 @@ _SUMMARY_SYSTEM_PROMPT = (
 _FENCE_RE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
 
 _MAX_SECTIONS = 12
+
+# Asking for a nested JSON structure directly rather than markdown headings
+# with "#" levels: the nesting is what the caller wants, and reconstructing it
+# from prefix counts means re-deriving structure the model already knew and
+# threw away.
+_OUTLINE_SYSTEM_PROMPT = (
+    "You produce document outlines. You reply with a JSON array and nothing "
+    "else: no preamble, no explanation, no markdown fences. Each element is an "
+    'object with a string key "title" and an optional key "children" holding '
+    "an array of the same shape. Titles are at most ten words and contain no "
+    "prose. Nest no deeper than three levels. Describe only the structure the "
+    "provided material actually has; never invent a section it does not "
+    "contain."
+)
+
+# A model that nests without limit turns one bad reply into an outline nobody
+# can render and, before that, into unbounded recursion in the parser. Three
+# is what the prompt asks for; this is the guard for when it is ignored.
+_MAX_OUTLINE_DEPTH = 4
+_MAX_OUTLINE_NODES = 60
+
+
+class MalformedOutlineError(RuntimeError):
+    """The generator's reply could not be read as an outline.
+
+    Separate from ``MalformedSummaryError`` so a caller offering both can tell
+    which artifact failed without parsing an error message.
+    """
 
 
 class MalformedSummaryError(RuntimeError):
@@ -209,6 +242,104 @@ class Study:
             for element in _parse_sections(raw)
         )
         return DocumentSummary(sections=sections, source_document=_single_document(fragments))
+
+    def outline(
+        self,
+        fragments: Sequence[Fragment],
+        config: AppConfig,
+        *,
+        language: Optional[str] = None,
+    ) -> DocumentOutline:
+        """Build a heading tree over ``fragments``.
+
+        Args:
+            fragments: Evidence to outline, already ranked by the caller.
+            config: Read fresh on every call, as in ``summarize``.
+            language: Language for the headings. ``None`` follows the material.
+
+        Returns:
+            A ``DocumentOutline``. Empty input gives an empty outline without
+            calling the generator.
+
+        Raises:
+            MalformedOutlineError: The reply is not JSON, is not an array, or
+                describes no titled node.
+            Exception: Whatever the chat model raises (hard-fail policy).
+        """
+        if not fragments:
+            return DocumentOutline(nodes=(), source_document="")
+
+        context, _metrics = build_context_for_model(
+            list(fragments), config.flags.usar_optimizacion_contexto
+        )
+        instruction = "Outline the structure of the following material."
+        if language:
+            instruction += f" Write the headings in {language}."
+
+        raw = self._chat_model.generate(
+            f"{instruction}\n\n{context}", system=_OUTLINE_SYSTEM_PROMPT
+        )
+
+        try:
+            decoded = json.loads(_strip_fence(raw))
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise MalformedOutlineError(
+                f"generator did not return JSON: {exc}. First 200 characters: {raw[:200]!r}"
+            ) from exc
+        if not isinstance(decoded, list):
+            raise MalformedOutlineError(
+                f"expected a JSON array of nodes, got {type(decoded).__name__}"
+            )
+
+        nodes = _build_outline_nodes(decoded, depth=1, budget=[_MAX_OUTLINE_NODES])
+        if not nodes:
+            raise MalformedOutlineError(
+                f"no node carried a title ({len(decoded)} element(s) returned)"
+            )
+        return DocumentOutline(nodes=nodes, source_document=_single_document(fragments))
+
+
+def _build_outline_nodes(elements: Any, depth: int, budget: List[int]) -> Tuple[OutlineNode, ...]:
+    """Turn decoded JSON into nodes, bounded in both depth and total count.
+
+    Two bounds because they fail differently. Depth stops a model that nests
+    without end, which would otherwise recurse until the interpreter gives up.
+    The node budget stops a model that returns a thousand siblings, which
+    parses fine and produces an outline nobody can read.
+
+    Both truncate rather than raise. An outline is a navigational aid: one cut
+    off at three levels is still usable, where a summary missing a section is
+    not -- which is why this differs from ``_parse_sections`` deliberately.
+
+    Args:
+        elements: Decoded JSON, expected to be a list of dicts.
+        depth: Current nesting level, 1 at the top.
+        budget: Single-element list used as a mutable counter across the
+            recursion, decremented per node kept.
+    """
+    if not isinstance(elements, list) or depth > _MAX_OUTLINE_DEPTH:
+        return ()
+
+    nodes: List[OutlineNode] = []
+    for element in elements:
+        if budget[0] <= 0:
+            break
+        if not isinstance(element, dict):
+            continue
+        title = str(element.get("title", "")).strip()
+        if not title:
+            # A node with no title is not a heading. Its children, if any, are
+            # dropped with it: re-parenting them would invent a structure the
+            # model did not describe.
+            continue
+        budget[0] -= 1
+        nodes.append(
+            OutlineNode(
+                title=title,
+                children=_build_outline_nodes(element.get("children"), depth + 1, budget),
+            )
+        )
+    return tuple(nodes)
 
 
 def summary_to_dict(summary: DocumentSummary) -> Dict[str, Any]:
