@@ -118,7 +118,12 @@ docs/README.md             Documentation standard
 
 Ollama roles are configured via env vars; defaults are the second arg of
 `os.getenv` in `rag/chat_pdfs.py`. Precedence is environment > `settings.json`
-> module defaults. The environment wins for this run, including over a
+> module defaults. **Which models have actually been measured, on what and how
+fast, is [`docs/model-history.md`](docs/model-history.md)** — append a row
+there when you run the gate against a model, rather than deciding the next
+default from memory. It covers the fixed stack too (MinerU, jina-clip, the
+reranker), because a version change there has moved more cases than any
+generator swap this project has measured. The environment wins for this run, including over a
 choice saved in the web UI; a save does not persist that override as if the
 user had picked it (issue #79). Jina CLIP v2 and BGE Reranker v2 M3 are fixed.
 
