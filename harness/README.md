@@ -42,10 +42,12 @@ what a flag does — this is exactly the loop's job.
 ## Layout
 
 ```
+RUNBOOK.md           How to run a campaign: procedure, decision points, verdicts
 search_space.py      Declared tunables, index-time exclusions, feasibility, reachability gate metadata
 fast_tier.txt         Fixed 13-case regression filter (never declares an improvement)
 unreachable_cases.txt Cases excluded from the maximised scalar — starts empty, evidence-backed
 ledger.py              Append-only evidence ledger (JSON per iteration + index.jsonl)
+environment.py          The installed stack an iteration measured on (#107)
 proposers.py            GridProposer (deterministic control) + LlmProposer (Ollama-backed)
 evaluator.py            Case-set selection, objective/latency math, the real-evaluator adapter
 loop.py                The ratchet, the latency constraint, termination
