@@ -780,10 +780,62 @@ def run_all_cases(
     pending: List[Dict[str, Any]] = []
 
     print("[phase 1/2] retrieval for every case (embedder + reranker on GPU)", flush=True)
+    # One corpus at a time, releasing each before the next is touched (issue
+    # #123). Interleaving them by case order kept both stacks resident, and
+    # each jina-clip worker costs ~2.8 GiB: on an 8 GB card the second one
+    # could not start, so every blind-set case came back
+    # infrastructure_error and the whole run was discarded -- after paying the
+    # full indexing time. The workers start lazily on first use, so grouping
+    # is enough; nothing needs to be built later than it already is.
+    #
+    # Execution order changes, result order does not: records are restored to
+    # the caller's case order below, so an artefact from this build is
+    # comparable with one from before it.
+    for corpus_source, retrieve, evidence in (
+        ("corpus", retrieve_dev, evidence_dev),
+        ("arxiv", retrieve_blind, evidence_blind),
+    ):
+        corpus_cases = [c for c in cases if c["source"] == corpus_source]
+        if not corpus_cases or retrieve is None:
+            continue
+        _run_retrieval_for_corpus(corpus_cases, retrieve, evidence, records, pending)
+        # Freed here rather than after both corpora, so the second corpus's
+        # worker starts on a card the first one is no longer holding.
+        _release_gpu_models(retrieve)
+
+    _restore_case_order(records, pending, cases)
+
+    print(f"\n[phase 2/2] generation for {len(pending)} case(s) (Ollama alone on GPU)", flush=True)
+    with _generation_keep_alive(set(models) | {AUX_MODEL}):
+        for item in pending:
+            records.extend(
+                run_factual_case(rag, item["case"], item["fragments"], models, item["elapsed"])
+            )
+    return records
+
+
+def _restore_case_order(records, pending, cases) -> None:
+    """Sort both lists back into the order ``cases`` came in.
+
+    Phase 1 now walks one corpus at a time (issue #123), which is a change to
+    execution order only. Reports aggregate rather than index, so nothing
+    depends on this -- but an artefact whose records appear in a different
+    order than an earlier one invites a reader to diff them and find a
+    difference that is not there.
+    """
+    position = {case["id"]: index for index, case in enumerate(cases)}
+    records.sort(key=lambda record: position.get(record["id"], len(position)))
+    pending.sort(key=lambda item: position.get(item["case"]["id"], len(position)))
+
+
+def _run_retrieval_for_corpus(cases, retrieve, evidence, records, pending) -> None:
+    """Retrieve every case of one corpus, appending to ``records``/``pending``.
+
+    Extracted from ``run_all_cases``'s loop body unchanged (issue #123); the
+    only difference is that the caller now hands it one corpus's cases and its
+    single stack, instead of switching stacks per case.
+    """
     for case in cases:
-        is_dev = case["source"] == "corpus"
-        retrieve = retrieve_dev if is_dev else retrieve_blind
-        evidence = evidence_dev if is_dev else evidence_blind
         t0 = time.perf_counter()
         try:
             result = retrieve.run(case["question"])
@@ -831,16 +883,6 @@ def run_all_cases(
                 f"  [retrieved] {case['id']} ({elapsed:.1f}s, {len(fragments)} fragments)",
                 flush=True,
             )
-
-    _release_gpu_models(retrieve_dev, retrieve_blind)
-
-    print(f"\n[phase 2/2] generation for {len(pending)} case(s) (Ollama alone on GPU)", flush=True)
-    with _generation_keep_alive(set(models) | {AUX_MODEL}):
-        for item in pending:
-            records.extend(
-                run_factual_case(rag, item["case"], item["fragments"], models, item["elapsed"])
-            )
-    return records
 
 
 # REPORTING
