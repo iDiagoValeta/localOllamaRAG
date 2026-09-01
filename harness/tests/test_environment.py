@@ -161,3 +161,80 @@ class TestComparison:
     def test_describing_a_match_yields_nothing(self):
         one = {"schema": 1, "packages": {"isolated:mineru": "2.6.3"}}
         assert environment.describe_difference(one, dict(one)) == []
+
+
+class TestAnEnvironmentNobodyMeasured:
+    """An entry that measured ONE environment must not verify against one that
+    measured both (issue #132).
+
+    ``compare`` skips a key either side reports as ``None``, which is right for
+    a package genuinely absent from one environment and wrong when an entire
+    environment went unmeasured. A campaign launched with the system
+    interpreter instead of ``.venv/bin/python`` records every ``product:*`` key
+    as ``None`` -- it says nothing at all about the stack that decides
+    retrieval and generation -- and used to compare as ``match`` against an
+    entry that does. That is a false positive of comparability, which is the
+    failure #107 exists to remove.
+    """
+
+    _BOTH = {
+        "schema": 1,
+        "packages": {
+            "isolated:mineru": "3.4.5",
+            "product:torch": "2.13.0",
+            "product:faiss-cpu": "1.15.0",
+        },
+    }
+    _ISOLATED_ONLY = {
+        "schema": 1,
+        "packages": {
+            "isolated:mineru": "3.4.5",
+            "product:torch": None,
+            "product:faiss-cpu": None,
+        },
+    }
+
+    def test_an_entirely_unmeasured_environment_is_unknown_not_a_match(self):
+        assert environment.compare(self._BOTH, self._ISOLATED_ONLY) == environment.UNKNOWN
+
+    def test_the_answer_does_not_depend_on_argument_order(self):
+        assert environment.compare(self._ISOLATED_ONLY, self._BOTH) == environment.UNKNOWN
+
+    def test_two_sides_that_both_skipped_the_same_environment_still_compare(self):
+        """Neither measured the product stack, so neither claims anything about
+        it. What they did both measure is comparable on its own terms."""
+        other = {
+            "schema": 1,
+            "packages": {
+                "isolated:mineru": "3.4.5",
+                "product:torch": None,
+                "product:faiss-cpu": None,
+            },
+        }
+        assert environment.compare(self._ISOLATED_ONLY, other) == environment.MATCH
+
+    def test_a_known_difference_still_wins_over_the_unmeasured_environment(self):
+        """DIFFERS is a stronger answer than UNKNOWN: a stack that provably
+        moved is not made uncertain by a second environment nobody read."""
+        drifted = {
+            "schema": 1,
+            "packages": {
+                "isolated:mineru": "2.6.3",
+                "product:torch": None,
+                "product:faiss-cpu": None,
+            },
+        }
+        assert environment.compare(self._BOTH, drifted) == environment.DIFFERS
+
+    def test_one_missing_package_is_still_just_a_missing_package(self):
+        """The narrow skip this module always had must survive: an environment
+        with SOME versions is measured, whatever it is missing."""
+        almost = {
+            "schema": 1,
+            "packages": {
+                "isolated:mineru": "3.4.5",
+                "product:torch": "2.13.0",
+                "product:faiss-cpu": None,
+            },
+        }
+        assert environment.compare(self._BOTH, almost) == environment.MATCH

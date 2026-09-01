@@ -32,9 +32,18 @@ Stop at the first one that fails. Each is cheap; the campaign is not. Check 0
 and check 6 both exist because a real run on 2026-09-01 skipped them and paid
 28.7 minutes to find out.
 
+> [!IMPORTANT]
+> **Run every command below with `.venv/bin/python`, not a bare `python`.**
+> `--status` works under a bare interpreter and prints a confident-looking
+> line, but the fingerprint it computes sees only the isolated venv — the
+> product stack shows as unmeasured, and an entry written that way describes
+> nothing about retrieval or generation (issue #132). The comparison now
+> answers `unknown` rather than `match` in that case, so the mistake is
+> visible instead of silent, but the entry is still worth nothing.
+
 ```bash
 # 0. Can this machine run anything at all? Installs nothing.
-python tools/setup_environments.py --check
+.venv/bin/python tools/setup_environments.py --check
 ```
 
 Six components, each reported separately: both interpreters, CUDA visible to
@@ -45,7 +54,7 @@ attention (see `tools/setup_environments.py`).
 
 ```bash
 # 1. What does the ledger hold, and how much can this launch pair against?
-python -m harness.cli --status
+.venv/bin/python -m harness.cli --status
 ```
 
 This is the whole precondition check for the ledger, and it evaluates
