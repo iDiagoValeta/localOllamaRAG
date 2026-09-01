@@ -6,6 +6,11 @@ candidate so a run can be reconstructed. Implements
 [`docs/design/2026-07-28-loop-automejorable.md`](../docs/design/2026-07-28-loop-automejorable.md)
 §4 ("Arquitectura del arnés").
 
+> [!TIP]
+> **About to run a campaign rather than change the harness?** Read
+> [`RUNBOOK.md`](RUNBOOK.md) instead: the procedure, the decision points and
+> what each verdict means, without the reasoning this file exists to carry.
+
 > [!CAUTION]
 > The harness may **read and run** the evaluation gate under `tests/eval/`.
 > It never redefines how the evaluation scores. `tests/eval/grade.py`,

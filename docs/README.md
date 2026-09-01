@@ -7,6 +7,7 @@
 | `rag/README.md` | What `rag/` is today and where the rest of the docs live. |
 | `AGENTS.md` (root) | Operating contract for any agent or human working in this repo; `.claude/CLAUDE.md` and `.codex/AGENTS.md` are pointers to it and must stay pointers. |
 | `CONTRIBUTING.md` | How to branch, open PRs and issues, what a change must carry, how issues get closed. |
+| `harness/RUNBOOK.md` | An agent or person about to run a loop campaign: the procedure, the decision points, what each verdict means. Procedure only — the reasoning lives in `harness/README.md`. |
 | `docs/design/*.md` | Current standing design decisions and their rationale; update them when architecture changes. |
 | Directory-local `README.md` | Only where a directory's purpose isn't obvious from its code — not one per folder by default. |
 
