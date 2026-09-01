@@ -1,0 +1,107 @@
+{
+  "_comment": [
+    "The declared label set for this repository -- one source, so CONTRIBUTING.md's",
+    "issue standard cannot cite a label that does not exist (issue #109: it cited",
+    "`docs`, which is really `documentation`, and `loop`, which had never been",
+    "created, while omitting `performance` and `research`, which were in use).",
+    "",
+    "`kind` decides what the standard requires:",
+    "  type            -- an issue carries exactly one; this is the 'one label",
+    "                     minimum' in CONTRIBUTING.md.",
+    "  modifier        -- optional, stacks on a type label.",
+    "  github-default  -- shipped by GitHub when the repository was created and",
+    "                     kept only so this file is a complete inventory. Not part",
+    "                     of the standard; nothing here is expected to use them.",
+    "",
+    "Colours are hex without the leading '#', matching `gh label list --json color`.",
+    "tests/unit/test_contribution_standard_drift.py checks the documentation",
+    "against this file; .github/workflows/labels.yml checks this file against the",
+    "labels GitHub actually holds."
+  ],
+  "labels": [
+    {
+      "name": "bug",
+      "color": "d73a4a",
+      "description": "Something isn't working",
+      "kind": "type"
+    },
+    {
+      "name": "enhancement",
+      "color": "a2eeef",
+      "description": "New feature or request",
+      "kind": "type"
+    },
+    {
+      "name": "documentation",
+      "color": "0075ca",
+      "description": "Improvements or additions to documentation",
+      "kind": "type"
+    },
+    {
+      "name": "eval",
+      "color": "1d76db",
+      "description": "Gold cases, grading and the measurement gate",
+      "kind": "type"
+    },
+    {
+      "name": "loop",
+      "color": "0052cc",
+      "description": "The self-improvement harness: search, ledger, campaigns",
+      "kind": "type"
+    },
+    {
+      "name": "performance",
+      "color": "0e8a16",
+      "description": "Latency, throughput and resource use",
+      "kind": "type"
+    },
+    {
+      "name": "research",
+      "color": "5319e7",
+      "description": "Exploration with a written conclusion",
+      "kind": "type"
+    },
+    {
+      "name": "cleanup",
+      "color": "fef2c0",
+      "description": "Removing dead weight from the repo",
+      "kind": "type"
+    },
+    {
+      "name": "wontfix",
+      "color": "ffffff",
+      "description": "This will not be worked on",
+      "kind": "modifier"
+    },
+    {
+      "name": "duplicate",
+      "color": "cfd3d7",
+      "description": "This issue or pull request already exists",
+      "kind": "github-default"
+    },
+    {
+      "name": "good first issue",
+      "color": "7057ff",
+      "description": "Good for newcomers",
+      "kind": "github-default"
+    },
+    {
+      "name": "help wanted",
+      "color": "008672",
+      "description": "Extra attention is needed",
+      "kind": "github-default"
+    },
+    {
+      "name": "invalid",
+      "color": "e4e669",
+      "description": "This doesn't seem right",
+      "kind": "github-default"
+    },
+    {
+      "name": "question",
+      "color": "d876e3",
+      "description": "Further information is requested",
+      "kind": "github-default"
+    }
+  ]
+}

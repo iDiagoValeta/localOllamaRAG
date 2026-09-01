@@ -1,0 +1,81 @@
+name: Labels
+
+# The half of the contribution standard a unit test cannot see.
+#
+# tests/unit/test_contribution_standard_drift.py checks CONTRIBUTING.md and the
+# issue templates against .github/labels.json -- two files in the working tree,
+# no network, so it runs in the fast gate. But labels.json is a claim ABOUT
+# GitHub, and the drift that opened issue #109 was exactly that kind: the docs
+# named `docs` and `loop`, and neither existed on the repository. Declaring them
+# in a file would have moved the lie one step, not removed it.
+#
+# So this job asks GitHub. Verification only -- it never creates, edits or
+# deletes a label. Adding one stays three deliberate steps (create it on GitHub,
+# declare it here, document it in CONTRIBUTING.md); a workflow that silently
+# reconciled the difference would decide which side was right, and it is never
+# in a position to know.
+
+on:
+  pull_request:
+    paths:
+      - .github/labels.json
+      - .github/workflows/labels.yml
+  push:
+    branches: [main]
+    paths:
+      - .github/labels.json
+      - .github/workflows/labels.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  declared-matches-github:
+    name: Declared labels match the repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare .github/labels.json against `gh label list`
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label list --limit 200 --json name,color,description > /tmp/actual.json
+          python3 - <<'PY'
+          import json
+          import sys
+
+          declared = {
+              entry["name"]: entry
+              for entry in json.load(open(".github/labels.json"))["labels"]
+          }
+          actual = {entry["name"]: entry for entry in json.load(open("/tmp/actual.json"))}
+
+          problems = []
+          for name in sorted(set(declared) - set(actual)):
+              problems.append(
+                  f"declared but absent from GitHub: {name!r} -- create it "
+                  f"(`gh label create {name!r} --color {declared[name]['color']} "
+                  f"--description {declared[name]['description']!r}`) or drop the declaration"
+              )
+          for name in sorted(set(actual) - set(declared)):
+              problems.append(
+                  f"exists on GitHub but undeclared: {name!r} -- add it to "
+                  ".github/labels.json (and to CONTRIBUTING.md's table if it is a type label)"
+              )
+          for name in sorted(set(declared) & set(actual)):
+              for field in ("color", "description"):
+                  if declared[name][field] != actual[name][field]:
+                      problems.append(
+                          f"{name!r} {field}: declared {declared[name][field]!r}, "
+                          f"GitHub has {actual[name][field]!r}"
+                      )
+
+          if problems:
+              print("Label declaration and repository disagree:\n")
+              for problem in problems:
+                  print(f"  - {problem}")
+              sys.exit(1)
+          print(f"{len(declared)} labels declared, all matching the repository.")
+          PY
