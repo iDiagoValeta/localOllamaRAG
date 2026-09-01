@@ -65,6 +65,20 @@ logger = logging.getLogger(__name__)
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(_THIS_DIR))))
 
+# Forwarded to the MinerU CLI as MINERU_MODEL_SOURCE (issue #118). "local"
+# was the default and means two different things across MinerU's major
+# versions: in 2.x it reused the already-downloaded HuggingFace cache, and in
+# 3.x it means "read paths from a local models config file" and dereferences
+# None without one -- so `pip install mineru[core]` followed by a first run
+# extracted nothing at all, which is not a default, it is a trap. A default
+# has to work on the installation the project's own instructions produce.
+#
+# "huggingface" downloads the models once and reuses them afterwards. An
+# air-gapped install sets MINERU_MODEL_SOURCE=local explicitly, alongside the
+# config file 3.x needs -- an opt-in for a deliberate setup rather than the
+# state everyone lands in by accident.
+_DEFAULT_MODEL_SOURCE = "huggingface"
+
 # Bumped whenever SECTION 2's block-to-text/image mapping changes shape.
 # Folded into the cache key so every cached extraction from a previous
 # version of this adapter is treated as a miss instead of being replayed
@@ -447,7 +461,7 @@ class MineruExtractor:
         self,
         mineru_bin: Optional[str] = None,
         cache_dir: Optional[str] = None,
-        model_source: str = "local",
+        model_source: str = _DEFAULT_MODEL_SOURCE,
         timeout_seconds: int = 1800,
     ):
         """Args:
@@ -518,7 +532,7 @@ class MineruImageExtractor:
         self,
         mineru_bin: Optional[str] = None,
         cache_dir: Optional[str] = None,
-        model_source: str = "local",
+        model_source: str = _DEFAULT_MODEL_SOURCE,
         timeout_seconds: int = 1800,
     ):
         """Args: same as ``MineruExtractor.__init__``."""

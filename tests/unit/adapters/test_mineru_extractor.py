@@ -105,7 +105,7 @@ def test_extract_builds_the_correct_mineru_command(monkeypatch, tmp_path):
     assert Path(cmd[cmd.index("-o") + 1]).parent == cache_dir
 
 
-def test_model_source_defaults_to_local(monkeypatch, tmp_path):
+def test_model_source_defaults_to_a_source_that_works_on_a_fresh_install(monkeypatch, tmp_path):
     pdf = _make_pdf(tmp_path)
     bin_path = _make_bin(tmp_path)
     seen_env = {}
@@ -120,7 +120,13 @@ def test_model_source_defaults_to_local(monkeypatch, tmp_path):
 
     MineruExtractor(mineru_bin=str(bin_path), cache_dir=str(tmp_path / "cache")).extract(str(pdf))
 
-    assert seen_env["MINERU_MODEL_SOURCE"] == "local"
+    # Changed from "local" in issue #118, deliberately. "local" means two
+    # different things across MinerU's major versions: in 2.x it reused the
+    # already-downloaded HuggingFace cache, and in 3.x it means "read a local
+    # models config file" and crashes without one -- so the shipped default
+    # extracted nothing on the installation `pip install mineru[core]`
+    # produces today. An air-gapped setup opts back in explicitly.
+    assert seen_env["MINERU_MODEL_SOURCE"] == "huggingface"
 
 
 def test_model_source_is_configurable(monkeypatch, tmp_path):
