@@ -112,7 +112,22 @@ nvidia-smi --query-compute-apps=pid,used_memory --format=csv
 >
 > Do not run anything else on the card during a campaign, the jina-clip probe
 > in check 4 included. One probe alongside a live run is enough to take it
-> down.
+> down. Two campaigns at once will take each other down -- check `pgrep -f
+> harness.cli` before launching, since a backgrounded one leaves no obvious
+> trace in the terminal.
+
+> [!TIP]
+> **A campaign fits on 8 GB even though a full gate run does not.** The
+> harness only ever asks for search-set ids (`source: corpus`), and
+> `evaluate()` builds a corpus's stack only when the filtered case list
+> needs it -- so a campaign builds one embedder where a full `run_eval.py`
+> builds two, and two do not fit (#123). Measured: 32 cases, zero
+> `infrastructure_error`, ~6.6 of 7.6 GiB resident.
+>
+> The practical consequence, plainly: **on a card this size you can run the
+> loop but not the gate.** A candidate the loop accepts still needs the full
+> gate before anyone believes it, and until #123 is resolved that has to
+> happen somewhere with more VRAM.
 
 > [!NOTE]
 > A dry-run given `--ledger-dir <a ledger holding anything not marked demo>`
