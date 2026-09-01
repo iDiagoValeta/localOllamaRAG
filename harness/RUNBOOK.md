@@ -26,11 +26,25 @@ finds something, a human decides what happens to it.
 
 ---
 
-## 1. Before launching: five checks, in order
+## 1. Before launching: six checks, in order
 
-Stop at the first one that fails. Each is cheap; the campaign is not.
+Stop at the first one that fails. Each is cheap; the campaign is not. Check 0
+and check 6 both exist because a real run on 2026-09-01 skipped them and paid
+28.7 minutes to find out.
 
 ```bash
+# 0. Can this machine run anything at all? Installs nothing.
+python tools/setup_environments.py --check
+```
+
+Six components, each reported separately: both interpreters, CUDA visible to
+the isolated one, the MinerU binary, the jina-clip worker actually loading,
+and which configured Ollama models are missing. A `FAIL` here means no
+campaign is possible; a `warn` means something it does not build needs
+attention (see `tools/setup_environments.py`).
+
+```bash
+# 1. What does the ledger hold, and how much can this launch pair against?
 python -m harness.cli --status
 ```
 
@@ -52,7 +66,7 @@ Read it top to bottom:
 | `environment` | The installed stack, per environment. `isolated:` builds the index, `product:` decides retrieval and generation. | If `isolated:mineru` is missing, `.venv-mineru` is not installed and indexing cannot run. |
 | `ledger:` | What prior history exists. | See §2. |
 
-The remaining four checks:
+The remaining checks:
 
 ```bash
 # 2. The fast gate is green, so a failure later is the campaign's, not the tree's.
@@ -70,7 +84,26 @@ echo '{"id": 1, "op": "text", "text": "probe"}' \
 
 # 5. The wiring runs end to end, with no GPU and no models, into a temp dir.
 python -m harness.cli --dry-run --max-iterations 3
+
+# 6. Is there room on the card? Anything else holding VRAM will end the run.
+nvidia-smi --query-gpu=memory.used,memory.total --format=csv
+nvidia-smi --query-compute-apps=pid,used_memory --format=csv
 ```
+
+> [!WARNING]
+> **On an 8 GB card, set `OLLAMA_KEEP_ALIVE=0` for the run.** Phase 1 holds
+> two jina-clip workers (one per corpus, ~2.8 GiB each) plus the reranker;
+> with a generator also resident, the second worker cannot start and every
+> blind-set case comes back `infrastructure_error`. Measured 2026-09-01: 19 of
+> 51 cases unevaluable after 28.7 minutes, the whole run discarded
+> (`[gate] INCONCLUSIVE ... this run measured nothing`). Issue #123 has the
+> allocator's own accounting; the keep-alive is a workaround, not a fix, and
+> it makes the run's timings incomparable with ledger history that did not use
+> it.
+>
+> Do not run anything else on the card during a campaign, the jina-clip probe
+> in check 4 included. One probe alongside a live run is enough to take it
+> down.
 
 > [!NOTE]
 > A dry-run given `--ledger-dir <a ledger holding anything not marked demo>`
@@ -153,11 +186,22 @@ scored healthy.
 Always give `--max-iterations`, `--patience`, or both. The loop refuses to
 start without at least one; it is what guarantees termination.
 
-**Budget.** A full search-set evaluation was ~20 min at 2026-08-19 rates on
-the reference GPU; the fast tier is ~4 min. A candidate rejected at the fast
-tier costs the fast tier only. Expect a night to fit many candidates, not
-three or four — the design doc's original estimate was ~6x too pessimistic
-and has been corrected.
+**Budget, and whose machine the number came from.** Quoting one GPU's timings
+as universal is how someone budgets a night for something that takes seven.
+
+| | reference GPU (2026-08-19) | RTX 4060 Laptop 8 GB (2026-09-01) |
+|---|---|---|
+| retrieval-only case | ~4.1 s | **~30 s** |
+| answered case | ~28.5 s | ~9-11 s |
+| full search-set evaluation | ~20 min | ~25 min (phase 1 dominates) |
+| fast tier (13 cases) | ~4 min | not measured here |
+
+The 4060 figures are with `OLLAMA_KEEP_ALIVE=0` (see the warning above), which
+is part of why retrieval is slower and generation is not: phase 2 runs with
+the card to itself either way. A candidate rejected at the fast tier costs the
+fast tier only. A night still fits many candidates on either machine — the
+design doc's original estimate was ~6x too pessimistic and has been
+corrected — but size the night from the row that matches your card.
 
 ---
 
