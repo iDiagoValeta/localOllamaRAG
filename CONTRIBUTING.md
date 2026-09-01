@@ -72,13 +72,55 @@ An issue exists to be closable with evidence:
 - **Evidence over opinion.** Measurements, run artifacts and logs beat design
   taste. Cite local artifacts explicitly as local (`tests/eval/runs/` is
   gitignored — cited, not shipped).
-- **One label minimum**: `bug`, `enhancement`, `eval`, `docs`, `cleanup`,
-  plus `loop` for anything touching the self-improvement harness.
+- **One type label minimum.** Pick the one that says what the issue *is*;
+  stack a modifier only if it adds something.
+
+  <!-- labels:begin -->
+  <!-- Declared in .github/labels.json; both lists are checked against it by
+       tests/unit/test_contribution_standard_drift.py, so a label named here
+       and missing there (or the reverse) is a red test, not a discovery
+       someone makes at `gh issue create` time. -->
+
+  | Type label | Use it when |
+  |---|---|
+  | `bug` | The shipped product does something wrong. |
+  | `enhancement` | A capability or behaviour change the product does not have. |
+  | `eval` | Gold cases, grading, the measurement gate itself. |
+  | `loop` | The self-improvement harness: search space, ledger, campaigns. |
+  | `performance` | Latency, throughput or resource use is the subject. |
+  | `research` | An exploration whose deliverable is a written conclusion. |
+  | `documentation` | The docs are wrong, missing or contradict the code. |
+  | `cleanup` | Removing dead weight; no behaviour change intended. |
+
+  Modifier: `wontfix`, applied when closing with the reasoning, never instead
+  of it.
+  <!-- labels:end -->
+
+  `eval` and `loop` are not synonyms. `eval` is the measurement — cases,
+  grading, the gate's own correctness. `loop` is the optimiser that consumes
+  it. An issue about a case the grader scores wrong is `eval`; an issue about
+  a campaign pairing against the wrong baseline is `loop`; one that is both
+  carries both.
 - **Closing comment carries the proof**: the numbers, the merged PRs, or the
   reasoned decision (including "won't do", with the reasoning). An issue
   closed without evidence will be reopened.
 - Design decisions that change product architecture or the loop get a dated
   block in the relevant `docs/design/*.md` **before** code moves.
+
+### Where the standard is enforced, not just written
+
+Three checks, because a written convention drifted for months once already
+(`docs` and `loop` were named here while neither existed on GitHub, issue
+#109):
+
+| Check | What it holds | Runs in |
+|---|---|---|
+| `tests/unit/test_contribution_standard_drift.py` | This document and the issue templates name only declared labels, and every type label is documented here | fast gate, `architecture` job |
+| `.github/workflows/labels.yml` | `.github/labels.json` matches the labels GitHub actually holds | on changes to that file, and on demand |
+| `.github/ISSUE_TEMPLATE/`, `blank_issues_enabled: false` | Every new issue starts from a template | GitHub itself |
+
+Adding a label is therefore three edits and no ambiguity: create it on
+GitHub, declare it in `.github/labels.json`, name it in the table above.
 
 ## Protected zones (owner agreement required)
 
