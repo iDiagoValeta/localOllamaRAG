@@ -228,7 +228,16 @@ MinerU and Jina CLIP v2 do not run in that environment: their dependencies
 collide with the product's, so both are installed together into one isolated
 interpreter at `.venv-mineru/Scripts/python.exe` (Windows) or
 `.venv-mineru/bin/python` (Linux/Mac), at the project root, following each
-project's own install instructions. That interpreter needs a CUDA GPU: Jina
+project's own install instructions.
+
+> [!IMPORTANT]
+> **MinerU 3.x needs `MINERU_MODEL_SOURCE=huggingface` on a first run.** The
+> default, `local`, meant "reuse the already-downloaded HuggingFace cache" in
+> 2.x; in 3.x it means "read paths from a local models config file" and fails
+> without one, so nothing indexes (issue #118). Set it once so MinerU
+> downloads its models; the default works from then on. MinerU also names its
+> output directory after the backend that ran (`hybrid_auto/` rather than
+> 2.x's `auto/`) — the adapter finds it either way. That interpreter needs a CUDA GPU: Jina
 CLIP v2 can run on CPU (that is how the roughly 100 seconds per document
 figure was measured, impractical for indexing), but this project's worker
 refuses to start it there. That is the same "no silent fallbacks" policy

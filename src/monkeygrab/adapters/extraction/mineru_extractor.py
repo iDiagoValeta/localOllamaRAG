@@ -140,29 +140,71 @@ def _cache_key(pdf_path: Path, mineru_bin: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
+def _find_output_dir(dest: Path, pdf_stem: str) -> Path:
+    """The directory holding this extraction's Markdown, whatever it is called.
+
+    MinerU nests its output one level deeper than the ``-o`` directory it is
+    given. 2.x always named that level ``auto/``; 3.x names it after the
+    backend that ran -- ``hybrid_auto/``, ``vlm_auto/``, ``pipeline_auto/`` --
+    so the hardcoded name meant a fresh install extracted a PDF successfully
+    and had the result rejected (issue #118).
+
+    The directory is therefore located by what it CONTAINS (``<stem>.md``)
+    rather than by its name: no version detection, no list of backend names to
+    keep current as MinerU adds them, and 2.x's ``auto/`` keeps working
+    untouched.
+
+    Raises:
+        RuntimeError: No candidate, or more than one. Two output directories
+            side by side -- a stale one from an earlier run next to a fresh
+            one -- is ambiguous, and picking whichever sorted first would
+            index a mixture of two extractions while reporting one. That is
+            the failure this adapter's no-silent-fallback policy exists to
+            prevent, so it is a hard failure rather than a heuristic.
+    """
+    parent = dest / pdf_stem
+    candidates = (
+        sorted(child for child in parent.iterdir() if (child / f"{pdf_stem}.md").is_file())
+        if parent.is_dir()
+        else []
+    )
+
+    if not candidates:
+        raise RuntimeError(
+            f"MinerU produced no output directory containing {pdf_stem}.md under {parent}. "
+            "Check the CLI's own stderr/stdout for the real cause -- with MinerU 3.x, "
+            "MINERU_MODEL_SOURCE=local requires a local models config file and crashes "
+            "without one; MINERU_MODEL_SOURCE=huggingface downloads them instead "
+            "(issue #118)."
+        )
+    if len(candidates) > 1:
+        names = ", ".join(child.name for child in candidates)
+        raise RuntimeError(
+            f"MinerU left more than one output directory under {parent}: {names}. "
+            "This adapter will not guess which extraction is current -- delete the "
+            "stale one (or clear the extraction cache) and re-run."
+        )
+    return candidates[0]
+
+
 def _validate_output(dest: Path, pdf_stem: str) -> Tuple[Path, Path]:
     """Locate and sanity-check MinerU's output inside ``dest``.
 
-    MinerU nests its own output one level deeper than the ``-o`` directory it
-    is given: ``<dest>/<pdf_stem>/auto/<pdf_stem>.md`` plus a sibling
-    ``*_content_list.json`` with the structured block list this adapter
-    parses (SECTION 2).
+    The output directory is found by ``_find_output_dir`` (its name depends on
+    the MinerU version and backend); this checks that what is inside it is
+    usable -- the Markdown and the sibling ``*_content_list.json`` carrying
+    the structured block list this adapter parses (SECTION 2).
 
     Returns:
         ``(md_path, content_list_path)``.
 
     Raises:
-        RuntimeError: If the ``auto/`` directory, the Markdown file or the
+        RuntimeError: If the output directory, the Markdown file or the
             content-list JSON is missing, or the Markdown is empty --
             the three "MinerU silently produced nothing usable" failure
             modes this adapter must never paper over (see module docstring).
     """
-    auto_dir = dest / pdf_stem / "auto"
-    if not auto_dir.is_dir():
-        raise RuntimeError(
-            f"MinerU produced no output directory (expected {auto_dir}). "
-            "Check the CLI's own stderr/stdout for the real cause."
-        )
+    auto_dir = _find_output_dir(dest, pdf_stem)
 
     md_path = auto_dir / f"{pdf_stem}.md"
     if not md_path.is_file() or not md_path.read_text(encoding="utf-8").strip():
