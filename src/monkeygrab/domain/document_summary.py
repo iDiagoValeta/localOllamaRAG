@@ -91,3 +91,47 @@ class DocumentOutline:
     @property
     def is_empty(self) -> bool:
         return not self.nodes
+
+
+@dataclasses.dataclass(frozen=True)
+class QuizQuestion:
+    """One multiple-choice question, with the evidence its answer rests on.
+
+    Attributes:
+        prompt: The question text.
+        options: Answer choices, in the order they are shown. Order is part
+            of the artifact: ``correct_index`` points into it, so a caller
+            that reorders them silently invalidates the key.
+        correct_index: Position in ``options`` of the correct choice.
+        source_pages: Pages the question was written from, ascending and
+            deduplicated -- the same contract as ``SummarySection``, so a
+            reader can go and check the claim the question tests.
+    """
+
+    prompt: str
+    options: Tuple[str, ...]
+    correct_index: int
+    source_pages: Tuple[int, ...] = ()
+
+    @property
+    def correct_option(self) -> str:
+        """The text of the correct choice."""
+        return self.options[self.correct_index]
+
+
+@dataclasses.dataclass(frozen=True)
+class Quiz:
+    """A set of questions over one retrieval.
+
+    Attributes:
+        questions: In the order the generator produced them.
+        source_document: As in ``DocumentSummary`` -- "" when the evidence
+            spans more than one document.
+    """
+
+    questions: Tuple[QuizQuestion, ...]
+    source_document: str = ""
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.questions
