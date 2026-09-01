@@ -104,6 +104,13 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
                              "(criterion 7). Skips the search loop. Needs --ledger-dir "
                              "pointing at the ledger that holds that entry."
                          ))
+    parser.add_argument("--status", action="store_true",
+                         help=(
+                             "Print what the ledger holds and how much of it this launch "
+                             "could pair against, evaluate nothing, exit 0. Reads the same "
+                             "ledger the run would (--ledger-dir), under the same reference "
+                             "config (--set is honoured)."
+                         ))
     parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                          help=(
                              "Pin a reference-config field for this campaign (repeatable), "
@@ -160,6 +167,106 @@ def format_comparability_lines(comparability: Dict[str, Any]) -> list:
     for reason in comparability["incomparable_reasons"]:
         lines.append(f"  WARNING recovery-mode history mismatch -- {reason}")
     return lines
+
+
+def format_ledger_summary(entries: Sequence[ledger_mod.LedgerEntry]) -> list:
+    """What a ledger holds, for an operator deciding whether to launch.
+
+    Answers the questions the per-entry JSONs make expensive: how far the
+    history goes, what it decided, how much of it predates the stack
+    fingerprint, and what the last iteration did. Comparability is NOT
+    answered here -- that depends on this launch's config and stack, and
+    ``format_comparability_lines`` is the one place that decides it.
+
+    Args:
+        entries: Ledger history, oldest first (``ledger.read_history``).
+
+    Returns:
+        Lines to print, in order. A single line when the ledger is empty.
+    """
+    if not entries:
+        return ["ledger: empty -- no prior campaign has written here"]
+
+    verdicts: Dict[str, int] = {}
+    for entry in entries:
+        verdicts[entry.verdict] = verdicts.get(entry.verdict, 0) + 1
+    by_verdict = ", ".join(f"{name} {count}" for name, count in sorted(verdicts.items()))
+
+    latest = entries[-1]
+    search_set = [e for e in entries if e.evaluated_case_set == "search_set"]
+    best = max(search_set, key=lambda e: e.objective_adjusted, default=None)
+    # Entries predating schema v3 carry no stack fingerprint at all, so a
+    # count of them is a count of how much of this history can never be
+    # verified against the current stack (#107) -- the number that says
+    # whether a refresh campaign is what the ledger needs.
+    without_fingerprint = sum(1 for e in entries if e.environment_fingerprint is None)
+
+    lines = [
+        f"ledger: {len(entries)} entry(ies), iterations "
+        f"{entries[0].iteration}-{latest.iteration} ({by_verdict})",
+        f"  last: iteration {latest.iteration} {latest.verdict} "
+        f"on the {latest.evaluated_case_set} -- {latest.reason}",
+    ]
+    if best is not None:
+        lines.append(
+            f"  best search-set objective in this ledger: {best.objective_adjusted} "
+            f"(iteration {best.iteration}) -- comparability decides whether this launch can use it"
+        )
+    if without_fingerprint:
+        lines.append(
+            f"  {without_fingerprint} entry(ies) carry no stack fingerprint "
+            "(written before ledger schema v3) -- their stack can never be verified (#107)"
+        )
+    return lines
+
+
+def _run_status(reference, ledger_dir: Path) -> int:
+    """Report the ledger without evaluating anything (issue #114).
+
+    The launch line was previously reachable only from a real campaign, which
+    pays the reference measurement (~20 min) before printing it, or from
+    ``--dry-run``, whose demo evaluator writes a partial ``effective_config``
+    that can never match a real ``AppConfig`` -- so it reported 0 comparable
+    states whatever the ledger held. An agent deciding whether to launch
+    needs the answer before either.
+
+    Deliberately reuses ``format_comparability_lines``: what ``--status``
+    reports and what a campaign pairs against must not come from two
+    readings that can drift apart.
+    """
+    launch_environment = environment_mod.environment_fingerprint()
+    print(f"ledger dir: {ledger_dir}")
+    # The model roles are half of what decides comparability, and the half a
+    # settings.json change moves without anyone noticing -- the 2026-08-23
+    # campaign A failure. Printing them here means an agent never has to
+    # guess which configuration its --status answer was computed under.
+    roles = ", ".join(
+        f"{role}={getattr(reference.models, role)}"
+        for role in ("rag", "chat", "contextual", "recomp")
+    )
+    print(f"reference models: {roles}")
+    if launch_environment is None:
+        print("environment: stack versions unreadable (#107)")
+    else:
+        readable = ", ".join(
+            f"{key}={value}"
+            for key, value in sorted(launch_environment["packages"].items())
+            if value is not None
+        )
+        print(f"environment: {readable}")
+
+    if not ledger_dir.exists():
+        print("ledger: directory does not exist yet -- a first campaign creates it")
+        return 0
+
+    entries = list(ledger_mod.read_history(ledger_dir))
+    for line in format_ledger_summary(entries):
+        print(line)
+    for line in format_comparability_lines(
+        loop_mod.describe_ledger_comparability(reference, entries, launch_environment)
+    ):
+        print(line)
+    return 0
 
 
 def _run_replay(iteration: int, evaluate, ledger_dir: Path) -> int:
@@ -219,6 +326,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     else:
         evaluate = evaluator_mod.real_evaluate
         ledger_dir = args.ledger_dir or ledger_mod.LEDGER_DIR
+
+    if args.status:
+        return _run_status(reference, ledger_dir)
 
     if args.replay is not None:
         return _run_replay(args.replay, evaluate, ledger_dir)

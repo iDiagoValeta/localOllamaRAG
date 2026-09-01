@@ -1,4 +1,4 @@
-"""Tests for harness.cli -- --replay (criterion 7) and --set wiring."""
+"""Tests for harness.cli -- --replay (criterion 7), --set wiring, --status."""
 
 import json
 import sys
@@ -190,3 +190,109 @@ def test_launch_line_still_names_a_config_mismatch():
     assert lines[-1] == (
         "  WARNING recovery-mode history mismatch -- models.chat: this launch 'a', ledger 'b'"
     )
+
+
+# --status (issue #114): the ledger's state without paying a campaign. The
+# launch line used to be reachable only after the reference measurement
+# (~20 min), or from --dry-run, whose demo evaluator writes a partial
+# effective_config that can never match a real AppConfig -- so it reported 0
+# comparable states whatever the ledger held.
+
+
+def _seed_search_set_entry(ledger_dir, iteration, objective, *, fingerprint=None):
+    import dataclasses
+
+    from monkeygrab.config.app_config import AppConfig
+
+    ledger.write_entry(
+        ledger.LedgerEntry(
+            schema_version=ledger.SCHEMA_VERSION,
+            iteration=iteration,
+            parent_iteration=None,
+            git_commit=None,
+            config_overrides={},
+            effective_config=dataclasses.asdict(AppConfig()),
+            proposer="grid",
+            proposer_rationale=None,
+            proposer_model=None,
+            proposer_fallback=False,
+            proposer_fallback_reason=None,
+            evaluated_case_set="search_set",
+            case_records=[
+                {"id": "a", "case_type": "factual_number", "passed": True, "elapsed_seconds": 1.0}
+            ],
+            summary={"total": 1, "passed": 1, "pass_rate": 1.0},
+            objective_raw=objective,
+            objective_adjusted=objective,
+            median_latency_answered_s=1.0,
+            median_latency_retrieval_only_s=None,
+            reference_median_latency_answered_s=1.0,
+            reference_median_latency_retrieval_only_s=None,
+            latency_ceiling_multiplier=1.2,
+            verdict="accepted",
+            reason="seeded",
+            environment_fingerprint=fingerprint,
+        ),
+        ledger_dir,
+    )
+
+
+def test_status_never_calls_the_evaluator(tmp_path, monkeypatch, capsys):
+    """The whole point: an answer before the measurement, not after it."""
+
+    def explode(*args, **kwargs):
+        raise AssertionError("--status must not evaluate anything")
+
+    monkeypatch.setattr(ev, "real_evaluate", explode)
+    _seed_search_set_entry(tmp_path, 1, 27)
+
+    assert cli.main(["--status", "--ledger-dir", str(tmp_path)]) == 0
+    assert "ledger: 1 entry(ies)" in capsys.readouterr().out
+
+
+def test_status_reads_the_ledger_without_writing_to_it(tmp_path, capsys):
+    """The other half of "without paying a campaign": --dry-run pointed at a
+    real ledger to inspect it APPENDS demo entries to an append-only file,
+    indistinguishable from real ones afterwards. --status is read-only."""
+    _seed_search_set_entry(tmp_path, 1, 27)
+    before = sorted(p.name for p in tmp_path.iterdir())
+
+    cli.main(["--status", "--ledger-dir", str(tmp_path)])
+
+    assert sorted(p.name for p in tmp_path.iterdir()) == before
+    out = capsys.readouterr().out
+    assert "1 comparable search-set state(s)" in out
+    assert "historical high water: 27" in out
+
+
+def test_status_honours_set_so_it_answers_for_the_campaign_you_would_launch(tmp_path, capsys):
+    """A --set pin changes comparability; --status computed under a different
+    reference than the campaign would use is worse than no answer."""
+    _seed_search_set_entry(tmp_path, 1, 27)
+
+    cli.main(["--status", "--ledger-dir", str(tmp_path), "--set", "models.chat=other:model"])
+    out = capsys.readouterr().out
+    assert "chat=other:model" in out
+    assert "0 comparable search-set state(s)" in out
+
+
+def test_status_on_a_directory_that_does_not_exist_yet(tmp_path, capsys):
+    assert cli.main(["--status", "--ledger-dir", str(tmp_path / "nope")]) == 0
+    assert "directory does not exist yet" in capsys.readouterr().out
+
+
+def test_ledger_summary_of_an_empty_history():
+    assert cli.format_ledger_summary([]) == [
+        "ledger: empty -- no prior campaign has written here"
+    ]
+
+
+def test_ledger_summary_counts_pre_v3_entries_separately(tmp_path):
+    """How much of this history can never be verified against the current
+    stack is the number that says whether a refresh campaign is due (#107)."""
+    _seed_search_set_entry(tmp_path, 1, 27, fingerprint=None)
+    _seed_search_set_entry(tmp_path, 2, 25, fingerprint={"schema": 1, "packages": {"a": "1"}})
+
+    lines = cli.format_ledger_summary(list(ledger.read_history(tmp_path)))
+    assert any("1 entry(ies) carry no stack fingerprint" in line for line in lines)
+    assert any("iterations 1-2" in line for line in lines)
