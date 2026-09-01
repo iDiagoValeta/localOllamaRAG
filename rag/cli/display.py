@@ -1015,6 +1015,55 @@ class Display:
         else:
             self.console.print()
 
+    def ask(self, prompt_text: str) -> str:
+        """Ask a one-off question, outside the main rag/chat prompt.
+
+        Plain input rather than the prompt-toolkit session: that session
+        carries the slash-command autocompleter and the mode indicator, both
+        of which would be wrong here and confusing in a "which document?"
+        prompt.
+        """
+        return self.console.input(f"[bold]{prompt_text}[/bold] ")
+
+    def document_choices(self, nombres: List[str]) -> None:
+        """Numbered list of indexed documents, for a pick-one prompt."""
+        table = Table(box=box.SIMPLE, show_header=False, padding=(0, 1))
+        table.add_column(justify="right", style="dim")
+        table.add_column()
+        for index, nombre in enumerate(nombres, start=1):
+            table.add_row(str(index), nombre)
+        self.console.print(table)
+
+    def summary_panel(self, resumen: Dict[str, Any]) -> None:
+        """Render a structured summary: sections, then the pages behind them.
+
+        The pages are printed once at the end rather than after every section
+        because every section currently cites the same retrieval -- repeating
+        an identical line under each one would read as per-section attribution,
+        which is precisely what the use case declines to claim.
+        """
+        documento = resumen.get("source_document") or ""
+        secciones = resumen.get("sections") or []
+        cuerpo = Text()
+        for index, seccion in enumerate(secciones):
+            if index:
+                cuerpo.append("\n\n")
+            heading = (seccion.get("heading") or "").strip()
+            if heading:
+                cuerpo.append(heading + "\n", style="bold")
+            cuerpo.append((seccion.get("body") or "").strip())
+
+        paginas = sorted({p for s in secciones for p in (s.get("source_pages") or [])})
+        if paginas:
+            cuerpo.append("\n\n")
+            cuerpo.append(
+                f"{self._s('summary.pages')}: {', '.join(str(p) for p in paginas)}", style="dim"
+            )
+
+        self.console.print(
+            Panel(cuerpo, title=documento or self._s("summary.title"), border_style="cyan")
+        )
+
     def docs_table(self, docs: List[Any]) -> None:
         if not docs:
             self.warning(self._s("docs.none"))
