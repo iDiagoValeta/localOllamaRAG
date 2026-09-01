@@ -1,10 +1,10 @@
 """Study -- structured artifacts over retrieved evidence, instead of prose.
 
 Issue #140. ``Answer`` streams prose for one question. This produces artifacts
-with parts: a summary now, an outline and a quiz once this shape is proven.
-The three share a path -- take fragments the caller already retrieved, ask the
-generator for structure, parse it, attach the evidence each part came from --
-and differ only in schema and prompt.
+with parts: a summary, an outline and a quiz. The three share a path -- take
+fragments the caller already retrieved, ask the generator for structure, parse
+it, attach the evidence each part came from -- and differ only in schema,
+prompt, and how strict the parse is (see below).
 
 Takes its ports and config through the call, reads nothing from module state
 (``AGENTS.md`` section 7 rule 2), and hard-fails rather than degrading
@@ -30,6 +30,14 @@ section with a heading and a body is usable; one with neither is not. The
 line is drawn at "can a reader use this", not at "does it match the schema
 exactly", because tightening past that point turns a cosmetic difference
 between models into an outage.
+
+The three artifacts draw that line in three places, and the difference is the
+cost of being wrong, not a matter of taste. An outline truncates: one cut off
+at three levels still navigates. A summary drops unusable sections but raises
+if none survive: a section a reader cannot read is visibly absent. A quiz is
+strictest, because it is the only one that can be wrong *without looking
+wrong* -- a key pointing at the wrong option grades the reader against a
+falsehood, and checking it is exactly what they could not do.
 """
 
 import json
@@ -42,6 +50,8 @@ from monkeygrab.domain.document_summary import (
     DocumentOutline,
     DocumentSummary,
     OutlineNode,
+    Quiz,
+    QuizQuestion,
     SummarySection,
 )
 from monkeygrab.domain.fragment import Fragment
@@ -93,6 +103,43 @@ _OUTLINE_SYSTEM_PROMPT = (
 # is what the prompt asks for; this is the guard for when it is ignored.
 _MAX_OUTLINE_DEPTH = 4
 _MAX_OUTLINE_NODES = 60
+
+
+# Asking for the key as an index into the options rather than as the correct
+# answer's text: a model that restates the text introduces a second copy that
+# can disagree with the option it names -- by a comma, by a truncation -- and
+# then nothing downstream can tell which of the two is the answer.
+_QUIZ_SYSTEM_PROMPT = (
+    "You write multiple-choice comprehension questions. You reply with a JSON "
+    "array and nothing else: no preamble, no explanation, no markdown fences. "
+    'Each element is an object with three keys: "prompt" (the question), '
+    '"options" (an array of three or four distinct answer strings) and '
+    '"correct_index" (the zero-based position in that array of the correct '
+    "option). Exactly one option is correct and the others must be plausible "
+    "but wrong. Ask only about what the provided material states; never draw "
+    "on your own knowledge, and if the material supports fewer questions than "
+    "requested, return fewer rather than inventing any."
+)
+
+# A quiz nobody asked the length of is not a quiz. The ceiling is a guard on
+# the model, not a product limit: past it the reply is long enough that
+# truncation, not question count, is what decides where it ends.
+_DEFAULT_QUESTION_COUNT = 5
+_MAX_QUESTION_COUNT = 20
+
+# Two is a coin toss and four is the conventional ceiling for a readable
+# question. Below the floor there is no choice to make; above the ceiling the
+# model starts padding with near-duplicates of the correct option.
+_MIN_OPTIONS = 2
+_MAX_OPTIONS = 6
+
+
+class MalformedQuizError(RuntimeError):
+    """The generator's reply held no question safe to grade a reader against.
+
+    Separate from the summary and outline errors so a caller offering several
+    artifacts can tell which one failed without parsing an error message.
+    """
 
 
 class MalformedOutlineError(RuntimeError):
@@ -162,6 +209,50 @@ def _parse_sections(raw: str) -> List[Dict[str, Any]]:
             f"no section carried a heading or a body ({len(decoded)} element(s) returned)"
         )
     return usable[:_MAX_SECTIONS]
+
+
+def _usable_question(element: Any) -> Optional[Dict[str, Any]]:
+    """The question's fields if it is safe to grade against, else ``None``.
+
+    Stricter than ``_parse_sections`` on purpose. A thin summary section is
+    thin and the reader can see that. A question whose key points at the wrong
+    option teaches something false with the authority of an answer key, and
+    the reader has no way to notice -- checking is precisely what they were
+    unable to do, which is why they are taking the quiz.
+
+    So every dropped case below is one where the artifact would still *look*
+    answerable. Nothing here is repaired: there is no evidence for what the
+    model meant, and a guessed key is the failure this function exists to
+    prevent.
+    """
+    if not isinstance(element, dict):
+        return None
+
+    prompt = str(element.get("prompt", "")).strip()
+    if not prompt:
+        return None
+
+    raw_options = element.get("options")
+    if not isinstance(raw_options, list):
+        return None
+    options = [str(option).strip() for option in raw_options if str(option).strip()]
+    if not _MIN_OPTIONS <= len(options) <= _MAX_OPTIONS:
+        return None
+    # Duplicates make the key ambiguous rather than wrong: a reader who picks
+    # the other identical option answered correctly and grades as incorrect.
+    if len(set(options)) != len(options):
+        return None
+
+    index = element.get("correct_index")
+    # `bool` is an `int` in Python, and `True` would index option 1 silently.
+    if isinstance(index, bool) or not isinstance(index, int):
+        return None
+    # Not `-len <= index < len`: a negative index is legal in Python and would
+    # quietly select from the end, but from a model it means nothing at all.
+    if not 0 <= index < len(options):
+        return None
+
+    return {"prompt": prompt, "options": options, "correct_index": index}
 
 
 class Study:
@@ -299,6 +390,92 @@ class Study:
         return DocumentOutline(nodes=nodes, source_document=_single_document(fragments))
 
 
+    def quiz(
+        self,
+        fragments: Sequence[Fragment],
+        config: AppConfig,
+        *,
+        language: Optional[str] = None,
+        question_count: int = _DEFAULT_QUESTION_COUNT,
+    ) -> Quiz:
+        """Write multiple-choice questions over ``fragments``.
+
+        Args:
+            fragments: Evidence to question, already ranked by the caller.
+            config: Read fresh on every call, as in ``summarize``.
+            language: Language for the questions. ``None`` follows the
+                material.
+            question_count: How many to ask for. The model may return fewer
+                if the material does not support that many, which is not an
+                error -- padding would mean inventing questions.
+
+        Returns:
+            A ``Quiz``. Empty input gives an empty quiz without calling the
+            generator.
+
+        Raises:
+            ValueError: ``question_count`` is outside 1..20. Checked before
+                the model is called, because a bad count is the caller's bug
+                and spending a generation on it hides that.
+            MalformedQuizError: The reply is not JSON, is not an array, or
+                held no question safe to grade against.
+            Exception: Whatever the chat model raises (hard-fail policy).
+        """
+        if not 1 <= question_count <= _MAX_QUESTION_COUNT:
+            raise ValueError(
+                f"question_count must be between 1 and {_MAX_QUESTION_COUNT}, got {question_count}"
+            )
+        if not fragments:
+            return Quiz(questions=(), source_document="")
+
+        context, _metrics = build_context_for_model(
+            list(fragments), config.flags.usar_optimizacion_contexto
+        )
+        instruction = (
+            f"Write {question_count} multiple-choice questions about the following material."
+        )
+        if language:
+            instruction += f" Write the questions and options in {language}."
+
+        raw = self._chat_model.generate(
+            f"{instruction}\n\n{context}", system=_QUIZ_SYSTEM_PROMPT
+        )
+
+        try:
+            decoded = json.loads(_strip_fence(raw))
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise MalformedQuizError(
+                f"generator did not return JSON: {exc}. First 200 characters: {raw[:200]!r}"
+            ) from exc
+        if not isinstance(decoded, list):
+            raise MalformedQuizError(
+                f"expected a JSON array of questions, got {type(decoded).__name__}"
+            )
+
+        usable = [fields for fields in map(_usable_question, decoded) if fields is not None]
+        if not usable:
+            raise MalformedQuizError(
+                "no question carried a prompt, distinct options and an in-range key "
+                f"({len(decoded)} element(s) returned)"
+            )
+
+        # Same coarse attribution as summarize: the whole retrieval's pages
+        # per question. Asking the model which fragment it used would buy
+        # precision at the price of confident, wrong page numbers -- and here
+        # a reader follows the citation precisely when they doubt the key.
+        pages = _pages_of(fragments)
+        questions = tuple(
+            QuizQuestion(
+                prompt=fields["prompt"],
+                options=tuple(fields["options"]),
+                correct_index=fields["correct_index"],
+                source_pages=pages,
+            )
+            for fields in usable[:question_count]
+        )
+        return Quiz(questions=questions, source_document=_single_document(fragments))
+
+
 def _build_outline_nodes(elements: Any, depth: int, budget: List[int]) -> Tuple[OutlineNode, ...]:
     """Turn decoded JSON into nodes, bounded in both depth and total count.
 
@@ -360,5 +537,25 @@ def summary_to_dict(summary: DocumentSummary) -> Dict[str, Any]:
                 "source_pages": list(section.source_pages),
             }
             for section in summary.sections
+        ],
+    }
+
+
+def quiz_to_dict(quiz: Quiz) -> Dict[str, Any]:
+    """Plain-JSON view for an interface layer.
+
+    Lives here for the same reason ``summary_to_dict`` does: one shape for the
+    artifact, so the CLI and the web app cannot drift into two.
+    """
+    return {
+        "source_document": quiz.source_document,
+        "questions": [
+            {
+                "prompt": question.prompt,
+                "options": list(question.options),
+                "correct_index": question.correct_index,
+                "source_pages": list(question.source_pages),
+            }
+            for question in quiz.questions
         ],
     }

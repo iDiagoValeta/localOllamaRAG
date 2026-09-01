@@ -9,8 +9,8 @@ Full rationale and phased rollout: [`docs/design/2026-07-26-monkeygrab-v2.md`](.
 ```
 domain/        entities, zero infrastructure imports    (Chunk, Fragment, ExtractedPage, ...)
 ports/         Protocols the application layer depends on (PdfExtractor, Embedder, VectorStore, ...)
-application/   use cases: IndexCorpus, Retrieve, Answer, + pure helpers (rrf_fusion, text_chunking,
-               context_assembly, keywords)
+application/   use cases: IndexCorpus, Retrieve, Answer, Study, + pure helpers (rrf_fusion,
+               text_chunking, context_assembly, keywords)
 config/        AppConfig — immutable, built once via from_env(), changed via with_overrides() (never mutated)
 adapters/      port implementations (MinerU, jina-clip, FAISS, Ollama, BM25, CrossEncoder)
 ```
@@ -57,6 +57,14 @@ them holds pipeline logic.
 split exists because a caller streaming to a web client sends the cited
 sources before the first token arrives, which it cannot do if preparing the
 prompt and generating from it are one call.
+
+`Study` is the other caller of the generator, and it produces structure where
+`Answer` produces prose: a summary, an outline, a quiz. All three take
+fragments the caller already retrieved and differ only in schema, prompt, and
+how strict the parse is. That last part is the design decision worth knowing
+before touching it — an outline truncates, a summary drops unusable sections,
+and a quiz refuses anything it cannot grade safely, because a wrong answer key
+is the only one of the three that misleads without looking wrong.
 
 `rag/engine/wiring.py` is the only bridge between the mutable runtime globals
 in `rag/chat_pdfs.py` and the immutable `AppConfig` this package takes. It
