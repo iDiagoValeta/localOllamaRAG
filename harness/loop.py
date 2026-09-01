@@ -427,33 +427,6 @@ def _build_entry(
         reason=reason,
         regression_baseline_iteration=regression_baseline_iteration,
     )
-    if candidate_latency is None:
-        candidate_latency = evaluator_mod.median_latency_by_bucket(result.records)
-    return ledger_mod.LedgerEntry(
-        schema_version=ledger_mod.SCHEMA_VERSION,
-        iteration=iteration,
-        parent_iteration=parent_iteration,
-        git_commit=git_commit,
-        config_overrides=dict(overrides),
-        effective_config=dict(result.effective_config),
-        proposer=meta.get("proposer", "unknown"),
-        proposer_rationale=meta.get("rationale"),
-        proposer_model=meta.get("model"),
-        proposer_fallback=bool(meta.get("fallback", False)),
-        proposer_fallback_reason=meta.get("fallback_reason"),
-        evaluated_case_set=evaluated_case_set,
-        case_records=[dataclasses.asdict(r) for r in result.records],
-        summary=_summary(result.records),
-        objective_raw=objective_raw,
-        objective_adjusted=objective_adjusted,
-        median_latency_answered_s=candidate_latency.get("answered"),
-        median_latency_retrieval_only_s=candidate_latency.get("retrieval_only"),
-        reference_median_latency_answered_s=reference_latency.get("answered"),
-        reference_median_latency_retrieval_only_s=reference_latency.get("retrieval_only"),
-        latency_ceiling_multiplier=LATENCY_CEILING_MULTIPLIER,
-        verdict=verdict,
-        reason=reason,
-    )
 
 
 def run_loop(
