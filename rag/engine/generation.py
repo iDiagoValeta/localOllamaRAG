@@ -190,19 +190,35 @@ def generar_respuesta(
     return respuesta_completa
 
 
-def generar_respuesta_silenciosa(pregunta: str, fragmentos: List[Dict[str, Any]], metricas: Optional[Dict[str, Any]] = None) -> str:
+def generar_respuesta_silenciosa(
+    pregunta: str,
+    fragmentos: List[Dict[str, Any]],
+    metricas: Optional[Dict[str, Any]] = None,
+    stats: Optional[Dict[str, Any]] = None,
+) -> str:
     """Generate a RAG response without terminal output or a debug dump.
 
     Args:
         pregunta: User question.
         fragmentos: Retrieved context fragments.
         metricas: Pipeline metrics (unused here, kept for API compatibility).
+        stats: Optional dict filled in place with what Ollama reported on the
+            final chunk -- ``eval_count``, ``eval_duration``, ``load_duration``
+            and the rest of ``_GEN_STATS_FIELDS``. Appended as a keyword rather
+            than folded into ``metricas`` because this function's signature is
+            part of the public API (``AGENTS.md`` rule 7) and every existing
+            caller passes ``metricas`` positionally.
+
+            The streaming path has always collected these; only the silent one
+            dropped them, which is why the evaluation gate -- the one caller
+            that most needs to compare generators -- could measure seconds per
+            case but not tokens per second.
 
     Returns:
         Complete response text.
     """
     mensaje_usuario = cfg._preparar_mensaje_usuario_rag(pregunta, fragmentos)
-    return cfg._generar_respuesta_stream(mensaje_usuario)
+    return cfg._generar_respuesta_stream(mensaje_usuario, stats=stats)
 
 
 def evaluar_pregunta_rag(

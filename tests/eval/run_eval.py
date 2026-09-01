@@ -565,6 +565,31 @@ def run_retrieval_case(
     return record
 
 
+def _decoding_metrics(stats: Dict[str, Any]) -> Dict[str, Any]:
+    """Tokens generated, decode time and tokens/s, when Ollama reported them.
+
+    Absent keys rather than zeros or nulls: a record with no counts means the
+    model did not report them, and writing 0.0 would make a later average over
+    the column silently wrong in the direction of "slower". Every consumer that
+    aggregates these has to skip records that lack them, and a missing key is
+    the one shape that cannot be summed by accident.
+
+    tokens_per_second is derived here rather than left to each reader: the
+    same division already lives in generation.generar_respuesta for the debug
+    dump, and two copies of one formula is how the two ends up disagreeing.
+    """
+    eval_count = stats.get("eval_count")
+    eval_duration = stats.get("eval_duration")
+    if not eval_count or not eval_duration:
+        return {}
+    return {
+        "eval_count": eval_count,
+        # Ollama reports durations in nanoseconds.
+        "eval_duration_s": round(eval_duration / 1e9, 3),
+        "tokens_per_second": round(eval_count / (eval_duration / 1e9), 2),
+    }
+
+
 def run_factual_case(
     rag,
     case: Dict[str, Any],
@@ -598,8 +623,11 @@ def run_factual_case(
     for model in models:
         rag.set_model_roles_runtime({"rag": model})
         t0 = time.perf_counter()
+        gen_stats: Dict[str, Any] = {}
         try:
-            answer = rag.generar_respuesta_silenciosa(case["question"], list(fragments))
+            answer = rag.generar_respuesta_silenciosa(
+                case["question"], list(fragments), stats=gen_stats
+            )
         except Exception as exc:
             # A dead or overloaded Ollama must not be reported as a quality
             # regression: the run is inconclusive, which is a different verdict
@@ -632,6 +660,12 @@ def run_factual_case(
             "passed": result["pass"],
             "reason": result["reason"],
             "elapsed_seconds": round(retrieval_elapsed + gen_elapsed, 2),
+            # Generation only, so models are comparable. elapsed_seconds
+            # includes the retrieval this case shares across every model, and
+            # on this corpus retrieval dominates it -- comparing generators by
+            # that number mostly compares how busy the card was.
+            "generation_seconds": round(gen_elapsed, 2),
+            **_decoding_metrics(gen_stats),
         }
         if not result["pass"]:
             record["answer"] = answer
