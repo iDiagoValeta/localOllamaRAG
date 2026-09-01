@@ -235,7 +235,7 @@ git check-ignore -v <path>
 
 ### CLI slash commands
 
-`/rag` `/chat` `/docs` `/temas`(`/topics` `/temes`) `/stats` `/reindex` `/limpiar`(`/clear` `/netejar`) `/ayuda`(`/help` `/ajuda`) `/salir`(`/exit` `/eixir`).
+`/rag` `/chat` `/docs` `/temas`(`/topics` `/temes`) `/resumen`(`/summary` `/resum`) `/stats` `/reindex` `/limpiar`(`/clear` `/netejar`) `/ayuda`(`/help` `/ajuda`) `/salir`(`/exit` `/eixir`).
 
 ---
 

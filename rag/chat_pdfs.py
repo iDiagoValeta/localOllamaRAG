@@ -505,6 +505,11 @@ from rag.engine.indexing import (
     indexar_documentos,
     obtener_documentos_indexados,
 )
+from rag.engine.study import (
+    MalformedSummaryError,
+    fragmentos_de_documento,
+    resumir_fragmentos,
+)
 from rag.engine.settings import (
     STORE_IDS,
     cargar_ajustes_persistidos,

@@ -6,9 +6,9 @@ between the prompt, the ``/ayuda`` screen and the autocompleter.
 
 Primary command lists per language
 -----------------------------------
-- ES: /ayuda  /limpiar  /temas  /salir  (canonical names)
-- EN: /help   /clear    /topics /exit
-- CA: /ajuda  /netejar  /temes  /eixir
+- ES: /ayuda  /limpiar  /temas  /resumen /salir  (canonical names)
+- EN: /help   /clear    /topics /summary /exit
+- CA: /ajuda  /netejar  /temes  /resum   /eixir
 
 All tokens from all languages are always accepted by the dispatcher.
 """
@@ -26,6 +26,7 @@ COMMANDS: List[Tuple[str, str]] = [
     ("/stats",   "cmd.stats.desc"),
     ("/docs",    "cmd.docs.desc"),
     ("/temas",   "cmd.temas.desc"),
+    ("/resumen", "cmd.resumen.desc"),
     ("/reindex", "cmd.reindex.desc"),
     ("/ayuda",   "cmd.ayuda.desc"),
     ("/salir",   "cmd.salir.desc"),
@@ -38,11 +39,13 @@ ALIASES: List[Tuple[str, str, str]] = [
     ("/help",   "/ayuda",   "alias.help.desc"),
     ("/exit",   "/salir",   "alias.exit.desc"),
     ("/topics", "/temas",   "cmd.temas.desc"),
+    ("/summary", "/resumen", "cmd.resumen.desc"),
     # CA
     ("/netejar", "/limpiar", "alias.clear.desc"),
     ("/ajuda",   "/ayuda",   "alias.help.desc"),
     ("/eixir",   "/salir",   "alias.exit.desc"),
     ("/temes",   "/temas",   "cmd.temas.desc"),
+    ("/resum",   "/resumen", "cmd.resumen.desc"),
 ]
 
 
@@ -53,6 +56,7 @@ _PRIMARY_EN: List[Tuple[str, str]] = [
     ("/stats",   "cmd.stats.desc"),
     ("/docs",    "cmd.docs.desc"),
     ("/topics",  "cmd.temas.desc"),
+    ("/summary", "cmd.resumen.desc"),
     ("/reindex", "cmd.reindex.desc"),
     ("/help",    "cmd.ayuda.desc"),
     ("/exit",    "cmd.salir.desc"),
@@ -65,6 +69,7 @@ _PRIMARY_CA: List[Tuple[str, str]] = [
     ("/stats",   "cmd.stats.desc"),
     ("/docs",    "cmd.docs.desc"),
     ("/temes",   "cmd.temas.desc"),
+    ("/resum",   "cmd.resumen.desc"),
     ("/reindex", "cmd.reindex.desc"),
     ("/ajuda",   "cmd.ayuda.desc"),
     ("/eixir",   "cmd.salir.desc"),

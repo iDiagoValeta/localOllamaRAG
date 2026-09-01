@@ -20,7 +20,7 @@ import difflib
 import os
 import signal
 from collections import Counter
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from rag.cli.commands import ALIASES, COMMANDS, primary_commands
 from rag.cli.display import QueryTimer, SessionStats, ui
@@ -67,6 +67,21 @@ class MonkeyGrabCLI:
         for alias, target, *_ in ALIASES:
             if target in handlers:
                 self._commands[alias] = handlers[target]
+
+        # /resumen takes a topic, which the no-argument table cannot express.
+        # Registered here and in _commands both: the first entry makes a bare
+        # "/resumen" reach the handler (which then explains it needs a topic),
+        # the second makes "/resumen planck" reach it with one. Without the
+        # first, a bare "/resumen" falls through to the did-you-mean branch and
+        # suggests the command the user just typed.
+        argument_handlers = {"/resumen": self._cmd_summary}
+        self._commands_with_argument: Dict[str, Any] = dict(argument_handlers)
+        for alias, target, *_ in ALIASES:
+            if target in argument_handlers:
+                self._commands_with_argument[alias] = argument_handlers[target]
+        for name, handler in self._commands_with_argument.items():
+            self._commands.setdefault(name, lambda h=handler: h(""))
+
         self._validate_commands_registry()
 
     def _validate_commands_registry(self) -> None:
@@ -164,6 +179,15 @@ class MonkeyGrabCLI:
                 should_exit = self._commands[cmd_lower]()
                 if should_exit:
                     break
+                continue
+
+            # Commands that take an argument, dispatched on the first token.
+            # Kept separate from the exact-match table above so a bare "/rag"
+            # cannot be swallowed by a prefix match against "/ragged".
+            first, _, rest = pregunta.partition(" ")
+            handler = self._commands_with_argument.get(first.lower())
+            if handler is not None:
+                handler(rest.strip())
                 continue
 
             if pregunta.startswith('/'):
@@ -400,6 +424,94 @@ class MonkeyGrabCLI:
     def _cmd_docs(self) -> bool:
         ui.docs_table(self._get_document_summaries())
         return False
+
+    def _cmd_summary(self, argumento: str = "") -> bool:
+        """Summarise one indexed document, chosen from a numbered list.
+
+        Bare ``/resumen`` lists the documents and asks which one, rather than
+        requiring the user to have the exact filename in their head -- the
+        list is right there, and a summary of "the wrong file, spelled
+        correctly" is the failure a free-text argument invites. An argument is
+        still accepted: a number picks from the list, and anything else is
+        matched against the filenames, so the command stays scriptable.
+        """
+        docs = self._get_document_summaries()
+        if not docs:
+            ui.error(self._s("summary.no.docs"))
+            return False
+
+        nombres = [d.get("source", "") for d in docs if d.get("source")]
+        elegido = self._resolve_document_choice(argumento, nombres)
+        if elegido is None:
+            return False
+
+        ui.info(self._s("summary.working", doc=elegido))
+        try:
+            fragmentos = self.rag.fragmentos_de_documento(elegido)
+            if not fragmentos:
+                ui.error(self._s("summary.empty.doc", doc=elegido))
+                return False
+            resumen = self.rag.resumir_fragmentos(fragmentos, idioma=self._summary_language())
+        except self.rag.MalformedSummaryError as exc:
+            # Shown rather than swallowed: an empty panel with no reason is
+            # worse than an ugly error, and this one is actionable -- it means
+            # the model ignored the format, which a different model may not.
+            ui.error(self._s("summary.malformed", error=str(exc)[:160]))
+            return False
+        except Exception as exc:
+            ui.error(self._s("summary.failed", error=str(exc)[:160]))
+            return False
+
+        ui.summary_panel(resumen)
+        return False
+
+    def _summary_language(self) -> str:
+        """Write the summary in the interface language.
+
+        Someone running the Valencian interface over an English paper wants
+        the summary in Valencian; the model reads the material in whatever
+        language it is in either way.
+        """
+        return {
+            "en": "English",
+            "ca": "Valencià",
+        }.get(os.getenv("MONKEYGRAB_LANG", "es").strip().lower(), "Castellano")
+
+    def _resolve_document_choice(self, argumento: str, nombres: List[str]) -> Optional[str]:
+        """Turn an argument (or an interactive answer) into one filename.
+
+        Returns ``None`` when the user cancelled or picked something that does
+        not exist, having already been told which -- the caller just stops.
+        """
+        if not argumento:
+            ui.document_choices(nombres)
+            try:
+                argumento = ui.ask(self._s("summary.prompt")).strip()
+            except (EOFError, KeyboardInterrupt):
+                return None
+            if not argumento:
+                return None
+
+        if argumento.isdigit():
+            indice = int(argumento) - 1
+            if 0 <= indice < len(nombres):
+                return nombres[indice]
+            ui.error(self._s("summary.bad.number", n=len(nombres)))
+            return None
+
+        # Substring match, case-insensitive: "planck" should find
+        # "planck-cosmology.pdf". Ambiguity is reported rather than resolved by
+        # picking the first, which would summarise a document the user did not
+        # ask for and look like it worked.
+        bajo = argumento.lower()
+        coincidencias = [n for n in nombres if bajo in n.lower()]
+        if len(coincidencias) == 1:
+            return coincidencias[0]
+        if not coincidencias:
+            ui.error(self._s("summary.no.match", query=argumento))
+            return None
+        ui.error(self._s("summary.ambiguous", query=argumento, matches=", ".join(coincidencias)))
+        return None
 
     def _cmd_topics(self) -> bool:
         self._show_topics()
