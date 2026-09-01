@@ -559,3 +559,20 @@ def quiz_to_dict(quiz: Quiz) -> Dict[str, Any]:
             for question in quiz.questions
         ],
     }
+
+
+def _outline_node_to_dict(node: OutlineNode) -> Dict[str, Any]:
+    return {"title": node.title, "children": [_outline_node_to_dict(c) for c in node.children]}
+
+
+def outline_to_dict(outline: DocumentOutline) -> Dict[str, Any]:
+    """Plain-JSON view for an interface layer.
+
+    Children stay nested rather than being flattened with a depth number: the
+    nesting is the artifact, and flattening it here would make every consumer
+    rebuild the tree, each in its own slightly different way.
+    """
+    return {
+        "source_document": outline.source_document,
+        "nodes": [_outline_node_to_dict(node) for node in outline.nodes],
+    }

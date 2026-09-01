@@ -295,17 +295,29 @@ drifted.
 ### Interfaces
 
 The **CLI** takes slash commands: `/rag` and `/chat` switch mode, `/docs` lists
-what is indexed, `/temas` shows corpus topics, `/resumen` summarises one
-document, `/stats` the active pipeline configuration, `/reindex` rebuilds the
-index, `/limpiar` clears history, `/salir` exits and `/ayuda` lists everything.
-`/temas`, `/resumen`, `/limpiar`, `/salir` and `/ayuda` also have English and
-Valencian aliases.
+what is indexed, `/temas` shows corpus topics, `/stats` the active pipeline
+configuration, `/reindex` rebuilds the index, `/limpiar` clears history,
+`/salir` exits and `/ayuda` lists everything. Most commands also have English
+and Valencian aliases.
 
-`/resumen` on its own lists the indexed documents and asks which one, so you
-never have to remember a filename; `/resumen planck` picks by substring and
-`/resumen 3` by position. The summary comes back as titled sections with the
-pages behind them, written in the interface language whatever the document's
-own language is.
+Three of them do something other than answer a question — they turn a document
+into a structured artifact:
+
+| command | alias | what you get |
+|---|---|---|
+| `/resumen` | `/summary`, `/resum` | titled sections, with the pages behind them |
+| `/esquema` | `/outline` | the heading tree, indented, no prose |
+| `/cuestionario` | `/quiz`, `/questionari` | multiple-choice questions with their answer key |
+
+All three pick a document the same way. On its own, the command lists what is
+indexed and asks which one, so you never have to remember a filename;
+`/resumen planck` picks by substring and `/resumen 3` by position. The artifact
+comes back in the interface language whatever the document's own language is.
+
+The quiz is deliberately the strictest of the three: a question whose answer
+key cannot be verified is dropped rather than repaired, and if none survive you
+get an error instead of a quiz. A wrong key is the one failure here that would
+not look like one.
 
 The **web UI** adds document upload, per-role model assignment, the pipeline
 toggles, and an inline PDF viewer that opens cited sources at the right page.

@@ -506,7 +506,11 @@ from rag.engine.indexing import (
     obtener_documentos_indexados,
 )
 from rag.engine.study import (
+    MalformedOutlineError,
+    MalformedQuizError,
     MalformedSummaryError,
+    cuestionario_de_fragmentos,
+    esquema_de_fragmentos,
     fragmentos_de_documento,
     resumir_fragmentos,
 )

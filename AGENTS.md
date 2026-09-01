@@ -240,7 +240,12 @@ git check-ignore -v <path>
 
 ### CLI slash commands
 
-`/rag` `/chat` `/docs` `/temas`(`/topics` `/temes`) `/resumen`(`/summary` `/resum`) `/stats` `/reindex` `/limpiar`(`/clear` `/netejar`) `/ayuda`(`/help` `/ajuda`) `/salir`(`/exit` `/eixir`).
+`/rag` `/chat` `/docs` `/temas`(`/topics` `/temes`) `/resumen`(`/summary` `/resum`) `/esquema`(`/outline`) `/cuestionario`(`/quiz` `/questionari`) `/stats` `/reindex` `/limpiar`(`/clear` `/netejar`) `/ayuda`(`/help` `/ajuda`) `/salir`(`/exit` `/eixir`).
+
+The three that take a document argument — `/resumen`, `/esquema`,
+`/cuestionario` — run `Study` and share `_document_fragments` for the picker.
+They are registered in `_commands_with_argument` as well as `_commands`, so a
+bare invocation reaches the handler instead of the did-you-mean branch.
 
 ---
 

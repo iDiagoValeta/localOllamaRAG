@@ -74,7 +74,11 @@ class MonkeyGrabCLI:
         # the second makes "/resumen planck" reach it with one. Without the
         # first, a bare "/resumen" falls through to the did-you-mean branch and
         # suggests the command the user just typed.
-        argument_handlers = {"/resumen": self._cmd_summary}
+        argument_handlers = {
+            "/resumen": self._cmd_summary,
+            "/esquema": self._cmd_outline,
+            "/cuestionario": self._cmd_quiz,
+        }
         self._commands_with_argument: Dict[str, Any] = dict(argument_handlers)
         for alias, target, *_ in ALIASES:
             if target in argument_handlers:
@@ -425,32 +429,53 @@ class MonkeyGrabCLI:
         ui.docs_table(self._get_document_summaries())
         return False
 
-    def _cmd_summary(self, argumento: str = "") -> bool:
-        """Summarise one indexed document, chosen from a numbered list.
+    def _document_fragments(self, argumento: str, working_key: str):
+        """Pick a document and load its chunks, or ``None`` if that fails.
 
-        Bare ``/resumen`` lists the documents and asks which one, rather than
+        Shared by the three ``Study`` commands, which differ only in what they
+        ask the generator for. Bare ``/resumen`` (or ``/esquema``, or
+        ``/cuestionario``) lists the documents and asks which one, rather than
         requiring the user to have the exact filename in their head -- the
-        list is right there, and a summary of "the wrong file, spelled
-        correctly" is the failure a free-text argument invites. An argument is
-        still accepted: a number picks from the list, and anything else is
-        matched against the filenames, so the command stays scriptable.
+        list is right there, and an artifact built from "the wrong file,
+        spelled correctly" is the failure a free-text argument invites. An
+        argument is still accepted: a number picks from the list, and anything
+        else is matched against the filenames, so the commands stay
+        scriptable.
+
+        Returns:
+            ``(document_name, fragments)``, or ``None`` when there is nothing
+            indexed, the user cancelled, or the chosen document has no chunks.
+            The reason has already been shown in every one of those cases.
         """
         docs = self._get_document_summaries()
         if not docs:
             ui.error(ui._s("summary.no.docs"))
-            return False
+            return None
 
-        nombres = [d.get("source", "") for d in docs if d.get("source")]
+        # "name", the key _get_document_summaries actually returns. It reads
+        # the filename out of each fragment's `source` metadata but publishes
+        # it under `name`, and asking for `source` here silently produced an
+        # empty candidate list rather than an error (issue #150).
+        nombres = [d.get("name", "") for d in docs if d.get("name")]
         elegido = self._resolve_document_choice(argumento, nombres)
         if elegido is None:
-            return False
+            return None
 
-        ui.info(ui._s("summary.working", doc=elegido))
+        ui.info(ui._s(working_key, doc=elegido))
+        fragmentos = self.rag.fragmentos_de_documento(elegido)
+        if not fragmentos:
+            ui.error(ui._s("summary.empty.doc", doc=elegido))
+            return None
+        return elegido, fragmentos
+
+    def _cmd_summary(self, argumento: str = "") -> bool:
+        """Summarise one indexed document, chosen from a numbered list."""
+        elegido = self._document_fragments(argumento, "summary.working")
+        if elegido is None:
+            return False
+        _, fragmentos = elegido
+
         try:
-            fragmentos = self.rag.fragmentos_de_documento(elegido)
-            if not fragmentos:
-                ui.error(ui._s("summary.empty.doc", doc=elegido))
-                return False
             resumen = self.rag.resumir_fragmentos(fragmentos, idioma=self._summary_language())
         except self.rag.MalformedSummaryError as exc:
             # Shown rather than swallowed: an empty panel with no reason is
@@ -463,6 +488,50 @@ class MonkeyGrabCLI:
             return False
 
         ui.summary_panel(resumen)
+        return False
+
+    def _cmd_outline(self, argumento: str = "") -> bool:
+        """Show the heading tree of one indexed document."""
+        elegido = self._document_fragments(argumento, "outline.working")
+        if elegido is None:
+            return False
+        _, fragmentos = elegido
+
+        try:
+            esquema = self.rag.esquema_de_fragmentos(fragmentos, idioma=self._summary_language())
+        except self.rag.MalformedOutlineError as exc:
+            ui.error(ui._s("outline.malformed", error=str(exc)[:160]))
+            return False
+        except Exception as exc:
+            ui.error(ui._s("outline.failed", error=str(exc)[:160]))
+            return False
+
+        ui.outline_panel(esquema)
+        return False
+
+    def _cmd_quiz(self, argumento: str = "") -> bool:
+        """Build a multiple-choice quiz over one indexed document."""
+        elegido = self._document_fragments(argumento, "quiz.working")
+        if elegido is None:
+            return False
+        _, fragmentos = elegido
+
+        try:
+            cuestionario = self.rag.cuestionario_de_fragmentos(
+                fragmentos, idioma=self._summary_language()
+            )
+        except self.rag.MalformedQuizError as exc:
+            # A quiz is the one artifact where "nothing" beats "something":
+            # the core raises rather than hand back questions whose answer key
+            # it could not verify, and the user needs to know that is why the
+            # panel is missing rather than assume the document was too thin.
+            ui.error(ui._s("quiz.malformed", error=str(exc)[:160]))
+            return False
+        except Exception as exc:
+            ui.error(ui._s("quiz.failed", error=str(exc)[:160]))
+            return False
+
+        ui.quiz_panel(cuestionario)
         return False
 
     def _summary_language(self) -> str:

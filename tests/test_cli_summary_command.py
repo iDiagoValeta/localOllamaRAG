@@ -43,7 +43,7 @@ class _FakeRagEngine:
 def _cli(engine, docs=(("paper.pdf",),)):
     cli = MonkeyGrabCLI(engine)
     cli.collection = object()
-    cli._get_document_summaries = lambda: [{"source": d} for (d,) in docs]
+    cli._get_document_summaries = lambda: [{"name": d} for (d,) in docs]
     return cli
 
 
