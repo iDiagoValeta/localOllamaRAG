@@ -61,7 +61,7 @@ which parses imports — not a convention to trust by eye): `application` may
 import `domain`/`ports`/`config`; `ports` may import `domain`; `domain` and
 `config` import nothing internal. `adapters` implement `ports` but are never
 imported *by* `domain`/`ports`/`config`/`application`. Full explanation and
-how to add a new adapter: [`src/monkeygrab/README.md`](../src/monkeygrab/README.md).
+how to add a new adapter: [`src/monkeygrab/README.md`](src/monkeygrab/README.md).
 
 ```
 src/monkeygrab/          Hexagonal core (see src/monkeygrab/README.md)
@@ -134,13 +134,13 @@ Other env vars: `DOCS_FOLDER` (default `rag/docs/en/`), `MONKEYGRAB_DATA_DIR` (w
 
 The Ollama endpoint has exactly one reader, `monkeygrab.config.env.read_env_ollama_base_url`, feeding `AppConfig.models.ollama.base_url` and `rag.chat_pdfs.OLLAMA_BASE_URL`. Every generation call, both `/chat` modes and both reachability checks (CLI startup, web control panel) resolve through it. Do not re-read the variable at a call site: a second resolution is how the CLI health check ended up reporting a server the pipeline never talked to.
 
-Desktop app: `rag/web/desktop.py` is the pywebview entry point frozen by PyInstaller (`packaging/MonkeyGrab.spec`, `packaging/build_exe.py`) into `MonkeyGrab.exe`. Built-in corpora ship in the bundle; Ollama is an external prerequisite. See [`packaging/README.md`](../packaging/README.md).
+Desktop app: `rag/web/desktop.py` is the pywebview entry point frozen by PyInstaller (`packaging/MonkeyGrab.spec`, `packaging/build_exe.py`) into `MonkeyGrab.exe`. Built-in corpora ship in the bundle; Ollama is an external prerequisite. See [`packaging/README.md`](packaging/README.md).
 
 ---
 
 ## 4. Pipeline architecture
 
-> Full reference with signatures and constants: [`rag/README.md`](../rag/README.md) → [`src/monkeygrab/README.md`](../src/monkeygrab/README.md). Pipeline behavior as currently observed: `tests/characterization/`.
+> Full reference with signatures and constants: [`rag/README.md`](rag/README.md) → [`src/monkeygrab/README.md`](src/monkeygrab/README.md). Pipeline behavior as currently observed: `tests/characterization/`.
 
 ---
 
