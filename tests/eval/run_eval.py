@@ -1421,6 +1421,20 @@ def evaluate(
                 _sources_in_store(stack_blind.vector_store) if stack_blind else set(),
             )
 
+            # Indexing is a use, so it starts each corpus's jina-clip worker
+            # and loads its reranker, and both stay resident afterwards.
+            # Phase 1 then opens the one it needs on top of them: measured
+            # 2026-09-01, indexing three new blind papers left two workers
+            # alive and every dev case failed reranking with CUDA OOM before
+            # retrieval had touched the second corpus at all (issue #123).
+            #
+            # Safe because both reload on next use and say so: the embedder's
+            # _ensure_worker starts a new process when close() has set
+            # _process to None, and CrossEncoderReranker.release's docstring
+            # states "a later rerank simply loads again". Releasing here costs
+            # one model load and buys the phase the whole card.
+            _release_gpu_models(retrieve_dev, retrieve_blind)
+
             print(
                 f"\n[run] stack={stack_slug} {len(cases)} cases x up to {len(models)} model(s)\n",
                 flush=True,
