@@ -142,18 +142,42 @@ def _installed_ollama_models() -> List[str]:
     return [m["name"] for m in response.json().get("models", []) if m.get("name")]
 
 
+def _with_implicit_tag(name: str) -> str:
+    """``qwen3:8b`` unchanged, ``qwen3-coder-30b`` -> ``qwen3-coder-30b:latest``.
+
+    Ollama treats a bare name and ``name:latest`` as the same model everywhere
+    -- ``ollama run qwen3-coder-30b`` works on a model ``ollama list`` shows as
+    ``qwen3-coder-30b:latest`` -- but ``/api/tags`` always returns the tagged
+    form. Comparing the two directly told an operator to pull a model they
+    already had, and following that instruction is a no-op that leaves them no
+    wiser (issue #129).
+
+    A digest reference (``model@sha256:...``) is left alone: it already names
+    an exact blob, and appending a tag to it would be nonsense.
+    """
+    if ":" in name or "@" in name:
+        return name
+    return f"{name}:latest"
+
+
 def preflight_ollama(required_models: Iterable[str]) -> None:
     """Fail fast, with an exact `ollama pull` list, if any model is missing.
 
     Args:
-        required_models: Every Ollama model name this run will call.
+        required_models: Every Ollama model name this run will call. A name
+            with no tag is checked as ``:latest``, matching how Ollama itself
+            resolves it (issue #129).
 
     Raises:
         EvalSetupError: Ollama is unreachable, or one or more models are
             missing (message lists every missing model, not just the first).
     """
-    installed = set(_installed_ollama_models())
-    missing = sorted(set(required_models) - installed)
+    installed = {_with_implicit_tag(name) for name in _installed_ollama_models()}
+    # Reported by the name the caller passed, not the normalised one: the
+    # message has to be something they can paste back.
+    missing = sorted(
+        name for name in set(required_models) if _with_implicit_tag(name) not in installed
+    )
     if missing:
         pulls = "\n".join(f"  ollama pull {name}" for name in missing)
         raise EvalSetupError(f"{len(missing)} required Ollama model(s) not installed:\n{pulls}")
