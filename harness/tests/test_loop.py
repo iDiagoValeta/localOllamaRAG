@@ -509,6 +509,7 @@ def _seed_entry(
     verdict="accepted",
     effective_config=None,
     evaluated_case_set="search_set",
+    environment_fingerprint=None,
 ):
     import dataclasses
 
@@ -542,6 +543,7 @@ def _seed_entry(
         latency_ceiling_multiplier=loop.LATENCY_CEILING_MULTIPLIER,
         verdict=verdict,
         reason="seeded",
+        environment_fingerprint=environment_fingerprint,
     )
     ledger_mod.write_entry(entry, tmp_path_ledger)
 
@@ -853,6 +855,12 @@ def test_describe_comparability_on_an_empty_ledger():
         "history_entries": 0,
         "comparable_search_set_states": 0,
         "high_water_objective_adjusted": None,
+        # Issue #107: no comparable state, so none verified and none
+        # unverified -- the split is over what pairing would actually use --
+        # and no high water whose stack could be verified either way.
+        "high_water_environment_verified": None,
+        "environment_verified_states": 0,
+        "environment_unverified_states": 0,
         "incomparable_reasons": [],
     }
 
@@ -974,3 +982,181 @@ def test_candidate_overrides_win_over_reference_pins(tmp_path):
     entry = report["iterations"][0]
     # The candidate's own value reached the ledger's provenance.
     assert entry["config_overrides"] == {"retrieval.top_k_final": 8}
+
+
+# ENVIRONMENT DRIFT (issue #107): comparable-view equality covers models,
+# chunking and index-time flags, and nothing else. A healthy August baseline
+# can therefore hold passes today's MinerU/jina-clip cannot reach -- recovery
+# pairs against a high water nobody can climb back to, every campaign ends
+# rejected_regression on ghost passes, and there is no bug to fix. The stack
+# each iteration ran on is recorded per entry, and a KNOWN-different stack
+# makes an entry incomparable. Unknown does not: pre-v3 entries carry no
+# fingerprint, and calling them different would disarm recovery mode across
+# the whole existing ledger, discarding the evidence #92 was built on.
+
+_STACK_AUGUST = {"schema": 1, "packages": {"isolated:mineru": "2.6.3"}}
+_STACK_TODAY = {"schema": 1, "packages": {"isolated:mineru": "3.4.5"}}
+
+_ONE_PASS = [{"id": "a", "case_type": "factual_number", "passed": True, "elapsed_seconds": 200.0}]
+
+
+def test_an_entry_measured_on_a_different_stack_is_not_comparable(tmp_path):
+    from harness import ledger as ledger_mod
+
+    _seed_entry(tmp_path, 1, 27, _ONE_PASS, environment_fingerprint=_STACK_AUGUST)
+    info = loop.describe_ledger_comparability(
+        AppConfig(), list(ledger_mod.read_history(tmp_path)), launch_environment=_STACK_TODAY
+    )
+    assert info["comparable_search_set_states"] == 0
+    assert info["high_water_objective_adjusted"] is None
+    assert info["incomparable_reasons"] == [
+        "isolated:mineru: this launch '3.4.5', ledger '2.6.3'"
+    ]
+
+
+def test_an_entry_from_the_same_stack_is_comparable_and_reported_as_verified(tmp_path):
+    from harness import ledger as ledger_mod
+
+    _seed_entry(tmp_path, 1, 27, _ONE_PASS, environment_fingerprint=_STACK_TODAY)
+    info = loop.describe_ledger_comparability(
+        AppConfig(), list(ledger_mod.read_history(tmp_path)), launch_environment=_STACK_TODAY
+    )
+    assert info["comparable_search_set_states"] == 1
+    assert info["environment_verified_states"] == 1
+    assert info["environment_unverified_states"] == 0
+
+
+def test_an_entry_without_a_fingerprint_stays_comparable_but_counts_as_unverified(tmp_path):
+    """Every entry written before schema v3 is this case. Disarming them would
+    solve #107 by throwing away #92's evidence -- so they still pair, and the
+    launch line says how many are unverified."""
+    from harness import ledger as ledger_mod
+
+    _seed_entry(tmp_path, 1, 27, _ONE_PASS, environment_fingerprint=None)
+    info = loop.describe_ledger_comparability(
+        AppConfig(), list(ledger_mod.read_history(tmp_path)), launch_environment=_STACK_TODAY
+    )
+    assert info["comparable_search_set_states"] == 1
+    assert info["environment_verified_states"] == 0
+    assert info["environment_unverified_states"] == 1
+    assert info["incomparable_reasons"] == []
+
+
+def test_an_unreadable_launch_environment_verifies_nothing_and_rejects_nothing(tmp_path):
+    """environment_fingerprint() returns None when it cannot read the stack.
+    That is a gap in provenance, not evidence that anything drifted."""
+    from harness import ledger as ledger_mod
+
+    _seed_entry(tmp_path, 1, 27, _ONE_PASS, environment_fingerprint=_STACK_AUGUST)
+    info = loop.describe_ledger_comparability(
+        AppConfig(), list(ledger_mod.read_history(tmp_path)), launch_environment=None
+    )
+    assert info["comparable_search_set_states"] == 1
+    assert info["environment_unverified_states"] == 1
+
+
+def test_the_high_water_skips_an_entry_measured_on_a_different_stack(tmp_path):
+    """The #107 failure in one assertion: the drifted entry scores higher, and
+    pairing against it is what makes recovery structurally unreachable."""
+    from harness import ledger as ledger_mod
+
+    _seed_entry(tmp_path, 1, 30, _ONE_PASS, environment_fingerprint=_STACK_AUGUST)
+    _seed_entry(tmp_path, 2, 27, _ONE_PASS, environment_fingerprint=_STACK_TODAY)
+    entries = list(ledger_mod.read_history(tmp_path))
+    import dataclasses
+
+    view = loop._comparable_config_view(dataclasses.asdict(AppConfig()))
+
+    high_water = loop._historical_high_water(entries, view, launch_environment=_STACK_TODAY)
+    assert high_water is not None and high_water.iteration == 2
+
+    both = loop._historical_high_water(entries, view, launch_environment=None)
+    assert both is not None and both.iteration == 1
+
+
+def test_run_loop_stamps_the_launch_environment_into_every_entry(tmp_path):
+    from harness import ledger as ledger_mod
+
+    search_ids = ["a", "b"]
+
+    def evaluate(overrides, case_ids):
+        return ev.EvaluationResult(
+            records=tuple(
+                ev.CaseRecord(id=cid, case_type="factual_number", passed=True, elapsed_seconds=1.0)
+                for cid in case_ids
+            ),
+            effective_config=dict(overrides),
+        )
+
+    report = loop.run_loop(
+        reference=AppConfig(),
+        evaluate=evaluate,
+        proposer=_FixedProposer({"retrieval.top_k_final": 12}),
+        search_set_ids=search_ids,
+        fast_tier_ids=["a"],
+        unreachable_ids=(),
+        max_iterations=1,
+        patience=None,
+        ledger_dir=tmp_path,
+        verify_reachability=False,
+        launch_environment=_STACK_TODAY,
+    )
+
+    written = list(ledger_mod.read_history(tmp_path))
+    assert written and all(e.environment_fingerprint == _STACK_TODAY for e in written)
+    assert report["environment"]["fingerprint"] == _STACK_TODAY
+
+
+def test_the_report_says_when_the_launch_environment_could_not_be_read(tmp_path):
+    def evaluate(overrides, case_ids):
+        return ev.EvaluationResult(
+            records=tuple(
+                ev.CaseRecord(id=cid, case_type="factual_number", passed=True, elapsed_seconds=1.0)
+                for cid in case_ids
+            ),
+            effective_config=dict(overrides),
+        )
+
+    report = loop.run_loop(
+        reference=AppConfig(),
+        evaluate=evaluate,
+        proposer=_FixedProposer({"retrieval.top_k_final": 12}),
+        search_set_ids=["a", "b"],
+        fast_tier_ids=["a"],
+        unreachable_ids=(),
+        max_iterations=1,
+        patience=None,
+        ledger_dir=tmp_path,
+        verify_reachability=False,
+        launch_environment=None,
+    )
+    assert report["environment"]["fingerprint"] is None
+    assert report["environment"]["readable"] is False
+
+
+def test_the_launch_line_says_when_the_high_water_itself_is_unverified(tmp_path):
+    """The exact #107 situation: an aged entry outscores every verified one, so
+    the count of unverified states is not the fact that decides -- which entry
+    pairing will actually use is."""
+    from harness import ledger as ledger_mod
+
+    _seed_entry(tmp_path, 1, 30, _ONE_PASS, environment_fingerprint=None)
+    _seed_entry(tmp_path, 2, 25, _ONE_PASS, environment_fingerprint=_STACK_TODAY)
+    info = loop.describe_ledger_comparability(
+        AppConfig(), list(ledger_mod.read_history(tmp_path)), launch_environment=_STACK_TODAY
+    )
+    assert info["comparable_search_set_states"] == 2
+    assert info["high_water_objective_adjusted"] == 30
+    assert info["high_water_environment_verified"] is False
+
+
+def test_a_verified_high_water_is_reported_as_verified(tmp_path):
+    from harness import ledger as ledger_mod
+
+    _seed_entry(tmp_path, 1, 25, _ONE_PASS, environment_fingerprint=None)
+    _seed_entry(tmp_path, 2, 30, _ONE_PASS, environment_fingerprint=_STACK_TODAY)
+    info = loop.describe_ledger_comparability(
+        AppConfig(), list(ledger_mod.read_history(tmp_path)), launch_environment=_STACK_TODAY
+    )
+    assert info["high_water_objective_adjusted"] == 30
+    assert info["high_water_environment_verified"] is True

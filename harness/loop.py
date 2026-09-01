@@ -98,6 +98,7 @@ import dataclasses
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence
 
+from harness import environment as environment_mod
 from harness import evaluator as evaluator_mod
 from harness import ledger as ledger_mod
 from harness import proposers as proposers_mod
@@ -145,6 +146,15 @@ RESOLUTION_WARNING: Dict[str, Any] = {
         "(block B, the corpus expansion this harness is sized against)."
     ),
 }
+
+
+# run_loop's `launch_environment` has three meaningful states and only two
+# would fit in `None`: "read it from this machine" (the default), "this exact
+# fingerprint" (tests, and any caller that already read it), and "unreadable,
+# so verify nothing" -- which IS None, because that is what
+# environment.environment_fingerprint returns when it cannot read the stack.
+# A sentinel keeps the third from being spelled the same as the first.
+_READ_ENVIRONMENT = object()
 
 
 def _bucket_stats(records: Sequence[evaluator_mod.CaseRecord], key_fn) -> Dict[str, Dict[str, Any]]:
@@ -266,17 +276,36 @@ def _comparable_config_view(effective_config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def is_comparable_search_set_entry(
-    entry: ledger_mod.LedgerEntry, comparable_view: Dict[str, Any]
+    entry: ledger_mod.LedgerEntry,
+    comparable_view: Dict[str, Any],
+    launch_environment: Optional[Dict[str, Any]] = None,
 ) -> bool:
     """Whether ``entry`` can serve as a recovery-mode baseline for this view.
 
     Only complete, non-``inconclusive`` search-set evaluations carry the full
     pass vector recovery pairing needs; fast-tier-rejected entries do not.
+
+    An entry measured on a KNOWN-different stack is rejected too (issue #107).
+    Configuration equality says the two runs asked the pipeline the same
+    question; it says nothing about whether the pipeline was the same, and a
+    2026-08 baseline held passes the current MinerU/jina-clip cannot reach --
+    so recovery paired against a high water nobody could climb back to and
+    every campaign ended ``rejected_regression`` with no bug to fix.
+
+    "Known" is doing real work in that sentence. ``environment.compare``
+    answers ``UNKNOWN`` for any entry written before schema v3, and this
+    function treats that as comparable: the alternative disarms recovery mode
+    across the entire existing ledger, which would fix #107 by discarding the
+    evidence #92 was built on. ``describe_ledger_comparability`` counts those
+    entries separately so an operator sees how much of the pairing is
+    unverified rather than assuming all of it was checked.
     """
     return (
         entry.evaluated_case_set == "search_set"
         and entry.verdict != "inconclusive"
         and _comparable_config_view(entry.effective_config) == comparable_view
+        and environment_mod.compare(entry.environment_fingerprint, launch_environment)
+        != environment_mod.DIFFERS
     )
 
 
@@ -304,7 +333,9 @@ def _diff_comparable_views(
     return diffs
 
 
-def describe_ledger_comparability(reference, entries) -> Dict[str, Any]:
+def describe_ledger_comparability(
+    reference, entries, launch_environment: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """What an operator should know about prior history BEFORE paying evaluations.
 
     Recovery mode's actual arming additionally depends on the reference
@@ -313,27 +344,64 @@ def describe_ledger_comparability(reference, entries) -> Dict[str, Any]:
     silently incomparable ledger is how a campaign spends hours fabricating
     evidence against its own fix).
 
+    Issue #107 adds the second half of that warning. Counting comparable
+    states was never the same as counting *verified* ones: an entry with no
+    recorded stack still pairs, and until schema v3 every entry was in that
+    position. The two counts are reported separately so "12 comparable
+    states" cannot be read as "12 states measured on this stack" when the
+    truth is that none of them said.
+
     Returns:
         A dict with ``history_entries``, ``comparable_search_set_states``,
         ``high_water_objective_adjusted`` (max among comparable states, or
-        ``None``), and ``incomparable_reasons`` -- empty unless entries exist
-        and none of them is comparable, in which case it names the fields
-        that differ against the latest entry.
+        ``None``), ``environment_verified_states`` and
+        ``environment_unverified_states`` (the comparable ones split by
+        whether their stack was actually checked against this launch's), and
+        ``incomparable_reasons`` -- empty unless entries exist and none of
+        them is comparable, in which case it names the fields that differ
+        against the latest entry, stack included.
     """
     comparable_view = _comparable_config_view(dataclasses.asdict(reference))
-    comparable = [e for e in entries if is_comparable_search_set_entry(e, comparable_view)]
+    comparable = [
+        e
+        for e in entries
+        if is_comparable_search_set_entry(e, comparable_view, launch_environment)
+    ]
+    verified = sum(
+        1
+        for e in comparable
+        if environment_mod.compare(e.environment_fingerprint, launch_environment)
+        == environment_mod.MATCH
+    )
+    # The count of unverified states says how much of the history is
+    # unchecked; this says whether the ONE entry that will actually be paired
+    # against is among them, which is the fact that decides whether a refresh
+    # campaign is due (#107). They differ exactly when the high water is the
+    # aged entry -- the situation that opened the issue.
+    high_water = _historical_high_water(entries, comparable_view, launch_environment)
     info: Dict[str, Any] = {
         "history_entries": len(entries),
         "comparable_search_set_states": len(comparable),
-        "high_water_objective_adjusted": max(
-            (e.objective_adjusted for e in comparable), default=None
+        "high_water_objective_adjusted": (
+            high_water.objective_adjusted if high_water is not None else None
         ),
+        "high_water_environment_verified": (
+            None
+            if high_water is None
+            else environment_mod.compare(high_water.environment_fingerprint, launch_environment)
+            == environment_mod.MATCH
+        ),
+        "environment_verified_states": verified,
+        "environment_unverified_states": len(comparable) - verified,
         "incomparable_reasons": [],
     }
     if entries and not comparable:
         latest = entries[-1]
         diffs = _diff_comparable_views(
             comparable_view, _comparable_config_view(latest.effective_config)
+        )
+        diffs += environment_mod.describe_difference(
+            latest.environment_fingerprint, launch_environment
         )
         info["incomparable_reasons"] = diffs or [
             "config matches the latest entry but it carries no complete search-set pass vector"
@@ -344,6 +412,7 @@ def describe_ledger_comparability(reference, entries) -> Dict[str, Any]:
 def _historical_high_water(
     entries: Sequence[ledger_mod.LedgerEntry],
     comparable_view: Dict[str, Any],
+    launch_environment: Optional[Dict[str, Any]] = None,
 ) -> Optional[ledger_mod.LedgerEntry]:
     """The best comparable search-set state in prior ledger history, or ``None``.
 
@@ -356,7 +425,7 @@ def _historical_high_water(
     """
     best: Optional[ledger_mod.LedgerEntry] = None
     for entry in entries:
-        if is_comparable_search_set_entry(entry, comparable_view):
+        if is_comparable_search_set_entry(entry, comparable_view, launch_environment):
             if best is None or entry.objective_adjusted >= best.objective_adjusted:
                 best = entry
     return best
@@ -395,6 +464,7 @@ def _build_entry(
     reason: str,
     candidate_latency: Optional[Dict[str, Optional[float]]] = None,
     regression_baseline_iteration: Optional[int] = None,
+    environment_fingerprint: Optional[Dict[str, Any]] = None,
 ) -> ledger_mod.LedgerEntry:
     objective_raw, objective_adjusted = evaluator_mod.compute_objective(
         result.records, unreachable_ids
@@ -426,6 +496,7 @@ def _build_entry(
         verdict=verdict,
         reason=reason,
         regression_baseline_iteration=regression_baseline_iteration,
+        environment_fingerprint=environment_fingerprint,
     )
 
 
@@ -443,6 +514,7 @@ def run_loop(
     verify_reachability: bool = True,
     reachability_probe_case_ids: Sequence[str] = (),
     reference_overrides: Optional[Dict[str, Any]] = None,
+    launch_environment: Any = _READ_ENVIRONMENT,
 ) -> Dict[str, Any]:
     """Run the search until termination, writing one ledger entry per iteration.
 
@@ -490,6 +562,12 @@ def run_loop(
         written this run. Always returned, on every termination path
         (criterion 8) -- including when the search space is exhausted.
 
+        launch_environment: The installed stack this campaign runs on, stamped
+            into every entry and used to reject a ledger entry measured on a
+            known-different one (issue #107). Defaults to reading this
+            machine; pass ``None`` to verify nothing, or an explicit
+            fingerprint to pin it.
+
     Raises:
         ValueError: Neither ``max_iterations`` nor ``patience`` is set.
         evaluator.ReachabilityError: ``evaluate`` rejects a declared key at
@@ -502,6 +580,8 @@ def run_loop(
         raise ValueError("run_loop needs max_iterations and/or patience to guarantee termination")
 
     reference_overrides = dict(reference_overrides or {})
+    if launch_environment is _READ_ENVIRONMENT:
+        launch_environment = environment_mod.environment_fingerprint()
 
     if verify_reachability:
         evaluator_mod.verify_reachable(evaluate, reachability_probe_case_ids)
@@ -530,7 +610,7 @@ def run_loop(
     # vector. Frozen here from PRIOR history; this run's own entries never
     # move it mid-campaign.
     comparable_view = _comparable_config_view(dataclasses.asdict(reference))
-    high_water = _historical_high_water(entries_so_far, comparable_view)
+    high_water = _historical_high_water(entries_so_far, comparable_view, launch_environment)
     if high_water is not None and high_water.objective_adjusted > reference_objective_adjusted:
         recovery_mode = True
         # The high-water entry carries the full search-set pass vector, which
@@ -542,7 +622,7 @@ def run_loop(
         eligible_history_entries = sum(
             1
             for e in entries_so_far
-            if is_comparable_search_set_entry(e, comparable_view)
+            if is_comparable_search_set_entry(e, comparable_view, launch_environment)
         )
     else:
         recovery_mode = False
@@ -593,6 +673,7 @@ def run_loop(
                 reference_latency=reference_latency,
                 verdict="inconclusive",
                 reason="fast-tier evaluation carries infrastructure_error record(s) -- not scored",
+                environment_fingerprint=launch_environment,
             )
         else:
             regressed = _regressed_ids(fast_regression_baseline, fast_result.records)
@@ -615,7 +696,8 @@ def run_loop(
                     reference_latency=reference_latency,
                     verdict="rejected_regression",
                     reason=f"fast-tier regression on {regressed}{baseline_note}",
-                    regression_baseline_iteration=recovery_baseline_iteration,
+                    environment_fingerprint=launch_environment,
+                regression_baseline_iteration=recovery_baseline_iteration,
                 )
             else:
                 full_result = evaluate(
@@ -636,6 +718,7 @@ def run_loop(
                         reference_latency=reference_latency,
                         verdict="inconclusive",
                         reason="search-set evaluation carries infrastructure_error record(s) -- not scored",
+                        environment_fingerprint=launch_environment,
                     )
                 else:
                     candidate_latency = evaluator_mod.median_latency_by_bucket(full_result.records)
@@ -687,7 +770,8 @@ def run_loop(
                         # Provenance on every SCORED entry, accepted ones
                         # included: which pass vector the regression checks
                         # paired against is part of the evidence.
-                        regression_baseline_iteration=recovery_baseline_iteration,
+                        environment_fingerprint=launch_environment,
+                regression_baseline_iteration=recovery_baseline_iteration,
                     )
 
         ledger_mod.write_entry(entry, ledger_dir)
@@ -725,6 +809,14 @@ def run_loop(
                 high_water.objective_adjusted if recovery_mode and high_water is not None else None
             ),
             "eligible_history_entries": eligible_history_entries,
+        },
+        "environment": {
+            # Issue #107: which stack this campaign measured on. `readable` is
+            # False when the versions could not be read at all -- a gap in
+            # provenance, not evidence that anything drifted, and the two read
+            # identically in a report that only carried the fingerprint.
+            "fingerprint": launch_environment,
+            "readable": launch_environment is not None,
         },
         "resolution_warning": RESOLUTION_WARNING,
         "iterations": [e.to_dict() for e in new_entries],

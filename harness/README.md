@@ -456,3 +456,78 @@ Fixed alongside:
   it"), a healthy campaign's entries are what makes a later sabotaged run
   recoverable. Pointing a criterion-5 campaign at the same `--ledger-dir` as
   its healthy sibling is what arms recovery mode.
+
+## Environment drift (issue #107, decided 2026-09-01)
+
+Recovery mode above pairs against a comparable prior state, and
+`_comparable_config_view` decides comparability from **configuration alone**:
+model roles, chunking, index-time flags. That view is complete for what a
+campaign *asked* the pipeline and silent about whether the pipeline was the
+same one.
+
+The gap is not hypothetical. During the criterion-5 validation campaign of
+2026-08-23, the restoration candidate was rejected for losing
+`planck-contours-figure` against the healthy high water of 2026-08-19 — and
+the loss was real that day, measured three ways. Nothing in the pairing logic
+was wrong; the August entry simply held a pass the then-current stack could no
+longer reach. Left alone, enough drift makes every criterion-5 campaign end
+`rejected_regression` on ghost passes, recovery becomes structurally
+unreachable again with **no bug to fix**, and the tempting move is to edit
+history instead of refreshing it.
+
+`environment.py` records what was *installed*, per entry, alongside what was
+configured:
+
+- **Two environments, never merged.** `.venv-mineru` (MinerU, jina-clip) builds
+  the index; the product interpreter (BGE reranker, FAISS, BM25, the Ollama
+  client) decides retrieval and generation. `transformers`,
+  `sentence-transformers` and `torch` are installed in both at deliberately
+  different versions, so keys are qualified (`isolated:transformers` vs
+  `product:transformers`). One merged key would record one of the two and drop
+  the other, and the dropped one is a real input to the result.
+- **A declared package list**, hand-written like `SEARCH_SPACE`: each entry is
+  a claim that this package can change a case's outcome. A `pip freeze`
+  fingerprint would report drift on every unrelated transitive bump.
+- **The git commit is not part of it.** It is already recorded per entry and it
+  moves on every commit, README edits included. Folding it in would make every
+  entry incomparable with every other one — not strict, useless.
+- **Read from `*.dist-info` directory names**, because `importlib` and
+  `subprocess` are both banned under `harness/`
+  (`test_harness_boundaries.py`). The restriction turns out to be the right
+  tool anyway: it is the only one of the three that can read the *isolated*
+  venv, a different interpreter this process never runs.
+
+### Unknown is not the same as different
+
+`environment.compare` answers `match`, `differs` or `unknown`, and
+`is_comparable_search_set_entry` rejects **only** `differs`.
+
+That is the whole design decision. Every entry written before ledger schema v3
+carries no fingerprint, so treating unknown as different would disarm recovery
+mode across the entire existing ledger — solving #107 by discarding the
+evidence #92 was built on. It is the same distinction
+`index_fingerprint.fingerprint_is_stale` draws in the product: a missing value
+is not a mismatch.
+
+Two consequences follow, and both are reported rather than hidden:
+
+- A fingerprint that could not be read at all is `None`, never a dict of
+  `None`s. Two environments that know nothing would otherwise compare equal
+  and claim a verified comparability neither has.
+- The launch line splits comparable states into verified and unverified, so
+  "12 comparable states" cannot be read as "12 measured on this stack" when
+  none of them said. Every report carries an `environment` block with the
+  fingerprint and whether it was readable.
+- **The count is not the fact that decides; the high water is.** A campaign
+  pairs against exactly one entry, so the launch line says separately whether
+  *that* entry's stack was verified (`high_water_environment_verified`). The
+  two answers differ precisely when the aged entry outscores every verified
+  one — the situation that opened #107 — and that is when a refresh is due.
+
+### What this does not do
+
+It makes drift **visible**; it does not make an aged baseline reachable again.
+That is issue #107's option 1, the refresh campaign: re-run a healthy grid on
+the current stack into the same ledger, and the latest-tie rule prefers the
+newer high water on its own. This half is what tells an operator, at launch
+and before hours are paid, that a refresh is what the ledger needs.

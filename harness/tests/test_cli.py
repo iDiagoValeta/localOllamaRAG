@@ -120,3 +120,73 @@ def test_cli_replay_exits_nonzero_when_the_iteration_is_missing(tmp_path, capsys
     code = cli.main(["--dry-run", "--replay", "9", "--ledger-dir", str(tmp_path)])
     assert code == 1
     assert "iteration 9" in capsys.readouterr().err
+
+
+# THE LAUNCH LINE (issues #100 and #107). Its whole job is carrying facts a
+# campaign depends on before hours are paid, so the lines are tested rather
+# than trusted: a mistyped key would drop the warning that matters most while
+# everything still ran green.
+
+
+def _comparability(**overrides):
+    base = {
+        "history_entries": 3,
+        "comparable_search_set_states": 2,
+        "high_water_objective_adjusted": 30,
+        "high_water_environment_verified": True,
+        "environment_verified_states": 2,
+        "environment_unverified_states": 0,
+        "incomparable_reasons": [],
+    }
+    base.update(overrides)
+    return base
+
+
+def test_launch_line_reports_counts_and_the_high_water():
+    lines = cli.format_comparability_lines(_comparability())
+    assert lines[0] == "ledger history: 3 entry(ies), 2 comparable search-set state(s)"
+    assert "historical high water: 30" in lines[1]
+    assert not any("WARNING" in line for line in lines)
+
+
+def test_launch_line_warns_when_the_high_water_itself_is_unverified():
+    """Issue #107: the one entry pairing will use is the one nobody's stack
+    matched. That is the fact that decides whether a refresh is due."""
+    lines = cli.format_comparability_lines(
+        _comparability(high_water_environment_verified=False,
+                       environment_verified_states=1, environment_unverified_states=1)
+    )
+    warning = [line for line in lines if "high-water entry was NOT measured" in line]
+    assert len(warning) == 1
+    assert "#107" in warning[0]
+
+
+def test_launch_line_counts_unverified_states_without_calling_them_wrong():
+    lines = cli.format_comparability_lines(
+        _comparability(environment_verified_states=1, environment_unverified_states=1)
+    )
+    unverified = [line for line in lines if "carry no comparable stack fingerprint" in line]
+    assert len(unverified) == 1
+    assert "unverified, not wrong" in unverified[0]
+
+
+def test_launch_line_says_nothing_about_the_stack_when_everything_is_verified():
+    lines = cli.format_comparability_lines(_comparability())
+    assert not any("fingerprint" in line for line in lines)
+
+
+def test_launch_line_still_names_a_config_mismatch():
+    """Issue #100's own warning must survive #107's additions."""
+    lines = cli.format_comparability_lines(
+        _comparability(
+            comparable_search_set_states=0,
+            high_water_objective_adjusted=None,
+            high_water_environment_verified=None,
+            environment_verified_states=0,
+            environment_unverified_states=0,
+            incomparable_reasons=["models.chat: this launch 'a', ledger 'b'"],
+        )
+    )
+    assert lines[-1] == (
+        "  WARNING recovery-mode history mismatch -- models.chat: this launch 'a', ledger 'b'"
+    )
