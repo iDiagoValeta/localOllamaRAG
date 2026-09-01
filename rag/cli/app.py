@@ -437,7 +437,7 @@ class MonkeyGrabCLI:
         """
         docs = self._get_document_summaries()
         if not docs:
-            ui.error(self._s("summary.no.docs"))
+            ui.error(ui._s("summary.no.docs"))
             return False
 
         nombres = [d.get("source", "") for d in docs if d.get("source")]
@@ -445,21 +445,21 @@ class MonkeyGrabCLI:
         if elegido is None:
             return False
 
-        ui.info(self._s("summary.working", doc=elegido))
+        ui.info(ui._s("summary.working", doc=elegido))
         try:
             fragmentos = self.rag.fragmentos_de_documento(elegido)
             if not fragmentos:
-                ui.error(self._s("summary.empty.doc", doc=elegido))
+                ui.error(ui._s("summary.empty.doc", doc=elegido))
                 return False
             resumen = self.rag.resumir_fragmentos(fragmentos, idioma=self._summary_language())
         except self.rag.MalformedSummaryError as exc:
             # Shown rather than swallowed: an empty panel with no reason is
             # worse than an ugly error, and this one is actionable -- it means
             # the model ignored the format, which a different model may not.
-            ui.error(self._s("summary.malformed", error=str(exc)[:160]))
+            ui.error(ui._s("summary.malformed", error=str(exc)[:160]))
             return False
         except Exception as exc:
-            ui.error(self._s("summary.failed", error=str(exc)[:160]))
+            ui.error(ui._s("summary.failed", error=str(exc)[:160]))
             return False
 
         ui.summary_panel(resumen)
@@ -486,7 +486,7 @@ class MonkeyGrabCLI:
         if not argumento:
             ui.document_choices(nombres)
             try:
-                argumento = ui.ask(self._s("summary.prompt")).strip()
+                argumento = ui.ask(ui._s("summary.prompt")).strip()
             except (EOFError, KeyboardInterrupt):
                 return None
             if not argumento:
@@ -496,7 +496,7 @@ class MonkeyGrabCLI:
             indice = int(argumento) - 1
             if 0 <= indice < len(nombres):
                 return nombres[indice]
-            ui.error(self._s("summary.bad.number", n=len(nombres)))
+            ui.error(ui._s("summary.bad.number", n=len(nombres)))
             return None
 
         # Substring match, case-insensitive: "planck" should find
@@ -508,9 +508,9 @@ class MonkeyGrabCLI:
         if len(coincidencias) == 1:
             return coincidencias[0]
         if not coincidencias:
-            ui.error(self._s("summary.no.match", query=argumento))
+            ui.error(ui._s("summary.no.match", query=argumento))
             return None
-        ui.error(self._s("summary.ambiguous", query=argumento, matches=", ".join(coincidencias)))
+        ui.error(ui._s("summary.ambiguous", query=argumento, matches=", ".join(coincidencias)))
         return None
 
     def _cmd_topics(self) -> bool:
