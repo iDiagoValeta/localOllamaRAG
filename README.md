@@ -241,10 +241,21 @@ project's own install instructions.
 CLIP v2 can run on CPU (that is how the roughly 100 seconds per document
 figure was measured, impractical for indexing), but this project's worker
 refuses to start it there. That is the same "no silent fallbacks" policy
-from above, applied to a slow device instead of a missing one. There is no
-setup script for this yet; see
+from above, applied to a slow device instead of a missing one. See
 [`src/monkeygrab/README.md`](src/monkeygrab/README.md) for how the isolation
 is used.
+
+Both environments can be built and verified in one command:
+
+```bash
+python tools/setup_environments.py            # build .venv and .venv-mineru, then check
+python tools/setup_environments.py --check    # verify only: is this machine set up?
+```
+
+`--check` reports each component separately — both interpreters, CUDA visible
+to the isolated one, the MinerU binary, the jina-clip worker actually loading,
+and which configured Ollama models are missing. It never pulls models: that is
+gigabytes over your connection. Teardown is `rm -rf .venv .venv-mineru`.
 
 Copy [`.env.example`](.env.example) to `.env` at the project root; it documents
 every supported variable with its default. The shell environment always wins over

@@ -8,10 +8,13 @@ standard (what gets documented where) is [`docs/README.md`](docs/README.md).
 ## Setup
 
 ```bash
-pip install -r rag/requirements.txt          # core
-pip install -r rag/web/requirements.txt      # web UI
+python tools/setup_environments.py                     # .venv + .venv-mineru, then verify
 cd rag/web/frontend && pnpm install && pnpm run build   # frontend (pnpm only)
 ```
+
+`python tools/setup_environments.py --check` answers "is this machine set up?"
+without installing anything, and names the component that is missing rather
+than the whole setup.
 
 Ollama must be running locally with a generator model pulled; a CUDA GPU is
 required for indexing (jina-clip hard-fails without one). MinerU and Jina CLIP
