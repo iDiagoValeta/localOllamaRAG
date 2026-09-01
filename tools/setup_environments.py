@@ -178,7 +178,11 @@ def _check_mineru_binary() -> Tuple[bool, str]:
             result = subprocess.run(
                 [str(candidate), "--version"], capture_output=True, text=True, timeout=120
             )
-            version = (result.stdout or result.stderr).strip().splitlines()[-1] if result.stdout or result.stderr else "?"
+            # A binary that exists but prints nothing to either stream is the
+            # case that used to raise IndexError out of a diagnostic whose one
+            # job is to survive a broken install and describe it.
+            lines = (result.stdout or result.stderr or "").strip().splitlines()
+            version = lines[-1] if lines else "present, but --version printed nothing"
             return True, f"MinerU: {version}"
     return False, f"MinerU: no binary under {ISOLATED_VENV}"
 
@@ -251,22 +255,33 @@ def _check_ollama() -> Tuple[bool, str]:
 
 def run_checks() -> int:
     """Every precondition, each reported separately. Returns a process exit code."""
+    # Labelled explicitly rather than read off __name__: half the entries are
+    # lambdas, and a label guessed from a function object is the kind of
+    # pointer that names something real and wrong -- a raising CUDA probe
+    # reported as "interpreter check" sends the reader to rebuild a venv that
+    # is fine.
     checks = [
-        lambda: _check_interpreter(PRODUCT_VENV, ".venv"),
-        lambda: _check_interpreter(ISOLATED_VENV, ".venv-mineru"),
-        _check_cuda,
-        _check_mineru_binary,
-        _check_jina_worker,
-        _check_ollama,
+        (".venv", lambda: _check_interpreter(PRODUCT_VENV, ".venv")),
+        (".venv-mineru", lambda: _check_interpreter(ISOLATED_VENV, ".venv-mineru")),
+        ("CUDA", _check_cuda),
+        ("MinerU", _check_mineru_binary),
+        ("jina-clip", _check_jina_worker),
+        ("Ollama", _check_ollama),
     ]
     print("\nChecking:")
     failures = 0
     warnings = 0
-    for check in checks:
+    for label, check in checks:
         try:
             passed, message = check()
         except subprocess.TimeoutExpired:
-            passed, message = False, f"{check.__name__}: timed out"
+            passed, message = False, f"{label}: timed out"
+        except Exception as exc:  # noqa: BLE001 -- a diagnostic must outlive what it diagnoses
+            # Every check shells out to something that may be half-installed.
+            # One raising must report that check as failed, not abort the run
+            # and leave the remaining components unreported -- the state this
+            # script exists to describe is exactly the broken one.
+            passed, message = False, f"{label}: raised {type(exc).__name__}: {exc}"
         # Two states are not setup failures and must not read as one:
         # Ollama is the component this script does not build (a missing model
         # is a pull away), and a busy GPU means installed-and-occupied, which

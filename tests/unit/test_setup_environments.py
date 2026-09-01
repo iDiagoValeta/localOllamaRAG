@@ -115,3 +115,47 @@ class TestReporting:
         })
         assert setup.run_checks() == 1
         assert "1 component(s) missing" in capsys.readouterr().out
+
+
+class TestSurvivingWhatItDiagnoses:
+    """A diagnostic must outlive the broken install it is describing.
+
+    Found by re-reading the script rather than by a failure: every check
+    shells out to something that may be half-installed, and only
+    ``TimeoutExpired`` was caught. Anything else -- an ``OSError`` from a
+    binary that is not executable, a ``JSONDecodeError`` from a truncated
+    reply -- aborted the whole run and left the remaining components
+    unreported, which is exactly the state the script exists to describe.
+    """
+
+    def test_one_check_raising_does_not_abort_the_others(self, monkeypatch, capsys):
+        monkeypatch.setattr(setup, "_check_interpreter", lambda venv, label: (True, f"{label}: ok"))
+        monkeypatch.setattr(setup, "_check_cuda", lambda: (_ for _ in ()).throw(OSError("boom")))
+        monkeypatch.setattr(setup, "_check_mineru_binary", lambda: (True, "MinerU: 3.4.5"))
+        monkeypatch.setattr(setup, "_check_jina_worker", lambda: (True, "jina-clip: ready"))
+        monkeypatch.setattr(setup, "_check_ollama", lambda: (True, "Ollama: reachable"))
+
+        assert setup.run_checks() == 1
+        out = capsys.readouterr().out
+        assert "CUDA: raised OSError: boom" in out
+        # The checks after the raising one still ran and still reported.
+        assert "MinerU: 3.4.5" in out
+        assert "Ollama: reachable" in out
+
+    def test_a_binary_that_prints_no_version_is_still_reported_as_present(
+        self, monkeypatch, tmp_path
+    ):
+        """It used to raise IndexError off an empty splitlines()."""
+        binary = tmp_path / "bin" / "mineru"
+        binary.parent.mkdir(parents=True)
+        binary.write_text("", encoding="utf-8")
+        monkeypatch.setattr(setup, "ISOLATED_VENV", tmp_path)
+
+        class _Silent:
+            stdout = ""
+            stderr = ""
+
+        monkeypatch.setattr(setup.subprocess, "run", lambda *a, **k: _Silent())
+        passed, message = setup._check_mineru_binary()
+        assert passed
+        assert "printed nothing" in message
