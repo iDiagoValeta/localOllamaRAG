@@ -72,11 +72,13 @@ echo '{"id": 1, "op": "text", "text": "probe"}' \
 python -m harness.cli --dry-run --max-iterations 3
 ```
 
-> [!WARNING]
-> Never pass `--ledger-dir <a real ledger>` to `--dry-run`. It **appends its
-> demo iterations to that ledger** and they are indistinguishable from
-> measured ones afterwards (issue #115). Without `--ledger-dir`, a dry-run
-> writes to a fresh temp directory, which is the safe form used above.
+> [!NOTE]
+> A dry-run given `--ledger-dir <a ledger holding anything not marked demo>`
+> now refuses to start (exit 2) rather than appending its synthetic iterations
+> to it — which is what it used to do, indistinguishably from measured entries
+> (issue #115). `--status` and `--replay` only read, so neither is affected.
+> Without `--ledger-dir`, a dry-run writes to a fresh temp directory, which is
+> the safe form used above.
 
 A missing Ollama model is caught by the gate itself, at launch, with the exact
 `ollama pull` line to run — verified 2026-09-01, it failed in 20 s rather than
@@ -202,7 +204,10 @@ red test.
 - **Never hand-edit the ledger** to remove an inconvenient entry. It is
   append-only evidence. If the history is stale, the answer is a refresh
   campaign, not a delete (#107).
-- **Never run `--dry-run` against a real ledger** (§1's warning, #115).
+- **Never hand-write a demo result into a real ledger.** The tool now refuses
+  to do it for you (§1), and the refusal exists because a demo entry is not
+  inert: `GridProposer` reads history back to skip points already tried, and
+  `_historical_high_water` picks a pairing baseline from it (#115).
 - **Never weaken a test to make a campaign pass.** `tests/characterization/`
   pins current behaviour including its bugs; changing one is a signal to stop
   and confirm (`AGENTS.md` rule 9).

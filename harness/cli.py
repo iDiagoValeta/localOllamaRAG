@@ -212,12 +212,34 @@ def format_ledger_summary(entries: Sequence[ledger_mod.LedgerEntry]) -> list:
             f"  best search-set objective in this ledger: {best.objective_adjusted} "
             f"(iteration {best.iteration}) -- comparability decides whether this launch can use it"
         )
+    demo_entries = sum(1 for e in entries if e.evaluator == ledger_mod.EVALUATOR_DEMO)
+    if demo_entries:
+        lines.append(
+            f"  {demo_entries} entry(ies) came from the demo evaluator -- never used as "
+            "a pairing baseline, and reported rather than filtered silently (#115)"
+        )
     if without_fingerprint:
         lines.append(
             f"  {without_fingerprint} entry(ies) carry no stack fingerprint "
             "(written before ledger schema v3) -- their stack can never be verified (#107)"
         )
     return lines
+
+
+def _entries_a_demo_run_must_not_join(ledger_dir: Path) -> int:
+    """How many entries in ``ledger_dir`` a demo run has no business joining.
+
+    Anything not positively marked as demo counts, ``None`` included: an entry
+    written before ledger schema v4 cannot be known to be real, and that
+    uncertainty is the defect (issue #115), not an exemption from it.
+    """
+    if not ledger_dir.exists():
+        return 0
+    return sum(
+        1
+        for entry in ledger_mod.read_history(ledger_dir)
+        if entry.evaluator != ledger_mod.EVALUATOR_DEMO
+    )
 
 
 def _run_status(reference, ledger_dir: Path) -> int:
@@ -322,10 +344,36 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.dry_run:
         evaluate = evaluator_mod.build_demo_evaluator()
+        evaluator_kind = ledger_mod.EVALUATOR_DEMO
         ledger_dir = args.ledger_dir or Path(tempfile.mkdtemp(prefix="harness_dry_run_"))
     else:
         evaluate = evaluator_mod.real_evaluate
+        evaluator_kind = ledger_mod.EVALUATOR_REAL
         ledger_dir = args.ledger_dir or ledger_mod.LEDGER_DIR
+
+    # Issue #115: refuse BEFORE anything is written. The demo evaluator has no
+    # opinion about which real configuration is better, and its entries used to
+    # land in an append-only evidence file with nothing marking them -- then act
+    # as points already tried and as pairing baselines. The default path (a
+    # fresh temp dir) is untouched; this guards only an explicit --ledger-dir,
+    # which is precisely the case harness/README.md already claimed was
+    # protected and was not.
+    # --status and --replay only read, so neither can contaminate anything;
+    # gating them would block the two commands an operator uses to inspect a
+    # ledger, which is the opposite of the point (caught by
+    # test_cli_replay_exits_zero_when_the_demo_evaluator_matches).
+    if args.dry_run and not args.status and args.replay is None:
+        blocking = _entries_a_demo_run_must_not_join(ledger_dir)
+        if blocking:
+            print(
+                f"REFUSING: {blocking} entry(ies) this dry-run must not write beside "
+                f"in {ledger_dir} -- they came from the real evaluator, or from before "
+                "the ledger recorded which evaluator wrote them (unknown is not "
+                "permission). Drop --ledger-dir to write to a fresh temp directory, "
+                "or point it at a scratch ledger of demo entries.",
+                file=sys.stderr,
+            )
+            return 2
 
     if args.status:
         return _run_status(reference, ledger_dir)
@@ -368,6 +416,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             ledger_dir=ledger_dir,
             reference_overrides=set_overrides,
             launch_environment=launch_environment,
+            evaluator_kind=evaluator_kind,
         )
     except evaluator_mod.ReachabilityError as exc:
         print(f"REACHABILITY GATE FAILED: {exc}", file=sys.stderr)
