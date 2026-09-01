@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 LEDGER_DIR = Path(__file__).resolve().parent / "ledger"
 INDEX_FILE_NAME = "index.jsonl"
@@ -111,6 +111,20 @@ class LedgerEntry:
             would reject every candidate that restores healthy behaviour,
             because the sabotage can luck into passing a case the healthy
             pipeline fails. See ``loop._historical_high_water``.
+        environment_fingerprint: The installed stack this iteration was
+            measured on (``harness.environment.environment_fingerprint``), or
+            ``None`` when it could not be read -- and always ``None`` in v1/v2
+            files, which predate the field (schema v3, issue #107).
+            ``effective_config`` records what was *configured*; this records
+            what was *installed*, and the two drift independently: a MinerU
+            upgrade or an upstream fix changes what a case can pass without
+            moving a single config value, which is how a healthy August
+            baseline came to hold passes the current stack cannot reach.
+            Unknown is deliberately not the same as different --
+            ``environment.compare`` returns three answers, and
+            ``loop.is_comparable_search_set_entry`` rejects only a KNOWN
+            mismatch, so pre-v3 history stays usable and is reported as
+            unverified rather than silently trusted.
     """
 
     schema_version: int
@@ -137,6 +151,7 @@ class LedgerEntry:
     verdict: str
     reason: str
     regression_baseline_iteration: Optional[int] = None
+    environment_fingerprint: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return dataclasses.asdict(self)

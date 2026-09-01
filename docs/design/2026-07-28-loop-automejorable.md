@@ -597,6 +597,49 @@ Adoptados por defecto; cualquiera es revisable.
 > día -- el caso `planck-contours-figure` pasa en el ledger de agosto, falla hoy
 > sin descripciones y pasa hoy con ellas -- registrada como problema de
 > envejecimiento del baseline (#107), no como defecto del emparejamiento.
+>
+> **Huella de entorno en la comparabilidad (decisión del 2026-09-01,
+> issue #107).** `_comparable_config_view` decide la comparabilidad a partir
+> de la *configuración* -- modelos, troceado, flags de indexado -- y es muda
+> sobre si el pipeline era el mismo. La campaña C de 2026-08-23 lo demostró:
+> la entrada sana de 2026-08-19 retenía un pase que el stack de aquel día ya
+> no alcanzaba, así que el rechazo era correcto en la lógica y falso en el
+> fondo. Sin arreglo, basta con acumular deriva para que toda campaña de
+> criterio 5 termine en `rejected_regression` sobre pases fantasma, esta vez
+> sin defecto que corregir, y la tentación pase a ser editar la historia en
+> lugar de refrescarla. Decisión: cada entrada registra la **pila instalada**
+> con la que se midió (`harness/environment.py`, ledger schema v3), y una
+> entrada medida sobre una pila **conocidamente distinta** deja de ser
+> comparable. Dos entornos separados y nunca fundidos, porque deciden cosas
+> distintas y conviven con versiones distintas a propósito: el aislado
+> (`.venv-mineru`: MinerU y jina-clip construyen el índice) y el del producto
+> (reranker BGE, FAISS, BM25, cliente Ollama). El commit de git queda fuera
+> de la comparación: ya se registra por entrada y se mueve con cualquier
+> cambio, incluido un README, así que incluirlo no sería estricto sino
+> inservible.
+>
+> Lo que fija la decisión no es qué se compara sino **qué significa no
+> saberlo**: `environment.compare` responde `match`, `differs` o `unknown`, y
+> sólo `differs` descarta. Toda entrada anterior al schema v3 carece de
+> huella, y tratar «desconocido» como «distinto» desarmaría el modo
+> recuperación sobre el ledger entero, es decir, resolvería #107 tirando la
+> evidencia sobre la que se construyó #92. Es la misma distinción que el
+> producto ya hace en `index_fingerprint.fingerprint_is_stale`: un valor
+> ausente no es un desacuerdo. En consecuencia, una huella ilegible es `None`
+> y nunca un diccionario de `None`s (dos entornos que no saben nada
+> compararían iguales y afirmarían una comparabilidad verificada que no
+> tienen), y la línea de arranque separa los estados comparables en
+> verificados y no verificados, para que «12 estados comparables» no se lea
+> como «12 medidos sobre esta pila» cuando ninguno lo dijo.
+>
+> Alcance declarado: esto hace **visible** la deriva, no vuelve alcanzable un
+> baseline envejecido. Eso es la opción 1 del propio #107, la campaña de
+> refresco -- volver a medir una rejilla sana sobre la pila actual contra el
+> mismo ledger, que la regla de empate-al-más-reciente prefiere sola. Esta
+> mitad es la que avisa, en el arranque y antes de pagar horas, de que lo que
+> el ledger necesita es un refresco. Implementación: `harness/environment.py`,
+> `harness/loop.py` (`is_comparable_search_set_entry`,
+> `describe_ledger_comparability`, `_historical_high_water`).
 - **Terminación:** presupuesto de iteraciones, o parada tras varias iteraciones
   seguidas sin superar el suelo de ruido.
 - **Comparación pareada** sobre los mismos casos, nunca entre tasas de runs

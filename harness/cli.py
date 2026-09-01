@@ -33,6 +33,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, Optional, Sequence
 
+from harness import environment as environment_mod
 from harness import evaluator as evaluator_mod
 from harness import ledger as ledger_mod
 from harness import loop as loop_mod
@@ -113,6 +114,54 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def format_comparability_lines(comparability: Dict[str, Any]) -> list:
+    """The launch line an operator reads before any evaluation is paid.
+
+    A function rather than a run of ``print`` calls so the lines themselves are
+    testable: their whole job is to carry facts a campaign depends on (issues
+    #100 and #107), and a mistyped key would silently drop the warning that
+    matters most while everything still ran green.
+
+    Args:
+        comparability: ``loop.describe_ledger_comparability``'s return value.
+
+    Returns:
+        Lines to print, in order.
+    """
+    lines = [
+        f"ledger history: {comparability['history_entries']} entry(ies), "
+        f"{comparability['comparable_search_set_states']} comparable search-set state(s)"
+    ]
+    if comparability["high_water_objective_adjusted"] is not None:
+        lines.append(
+            f"  historical high water: {comparability['high_water_objective_adjusted']} "
+            "(recovery mode arms only if the measured reference scores lower)"
+        )
+        # Issue #107's exact situation: the entry that will be paired against
+        # is itself the one whose stack nobody recorded. The count below is
+        # about the history; this is about the single entry that decides.
+        if comparability["high_water_environment_verified"] is False:
+            lines.append(
+                "  WARNING that high-water entry was NOT measured on a stack "
+                "comparable to this launch's -- it can hold passes this stack "
+                "cannot reach, which reads as a regression no candidate can fix. "
+                "A refresh campaign on the current stack is what replaces it (#107)"
+            )
+    # An unverified state still pairs. Saying so is the difference between
+    # "12 comparable states" read as "12 measured on this stack" and read as
+    # what it is: a stack an old entry never recorded is a stack nobody checked.
+    if comparability["environment_unverified_states"]:
+        lines.append(
+            f"  {comparability['environment_unverified_states']} of those carry no "
+            f"comparable stack fingerprint ({comparability['environment_verified_states']} "
+            "verified against this launch) -- pairing against them is unverified, "
+            "not wrong; a refresh campaign on this stack replaces them (#107)"
+        )
+    for reason in comparability["incomparable_reasons"]:
+        lines.append(f"  WARNING recovery-mode history mismatch -- {reason}")
+    return lines
+
+
 def _run_replay(iteration: int, evaluate, ledger_dir: Path) -> int:
     """Criterion 7: reconstruct one ledger entry and compare the pass vector."""
     try:
@@ -183,21 +232,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # evidence against its own fix. Say what the ledger offers BEFORE the
     # reference measurement is paid; arming itself still depends on that
     # measurement, so nothing here promises it.
+    # Issue #107: read the stack once and hand the same fingerprint to both
+    # the launch line and the loop, so what the operator is told and what the
+    # campaign pairs against cannot come from two different readings.
+    launch_environment = environment_mod.environment_fingerprint()
+    if launch_environment is None:
+        print(
+            "environment: stack versions unreadable -- entries will carry no "
+            "fingerprint and no prior entry can be rejected for drift (#107)"
+        )
+
     if ledger_dir.exists():
         comparability = loop_mod.describe_ledger_comparability(
-            reference, list(ledger_mod.read_history(ledger_dir))
+            reference, list(ledger_mod.read_history(ledger_dir)), launch_environment
         )
-        print(
-            f"ledger history: {comparability['history_entries']} entry(ies), "
-            f"{comparability['comparable_search_set_states']} comparable search-set state(s)"
-        )
-        if comparability["high_water_objective_adjusted"] is not None:
-            print(
-                f"  historical high water: {comparability['high_water_objective_adjusted']} "
-                "(recovery mode arms only if the measured reference scores lower)"
-            )
-        for reason in comparability["incomparable_reasons"]:
-            print(f"  WARNING recovery-mode history mismatch -- {reason}")
+        for line in format_comparability_lines(comparability):
+            print(line)
 
     try:
         report = loop_mod.run_loop(
@@ -207,6 +257,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             max_iterations=args.max_iterations, patience=args.patience,
             ledger_dir=ledger_dir,
             reference_overrides=set_overrides,
+            launch_environment=launch_environment,
         )
     except evaluator_mod.ReachabilityError as exc:
         print(f"REACHABILITY GATE FAILED: {exc}", file=sys.stderr)
