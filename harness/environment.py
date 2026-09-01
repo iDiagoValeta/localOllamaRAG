@@ -197,6 +197,30 @@ def _comparable_pairs(left: Dict[str, Any], right: Dict[str, Any]) -> List[tuple
     ]
 
 
+def _environments_only_one_side_measured(
+    left: Dict[str, Any], right: Dict[str, Any]
+) -> List[str]:
+    """Declared environments one side read and the other did not read at all.
+
+    Distinct from a package missing on one side, which ``_comparable_pairs``
+    already skips for good reason. An environment with NO version on one side
+    was not measured there -- the campaign ran with an interpreter that has
+    none of its packages -- so it makes no claim the other side's versions can
+    be checked against (issue #132).
+    """
+    left_packages = left.get("packages") or {}
+    right_packages = right.get("packages") or {}
+    measured_left, measured_right = set(), set()
+    for packages, measured in ((left_packages, measured_left), (right_packages, measured_right)):
+        for key, version in packages.items():
+            if version is not None:
+                measured.add(key.split(":", 1)[0])
+    declared = {key.split(":", 1)[0] for key in set(left_packages) | set(right_packages)}
+    return sorted(
+        env for env in declared if (env in measured_left) != (env in measured_right)
+    )
+
+
 def compare(left: Optional[Dict[str, Any]], right: Optional[Dict[str, Any]]) -> str:
     """``MATCH``, ``DIFFERS`` or ``UNKNOWN`` for two fingerprints.
 
@@ -218,7 +242,18 @@ def compare(left: Optional[Dict[str, Any]], right: Optional[Dict[str, Any]]) -> 
     pairs = _comparable_pairs(left, right)
     if not pairs:
         return UNKNOWN
-    return MATCH if all(a == b for _, a, b in pairs) else DIFFERS
+    if not all(a == b for _, a, b in pairs):
+        # A stack that provably moved is not made uncertain by a second
+        # environment nobody read: DIFFERS is the stronger answer and wins.
+        return DIFFERS
+    # Everything both sides read agrees -- but agreement over half the stack
+    # is not verification of the stack. An entry whose product environment was
+    # never measured (a campaign launched with the wrong interpreter, issue
+    # #132) says nothing about retrieval or generation, and must not read as
+    # verified against one that does.
+    if _environments_only_one_side_measured(left, right):
+        return UNKNOWN
+    return MATCH
 
 
 def describe_difference(
