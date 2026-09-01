@@ -20,6 +20,7 @@ for path in (str(ROOT), str(ROOT / "src")):
         sys.path.insert(0, path)
 
 from monkeygrab.application.study import (  # noqa: E402
+    MalformedOutlineError,
     MalformedSummaryError,
     Study,
     summary_to_dict,
@@ -187,3 +188,71 @@ class TestTheInterfaceView:
         payload = summary_to_dict(summary)
         assert json.loads(json.dumps(payload)) == payload
         assert payload["sections"][0]["source_pages"] == [7]
+
+
+class TestOutline:
+    """The tree, and the two bounds that keep a bad reply from being unbounded."""
+
+    _NESTED = (
+        '[{"title": "Introduction"},'
+        ' {"title": "Method", "children": ['
+        '   {"title": "Data"}, {"title": "Model"}]}]'
+    )
+
+    def test_nesting_is_preserved(self):
+        outline = Study(_FakeChatModel(self._NESTED)).outline([_fragment()], AppConfig())
+        assert [n.title for n in outline.nodes] == ["Introduction", "Method"]
+        assert [c.title for c in outline.nodes[1].children] == ["Data", "Model"]
+
+    def test_depth_is_reported_from_the_tree(self):
+        outline = Study(_FakeChatModel(self._NESTED)).outline([_fragment()], AppConfig())
+        assert outline.nodes[0].depth == 1
+        assert outline.nodes[1].depth == 2
+
+    def test_nesting_deeper_than_the_limit_is_truncated_not_fatal(self):
+        """An outline is a navigational aid: one cut off at three levels is
+        still usable, unlike a summary missing a section. Truncating is the
+        deliberate difference from _parse_sections."""
+        deep = '[{"title": "L1", "children": [{"title": "L2", "children": ['
+        deep += '{"title": "L3", "children": [{"title": "L4", "children": ['
+        deep += '{"title": "L5"}]}]}]}]}]'
+        outline = Study(_FakeChatModel(deep)).outline([_fragment()], AppConfig())
+        assert outline.nodes[0].depth == 4
+
+    def test_a_flood_of_siblings_is_capped(self):
+        """Parses fine, produces an outline nobody can read."""
+        flood = "[" + ",".join(f'{{"title": "H{i}"}}' for i in range(200)) + "]"
+        outline = Study(_FakeChatModel(flood)).outline([_fragment()], AppConfig())
+        assert 0 < len(outline.nodes) <= 60
+
+    def test_an_untitled_node_is_dropped_with_its_children(self):
+        """Re-parenting them would invent a structure the model did not
+        describe."""
+        reply = '[{"title": "Kept"}, {"children": [{"title": "Orphan"}]}]'
+        outline = Study(_FakeChatModel(reply)).outline([_fragment()], AppConfig())
+        titles = [n.title for n in outline.nodes]
+        assert titles == ["Kept"]
+        assert not any(c.title == "Orphan" for n in outline.nodes for c in n.children)
+
+    def test_malformed_json_raises_its_own_error_type(self):
+        """Distinct from MalformedSummaryError so a caller offering both can
+        tell which artifact failed without parsing a message."""
+        with pytest.raises(MalformedOutlineError):
+            Study(_FakeChatModel("not json at all")).outline([_fragment()], AppConfig())
+
+    def test_an_array_with_no_titled_node_raises(self):
+        with pytest.raises(MalformedOutlineError):
+            Study(_FakeChatModel('[{"children": []}, {}]')).outline([_fragment()], AppConfig())
+
+    def test_empty_input_does_not_call_the_generator(self):
+        outline = Study(_ExplodingChatModel()).outline([], AppConfig())
+        assert outline.is_empty
+
+    def test_the_language_request_reaches_the_prompt(self):
+        model = _FakeChatModel(self._NESTED)
+        Study(model).outline([_fragment()], AppConfig(), language="Valencià")
+        assert "Valencià" in model.calls[0]["prompt"]
+
+    def test_a_generator_failure_propagates(self):
+        with pytest.raises(RuntimeError, match="down"):
+            Study(_FakeChatModel(RuntimeError("down"))).outline([_fragment()], AppConfig())

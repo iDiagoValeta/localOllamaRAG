@@ -51,3 +51,43 @@ class DocumentSummary:
     @property
     def is_empty(self) -> bool:
         return not self.sections
+
+
+@dataclasses.dataclass(frozen=True)
+class OutlineNode:
+    """One heading in a document outline, with its children.
+
+    A tree rather than a flat list carrying depth numbers: the nesting IS the
+    artifact, and a flat representation makes every consumer rebuild it, each
+    in its own slightly different way.
+
+    Attributes:
+        title: The heading text.
+        children: Sub-headings, in reading order. A leaf has none.
+    """
+
+    title: str
+    children: Tuple["OutlineNode", ...] = ()
+
+    @property
+    def depth(self) -> int:
+        """How many levels this node spans, itself included."""
+        return 1 + max((child.depth for child in self.children), default=0)
+
+
+@dataclasses.dataclass(frozen=True)
+class DocumentOutline:
+    """The heading tree of one retrieval.
+
+    Attributes:
+        nodes: Top-level headings, in reading order.
+        source_document: As in ``DocumentSummary`` -- "" when the evidence
+            spans more than one document, rather than naming one of them.
+    """
+
+    nodes: Tuple[OutlineNode, ...]
+    source_document: str = ""
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.nodes
