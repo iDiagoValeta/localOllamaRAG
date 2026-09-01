@@ -73,6 +73,12 @@ def harness(monkeypatch):
             log.append(("release", retrieve.name))
 
     monkeypatch.setattr(run_eval, "_release_gpu_models", fake_release)
+    # Phase 2 releases the Ollama models on exit, which imports `requests`.
+    # The fast gate's `architecture` job installs pytest and nothing else --
+    # by design, to prove the pure layers need nothing else -- so a test that
+    # reaches that import fails there and passes locally, which is the worst
+    # way for a test to be wrong.
+    monkeypatch.setattr(run_eval, "_release_ollama_models", lambda *_a, **_kw: None)
     monkeypatch.setattr(
         run_eval,
         "run_retrieval_case",
