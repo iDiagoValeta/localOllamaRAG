@@ -210,6 +210,9 @@ Items 1–5 of §6 apply here too. What differs:
 > Detailed commands in `README.md` (CLI/Web).
 
 ```bash
+# Setup (both interpreters; --check verifies without installing)
+python tools/setup_environments.py             # .venv + .venv-mineru, then check
+
 # CLI / Web
 python rag/chat_pdfs.py                        # default es; MONKEYGRAB_LANG=en|ca for other UI
 python rag/web/app.py                          # http://localhost:5000 (ES/EN/VAL UI + corpus selector via POST /api/corpus)
@@ -223,6 +226,7 @@ pytest tests/unit tests/eval harness/tests --ignore=tests/unit/adapters   # what
 python tests/eval/run_eval.py --models <model...>           # full gate locally; needs Ollama + GPU
 
 # Configuration search harness (issue #31) — not product, see harness/README.md
+python -m harness.cli --status                              # what the ledger holds; evaluates nothing
 python -m harness.cli --dry-run --max-iterations 3          # smoke-test the loop, no GPU/Ollama needed
 
 # Misc
@@ -235,7 +239,7 @@ git check-ignore -v <path>
 
 ---
 
-## 11. Dependencies
+## 10. Dependencies
 
 ```bash
 pip install -r rag/requirements.txt                      # RAG core (required)
