@@ -303,6 +303,11 @@ def is_comparable_search_set_entry(
     return (
         entry.evaluated_case_set == "search_set"
         and entry.verdict != "inconclusive"
+        # Issue #115: a demo entry measures a synthetic landscape with no
+        # opinion about which real configuration is better. Pairing a real
+        # campaign against one is the "loop sobre una medida que miente"
+        # failure arriving through the door marked safe.
+        and entry.evaluator != ledger_mod.EVALUATOR_DEMO
         and _comparable_config_view(entry.effective_config) == comparable_view
         and environment_mod.compare(entry.environment_fingerprint, launch_environment)
         != environment_mod.DIFFERS
@@ -465,6 +470,7 @@ def _build_entry(
     candidate_latency: Optional[Dict[str, Optional[float]]] = None,
     regression_baseline_iteration: Optional[int] = None,
     environment_fingerprint: Optional[Dict[str, Any]] = None,
+    evaluator: Optional[str] = None,
 ) -> ledger_mod.LedgerEntry:
     objective_raw, objective_adjusted = evaluator_mod.compute_objective(
         result.records, unreachable_ids
@@ -497,6 +503,7 @@ def _build_entry(
         reason=reason,
         regression_baseline_iteration=regression_baseline_iteration,
         environment_fingerprint=environment_fingerprint,
+        evaluator=evaluator,
     )
 
 
@@ -515,6 +522,7 @@ def run_loop(
     reachability_probe_case_ids: Sequence[str] = (),
     reference_overrides: Optional[Dict[str, Any]] = None,
     launch_environment: Any = _READ_ENVIRONMENT,
+    evaluator_kind: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run the search until termination, writing one ledger entry per iteration.
 
@@ -562,6 +570,10 @@ def run_loop(
         written this run. Always returned, on every termination path
         (criterion 8) -- including when the search space is exhausted.
 
+        evaluator_kind: ``ledger.EVALUATOR_REAL`` or ``EVALUATOR_DEMO``,
+            stamped into every entry so a demo iteration can never be mistaken
+            for a measured one later (issue #115). ``None`` records unknown,
+            which is what pre-v4 entries carry.
         launch_environment: The installed stack this campaign runs on, stamped
             into every entry and used to reject a ledger entry measured on a
             known-different one (issue #107). Defaults to reading this
@@ -674,6 +686,7 @@ def run_loop(
                 verdict="inconclusive",
                 reason="fast-tier evaluation carries infrastructure_error record(s) -- not scored",
                 environment_fingerprint=launch_environment,
+                evaluator=evaluator_kind,
             )
         else:
             regressed = _regressed_ids(fast_regression_baseline, fast_result.records)
@@ -697,6 +710,7 @@ def run_loop(
                     verdict="rejected_regression",
                     reason=f"fast-tier regression on {regressed}{baseline_note}",
                     environment_fingerprint=launch_environment,
+                    evaluator=evaluator_kind,
                 regression_baseline_iteration=recovery_baseline_iteration,
                 )
             else:
@@ -719,6 +733,7 @@ def run_loop(
                         verdict="inconclusive",
                         reason="search-set evaluation carries infrastructure_error record(s) -- not scored",
                         environment_fingerprint=launch_environment,
+                        evaluator=evaluator_kind,
                     )
                 else:
                     candidate_latency = evaluator_mod.median_latency_by_bucket(full_result.records)
@@ -771,6 +786,7 @@ def run_loop(
                         # included: which pass vector the regression checks
                         # paired against is part of the evidence.
                         environment_fingerprint=launch_environment,
+                        evaluator=evaluator_kind,
                 regression_baseline_iteration=recovery_baseline_iteration,
                     )
 

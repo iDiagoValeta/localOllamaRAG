@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 LEDGER_DIR = Path(__file__).resolve().parent / "ledger"
 INDEX_FILE_NAME = "index.jsonl"
@@ -38,6 +38,14 @@ INDEX_FILE_NAME = "index.jsonl"
 # against a non-empty ledger_dir, which the default harness/ledger/ becomes
 # after one real run.
 _ENTRY_FILENAME_RE = re.compile(r"^\d{4}_.*\.json$")
+
+# Which evaluator produced an entry (issue #115). `None` is a fourth state and
+# the default: an entry written before schema v4 CANNOT be known to be real,
+# because a --dry-run pointed at that ledger is exactly the defect this field
+# closes. Asserting "real" for them would repeat the mistake #107 avoided --
+# treating an absent record as a positive claim.
+EVALUATOR_DEMO = "demo"
+EVALUATOR_REAL = "real"
 
 VERDICTS = (
     "accepted",
@@ -125,6 +133,15 @@ class LedgerEntry:
             ``loop.is_comparable_search_set_entry`` rejects only a KNOWN
             mismatch, so pre-v3 history stays usable and is reported as
             unverified rather than silently trusted.
+        evaluator: ``EVALUATOR_REAL``, ``EVALUATOR_DEMO``, or ``None`` for an
+            entry written before schema v4 (issue #115). ``None`` means
+            unknown, not real: a ``--dry-run --ledger-dir <a real ledger>``
+            used to append its synthetic iterations here with nothing to tell
+            them apart, and a demo entry is not inert once written --
+            ``GridProposer`` reads history back to skip points already tried
+            and ``loop._historical_high_water`` picks a pairing baseline from
+            it, so a synthetic iteration that scored well became a baseline a
+            real campaign was judged against.
     """
 
     schema_version: int
@@ -152,6 +169,7 @@ class LedgerEntry:
     reason: str
     regression_baseline_iteration: Optional[int] = None
     environment_fingerprint: Optional[Dict[str, Any]] = None
+    evaluator: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return dataclasses.asdict(self)

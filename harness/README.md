@@ -364,7 +364,13 @@ it has no opinion about which real configuration is better.
 > read the directory back via `ledger.read_history` to continue where the
 > last invocation left off. `--dry-run` deliberately does NOT default to
 > this directory (a fresh temp dir instead), precisely so demo runs never
-> mix into that history. A second real invocation against a non-empty
+> mix into that history. Issue #115 closed the gap that sentence left open:
+> the default was protected and an explicit `--ledger-dir` was not, so a
+> dry-run pointed at a real ledger *to inspect it* appended its own
+> iterations there, unmarked. Entries now record which evaluator wrote them
+> (schema v4), a demo run refuses a ledger holding anything not marked demo,
+> and a demo entry is never selected as a pairing baseline. Use `--status`
+> to inspect a ledger; it only reads. A second real invocation against a non-empty
 > `--ledger-dir` — including the default, after one real run — used to
 > crash (`ledger.read_history` fed `cli.py`'s own `report.json` to
 > `LedgerEntry(**data)`); fixed, see `harness/tests/test_ledger.py`'s
