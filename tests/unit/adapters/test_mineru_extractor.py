@@ -53,9 +53,15 @@ def _dest_from_cmd(cmd):
     return Path(cmd[cmd.index("-o") + 1])
 
 
-def _write_valid_output(dest: Path, pdf_stem: str, blocks=None, md_text="# Heading\n\nSome text."):
-    """Write the directory tree MinerU produces for a successful extraction."""
-    auto = dest / pdf_stem / "auto"
+def _write_valid_output(
+    dest: Path, pdf_stem: str, blocks=None, md_text="# Heading\n\nSome text.", backend_dir="auto"
+):
+    """Write the directory tree MinerU produces for a successful extraction.
+
+    ``backend_dir`` is ``auto`` for MinerU 2.x and ``<backend>_auto`` for 3.x
+    (``hybrid_auto``, ``vlm_auto``, ``pipeline_auto``) -- see issue #118.
+    """
+    auto = dest / pdf_stem / backend_dir
     auto.mkdir(parents=True, exist_ok=True)
     (auto / f"{pdf_stem}.md").write_text(md_text, encoding="utf-8")
     (auto / f"{pdf_stem}_content_list.json").write_text(
@@ -457,3 +463,101 @@ def test_parses_a_representative_mineru_output_including_a_table_and_a_figure(mo
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+# MinerU 3.x moved its output directory (issue #118). 2.x wrote
+# <dest>/<stem>/auto/; 3.x names it after the backend that ran --
+# hybrid_auto/, vlm_auto/, pipeline_auto/ -- so a fresh install today
+# extracted a PDF successfully and the adapter rejected the result, having
+# looked in one hardcoded place. The directory is located by what it
+# contains, not by its name, which needs no version detection and keeps
+# working for 2.x.
+
+
+@pytest.mark.parametrize("backend_dir", ["auto", "hybrid_auto", "vlm_auto", "pipeline_auto"])
+def test_output_is_found_whatever_the_backend_named_its_directory(
+    monkeypatch, tmp_path, backend_dir
+):
+    pdf = _make_pdf(tmp_path)
+    binary = _make_bin(tmp_path)
+
+    blocks = [{"type": "text", "text": "Some text.", "text_level": 1, "page_idx": 0}]
+
+    def fake_run(cmd, **kwargs):
+        _write_valid_output(
+            _dest_from_cmd(cmd), pdf.stem, blocks=blocks, backend_dir=backend_dir
+        )
+        return _FakeCompleted()
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    extractor = MineruExtractor(mineru_bin=str(binary), cache_dir=str(tmp_path / "cache"))
+    pages = extractor.extract(str(pdf))
+    assert pages and pages[0].text == "# Some text."
+
+
+def test_two_backend_directories_raise_instead_of_picking_one(monkeypatch, tmp_path):
+    """A stale directory from an earlier run beside a fresh one is ambiguous.
+    Guessing would silently index whichever sorted first -- a mixture of two
+    extractions reported as one, which is the failure the hard-fail policy
+    exists to prevent."""
+    pdf = _make_pdf(tmp_path)
+    binary = _make_bin(tmp_path)
+
+    def fake_run(cmd, **kwargs):
+        dest = _dest_from_cmd(cmd)
+        _write_valid_output(dest, pdf.stem, backend_dir="auto", md_text="# Old\n\nstale.")
+        _write_valid_output(dest, pdf.stem, backend_dir="hybrid_auto", md_text="# New\n\nfresh.")
+        return _FakeCompleted()
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    extractor = MineruExtractor(mineru_bin=str(binary), cache_dir=str(tmp_path / "cache"))
+    with pytest.raises(RuntimeError) as exc:
+        extractor.extract(str(pdf))
+    assert "auto" in str(exc.value) and "hybrid_auto" in str(exc.value)
+
+
+def test_no_output_directory_still_names_what_it_looked_for(monkeypatch, tmp_path):
+    """The error must stay actionable now that the path is not one literal."""
+    pdf = _make_pdf(tmp_path)
+    binary = _make_bin(tmp_path)
+
+    def fake_run(cmd, **kwargs):
+        (_dest_from_cmd(cmd) / pdf.stem).mkdir(parents=True, exist_ok=True)
+        return _FakeCompleted()
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    extractor = MineruExtractor(mineru_bin=str(binary), cache_dir=str(tmp_path / "cache"))
+    with pytest.raises(RuntimeError) as exc:
+        extractor.extract(str(pdf))
+    message = str(exc.value)
+    assert f"{pdf.stem}.md" in message
+    assert "MINERU_MODEL_SOURCE" in message
+
+
+def test_images_are_read_from_the_directory_that_was_found(monkeypatch, tmp_path):
+    """img_path is relative to the output directory, so locating the wrong one
+    would find the markdown and lose every figure."""
+    pdf = _make_pdf(tmp_path)
+    binary = _make_bin(tmp_path)
+    blocks = [
+        {
+            "type": "image",
+            "img_path": "images/fig.png",
+            "image_caption": ["Figure 1: a caption"],
+            "page_idx": 0,
+        }
+    ]
+
+    def fake_run(cmd, **kwargs):
+        out = _write_valid_output(
+            _dest_from_cmd(cmd), pdf.stem, blocks=blocks, backend_dir="hybrid_auto"
+        )
+        (out / "images").mkdir(exist_ok=True)
+        (out / "images" / "fig.png").write_bytes(_TINY_PNG)
+        return _FakeCompleted()
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    extractor = MineruImageExtractor(mineru_bin=str(binary), cache_dir=str(tmp_path / "cache"))
+    images = extractor.extract(str(pdf))
+    assert list(images) == [0]
+    assert images[0][0].caption == "Figure 1: a caption"
