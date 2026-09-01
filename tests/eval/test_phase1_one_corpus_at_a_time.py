@@ -196,3 +196,56 @@ def test_a_missing_stack_is_skipped_rather_than_dereferenced(harness):
     )
 
     assert [(k, n) for k, n, *_ in log] == [("retrieve", "dev"), ("release", "dev")]
+
+
+# RELEASING AFTER INDEXING (issue #123, second half).
+#
+# Indexing is a use: it starts each corpus's jina-clip worker and loads its
+# reranker, and both stay resident. Phase 1 then opens the one it needs on top
+# of them. Measured 2026-09-01 -- indexing three new blind papers left two
+# workers alive, and every dev case failed reranking with CUDA OOM before
+# retrieval had touched the second corpus at all. Grouping phase 1 by corpus
+# did not help, because the problem was already there when phase 1 started.
+
+
+def test_evaluate_releases_both_stacks_before_the_run_starts(monkeypatch):
+    """The stacks built during indexing must not still be holding the card
+    when phase 1 opens the one it needs."""
+    import inspect
+
+    source = inspect.getsource(run_eval.evaluate)
+    release_call = source.index("_release_gpu_models(retrieve_dev, retrieve_blind)")
+    run_call = source.index("records = run_all_cases(")
+    assert release_call < run_call, (
+        "evaluate() must release the indexing stacks BEFORE run_all_cases, or "
+        "phase 1 starts on a card two embedders and two rerankers are already on"
+    )
+
+
+def test_the_release_is_safe_because_both_halves_reload():
+    """This test exists because the fix is only correct if both components
+    come back on next use. If either stops reloading, releasing here turns a
+    memory fix into an outage, and that has to fail loudly here rather than
+    at the first case of a real run."""
+    # Read as text rather than imported: both adapters pull in torch and
+    # sentence-transformers, which the fast gate's architecture job installs
+    # nothing of, on purpose. The claim being checked is about what the source
+    # says, so reading it is not a weaker check -- it is the same one without
+    # dragging the stack in.
+    root = Path(__file__).resolve().parents[2] / "src" / "monkeygrab" / "adapters"
+
+    embedder = (root / "embedding" / "jina_clip_embedder.py").read_text(encoding="utf-8")
+    ensure = embedder[embedder.index("def _ensure_worker") :]
+    ensure = ensure[: ensure.index("\n    def ", 1)]
+    assert "self._start_worker()" in ensure, (
+        "JinaClipEmbedder._ensure_worker no longer restarts a closed worker; "
+        "releasing after indexing would leave phase 1 with no embedder"
+    )
+
+    reranker = (root / "reranking" / "cross_encoder_reranker.py").read_text(encoding="utf-8")
+    release = reranker[reranker.index("def release") :]
+    release = release[: release.index("\n    def ", 1)] if "\n    def " in release[1:] else release
+    assert "loads again" in release, (
+        "CrossEncoderReranker.release no longer documents lazy reload; "
+        "releasing after indexing would leave phase 1 with no reranker"
+    )
