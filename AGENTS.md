@@ -85,6 +85,8 @@ tests/
                              no-infra CI job; each module docstring says why it lives here
 harness/                  Configuration search harness (issue #31); not product — see harness/README.md
 packaging/                PyInstaller desktop app build (see §3)
+tools/                    Repo tooling, not product: setup_environments.py (both venvs) + diagnostics/
+assets/                   Images the READMEs embed
 docs/design/               Architecture design docs; current: 2026-07-26-monkeygrab-v2.md
 docs/README.md             Documentation standard
 ```

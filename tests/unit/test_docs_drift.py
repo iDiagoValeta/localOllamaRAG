@@ -32,6 +32,13 @@ Checks:
    ``_*_FILENAME`` constants the store actually writes. The incident that
    motivated this file listed exactly this: the docstring said three files
    while the store wrote four.
+6. ``AGENTS.md`` section 2's directory tree against the repository's actual
+   top-level directories, both ways (issue #122). The tree is the map an
+   agent is pointed at first, and it was missing ``tools/`` and ``assets/``
+   -- ``tools/`` since before it held the setup script ``README.md`` now
+   tells people to run. Directory-level only: files churn far more, and a
+   check that fires on every new module gets trained away instead of
+   obeyed.
 
 Python sources are parsed with ``ast`` rather than imported: importing
 ``rag.chat_pdfs`` or ``rag.cli.commands`` (the latter transitively, through
@@ -476,4 +483,84 @@ def test_faiss_docstring_persistence_layout_matches_filename_constants():
         "_*_FILENAME constants disagree. "
         f"In the docstring only: {sorted(documented - written)}. "
         f"In the constants only: {sorted(written - documented)}."
+    )
+
+
+# CHECK 6 -- the directory tree in AGENTS.md section 2 (issue #122).
+
+# Not source: build output, virtualenvs, tooling caches and VCS metadata are
+# not this repository's structure and documenting them would be noise.
+_NOT_REPO_STRUCTURE = frozenset(
+    {"node_modules", "__pycache__", "build", "dist", "htmlcov", "site-packages"}
+)
+
+
+def _actual_top_level_directories() -> set:
+    """Top-level directories a reader would expect the tree to explain.
+
+    Dot-directories are excluded: `.github`, `.claude` and the virtualenvs are
+    infrastructure the tree does not describe and never claimed to.
+    """
+    return {
+        child.name
+        for child in ROOT.iterdir()
+        if child.is_dir()
+        and not child.name.startswith(".")
+        and child.name not in _NOT_REPO_STRUCTURE
+    }
+
+
+def _directories_named_in_the_agents_tree() -> set:
+    """Top-level names from the fenced tree in AGENTS.md's Architecture section.
+
+    Reads only the first path segment of each line's leading token, so
+    `docs/design/` and `docs/README.md` both count as documenting `docs`.
+    Indented lines are subdirectories of the entry above them and are skipped.
+    """
+    text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    blocks = re.findall(r"```\n(.*?)```", text, re.DOTALL)
+    named = set()
+    for block in blocks:
+        if "src/monkeygrab/" not in block:
+            continue
+        for line in block.splitlines():
+            if not line or line[0].isspace():
+                continue
+            token = line.split()[0]
+            named.add(token.split("/", 1)[0])
+    return named
+
+
+def test_the_agents_tree_names_every_top_level_directory():
+    """Direction 1, the #122 failure: `tools/` and `assets/` existed unlisted."""
+    undocumented = sorted(_actual_top_level_directories() - _directories_named_in_the_agents_tree())
+    assert not undocumented, (
+        f"AGENTS.md section 2's tree does not name: {undocumented}. It is the map an "
+        "agent reads first, so a directory missing from it reads as a directory that "
+        "does not exist."
+    )
+
+
+def test_the_agents_tree_names_nothing_that_stopped_existing():
+    """Direction 2: a deleted directory still on the map sends someone looking."""
+    documented = _directories_named_in_the_agents_tree()
+    # `tests` appears as a bare `tests/` header and is real; every entry here
+    # is checked as a directory, so a documented FILE at top level would need
+    # adding to this exemption rather than silently passing.
+    stale = sorted(
+        name
+        for name in documented
+        if not (ROOT / name).is_dir() and not (ROOT / name).is_file()
+    )
+    assert not stale, (
+        f"AGENTS.md section 2's tree names paths that no longer exist: {stale}."
+    )
+
+
+def test_the_tree_parser_actually_found_something():
+    """Guards the guard: a renamed section or fence would make both checks vacuous."""
+    named = _directories_named_in_the_agents_tree()
+    assert {"src", "rag", "tests", "harness"} <= named, (
+        f"the AGENTS.md tree parser found {sorted(named)}, which does not look like "
+        "the repository -- the fenced block it reads has moved or changed shape"
     )
