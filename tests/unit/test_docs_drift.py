@@ -564,3 +564,60 @@ def test_the_tree_parser_actually_found_something():
         f"the AGENTS.md tree parser found {sorted(named)}, which does not look like "
         "the repository -- the fenced block it reads has moved or changed shape"
     )
+
+
+# CHECK 7 -- relative links in Markdown resolve to something (issue #130).
+
+# Anchors and external schemes are out of scope: an anchor needs the target's
+# heading structure and an external URL needs the network, neither of which
+# belongs in a gate that runs with no dependencies and no connection.
+_MARKDOWN_LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+_EXTERNAL_SCHEMES = ("http://", "https://", "mailto:", "#")
+
+_NOT_REPO_MARKDOWN = frozenset({".venv", ".venv-mineru", "venv", "node_modules", ".git"})
+
+
+def _repository_markdown():
+    return sorted(
+        path
+        for path in ROOT.rglob("*.md")
+        if not _NOT_REPO_MARKDOWN.intersection(path.relative_to(ROOT).parts)
+    )
+
+
+def _broken_relative_links(path: Path):
+    """``(link text, target)`` for every relative link that resolves nowhere."""
+    broken = []
+    for text, target in _MARKDOWN_LINK.findall(path.read_text(encoding="utf-8")):
+        if target.startswith(_EXTERNAL_SCHEMES):
+            continue
+        without_anchor = target.split("#")[0]
+        if not without_anchor:
+            continue
+        if not (path.parent / without_anchor).exists():
+            broken.append((text, target))
+    return broken
+
+
+def test_the_markdown_file_list_is_not_accidentally_empty():
+    """Guards the guard: a bad skip list would make the check below vacuous."""
+    assert len(_repository_markdown()) > 5
+
+
+@pytest.mark.parametrize(
+    "path", _repository_markdown(), ids=lambda p: str(p.relative_to(ROOT))
+)
+def test_relative_links_resolve(path):
+    """AGENTS.md carried four `../` links for months after moving to the root.
+
+    Commit c07cd43 says it plainly -- "The contract moved from
+    .claude/CLAUDE.md to the repo root" -- and the links kept the extra level
+    the old location needed. Every one of them 404s on GitHub, which is where
+    the file is read. Same class as #109 and #122, in the form that is hardest
+    to notice: a link that looks right until someone clicks it.
+    """
+    broken = _broken_relative_links(path)
+    assert not broken, (
+        f"{path.relative_to(ROOT)} has relative link(s) resolving nowhere: "
+        + "; ".join(f"[{text}]({target})" for text, target in broken)
+    )
