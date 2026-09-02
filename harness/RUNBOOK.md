@@ -176,8 +176,9 @@ its own history.
 **`WARNING that high-water entry was NOT measured on a stack comparable to this launch's`**
 The entry your candidates will be judged against ran on a different (or
 unrecorded) stack. It can hold passes the current stack cannot reach, which
-reads as a regression no candidate can fix. A refresh campaign on the current
-stack is what replaces it — issue #107, still open for exactly that.
+reads as a regression no candidate can fix. **Run a refresh campaign** before
+paying for a real one: section 8. After it, this warning stops appearing,
+because a verified entry exists to be the baseline instead.
 
 **`N entry(ies) carry no stack fingerprint (written before ledger schema v3)`**
 Historical entries, usable but unverifiable. Not a problem by itself; it
@@ -299,13 +300,47 @@ measurement's actual resolution.
 - **Stage 1 is a single-field sweep from a fixed reference**, not a
   compounding hill climb. Two accepted single-field changes cannot combine
   within a run.
-- **An aged baseline is visible but not fixed.** Drift is now recorded and
-  reported (#107 option 2); making an aged high water reachable again needs a
-  refresh campaign, which is still open work.
+- **An aged baseline is displaced by a refresh campaign, not by editing
+  history.** Drift is recorded and reported (#107 option 2), and once this
+  stack has one complete comparable entry of its own, history that never said
+  what it ran on stops being the high water (#107 option 1). Section 8 is the
+  procedure.
 
 ---
 
-## 8. Closing a campaign
+## 8. Refreshing an aged baseline
+
+Run this when the launch line warns that the high water was not measured on a
+stack comparable to this one. It is an ordinary grid campaign; what makes it a
+refresh is why you are running it and that you let it finish.
+
+```bash
+python -m harness.cli --proposer grid --patience 3
+```
+
+Nothing else. The campaign measures the reference and the grid on the current
+stack and writes complete entries carrying this stack's fingerprint. From the
+first such entry, `loop._historical_high_water` drops the unverified pool: the
+August entry still *pairs* — it is still counted as a comparable state — but it
+is no longer eligible to be the baseline your candidates are judged against.
+
+**What to check afterwards.** Re-run `--status`. The warning should be gone and
+`high water` should name an iteration from this campaign. If it still names the
+old one, the new entries are not verified against this launch: either they came
+back `inconclusive` (Ollama, the index) or the fingerprint could not be read,
+which `--status` reports on its own line.
+
+**What this deliberately does not do.** It never edits or removes a ledger
+entry. The ledger is append-only and an aged entry is still evidence of what
+that stack did — it just stops being the standard a different stack is held to.
+Displacement is also conditional: with nothing measured on this stack, the old
+entries remain the baseline, because discarding them with nothing to put in
+their place would throw away issue #92's evidence over a drift nobody has
+demonstrated.
+
+---
+
+## 9. Closing a campaign
 
 1. The ledger and `report.json` are the evidence. `tests/eval/runs/` and
    `harness/ledger/` are gitignored — cite paths explicitly as local, never
