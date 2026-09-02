@@ -75,7 +75,8 @@ def _capture_run_all_cases(monkeypatch, seen_cases):
     asked to run and grades every one of them a pass, so a run this test
     file drives never needs Ollama."""
 
-    def _fake(rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, models):
+    def _fake(rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind,
+              models, **_stacks):
         seen_cases.extend(cases)
         return [
             {
@@ -187,7 +188,8 @@ def test_empty_case_ids_still_rejects_an_unreachable_override(monkeypatch):
 
 
 def _fail_every_case(monkeypatch):
-    def _fake(rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, models):
+    def _fake(rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind,
+              models, **_stacks):
         return [
             {
                 "id": c["id"], "paper": c["paper"], "case_type": c["case_type"],
@@ -470,7 +472,8 @@ def test_generation_flag_override_reaches_rag_chat_pdfs_during_case_execution(mo
     globals (see evaluate()'s docstring)."""
     observed = {}
 
-    def _fake_run_all_cases(rag_module, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, models):
+    def _fake_run_all_cases(rag_module, cases, retrieve_dev, retrieve_blind,
+                            evidence_dev, evidence_blind, models, **_stacks):
         observed["usar_recomp_synthesis"] = rag_module.USAR_RECOMP_SYNTHESIS
         observed["usar_optimizacion_contexto"] = rag_module.USAR_OPTIMIZACION_CONTEXTO
         return []
@@ -524,7 +527,8 @@ def test_model_roles_change_during_the_run_and_are_restored_after(monkeypatch):
     _capture_ensure_indexed(monkeypatch, [])
     observed = {}
 
-    def _fake_run_all_cases(rag_module, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, models):
+    def _fake_run_all_cases(rag_module, cases, retrieve_dev, retrieve_blind,
+                            evidence_dev, evidence_blind, models, **_stacks):
         rag_module.set_model_roles_runtime({"rag": models[0]})
         observed["during"] = rag_module.get_model_roles()
         return []

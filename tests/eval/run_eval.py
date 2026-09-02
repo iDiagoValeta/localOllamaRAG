@@ -590,6 +590,115 @@ def _decoding_metrics(stats: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# STUDY ARTIFACTS (issue #140)
+
+# Study reads a whole document, not a query's top-k, so these cases take a
+# third path through the gate: no retrieval, every stored chunk of one paper.
+# Grading them alongside the factual cases is the point -- a summary written
+# off evidence the product would not have produced is not the product's
+# summary.
+_STUDY_CASE_TYPES = frozenset({"study_summary", "study_outline", "study_quiz"})
+
+# Same ceiling rag/engine/study.py uses, for the same reason: the context
+# budget cuts long before this does, and the cap stops a 300-page PDF turning
+# one case into a full-corpus scan.
+_STUDY_MAX_CHUNKS = 400
+
+
+def document_chunks(store, source: str) -> List[Dict[str, Any]]:
+    """Every stored chunk of one document, in storage order."""
+    from monkeygrab.domain.fragment import Fragment  # noqa: F401  (typing only)
+
+    return [
+        _fragment_to_dict(fragment)
+        for fragment in store.get_page(None, 0)
+        if fragment.metadata.source == source
+    ][:_STUDY_MAX_CHUNKS]
+
+
+def run_study_case(
+    case: Dict[str, Any],
+    fragments: Sequence[Dict[str, Any]],
+    models: Sequence[str],
+    retrieval_elapsed: float,
+) -> List[Dict[str, Any]]:
+    """Build a Study artifact per model and grade its structure.
+
+    One record per model, like ``run_factual_case``: the artifact a generator
+    produces is the thing under test, so a model swap has to be visible here
+    the same way it is there.
+
+    A ``Malformed*Error`` is a FAIL, not an ``infrastructure_error``. The model
+    was reachable and answered; it answered in a shape the parse refuses, which
+    is a quality result about that model and belongs in its score.
+    """
+    from monkeygrab.application.study import (
+        MalformedOutlineError,
+        MalformedQuizError,
+        MalformedSummaryError,
+        Study,
+        outline_to_dict,
+        quiz_to_dict,
+        summary_to_dict,
+    )
+    from rag.engine import wiring
+
+    malformed = (MalformedSummaryError, MalformedOutlineError, MalformedQuizError)
+    records: List[Dict[str, Any]] = []
+
+    for model in models:
+        t0 = time.perf_counter()
+        try:
+            config = wiring.app_config_from_runtime().with_overrides(
+                **{"models.rag": model}
+            )
+            domain_fragments = [wiring.fragment_from_dict(f) for f in fragments]
+            study = Study(wiring.rag_chat_model(config))
+            if case["case_type"] == "study_summary":
+                artifact = summary_to_dict(study.summarize(domain_fragments, config))
+            elif case["case_type"] == "study_outline":
+                artifact = outline_to_dict(study.outline(domain_fragments, config))
+            else:
+                artifact = quiz_to_dict(
+                    study.quiz(
+                        domain_fragments,
+                        config,
+                        question_count=int(case.get("question_count", 5)),
+                    )
+                )
+        except malformed as exc:
+            records.append({
+                "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
+                "lang": case["lang"], "model": model, "passed": False,
+                "reason": f"malformed artifact -- {type(exc).__name__}: {str(exc)[:120]}",
+                "elapsed_seconds": round(retrieval_elapsed + time.perf_counter() - t0, 2),
+            })
+            print(f"  [FAIL] {case['id']} / {model} -- malformed artifact", flush=True)
+            continue
+        except Exception as exc:
+            records.append({
+                "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
+                "lang": case["lang"], "model": model, "passed": False,
+                "infrastructure_error": True,
+                "reason": f"study failed -- {type(exc).__name__}: {exc}",
+                "elapsed_seconds": round(retrieval_elapsed + time.perf_counter() - t0, 2),
+            })
+            print(f"  [ERROR] {case['id']} / {model}: {type(exc).__name__}: {exc}", flush=True)
+            continue
+
+        result = grade.grade_study(artifact, case)
+        records.append({
+            "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
+            "lang": case["lang"], "model": model, "passed": result["pass"],
+            "reason": result["reason"],
+            "elapsed_seconds": round(retrieval_elapsed + time.perf_counter() - t0, 2),
+        })
+        status = "PASS" if result["pass"] else "FAIL"
+        print(f"  [{status}] {case['id']} / {model} -- {result['reason']}", flush=True)
+
+    return records
+
+
 def run_factual_case(
     rag,
     case: Dict[str, Any],
@@ -794,6 +903,9 @@ def run_all_cases(
     evidence_dev,
     evidence_blind,
     models: Sequence[str],
+    *,
+    stack_dev=None,
+    stack_blind=None,
 ) -> List[Dict[str, Any]]:
     """Run every gold case via ``Retrieve``, retrieving everything before
     generating anything.
@@ -825,14 +937,17 @@ def run_all_cases(
     # Execution order changes, result order does not: records are restored to
     # the caller's case order below, so an artefact from this build is
     # comparable with one from before it.
-    for corpus_source, retrieve, evidence in (
-        ("corpus", retrieve_dev, evidence_dev),
-        ("arxiv", retrieve_blind, evidence_blind),
+    for corpus_source, retrieve, evidence, stack in (
+        ("corpus", retrieve_dev, evidence_dev, stack_dev),
+        ("arxiv", retrieve_blind, evidence_blind, stack_blind),
     ):
         corpus_cases = [c for c in cases if c["source"] == corpus_source]
         if not corpus_cases or retrieve is None:
             continue
-        _run_retrieval_for_corpus(corpus_cases, retrieve, evidence, records, pending)
+        _run_retrieval_for_corpus(
+            corpus_cases, retrieve, evidence, records, pending,
+            store=stack.vector_store if stack is not None else None,
+        )
         # Freed here rather than after both corpora, so the second corpus's
         # worker starts on a card the first one is no longer holding.
         _release_gpu_models(retrieve)
@@ -842,9 +957,14 @@ def run_all_cases(
     print(f"\n[phase 2/2] generation for {len(pending)} case(s) (Ollama alone on GPU)", flush=True)
     with _generation_keep_alive(set(models) | {AUX_MODEL}):
         for item in pending:
-            records.extend(
-                run_factual_case(rag, item["case"], item["fragments"], models, item["elapsed"])
-            )
+            if item["case"]["case_type"] in _STUDY_CASE_TYPES:
+                records.extend(
+                    run_study_case(item["case"], item["fragments"], models, item["elapsed"])
+                )
+            else:
+                records.extend(
+                    run_factual_case(rag, item["case"], item["fragments"], models, item["elapsed"])
+                )
     return records
 
 
@@ -862,15 +982,49 @@ def _restore_case_order(records, pending, cases) -> None:
     pending.sort(key=lambda item: position.get(item["case"]["id"], len(position)))
 
 
-def _run_retrieval_for_corpus(cases, retrieve, evidence, records, pending) -> None:
+def _run_retrieval_for_corpus(cases, retrieve, evidence, records, pending, store=None) -> None:
     """Retrieve every case of one corpus, appending to ``records``/``pending``.
 
     Extracted from ``run_all_cases``'s loop body unchanged (issue #123); the
     only difference is that the caller now hands it one corpus's cases and its
     single stack, instead of switching stacks per case.
+
+    Study cases (issue #140) skip retrieval entirely: they read a whole
+    document, so a top-k for a query would grade the artifact on the wrong
+    evidence. They still go through this phase because that is where the store
+    is open, and still land in ``pending`` because generation is phase 2's job.
     """
     for case in cases:
         t0 = time.perf_counter()
+        if case["case_type"] in _STUDY_CASE_TYPES:
+            if store is None:
+                records.append({
+                    "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
+                    "lang": case["lang"], "model": None, "passed": False,
+                    "infrastructure_error": True,
+                    "reason": "study case needs the vector store and none was provided",
+                    "elapsed_seconds": 0.0,
+                })
+                continue
+            fragments = document_chunks(store, f"{case['paper']}.pdf")
+            elapsed = time.perf_counter() - t0
+            if not fragments:
+                records.append({
+                    "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
+                    "lang": case["lang"], "model": None, "passed": False,
+                    "infrastructure_error": True,
+                    "reason": f"no stored chunks for {case['paper']}.pdf",
+                    "elapsed_seconds": round(elapsed, 2),
+                })
+                print(f"  [ERROR] {case['id']} -- no chunks for {case['paper']}.pdf", flush=True)
+                continue
+            pending.append({"case": case, "fragments": fragments, "elapsed": elapsed})
+            print(
+                f"  [loaded] {case['id']} ({elapsed:.1f}s, {len(fragments)} chunks of "
+                f"{case['paper']}.pdf)",
+                flush=True,
+            )
+            continue
         try:
             result = retrieve.run(case["question"])
             retrieved = [_fragment_to_dict(f) for f in result.fragments]
@@ -1475,7 +1629,9 @@ def evaluate(
             )
             with _generation_config_overrides(rag, config_overrides):
                 records = run_all_cases(
-                    rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind, models
+                    rag, cases, retrieve_dev, retrieve_blind, evidence_dev,
+                    evidence_blind, models,
+                    stack_dev=stack_dev, stack_blind=stack_blind,
                 )
     finally:
         for stack in stacks_to_close:
