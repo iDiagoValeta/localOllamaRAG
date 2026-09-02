@@ -37,7 +37,7 @@ class _FakeChatModel:
         self.reply = reply
         self.calls = []
 
-    def generate(self, prompt, *, system=None, images=()):
+    def generate(self, prompt, *, system=None, images=(), response_format=None):
         self.calls.append({"prompt": prompt, "system": system})
         if isinstance(self.reply, Exception):
             raise self.reply

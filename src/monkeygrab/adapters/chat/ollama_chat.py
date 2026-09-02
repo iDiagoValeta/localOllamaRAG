@@ -5,7 +5,7 @@ import json
 import logging
 import time
 from functools import lru_cache
-from typing import Any, Dict, Iterator, Optional, Sequence
+from typing import Any, Dict, Iterator, Mapping, Optional, Sequence
 
 import ollama
 import requests
@@ -122,6 +122,7 @@ class OllamaChatModel:
         *,
         system: Optional[str] = None,
         images: Sequence[bytes] = (),
+        response_format: Optional[Mapping[str, Any]] = None,
     ) -> str:
         """Generate a complete response in one call via ``ollama.chat``.
 
@@ -129,6 +130,14 @@ class OllamaChatModel:
             prompt: User/task prompt.
             system: Optional system prompt.
             images: Optional raw image bytes (vision models only).
+            response_format: JSON Schema passed to Ollama's ``format``, which
+                constrains decoding rather than asking in prose.
+
+                Measured 2026-09-02 on ``higgs-boson.pdf``, the document whose
+                quizzes failed every time: unconstrained 2/5, ``format:"json"``
+                0/5 (syntactically valid every time, and a dict rather than the
+                array every time -- plain JSON mode fixes syntax, not shape),
+                schema 5/5.
 
         Returns:
             The complete generated text.
@@ -145,13 +154,16 @@ class OllamaChatModel:
             messages.insert(0, {"role": "system", "content": system})
 
         try:
-            response = ollama_client_for(self._base_url).chat(
-                model=self._model,
-                messages=messages,
-                think=False,
-                keep_alive=self._keep_alive,
-                options=self._options(),
-            )
+            chat_kwargs: Dict[str, Any] = {
+                "model": self._model,
+                "messages": messages,
+                "think": False,
+                "keep_alive": self._keep_alive,
+                "options": self._options(),
+            }
+            if response_format is not None:
+                chat_kwargs["format"] = response_format
+            response = ollama_client_for(self._base_url).chat(**chat_kwargs)
         except Exception as exc:
             raise RuntimeError(f"Ollama generate failed for model {self._model!r}: {exc}") from exc
 

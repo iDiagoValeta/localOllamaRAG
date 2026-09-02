@@ -92,7 +92,7 @@ class FakeContextualModel:
         self._raises = raises
         self.calls = []
 
-    def generate(self, prompt, *, system=None, images=()):
+    def generate(self, prompt, *, system=None, images=(), response_format=None):
         self.calls.append({"prompt": prompt, "system": system})
         if self._raises:
             raise RuntimeError("contextual model unavailable")
@@ -115,7 +115,7 @@ class FakeImageDescriber:
         self._raises = raises
         self.calls = []
 
-    def generate(self, prompt, *, system=None, images=()):
+    def generate(self, prompt, *, system=None, images=(), response_format=None):
         self.calls.append({"prompt": prompt, "system": system, "images": images})
         if self._raises:
             raise RuntimeError("vision model unavailable")
