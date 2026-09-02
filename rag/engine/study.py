@@ -1,4 +1,4 @@
-"""Summary and outline entry points for the CLI and the web app.
+"""Summary, outline and quiz entry points for the CLI and the web app.
 
 Issue #140. Wires the port adapters and runs
 ``monkeygrab.application.study.Study``, converting between the domain
@@ -15,14 +15,22 @@ choice of when to show what away from both of them.
 from typing import Any, Dict, List, Optional
 
 from monkeygrab.application.study import (
+    MalformedOutlineError,
+    MalformedQuizError,
     MalformedSummaryError,
     Study,
+    outline_to_dict,
+    quiz_to_dict,
     summary_to_dict,
 )
 from rag.engine import wiring
 
 __all__ = [
+    "MalformedOutlineError",
+    "MalformedQuizError",
     "MalformedSummaryError",
+    "cuestionario_de_fragmentos",
+    "esquema_de_fragmentos",
     "fragmentos_de_documento",
     "resumir_fragmentos",
 ]
@@ -65,6 +73,61 @@ def resumir_fragmentos(
     config = wiring.app_config_from_runtime()
     fragments = [wiring.fragment_from_dict(f) for f in fragmentos]
     return summary_to_dict(_study().summarize(fragments, config, language=idioma))
+
+
+def esquema_de_fragmentos(
+    fragmentos: List[Dict[str, Any]],
+    idioma: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build the heading tree of already-retrieved fragments.
+
+    Args:
+        fragmentos: Fragment dicts as the interfaces hold them.
+        idioma: Language for the headings. ``None`` follows the material.
+
+    Returns:
+        ``{"source_document": str, "nodes": [{"title", "children"}]}`` --
+        nested, because the nesting is the artifact. Plain JSON, so the web
+        app can return it unchanged.
+
+    Raises:
+        MalformedOutlineError: The reply could not be read as an outline. Not
+            caught here, for the same reason ``resumir_fragmentos`` does not
+            catch its own.
+    """
+    config = wiring.app_config_from_runtime()
+    fragments = [wiring.fragment_from_dict(f) for f in fragmentos]
+    return outline_to_dict(_study().outline(fragments, config, language=idioma))
+
+
+def cuestionario_de_fragmentos(
+    fragmentos: List[Dict[str, Any]],
+    idioma: Optional[str] = None,
+    num_preguntas: int = 5,
+) -> Dict[str, Any]:
+    """Write multiple-choice questions over already-retrieved fragments.
+
+    Args:
+        fragmentos: Fragment dicts as the interfaces hold them.
+        idioma: Language for the questions. ``None`` follows the material.
+        num_preguntas: How many to ask for. Fewer may come back if the
+            material does not support that many, which is not an error.
+
+    Returns:
+        ``{"source_document": str, "questions": [{"prompt", "options",
+        "correct_index", "source_pages"}]}`` -- plain JSON.
+
+    Raises:
+        ValueError: ``num_preguntas`` is outside the accepted range.
+        MalformedQuizError: The reply held no question safe to grade against.
+            Not caught here: an interface decides how to tell its user, and a
+            quiz silently short of questions is exactly the failure the core
+            refuses to produce.
+    """
+    config = wiring.app_config_from_runtime()
+    fragments = [wiring.fragment_from_dict(f) for f in fragmentos]
+    quiz = _study().quiz(fragments, config, language=idioma, question_count=num_preguntas)
+    return quiz_to_dict(quiz)
 
 
 # How many chunks of one document to feed a summary. The context budget cuts

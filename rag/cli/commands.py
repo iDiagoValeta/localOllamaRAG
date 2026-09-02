@@ -6,9 +6,9 @@ between the prompt, the ``/ayuda`` screen and the autocompleter.
 
 Primary command lists per language
 -----------------------------------
-- ES: /ayuda  /limpiar  /temas  /resumen /salir  (canonical names)
-- EN: /help   /clear    /topics /summary /exit
-- CA: /ajuda  /netejar  /temes  /resum   /eixir
+- ES: /ayuda  /limpiar  /temas  /resumen /esquema /cuestionario  /salir  (canonical)
+- EN: /help   /clear    /topics /summary /outline /quiz          /exit
+- CA: /ajuda  /netejar  /temes  /resum   /esquema /questionari   /eixir
 
 All tokens from all languages are always accepted by the dispatcher.
 """
@@ -27,6 +27,8 @@ COMMANDS: List[Tuple[str, str]] = [
     ("/docs",    "cmd.docs.desc"),
     ("/temas",   "cmd.temas.desc"),
     ("/resumen", "cmd.resumen.desc"),
+    ("/esquema", "cmd.esquema.desc"),
+    ("/cuestionario", "cmd.cuestionario.desc"),
     ("/reindex", "cmd.reindex.desc"),
     ("/ayuda",   "cmd.ayuda.desc"),
     ("/salir",   "cmd.salir.desc"),
@@ -40,12 +42,15 @@ ALIASES: List[Tuple[str, str, str]] = [
     ("/exit",   "/salir",   "alias.exit.desc"),
     ("/topics", "/temas",   "cmd.temas.desc"),
     ("/summary", "/resumen", "cmd.resumen.desc"),
+    ("/outline", "/esquema", "cmd.esquema.desc"),
+    ("/quiz",    "/cuestionario", "cmd.cuestionario.desc"),
     # CA
     ("/netejar", "/limpiar", "alias.clear.desc"),
     ("/ajuda",   "/ayuda",   "alias.help.desc"),
     ("/eixir",   "/salir",   "alias.exit.desc"),
     ("/temes",   "/temas",   "cmd.temas.desc"),
     ("/resum",   "/resumen", "cmd.resumen.desc"),
+    ("/questionari", "/cuestionario", "cmd.cuestionario.desc"),
 ]
 
 
@@ -57,6 +62,8 @@ _PRIMARY_EN: List[Tuple[str, str]] = [
     ("/docs",    "cmd.docs.desc"),
     ("/topics",  "cmd.temas.desc"),
     ("/summary", "cmd.resumen.desc"),
+    ("/outline", "cmd.esquema.desc"),
+    ("/quiz",    "cmd.cuestionario.desc"),
     ("/reindex", "cmd.reindex.desc"),
     ("/help",    "cmd.ayuda.desc"),
     ("/exit",    "cmd.salir.desc"),
@@ -70,6 +77,8 @@ _PRIMARY_CA: List[Tuple[str, str]] = [
     ("/docs",    "cmd.docs.desc"),
     ("/temes",   "cmd.temas.desc"),
     ("/resum",   "cmd.resumen.desc"),
+    ("/esquema", "cmd.esquema.desc"),
+    ("/questionari", "cmd.cuestionario.desc"),
     ("/reindex", "cmd.reindex.desc"),
     ("/ajuda",   "cmd.ayuda.desc"),
     ("/eixir",   "cmd.salir.desc"),

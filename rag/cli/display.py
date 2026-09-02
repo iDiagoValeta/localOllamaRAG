@@ -1064,6 +1064,68 @@ class Display:
             Panel(cuerpo, title=documento or self._s("summary.title"), border_style="cyan")
         )
 
+    def outline_panel(self, esquema: Dict[str, Any]) -> None:
+        """Render a heading tree, indented by depth.
+
+        Indentation rather than numbering: the model is asked for structure,
+        not for a numbering scheme, and inventing one here would present a
+        precision the outline does not have.
+        """
+        documento = esquema.get("source_document") or ""
+        cuerpo = Text()
+
+        def walk(nodos: List[Dict[str, Any]], depth: int) -> None:
+            for nodo in nodos:
+                titulo = (nodo.get("title") or "").strip()
+                if not titulo:
+                    continue
+                if cuerpo:
+                    cuerpo.append("\n")
+                cuerpo.append("  " * depth)
+                cuerpo.append(titulo, style="bold" if depth == 0 else "")
+                walk(nodo.get("children") or [], depth + 1)
+
+        walk(esquema.get("nodes") or [], 0)
+        self.console.print(
+            Panel(cuerpo, title=documento or self._s("outline.title"), border_style="cyan")
+        )
+
+    def quiz_panel(self, cuestionario: Dict[str, Any]) -> None:
+        """Render the questions with their options and the key.
+
+        The answer is shown rather than hidden behind a prompt: this is a
+        terminal, and a reader who wants to self-test can stop reading at the
+        options. Hiding it would need an interactive mode the CLI's line-based
+        loop does not have, and a quiz whose answers live nowhere is not
+        checkable at all.
+        """
+        documento = cuestionario.get("source_document") or ""
+        preguntas = cuestionario.get("questions") or []
+        cuerpo = Text()
+        for index, pregunta in enumerate(preguntas, start=1):
+            if index > 1:
+                cuerpo.append("\n\n")
+            cuerpo.append(f"{index}. {(pregunta.get('prompt') or '').strip()}\n", style="bold")
+            opciones = pregunta.get("options") or []
+            correcta = pregunta.get("correct_index")
+            for position, opcion in enumerate(opciones):
+                cuerpo.append(f"   {chr(ord('a') + position)}) {opcion}\n")
+            if isinstance(correcta, int) and 0 <= correcta < len(opciones):
+                cuerpo.append(
+                    f"   {self._s('quiz.answer')}: {chr(ord('a') + correcta)}", style="dim"
+                )
+
+        paginas = sorted({p for q in preguntas for p in (q.get("source_pages") or [])})
+        if paginas:
+            cuerpo.append("\n\n")
+            cuerpo.append(
+                f"{self._s('summary.pages')}: {', '.join(str(p) for p in paginas)}", style="dim"
+            )
+
+        self.console.print(
+            Panel(cuerpo, title=documento or self._s("quiz.title"), border_style="cyan")
+        )
+
     def docs_table(self, docs: List[Any]) -> None:
         if not docs:
             self.warning(self._s("docs.none"))
