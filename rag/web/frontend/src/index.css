@@ -188,6 +188,20 @@ body {
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.28);
 }
 
+/* The composer sits over the transcript, and its glass depends on
+   backdrop-filter to stay readable. A transform on any ancestor — every
+   motion.div has one — takes that filter out of play, and the panel falls back
+   to a 55%-alpha fill you can read straight through. Measured, not assumed:
+   getComputedStyle reports backdrop-filter: none here.
+
+   So the composer gets an opaque floor of its own rather than borrowing one it
+   may not get. The rest of the glass panels are decorative and can keep it. */
+.composer-panel {
+  background: var(--bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.28);
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }

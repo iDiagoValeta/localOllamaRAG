@@ -154,7 +154,7 @@ const STRINGS = {
     studyAnswer: 'Respuesta', studyShowAnswersInline: 'Ver respuestas',
     studyEmptyTitle: 'Estudia tus documentos',
     studyEmptyBody: 'Un resumen, un esquema o un cuestionario de cualquier PDF indexado.',
-    studyPages: 'Páginas',
+    studyPages: 'Páginas', studyPagesShort: 'páginas',
     studyMalformed: 'El modelo no respetó el formato. Prueba otra vez, o con otro modelo.',
     studyFailed: 'No se pudo generar: {error}',
     storesLabel: 'Almacén vectorial',
@@ -234,7 +234,7 @@ const STRINGS = {
     studyAnswer: 'Answer', studyShowAnswersInline: 'Show answers',
     studyEmptyTitle: 'Study your documents',
     studyEmptyBody: 'A summary, an outline or a quiz from any indexed PDF.',
-    studyPages: 'Pages',
+    studyPages: 'Pages', studyPagesShort: 'pages',
     studyMalformed: 'The model did not follow the format. Try again, or another model.',
     studyFailed: 'Could not generate: {error}',
     storesLabel: 'Vector store',
@@ -315,7 +315,7 @@ const STRINGS = {
     studyAnswer: 'Resposta', studyShowAnswersInline: 'Veure respostes',
     studyEmptyTitle: 'Estudia els teus documents',
     studyEmptyBody: 'Un resum, un esquema o un qüestionari de qualsevol PDF indexat.',
-    studyPages: 'Pàgines',
+    studyPages: 'Pàgines', studyPagesShort: 'pàgines',
     studyMalformed: 'El model no ha respectat el format. Prova una altra vegada, o amb un altre model.',
     studyFailed: 'No s\'ha pogut generar: {error}',
     storesLabel: 'Magatzem vectorial',
@@ -1849,7 +1849,7 @@ export default function App() {
 
         {/* Chat Area */}
         <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar scroll-smooth relative">
-          <div className="max-w-3xl mx-auto space-y-10 pb-20 relative z-10">
+          <div className={`max-w-3xl mx-auto space-y-10 relative z-10 ${mode === 'study' ? 'pb-44' : 'pb-32'}`}>
             <AnimatePresence>
               {messages.length === 0 && !isLoading && (
                 <motion.div
@@ -1974,7 +1974,7 @@ export default function App() {
           <div className="max-w-3xl mx-auto relative">
             {/* Autocomplete — above the input, so the caret never sits under it */}
             {mode === 'study' && documentSuggestions.length > 0 && (
-              <div className="glass-panel absolute bottom-full mb-2 left-0 right-0 py-1.5 max-h-64 overflow-y-auto custom-scrollbar z-30">
+              <div className="composer-panel absolute bottom-full mb-2 left-0 right-0 py-1.5 max-h-64 overflow-y-auto custom-scrollbar z-30">
                 {documentSuggestions.map((doc, i) => (
                   <button
                     key={doc}
@@ -1994,36 +1994,13 @@ export default function App() {
               </div>
             )}
 
-            {/* Artifact chooser — three fixed kinds, so a segmented control */}
-            {mode === 'study' && (
-              <div className="flex items-center gap-2 mb-2 px-0.5">
-                <div className="flex bg-[var(--surface)] p-1 border border-[var(--border)]">
-                  {([
-                    ['summary', T.studyKindSummary],
-                    ['outline', T.studyKindOutline],
-                    ['quiz', T.studyKindQuiz],
-                  ] as [StudyKind, string][]).map(([kind, label]) => (
-                    <button
-                      key={kind}
-                      type="button"
-                      onClick={() => setStudyKind(kind)}
-                      className={`px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase transition-all ${
-                        studyKind === kind
-                          ? 'bg-[var(--accent)] text-[var(--accent-contrast)]'
-                          : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <span className="text-[10px] text-[var(--text-faint)] tracking-wide hidden sm:block">
-                  {T.studyHint}
-                </span>
-              </div>
-            )}
-
-            <div className="glass-panel relative flex items-end gap-3 p-2.5 focus-within:border-[var(--accent)] transition-all">
+            {/* The chooser lives INSIDE the input panel. Floating it above sat it
+                on the transparent end of the area's gradient, so the chat read
+                straight through it. Padding cannot fix that — content passes
+                under a floating input by design; what it needed was a floor. */}
+            <div className={`composer-panel relative focus-within:border-[var(--accent)] transition-all ${
+              mode === 'study' ? 'flex flex-col p-2.5 gap-2' : 'flex items-end gap-3 p-2.5'
+            }`}>
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -2051,22 +2028,54 @@ export default function App() {
                   }
                 }}
                 placeholder={mode === 'study' ? T.studyPlaceholder : mode === 'rag' ? T.placeholderRag : T.placeholderChat}
-                className="flex-1 max-h-48 min-h-[52px] bg-transparent border-none focus:ring-0 focus:outline-none resize-none py-3.5 px-4 text-[15px] text-[var(--text)] placeholder:text-[var(--text-faint)] custom-scrollbar font-medium"
+                className={`${mode === 'study' ? 'w-full max-h-40 min-h-[44px]' : 'flex-1 max-h-48 min-h-[52px]'} bg-transparent border-none focus:ring-0 focus:outline-none resize-none py-3.5 px-4 text-[15px] text-[var(--text)] placeholder:text-[var(--text-faint)] custom-scrollbar font-medium`}
                 rows={1}
                 disabled={isLoading}
               />
 
-              <button
-                onClick={handleSend}
-                disabled={!input.trim() || isLoading}
-                className="p-3.5 bg-[var(--accent)] text-[var(--accent-contrast)] hover:bg-[var(--accent-hover)] active:scale-95 disabled:opacity-40 disabled:bg-[var(--surface-2)] disabled:text-[var(--text-faint)] transition-all flex-shrink-0"
-              >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Send className="w-5 h-5 ml-0.5" />
-                )}
-              </button>
+              {mode === 'study' ? (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex bg-[var(--surface)] border border-[var(--border)]">
+                    {([
+                      ['summary', T.studyKindSummary],
+                      ['outline', T.studyKindOutline],
+                      ['quiz', T.studyKindQuiz],
+                    ] as [StudyKind, string][]).map(([kind, label]) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        onClick={() => setStudyKind(kind)}
+                        className={`px-3 py-2 text-[11px] font-bold tracking-wide uppercase transition-all ${
+                          studyKind === kind
+                            ? 'bg-[var(--accent)] text-[var(--accent-contrast)]'
+                            : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleSend}
+                    disabled={!input.trim() || isLoading}
+                    className="p-3 bg-[var(--accent)] text-[var(--accent-contrast)] hover:bg-[var(--accent-hover)] active:scale-95 disabled:opacity-40 disabled:bg-[var(--surface-2)] disabled:text-[var(--text-faint)] transition-all flex-shrink-0"
+                  >
+                    {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 ml-0.5" />}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleSend}
+                  disabled={!input.trim() || isLoading}
+                  className="p-3.5 bg-[var(--accent)] text-[var(--accent-contrast)] hover:bg-[var(--accent-hover)] active:scale-95 disabled:opacity-40 disabled:bg-[var(--surface-2)] disabled:text-[var(--text-faint)] transition-all flex-shrink-0"
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Send className="w-5 h-5 ml-0.5" />
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -2082,25 +2091,29 @@ export default function App() {
 // =============================================================================
 
 function OutlineTree({ nodes, depth = 0 }: { nodes: OutlineNode[]; depth?: number }) {
+  // Top level is a stack of headings; every level below hangs off a rule.
+  // Indentation alone did not read as hierarchy — 16px against 15px text is
+  // noise, and the result looked like a flat list. The rule is what makes a
+  // child visibly belong to its parent.
   return (
-    <ul className={depth === 0 ? 'space-y-1.5' : 'space-y-1 mt-1.5'}>
+    <ul className={depth === 0 ? 'space-y-3' : 'mt-1.5 space-y-1.5 border-l border-[var(--border)] pl-4'}>
       {nodes.map((node, i) => (
-        <li key={`${depth}-${i}-${node.title}`}>
-          <div
-            className="flex items-start gap-2"
-            style={{ paddingLeft: depth * 16 }}
+        <li key={`${depth}-${i}-${node.title}`} className="relative">
+          {depth > 0 && (
+            // Ticks the rule at each child, so siblings are countable.
+            <span className="absolute -left-4 top-[0.7em] w-2 h-px bg-[var(--border)]" aria-hidden="true" />
+          )}
+          <span
+            className={
+              depth === 0
+                ? 'block text-[var(--text)] font-semibold text-[15px]'
+                : depth === 1
+                  ? 'block text-[var(--text)] text-[14px]'
+                  : 'block text-[var(--text-muted)] text-[13px]'
+            }
           >
-            {/* Depth reads as a rule, not as an indent alone: an outline four
-                levels deep is otherwise a wall of text nudged rightwards. */}
-            <span
-              className={`mt-[7px] shrink-0 rounded-full ${
-                depth === 0 ? 'w-1.5 h-1.5 bg-[var(--accent)]' : 'w-1 h-1 bg-[var(--text-faint)]'
-              }`}
-            />
-            <span className={depth === 0 ? 'text-[var(--text)] font-semibold' : 'text-[var(--text-muted)]'}>
-              {node.title}
-            </span>
-          </div>
+            {node.title}
+          </span>
           {node.children?.length ? <OutlineTree nodes={node.children} depth={depth + 1} /> : null}
         </li>
       ))}
@@ -2129,7 +2142,9 @@ function StudyArtifactView({
           {section.heading && (
             <h3 className="text-[var(--text)] font-semibold">{section.heading}</h3>
           )}
-          <p className="text-[var(--text-muted)]">{section.body}</p>
+          <div className="text-[var(--text-muted)]">
+            <MarkdownContent text={section.body} />
+          </div>
         </div>
       ))}
 
@@ -2181,15 +2196,13 @@ function StudyArtifactView({
         </div>
       )}
 
-      {(artifact.source_document || pages.length > 0) && (
+      {artifact.source_document && (
         <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-[var(--text-faint)]">
-          {artifact.source_document && (
-            <span className="inline-flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5" />
-              {artifact.source_document}
-            </span>
-          )}
-          {pages.length > 0 && <span>· {strings.studyPages} {pages.join(', ')}</span>}
+          <span className="inline-flex items-center gap-1.5">
+            <FileText className="w-3.5 h-3.5" />
+            {artifact.source_document}
+          </span>
+          {pages.length > 0 && <span>· {pages.length} {strings.studyPagesShort}</span>}
         </div>
       )}
     </div>
