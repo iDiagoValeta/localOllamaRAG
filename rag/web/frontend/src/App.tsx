@@ -4,7 +4,7 @@ import {
   Search, Layers, FileUp, Menu, X,
   RefreshCw, Loader2, AlertCircle, CheckCircle2, Trash2,
   ChevronDown, Copy, Check, Languages, Eye,
-  Power, Sun, Moon
+  Power, Sun, Moon, BookOpen
 } from './lib/icons';
 import { getStoredTheme, setTheme, type Theme } from './lib/theme';
 import { motion, AnimatePresence } from 'motion/react';
@@ -15,7 +15,18 @@ import 'katex/dist/katex.min.css';
 // Types
 // =============================================================================
 
-type Mode = 'chat' | 'rag';
+// 'study' is a front-end-only mode: the backend's /api/mode knows chat and rag,
+// and a study turn is a POST to /api/study rather than a mode the server holds.
+type Mode = 'chat' | 'rag' | 'study';
+type StudyKind = 'summary' | 'outline' | 'quiz';
+
+interface OutlineNode { title: string; children: OutlineNode[]; }
+interface StudyArtifact {
+  source_document?: string;
+  sections?: { heading: string; body: string; source_pages: number[] }[];
+  nodes?: OutlineNode[];
+  questions?: { prompt: string; options: string[]; correct_index: number; source_pages: number[] }[];
+}
 
 interface Citation {
   document: string;
@@ -32,6 +43,10 @@ interface Message {
   metrics?: { searchTime: string; chunks: number };
   isStreaming?: boolean;
   isError?: boolean;
+  // A study turn answers with structure rather than prose, so it is carried
+  // as data and rendered by the bubble instead of being flattened to text.
+  artifact?: StudyArtifact;
+  artifactKind?: StudyKind;
 }
 
 interface PipelineSettings {
@@ -131,15 +146,17 @@ const STRINGS = {
     indexingFailed: 'La indexación no pudo completarse.',
     noResults: 'No se encontró información relevante en los documentos.',
     tabModels: 'Modelos',
-    tabStudy: 'Estudiar',
-    studyPick: 'Elige un documento',
-    studySummary: 'Resumen', studyOutline: 'Esquema', studyQuiz: 'Cuestionario',
-    studyRun: 'Generar', studyWorking: 'Trabajando sobre {doc}...',
-    studyEmpty: 'Elige un documento y qué quieres hacer con él.',
-    studyPages: 'Páginas', studyAnswer: 'Respuesta', studyShowAnswers: 'Ver respuestas',
+    modeStudy: 'ESTUDIAR',
+    studyKindSummary: 'Resumen', studyKindOutline: 'Esquema', studyKindQuiz: 'Cuestionario',
+    studyPlaceholder: 'Escribe el nombre de un documento...',
+    studyHint: 'Elige qué generar y escribe el documento. Tab para autocompletar.',
+    studyNoMatch: 'No encuentro ningún documento que coincida con «{query}».',
+    studyAnswer: 'Respuesta', studyShowAnswersInline: 'Ver respuestas',
+    studyEmptyTitle: 'Estudia tus documentos',
+    studyEmptyBody: 'Un resumen, un esquema o un cuestionario de cualquier PDF indexado.',
+    studyPages: 'Páginas', studyPagesShort: 'páginas',
     studyMalformed: 'El modelo no respetó el formato. Prueba otra vez, o con otro modelo.',
     studyFailed: 'No se pudo generar: {error}',
-    studyNoDocs: 'No hay documentos indexados todavía.',
     storesLabel: 'Almacén vectorial',
     storeNotIndexed: 'sin indexar',
     storeEmptyHint: 'Almacén vacío. Sube PDFs y reindexa para activarlo.',
@@ -209,15 +226,17 @@ const STRINGS = {
     indexingFailed: 'Indexing could not be completed.',
     noResults: 'No relevant information found in the documents.',
     tabModels: 'Models',
-    tabStudy: 'Study',
-    studyPick: 'Pick a document',
-    studySummary: 'Summary', studyOutline: 'Outline', studyQuiz: 'Quiz',
-    studyRun: 'Generate', studyWorking: 'Working on {doc}...',
-    studyEmpty: 'Pick a document and what you want done with it.',
-    studyPages: 'Pages', studyAnswer: 'Answer', studyShowAnswers: 'Show answers',
+    modeStudy: 'STUDY',
+    studyKindSummary: 'Summary', studyKindOutline: 'Outline', studyKindQuiz: 'Quiz',
+    studyPlaceholder: 'Type a document name...',
+    studyHint: 'Pick what to generate and type the document. Tab to autocomplete.',
+    studyNoMatch: 'No document matches "{query}".',
+    studyAnswer: 'Answer', studyShowAnswersInline: 'Show answers',
+    studyEmptyTitle: 'Study your documents',
+    studyEmptyBody: 'A summary, an outline or a quiz from any indexed PDF.',
+    studyPages: 'Pages', studyPagesShort: 'pages',
     studyMalformed: 'The model did not follow the format. Try again, or another model.',
     studyFailed: 'Could not generate: {error}',
-    studyNoDocs: 'Nothing indexed yet.',
     storesLabel: 'Vector store',
     storeNotIndexed: 'not indexed',
     storeEmptyHint: 'Empty store. Upload PDFs and re-index to activate it.',
@@ -288,14 +307,17 @@ const STRINGS = {
     noResults: "No s'ha trobat informació rellevant als documents.",
     tabModels: 'Models',
     tabStudy: 'Estudiar',
-    studyPick: 'Tria un document',
-    studySummary: 'Resum', studyOutline: 'Esquema', studyQuiz: 'Qüestionari',
-    studyRun: 'Generar', studyWorking: 'Treballant sobre {doc}...',
-    studyEmpty: 'Tria un document i què vols que en faça.',
-    studyPages: 'Pàgines', studyAnswer: 'Resposta', studyShowAnswers: 'Veure respostes',
+    modeStudy: 'ESTUDIAR',
+    studyKindSummary: 'Resum', studyKindOutline: 'Esquema', studyKindQuiz: 'Qüestionari',
+    studyPlaceholder: 'Escriu el nom d\'un document...',
+    studyHint: 'Tria què generar i escriu el document. Tab per autocompletar.',
+    studyNoMatch: 'No trobe cap document que coincidisca amb «{query}».',
+    studyAnswer: 'Resposta', studyShowAnswersInline: 'Veure respostes',
+    studyEmptyTitle: 'Estudia els teus documents',
+    studyEmptyBody: 'Un resum, un esquema o un qüestionari de qualsevol PDF indexat.',
+    studyPages: 'Pàgines', studyPagesShort: 'pàgines',
     studyMalformed: 'El model no ha respectat el format. Prova una altra vegada, o amb un altre model.',
     studyFailed: 'No s\'ha pogut generar: {error}',
-    studyNoDocs: 'Encara no hi ha documents indexats.',
     storesLabel: 'Magatzem vectorial',
     storeNotIndexed: 'sense indexar',
     storeEmptyHint: 'Magatzem buit. Puja PDFs i reindexa per a activar-lo.',
@@ -337,16 +359,6 @@ function fill(tpl: string, vars: Record<string, string | number>): string {
 // =============================================================================
 
 const API_BASE = '/api';
-
-type StudyKind = 'summary' | 'outline' | 'quiz';
-
-interface OutlineNode { title: string; children: OutlineNode[]; }
-interface StudyArtifact {
-  source_document?: string;
-  sections?: { heading: string; body: string; source_pages: number[] }[];
-  nodes?: OutlineNode[];
-  questions?: { prompt: string; options: string[]; correct_index: number; source_pages: number[] }[];
-}
 
 const api = {
   init: () =>
@@ -705,6 +717,12 @@ export default function App() {
 
   const [mode, setMode] = useState<Mode>('rag');
   const [input, setInput] = useState('');
+  // Study mode. The artifact kind is a control (three fixed choices); the
+  // document is typed, because a corpus grows and a dropdown of every PDF
+  // stops being a control and becomes a list to scroll.
+  const [studyKind, setStudyKind] = useState<StudyKind>('summary');
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
+  const [revealedQuiz, setRevealedQuiz] = useState<Record<string, boolean>>({});
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -762,16 +780,8 @@ export default function App() {
   const [pdfViewer, setPdfViewer] = useState<{ doc: string; page: number; mode: 'full' | 'split' } | null>(null);
   // Full-area overlay panels (Models / Pipeline) shown in the main column, like
   // the PDF viewer. Opening one closes any open PDF; closing returns to chat.
-  const [mainPanel, setMainPanel] = useState<'models' | 'pipeline' | 'study' | null>(null);
-  const [studyKind, setStudyKind] = useState<StudyKind>('summary');
-  const [studyDoc, setStudyDoc] = useState<string>('');
-  const [studyBusy, setStudyBusy] = useState(false);
-  const [studyResult, setStudyResult] = useState<StudyArtifact | null>(null);
-  const [studyError, setStudyError] = useState<string | null>(null);
-  // Answers hidden by default: a quiz whose key is on screen from the first
-  // render is a summary with extra steps.
-  const [studyRevealed, setStudyRevealed] = useState(false);
-  const openMainPanel = useCallback((panel: 'models' | 'pipeline' | 'study') => {
+  const [mainPanel, setMainPanel] = useState<'models' | 'pipeline' | null>(null);
+  const openMainPanel = useCallback((panel: 'models' | 'pipeline') => {
     setPdfViewer(null);
     setMainPanel(panel);
     if (window.innerWidth < 768) setIsSidebarOpen(false);
@@ -857,6 +867,10 @@ export default function App() {
   const handleModeChange = useCallback(async (newMode: Mode) => {
     const previousMode = mode;
     setMode(newMode);
+    // The backend only knows chat and rag. A study turn is a POST to
+    // /api/study, so telling the server about this mode would either 400 or
+    // leave it holding a mode nothing reads.
+    if (newMode === 'study') return;
     const result = await api.setMode(newMode).catch(() => null);
     if (!result?.ok) setMode(previousMode);
   }, [mode]);
@@ -1074,9 +1088,106 @@ export default function App() {
   }, [isInitialized, loadStores, loadModelRoles, refreshOllama]);
 
   // ---- Send message (streaming) ----
+  // ---- Study mode: matching a typed document, and asking for the artifact ----
+
+  /** Documents whose name contains what has been typed, best-first.
+   *
+   * Substring rather than prefix: nobody remembers whether a paper is filed as
+   * "attention-transformers" or "transformers-attention", and typing the half
+   * you do remember should find it. A name that STARTS with the query sorts
+   * first, so the prefix case still behaves like a prefix search. */
+  const documentSuggestions = React.useMemo(() => {
+    if (mode !== 'study') return [];
+    const query = input.trim().toLowerCase();
+    // Nothing typed, nothing suggested. A list that opens on focus covers the
+    // conversation the user just generated, and the sidebar already lists the
+    // corpus for anyone who needs to look it up.
+    if (!query) return [];
+    const hits = documents.filter(d => d.toLowerCase().includes(query));
+    // An exact match is a decision already made, not a suggestion to show.
+    if (hits.length === 1 && hits[0].toLowerCase() === query) return [];
+    return hits.sort((a, b) => {
+      const aStarts = a.toLowerCase().startsWith(query) ? 0 : 1;
+      const bStarts = b.toLowerCase().startsWith(query) ? 0 : 1;
+      return aStarts - bStarts || a.localeCompare(b);
+    });
+  }, [mode, input, documents]);
+
+  /** The document a typed message names, or null.
+   *
+   * Falls back to a unique substring match so "planck" sends, rather than
+   * making the user complete the filename the autocomplete already showed. */
+  const resolveDocument = useCallback((text: string): string | null => {
+    const query = text.trim().toLowerCase();
+    if (!query) return null;
+    const exact = documents.find(d => d.toLowerCase() === query);
+    if (exact) return exact;
+    const contained = documents.filter(d => query.includes(d.toLowerCase()));
+    if (contained.length === 1) return contained[0];
+    const partial = documents.filter(d => d.toLowerCase().includes(query));
+    return partial.length === 1 ? partial[0] : null;
+  }, [documents]);
+
+  const acceptSuggestion = useCallback((name: string) => {
+    setInput(name);
+    setSuggestionIndex(0);
+    textareaRef.current?.focus();
+  }, []);
+
+  const sendStudy = useCallback(async (text: string) => {
+    const doc = resolveDocument(text);
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: text, mode: 'study' };
+    const assistantId = (Date.now() + 1).toString();
+
+    if (!doc) {
+      // Named before anything is spent: the failure is in the request, and a
+      // spinner followed by "not found" would hide that.
+      setMessages(prev => [...prev, userMsg, {
+        id: assistantId, role: 'assistant', mode: 'study', isError: true,
+        content: fill(T.studyNoMatch, { query: text }),
+      }]);
+      setInput('');
+      return;
+    }
+
+    setMessages(prev => [...prev, userMsg, {
+      id: assistantId, role: 'assistant', content: '', mode: 'study', isStreaming: true,
+    }]);
+    setInput('');
+    setIsLoading(true);
+    const started = Date.now();
+
+    try {
+      const langName = lang === 'en' ? 'English' : lang === 'ca' ? 'Valencià' : 'Castellano';
+      const { status, body } = await api.study(studyKind, doc, langName);
+      const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+      setMessages(prev => prev.map(m => m.id !== assistantId ? m : (
+        status === 200 && body.ok
+          ? { ...m, isStreaming: false, artifact: body.artifact as StudyArtifact,
+              artifactKind: studyKind, content: '',
+              metrics: { searchTime: `${elapsed}s`, chunks: 0 } }
+          // 422 is the model ignoring the format, not the server breaking, and
+          // the two need different advice.
+          : { ...m, isStreaming: false, isError: true,
+              content: status === 422 ? T.studyMalformed
+                                      : fill(T.studyFailed, { error: String(body.error ?? status) }) }
+      )));
+    } catch (e) {
+      setMessages(prev => prev.map(m => m.id !== assistantId ? m
+        : { ...m, isStreaming: false, isError: true, content: fill(T.studyFailed, { error: String(e) }) }));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [resolveDocument, studyKind, lang, T]);
+
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || isLoading) return;
+
+    if (mode === 'study') {
+      await sendStudy(text);
+      return;
+    }
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -1154,7 +1265,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [input, mode, isLoading, lang]);
+  }, [input, mode, isLoading, lang, sendStudy]);
 
   // ---- Copy message ----
   const handleCopyMessage = useCallback(async (msg: Message) => {
@@ -1375,173 +1486,6 @@ export default function App() {
     </div>
   );
 
-  const runStudy = async () => {
-    if (!studyDoc || studyBusy) return;
-    setStudyBusy(true);
-    setStudyError(null);
-    setStudyResult(null);
-    setStudyRevealed(false);
-    try {
-      const langName = lang === 'en' ? 'English' : lang === 'ca' ? 'Valencià' : 'Castellano';
-      const { status, body } = await api.study(studyKind, studyDoc, langName);
-      if (status === 200 && body.ok) {
-        setStudyResult(body.artifact as StudyArtifact);
-      } else if (status === 422) {
-        // Told apart from a server failure on purpose: the user's next move is
-        // "try again or change model", not "check the backend".
-        setStudyError(T.studyMalformed);
-      } else {
-        setStudyError(fill(T.studyFailed, { error: String(body.error ?? status) }));
-      }
-    } catch (e) {
-      setStudyError(fill(T.studyFailed, { error: String(e) }));
-    } finally {
-      setStudyBusy(false);
-    }
-  };
-
-  const renderOutlineNodes = (nodes: OutlineNode[], depth = 0) => (
-    <ul className={depth === 0 ? 'space-y-1' : 'space-y-1 mt-1'}>
-      {nodes.map((node, i) => (
-        <li key={`${depth}-${i}-${node.title}`} style={{ paddingLeft: depth * 18 }}>
-          <span className={depth === 0 ? 'text-[var(--text)] font-semibold' : 'text-[var(--text-muted)]'}>
-            {node.title}
-          </span>
-          {node.children?.length ? renderOutlineNodes(node.children, depth + 1) : null}
-        </li>
-      ))}
-    </ul>
-  );
-
-  const renderStudyPanel = () => {
-    const kinds: { id: StudyKind; label: string }[] = [
-      { id: 'summary', label: T.studySummary },
-      { id: 'outline', label: T.studyOutline },
-      { id: 'quiz', label: T.studyQuiz },
-    ];
-    // Annotated: the chain of ?? over two optional arrays leaves tsc inferring
-    // never[], which then makes the numeric sort below an error.
-    const pages: number[] = studyResult?.sections?.flatMap(x => x.source_pages ?? [])
-      ?? studyResult?.questions?.flatMap(x => x.source_pages ?? []) ?? [];
-    const uniquePages = Array.from(new Set(pages)).sort((a, b) => a - b);
-
-    return (
-      <div className="space-y-6 max-w-3xl">
-        <div className="space-y-2">
-          <label className="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">
-            {T.studyPick}
-          </label>
-          {documents.length === 0 ? (
-            <p className="text-sm text-[var(--text-muted)]">{T.studyNoDocs}</p>
-          ) : (
-            <select
-              value={studyDoc}
-              onChange={e => { setStudyDoc(e.target.value); setStudyResult(null); setStudyError(null); }}
-              className="w-full bg-[var(--surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)]"
-            >
-              <option value="">—</option>
-              {documents.map(doc => <option key={doc} value={doc}>{doc}</option>)}
-            </select>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {kinds.map(k => (
-            <button
-              key={k.id}
-              type="button"
-              onClick={() => { setStudyKind(k.id); setStudyResult(null); setStudyError(null); }}
-              className={`px-3 py-2 text-xs font-semibold border transition-colors ${
-                studyKind === k.id
-                  ? 'bg-[var(--surface-2)] text-[var(--text)] border-[var(--border)]'
-                  : 'bg-[var(--surface)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text)]'
-              }`}
-            >
-              {k.label}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={runStudy}
-            disabled={!studyDoc || studyBusy}
-            className="px-4 py-2 text-xs font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text)] disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {studyBusy ? fill(T.studyWorking, { doc: studyDoc }) : T.studyRun}
-          </button>
-        </div>
-
-        {studyError && (
-          <div className="border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--text)]">
-            {studyError}
-          </div>
-        )}
-
-        {!studyResult && !studyError && !studyBusy && (
-          <p className="text-sm text-[var(--text-muted)]">{T.studyEmpty}</p>
-        )}
-
-        {studyResult && (
-          <div className="border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4">
-            {studyResult.source_document && (
-              <div className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">
-                {studyResult.source_document}
-              </div>
-            )}
-
-            {studyResult.sections?.map((section, i) => (
-              <div key={i} className="space-y-1">
-                {section.heading && <h3 className="t-h3 text-[var(--text)]">{section.heading}</h3>}
-                <p className="text-sm text-[var(--text-muted)] leading-relaxed">{section.body}</p>
-              </div>
-            ))}
-
-            {studyResult.nodes && renderOutlineNodes(studyResult.nodes)}
-
-            {studyResult.questions && (
-              <div className="space-y-5">
-                {studyResult.questions.map((q, i) => (
-                  <div key={i} className="space-y-1.5">
-                    <p className="text-sm font-semibold text-[var(--text)]">{i + 1}. {q.prompt}</p>
-                    <ul className="space-y-1">
-                      {q.options.map((option, j) => (
-                        <li
-                          key={j}
-                          className={`text-sm pl-4 ${
-                            studyRevealed && j === q.correct_index
-                              ? 'text-[var(--text)] font-semibold'
-                              : 'text-[var(--text-muted)]'
-                          }`}
-                        >
-                          {String.fromCharCode(97 + j)}) {option}
-                          {studyRevealed && j === q.correct_index && ` — ${T.studyAnswer}`}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-                {!studyRevealed && (
-                  <button
-                    type="button"
-                    onClick={() => setStudyRevealed(true)}
-                    className="px-3 py-2 text-xs font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text)]"
-                  >
-                    {T.studyShowAnswers}
-                  </button>
-                )}
-              </div>
-            )}
-
-            {uniquePages.length > 0 && (
-              <div className="pt-2 text-xs text-[var(--text-muted)] border-t border-[var(--border)]">
-                {T.studyPages}: {uniquePages.join(', ')}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const renderPipelinePanel = () => (
     <div className="mx-auto w-full max-w-4xl space-y-4">
       {(settingsError || isReindexing) && (
@@ -1698,12 +1642,6 @@ export default function App() {
             >
               {T.tabPipeline}
             </button>
-            <button
-              className={`flex-1 py-2 text-xs font-semibold transition-all ${mainPanel === 'study' ? 'bg-[var(--surface-2)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
-              onClick={() => openMainPanel('study')}
-            >
-              {T.tabStudy}
-            </button>
           </div>
         </div>
 
@@ -1831,9 +1769,7 @@ export default function App() {
                 {mainPanel === 'models'
                   ? <Ollama className="w-5 h-5 flex-shrink-0 text-[var(--text)]" />
                   : <Database className="w-5 h-5 flex-shrink-0" />}
-                <h2 className="t-h2 text-[var(--text)] truncate">
-                  {mainPanel === 'models' ? T.tabModels : mainPanel === 'study' ? T.tabStudy : T.tabPipeline}
-                </h2>
+                <h2 className="t-h2 text-[var(--text)] truncate">{mainPanel === 'models' ? T.tabModels : T.tabPipeline}</h2>
               </div>
               <button
                 type="button"
@@ -1846,7 +1782,7 @@ export default function App() {
               </button>
             </header>
             <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
-              {mainPanel === 'models' ? renderModelsPanel() : mainPanel === 'study' ? renderStudyPanel() : renderPipelinePanel()}
+              {mainPanel === 'models' ? renderModelsPanel() : renderPipelinePanel()}
             </div>
           </div>
         )}
@@ -1879,6 +1815,13 @@ export default function App() {
                 <Database className="w-4 h-4" />
                 RAG
               </button>
+              <button
+                className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide transition-all flex items-center gap-2 ${mode === 'study' ? 'bg-[var(--accent)] text-[var(--accent-contrast)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+                onClick={() => handleModeChange('study')}
+              >
+                <BookOpen className="w-4 h-4" />
+                {T.modeStudy}
+              </button>
             </div>
           </div>
 
@@ -1906,7 +1849,7 @@ export default function App() {
 
         {/* Chat Area */}
         <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar scroll-smooth relative">
-          <div className="max-w-3xl mx-auto space-y-10 pb-20 relative z-10">
+          <div className={`max-w-3xl mx-auto space-y-10 relative z-10 ${mode === 'study' ? 'pb-44' : 'pb-32'}`}>
             <AnimatePresence>
               {messages.length === 0 && !isLoading && (
                 <motion.div
@@ -1969,7 +1912,15 @@ export default function App() {
                             ? 'text-red-400'
                             : 'text-[var(--text)]'
                       }`}>
-                        {msg.content ? (
+                        {msg.artifact && msg.artifactKind ? (
+                          <StudyArtifactView
+                            artifact={msg.artifact}
+                            kind={msg.artifactKind}
+                            revealed={!!revealedQuiz[msg.id]}
+                            onReveal={() => setRevealedQuiz(prev => ({ ...prev, [msg.id]: true }))}
+                            strings={T as unknown as Record<string, string>}
+                          />
+                        ) : msg.content ? (
                           <MarkdownContent text={msg.content} />
                         ) : msg.isStreaming ? (
                           <span className="inline-block w-2 h-5 bg-orange-400 rounded-sm animate-pulse" />
@@ -2021,40 +1972,239 @@ export default function App() {
           style={{ background: 'linear-gradient(to top, var(--bg), color-mix(in srgb, var(--bg) 88%, transparent) 55%, transparent)' }}
         >
           <div className="max-w-3xl mx-auto relative">
-            <div className="glass-panel relative flex items-end gap-3 p-2.5 focus-within:border-[var(--accent)] transition-all">
+            {/* Autocomplete — above the input, so the caret never sits under it */}
+            {mode === 'study' && documentSuggestions.length > 0 && (
+              <div className="composer-panel absolute bottom-full mb-2 left-0 right-0 py-1.5 max-h-64 overflow-y-auto custom-scrollbar z-30">
+                {documentSuggestions.map((doc, i) => (
+                  <button
+                    key={doc}
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); acceptSuggestion(doc); }}
+                    onMouseEnter={() => setSuggestionIndex(i)}
+                    className={`w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm transition-colors ${
+                      i === suggestionIndex
+                        ? 'bg-[var(--surface-2)] text-[var(--text)]'
+                        : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                    }`}
+                  >
+                    <FileText className={`w-4 h-4 shrink-0 ${i === suggestionIndex ? 'text-[var(--accent)]' : ''}`} />
+                    <span className="truncate">{doc}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* The chooser lives INSIDE the input panel. Floating it above sat it
+                on the transparent end of the area's gradient, so the chat read
+                straight through it. Padding cannot fix that — content passes
+                under a floating input by design; what it needed was a floor. */}
+            <div className={`composer-panel relative focus-within:border-[var(--accent)] transition-all ${
+              mode === 'study' ? 'flex flex-col p-2.5 gap-2' : 'flex items-end gap-3 p-2.5'
+            }`}>
               <textarea
                 ref={textareaRef}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => { setInput(e.target.value); setSuggestionIndex(0); }}
                 onKeyDown={(e) => {
+                  const suggesting = mode === 'study' && documentSuggestions.length > 0;
+                  if (suggesting && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+                    e.preventDefault();
+                    setSuggestionIndex(i => {
+                      const next = e.key === 'ArrowDown' ? i + 1 : i - 1;
+                      return (next + documentSuggestions.length) % documentSuggestions.length;
+                    });
+                    return;
+                  }
+                  // Tab completes; Enter sends. Keeping them apart means a
+                  // half-typed name never becomes a request by reflex.
+                  if (suggesting && e.key === 'Tab') {
+                    e.preventDefault();
+                    acceptSuggestion(documentSuggestions[suggestionIndex]);
+                    return;
+                  }
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     handleSend();
                   }
                 }}
-                placeholder={mode === 'rag' ? T.placeholderRag : T.placeholderChat}
-                className="flex-1 max-h-48 min-h-[52px] bg-transparent border-none focus:ring-0 focus:outline-none resize-none py-3.5 px-4 text-[15px] text-[var(--text)] placeholder:text-[var(--text-faint)] custom-scrollbar font-medium"
+                placeholder={mode === 'study' ? T.studyPlaceholder : mode === 'rag' ? T.placeholderRag : T.placeholderChat}
+                className={`${mode === 'study' ? 'w-full max-h-40 min-h-[44px]' : 'flex-1 max-h-48 min-h-[52px]'} bg-transparent border-none focus:ring-0 focus:outline-none resize-none py-3.5 px-4 text-[15px] text-[var(--text)] placeholder:text-[var(--text-faint)] custom-scrollbar font-medium`}
                 rows={1}
                 disabled={isLoading}
               />
 
-              <button
-                onClick={handleSend}
-                disabled={!input.trim() || isLoading}
-                className="p-3.5 bg-[var(--accent)] text-[var(--accent-contrast)] hover:bg-[var(--accent-hover)] active:scale-95 disabled:opacity-40 disabled:bg-[var(--surface-2)] disabled:text-[var(--text-faint)] transition-all flex-shrink-0"
-              >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Send className="w-5 h-5 ml-0.5" />
-                )}
-              </button>
+              {mode === 'study' ? (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex bg-[var(--surface)] border border-[var(--border)]">
+                    {([
+                      ['summary', T.studyKindSummary],
+                      ['outline', T.studyKindOutline],
+                      ['quiz', T.studyKindQuiz],
+                    ] as [StudyKind, string][]).map(([kind, label]) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        onClick={() => setStudyKind(kind)}
+                        className={`px-3 py-2 text-[11px] font-bold tracking-wide uppercase transition-all ${
+                          studyKind === kind
+                            ? 'bg-[var(--accent)] text-[var(--accent-contrast)]'
+                            : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleSend}
+                    disabled={!input.trim() || isLoading}
+                    className="p-3 bg-[var(--accent)] text-[var(--accent-contrast)] hover:bg-[var(--accent-hover)] active:scale-95 disabled:opacity-40 disabled:bg-[var(--surface-2)] disabled:text-[var(--text-faint)] transition-all flex-shrink-0"
+                  >
+                    {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 ml-0.5" />}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleSend}
+                  disabled={!input.trim() || isLoading}
+                  className="p-3.5 bg-[var(--accent)] text-[var(--accent-contrast)] hover:bg-[var(--accent-hover)] active:scale-95 disabled:opacity-40 disabled:bg-[var(--surface-2)] disabled:text-[var(--text-faint)] transition-all flex-shrink-0"
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Send className="w-5 h-5 ml-0.5" />
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>
         </div>
         )}
       </main>
+    </div>
+  );
+}
+
+// =============================================================================
+// Study artifact — rendered in the chat bubble, one shape per kind
+// =============================================================================
+
+function OutlineTree({ nodes, depth = 0 }: { nodes: OutlineNode[]; depth?: number }) {
+  // Top level is a stack of headings; every level below hangs off a rule.
+  // Indentation alone did not read as hierarchy — 16px against 15px text is
+  // noise, and the result looked like a flat list. The rule is what makes a
+  // child visibly belong to its parent.
+  return (
+    <ul className={depth === 0 ? 'space-y-3' : 'mt-1.5 space-y-1.5 border-l border-[var(--border)] pl-4'}>
+      {nodes.map((node, i) => (
+        <li key={`${depth}-${i}-${node.title}`} className="relative">
+          {depth > 0 && (
+            // Ticks the rule at each child, so siblings are countable.
+            <span className="absolute -left-4 top-[0.7em] w-2 h-px bg-[var(--border)]" aria-hidden="true" />
+          )}
+          <span
+            className={
+              depth === 0
+                ? 'block text-[var(--text)] font-semibold text-[15px]'
+                : depth === 1
+                  ? 'block text-[var(--text)] text-[14px]'
+                  : 'block text-[var(--text-muted)] text-[13px]'
+            }
+          >
+            {node.title}
+          </span>
+          {node.children?.length ? <OutlineTree nodes={node.children} depth={depth + 1} /> : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function StudyArtifactView({
+  artifact, kind, revealed, onReveal, strings,
+}: {
+  artifact: StudyArtifact;
+  kind: StudyKind;
+  revealed: boolean;
+  onReveal: () => void;
+  strings: Record<string, string>;
+}) {
+  const pages = Array.from(new Set<number>([
+    ...(artifact.sections ?? []).flatMap(x => x.source_pages ?? []),
+    ...(artifact.questions ?? []).flatMap(x => x.source_pages ?? []),
+  ])).sort((a, b) => a - b);
+
+  return (
+    <div className="w-full space-y-4 text-[15px] leading-relaxed">
+      {kind === 'summary' && (artifact.sections ?? []).map((section, i) => (
+        <div key={i} className="space-y-1">
+          {section.heading && (
+            <h3 className="text-[var(--text)] font-semibold">{section.heading}</h3>
+          )}
+          <div className="text-[var(--text-muted)]">
+            <MarkdownContent text={section.body} />
+          </div>
+        </div>
+      ))}
+
+      {kind === 'outline' && <OutlineTree nodes={artifact.nodes ?? []} />}
+
+      {kind === 'quiz' && (
+        <div className="space-y-5">
+          {(artifact.questions ?? []).map((q, i) => (
+            <div key={i} className="space-y-2">
+              <p className="text-[var(--text)] font-semibold">
+                <span className="text-[var(--accent)] mr-1.5">{i + 1}.</span>{q.prompt}
+              </p>
+              <ul className="space-y-1.5">
+                {q.options.map((option, j) => {
+                  const isKey = revealed && j === q.correct_index;
+                  return (
+                    <li
+                      key={j}
+                      className={`flex items-start gap-2.5 px-3 py-1.5 border transition-colors ${
+                        isKey
+                          ? 'border-[var(--accent)]/40 bg-[var(--accent)]/10 text-[var(--text)]'
+                          : 'border-transparent text-[var(--text-muted)]'
+                      }`}
+                    >
+                      <span className={`font-mono text-xs mt-0.5 ${isKey ? 'text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}>
+                        {String.fromCharCode(97 + j)}
+                      </span>
+                      <span className="flex-1">{option}</span>
+                      {isKey && (
+                        <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-[var(--accent)]" />
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+          {/* Hidden by default: a quiz whose key is on screen from the first
+              render is a summary with extra steps. */}
+          {!revealed && (artifact.questions ?? []).length > 0 && (
+            <button
+              type="button"
+              onClick={onReveal}
+              className="px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase text-[var(--text-muted)] hover:text-[var(--text)] bg-[var(--surface)] hover:bg-[var(--surface-2)] border border-[var(--border)] transition-colors"
+            >
+              {strings.studyShowAnswersInline}
+            </button>
+          )}
+        </div>
+      )}
+
+      {artifact.source_document && (
+        <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-[var(--text-faint)]">
+          <span className="inline-flex items-center gap-1.5">
+            <FileText className="w-3.5 h-3.5" />
+            {artifact.source_document}
+          </span>
+          {pages.length > 0 && <span>· {pages.length} {strings.studyPagesShort}</span>}
+        </div>
+      )}
     </div>
   );
 }
