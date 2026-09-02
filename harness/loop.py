@@ -427,12 +427,45 @@ def _historical_high_water(
     latest iteration so repeated measurements of one configuration converge.
     Computed once at loop start from PRIOR history only -- entries written by
     the current run never move the pairing baseline mid-campaign.
+
+    ## Verified history displaces unverified (issue #107, option 1)
+
+    The fingerprint (option 2) stops an entry measured on a *provably
+    different* stack from pairing. It does nothing about the entries that
+    actually aged: everything written before schema v3 carries no fingerprint,
+    compares ``UNKNOWN``, and keeps pairing forever -- and those are precisely
+    the August entries holding passes this stack cannot reach. Left alone,
+    every campaign ends ``rejected_regression`` against a high water nobody can
+    climb back to, with no bug to fix.
+
+    So once this stack has measured a comparable state of its own, history that
+    never said what it ran on stops being the baseline. That is what makes a
+    refresh campaign work: run the grid on the current stack, and from its
+    first complete entry the aged high water is out of the pool.
+
+    The displacement is deliberately conditional on a verified entry existing.
+    Discarding unverified history with nothing measured to put in its place
+    would throw away the evidence issue #92 was built on over a stack drift
+    nobody has demonstrated -- and a launch that cannot read its own stack
+    verifies nothing, so it behaves exactly as it did before #107.
     """
+    comparable = [
+        entry
+        for entry in entries
+        if is_comparable_search_set_entry(entry, comparable_view, launch_environment)
+    ]
+    verified = [
+        entry
+        for entry in comparable
+        if environment_mod.compare(entry.environment_fingerprint, launch_environment)
+        == environment_mod.MATCH
+    ]
+    pool = verified or comparable
+
     best: Optional[ledger_mod.LedgerEntry] = None
-    for entry in entries:
-        if is_comparable_search_set_entry(entry, comparable_view, launch_environment):
-            if best is None or entry.objective_adjusted >= best.objective_adjusted:
-                best = entry
+    for entry in pool:
+        if best is None or entry.objective_adjusted >= best.objective_adjusted:
+            best = entry
     return best
 
 

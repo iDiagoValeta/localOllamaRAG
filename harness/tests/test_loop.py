@@ -1134,14 +1134,39 @@ def test_the_report_says_when_the_launch_environment_could_not_be_read(tmp_path)
     assert report["environment"]["readable"] is False
 
 
-def test_the_launch_line_says_when_the_high_water_itself_is_unverified(tmp_path):
-    """The exact #107 situation: an aged entry outscores every verified one, so
-    the count of unverified states is not the fact that decides -- which entry
-    pairing will actually use is."""
+def test_a_refreshed_baseline_takes_over_from_a_higher_aged_one(tmp_path):
+    """The exact #107 situation, now resolved rather than only reported.
+
+    This used to assert the opposite: the aged 30 won and the launch line said
+    so, which was accurate and useless -- the operator was told the baseline
+    was unreachable and had no way to replace it. Option 1 is that way: once a
+    comparable state has been measured on this stack, the entry that never said
+    what it ran on stops being the baseline, even though it scores higher.
+
+    The count of comparable states does not change. Both still pair; only one
+    is eligible to be the high water.
+    """
     from harness import ledger as ledger_mod
 
     _seed_entry(tmp_path, 1, 30, _ONE_PASS, environment_fingerprint=None)
     _seed_entry(tmp_path, 2, 25, _ONE_PASS, environment_fingerprint=_STACK_TODAY)
+    info = loop.describe_ledger_comparability(
+        AppConfig(), list(ledger_mod.read_history(tmp_path)), launch_environment=_STACK_TODAY
+    )
+    assert info["comparable_search_set_states"] == 2
+    assert info["high_water_objective_adjusted"] == 25
+    assert info["high_water_environment_verified"] is True
+
+
+def test_the_launch_line_says_when_the_high_water_itself_is_unverified(tmp_path):
+    """With nothing measured on this stack there is nothing to displace with,
+    so the aged entry is still the baseline -- and the launch line has to say
+    that it was never verified, because that is the warning telling the
+    operator a refresh campaign is what they need."""
+    from harness import ledger as ledger_mod
+
+    _seed_entry(tmp_path, 1, 30, _ONE_PASS, environment_fingerprint=None)
+    _seed_entry(tmp_path, 2, 25, _ONE_PASS, environment_fingerprint=None)
     info = loop.describe_ledger_comparability(
         AppConfig(), list(ledger_mod.read_history(tmp_path)), launch_environment=_STACK_TODAY
     )
@@ -1160,3 +1185,94 @@ def test_a_verified_high_water_is_reported_as_verified(tmp_path):
     )
     assert info["high_water_objective_adjusted"] == 30
     assert info["high_water_environment_verified"] is True
+
+
+# ---------------------------------------------------------------------------
+# Issue #107, option 1: a refreshed baseline displaces the aged one.
+#
+# Option 2 (the fingerprint) landed already and stops an entry measured on a
+# *provably different* stack from pairing. It does nothing about the entries
+# that actually aged: everything written before schema v3 carries no
+# fingerprint at all, compares UNKNOWN, and keeps pairing forever. Those are
+# exactly the August entries holding passes this stack cannot reach.
+#
+# So the rule these tests pin: once this stack has measured a comparable state
+# of its own, history that never said what it ran on stops being the baseline.
+# Before that first verified entry nothing changes, because discarding the
+# unverified history with nothing to put in its place is how #92's evidence
+# would be thrown away for a stack drift nobody has demonstrated.
+# ---------------------------------------------------------------------------
+
+_STACK_NOW = {
+    "schema": 1,
+    "packages": {"isolated": {"mineru": "3.4.5"}, "product": {"torch": "2.9.0"}},
+}
+
+
+def _high_water_of(tmp_path, launch_environment):
+    import dataclasses
+
+    from harness import ledger as ledger_mod
+
+    entries = list(ledger_mod.read_history(tmp_path))
+    view = loop._comparable_config_view(dataclasses.asdict(AppConfig()))
+    return loop._historical_high_water(entries, view, launch_environment)
+
+
+def _records(passed_ids, failed_ids=()):
+    return (
+        [{"id": i, "case_type": "factual_number", "passed": True, "elapsed_seconds": 200.0}
+         for i in passed_ids]
+        + [{"id": i, "case_type": "factual_number", "passed": False, "elapsed_seconds": 200.0}
+           for i in failed_ids]
+    )
+
+
+def test_unverified_history_still_pairs_when_nothing_has_been_verified(tmp_path):
+    # Unchanged behaviour, and the reason the displacement is conditional:
+    # this is #92's evidence and there is nothing measured to replace it with.
+    _seed_entry(tmp_path, 1, 2, _records(("a", "b")), environment_fingerprint=None)
+
+    assert _high_water_of(tmp_path, _STACK_NOW).iteration == 1
+
+
+def test_a_verified_entry_displaces_a_higher_unverified_one(tmp_path):
+    # The whole point: the aged entry scores better and still loses, because
+    # it never said which stack produced that score.
+    _seed_entry(tmp_path, 1, 2, _records(("a", "b")), environment_fingerprint=None)
+    _seed_entry(tmp_path, 2, 1, _records(("a",), ("b",)), environment_fingerprint=_STACK_NOW)
+
+    high_water = _high_water_of(tmp_path, _STACK_NOW)
+    assert high_water.iteration == 2
+    assert high_water.objective_adjusted == 1
+
+
+def test_among_verified_entries_the_best_still_wins(tmp_path):
+    # Displacement changes which pool is eligible, not how the best is chosen.
+    _seed_entry(tmp_path, 1, 1, _records(("a",), ("b",)), environment_fingerprint=_STACK_NOW)
+    _seed_entry(tmp_path, 2, 2, _records(("a", "b")), environment_fingerprint=_STACK_NOW)
+
+    assert _high_water_of(tmp_path, _STACK_NOW).iteration == 2
+
+
+def test_an_entry_from_a_different_stack_verifies_nothing(tmp_path):
+    # DIFFERS was already excluded from pairing; it must also not count as the
+    # verified evidence that displaces unverified history, or a campaign run
+    # on the wrong stack would silently discard the ledger.
+    other_stack = {
+        "schema": 1,
+        "packages": {"isolated": {"mineru": "2.1.0"}, "product": {"torch": "2.9.0"}},
+    }
+    _seed_entry(tmp_path, 1, 2, _records(("a", "b")), environment_fingerprint=None)
+    _seed_entry(tmp_path, 2, 3, _records(("a", "b")), environment_fingerprint=other_stack)
+
+    assert _high_water_of(tmp_path, _STACK_NOW).iteration == 1
+
+
+def test_a_launch_that_cannot_read_its_own_stack_verifies_nothing(tmp_path):
+    # With no launch fingerprint every comparison is UNKNOWN, so there is no
+    # verified pool and the ledger must behave exactly as it did before #107.
+    _seed_entry(tmp_path, 1, 2, _records(("a", "b")), environment_fingerprint=None)
+    _seed_entry(tmp_path, 2, 1, _records(("a",), ("b",)), environment_fingerprint=_STACK_NOW)
+
+    assert _high_water_of(tmp_path, None).iteration == 1
