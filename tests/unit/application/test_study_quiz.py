@@ -41,8 +41,10 @@ class _FakeChatModel:
         self.reply = reply
         self.calls = []
 
-    def generate(self, prompt, *, system=None, images=()):
-        self.calls.append({"prompt": prompt, "system": system})
+    def generate(self, prompt, *, system=None, images=(), response_format=None):
+        self.calls.append(
+            {"prompt": prompt, "system": system, "response_format": response_format}
+        )
         if isinstance(self.reply, Exception):
             raise self.reply
         return self.reply
@@ -247,3 +249,40 @@ class TestTheInterfaceView:
         assert payload["questions"][0]["options"] == ["Documents", "Images", "Users"]
         assert payload["questions"][0]["correct_index"] == 0
         assert payload["questions"][0]["source_pages"] == [4]
+
+
+class TestTheSchemaIsAskedForInTheChannelThatEnforcesIt:
+    """Issue #153. A prompt can only ask; the schema constrains decoding.
+
+    Measured 2026-09-02 on `higgs-boson.pdf`, whose quizzes failed every time:
+    unconstrained 2/5, `format:"json"` 0/5 (valid JSON every time, and a dict
+    rather than the array every time -- plain JSON mode fixes syntax, not
+    shape), schema 5/5.
+    """
+
+    def test_the_quiz_asks_for_its_schema(self):
+        model = _FakeChatModel(_TWO_QUESTIONS)
+        Study(model).quiz([_fragment()], AppConfig.from_env())
+        schema = model.calls[0]["response_format"]
+        assert schema["type"] == "array"
+        assert set(schema["items"]["required"]) == {"prompt", "options", "correct_index"}
+
+    def test_the_schema_bounds_the_key_it_asks_for(self):
+        # 3-4 options and a key in 0..3: the model cannot emit 7 for a
+        # four-option question. The parse still checks the key against the
+        # options actually returned, because a schema cannot know how many
+        # there were.
+        model = _FakeChatModel(_TWO_QUESTIONS)
+        Study(model).quiz([_fragment()], AppConfig.from_env())
+        item = model.calls[0]["response_format"]["items"]["properties"]
+        assert item["options"]["minItems"] == 3
+        assert item["correct_index"]["maximum"] == 3
+
+    def test_a_schema_does_not_replace_the_parse(self):
+        # Every field the schema demands, and a key pointing at nothing. A
+        # schema constrains structure, never truth.
+        model = _FakeChatModel(
+            '[{"prompt": "Q", "options": ["a", "b", "c"], "correct_index": 9}]'
+        )
+        with pytest.raises(MalformedQuizError):
+            Study(model).quiz([_fragment()], AppConfig.from_env())

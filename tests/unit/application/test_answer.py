@@ -70,7 +70,7 @@ class FakeChatModel:
             yield GenerationChunk(text=t, done=False)
         yield self._final_chunk
 
-    def generate(self, prompt, *, system=None, images=()):
+    def generate(self, prompt, *, system=None, images=(), response_format=None):
         self.generate_calls.append({"prompt": prompt, "system": system})
         if self._raises:
             raise RuntimeError("recomp model unavailable")

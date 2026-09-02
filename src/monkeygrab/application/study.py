@@ -84,6 +84,24 @@ _FENCE_RE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL)
 
 _MAX_SECTIONS = 12
 
+# The same shape the prompt asks for in prose, in the one channel the backend
+# can enforce. Measured 2026-09-02 on higgs-boson.pdf, the document whose
+# quizzes failed every single time: unconstrained 2/5, and 5/5 with a schema.
+# A prompt can only ask; this refuses to decode a reply that would not parse.
+#
+# Note what a schema does NOT do: it constrains structure, never truth. A key
+# pointing at a plausible wrong option satisfies every schema ever written,
+# which is why _usable_question still runs afterwards and still drops what it
+# cannot verify.
+_SUMMARY_SCHEMA: Dict[str, Any] = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {"heading": {"type": "string"}, "body": {"type": "string"}},
+        "required": ["heading", "body"],
+    },
+}
+
 # Asking for a nested JSON structure directly rather than markdown headings
 # with "#" levels: the nesting is what the caller wants, and reconstructing it
 # from prefix counts means re-deriving structure the model already knew and
@@ -103,6 +121,33 @@ _OUTLINE_SYSTEM_PROMPT = (
 # is what the prompt asks for; this is the guard for when it is ignored.
 _MAX_OUTLINE_DEPTH = 4
 _MAX_OUTLINE_NODES = 60
+
+# Nested to the depth the prompt asks for and no further. A recursive schema
+# ($ref) would express "any depth", which is exactly what _MAX_OUTLINE_DEPTH
+# exists to refuse -- and a backend that cannot resolve the reference would
+# fall back to unconstrained decoding without saying so.
+_OUTLINE_NODE_SCHEMA: Dict[str, Any] = {"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]}
+_OUTLINE_SCHEMA: Dict[str, Any] = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "title": {"type": "string"},
+            "children": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "children": {"type": "array", "items": _OUTLINE_NODE_SCHEMA},
+                    },
+                    "required": ["title"],
+                },
+            },
+        },
+        "required": ["title"],
+    },
+}
 
 
 # Asking for the key as an index into the options rather than as the correct
@@ -132,6 +177,28 @@ _MAX_QUESTION_COUNT = 20
 # model starts padding with near-duplicates of the correct option.
 _MIN_OPTIONS = 2
 _MAX_OPTIONS = 6
+
+# correct_index is bounded by the schema as well as by _usable_question. The
+# schema stops the model emitting 7 for a four-option question; the parse still
+# checks the key against the options actually returned, because a schema cannot
+# know how many there were.
+_QUIZ_SCHEMA: Dict[str, Any] = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "prompt": {"type": "string"},
+            "options": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 3,
+                "maxItems": 4,
+            },
+            "correct_index": {"type": "integer", "minimum": 0, "maximum": 3},
+        },
+        "required": ["prompt", "options", "correct_index"],
+    },
+}
 
 
 class MalformedQuizError(RuntimeError):
@@ -314,7 +381,9 @@ class Study:
             instruction += f" Write the summary in {language}."
 
         raw = self._chat_model.generate(
-            f"{instruction}\n\n{context}", system=_SUMMARY_SYSTEM_PROMPT
+            f"{instruction}\n\n{context}",
+            system=_SUMMARY_SYSTEM_PROMPT,
+            response_format=_SUMMARY_SCHEMA,
         )
 
         # Every section cites the whole retrieval's pages. Per-section
@@ -368,7 +437,9 @@ class Study:
             instruction += f" Write the headings in {language}."
 
         raw = self._chat_model.generate(
-            f"{instruction}\n\n{context}", system=_OUTLINE_SYSTEM_PROMPT
+            f"{instruction}\n\n{context}",
+            system=_OUTLINE_SYSTEM_PROMPT,
+            response_format=_OUTLINE_SCHEMA,
         )
 
         try:
@@ -438,7 +509,9 @@ class Study:
             instruction += f" Write the questions and options in {language}."
 
         raw = self._chat_model.generate(
-            f"{instruction}\n\n{context}", system=_QUIZ_SYSTEM_PROMPT
+            f"{instruction}\n\n{context}",
+            system=_QUIZ_SYSTEM_PROMPT,
+            response_format=_QUIZ_SCHEMA,
         )
 
         try:

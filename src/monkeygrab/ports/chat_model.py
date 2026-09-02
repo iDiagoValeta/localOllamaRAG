@@ -1,6 +1,6 @@
 """ChatModel -- Ollama-style text/vision generation, single-shot or streamed."""
 
-from typing import Iterator, Optional, Protocol, Sequence
+from typing import Any, Iterator, Mapping, Optional, Protocol, Sequence
 
 from monkeygrab.domain.generation_chunk import GenerationChunk
 
@@ -39,6 +39,7 @@ class ChatModel(Protocol):
         *,
         system: Optional[str] = None,
         images: Sequence[bytes] = (),
+        response_format: Optional[Mapping[str, Any]] = None,
     ) -> str:
         """Generate a complete response in one call.
 
@@ -46,6 +47,21 @@ class ChatModel(Protocol):
             prompt: User/task prompt.
             system: Optional system prompt.
             images: Optional raw image bytes for a vision-capable chat model.
+            response_format: A JSON Schema the reply must conform to, for a
+                caller that parses the output rather than reading it. This is
+                a *constraint on decoding*, not a request in prose: the
+                backend refuses to emit tokens that would violate the schema,
+                so a caller gets the shape or an error, never a near miss.
+
+                Kept a per-call argument rather than adapter configuration
+                because the schema belongs to the artifact being asked for --
+                one model role produces summaries, outlines and quizzes, and
+                each has a different shape.
+
+                Sampling parameters stay out of this port (see above) because
+                they tune how a model writes. This decides what counts as a
+                reply at all, which is the caller's contract with its own
+                parser.
 
         Returns:
             The complete generated text.

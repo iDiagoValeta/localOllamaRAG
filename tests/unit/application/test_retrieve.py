@@ -112,7 +112,7 @@ class FakeQueryDecomposer:
         self._raises = raises
         self.calls = []
 
-    def generate(self, prompt, *, system=None, images=()):
+    def generate(self, prompt, *, system=None, images=(), response_format=None):
         self.calls.append(prompt)
         if self._raises:
             raise RuntimeError("decomposer unavailable")
