@@ -45,6 +45,7 @@ what a flag does — this is exactly the loop's job.
 RUNBOOK.md           How to run a campaign: procedure, decision points, verdicts
 search_space.py      Declared tunables, index-time exclusions, feasibility, reachability gate metadata
 fast_tier.txt         Fixed 13-case regression filter (never declares an improvement)
+slow_tier.py          Index-time tier (#102): batching by index recipe, cost in fast-tier units
 unreachable_cases.txt Cases excluded from the maximised scalar — starts empty, evidence-backed
 ledger.py              Append-only evidence ledger (JSON per iteration + index.jsonl)
 environment.py          The installed stack an iteration measured on (#107)

@@ -36,11 +36,13 @@ Four things live here besides the declared tunables:
   Any of these changes what is stored, which moves the index fingerprint and
   forces a full MinerU + jina-clip reindex per candidate -- far more
   expensive than the ~13 min a retrieval/generation-only evaluation now
-  costs (see above), whatever the exact multiple turns out to be once it is
-  measured. They get their own slower tier once block B (#30) lands and
-  reindex timing is measured. ``_validate_declared_space`` raises if any of
-  them appears in ``SEARCH_SPACE``, so a future contributor who adds one
-  gets a red test instead of a silent overnight reindex.
+  costs (see above). Their own tier is declared in ``harness/slow_tier.py``
+  (#102): it batches candidates by the index they need and prices a campaign
+  in fast-tier evaluations, so lifting this exclusion becomes a decision made
+  on a budget rather than discovered overnight. Declaring a knob there does
+  not put it in stage 1 -- ``_validate_declared_space`` still raises if any of
+  them appears in ``SEARCH_SPACE``, so a contributor who adds one here gets a
+  red test instead of a silent reindex.
 - ``expand_overrides`` / ``is_feasible``: ``weight_semantic_rrf`` and
   ``weight_bm25_rrf`` are coupled (see the docstring on ``expand_overrides``),
   and three declared parameters interact (section 2.3). Neither coupling is
