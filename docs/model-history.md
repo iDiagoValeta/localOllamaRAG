@@ -37,16 +37,41 @@ version moved three (see "Stack drift" below).
 `gemma4:e4b` is the repo default. Cases are the 23 answered ones; the other
 42 never call a generator.
 
-| Model | Params / size | Answered cases passed | Median s/case | tokens/s | Run |
-|---|---|---|---|---|---|
-| `qwen3-coder-30b:latest` | 30B MoE, 10 GB | **21 / 23** | 41.7 | not recorded | `20260901T023915Z` |
-| `gemma4:e2b` | 7.2 GB | 20 / 23 | 38.7 | not recorded | `20260901T023915Z` |
-| `gemma4:e4b` *(default)* | 9.6 GB | 19 / 23 | 39.8 | not recorded | `20260901T023915Z` |
-| `qwen3:30b-a3b` | 30B MoE, 3B active, 18 GB | pending | | | in progress |
-| `qwen3:8b` | 8B dense, 5.2 GB | pending | | | in progress |
-| `mistral-small3.2:24b` | 24B dense, 15 GB | pending | | | in progress |
-| `gpt-oss:20b` | 20B MoE, 13 GB | not yet run | | | |
-| `granite4:small-h` | MoE, 19 GB | not yet run | | | |
+| Model | Params / size | Answered cases passed | Median s/case | tokens/s | tokens/answer | s/answer | Run |
+|---|---|---|---|---|---|---|---|
+| `qwen3-coder-30b:latest` | 30B MoE, 10 GB | **21 / 23** | 41.7 | not recorded | not recorded | not recorded | `20260901T023915Z` |
+| `gemma4:e2b` | 7.2 GB | 20 / 23 | 38.7 | not recorded | not recorded | not recorded | `20260901T023915Z` |
+| `gemma4:e4b` *(default)* | 9.6 GB | 19 / 23 | 39.8 | not recorded | not recorded | not recorded | `20260901T023915Z` |
+| `qwen3:30b-a3b` | 30B MoE, 3B active, 18 GB | pending | | | | | in progress |
+| `qwen3:8b` | 8B dense, 5.2 GB | pending | | | | | in progress |
+| `mistral-small3.2:24b` | 24B dense, 15 GB | pending | | | | | in progress |
+| `gpt-oss:20b` | 20B MoE, 13 GB | not yet run | | | | | |
+| `granite4:small-h` | MoE, 19 GB | not yet run | | | | | |
+
+**Speed is not latency, and this is the column that says so.** `tokens/s` is
+how fast a model decodes; `s/answer` is how long the user waits, and it is
+tokens divided by that rate. A model that reasons inline spends its budget
+before it starts answering, so the two columns can rank the same pair of models
+in opposite orders. Measured 2026-09-01, one representative prompt, `think:
+false`, `num_predict: 96`, `temperature: 0`:
+
+| Model | tokens/s | tokens used | s/answer |
+|---|---|---|---|
+| `qwen3-coder-30b:latest` | 43.5 | 5 | **0.11** |
+| `qwen3:30b-a3b` | 38.2 | 96 | **2.51** |
+
+Fourteen per cent apart on the column this table used to show; twenty-three
+times apart on the wait. Both answered correctly. `think: false` controls
+Ollama's *thinking channel* — the separate field a model emits its trace into —
+and does not stop a model whose chat template reasons inline from doing it in
+the body of the answer. Qwen3 does exactly that. Full analysis in issue #146.
+
+The second consequence is worse than the wait. At `num_predict: 96` the
+reasoning consumed the whole budget, and the answer survived by luck; a longer
+preamble truncates into something that grades as a plain `FAIL`,
+indistinguishable from the model not knowing. So a high `tokens/answer` is not
+only a cost, it is a **truncation risk**, and that is the number to check first
+when a capable model grades badly.
 
 **Why the tokens/s column is empty above.** The gate recorded
 `elapsed_seconds` per case, which includes the retrieval every model shares —
@@ -115,6 +140,19 @@ Run the gate, then read the artifact rather than the terminal:
 python tests/eval/run_eval.py --models <model> [<model>...]
 ```
 
-Aggregate `tokens_per_second` over records that have it, skipping those that
-do not — a missing key means the model reported no counts, and treating it as
-zero drags an average toward "slower" for a reason that is not real.
+Then let the tool read the artifact and print the row:
+
+```bash
+python tools/diagnostics/model_history_row.py tests/eval/runs/<artifact>.json
+```
+
+It reports the median of `tokens_per_second`, `eval_count` and their quotient
+per model, skipping records that lack the counts — a missing key means the
+model reported none, and treating it as zero drags the average toward "faster
+and cheaper" for a reason that is not real. When a model's medians come from
+fewer records than it answered, the row says so in the `tokens/answer` cell:
+three medians over two generations deserve less trust than over twenty-three,
+and a table that hides its denominator stops saying which it is.
+
+The median rather than the mean, because one runaway generation should not
+move a figure that goes into an append-only table.
