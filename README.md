@@ -320,7 +320,10 @@ get an error instead of a quiz. A wrong key is the one failure here that would
 not look like one.
 
 The **web UI** adds document upload, per-role model assignment, the pipeline
-toggles, and an inline PDF viewer that opens cited sources at the right page.
+toggles, an inline PDF viewer that opens cited sources at the right page, and a
+**Study** panel with the same three artifacts as the CLI — pick a document,
+pick summary, outline or quiz. Quiz answers stay hidden until you ask for them,
+so the panel can be used to test yourself rather than just to read.
 Ollama is started automatically if it is installed but not running. Three fixed
 language stores — English, Castellano, Valencià — map to `rag/docs/{en,es,ca}/`.
 The `es` and `ca` stores ship with a few sample articles so a fresh clone has
