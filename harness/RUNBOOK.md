@@ -294,9 +294,15 @@ measurement's actual resolution.
   accepted improvement on today's corpus is **a candidate for confirmation,
   not a demonstrated result**. This is issue #30, the binding constraint on
   the whole loop, and every report carries it as `resolution_warning`.
-- **Index-time knobs are not searched.** Chunking and the index-time flags
-  force a full reindex per candidate, which no budget survives inside a search
-  loop (#102). Declaring one is a red test, not an oversight.
+- **Index-time knobs are still not searched, but the tier is now costed.**
+  Chunking and the index-time flags force a full reindex, which no budget
+  survives inside a search loop. Declaring one in `SEARCH_SPACE` is still a red
+  test. What `harness/slow_tier.py` adds (#102) is the accounting: candidates
+  are batched by the index they need — two that differ only in a retrieval knob
+  share one rebuild — and a campaign is priced in fast-tier evaluations, the
+  unit the patience budget is already spent in. It measures nothing itself; the
+  reindex and evaluation seconds come from a real run. Whether such a candidate
+  can pay off at all is still block B's question (#30).
 - **Stage 1 is a single-field sweep from a fixed reference**, not a
   compounding hill climb. Two accepted single-field changes cannot combine
   within a run.
