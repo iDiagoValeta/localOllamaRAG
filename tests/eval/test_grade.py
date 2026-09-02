@@ -19,7 +19,15 @@ from grade import grade_answer, grade_retrieval  # noqa: E402
 
 GOLD_FILE = ROOT / "gold_cases.jsonl"
 
-_VALID_CASE_TYPES = {"factual_number", "factual_concept", "figure_retrieval", "table_retrieval"}
+_VALID_CASE_TYPES = {
+    "factual_number", "factual_concept", "figure_retrieval", "table_retrieval",
+    "study_summary", "study_outline", "study_quiz",
+}
+# Study cases (issue #140) operate on a whole document rather than on a query,
+# so they carry no "question" and no "verified_pages" -- the paper IS the
+# scope. Requiring either would mean inventing a query the artifact never
+# runs and a page range that is simply "all of them".
+_STUDY_CASE_TYPES = {"study_summary", "study_outline", "study_quiz"}
 _VALID_LANGS = {"en", "es"}
 _VALID_KINDS = {"text", "table", "image"}
 _RETRIEVAL_CASE_TYPES = {"figure_retrieval", "table_retrieval"}
@@ -245,6 +253,19 @@ def test_gold_cases_have_required_fields_for_their_type():
             assert case.get("arxiv_id"), f"{cid}: source=arxiv requires 'arxiv_id'"
         assert case.get("case_type") in _VALID_CASE_TYPES, f"{cid}: bad 'case_type'"
         assert case.get("lang") in _VALID_LANGS, f"{cid}: bad 'lang'"
+
+        if case["case_type"] in _STUDY_CASE_TYPES:
+            # What each one needs instead: a bound the artifact must clear, so
+            # a model that returns one section or one question cannot pass by
+            # returning something rather than nothing.
+            if case["case_type"] == "study_summary":
+                assert case.get("min_sections"), f"{cid}: study_summary needs 'min_sections'"
+            elif case["case_type"] == "study_outline":
+                assert case.get("min_nodes"), f"{cid}: study_outline needs 'min_nodes'"
+            else:
+                assert case.get("min_questions"), f"{cid}: study_quiz needs 'min_questions'"
+            continue
+
         assert case.get("question"), f"{cid}: missing 'question'"
         assert case.get("verified_pages"), f"{cid}: missing 'verified_pages'"
 

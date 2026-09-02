@@ -308,3 +308,97 @@ def grade_retrieval(hit_kinds: Sequence[str], case: Dict[str, Any]) -> Dict[str,
         if kind in hit_set:
             return {"pass": True, "reason": f"kind {kind!r} present in retrieved hits"}
     return {"pass": False, "reason": f"wanted one of {expected}, got {sorted(hit_set)}"}
+
+
+# STUDY ARTIFACTS (issue #140)
+#
+# A summary, an outline and a quiz have no single correct answer the way a
+# factual case does, so grading them by matching a literal would either accept
+# anything or reject correct work over phrasing. What they do have is
+# structure, and structure is checkable without a judge model.
+#
+# The line drawn here: grade what the artifact must be *usable*, not what it
+# should ideally say. An outline that finds three of a document's real section
+# titles has demonstrably read the document; demanding a specific tree would be
+# grading the model's editorial choices. A quiz's key, by contrast, is not a
+# matter of taste -- it points at a valid option or it does not, and that is
+# the one property whose failure a reader cannot detect for themselves.
+
+
+def _titles_of(nodes: Sequence[Dict[str, Any]]) -> list:
+    """Every title in an outline tree, flattened, lowercased."""
+    found = []
+    for node in nodes or []:
+        title = str(node.get("title", "")).strip()
+        if title:
+            found.append(title.lower())
+        found.extend(_titles_of(node.get("children") or []))
+    return found
+
+
+def grade_study(artifact: Dict[str, Any], case: Dict[str, Any]) -> Dict[str, Any]:
+    """Score a Study artifact on structure, not on wording.
+
+    Args:
+        artifact: ``summary_to_dict`` / ``outline_to_dict`` / ``quiz_to_dict``
+            output.
+        case: A gold record whose ``case_type`` is ``study_summary``,
+            ``study_outline`` or ``study_quiz``.
+
+    Returns:
+        ``{"pass": bool, "reason": str}``.
+    """
+    kind = case.get("case_type")
+
+    if kind == "study_summary":
+        sections = artifact.get("sections") or []
+        minimum = int(case.get("min_sections", 3))
+        if len(sections) < minimum:
+            return {"pass": False, "reason": f"{len(sections)} section(s), wanted >= {minimum}"}
+        # Every section must be readable on its own: a heading with no body is
+        # a promise the summary does not keep.
+        empty = [i for i, s in enumerate(sections) if not str(s.get("body", "")).strip()]
+        if empty:
+            return {"pass": False, "reason": f"section(s) {empty} carry no body"}
+        blob = " ".join(
+            f"{s.get('heading', '')} {s.get('body', '')}" for s in sections
+        ).lower()
+        missing = [t for t in (case.get("required_all") or []) if t.lower() not in blob]
+        if missing:
+            return {"pass": False, "reason": f"summary never mentions {missing}"}
+        return {"pass": True, "reason": f"{len(sections)} sourced sections"}
+
+    if kind == "study_outline":
+        titles = _titles_of(artifact.get("nodes") or [])
+        minimum = int(case.get("min_nodes", 5))
+        if len(titles) < minimum:
+            return {"pass": False, "reason": f"{len(titles)} title(s), wanted >= {minimum}"}
+        # Any-of, not all-of: which sections a model names is an editorial
+        # choice, but finding none of a paper's real headings means it did not
+        # read the paper.
+        wanted = [t.lower() for t in (case.get("expect_titles_any") or [])]
+        if wanted and not any(w in " | ".join(titles) for w in wanted):
+            return {"pass": False, "reason": f"none of {case['expect_titles_any']} in the outline"}
+        return {"pass": True, "reason": f"{len(titles)} titles"}
+
+    if kind == "study_quiz":
+        questions = artifact.get("questions") or []
+        minimum = int(case.get("min_questions", 2))
+        if len(questions) < minimum:
+            return {"pass": False, "reason": f"{len(questions)} question(s), wanted >= {minimum}"}
+        for index, question in enumerate(questions):
+            options = question.get("options") or []
+            key = question.get("correct_index")
+            if len(options) < 2:
+                return {"pass": False, "reason": f"question {index} offers no choice"}
+            if len(set(options)) != len(options):
+                return {"pass": False, "reason": f"question {index} repeats an option"}
+            # The property whose failure a reader cannot catch: a key that
+            # does not point at a real option grades them against nothing.
+            if not isinstance(key, int) or isinstance(key, bool) or not 0 <= key < len(options):
+                return {"pass": False, "reason": f"question {index} has key {key!r} out of range"}
+            if not str(question.get("prompt", "")).strip():
+                return {"pass": False, "reason": f"question {index} has no prompt"}
+        return {"pass": True, "reason": f"{len(questions)} questions, every key in range"}
+
+    return {"pass": False, "reason": f"grade_study does not handle case_type {kind!r}"}

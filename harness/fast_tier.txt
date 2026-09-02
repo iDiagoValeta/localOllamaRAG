@@ -46,3 +46,23 @@ dpo-pipeline-figure-es
 higgs-diphoton-figure
 planck-contours-figure
 gw-strain-figure
+
+# -- study artifacts (3): study_summary / study_outline / study_quiz --
+#
+# Present because the tier's own rule is to span every case_type in the search
+# set (harness/tests/test_evaluator.py), and issue #140 added three. They are
+# not free: each one is a full generation over a whole document, so this tier
+# costs three more answered-bucket cases than it did.
+#
+# Worth it for the same reason the failing figure cases are here. Only one knob
+# in SEARCH_SPACE reaches them at all -- flags.usar_optimizacion_contexto, the
+# one that decides what text the generator sees -- and it reaches them harder
+# than it reaches an answered case, because a Study artifact reads a whole
+# document rather than a top-k. A candidate that degrades context assembly
+# shows up here first.
+#
+# One paper, all three types: they share its chunks, so the document is loaded
+# once for the three.
+att-study-summary
+att-study-outline
+att-study-quiz
