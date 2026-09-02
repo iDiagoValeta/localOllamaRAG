@@ -1419,7 +1419,9 @@ export default function App() {
       { id: 'outline', label: T.studyOutline },
       { id: 'quiz', label: T.studyQuiz },
     ];
-    const pages = studyResult?.sections?.flatMap(x => x.source_pages ?? [])
+    // Annotated: the chain of ?? over two optional arrays leaves tsc inferring
+    // never[], which then makes the numeric sort below an error.
+    const pages: number[] = studyResult?.sections?.flatMap(x => x.source_pages ?? [])
       ?? studyResult?.questions?.flatMap(x => x.source_pages ?? []) ?? [];
     const uniquePages = Array.from(new Set(pages)).sort((a, b) => a - b);
 
