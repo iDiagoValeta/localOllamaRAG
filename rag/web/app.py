@@ -921,6 +921,69 @@ def api_topics():
     return jsonify({"ok": True, "topics": docs_data})
 
 
+# The three Study artifacts share one route because they share one shape:
+# pick a document, load its chunks, ask the generator for structure. Three
+# routes would have been three copies of the document lookup and three places
+# for the error contract to drift apart.
+_STUDY_KINDS = ("summary", "outline", "quiz")
+
+
+@app.route("/api/study", methods=["POST"])
+def api_study():
+    """Build a summary, an outline or a quiz over one indexed document.
+
+    Body: ``{"kind": "summary"|"outline"|"quiz", "document": str,
+    "language": str|None, "question_count": int|None}``.
+
+    A malformed generator reply comes back as 422 with ``kind: "malformed"``,
+    separate from a 500: the model ignored the format, which is actionable
+    (another model may not) and is not the server failing. The quiz raises
+    rather than returning questions whose answer key could not be verified,
+    so an empty panel here means "not safe to grade", never "nothing found".
+    """
+    data = request.get_json(silent=True) or {}
+    kind = str(data.get("kind") or "summary").strip().lower()
+    if kind not in _STUDY_KINDS:
+        return jsonify({"ok": False, "error": f"kind must be one of {', '.join(_STUDY_KINDS)}"}), 400
+
+    documento = str(data.get("document") or "").strip()
+    if not documento:
+        return jsonify({"ok": False, "error": "document is required"}), 400
+
+    idioma = data.get("language") or None
+    coll = _get_collection()
+    if documento not in rag_engine.obtener_documentos_indexados(coll):
+        return jsonify({"ok": False, "error": f"{documento} is not indexed"}), 404
+
+    fragmentos = rag_engine.fragmentos_de_documento(documento)
+    if not fragmentos:
+        return jsonify({"ok": False, "error": f"{documento} has no indexed fragments"}), 409
+
+    try:
+        if kind == "summary":
+            artifact = rag_engine.resumir_fragmentos(fragmentos, idioma=idioma)
+        elif kind == "outline":
+            artifact = rag_engine.esquema_de_fragmentos(fragmentos, idioma=idioma)
+        else:
+            count = data.get("question_count")
+            kwargs = {"idioma": idioma}
+            if count is not None:
+                kwargs["num_preguntas"] = int(count)
+            artifact = rag_engine.cuestionario_de_fragmentos(fragmentos, **kwargs)
+    except (
+        rag_engine.MalformedSummaryError,
+        rag_engine.MalformedOutlineError,
+        rag_engine.MalformedQuizError,
+    ) as exc:
+        return jsonify({"ok": False, "kind": "malformed", "error": str(exc)[:400]}), 422
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(exc)[:400]}), 500
+
+    return jsonify({"ok": True, "kind": kind, "artifact": artifact})
+
+
 @app.route("/api/reindex", methods=["POST"])
 def api_reindex():
     """Re-index everything with the current pipeline settings.

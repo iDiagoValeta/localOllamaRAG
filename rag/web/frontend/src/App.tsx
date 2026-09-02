@@ -131,6 +131,15 @@ const STRINGS = {
     indexingFailed: 'La indexación no pudo completarse.',
     noResults: 'No se encontró información relevante en los documentos.',
     tabModels: 'Modelos',
+    tabStudy: 'Estudiar',
+    studyPick: 'Elige un documento',
+    studySummary: 'Resumen', studyOutline: 'Esquema', studyQuiz: 'Cuestionario',
+    studyRun: 'Generar', studyWorking: 'Trabajando sobre {doc}...',
+    studyEmpty: 'Elige un documento y qué quieres hacer con él.',
+    studyPages: 'Páginas', studyAnswer: 'Respuesta', studyShowAnswers: 'Ver respuestas',
+    studyMalformed: 'El modelo no respetó el formato. Prueba otra vez, o con otro modelo.',
+    studyFailed: 'No se pudo generar: {error}',
+    studyNoDocs: 'No hay documentos indexados todavía.',
     storesLabel: 'Almacén vectorial',
     storeNotIndexed: 'sin indexar',
     storeEmptyHint: 'Almacén vacío. Sube PDFs y reindexa para activarlo.',
@@ -200,6 +209,15 @@ const STRINGS = {
     indexingFailed: 'Indexing could not be completed.',
     noResults: 'No relevant information found in the documents.',
     tabModels: 'Models',
+    tabStudy: 'Study',
+    studyPick: 'Pick a document',
+    studySummary: 'Summary', studyOutline: 'Outline', studyQuiz: 'Quiz',
+    studyRun: 'Generate', studyWorking: 'Working on {doc}...',
+    studyEmpty: 'Pick a document and what you want done with it.',
+    studyPages: 'Pages', studyAnswer: 'Answer', studyShowAnswers: 'Show answers',
+    studyMalformed: 'The model did not follow the format. Try again, or another model.',
+    studyFailed: 'Could not generate: {error}',
+    studyNoDocs: 'Nothing indexed yet.',
     storesLabel: 'Vector store',
     storeNotIndexed: 'not indexed',
     storeEmptyHint: 'Empty store. Upload PDFs and re-index to activate it.',
@@ -269,6 +287,15 @@ const STRINGS = {
     indexingFailed: "La indexació no s'ha pogut completar.",
     noResults: "No s'ha trobat informació rellevant als documents.",
     tabModels: 'Models',
+    tabStudy: 'Estudiar',
+    studyPick: 'Tria un document',
+    studySummary: 'Resum', studyOutline: 'Esquema', studyQuiz: 'Qüestionari',
+    studyRun: 'Generar', studyWorking: 'Treballant sobre {doc}...',
+    studyEmpty: 'Tria un document i què vols que en faça.',
+    studyPages: 'Pàgines', studyAnswer: 'Resposta', studyShowAnswers: 'Veure respostes',
+    studyMalformed: 'El model no ha respectat el format. Prova una altra vegada, o amb un altre model.',
+    studyFailed: 'No s\'ha pogut generar: {error}',
+    studyNoDocs: 'Encara no hi ha documents indexats.',
     storesLabel: 'Magatzem vectorial',
     storeNotIndexed: 'sense indexar',
     storeEmptyHint: 'Magatzem buit. Puja PDFs i reindexa per a activar-lo.',
@@ -310,6 +337,16 @@ function fill(tpl: string, vars: Record<string, string | number>): string {
 // =============================================================================
 
 const API_BASE = '/api';
+
+type StudyKind = 'summary' | 'outline' | 'quiz';
+
+interface OutlineNode { title: string; children: OutlineNode[]; }
+interface StudyArtifact {
+  source_document?: string;
+  sections?: { heading: string; body: string; source_pages: number[] }[];
+  nodes?: OutlineNode[];
+  questions?: { prompt: string; options: string[]; correct_index: number; source_pages: number[] }[];
+}
 
 const api = {
   init: () =>
@@ -395,6 +432,17 @@ const api = {
 
   deleteDoc: (filename: string) =>
     fetch(`${API_BASE}/docs/${encodeURIComponent(filename)}`, { method: 'DELETE' }).then(r => r.json()),
+
+  // One call for the three artifacts, mirroring the single route. The status
+  // code is kept: 422 means the model ignored the format, which the panel
+  // reports differently from a server failure because the user's next move
+  // differs too (retry or change model, versus check the backend).
+  study: (kind: StudyKind, document: string, language: string, questionCount?: number) =>
+    fetch(`${API_BASE}/study`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, document, language, question_count: questionCount }),
+    }).then(async r => ({ status: r.status, body: await r.json() })),
 };
 
 // =============================================================================
@@ -714,8 +762,16 @@ export default function App() {
   const [pdfViewer, setPdfViewer] = useState<{ doc: string; page: number; mode: 'full' | 'split' } | null>(null);
   // Full-area overlay panels (Models / Pipeline) shown in the main column, like
   // the PDF viewer. Opening one closes any open PDF; closing returns to chat.
-  const [mainPanel, setMainPanel] = useState<'models' | 'pipeline' | null>(null);
-  const openMainPanel = useCallback((panel: 'models' | 'pipeline') => {
+  const [mainPanel, setMainPanel] = useState<'models' | 'pipeline' | 'study' | null>(null);
+  const [studyKind, setStudyKind] = useState<StudyKind>('summary');
+  const [studyDoc, setStudyDoc] = useState<string>('');
+  const [studyBusy, setStudyBusy] = useState(false);
+  const [studyResult, setStudyResult] = useState<StudyArtifact | null>(null);
+  const [studyError, setStudyError] = useState<string | null>(null);
+  // Answers hidden by default: a quiz whose key is on screen from the first
+  // render is a summary with extra steps.
+  const [studyRevealed, setStudyRevealed] = useState(false);
+  const openMainPanel = useCallback((panel: 'models' | 'pipeline' | 'study') => {
     setPdfViewer(null);
     setMainPanel(panel);
     if (window.innerWidth < 768) setIsSidebarOpen(false);
@@ -1319,6 +1375,171 @@ export default function App() {
     </div>
   );
 
+  const runStudy = async () => {
+    if (!studyDoc || studyBusy) return;
+    setStudyBusy(true);
+    setStudyError(null);
+    setStudyResult(null);
+    setStudyRevealed(false);
+    try {
+      const langName = lang === 'en' ? 'English' : lang === 'ca' ? 'Valencià' : 'Castellano';
+      const { status, body } = await api.study(studyKind, studyDoc, langName);
+      if (status === 200 && body.ok) {
+        setStudyResult(body.artifact as StudyArtifact);
+      } else if (status === 422) {
+        // Told apart from a server failure on purpose: the user's next move is
+        // "try again or change model", not "check the backend".
+        setStudyError(T.studyMalformed);
+      } else {
+        setStudyError(fill(T.studyFailed, { error: String(body.error ?? status) }));
+      }
+    } catch (e) {
+      setStudyError(fill(T.studyFailed, { error: String(e) }));
+    } finally {
+      setStudyBusy(false);
+    }
+  };
+
+  const renderOutlineNodes = (nodes: OutlineNode[], depth = 0) => (
+    <ul className={depth === 0 ? 'space-y-1' : 'space-y-1 mt-1'}>
+      {nodes.map((node, i) => (
+        <li key={`${depth}-${i}-${node.title}`} style={{ paddingLeft: depth * 18 }}>
+          <span className={depth === 0 ? 'text-[var(--text)] font-semibold' : 'text-[var(--text-muted)]'}>
+            {node.title}
+          </span>
+          {node.children?.length ? renderOutlineNodes(node.children, depth + 1) : null}
+        </li>
+      ))}
+    </ul>
+  );
+
+  const renderStudyPanel = () => {
+    const kinds: { id: StudyKind; label: string }[] = [
+      { id: 'summary', label: T.studySummary },
+      { id: 'outline', label: T.studyOutline },
+      { id: 'quiz', label: T.studyQuiz },
+    ];
+    const pages = studyResult?.sections?.flatMap(x => x.source_pages ?? [])
+      ?? studyResult?.questions?.flatMap(x => x.source_pages ?? []) ?? [];
+    const uniquePages = Array.from(new Set(pages)).sort((a, b) => a - b);
+
+    return (
+      <div className="space-y-6 max-w-3xl">
+        <div className="space-y-2">
+          <label className="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">
+            {T.studyPick}
+          </label>
+          {documents.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)]">{T.studyNoDocs}</p>
+          ) : (
+            <select
+              value={studyDoc}
+              onChange={e => { setStudyDoc(e.target.value); setStudyResult(null); setStudyError(null); }}
+              className="w-full bg-[var(--surface)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text)]"
+            >
+              <option value="">—</option>
+              {documents.map(doc => <option key={doc} value={doc}>{doc}</option>)}
+            </select>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {kinds.map(k => (
+            <button
+              key={k.id}
+              type="button"
+              onClick={() => { setStudyKind(k.id); setStudyResult(null); setStudyError(null); }}
+              className={`px-3 py-2 text-xs font-semibold border transition-colors ${
+                studyKind === k.id
+                  ? 'bg-[var(--surface-2)] text-[var(--text)] border-[var(--border)]'
+                  : 'bg-[var(--surface)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text)]'
+              }`}
+            >
+              {k.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={runStudy}
+            disabled={!studyDoc || studyBusy}
+            className="px-4 py-2 text-xs font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text)] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {studyBusy ? fill(T.studyWorking, { doc: studyDoc }) : T.studyRun}
+          </button>
+        </div>
+
+        {studyError && (
+          <div className="border border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--text)]">
+            {studyError}
+          </div>
+        )}
+
+        {!studyResult && !studyError && !studyBusy && (
+          <p className="text-sm text-[var(--text-muted)]">{T.studyEmpty}</p>
+        )}
+
+        {studyResult && (
+          <div className="border border-[var(--border)] bg-[var(--surface)] p-5 space-y-4">
+            {studyResult.source_document && (
+              <div className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">
+                {studyResult.source_document}
+              </div>
+            )}
+
+            {studyResult.sections?.map((section, i) => (
+              <div key={i} className="space-y-1">
+                {section.heading && <h3 className="t-h3 text-[var(--text)]">{section.heading}</h3>}
+                <p className="text-sm text-[var(--text-muted)] leading-relaxed">{section.body}</p>
+              </div>
+            ))}
+
+            {studyResult.nodes && renderOutlineNodes(studyResult.nodes)}
+
+            {studyResult.questions && (
+              <div className="space-y-5">
+                {studyResult.questions.map((q, i) => (
+                  <div key={i} className="space-y-1.5">
+                    <p className="text-sm font-semibold text-[var(--text)]">{i + 1}. {q.prompt}</p>
+                    <ul className="space-y-1">
+                      {q.options.map((option, j) => (
+                        <li
+                          key={j}
+                          className={`text-sm pl-4 ${
+                            studyRevealed && j === q.correct_index
+                              ? 'text-[var(--text)] font-semibold'
+                              : 'text-[var(--text-muted)]'
+                          }`}
+                        >
+                          {String.fromCharCode(97 + j)}) {option}
+                          {studyRevealed && j === q.correct_index && ` — ${T.studyAnswer}`}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+                {!studyRevealed && (
+                  <button
+                    type="button"
+                    onClick={() => setStudyRevealed(true)}
+                    className="px-3 py-2 text-xs font-semibold border border-[var(--border)] bg-[var(--surface-2)] text-[var(--text)]"
+                  >
+                    {T.studyShowAnswers}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {uniquePages.length > 0 && (
+              <div className="pt-2 text-xs text-[var(--text-muted)] border-t border-[var(--border)]">
+                {T.studyPages}: {uniquePages.join(', ')}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderPipelinePanel = () => (
     <div className="mx-auto w-full max-w-4xl space-y-4">
       {(settingsError || isReindexing) && (
@@ -1475,6 +1696,12 @@ export default function App() {
             >
               {T.tabPipeline}
             </button>
+            <button
+              className={`flex-1 py-2 text-xs font-semibold transition-all ${mainPanel === 'study' ? 'bg-[var(--surface-2)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+              onClick={() => openMainPanel('study')}
+            >
+              {T.tabStudy}
+            </button>
           </div>
         </div>
 
@@ -1602,7 +1829,9 @@ export default function App() {
                 {mainPanel === 'models'
                   ? <Ollama className="w-5 h-5 flex-shrink-0 text-[var(--text)]" />
                   : <Database className="w-5 h-5 flex-shrink-0" />}
-                <h2 className="t-h2 text-[var(--text)] truncate">{mainPanel === 'models' ? T.tabModels : T.tabPipeline}</h2>
+                <h2 className="t-h2 text-[var(--text)] truncate">
+                  {mainPanel === 'models' ? T.tabModels : mainPanel === 'study' ? T.tabStudy : T.tabPipeline}
+                </h2>
               </div>
               <button
                 type="button"
@@ -1615,7 +1844,7 @@ export default function App() {
               </button>
             </header>
             <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
-              {mainPanel === 'models' ? renderModelsPanel() : renderPipelinePanel()}
+              {mainPanel === 'models' ? renderModelsPanel() : mainPanel === 'study' ? renderStudyPanel() : renderPipelinePanel()}
             </div>
           </div>
         )}
