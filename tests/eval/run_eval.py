@@ -57,6 +57,7 @@ if str(REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "src"))
 if str(EVAL_DIR) not in sys.path:
     sys.path.insert(0, str(EVAL_DIR))
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 import grade  # noqa: E402  (tests/eval sibling module)
 
@@ -1637,6 +1638,7 @@ def evaluate(
             # states "a later rerank simply loads again". Releasing here costs
             # one model load and buys the phase the whole card.
             _release_gpu_models(retrieve_dev, retrieve_blind)
+            _release_ollama_models(required_models)
 
             print(
                 f"\n[run] stack={stack_slug} {len(cases)} cases x up to {len(models)} model(s)\n",
