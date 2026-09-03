@@ -205,11 +205,15 @@ def query_decomposer(config: AppConfig) -> OllamaChatModel:
     should explore different angles on the question, and identical phrasings
     would add nothing to retrieve.
     """
+    # keep_alive is 0 because query decomposition is an auxiliary pre-retrieval
+    # step immediately followed by Cross-Encoder reranking; keeping the chat
+    # model resident alongside Jina CLIP and the reranker exhausts VRAM on
+    # 8 GB cards (issue #164).
     ollama = config.models.ollama
     return OllamaChatModel(
         config.models.chat,
         num_ctx=ollama.query_num_ctx,
-        keep_alive=ollama.keep_alive,
+        keep_alive=0,
         request_timeout=ollama.request_timeout,
         generate_retries=ollama.generate_retries,
         generate_retry_delay=ollama.generate_retry_delay,
