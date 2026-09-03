@@ -86,14 +86,19 @@ EVAL_DEV_LABEL = EVAL_DIR / "dev_docs"
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 # The baseline was calibrated with this model. Other models can be measured
-# explicitly, but must not be mixed into the same ratchet.
-DEFAULT_MODELS = ["gemma4:e2b"]
+DEFAULT_MODELS = [
+    os.getenv(
+        "OLLAMA_RAG_MODEL", "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE"
+    )
+]
 
 # Model used for the auxiliary Ollama roles during this run: query
 # decomposition, contextual-retrieval enrichment and RECOMP synthesis. Kept
 # separate from --models so indexing cost does not multiply by the number of
 # generator models under test.
-AUX_MODEL = "gemma4:e2b"
+AUX_MODEL = os.getenv(
+    "OLLAMA_AUX_MODEL", "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE"
+)
 
 # Safety margin subtracted from an observed pass rate before it is written as
 # the new baseline floor (see _update_baseline) -- keeps normal run-to-run
