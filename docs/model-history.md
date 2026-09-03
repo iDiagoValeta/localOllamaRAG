@@ -42,6 +42,7 @@ version moved three (see "Stack drift" below).
 | `qwen3-coder-30b:latest` | 30B MoE, 10 GB | **21 / 23** | 41.7 | not recorded | not recorded | not recorded | `20260901T023915Z` |
 | `gemma4:e2b` | 7.2 GB | 20 / 23 | 38.7 | not recorded | not recorded | not recorded | `20260901T023915Z` |
 | `gemma4:e4b` *(default)* | 9.6 GB | 19 / 23 | 39.8 | not recorded | not recorded | not recorded | `20260901T023915Z` |
+| `hf.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M` | 3B dense, 2.0 GB | **49 / 63** (77.8%) | 8.2 | 98.5 | 25 | 0.25 | `20260903T115934Z` |
 | `qwen3:30b-a3b` | 30B MoE, 3B active, 18 GB | pending | | | | | in progress |
 | `qwen3:8b` | 8B dense, 5.2 GB | pending | | | | | in progress |
 | `mistral-small3.2:24b` | 24B dense, 15 GB | pending | | | | | in progress |
