@@ -256,3 +256,41 @@ class TestOutline:
     def test_a_generator_failure_propagates(self):
         with pytest.raises(RuntimeError, match="down"):
             Study(_FakeChatModel(RuntimeError("down"))).outline([_fragment()], AppConfig())
+
+
+class TestStudyContextBudgeting:
+    def test_fragments_fitting_in_budget_are_kept_verbatim(self):
+        from monkeygrab.application.study import _budget_fragments
+
+        frags = [_fragment(page=i, text=f"Text {i}") for i in range(5)]
+        budgeted = _budget_fragments(frags, max_chars=1000)
+        assert list(budgeted) == frags
+
+    def test_fragments_exceeding_budget_are_subsampled_evenly(self):
+        from monkeygrab.application.study import _budget_fragments
+
+        # 100 fragments of 200 chars each = 20,000 chars total
+        frags = [_fragment(page=i + 1, text=f"Chunk {i:03d} " + "x" * 190) for i in range(100)]
+        budgeted = _budget_fragments(frags, max_chars=3000)
+
+        assert len(budgeted) < len(frags)
+        assert sum(len(f.doc) for f in budgeted) <= 3000
+        # Verify even distribution across early, middle, and late pages
+        pages = [f.metadata.page for f in budgeted]
+        assert pages[0] == 1
+        assert pages[-1] > 80
+
+    def test_study_summarize_bounds_prompt_for_large_documents(self):
+        reply = '[{"heading": "Test", "body": "Summary body."}]'
+        model = _FakeChatModel(reply)
+        # 100 chunks of 2,000 chars each = 200,000 chars (like planck-cosmology)
+        frags = [_fragment(page=i + 1, text="Word " * 400) for i in range(100)]
+
+        config = AppConfig()
+        Study(model).summarize(frags, config)
+
+        prompt = model.calls[0]["prompt"]
+        # With default rag_num_ctx = 16384, max_chars is ~43000.
+        # The prompt must be well bounded and not contain all 200,000 characters.
+        assert len(prompt) < 50000
+
