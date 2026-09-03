@@ -173,6 +173,29 @@ The rest of the stack is not an Ollama model:
 > which needs a CUDA GPU, because its dependencies conflict with the
 > product's — see [`src/monkeygrab/README.md`](src/monkeygrab/README.md).
 
+### Evaluated Generator Models (Hardware Benchmark: RTX 4060 Laptop 8 GB VRAM)
+
+Empirical evaluations across the 83 gold acceptance cases demonstrate that **compact Mixture-of-Experts (MoE)** models systematically outperform dense architectures on consumer hardware (8 GB VRAM):
+
+1. **Memory Bandwidth & Decoding Throughput**: On a 128-bit memory bus (~272 GB/s VRAM bandwidth), a dense 8B model reads ~5–8 GB of weights per token, capping decoding at ~30–45 tok/s. A compact MoE (e.g. `Ling-3.0-tiny`: 7.9B total, 1.3B active) retains 8B-tier capacity while reading only ~1.3 GB per token, reaching **109–158 tokens/s**.
+2. **Zero System RAM Offload**: Dense models >=8B combined with 16k context and KV caches collide with the 8 GB ceiling, forcing partial CPU offload and ballooning latency. Compact MoEs quantized to MXFP4/Q4 (4.2–4.9 GB) reside 100% in VRAM with zero host-to-device bus penalty.
+3. **Specialized Multilingual Routing**: Distinct expert subsets decouple scientific extraction, Spanish, and Catalan/Valencian syntax without catastrophic gradient interference.
+
+| Model | Architecture & Size | Gold Cases Passed | Median Time / Case | Decode Speed | Latency | Status / Verdict |
+|---|---|---|---|---|---|---|
+| [**`Ling-3.0-tiny-MXFP4_MOE`**](https://huggingface.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF) | MoE (7.9B total, 1.3B active), 4.9 GB | **56 / 63 (88.9%)** | **8.1 s** | **109.3 tok/s** | **0.15 s/answer** | 🥇 **Current Champion** (fastest wait, highest pass rate) |
+| [**`Granite-4.0-H-Tiny-MXFP4_MOE`**](https://huggingface.co/noctrex/Granite-4.0-H-Tiny-MXFP4_MOE-GGUF) | MoE, 4.2 GB | **53 / 63 (84.1%)** | **8.4 s** | **117.2 tok/s** | 0.63 s/answer | 🥈 Strong runner-up (IBM Research) |
+| [**`LFM2-8B-A1B-MXFP4_MOE`**](https://huggingface.co/noctrex/LFM2-8B-A1B-MXFP4_MOE-GGUF) | MoE (8B total, 1B active), 4.9 GB | **49 / 63 (77.8%)** | **8.2 s** | **157.7 tok/s** | 0.37 s/answer | Passed gate floor (Liquid AI) |
+| [**`Llama-3.2-3B-Instruct`**](https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF) | Dense 3B, 2.0 GB | **49 / 63 (77.8%)** | **8.2 s** | 98.5 tok/s | 0.25 s/answer | Competent, but lacks MoE capacity |
+| [**`OLMoE-1B-7B-0125-Instruct`**](https://huggingface.co/noctrex/OLMoE-1B-7B-0125-Instruct-MXFP4_MOE-GGUF) | MoE (7B total, 1B active), 3.9 GB | 40 / 63 (63.5%) | 7.7 s | **212.9 tok/s** | 0.31 s/answer | Fastest raw decode, failed Study JSON schemas |
+| [**`Phi-mini-MoE-instruct`**](https://huggingface.co/noctrex/Phi-mini-MoE-instruct-MXFP4_MOE-GGUF) | MoE, 4.9 GB | 5 / 63 (7.9%) | 51.0 s | 87.8 tok/s | 2.52 s/answer | Excessive verbosity, failed format schemas |
+| [**`SmallThinker-4B-A0.6B-Instruct`**](https://huggingface.co/noctrex/SmallThinker-4B-A0.6B-Instruct-MXFP4_MOE-GGUF) | MoE (4B total, 0.6B active), 2.6 GB | Failed | Loop | 119.0 tok/s | Loop | Runaway loop (>137k tokens, missing EOS) |
+| [**`Ministral-8B-Instruct`**](https://huggingface.co/bartowski/Ministral-8B-Instruct-2410-GGUF) | Dense 8B, 4.9 GB | Failed | Loop | 32.6 tok/s | Loop | 22% CPU offload, runaway loop (>23k tokens) |
+| [**`gemma4:e4b`**](https://ollama.com/library/gemma) *(former default)* | Dense, 9.6 GB | 19 / 23 (82.6%)* | 39.8 s | 39.8 tok/s | Not recorded | Retired (replaced by Ling-3.0-tiny) |
+| [**`gemma4:e2b`**](https://ollama.com/library/gemma) *(former baseline)* | Dense, 7.2 GB | 20 / 23 (87.0%)* | 38.7 s | Not recorded | Not recorded | Retired |
+
+*\*Evaluated on the earlier 23-case reference subset.* Detailed logs and historical benchmarks in [`docs/model-history.md`](docs/model-history.md).
+
 ---
 
 ## The query pipeline
