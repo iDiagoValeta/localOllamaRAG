@@ -129,5 +129,13 @@ def test_unset_variables_keep_every_role_on_the_local_server(monkeypatch):
     assert endpoints == {"http://localhost:11434"}
 
 
+def test_query_decomposer_uses_zero_keep_alive(monkeypatch):
+    """Query decomposition runs immediately before Cross-Encoder reranking;
+    holding VRAM on 8 GB cards causes CUDA OOM (issue #164)."""
+    wiring = _wiring_with_env(monkeypatch)
+    config = wiring.app_config_from_runtime()
+    assert wiring.query_decomposer(config)._keep_alive == 0
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
