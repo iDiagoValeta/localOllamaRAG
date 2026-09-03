@@ -654,15 +654,30 @@ def run_study_case(
             )
             domain_fragments = [wiring.fragment_from_dict(f) for f in fragments]
             study = Study(wiring.rag_chat_model(config))
+            lang_label = case.get("language")
+            if not lang_label:
+                lang = case.get("lang")
+                if lang == "es":
+                    lang_label = "Castellano"
+                elif lang == "ca":
+                    lang_label = "Valencià"
+                elif lang == "en":
+                    lang_label = "English"
+
             if case["case_type"] == "study_summary":
-                artifact = summary_to_dict(study.summarize(domain_fragments, config))
+                artifact = summary_to_dict(
+                    study.summarize(domain_fragments, config, language=lang_label)
+                )
             elif case["case_type"] == "study_outline":
-                artifact = outline_to_dict(study.outline(domain_fragments, config))
+                artifact = outline_to_dict(
+                    study.outline(domain_fragments, config, language=lang_label)
+                )
             else:
                 artifact = quiz_to_dict(
                     study.quiz(
                         domain_fragments,
                         config,
+                        language=lang_label,
                         question_count=int(case.get("question_count", 5)),
                     )
                 )

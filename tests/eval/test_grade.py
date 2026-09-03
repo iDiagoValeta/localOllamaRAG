@@ -28,7 +28,7 @@ _VALID_CASE_TYPES = {
 # scope. Requiring either would mean inventing a query the artifact never
 # runs and a page range that is simply "all of them".
 _STUDY_CASE_TYPES = {"study_summary", "study_outline", "study_quiz"}
-_VALID_LANGS = {"en", "es"}
+_VALID_LANGS = {"en", "es", "ca"}
 _VALID_KINDS = {"text", "table", "image"}
 _RETRIEVAL_CASE_TYPES = {"figure_retrieval", "table_retrieval"}
 
@@ -283,16 +283,17 @@ def test_gold_cases_have_required_fields_for_their_type():
             )
 
 
-def test_gold_cases_cover_both_languages_and_all_case_types():
-    """Guards the corpus shape the design doc asks for (section 7.1):
-    numeric facts, concepts, figure retrieval, table retrieval, and
-    Spanish-language queries over English documents -- not just English
-    factual questions."""
+def test_gold_cases_cover_all_three_languages_and_all_case_types():
+    """Guards the corpus shape the design doc asks for:
+    numeric facts, concepts, figure retrieval, table retrieval, study artifacts,
+    and queries across all three supported languages (en, es, ca)."""
     cases = _load_gold_cases()
     case_types_seen = {c["case_type"] for c in cases}
     langs_seen = {c["lang"] for c in cases}
     assert case_types_seen == _VALID_CASE_TYPES, f"missing case types: {_VALID_CASE_TYPES - case_types_seen}"
+    assert "en" in langs_seen, "no English-language case found"
     assert "es" in langs_seen, "no Spanish-language case found"
+    assert "ca" in langs_seen, "no Valencian-language case found"
 
 
 def test_gold_cases_include_papers_outside_the_dev_set():
