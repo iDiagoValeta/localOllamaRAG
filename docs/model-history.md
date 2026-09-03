@@ -106,6 +106,21 @@ than a 2B that does. Full analysis in issue #134.
 
 ---
 
+## Why compact MoE models outperform dense models on consumer hardware (8 GB VRAM)
+
+Empirical evaluations across the 83 gold cases show that compact Mixture-of-Experts (MoE) architectures (e.g. `Ling-3.0-tiny`, `Granite-4.0-H-Tiny`) substantially outperform dense models of comparable or larger sizes (e.g. `gemma4:e4b`, `Llama-3.2-3B`) in both accuracy and latency:
+
+1. **Decoupling Parameter Capacity from FLOPs and Memory Bandwidth per Token**:
+   - A dense model activates all weights for every decoded token. On an 8 GB consumer GPU (such as an RTX 4060 with a 128-bit bus, ~272 GB/s VRAM bandwidth), streaming a dense 8B model requires reading ~5–8 GB of weights per token, capping decoding throughput at ~30–45 tok/s.
+   - A compact MoE (e.g. `Ling-3.0-tiny`: 7.9B total, 1.3B active) retains the representational knowledge of a ~8B model, but only routes to and reads ~1.3B parameters per token. This reduces memory bandwidth load by ~4× to 5×, driving decoding throughput to **109–117 tokens/s**.
+2. **Zero Offloading to System RAM**:
+   - Dense models of 8B–14B at FP16/Q8 or even Q4 frequently collide with the 8 GB VRAM ceiling once KV cache and 16k context are allocated, forcing Ollama into partial CPU offloading (as observed with `gpt-oss:20b` at 60% CPU offload and 21 s/answer).
+   - Compact MoEs quantized to MXFP4/Q4 fit entirely (100%) in GPU VRAM (4.2–4.9 GB), leaving ample headroom for embeddings and KV caches with zero host-to-device bus penalties.
+3. **Specialization in RAG and Cross-Lingual Tasks**:
+   - In multimodal and multilang RAG (English, Spanish, Valencian), distinct expert routing handles syntax, factual grounding, and structured JSON formatting without the catastrophic forgetting or capacity bottlenecks that constrain dense 2B–3B models.
+
+---
+
 ## Stack drift, which moved more than any generator swap
 
 Same generator (`gemma4:e4b`), same 32 search-set cases, different extractor
