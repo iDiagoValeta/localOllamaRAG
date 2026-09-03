@@ -246,6 +246,62 @@ def _single_document(fragments: Sequence[Fragment]) -> str:
     return next(iter(sources)) if len(sources) == 1 else ""
 
 
+def _calculate_context_char_budget(config: AppConfig) -> int:
+    """Derive a safe character budget for document context from config.models.ollama.rag_num_ctx.
+
+    Reserves tokens for instructions, system prompt, JSON schema, and output generation.
+    Assumes a conservative 3.0 characters per token to account for non-ASCII multi-lingual
+    text and dense mathematical notations.
+    """
+    num_ctx = config.models.ollama.rag_num_ctx
+    available_tokens = max(1000, num_ctx - 2048)
+    return int(available_tokens * 3.0)
+
+
+def _budget_fragments(fragments: Sequence[Fragment], max_chars: int) -> Sequence[Fragment]:
+    """Sample fragments evenly if the full document exceeds the character budget (issue #170).
+
+    Study artifacts operate over whole documents rather than a top-k retrieval. For
+    large documents (e.g. 60+ pages with > 200k tokens), sending every chunk
+    exceeds the generator's context window (num_ctx) and causes Ollama to reject
+    the call with HTTP 400 exceed_context_size_error.
+
+    When total characters fit within max_chars, all fragments are preserved verbatim.
+    When exceeding max_chars, fragments are sampled uniformly across the document
+    so all sections remain represented in the artifact.
+    """
+    if not fragments or max_chars <= 0:
+        return fragments
+
+    total_chars = sum(len(f.doc) for f in fragments)
+    if total_chars <= max_chars:
+        return fragments
+
+    avg_chunk_len = max(1, total_chars // len(fragments))
+    target_count = max(1, min(len(fragments), max_chars // avg_chunk_len))
+    if target_count >= len(fragments):
+        return fragments
+
+    step = len(fragments) / target_count
+    sampled_indices = [int(i * step) for i in range(target_count)]
+    seen = set()
+    unique_indices = []
+    for idx in sampled_indices:
+        if idx not in seen and idx < len(fragments):
+            seen.add(idx)
+            unique_indices.append(idx)
+
+    sampled = [fragments[i] for i in unique_indices]
+    current_chars = 0
+    kept = []
+    for f in sampled:
+        if current_chars + len(f.doc) > max_chars and kept:
+            break
+        kept.append(f)
+        current_chars += len(f.doc)
+    return kept or fragments[:1]
+
+
 def _parse_sections(raw: str) -> List[Dict[str, Any]]:
     """Decode the generator's reply into section dicts, or raise.
 
@@ -373,8 +429,9 @@ class Study:
         # the format the pipeline already produces rather than a second one
         # that could drift from it. The metrics half of the return is the
         # caller's concern there and nobody's here.
+        budgeted = _budget_fragments(fragments, _calculate_context_char_budget(config))
         context, _metrics = build_context_for_model(
-            list(fragments), config.flags.usar_optimizacion_contexto
+            list(budgeted), config.flags.usar_optimizacion_contexto
         )
         instruction = "Summarise the following material."
         if language:
@@ -429,8 +486,9 @@ class Study:
         if not fragments:
             return DocumentOutline(nodes=(), source_document="")
 
+        budgeted = _budget_fragments(fragments, _calculate_context_char_budget(config))
         context, _metrics = build_context_for_model(
-            list(fragments), config.flags.usar_optimizacion_contexto
+            list(budgeted), config.flags.usar_optimizacion_contexto
         )
         instruction = "Outline the structure of the following material."
         if language:
@@ -499,8 +557,9 @@ class Study:
         if not fragments:
             return Quiz(questions=(), source_document="")
 
+        budgeted = _budget_fragments(fragments, _calculate_context_char_budget(config))
         context, _metrics = build_context_for_model(
-            list(fragments), config.flags.usar_optimizacion_contexto
+            list(budgeted), config.flags.usar_optimizacion_contexto
         )
         instruction = (
             f"Write {question_count} multiple-choice questions about the following material."
