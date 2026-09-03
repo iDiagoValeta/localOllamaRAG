@@ -127,6 +127,7 @@ _CODE_READS_NOT_DOCUMENTED = {
     "DISABLE_HMR",
     "LOCALAPPDATA",
     "XDG_DATA_HOME",
+    "PYTORCH_CUDA_ALLOC_CONF",
 }
 
 # monkeygrab.config.env's typed readers, plus rag/chat_pdfs.py's own

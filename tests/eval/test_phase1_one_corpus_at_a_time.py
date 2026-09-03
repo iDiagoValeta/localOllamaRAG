@@ -249,3 +249,18 @@ def test_the_release_is_safe_because_both_halves_reload():
         "CrossEncoderReranker.release no longer documents lazy reload; "
         "releasing after indexing would leave phase 1 with no reranker"
     )
+
+
+def test_evaluate_releases_ollama_models_before_the_run_starts():
+    """Any model preflight or earlier requests loaded in Ollama must be released
+    before phase 1 begins, so phase 1 starts with 0 B Ollama VRAM on the card (issue #162)."""
+    import inspect
+
+    source = inspect.getsource(run_eval.evaluate)
+    release_call = source.index("_release_ollama_models(required_models)")
+    run_call = source.index("records = run_all_cases(")
+    assert release_call < run_call, (
+        "evaluate() must release Ollama models BEFORE run_all_cases, or "
+        "phase 1 starts with resident Ollama models contending for 8 GB VRAM"
+    )
+
