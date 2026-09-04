@@ -1,8 +1,13 @@
 """MonkeyGrab -- RAG engine for PDF document queries.
 
-Interactive application with two operating modes: CHAT (free conversation with
-a base model, persistent history, and project identity) and RAG (document
-queries over indexed PDFs with hybrid retrieval and source-backed answers).
+Public facade, runtime configuration, system prompts, and re-exports consumed
+by the web app (Flask + React), desktop application, and test suite. This
+module is no longer executed directly as a script; the web interface is started
+with ``python rag/web/app.py``.
+
+Supports two operating modes: CHAT (free conversation with a base model,
+persistent history, and project identity) and RAG (document queries over indexed
+PDFs with hybrid retrieval and source-backed answers).
 
 Pipeline stages (each togglable via flags):
     1. Indexing        chunking + embeddings + contextual retrieval (opt.)
@@ -12,29 +17,9 @@ Pipeline stages (each togglable via flags):
     5. Generation      RECOMP synthesis (opt.) + streaming
     6. Observability   metrics and debug dumps
 
-How to run (interactive CLI):
-    From the repository root (recommended, matches docs and imports):
-
-        python rag/chat_pdfs.py
-
-    From inside ``rag/``:
-
-        cd rag
-        python chat_pdfs.py
-
-    On Windows (PowerShell), same commands from the project root or ``rag/``.
-
-    This starts ``MonkeyGrabCLI`` (see ``rag/cli/app.py``): slash commands
-    such as ``/rag``, ``/chat``, ``/reindex``, ``/docs``, ``/salir``.
-
-    The Flask web app does **not** execute this file as ``__main__``; it imports
-    functions and constants from here. Start the UI with ``python rag/web/app.py``
-    from the repository root.
-
-    Prerequisites: Ollama running; PDFs under ``rag/docs/en/`` unless ``DOCS_FOLDER``
-    points elsewhere. Generation model names use ``OLLAMA_RAG_MODEL`` and the
-    related Ollama roles documented in the project README
-    and in ``rag/README.md``.
+Prerequisites: Ollama running; PDFs under ``rag/docs/en/`` unless ``DOCS_FOLDER``
+points elsewhere. Generation model names use ``OLLAMA_RAG_MODEL`` and the
+related Ollama roles documented in the project README and in ``rag/README.md``.
 """
 
 import logging
@@ -532,28 +517,3 @@ def obtener_vector_store():
     return vector_store(app_config_from_runtime())
 
 
-def main():
-    """Launch the MonkeyGrab CLI application."""
-    from rag.cli import MonkeyGrabCLI
-
-    # ``sys.modules[__name__]``, not ``import rag.chat_pdfs``: run as a script
-    # this file is ``__main__``, and importing it by name would execute a second
-    # copy whose globals nothing else reads -- the engine modules bind the
-    # ``__main__`` one (see rag/engine/runtime.py), and so does the settings
-    # loader below. Handing the CLI the other copy is how it would end up
-    # displaying, listing and indexing one configuration while retrieval and
-    # generation ran on another.
-    rag_engine = sys.modules[__name__]
-    # Same file the web control panel writes, applied here rather than inside
-    # the CLI because this is where the engine is composed -- the CLI receives a
-    # configured module, exactly as the Flask app does. Without it the CLI would
-    # start from this module's defaults while the index on disk was built from
-    # the UI's choices, which is what the fingerprint warning then reports with
-    # nothing in the session to explain it.
-    cargar_ajustes_persistidos()
-    cli = MonkeyGrabCLI(rag_engine)
-    cli.run()
-
-
-if __name__ == "__main__":
-    main()

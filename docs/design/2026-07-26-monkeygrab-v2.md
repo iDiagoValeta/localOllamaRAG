@@ -9,9 +9,10 @@ MonkeyGrab responde preguntas sobre PDFs sin enviar el corpus a servicios
 externos. Debe recuperar texto, tablas e imágenes, mantener citas a la página
 original y medir regresiones con respuestas producidas por el sistema real.
 
-La aplicación tiene una sola composición de indexación y recuperación. La CLI,
-la interfaz web, la aplicación de escritorio y el gate de evaluación comparten
-los mismos casos de uso y adaptadores.
+La aplicación tiene una sola composición de indexación y recuperación. La
+interfaz web, la aplicación de escritorio y el gate de evaluación comparten
+los mismos casos de uso y adaptadores (la interfaz de terminal CLI fue retirada
+posteriormente).
 
 ## Composición multimodal
 

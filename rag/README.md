@@ -3,17 +3,16 @@
 > [!TIP]
 > Looking to **install and run** MonkeyGrab? See the [root README](../README.md).
 
-`rag/` holds the terminal CLI, the Flask + React web app, the pywebview desktop
+`rag/` holds the Flask + React web app, the pywebview desktop
 wrapper, and the entry points they call into the pipeline.
 
 [`chat_pdfs.py`](chat_pdfs.py) is the public facade: configuration,
-prompts, and re-exports of everything the CLI, the web app, the tests and the
+prompts, and re-exports of everything the web app, the tests and the
 evaluation runner import. Treat its exported names as a contract; renaming one
-breaks callers in three places at once.
+breaks callers at once.
 
 ```
 chat_pdfs.py    facade: runtime configuration, prompts, re-exports
-cli/            interactive terminal app and its i18n strings
 web/            Flask backend, React frontend, desktop (pywebview) entry point
 engine/         pipeline entry points
 docs/           corpus PDFs, one folder per language store
@@ -28,14 +27,14 @@ required ports and run `IndexCorpus`, `Retrieve` and `Answer` from
 package's mutable runtime configuration and the immutable `AppConfig` the core
 expects. MinerU, Jina CLIP and FAISS are built by the fixed composition root.
 
-The consequence worth knowing: the CLI, web app, desktop wrapper and evaluation
+The consequence worth knowing: the web app, desktop wrapper and evaluation
 gate execute the same indexing, retrieval and generation implementations.
 
 [`engine/settings.py`](engine/settings.py) owns the other half of that
 agreement: the model roles, active store and pipeline flags the web control
-panel saves are read at startup by the CLI as well, so neither interface can run
-a pipeline the other's index was not built for. The environment outranks the
-file, the file outranks the defaults in `chat_pdfs.py`.
+panel saves are read at startup so the session reopens under the user's
+choices. The environment outranks the file, the file outranks the defaults
+in `chat_pdfs.py`.
 
 - **Hexagonal core, layers, how to add an adapter:** [`src/monkeygrab/README.md`](../src/monkeygrab/README.md)
 - **Design rationale and phased rollout:** [`docs/design/2026-07-26-monkeygrab-v2.md`](../docs/design/2026-07-26-monkeygrab-v2.md)

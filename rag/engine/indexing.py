@@ -1,4 +1,4 @@
-"""Indexing entry point for the CLI and the web app.
+"""Indexing entry point for the web app.
 
 Wires the fixed extraction, embedding and storage adapters and runs
 ``monkeygrab.application.index_corpus.IndexCorpus`` over a folder of PDFs.
@@ -17,7 +17,6 @@ from monkeygrab.application.index_fingerprint import compute_index_fingerprint, 
 from monkeygrab.composition import build_extractor
 from monkeygrab.config.app_config import AppConfig
 from monkeygrab.ports.vector_store import VectorStore
-from rag.cli.display import ui
 from rag.engine import wiring
 
 
@@ -56,11 +55,11 @@ def indexar_documentos(
 
     if not archivos_pdf:
         if not silent:
-            ui.warning("No PDF files found in folder")
+            logging.warning("No PDF files found in folder")
         return 0
 
     if not silent:
-        ui.pipeline_start("Indexing documents...")
+        logging.info("Indexing documents...")
 
     config = wiring.app_config_from_runtime()
 
@@ -115,16 +114,18 @@ def indexar_documentos(
             except Exception:
                 pass
         if not silent:
-            ui.pipeline_update(f"Processing: {archivo}")
+            logging.info("Processing: %s", archivo)
 
         ruta_pdf = os.path.join(carpeta, archivo)
         try:
             result = use_case.run(ruta_pdf, archivo)
             total_chunks += result.chunks_indexed
         except Exception as e:
+            # One record per failure. Until the terminal interface was removed
+            # this line went to the log and a second one to the user's console;
+            # both now land in logging, and `silent` no longer distinguishes
+            # them -- it silences progress chatter, not failures.
             logging.error(f"Error processing {archivo}: {e}")
-            if not silent:
-                ui.error(f"error in {archivo}: {e}")
 
     # Only a full-folder run (solo_archivos=None) can vouch for the *entire*
     # store having been produced under `config`'s recipe -- every call site
@@ -144,13 +145,11 @@ def indexar_documentos(
     # papers landed, a different property. Every chunk actually added this
     # pass did go through `config`, so the recipe claim holds regardless of
     # which files errored; a fully failed run leaves an empty store, which the
-    # `collection.count() == 0` branch in the CLI/web re-attempts on next
+    # `collection.count() == 0` branch in the web app re-attempts on next
     # launch without ever consulting this fingerprint.
     if solo_archivos is None:
         collection.write_fingerprint(compute_index_fingerprint(config))
 
-    if not silent:
-        ui.pipeline_stop()
     return total_chunks
 
 
@@ -158,10 +157,9 @@ def index_fingerprint_mismatch(collection: VectorStore) -> bool:
     """Whether the store's recorded fingerprint disagrees with the config in force.
 
     Detection only -- callers decide what to do with the answer (the product
-    warns and leaves reindexing to the user; see rag/cli/app.py and
-    rag/web/app.py). A store that has never recorded a fingerprint (every
-    index built before this feature existed) reads as *unknown*, not stale --
-    see ``fingerprint_is_stale``'s docstring.
+    warns and leaves reindexing to the user; see rag/web/app.py). A store that
+    has never recorded a fingerprint (every index built before this feature existed)
+    reads as *unknown*, not stale -- see ``fingerprint_is_stale``'s docstring.
 
     This is a diagnostic, not a pipeline step: unlike an adapter (see the
     hard-fail policy in AGENTS.md section 1 rule 8), it must never be

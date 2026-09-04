@@ -37,14 +37,14 @@
 ## Overview
 
 Ask questions about your PDFs in natural language and get answers grounded in
-what those files actually say. Point MonkeyGrab at a folder, start the CLI or the
+what those files actually say. Point MonkeyGrab at a folder, start the
 web interface, and nothing leaves the machine.
 
 - **Local-first** — indexing, retrieval and generation all run on your hardware; [Ollama](https://ollama.com/) provides the language models. No API keys.
 - **Hybrid retrieval** — vector search and [Okapi BM25](https://www.staff.city.ac.uk/~sbrp622/papers/foundations_bm25_review.pdf) fused with [Reciprocal Rank Fusion](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf), then re-scored by a [cross-encoder](https://www.sbert.net/examples/applications/cross-encoder/README.html).
 - **Multilingual** — Castellano, English and Valencià, in both the interface and the corpus.
 - **Multimodal** — [MinerU](https://github.com/opendatalab/MinerU) preserves document structure, while [Jina CLIP v2](https://huggingface.co/jinaai/jina-clip-v2) makes text and images searchable in the same semantic space.
-- **Three interfaces** — terminal CLI, [Flask](https://flask.palletsprojects.com/) + [React](https://react.dev/) web app, and a packaged Windows desktop app.
+- **Two interfaces** — [Flask](https://flask.palletsprojects.com/) + [React](https://react.dev/) web app, and a packaged Windows desktop app.
 
 <details>
 <summary><strong>See it in action</strong></summary>
@@ -53,10 +53,6 @@ web interface, and nothing leaves the machine.
 **Web interface**
 
 https://github.com/user-attachments/assets/f5f8fa1d-b193-4f94-85c2-8f903afa2348
-
-**CLI**
-
-https://github.com/user-attachments/assets/a27b6fef-52c1-4d4a-846e-7c4cd36863fa
 
 **LaTeX rendering** (formulas via [KaTeX](https://katex.org/) in the web UI):
 
@@ -68,7 +64,7 @@ https://github.com/user-attachments/assets/a27b6fef-52c1-4d4a-846e-7c4cd36863fa
 
 ## Architecture
 
-MonkeyGrab now has one production retrieval stack. The CLI, web app, desktop
+MonkeyGrab now has one production retrieval stack. The web app, desktop
 app and evaluation pipeline all use the same four-part multimodal path.
 
 1. **[MinerU](https://github.com/opendatalab/MinerU) understands the PDF.**
@@ -128,7 +124,7 @@ builds its adapters and calls a use case; none of them holds pipeline logic.
 | **Retrieval** | [`Retrieve`](src/monkeygrab/application/retrieve.py) | [`retrieval.py`](rag/engine/retrieval.py) |
 | **Generation** | [`Answer`](src/monkeygrab/application/answer.py) | [`generation.py`](rag/engine/generation.py) |
 
-That there is one path per stage is the point: the CLI, the web app and the
+That there is one path per stage is the point: the web app, the desktop app and the
 acceptance gate cannot measure different behaviour, because there is only one
 implementation to measure.
 
@@ -235,7 +231,6 @@ model pulled. Drop PDFs into `rag/docs/en/` — the index builds itself on first
 run.
 
 ```bash
-python rag/chat_pdfs.py    # CLI
 python rag/web/app.py      # web UI at http://localhost:5000
 ```
 
@@ -284,15 +279,13 @@ gigabytes over your connection. Teardown is `rm -rf .venv .venv-mineru`.
 
 Copy [`.env.example`](.env.example) to `.env` at the project root; it documents
 every supported variable with its default. The shell environment always wins over
-the file. `MONKEYGRAB_LANG` sets the interface language (`es`, `en`, `ca`),
-`DOCS_FOLDER` the corpus, and `OLLAMA_BASE_URL` the Ollama server — point it at
+the file. `DOCS_FOLDER` sets the corpus, and `OLLAMA_BASE_URL` the Ollama server — point it at
 another machine and every call follows, generation included, which is the way
 out when the local card cannot hold the generator you want.
 
 The model roles, pipeline toggles and active store you pick in the web UI are
-saved to `settings.json` in the data directory, and the CLI starts from that
-same file: one configuration per machine, not one per interface. The precedence
-is environment, then saved choices, then defaults, so an exported
+saved to `settings.json` in the data directory: one configuration per machine.
+The precedence is environment, then saved choices, then defaults, so an exported
 `OLLAMA_*_MODEL` or `DOCS_FOLDER` still describes the run you are starting.
 That override does not overwrite the saved choice: unset the variable and the
 UI pick is still there.
@@ -302,12 +295,12 @@ after each call, since loading them back is most of a query's latency — on a
 small or shared GPU that also means the model squats on VRAM for that long
 afterward, so lower it (or set it to `0`) there.
 
-Each corpus has its own Jina CLIP and FAISS index under `rag/vector_db/`. Both
-interfaces detect when a stored index no longer matches the active chunking,
-extraction or index-time flags and warn about it, but never reindex on their
+Each corpus has its own Jina CLIP and FAISS index under `rag/vector_db/`. The
+web interface detects when a stored index no longer matches the active chunking,
+extraction or index-time flags and warns about it, but never reindexes on its
 own — a settings change must not silently trigger a MinerU + jina-clip pass
-over the corpus, which can take an hour. Run `/reindex` (or the web UI's
-reindex action) explicitly to rebuild after changing the corpus, extraction
+over the corpus, which can take an hour. Use the web UI's reindex action
+explicitly to rebuild after changing the corpus, extraction
 behaviour or chunking rules. This detection needs an index built with this
 feature present: an index built by an older version has no recorded recipe to
 compare against and is never flagged, however much its actual recipe may have
@@ -317,36 +310,24 @@ drifted.
 
 ### Interfaces
 
-The **CLI** takes slash commands: `/rag` and `/chat` switch mode, `/docs` lists
-what is indexed, `/temas` shows corpus topics, `/stats` the active pipeline
-configuration, `/reindex` rebuilds the index, `/limpiar` clears history,
-`/salir` exits and `/ayuda` lists everything. Most commands also have English
-and Valencian aliases.
-
-Three of them do something other than answer a question — they turn a document
-into a structured artifact:
-
-| command | alias | what you get |
-|---|---|---|
-| `/resumen` | `/summary`, `/resum` | titled sections, with the pages behind them |
-| `/esquema` | `/outline` | the heading tree, indented, no prose |
-| `/cuestionario` | `/quiz`, `/questionari` | multiple-choice questions with their answer key |
-
-All three pick a document the same way. On its own, the command lists what is
-indexed and asks which one, so you never have to remember a filename;
-`/resumen planck` picks by substring and `/resumen 3` by position. The artifact
-comes back in the interface language whatever the document's own language is.
-
-The quiz is deliberately the strictest of the three: a question whose answer
-key cannot be verified is dropped rather than repaired, and if none survive you
-get an error instead of a quiz. A wrong key is the one failure here that would
-not look like one.
-
-The **web UI** adds document upload, per-role model assignment, the pipeline
+The **web UI** provides document upload, per-role model assignment, pipeline
 toggles, an inline PDF viewer that opens cited sources at the right page, and a
-**Study** panel with the same three artifacts as the CLI — pick a document,
-pick summary, outline or quiz. Quiz answers stay hidden until you ask for them,
-so the panel can be used to test yourself rather than just to read.
+**Study** panel with three structured artifacts. Pick a document, then pick one:
+
+| artifact | what you get |
+|---|---|
+| summary | titled sections, with the pages behind them |
+| outline | the heading tree, indented, no prose |
+| quiz | multiple-choice questions with their answer key |
+
+The artifact comes back in the interface language whatever the document's own
+language is. Quiz answers stay hidden until you ask for them, so the panel can
+be used to test yourself rather than just to read.
+
+The quiz is deliberately the strictest of the three: a question whose answer key
+cannot be verified is dropped rather than repaired, and if none survive you get
+an error instead of a quiz. A wrong key is the one failure here that would not
+look like one.
 Ollama is started automatically if it is installed but not running. Three fixed
 language stores — English, Castellano, Valencià — map to `rag/docs/{en,es,ca}/`.
 The `es` and `ca` stores ship with a few sample articles so a fresh clone has
