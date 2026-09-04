@@ -962,8 +962,7 @@ export default function App() {
                 className="space-y-6"
               >
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 pl-2 text-[10px] font-bold text-ink-faint uppercase tracking-widest">
-                    <Database className="h-3 w-3" />
+                  <div className="pl-2 text-[10px] font-bold text-ink-faint uppercase tracking-widest">
                     {T.storesLabel}
                   </div>
                   <div className={`rounded-2xl border border-edge bg-field p-1.5 space-y-1 ${storeBusy || isReindexing || isLoading ? 'opacity-50' : ''}`}>
@@ -1369,7 +1368,7 @@ export default function App() {
                   <button
                     onClick={handleSend}
                     disabled={!input.trim() || isLoading}
-                    className="p-3 bg-brand text-brand-contrast hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:bg-surface-raised disabled:text-ink-faint transition-all flex-shrink-0 rounded-xl"
+                    className="p-3 bg-ink text-surface hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:bg-surface-raised disabled:text-ink-faint transition-all flex-shrink-0 rounded-xl"
                   >
                     {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 ml-0.5" />}
                   </button>
@@ -1378,7 +1377,7 @@ export default function App() {
                 <button
                   onClick={handleSend}
                   disabled={!input.trim() || isLoading}
-                  className="p-3.5 bg-brand text-brand-contrast hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:bg-surface-raised disabled:text-ink-faint transition-all flex-shrink-0 rounded-2xl"
+                  className="p-3.5 bg-ink text-surface hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:bg-surface-raised disabled:text-ink-faint transition-all flex-shrink-0 rounded-2xl"
                 >
                   {isLoading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
