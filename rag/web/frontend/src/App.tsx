@@ -885,7 +885,7 @@ export default function App() {
 
   // ---- Main UI ----
   return (
-    <div className="flex h-screen bg-transparent text-zinc-300 font-sans overflow-hidden selection:bg-orange-500/30 p-2 md:p-4 gap-4">
+    <div className="flex h-screen bg-transparent text-ink font-sans overflow-hidden selection:bg-brand/25 p-2 md:p-4 gap-4">
 
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
@@ -894,7 +894,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
+            className="fixed inset-0 bg-field/80 backdrop-blur-sm z-40 md:hidden"
             onClick={() => setIsSidebarOpen(false)}
           />
         )}
@@ -917,10 +917,10 @@ export default function App() {
         {/* Sidebar Header */}
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={theme === 'dark' ? '/logo-dark.png' : '/logo-light.png'} alt="MonkeyGrab" className="w-9 h-9 object-cover flex-shrink-0" />
+            <img src="/logo.png" alt="MonkeyGrab" className="w-9 h-9 object-cover flex-shrink-0 grayscale" />
             <h1 className="flex font-extrabold text-lg tracking-tight"><ShimmerText text="MonkeyGrab" /></h1>
           </div>
-          <button className="md:hidden text-zinc-500 hover:text-white transition-colors bg-white/5 p-2 rounded-full" onClick={() => setIsSidebarOpen(false)}>
+          <button className="md:hidden text-ink-faint hover:text-ink transition-colors bg-field p-2 rounded-full" onClick={() => setIsSidebarOpen(false)}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -928,21 +928,21 @@ export default function App() {
         {/* Sidebar Tabs — Documents stays in the sidebar; Models & Pipeline
             open a full-area overlay in the main column. */}
         <div className="flex px-6 mb-2">
-          <div className="flex w-full bg-[var(--surface)] p-1 border border-[var(--border)]">
+          <div className="flex w-full bg-field p-1 border border-edge rounded-xl">
             <button
-              className={`flex-1 py-2 text-xs font-semibold transition-all ${mainPanel === null ? 'bg-[var(--surface-2)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${mainPanel === null ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
               onClick={() => { setMainPanel(null); setActiveTab('docs'); }}
             >
               {T.tabDocs}
             </button>
             <button
-              className={`flex-1 py-2 text-xs font-semibold transition-all ${mainPanel === 'models' ? 'bg-[var(--surface-2)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${mainPanel === 'models' ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
               onClick={() => openMainPanel('models')}
             >
               {T.tabModels}
             </button>
             <button
-              className={`flex-1 py-2 text-xs font-semibold transition-all ${mainPanel === 'pipeline' ? 'bg-[var(--surface-2)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${mainPanel === 'pipeline' ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
               onClick={() => openMainPanel('pipeline')}
             >
               {T.tabPipeline}
@@ -962,11 +962,11 @@ export default function App() {
                 className="space-y-6"
               >
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 pl-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                  <div className="flex items-center gap-2 pl-2 text-[10px] font-bold text-ink-faint uppercase tracking-widest">
                     <Database className="h-3 w-3" />
                     {T.storesLabel}
                   </div>
-                  <div className={`rounded-2xl border border-white/10 bg-black/30 p-1.5 space-y-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${storeBusy || isReindexing || isLoading ? 'opacity-50' : ''}`}>
+                  <div className={`rounded-2xl border border-edge bg-field p-1.5 space-y-1 ${storeBusy || isReindexing || isLoading ? 'opacity-50' : ''}`}>
                     {stores.map(store => {
                       const isActive = store.name === activeStore;
                       return (
@@ -974,18 +974,23 @@ export default function App() {
                           key={store.name}
                           type="button"
                           className={`group flex w-full items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-all focus:outline-none disabled:cursor-not-allowed ${isActive
-                            ? 'border-orange-500/50 bg-orange-500/15 shadow-[0_0_18px_rgba(230,140,82,0.16)]'
-                            : 'border-transparent bg-white/[0.03] hover:border-white/10 hover:bg-white/[0.06]'
+                            ? 'border-divider bg-surface-raised'
+                            : 'border-transparent hover:border-edge hover:bg-surface-raised/50'
                             }`}
                           onClick={() => handleStoreSelect(store.name)}
                           disabled={storeBusy || isReindexing || isLoading}
                         >
                           <span className="flex min-w-0 flex-1 flex-col">
                             <span className="flex items-center gap-1.5">
-                              <span className={`truncate text-xs font-bold tracking-wide ${isActive ? 'text-white' : 'text-zinc-400 group-hover:text-zinc-200'}`}>{store.label}</span>
-                              {isActive && <Check className="h-3 w-3 flex-shrink-0 text-[var(--accent)]" />}
+                              <span className={`truncate text-xs font-bold tracking-wide ${isActive ? 'text-ink' : 'text-ink-muted group-hover:text-ink'}`}>{store.label}</span>
+                              {isActive && <Check className="h-3 w-3 flex-shrink-0 text-ink" />}
                             </span>
-                            <span className={`mt-0.5 block truncate font-mono text-[9px] ${isActive ? 'text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}>
+                            {/* Always ink-muted, active or not: this line carries
+                                data (how many PDFs, whether they are indexed), and
+                                ink-faint at 9px measures 3.35:1 against the surface.
+                                Which store is active is already said twice over, by
+                                the raised fill and the check. */}
+                            <span className="mt-0.5 block truncate font-mono text-[9px] text-ink-muted">
                               {!store.indexed
                                 ? `${store.pdf_count} PDF · ${T.storeNotIndexed}`
                                 : store.fragments != null
@@ -997,9 +1002,9 @@ export default function App() {
                       );
                     })}
                   </div>
-                  {storeError && <p className="pl-2 text-[11px] text-red-400">{storeError}</p>}
+                  {storeError && <p className="pl-2 text-[11px] text-danger">{storeError}</p>}
                   {fingerprintStale && !isIndexing && (
-                    <p className="flex items-start gap-1.5 pl-2 text-[11px] text-amber-400">
+                    <p className="flex items-start gap-1.5 rounded-xl border border-danger/30 bg-danger/10 px-2.5 py-2 text-[11px] text-danger">
                       <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
                       <span>{T.fingerprintStaleWarning}</span>
                     </p>
@@ -1008,29 +1013,29 @@ export default function App() {
 
                 {/* Documents list */}
                 <div className="space-y-3">
-                  <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest pl-2">
+                  <div className="text-[10px] font-bold text-ink-faint uppercase tracking-widest pl-2">
                     {fill(T.collection, { n: documents.length })}
                   </div>
 
                   <div className="space-y-2">
                     {documents.length === 0 ? (
-                      <p className="text-xs text-zinc-600 text-center py-4">{T.noDocs}</p>
+                      <p className="text-xs text-ink-muted text-center py-4">{T.noDocs}</p>
                     ) : (
                       documents.map((doc, i) => (
-                        <div key={i} className="group flex items-center gap-3 p-3.5 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:border-white/10 transition-all">
-                          <div className="w-8 h-8 rounded-full bg-black/30 flex items-center justify-center flex-shrink-0">
-                            <FileText className="w-4 h-4 text-[var(--accent)]" />
+                        <div key={i} className="group flex items-center gap-3 p-3.5 rounded-2xl bg-field border border-edge hover:border-divider transition-all">
+                          <div className="w-8 h-8 rounded-full bg-surface-raised flex items-center justify-center flex-shrink-0">
+                            <FileText className="w-4 h-4 text-ink-muted" />
                           </div>
-                          <span className="text-sm text-zinc-300 group-hover:text-white truncate font-medium flex-1 min-w-0">{doc}</span>
+                          <span className="text-sm text-ink group-hover:text-ink truncate font-medium flex-1 min-w-0">{doc}</span>
                           <button
-                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full text-zinc-500 hover:text-orange-400 hover:bg-orange-500/10 transition-all flex-shrink-0"
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full text-ink-faint hover:text-ink hover:bg-surface-raised transition-all flex-shrink-0"
                             onClick={() => openPdf(doc)}
                             title={T.viewPdf}
                           >
                             <Eye className="w-4 h-4" />
                           </button>
                           <button
-                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all flex-shrink-0 disabled:opacity-50"
+                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full text-ink-faint hover:text-danger hover:bg-danger/10 transition-all flex-shrink-0 disabled:opacity-50"
                             onClick={() => handleDeleteDoc(doc)}
                             disabled={deletingDoc !== null}
                             title={T.deleteDoc}
@@ -1057,7 +1062,7 @@ export default function App() {
         {/* PDF pane — 'full' replaces the chat (opened from the sidebar);
             'split' sits to the left of the chat (opened from a source citation). */}
         {pdfViewer && (
-          <div className={`min-w-0 ${pdfViewer.mode === 'full' ? 'flex-1' : 'w-1/2 border-r border-white/10'}`}>
+          <div className={`min-w-0 ${pdfViewer.mode === 'full' ? 'flex-1' : 'w-1/2 border-r border-divider'}`}>
             <PdfPane
               doc={pdfViewer.doc}
               page={pdfViewer.page}
@@ -1097,32 +1102,32 @@ export default function App() {
         {pdfViewer?.mode !== 'full' && !mainPanel && (
         <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Header */}
-        <header className="h-20 border-b border-[var(--border)] flex items-center justify-between gap-3 px-4 bg-[var(--surface)] z-10">
+        <header className="h-20 border-b border-divider flex items-center justify-between gap-3 px-4 bg-surface-raised z-10">
           <div className="flex items-center gap-3 min-w-0">
             <button
-              className="p-2.5 text-[var(--text-muted)] hover:text-[var(--text)] bg-[var(--surface)] hover:bg-[var(--surface-2)] border border-[var(--border)] transition-colors flex-shrink-0"
+              className="p-2.5 text-ink-muted hover:text-ink bg-field hover:bg-surface border border-edge rounded-lg transition-colors flex-shrink-0"
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             >
               <Menu className="w-5 h-5" />
             </button>
 
-            <div className="flex bg-[var(--surface)] p-1 border border-[var(--border)] flex-shrink-0">
+            <div className="flex bg-field p-1 border border-edge rounded-xl flex-shrink-0">
               <button
-                className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide transition-all flex items-center gap-2 ${mode === 'chat' ? 'bg-[var(--surface-2)] text-[var(--text)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+                className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide rounded-lg transition-all flex items-center gap-2 ${mode === 'chat' ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
                 onClick={() => handleModeChange('chat')}
               >
-                <Ollama className="w-4 h-4 text-[var(--text)]" />
+                <Ollama className="w-4 h-4 text-ink" />
                 CHAT
               </button>
               <button
-                className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide transition-all flex items-center gap-2 ${mode === 'rag' ? 'bg-[var(--accent)] text-[var(--accent-contrast)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+                className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide rounded-lg transition-all flex items-center gap-2 ${mode === 'rag' ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
                 onClick={() => handleModeChange('rag')}
               >
                 <Database className="w-4 h-4" />
                 RAG
               </button>
               <button
-                className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide transition-all flex items-center gap-2 ${mode === 'study' ? 'bg-[var(--accent)] text-[var(--accent-contrast)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}
+                className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide rounded-lg transition-all flex items-center gap-2 ${mode === 'study' ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
                 onClick={() => handleModeChange('study')}
               >
                 <BookOpen className="w-4 h-4" />
@@ -1135,7 +1140,7 @@ export default function App() {
             <button
               type="button"
               onClick={toggleTheme}
-              className="p-2 text-[var(--text-muted)] hover:text-[var(--text)] bg-[var(--surface)] hover:bg-[var(--surface-2)] border border-[var(--border)] transition-colors"
+              className="p-2 text-ink-muted hover:text-ink bg-field hover:bg-surface border border-edge rounded-lg transition-colors"
               title={theme === 'dark' ? T.themeLight : T.themeDark}
               aria-label={theme === 'dark' ? T.themeLight : T.themeDark}
             >
@@ -1143,7 +1148,7 @@ export default function App() {
             </button>
             <LanguageToggle lang={lang} setLang={setLang} />
             <button
-              className="p-2 text-[var(--text-muted)] hover:text-[var(--accent)] bg-[var(--surface)] hover:bg-[var(--surface-2)] border border-[var(--border)] transition-colors"
+              className="p-2 text-ink-muted hover:text-ink bg-field hover:bg-surface border border-edge rounded-lg transition-colors"
               onClick={handleClear}
               title={T.clearChat}
               aria-label={T.clearChat}
@@ -1180,30 +1185,30 @@ export default function App() {
               >
                 {/* System messages */}
                 {msg.role === 'system' ? (
-                  <div className={`flex max-w-[85%] items-start gap-2 px-4 py-2.5 rounded-2xl text-xs font-medium ${msg.isError ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-white/5 text-zinc-400 border border-white/5'}`}>
+                  <div className={`flex max-w-[85%] items-start gap-2 px-4 py-2.5 rounded-2xl text-xs font-medium ${msg.isError ? 'bg-danger/10 text-danger border border-danger/20' : 'bg-field text-ink-muted border border-edge'}`}>
                     {msg.isError
-                      ? <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                      : <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 text-green-400" />
+                      ? <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-danger" />
+                      : <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0 text-ok" />
                     }
                     <MarkdownContent text={msg.content} compact />
                   </div>
                 ) : (
                   <>
-                    <div className={`flex flex-col gap-2 max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                    <div className={`flex flex-col gap-2 max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start w-full'}`}>
                       {/* Meta label + copy */}
                       <div className="flex items-center gap-2 px-2 group/meta">
                         {msg.role === 'assistant' && (
-                          <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase tracking-widest font-bold ${msg.mode === 'rag' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' : 'bg-white/10 text-zinc-400 border border-white/5'}`}>
+                          <span className="text-[9px] px-2 py-0.5 rounded-full uppercase tracking-widest font-bold bg-field text-ink-faint border border-edge">
                             {msg.mode}
                           </span>
                         )}
                         <button
                           onClick={() => handleCopyMessage(msg)}
-                          className="p-1.5 rounded-full text-zinc-500 hover:text-orange-400 hover:bg-orange-500/10 border border-transparent hover:border-orange-500/20 transition-all opacity-60 group-hover/meta:opacity-100"
+                          className="p-1.5 rounded-full text-ink-faint hover:text-ink hover:bg-surface-raised transition-all opacity-0 group-hover/meta:opacity-100"
                           title={T.copyMsg}
                         >
                           {copiedId === msg.id ? (
-                            <Check className="w-3.5 h-3.5 text-green-400" />
+                            <Check className="w-3.5 h-3.5 text-ok" />
                           ) : (
                             <Copy className="w-3.5 h-3.5" />
                           )}
@@ -1213,10 +1218,10 @@ export default function App() {
                       {/* Message bubble */}
                       <div className={`text-[15px] leading-relaxed ${
                         msg.role === 'user'
-                          ? 'text-[var(--text)] font-medium text-left'
+                          ? 'bg-field text-ink border border-edge rounded-2xl px-4 py-3 font-medium text-left'
                           : msg.isError
-                            ? 'text-red-400'
-                            : 'text-[var(--text)]'
+                            ? 'text-danger'
+                            : 'text-ink-soft'
                       }`}>
                         {msg.artifact && msg.artifactKind ? (
                           <StudyArtifactView
@@ -1229,10 +1234,10 @@ export default function App() {
                         ) : msg.content ? (
                           <MarkdownContent text={msg.content} />
                         ) : msg.isStreaming ? (
-                          <span className="inline-block w-2 h-5 bg-orange-400 rounded-sm animate-pulse" />
+                          <span className="inline-block w-2 h-5 bg-ink-muted rounded-sm animate-pulse" />
                         ) : null}
                         {msg.isStreaming && msg.content && (
-                          <span className="inline-block w-2 h-5 bg-orange-400 rounded-sm animate-pulse ml-1 align-text-bottom" />
+                          <span className="inline-block w-2 h-5 bg-ink-muted rounded-sm animate-pulse ml-1 align-text-bottom" />
                         )}
                       </div>
 
@@ -1243,22 +1248,22 @@ export default function App() {
                             {msg.citations.map((cite, i) => (
                               <button
                                 key={i}
-                                className="inline-flex max-w-full items-center gap-2 px-3 py-1.5 rounded-full bg-black/40 border border-white/5 text-xs text-zinc-300 hover:bg-white/10 hover:border-orange-500/30 hover:text-[var(--accent)] transition-all group cursor-pointer"
+                                className="inline-flex max-w-full items-center gap-2 px-3 py-1.5 rounded-full bg-field border border-edge text-xs text-ink-muted hover:bg-surface-raised hover:border-divider hover:text-ink transition-all group cursor-pointer"
                                 onClick={() => openPdf(cite.document, cite.best_page ?? cite.pages[0] ?? 1, 'split')}
                                 title={T.viewPdf}
                               >
-                                <FileText className="w-3.5 h-3.5 text-[var(--accent)] group-hover:text-orange-400" />
+                                <FileText className="w-3.5 h-3.5 text-ink-muted group-hover:text-ink" />
                                 <span className="font-medium truncate min-w-0">{cite.document}</span>
-                                <span className="text-zinc-600">|</span>
-                                <span className="text-zinc-400 shrink-0">p. {cite.best_page ?? cite.pages[0]}</span>
+                                <span className="text-ink-faint">|</span>
+                                <span className="text-ink-muted shrink-0">p. {cite.best_page ?? cite.pages[0]}</span>
                               </button>
                             ))}
                           </div>
                           {msg.metrics && (
-                            <div className="flex items-center gap-4 text-[11px] text-zinc-500 font-mono bg-black/20 inline-flex px-3 py-1.5 rounded-full border border-white/5">
-                              <span className="flex items-center gap-1.5"><Search className="w-3.5 h-3.5 text-zinc-400" /> {msg.metrics.searchTime}</span>
-                              <span className="w-1 h-1 rounded-full bg-zinc-700"></span>
-                              <span className="flex items-center gap-1.5"><Layers className="w-3.5 h-3.5 text-zinc-400" /> {fill(T.sources, { n: msg.metrics.chunks })}</span>
+                            <div className="flex items-center gap-4 text-[11px] text-ink-muted font-mono bg-field inline-flex px-3 py-1.5 rounded-full border border-edge">
+                              <span className="flex items-center gap-1.5"><Search className="w-3.5 h-3.5 text-ink-faint" /> {msg.metrics.searchTime}</span>
+                              <span className="w-1 h-1 rounded-full bg-divider"></span>
+                              <span className="flex items-center gap-1.5"><Layers className="w-3.5 h-3.5 text-ink-faint" /> {fill(T.sources, { n: msg.metrics.chunks })}</span>
                             </div>
                           )}
                         </div>
@@ -1275,7 +1280,7 @@ export default function App() {
         {/* Input Area */}
         <div
           className="p-6 absolute bottom-0 left-0 right-0 z-20"
-          style={{ background: 'linear-gradient(to top, var(--bg), color-mix(in srgb, var(--bg) 88%, transparent) 55%, transparent)' }}
+          style={{ background: 'linear-gradient(to top, var(--color-surface), color-mix(in srgb, var(--color-surface) 88%, transparent) 55%, transparent)' }}
         >
           <div className="max-w-3xl mx-auto relative">
             {/* Autocomplete — above the input, so the caret never sits under it */}
@@ -1289,11 +1294,11 @@ export default function App() {
                     onMouseEnter={() => setSuggestionIndex(i)}
                     className={`w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm transition-colors ${
                       i === suggestionIndex
-                        ? 'bg-[var(--surface-2)] text-[var(--text)]'
-                        : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                        ? 'bg-surface-raised text-ink'
+                        : 'text-ink-muted hover:text-ink'
                     }`}
                   >
-                    <FileText className={`w-4 h-4 shrink-0 ${i === suggestionIndex ? 'text-[var(--accent)]' : ''}`} />
+                    <FileText className={`w-4 h-4 shrink-0 ${i === suggestionIndex ? 'text-ink' : 'text-ink-faint'}`} />
                     <span className="truncate">{doc}</span>
                   </button>
                 ))}
@@ -1304,7 +1309,7 @@ export default function App() {
                 on the transparent end of the area's gradient, so the chat read
                 straight through it. Padding cannot fix that — content passes
                 under a floating input by design; what it needed was a floor. */}
-            <div className={`composer-panel relative focus-within:border-[var(--accent)] transition-all ${
+            <div className={`composer-panel relative focus-within:border-divider transition-all ${
               mode === 'study' ? 'flex flex-col p-2.5 gap-2' : 'flex items-end gap-3 p-2.5'
             }`}>
               <textarea
@@ -1334,14 +1339,14 @@ export default function App() {
                   }
                 }}
                 placeholder={mode === 'study' ? T.studyPlaceholder : mode === 'rag' ? T.placeholderRag : T.placeholderChat}
-                className={`${mode === 'study' ? 'w-full max-h-40 min-h-[44px]' : 'flex-1 max-h-48 min-h-[52px]'} bg-transparent border-none focus:ring-0 focus:outline-none resize-none py-3.5 px-4 text-[15px] text-[var(--text)] placeholder:text-[var(--text-faint)] custom-scrollbar font-medium`}
+                className={`${mode === 'study' ? 'w-full max-h-40 min-h-[44px]' : 'flex-1 max-h-48 min-h-[52px]'} bg-transparent border-none focus:ring-0 focus:outline-none resize-none py-3.5 px-4 text-[15px] text-ink placeholder:text-ink-faint custom-scrollbar font-medium`}
                 rows={1}
                 disabled={isLoading}
               />
 
               {mode === 'study' ? (
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex bg-[var(--surface)] border border-[var(--border)]">
+                  <div className="flex bg-field border border-edge rounded-lg p-0.5">
                     {([
                       ['summary', T.studyKindSummary],
                       ['outline', T.studyKindOutline],
@@ -1351,10 +1356,10 @@ export default function App() {
                         key={kind}
                         type="button"
                         onClick={() => setStudyKind(kind)}
-                        className={`px-3 py-2 text-[11px] font-bold tracking-wide uppercase transition-all ${
+                        className={`px-3 py-2 text-[11px] font-bold tracking-wide uppercase rounded transition-all ${
                           studyKind === kind
-                            ? 'bg-[var(--accent)] text-[var(--accent-contrast)]'
-                            : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                            ? 'bg-surface-raised text-ink'
+                            : 'text-ink-muted hover:text-ink'
                         }`}
                       >
                         {label}
@@ -1364,7 +1369,7 @@ export default function App() {
                   <button
                     onClick={handleSend}
                     disabled={!input.trim() || isLoading}
-                    className="p-3 bg-[var(--accent)] text-[var(--accent-contrast)] hover:bg-[var(--accent-hover)] active:scale-95 disabled:opacity-40 disabled:bg-[var(--surface-2)] disabled:text-[var(--text-faint)] transition-all flex-shrink-0"
+                    className="p-3 bg-brand text-brand-contrast hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:bg-surface-raised disabled:text-ink-faint transition-all flex-shrink-0 rounded-xl"
                   >
                     {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 ml-0.5" />}
                   </button>
@@ -1373,7 +1378,7 @@ export default function App() {
                 <button
                   onClick={handleSend}
                   disabled={!input.trim() || isLoading}
-                  className="p-3.5 bg-[var(--accent)] text-[var(--accent-contrast)] hover:bg-[var(--accent-hover)] active:scale-95 disabled:opacity-40 disabled:bg-[var(--surface-2)] disabled:text-[var(--text-faint)] transition-all flex-shrink-0"
+                  className="p-3.5 bg-brand text-brand-contrast hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:bg-surface-raised disabled:text-ink-faint transition-all flex-shrink-0 rounded-2xl"
                 >
                   {isLoading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -1390,4 +1395,5 @@ export default function App() {
       </main>
     </div>
   );
+
 }
