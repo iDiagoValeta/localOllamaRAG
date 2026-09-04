@@ -121,7 +121,26 @@ export function MarkdownContent({ text, compact = false }: { text: string; compa
         const heading = lines[0].match(/^(#{1,3})\s+(.+)$/);
         if (heading) {
           const Tag = heading[1].length === 1 ? 'h2' : heading[1].length === 2 ? 'h3' : 'h4';
-          return <Tag key={i}>{renderInlineMarkdown(heading[2], `h-${i}`)}</Tag>;
+          // The body that follows a heading inside the same block used to be
+          // dropped on the floor: a model that writes "### Title" and the
+          // paragraph on the next line, with no blank line between them, had
+          // everything but its headings deleted from the answer.
+          const body = lines.slice(1);
+          return (
+            <React.Fragment key={i}>
+              <Tag>{renderInlineMarkdown(heading[2], `h-${i}`)}</Tag>
+              {body.length > 0 && (
+                <p>
+                  {body.map((line, j) => (
+                    <React.Fragment key={j}>
+                      {j > 0 && <br />}
+                      {renderInlineMarkdown(line, `hb-${i}-${j}`)}
+                    </React.Fragment>
+                  ))}
+                </p>
+              )}
+            </React.Fragment>
+          );
         }
 
         if (lines.every(line => /^[-*]\s+/.test(line))) {
