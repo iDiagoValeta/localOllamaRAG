@@ -35,10 +35,10 @@ export function ModelSelect({
         type="button"
         disabled={disabled}
         onClick={() => setOpen(o => !o)}
-        className="flex w-full items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--popover)] px-2.5 py-2 text-xs text-[var(--text)] transition-colors hover:border-[var(--border-strong)] focus:border-orange-500/50 focus:outline-none focus:ring-2 focus:ring-orange-500/20 disabled:opacity-50"
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-edge bg-field px-2.5 py-2 text-xs text-ink transition-colors hover:border-divider focus:border-divider focus:outline-none disabled:opacity-50"
       >
         <span className="truncate">{value || '—'}</span>
-        <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 text-[var(--text-faint)] transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 text-ink-faint transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       <AnimatePresence>
         {open && (
@@ -47,7 +47,7 @@ export function ModelSelect({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.15 }}
-            className="custom-scrollbar absolute z-50 mt-1.5 max-h-56 w-full overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--popover)] p-1 shadow-xl"
+            className="custom-scrollbar absolute z-50 mt-1.5 max-h-56 w-full overflow-y-auto rounded-xl border border-edge bg-surface-raised p-1 shadow-xl"
           >
             {options.map(name => {
               const selected = name === value;
@@ -57,11 +57,11 @@ export function ModelSelect({
                     type="button"
                     onClick={() => { onChange(name); setOpen(false); }}
                     className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
-                      selected ? 'bg-[var(--popover-active)] text-[var(--accent)]' : 'text-[var(--text)] hover:bg-[var(--popover-hover)]'
+                      selected ? 'bg-surface text-ink font-medium' : 'text-ink-soft hover:bg-surface hover:text-ink'
                     }`}
                   >
                     <span className="truncate">{name}</span>
-                    {selected && <Check className="h-3.5 w-3.5 flex-shrink-0 text-[var(--accent)]" />}
+                    {selected && <Check className="h-3.5 w-3.5 flex-shrink-0 text-ink" />}
                   </button>
                 </li>
               );

@@ -23,9 +23,9 @@ export function StudyArtifactView({
       {kind === 'summary' && (artifact.sections ?? []).map((section, i) => (
         <div key={i} className="space-y-1">
           {section.heading && (
-            <h3 className="text-[var(--text)] font-semibold">{section.heading}</h3>
+            <h3 className="text-ink font-semibold">{section.heading}</h3>
           )}
-          <div className="text-[var(--text-muted)]">
+          <div className="text-ink-soft">
             <MarkdownContent text={section.body} />
           </div>
         </div>
@@ -37,8 +37,8 @@ export function StudyArtifactView({
         <div className="space-y-5">
           {(artifact.questions ?? []).map((q, i) => (
             <div key={i} className="space-y-2">
-              <p className="text-[var(--text)] font-semibold">
-                <span className="text-[var(--accent)] mr-1.5">{i + 1}.</span>{q.prompt}
+              <p className="text-ink font-semibold">
+                <span className="text-ink-muted mr-1.5">{i + 1}.</span>{q.prompt}
               </p>
               <ul className="space-y-1.5">
                 {q.options.map((option, j) => {
@@ -46,18 +46,18 @@ export function StudyArtifactView({
                   return (
                     <li
                       key={j}
-                      className={`flex items-start gap-2.5 px-3 py-1.5 border transition-colors ${
+                      className={`flex items-start gap-2.5 px-3 py-1.5 border transition-colors rounded-lg ${
                         isKey
-                          ? 'border-[var(--accent)]/40 bg-[var(--accent)]/10 text-[var(--text)]'
-                          : 'border-transparent text-[var(--text-muted)]'
+                          ? 'border-ok/40 bg-ok/10 text-ink'
+                          : 'border-transparent text-ink-muted'
                       }`}
                     >
-                      <span className={`font-mono text-xs mt-0.5 ${isKey ? 'text-[var(--accent)]' : 'text-[var(--text-faint)]'}`}>
+                      <span className={`font-mono text-xs mt-0.5 ${isKey ? 'text-ok font-semibold' : 'text-ink-faint'}`}>
                         {String.fromCharCode(97 + j)}
                       </span>
                       <span className="flex-1">{option}</span>
                       {isKey && (
-                        <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-[var(--accent)]" />
+                        <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-ok" />
                       )}
                     </li>
                   );
@@ -71,7 +71,7 @@ export function StudyArtifactView({
             <button
               type="button"
               onClick={onReveal}
-              className="px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase text-[var(--text-muted)] hover:text-[var(--text)] bg-[var(--surface)] hover:bg-[var(--surface-2)] border border-[var(--border)] transition-colors"
+              className="px-3 py-1.5 text-[11px] font-bold tracking-wide uppercase text-ink-muted hover:text-ink bg-field hover:bg-surface-raised border border-edge rounded-lg transition-colors"
             >
               {strings.studyShowAnswersInline}
             </button>
@@ -80,7 +80,7 @@ export function StudyArtifactView({
       )}
 
       {artifact.source_document && (
-        <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-[var(--text-faint)]">
+        <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-ink-faint">
           <span className="inline-flex items-center gap-1.5">
             <FileText className="w-3.5 h-3.5" />
             {artifact.source_document}

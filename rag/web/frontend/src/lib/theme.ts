@@ -1,6 +1,6 @@
 // Theme helper: dark by default, light optional, persisted in localStorage.
-// Components read semantic CSS tokens (--bg, --surface, --text, --accent, …)
-// defined in index.css; toggling `html.light` flips the whole palette.
+// Components read semantic CSS tokens (--color-surface, --color-ink, …)
+// defined in index.css; toggling `data-theme` flips the whole palette.
 
 const STORAGE_KEY = 'monkeygrab-theme';
 
@@ -15,7 +15,7 @@ export function getStoredTheme(): Theme {
 }
 
 export function applyTheme(theme: Theme): void {
-  document.documentElement.classList.toggle('light', theme === 'light');
+  document.documentElement.setAttribute('data-theme', theme);
 }
 
 export function setTheme(theme: Theme): void {
@@ -33,3 +33,4 @@ export function initTheme(): Theme {
   applyTheme(theme);
   return theme;
 }
+

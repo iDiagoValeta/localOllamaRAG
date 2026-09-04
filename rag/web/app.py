@@ -522,7 +522,9 @@ def serve_assets(filename):
 @app.route("/logo.jpg")
 def serve_logo():
     """Serve the requested MonkeyGrab logo (Vite copies ``public/`` into ``dist/``
-    root). The theme switch requests ``logo-dark.png`` / ``logo-light.png``."""
+    root). The UI asks for ``logo.png`` and greys it in CSS, so one file serves
+    both themes; the per-theme routes stay for older clients and resolve to it
+    through the fallback below."""
     name = os.path.basename(request.path)  # route is a fixed literal — safe
     path = os.path.join(_react_dist, name)
     if os.path.isfile(path):
