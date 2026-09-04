@@ -41,8 +41,8 @@ measure different behaviour.
 `application/index_fingerprint.py`'s recipe digest was, until issue #36, read
 only by `run_eval.py`. `rag/engine/indexing.py` now writes it after a full
 folder index (never after an incremental add, which cannot vouch for the rest
-of an existing store) and exposes `index_fingerprint_mismatch()`; the CLI and
-web app call it to warn when a stored index no longer matches the active
+of an existing store) and exposes `index_fingerprint_mismatch()`; the
+web app calls it to warn when a stored index no longer matches the active
 config, and leave reindexing to the user rather than triggering it — an hour
 of MinerU + jina-clip must never start silently. A store with no recorded
 fingerprint (every index built before this feature existed) reads as unknown,

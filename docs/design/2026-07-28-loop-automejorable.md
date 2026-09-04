@@ -698,5 +698,5 @@ Cada bloque recibe su propio plan de implementación.
   figura. Es la vía para cerrar el margen inalcanzable de §3, y necesita su propio
   diseño.
 - Los tres hallazgos de runtime de la auditoría (worker no thread-safe, VRAM sin
-  liberar en web/CLI, script del worker ausente del bundle). Bloquean el producto,
+  liberar en web/CLI —retirada esta última—, script del worker ausente del bundle). Bloquean el producto,
   no el loop, y se tratan aparte.

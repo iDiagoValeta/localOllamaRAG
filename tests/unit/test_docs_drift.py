@@ -17,22 +17,15 @@ Checks:
 1. ``AGENTS.md`` rule 7's "Pipeline entry points" and "Runtime
    switches" bullets against the module-level names ``rag/chat_pdfs.py``
    actually binds. Rule 7 calls the file's re-export block "the authoritative
-   list" and warns that renaming a symbol there breaks the web app, the CLI
-   and the tests at once.
-2. ``AGENTS.md`` section 9's CLI slash-command line against
-   ``rag/cli/commands.py``, which its own docstring calls the "single source
-   of truth for slash-commands". Checked both ways: a documented command
-   that no longer exists, and a registered command nobody documented.
-3. ``README.md``'s user-facing slash-command list against the same
-   ``COMMANDS`` registry -- the README is what an installing user reads, and
-   the contract file's check does not cover it.
-4. ``README.md``'s four Ollama-role environment variables against
+   list" and warns that renaming a symbol there breaks the web app and
+   the tests at once.
+2. ``README.md``'s four Ollama-role environment variables against
    ``MODEL_ROLE_ENV_VARS`` in ``rag/chat_pdfs.py``.
-5. ``FaissVectorStore``'s class-docstring persistence layout against the
+3. ``FaissVectorStore``'s class-docstring persistence layout against the
    ``_*_FILENAME`` constants the store actually writes. The incident that
    motivated this file listed exactly this: the docstring said three files
    while the store wrote four.
-6. ``AGENTS.md`` section 2's directory tree against the repository's actual
+4. ``AGENTS.md`` section 2's directory tree against the repository's actual
    top-level directories, both ways (issue #122). The tree is the map an
    agent is pointed at first, and it was missing ``tools/`` and ``assets/``
    -- ``tools/`` since before it held the setup script ``README.md`` now
@@ -41,10 +34,9 @@ Checks:
    obeyed.
 
 Python sources are parsed with ``ast`` rather than imported: importing
-``rag.chat_pdfs`` or ``rag.cli.commands`` (the latter transitively, through
-``rag/cli/__init__.py``) pulls in third-party packages (``dotenv``, ``rich``,
-``faiss``, ...) that the fast CI gate's ``architecture`` job -- which runs
-this file -- does not install.
+``rag.chat_pdfs`` pulls in third-party packages (``dotenv``, ``faiss``, ...)
+that the fast CI gate's ``architecture`` job -- which runs this file -- does
+not install.
 """
 
 import ast
@@ -59,7 +51,6 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = ROOT / "AGENTS.md"
 README = ROOT / "README.md"
 CHAT_PDFS = ROOT / "rag" / "chat_pdfs.py"
-CLI_COMMANDS = ROOT / "rag" / "cli" / "commands.py"
 FAISS_STORE = (
     ROOT / "src" / "monkeygrab" / "adapters" / "vectorstore" / "faiss_store.py"
 )
@@ -172,76 +163,7 @@ def _rule7_documented_symbols() -> Set[str]:
     return symbols
 
 
-def _documented_slash_commands() -> Set[str]:
-    """Backtick-quoted slash tokens from section 9's CLI command summary.
 
-    Captures the whole block after the heading, up to the next blank line or
-    heading, rather than just the first physical line -- that line is 152
-    characters today, so a reflow across two lines is a realistic edit, and
-    a single-line capture would report the wrapped commands as "registered
-    but undocumented" while they sit one line below where the test just read.
-    """
-    text = CONTRACT.read_text(encoding="utf-8")
-    match = re.search(
-        r"### CLI slash commands\s*\n\n(.*?)(?=\n\s*\n|\n#|\Z)",
-        text,
-        re.DOTALL,
-    )
-    if not match:
-        pytest.fail(
-            "AGENTS.md section 9 no longer has a 'CLI slash commands' line "
-            "in the expected place -- update this check's parsing."
-        )
-    # [\w-]+, not [A-Za-z]+: a command token may contain digits, hyphens or
-    # underscores, none of which the stricter class would match.
-    return set(re.findall(r"`(/[\w-]+)`", match.group(1)))
-
-
-def _cli_registered_commands() -> Set[str]:
-    """Every slash token rag/cli/commands.py declares: COMMANDS (primary
-    tokens) plus ALIASES (aliases across the three UI languages).
-
-    commands.py's own docstring calls it the "single source of truth for
-    slash-commands", and rag/cli/app.py validates its dispatcher against
-    exactly these two lists when the CLI starts
-    (``_validate_commands_registry``). So checking commands.py here is
-    equivalent to checking what the CLI actually registers, without needing
-    to parse app.py's dispatch dict directly.
-    """
-    tree = ast.parse(CLI_COMMANDS.read_text(encoding="utf-8"), filename=str(CLI_COMMANDS))
-    declared: dict = {}
-    for node in tree.body:
-        if isinstance(node, ast.Assign):
-            targets = node.targets
-        elif isinstance(node, ast.AnnAssign):
-            targets = [node.target]
-        else:
-            continue
-        for target in targets:
-            if isinstance(target, ast.Name) and target.id in ("COMMANDS", "ALIASES"):
-                try:
-                    declared[target.id] = ast.literal_eval(node.value)
-                except ValueError:
-                    pytest.fail(
-                        f"rag/cli/commands.py's {target.id} is no longer a "
-                        "literal ast.literal_eval can parse -- update this "
-                        "check's parsing."
-                    )
-
-    missing = {"COMMANDS", "ALIASES"} - declared.keys()
-    if missing:
-        pytest.fail(
-            f"rag/cli/commands.py no longer defines {sorted(missing)} at "
-            "module level -- update this check's parsing."
-        )
-
-    # token, *_ (not token, _): tolerant of extra fields per entry, matching
-    # ALIASES below -- a plain 2-tuple unpack raises on any entry that later
-    # grows a third field, which is exactly the kind of change this file
-    # should survive without needing an edit.
-    tokens = {token for token, *_ in declared["COMMANDS"]}
-    tokens.update(alias for alias, *_ in declared["ALIASES"])
-    return tokens
 
 
 def _module_str_constants(py_file: Path, names: Set[str]) -> Dict[str, str]:
@@ -305,9 +227,7 @@ def _module_literal(py_file: Path, name: str):
     )
 
 
-def _cli_primary_commands() -> Set[str]:
-    declared = _module_literal(CLI_COMMANDS, "COMMANDS")
-    return {token for token, *_ in declared}
+
 
 
 _FAISS_FILENAME_CONSTANTS = {
@@ -343,14 +263,7 @@ def _faiss_docstring_layout_files() -> Set[str]:
     pytest.fail("faiss_store.py no longer defines class FaissVectorStore")
 
 
-def _readme_slash_commands() -> Set[str]:
-    text = README.read_text(encoding="utf-8")
-    found = set(re.findall(r"`(/[\w-]+)`", text))
-    assert len(found) >= 8, (
-        f"README.md now parses to only {len(found)} slash command(s) "
-        f"({sorted(found)}) -- the capture likely narrowed."
-    )
-    return found
+
 
 
 def _readme_env_vars() -> Set[str]:
@@ -409,34 +322,7 @@ def test_rule7_pipeline_entry_points_and_runtime_switches_are_exported():
     )
 
 
-def test_cli_slash_commands_match_documentation():
-    """CLAUDE.md's slash-command list and rag/cli/commands.py must name the
-    same set of tokens, in both directions."""
-    documented = _documented_slash_commands()
-    registered = _cli_registered_commands()
-    missing_from_code = sorted(documented - registered)
-    missing_from_docs = sorted(registered - documented)
-    assert not missing_from_code and not missing_from_docs, (
-        "AGENTS.md section 9's CLI slash-command list and "
-        "rag/cli/commands.py disagree. "
-        f"Documented but no longer registered: {missing_from_code}. "
-        f"Registered but undocumented: {missing_from_docs}."
-    )
 
-
-def test_readme_slash_commands_match_the_cli_registry():
-    """Every primary COMMANDS token must appear in README.md, and every
-    slash token README.md backticks must actually be registered."""
-    documented = _readme_slash_commands()
-    registered = _cli_registered_commands()
-    primary = _cli_primary_commands()
-    missing_from_readme = sorted(primary - documented)
-    unknown = sorted(documented - registered)
-    assert not missing_from_readme and not unknown, (
-        "README.md's slash-command list and rag/cli/commands.py disagree. "
-        f"Primary commands missing from README.md: {missing_from_readme}. "
-        f"Documented in README.md but not registered: {unknown}."
-    )
 
 
 def test_readme_ollama_role_vars_match_model_role_env_vars():

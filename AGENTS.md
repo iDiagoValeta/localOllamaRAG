@@ -5,7 +5,7 @@ product only — the thesis research layer was defended and removed from HEAD
 (history preserved at tag `tfg-final`).
 
 Hexagonal architecture: `src/monkeygrab/` holds domain, ports, application use
-cases and adapters; `rag/` holds the interfaces (CLI, web) and the wiring that
+cases and adapters; `rag/` holds the web interface and the wiring that
 builds the adapters and runs the use cases. All three pipeline stages —
 indexing, retrieval, generation — go through the core. See §2 for the
 dependency rule and the layout.
@@ -37,19 +37,19 @@ been deleted.
 4. **Follow the code patterns in §6** when writing new code in `rag/`; §7 lists what `src/monkeygrab/` does differently.
 5. **Do not modify any `requirements.txt`** without confirmation — versions are pinned.
 6. **Do not flip pipeline flags** (`USAR_RECOMP_SYNTHESIS`, `USAR_RERANKER`, etc.) without agreement — they affect latency, cost and evaluation results.
-7. **Preserve `rag/chat_pdfs.py` public API.** It is consumed verbatim by `rag/web/app.py` (as `rag_engine`), the CLI and `tests/`. Renaming a symbol breaks all three at once. The authoritative list is the re-export block at the end of that file; the groups are:
+7. **Preserve `rag/chat_pdfs.py` public API.** It is consumed verbatim by `rag/web/app.py` (as `rag_engine`) and `tests/`. Renaming a symbol breaks them at once. The authoritative list is the re-export block at the end of that file; the groups are:
    - **Constants:** paths and collection names, model roles, every pipeline flag and numeric parameter, both system prompts, plus the `*_AVAILABLE` compatibility constants the UIs display.
    - **Pipeline entry points:** `indexar_documentos`, `realizar_busqueda_hibrida`, `preparar_fragmentos_para_generacion`, `generar_respuesta`, `generar_respuesta_silenciosa`, `generar_tokens_respuesta`, `evaluar_pregunta_rag`.
    - **Support:** context assembly, debug dumps, chat history, `obtener_documentos_indexados`, and the text helpers re-exported from `monkeygrab.application.keywords` (`STOPWORDS`, `extract_keywords`, ...).
-   - **Runtime switches (web control panel):** `get_pipeline_flags`, `set_pipeline_flags`, `set_docs_folder_runtime`, `MODEL_ROLE_VARS`, `MODEL_ROLE_ENV_VARS`, `get_model_roles`, `set_model_roles_runtime`, the path derivation helper `_derivar_paths_db`, and the persisted-choice API both interfaces use: `cargar_ajustes_persistidos`, `guardar_ajustes_persistidos`, `resolver_carpeta_store`, `STORE_IDS`.
+   - **Runtime switches (web control panel):** `get_pipeline_flags`, `set_pipeline_flags`, `set_docs_folder_runtime`, `MODEL_ROLE_VARS`, `MODEL_ROLE_ENV_VARS`, `get_model_roles`, `set_model_roles_runtime`, the path derivation helper `_derivar_paths_db`, and the persisted-choice API: `cargar_ajustes_persistidos`, `guardar_ajustes_persistidos`, `resolver_carpeta_store`, `STORE_IDS`.
 
-   The web API adds `/api/ollama[/start|/models]`, `/api/models`, `/api/stores` (GET) and `/api/stores/select` (POST). There are exactly three fixed language stores — `en` (English, default), `es` (Castellano), `ca` (Valencià) — each bound to `rag/docs/<id>/`. They always exist, possibly empty; there is no create/delete/hide/restore and no user-created stores. `settings.json` persists `active_store`, the model roles and the pipeline flags, falling back to the defaults for anything unknown. **Both interfaces read it** (`rag/engine/settings.py`): the web app at import, the CLI in `chat_pdfs.main()`, so a choice made in one is the configuration the other runs under. Precedence is environment > `settings.json` > module defaults, so an exported `OLLAMA_*_MODEL` or `DOCS_FOLDER` still describes the run that declares it. A save never writes an env-pinned role or store over the stored choice: the override lasts for this run, and unsetting the variable restores what the user picked rather than finding it erased. The active store is selectable, and documents can be viewed, added and removed per store.
+   The web API adds `/api/ollama[/start|/models]`, `/api/models`, `/api/stores` (GET) and `/api/stores/select` (POST). There are exactly three fixed language stores — `en` (English, default), `es` (Castellano), `ca` (Valencià) — each bound to `rag/docs/<id>/`. They always exist, possibly empty; there is no create/delete/hide/restore and no user-created stores. `settings.json` persists `active_store`, the model roles and the pipeline flags, falling back to the defaults for anything unknown. The web app reads it at startup (`rag/engine/settings.py`). Precedence is environment > `settings.json` > module defaults, so an exported `OLLAMA_*_MODEL` or `DOCS_FOLDER` still describes the run that declares it. A save never writes an env-pinned role or store over the stored choice: the override lasts for this run, and unsetting the variable restores what the user picked rather than finding it erased. The active store is selectable, and documents can be viewed, added and removed per store.
 8. **Hard-fail policy, project-wide.** Every adapter under `src/monkeygrab/adapters/` raises on failure instead of degrading — no silent CUDA→CPU fallback, no silent extractor swap, no silent RECOMP-to-raw-context fallback. Do not add a fallback chain inside an adapter; if a caller needs one, it composes two ports explicitly. See `docs/design/2026-07-26-monkeygrab-v2.md` §3 ("Política de fallos").
 9. **Test boundaries are load-bearing, not incidental:**
    - `tests/characterization/` pins the *current* pipeline's observed behavior, including its known bugs. Do not edit these tests to make a change pass — if a change legitimately alters behavior, that's a signal to stop and confirm, not to update the test. The one documented exception is `test_stale_default_config_bug.py`, whose own docstring says exactly when and how it is allowed to change.
    - `tests/eval/` holds the gold-case evaluation gate (`gold_cases.jsonl`, `run_eval.py`, `grade.py`) with a hand-verified expected answer per case. It is the acceptance gate for anything touching retrieval or generation — do not weaken a grading rule to raise the pass rate.
    - `tests/unit/test_architecture_boundaries.py` enforces the dependency rule in §2 by parsing imports; don't special-case it.
-10. **After any non-trivial change, update the right doc.** `README.md` = user-facing entry (install / run / config / CLI). `src/monkeygrab/README.md` / `rag/README.md` = architecture entry points. See `docs/README.md` for what does *not* need documenting.
+10. **After any non-trivial change, update the right doc.** `README.md` = user-facing entry (install / run / config / web). `src/monkeygrab/README.md` / `rag/README.md` = architecture entry points. See `docs/README.md` for what does *not* need documenting.
 11. **`.gitignore` / `.gitkeep` changes follow §8.** Validate with `git check-ignore -v <path>` and update §8 if policy changes.
 
 ---
@@ -70,10 +70,9 @@ src/monkeygrab/          Hexagonal core (see src/monkeygrab/README.md)
   application/             Use cases (IndexCorpus, Retrieve, Answer) + pure helpers
   config/                  AppConfig — immutable, from_env() / with_overrides()
   adapters/                Port implementations: MinerU, jina-clip, FAISS, Ollama, BM25, BGE
-rag/                      Interfaces (CLI + web) and pipeline entry points
+rag/                      Web interface and pipeline entry points
   chat_pdfs.py              Public facade + global config (see §1 rule 7)
   engine/                    wiring, retrieval, indexing, context, generation, chunking, debug, history, settings
-  cli/                       MonkeyGrabCLI (interactive loop, i18n strings)
   web/                       Flask backend + React frontend (pnpm; frontend/dist gitignored)
   docs/                      Corpus PDFs (es/, ca/, en/); versioned
   vector_db/                 FAISS per corpus (gitignored)
@@ -129,15 +128,15 @@ user had picked it (issue #79). Jina CLIP v2 and BGE Reranker v2 M3 are fixed.
 
 | Role | Env var | Notes |
 |------|---------|-------|
-| RAG generator (streaming) | `OLLAMA_RAG_MODEL` | `/rag` mode |
-| Chat + sub-queries | `OLLAMA_CHAT_MODEL` | `/chat` and RAG query decomposition; `think=False` |
+| RAG generator (streaming) | `OLLAMA_RAG_MODEL` | RAG mode |
+| Chat + sub-queries | `OLLAMA_CHAT_MODEL` | Chat mode and RAG query decomposition; `think=False` |
 | Contextual retrieval | `OLLAMA_CONTEXTUAL_MODEL` | Chunk enrichment at indexing (`USAR_CONTEXTUAL_RETRIEVAL`) |
 | RECOMP synthesis | `OLLAMA_RECOMP_MODEL` | Pre-generation context synthesis (`USAR_RECOMP_SYNTHESIS`) |
 | Reranker | fixed | `BAAI/bge-reranker-v2-m3`; not an Ollama model |
 
-Other env vars: `DOCS_FOLDER` (default `rag/docs/en/`), `MONKEYGRAB_DATA_DIR` (writable root for `vector_db`/history/debug; defaults to the package dir in dev, `%LOCALAPPDATA%/MonkeyGrab` in the packaged app), `MONKEYGRAB_LANG` (default `es`; `en`/`ca`), `OLLAMA_BASE_URL` (default `http://localhost:11434`, falling back to Ollama's own `OLLAMA_HOST`).
+Other env vars: `DOCS_FOLDER` (default `rag/docs/en/`), `MONKEYGRAB_DATA_DIR` (writable root for `vector_db`/history/debug; defaults to the package dir in dev, `%LOCALAPPDATA%/MonkeyGrab` in the packaged app), `OLLAMA_BASE_URL` (default `http://localhost:11434`, falling back to Ollama's own `OLLAMA_HOST`).
 
-The Ollama endpoint has exactly one reader, `monkeygrab.config.env.read_env_ollama_base_url`, feeding `AppConfig.models.ollama.base_url` and `rag.chat_pdfs.OLLAMA_BASE_URL`. Every generation call, both `/chat` modes and both reachability checks (CLI startup, web control panel) resolve through it. Do not re-read the variable at a call site: a second resolution is how the CLI health check ended up reporting a server the pipeline never talked to.
+The Ollama endpoint has exactly one reader, `monkeygrab.config.env.read_env_ollama_base_url`, feeding `AppConfig.models.ollama.base_url` and `rag.chat_pdfs.OLLAMA_BASE_URL`. Every generation call, both `/chat` modes and the reachability check (web control panel) resolve through it. Do not re-read the variable at a call site: a second resolution is how a health check once ended up reporting a server the pipeline never talked to.
 
 Desktop app: `rag/web/desktop.py` is the pywebview entry point frozen by PyInstaller (`packaging/MonkeyGrab.spec`, `packaging/build_exe.py`) into `MonkeyGrab.exe`. Built-in corpora ship in the bundle; Ollama is an external prerequisite. See [`packaging/README.md`](packaging/README.md).
 
@@ -186,7 +185,7 @@ See §1 rule 9 for what must not be edited (`tests/characterization/`,
 4. **Imports → constants → logic.** Stdlib → third-party → local; then config (models, paths, flags, numeric params).
 5. **Env setup before heavy imports.** Set `TORCH_COMPILE_DISABLE`, `TRITON_DISABLE`, etc. *before* `import torch` / `transformers`.
 6. **Mixed ES/EN naming (established).** Functions in Spanish (`realizar_busqueda_hibrida`); config constants in English (`CHUNK_SIZE`, `TOP_K_FINAL`); docstrings and comments in English. Follow the module's pattern; do not mix within a block.
-7. **Script-first, not enterprise.** Logic in modules + `main()`. Only exception: `MonkeyGrabCLI` in `rag/cli/app.py`.
+7. **Script-first, not enterprise.** Logic in modules.
 8. **Document pipeline flags in their own block** — inline comment per flag.
 
 ---
@@ -212,14 +211,13 @@ Items 1–5 of §6 apply here too. What differs:
 
 ## 9. Quick command index
 
-> Detailed commands in `README.md` (CLI/Web).
+> Detailed commands in `README.md` (Web).
 
 ```bash
 # Setup (both interpreters; --check verifies without installing)
 python tools/setup_environments.py             # .venv + .venv-mineru, then check
 
-# CLI / Web
-python rag/chat_pdfs.py                        # default es; MONKEYGRAB_LANG=en|ca for other UI
+# Web
 python rag/web/app.py                          # http://localhost:5000 (ES/EN/VAL UI + corpus selector via POST /api/corpus)
 
 # Frontend (pnpm only — package.json pins packageManager, CI enforces --frozen-lockfile)
@@ -237,15 +235,6 @@ python -m harness.cli --dry-run --max-iterations 3          # smoke-test the loo
 # Misc
 git check-ignore -v <path>
 ```
-
-### CLI slash commands
-
-`/rag` `/chat` `/docs` `/temas`(`/topics` `/temes`) `/resumen`(`/summary` `/resum`) `/esquema`(`/outline`) `/cuestionario`(`/quiz` `/questionari`) `/stats` `/reindex` `/limpiar`(`/clear` `/netejar`) `/ayuda`(`/help` `/ajuda`) `/salir`(`/exit` `/eixir`).
-
-The three that take a document argument — `/resumen`, `/esquema`,
-`/cuestionario` — run `Study` and share `_document_fragments` for the picker.
-They are registered in `_commands_with_argument` as well as `_commands`, so a
-bare invocation reaches the handler instead of the did-you-mean branch.
 
 ---
 

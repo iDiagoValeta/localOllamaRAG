@@ -1,4 +1,4 @@
-"""Hybrid retrieval entry point for the CLI and the web app.
+"""Hybrid retrieval entry point for the web app.
 
 Wires the port adapters and runs ``monkeygrab.application.retrieve.Retrieve``,
 then converts its output into the dicts the interfaces have always consumed.
@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Tuple
 
 from monkeygrab.application.retrieve import Retrieve
 from monkeygrab.ports.vector_store import VectorStore
-from rag.cli.display import ui
 from rag.engine import wiring
 
 
@@ -36,7 +35,7 @@ def realizar_busqueda_hibrida(
         Tuple of (ranked fragments, best score, metrics dict). The fragment
         list is already threshold-filtered and truncated to ``TOP_K_FINAL``.
     """
-    ui.debug("Starting hybrid search...")
+    logging.debug("Starting hybrid search...")
 
     config = wiring.app_config_from_runtime()
     store = collection
@@ -56,7 +55,7 @@ def realizar_busqueda_hibrida(
     metricas = wiring.retrieval_metrics_to_legacy(result.metrics, config)
     mejor_score = fragmentos_ranked[0]["score_final"] if fragmentos_ranked else 0
 
-    ui.debug(f"{len(fragmentos_ranked)} fragment(s) after ranking")
+    logging.debug(f"{len(fragmentos_ranked)} fragment(s) after ranking")
 
     if config.flags.logging_metricas:
         logging.info(
