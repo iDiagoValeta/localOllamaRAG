@@ -47,6 +47,13 @@ def indexar_documentos(
 
     Returns:
         Total number of chunks successfully indexed.
+
+    Raises:
+        RuntimeError: Every PDF in scope failed to index. The store and its
+            fingerprint are left exactly as they were, so the stale-index
+            warning keeps working and the caller can report the failure
+            (issue #192). A run where only *some* files failed returns
+            normally: those failures are logged per file.
     """
     os.makedirs(carpeta, exist_ok=True)
     archivos_pdf = [f for f in os.listdir(carpeta) if f.endswith(".pdf")]
@@ -105,6 +112,8 @@ def indexar_documentos(
     )
 
     total_chunks = 0
+    fallos = 0
+    ultimo_error = None
     for idx, archivo in enumerate(archivos_pdf):
         if progress_callback:
             try:
@@ -125,6 +134,8 @@ def indexar_documentos(
             # this line went to the log and a second one to the user's console;
             # both now land in logging, and `silent` no longer distinguishes
             # them -- it silences progress chatter, not failures.
+            fallos += 1
+            ultimo_error = e
             logging.error(f"Error processing {archivo}: {e}")
 
     # Only a full-folder run (solo_archivos=None) can vouch for the *entire*
@@ -137,16 +148,31 @@ def indexar_documentos(
     # silently launder away a real mismatch from an earlier config change,
     # exactly what index_fingerprint_mismatch exists to catch.
     #
-    # Written even when some individual files failed above (per-file
+    # Written even when *some* individual files failed above (per-file
     # exceptions are caught and logged, not re-raised): the fingerprint
     # asserts the *recipe* whatever ended up stored was built under, not that
     # every requested file is present -- unlike run_eval.ensure_indexed, whose
     # write-after-verify exists to guarantee a specific set of gold-case
     # papers landed, a different property. Every chunk actually added this
     # pass did go through `config`, so the recipe claim holds regardless of
-    # which files errored; a fully failed run leaves an empty store, which the
-    # `collection.count() == 0` branch in the web app re-attempts on next
-    # launch without ever consulting this fingerprint.
+    # which files errored.
+    #
+    # A run where *every* file failed is the exception, and it raises before
+    # reaching that write (issue #192). Such a run stored nothing, so there is
+    # no recipe to assert -- and writing one would actively hide the failure:
+    # the stored value would match the config in force, turning off the
+    # index_fingerprint_mismatch warning that is the only thing standing
+    # between the user and a silently empty store. The per-file logging.error
+    # above goes to the server's stdout, which is not where anyone running the
+    # packaged desktop app is looking; raising is what puts the failure on the
+    # channel the web layer already surfaces (_state["indexing_error"]).
+    if fallos and fallos == len(archivos_pdf):
+        raise RuntimeError(
+            f"Indexing failed on all {fallos} file(s) in {carpeta}; "
+            f"the store and its fingerprint were left untouched. "
+            f"Last error: {ultimo_error}"
+        )
+
     if solo_archivos is None:
         collection.write_fingerprint(compute_index_fingerprint(config))
 
