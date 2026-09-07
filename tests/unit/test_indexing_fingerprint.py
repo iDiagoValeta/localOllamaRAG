@@ -10,6 +10,8 @@ tests/conftest.py.
 
 from types import SimpleNamespace
 
+import pytest
+
 from monkeygrab.application.index_fingerprint import compute_index_fingerprint
 from monkeygrab.config.app_config import AppConfig
 
@@ -141,3 +143,74 @@ def test_mismatch_check_never_blocks_startup_on_a_read_failure(monkeypatch):
             raise OSError("sidecar file is locked")
 
     assert indexing.index_fingerprint_mismatch(_BrokenStore()) is False
+
+
+class _FailingIndexCorpus:
+    """An IndexCorpus whose every run raises -- the shape issue #192 reports,
+    where extraction failed on every file of a full re-index."""
+
+    def __init__(self, *_a, **_kw):
+        pass
+
+    def run(self, *_a, **_kw):
+        raise RuntimeError("CUDA out of memory")
+
+
+def test_run_where_every_file_fails_keeps_the_previous_fingerprint(tmp_path, monkeypatch):
+    # Issue #192: the fingerprint asserts the recipe the stored corpus was
+    # built under. A run that indexed nothing built no corpus, so writing it
+    # here would silence index_fingerprint_mismatch -- the one warning that
+    # would have told the user their store is empty because a re-index failed,
+    # not because they never indexed.
+    (tmp_path / "paper.pdf").write_bytes(b"%PDF-1.4")
+    config = _config()
+    _wire_fakes(monkeypatch, config)
+    monkeypatch.setattr(indexing, "IndexCorpus", _FailingIndexCorpus)
+    store = _FakeStore(fingerprint="pre-existing-value")
+
+    with pytest.raises(RuntimeError):
+        indexing.indexar_documentos(str(tmp_path), store, silent=True)
+
+    assert store.read_fingerprint() == "pre-existing-value"
+
+
+def test_run_where_every_file_fails_raises_so_the_ui_can_report_it(tmp_path, monkeypatch):
+    # The failures themselves only reach logging.error, i.e. the terminal that
+    # started the server -- not where anyone running the desktop app is
+    # looking. Raising is what puts the run on the channel the web layer
+    # already surfaces (_state["indexing_error"], read by /api/status).
+    (tmp_path / "a.pdf").write_bytes(b"%PDF-1.4")
+    (tmp_path / "b.pdf").write_bytes(b"%PDF-1.4")
+    config = _config()
+    _wire_fakes(monkeypatch, config)
+    monkeypatch.setattr(indexing, "IndexCorpus", _FailingIndexCorpus)
+
+    with pytest.raises(RuntimeError, match="2"):
+        indexing.indexar_documentos(str(tmp_path), _FakeStore(), silent=True)
+
+
+def test_a_run_where_only_some_files_fail_still_writes_the_fingerprint(tmp_path, monkeypatch):
+    # Deliberately unchanged by issue #192: every chunk that did land went
+    # through this config, so the recipe claim holds. Only a run that stored
+    # nothing at all fails to earn the fingerprint.
+    (tmp_path / "ok.pdf").write_bytes(b"%PDF-1.4")
+    (tmp_path / "bad.pdf").write_bytes(b"%PDF-1.4")
+    config = _config()
+    _wire_fakes(monkeypatch, config)
+
+    class _HalfFailingIndexCorpus:
+        def __init__(self, *_a, **_kw):
+            pass
+
+        def run(self, _path, nombre, *_a, **_kw):
+            if nombre == "bad.pdf":
+                raise RuntimeError("extraction failed")
+            return SimpleNamespace(chunks_indexed=3)
+
+    monkeypatch.setattr(indexing, "IndexCorpus", _HalfFailingIndexCorpus)
+    store = _FakeStore()
+
+    total = indexing.indexar_documentos(str(tmp_path), store, silent=True)
+
+    assert total == 3
+    assert store.read_fingerprint() == compute_index_fingerprint(config)
