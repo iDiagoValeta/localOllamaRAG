@@ -638,3 +638,22 @@ def test_a_stale_pump_thread_does_not_leak_its_stderr_into_a_fresh_workers_tail(
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+def test_a_fresh_embedder_is_not_unusable(monkeypatch):
+    # Nothing has died yet -- an embedder whose worker has never started must
+    # not read as retired, or wiring would replace it before its first use.
+    embedder, _calls = _embedder(monkeypatch)
+
+    assert embedder.is_unusable is False
+
+
+def test_an_embedder_whose_worker_died_reports_itself_unusable(monkeypatch):
+    # The signal wiring.embedder reads to build a replacement (issue #191).
+    # The adapter still refuses to respawn on its own; it only says so.
+    embedder, _calls = _embedder(monkeypatch, startup_message="eof")
+
+    with pytest.raises(RuntimeError):
+        embedder.embed("first")
+
+    assert embedder.is_unusable is True

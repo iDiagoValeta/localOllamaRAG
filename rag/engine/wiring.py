@@ -12,6 +12,7 @@ not cheap is cached here instead: the Cross-Encoder weights and the tokenized
 BM25 corpus would otherwise be rebuilt on every question.
 """
 
+import logging
 import threading
 from typing import Any, Dict
 
@@ -126,25 +127,89 @@ def embedder(config: AppConfig):
     instance is unreachable yet pinned alive by its own stdout/stderr pump
     threads once its worker has started, so nothing ever closes it (#46).
 
-    Unlike ``vector_store``/``lexical_index``, this slot is never re-keyed
-    or republished -- there is no corpus- or config-dependent identity to
-    switch, and nothing today ever resets it, so once built it holds the
-    one instance that will ever exist for the process's life. The #57
-    read race (validate one value, return another) has nothing to attach
-    to here. That reasoning is conditional on there staying no
-    invalidation path: a future GPU-release routine that swaps this slot
-    back to ``None`` to free VRAM would reopen the window, and the
-    ``(key, value)`` tuple trick used above would not close it here --
-    returning a locally-captured reference cannot stop a concurrent
-    ``close()`` on the very object it points to. That would need an
-    ownership rule (e.g. refcounting callers, or not invalidating the
-    slot until nothing still holds it), not just an atomic-looking read.
+    This slot is never re-keyed by corpus or config -- there is no
+    config-dependent identity to switch -- but it *is* invalidated in two
+    cases, both added for issue #191:
+
+    1. The cached instance reports ``is_unusable``. ``JinaClipEmbedder``
+       deliberately refuses to respawn its own worker so a crash loop stays
+       visible; its docstring names this caller as the one that builds a
+       replacement. Without that, a worker killed by the OOM killer made
+       every later query fail with "no longer usable" until the whole
+       server was restarted.
+    2. ``release_embedder`` was called (see below).
+
+    Both paths run under ``_embedder_cache_lock``, so two threads that
+    observe the same dead instance produce exactly one replacement rather
+    than two workers competing for the same 8GB card.
+
+    The read race this module's own history warns about (#57: validate one
+    value, return another) applies to invalidation, not to case 1: a
+    locally-captured reference cannot stop a concurrent ``close()`` on the
+    object it points to. Case 1 is safe because the instance being replaced
+    is already dead -- every call on it fails regardless of who holds it, so
+    a concurrent holder loses nothing. Case 2 is not safe in general, which
+    is why ``release_embedder`` has exactly one caller and that caller runs
+    where indexing has already failed; see its docstring.
     """
-    if _embedder_cache["embedder"] is None:
-        with _embedder_cache_lock:
-            if _embedder_cache["embedder"] is None:
-                _embedder_cache["embedder"] = build_embedder(config)
+    cached = _embedder_cache["embedder"]
+    if cached is not None and not _is_unusable(cached):
+        return cached
+
+    with _embedder_cache_lock:
+        cached = _embedder_cache["embedder"]
+        if cached is not None and _is_unusable(cached):
+            _close_quietly(cached)
+            _embedder_cache["embedder"] = cached = None
+        if cached is None:
+            _embedder_cache["embedder"] = build_embedder(config)
     return _embedder_cache["embedder"]
+
+
+def _is_unusable(instance) -> bool:
+    """Whether an embedder has retired itself, for embedders that can say so.
+
+    ``getattr`` rather than an isinstance check: the port is a Protocol and
+    test doubles satisfy it structurally, so an embedder with no opinion on
+    liveness (every double that never dies) reads as usable.
+    """
+    return bool(getattr(instance, "is_unusable", False))
+
+
+def _close_quietly(instance) -> None:
+    """Best-effort ``close()``. Releasing VRAM must never be what raises:
+    refusing to drop a dead instance because its pipes were already gone
+    would strand the very object being replaced."""
+    try:
+        instance.close()
+    except Exception:
+        logging.warning("Failed to close the previous embedder", exc_info=True)
+
+
+def release_embedder() -> None:
+    """Close the cached embedder and empty the slot.
+
+    Exists for one caller: the web layer's background indexing thread, on
+    the path where a run failed (issue #191). A worker that has just failed
+    a whole re-index is holding ~1.7 GiB and nothing is going to use it
+    again, which is what made the *next* attempt fail on memory the previous
+    failure was holding -- naming a PID with no visible connection to
+    anything the user did.
+
+    Deliberately not called after a successful run: that worker is the one
+    the next query will use, and reloading jina-clip costs ~29s.
+
+    Ownership rule, since ``embedder`` above returns a bare reference: only
+    call this where no retrieval can be in flight. The failed-indexing path
+    qualifies because the store it would have queried is empty. This is not
+    a general-purpose "free the GPU" entry point, and adding a second caller
+    means answering the ownership question that docstring raises, not just
+    reusing this one.
+    """
+    with _embedder_cache_lock:
+        instance, _embedder_cache["embedder"] = _embedder_cache["embedder"], None
+    if instance is not None:
+        _close_quietly(instance)
 
 
 def rag_chat_model(config: AppConfig) -> OllamaChatModel:
@@ -490,6 +555,7 @@ __all__ = [
     "rag_chat_model",
     "recomp_chat_model",
     "reranker",
+    "release_embedder",
     "reset_vector_store_cache",
     "retrieval_metrics_to_legacy",
     "vector_store",

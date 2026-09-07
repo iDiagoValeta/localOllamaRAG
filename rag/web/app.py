@@ -175,6 +175,13 @@ def _run_indexing_bg():
     except Exception as e:
         _state["indexing_error"] = str(e)
         _state["indexing_failed"] = True
+        # The worker that just failed a whole re-index is holding ~1.7 GiB and
+        # nothing is going to use it again. Left alive it makes the *next*
+        # attempt fail on memory this failure is holding, blaming a PID with
+        # no visible connection to anything the user did (issue #191). Safe
+        # here specifically: the store this run would have filled is empty, so
+        # no retrieval can be mid-flight against it.
+        rag_engine.release_embedder()
     finally:
         _state["indexing"] = False
         _state["indexing_progress"] = None

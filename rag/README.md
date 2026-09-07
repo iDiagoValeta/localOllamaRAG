@@ -30,6 +30,16 @@ expects. MinerU, Jina CLIP and FAISS are built by the fixed composition root.
 The consequence worth knowing: the web app, desktop wrapper and evaluation
 gate execute the same indexing, retrieval and generation implementations.
 
+`wiring.py` also owns the jina-clip worker's lifetime, since it holds the one
+instance the whole process shares. A worker that dies between calls (the OOM
+killer picks it first, being the largest resident process after the model
+server) is replaced on the next request rather than making every later query
+fail until a restart. The adapter itself still never respawns its own worker,
+so a genuine crash loop stays visible as repeated failures; `wiring` is the
+caller its docstring points at. `release_embedder()` frees that worker after
+an indexing run that failed, where it would otherwise sit on ~1.7 GiB that
+the next attempt needs.
+
 [`engine/settings.py`](engine/settings.py) owns the other half of that
 agreement: the model roles, active store and pipeline flags the web control
 panel saves are read at startup so the session reopens under the user's
