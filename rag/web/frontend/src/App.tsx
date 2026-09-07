@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import {
   Send, FileText, Database, Ollama,
   Search, Layers, Menu, X,
@@ -288,7 +288,7 @@ export default function App() {
     recompSynthesis: true,
   });
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const reindexFileInputRef = useRef<HTMLInputElement>(null);
   const [retryTrigger, setRetryTrigger] = useState(0);
@@ -327,13 +327,36 @@ export default function App() {
   }, [pdfViewer]);
 
   // ---- Scroll to bottom ----
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // Scrolls the container itself rather than calling scrollIntoView on a
+  // zero-height anchor: that anchor sat inside the list's pb-32, so aligning
+  // it left the last message short of the bottom, and scrollIntoView also
+  // walks every scrollable ancestor, which is not what "keep this pane at the
+  // bottom" means.
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
   }, []);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
+
+  // Switching mode swaps the whole conversation at once. Animating that
+  // scroll means racing the incoming messages' own entry animation, and the
+  // smooth scroll settles against heights that are still changing -- which
+  // is what left the conversation part-way up the pane, cut off at the
+  // bottom. A jump is also what the user expects here: they did not scroll,
+  // they changed view, and arriving mid-conversation reads as lost state.
+  //
+  // useLayoutEffect, not useEffect: this runs after the DOM is updated but
+  // before the browser paints, so the new conversation is never shown at the
+  // wrong offset first. requestAnimationFrame would do the same job one frame
+  // later -- visibly, and not at all while the tab is in the background,
+  // where rAF is throttled to a stop.
+  useLayoutEffect(() => {
+    scrollToBottom('auto');
+  }, [mode, scrollToBottom]);
 
   // ---- Initialize on mount ----
   useEffect(() => {
@@ -1158,7 +1181,7 @@ export default function App() {
         </header>
 
         {/* Chat Area */}
-        <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar scroll-smooth relative">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar scroll-smooth relative">
           <div className={`max-w-3xl mx-auto space-y-10 relative z-10 ${mode === 'study' ? 'pb-44' : 'pb-32'}`}>
             <AnimatePresence>
               {messages.length === 0 && !isLoading && (
@@ -1272,7 +1295,6 @@ export default function App() {
                 )}
               </motion.div>
             ))}
-            <div ref={messagesEndRef} />
           </div>
         </div>
 
