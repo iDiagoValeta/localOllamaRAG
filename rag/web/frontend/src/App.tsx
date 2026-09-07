@@ -1050,14 +1050,14 @@ export default function App() {
                           </div>
                           <span className="text-sm text-ink group-hover:text-ink truncate font-medium flex-1 min-w-0">{doc}</span>
                           <button
-                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full text-ink-faint hover:text-ink hover:bg-surface-raised transition-all flex-shrink-0"
+                            className="p-1.5 rounded-full text-ink-faint hover:text-ink hover:bg-surface-raised focus-visible:text-ink transition-all flex-shrink-0"
                             onClick={() => openPdf(doc)}
                             title={T.viewPdf}
                           >
                             <Eye className="w-4 h-4" />
                           </button>
                           <button
-                            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full text-ink-faint hover:text-danger hover:bg-danger/10 transition-all flex-shrink-0 disabled:opacity-50"
+                            className="p-1.5 rounded-full text-ink-faint hover:text-danger hover:bg-danger/10 focus-visible:text-danger transition-all flex-shrink-0 disabled:opacity-50"
                             onClick={() => handleDeleteDoc(doc)}
                             disabled={deletingDoc !== null}
                             title={T.deleteDoc}
@@ -1226,7 +1226,7 @@ export default function App() {
                         )}
                         <button
                           onClick={() => handleCopyMessage(msg)}
-                          className="p-1.5 rounded-full text-ink-faint hover:text-ink hover:bg-surface-raised transition-all opacity-0 group-hover/meta:opacity-100"
+                          className="p-2 rounded-full text-ink-faint hover:text-ink hover:bg-surface-raised focus-visible:text-ink transition-all"
                           title={T.copyMsg}
                         >
                           {copiedId === msg.id ? (
