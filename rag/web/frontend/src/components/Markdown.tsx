@@ -154,8 +154,13 @@ export function MarkdownContent({ text, compact = false }: { text: string; compa
         }
 
         if (lines.every(line => /^\d+\.\s+/.test(line))) {
+          // Start from the number the model actually wrote. Models routinely
+          // separate list items with a blank line, and blocks are split on
+          // exactly that -- so a ten-item list arrives here as ten one-item
+          // blocks, and every one of them restarted at 1.
+          const firstNumber = Number(lines[0].match(/^(\d+)\./)![1]);
           return (
-            <ol key={i}>
+            <ol key={i} start={firstNumber}>
               {lines.map((line, j) => (
                 <li key={j}>{renderInlineMarkdown(line.replace(/^\d+\.\s+/, ''), `ol-${i}-${j}`)}</li>
               ))}
