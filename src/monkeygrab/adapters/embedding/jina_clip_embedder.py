@@ -129,6 +129,26 @@ class JinaClipEmbedder:
 
     # lifecycle
 
+    @property
+    def is_unusable(self) -> bool:
+        """Whether this instance has retired its worker for good.
+
+        Exists so the caller named in the class docstring -- the one that
+        "wants a fresh worker constructs a new JinaClipEmbedder" -- can act on
+        that rule without catching an exception per call or reading a private
+        attribute (issue #191). This adapter still never respawns on its own;
+        deciding to build a replacement stays outside it, which is what keeps
+        a crash loop visible as repeated construction rather than hidden
+        behind an apparently healthy instance.
+
+        A worker that has not started yet reads ``False``: nothing has died.
+        """
+        if self._dead_reason is not None:
+            return True
+        # Death observed only now, between calls -- the same lazy check
+        # _ensure_worker makes, without the side effect of recording it.
+        return self._process is not None and self._process.poll() is not None
+
     def _ensure_worker(self) -> subprocess.Popen:
         if self._process is not None:
             if self._process.poll() is None:
