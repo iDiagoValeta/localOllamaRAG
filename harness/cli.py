@@ -41,16 +41,58 @@ from harness import proposers as proposers_mod
 
 
 def _build_reference():
-    """The ``AppConfig`` the loop's ratchet, feasibility and latency ceiling measure against."""
+    """The ``AppConfig`` the loop's ratchet, feasibility and latency ceiling measure against.
+
+    Built the way the product builds its own: apply the saved choices in
+    ``settings.json``, then convert the resulting runtime globals. Precedence
+    stays environment > ``settings.json`` > module defaults, because
+    ``cargar_ajustes_persistidos`` already skips every role the environment
+    pins (AGENTS.md section 1, rule 7).
+
+    This used to be ``AppConfig.from_env()`` alone, which never read
+    ``settings.json`` -- so on any machine where the model or the pipeline
+    flags had been chosen in the web UI, the loop searched for improvements
+    around a configuration nobody was running. The RUNBOOK's own §1 warns
+    that a campaign already lost hours to exactly this ("a settings.json
+    value nobody had checked"); reading the file is the fix that warning
+    was asking for.
+
+    The engine stack is imported lazily and its absence is tolerated on
+    purpose: the harness is also exercised where the product's dependencies
+    are not installed at all (its own tests run against fake evaluators, in
+    the CI job that installs nothing). That fallback is announced on stderr
+    rather than taken silently -- degrading to a different reference than the
+    one the operator believes they are measuring is the failure this whole
+    docstring is about.
+    """
     import sys as _sys
     from pathlib import Path as _Path
 
-    src = _Path(__file__).resolve().parents[1] / "src"
-    if str(src) not in _sys.path:
-        _sys.path.insert(0, str(src))
-    from monkeygrab.config.app_config import AppConfig
+    root = _Path(__file__).resolve().parents[1]
+    for entry in (root / "src", root):
+        if str(entry) not in _sys.path:
+            _sys.path.insert(0, str(entry))
 
-    return AppConfig.from_env()
+    try:
+        # rag.chat_pdfs first, deliberately: it owns the runtime globals the
+        # two modules below read and write, and importing either of them as
+        # the entry point instead leaves it half-initialised (the same
+        # ordering tests/unit/test_indexing_fingerprint.py documents).
+        import rag.chat_pdfs  # noqa: F401
+        from rag.engine.settings import cargar_ajustes_persistidos
+        from rag.engine.wiring import app_config_from_runtime
+    except ImportError as exc:
+        from monkeygrab.config.app_config import AppConfig
+
+        print(
+            f"NOTE: engine stack unavailable ({exc.name}); the reference comes from the "
+            "environment and module defaults, ignoring any saved settings.json.",
+            file=sys.stderr,
+        )
+        return AppConfig.from_env()
+
+    cargar_ajustes_persistidos()
+    return app_config_from_runtime()
 
 
 def parse_set_overrides(pairs: Sequence[str]) -> Dict[str, Any]:
