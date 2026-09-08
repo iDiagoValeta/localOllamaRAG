@@ -231,8 +231,16 @@ def _gold_cases() -> List[Dict[str, Any]]:
 
 
 def search_set_case_ids() -> Tuple[str, ...]:
-    """Case ids with ``source == "corpus"`` -- the loop's objective (spec section 4)."""
-    return tuple(c["id"] for c in _gold_cases() if c["source"] == "corpus")
+    """Every case that is not blind -- the loop's objective (spec section 4).
+
+    Defined as the complement of the blind set rather than as
+    ``source == "corpus"``: the product grew from one evaluated corpus to
+    three (``corpus``, ``corpus_es``, ``corpus_ca``), and a whitelist would
+    have quietly dropped two thirds of the objective while still looking
+    like it partitioned everything. The blind set is the closed set here --
+    it is the one thing the harness must never request.
+    """
+    return tuple(c["id"] for c in _gold_cases() if c["source"] != "arxiv")
 
 
 def blind_set_case_ids() -> Tuple[str, ...]:

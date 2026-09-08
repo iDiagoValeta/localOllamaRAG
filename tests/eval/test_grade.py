@@ -248,7 +248,16 @@ def test_gold_cases_have_required_fields_for_their_type():
     for case in cases:
         cid = case.get("id", "<missing id>")
         assert case.get("paper"), f"{cid}: missing 'paper'"
-        assert case.get("source") in {"corpus", "arxiv"}, f"{cid}: bad 'source'"
+        # Literal rather than imported from run_eval's EXTRA_DEV_CORPORA,
+        # which is the source of truth: this file runs in the CI job that
+        # installs nothing, and importing run_eval would pull in the engine
+        # stack. Add a corpus there, add it here.
+        assert case.get("source") in {
+            "corpus",
+            "corpus_es",
+            "corpus_ca",
+            "arxiv",
+        }, f"{cid}: bad 'source'"
         if case["source"] == "arxiv":
             assert case.get("arxiv_id"), f"{cid}: source=arxiv requires 'arxiv_id'"
         assert case.get("case_type") in _VALID_CASE_TYPES, f"{cid}: bad 'case_type'"

@@ -1693,6 +1693,17 @@ def evaluate(
                 extra_corpora.append((source, retrieve_x, evidence_x, stack_x))
                 extra_sources[source] = _sources_in_store(stack_x.vector_store)
 
+                # Released as soon as this corpus is indexed, not with the
+                # others further down. Indexing is a use, so it leaves a
+                # jina-clip worker (~3.2 GiB) and a reranker resident, and
+                # with four corpora the accumulation runs the card out before
+                # the third one can even start its worker -- measured, exactly
+                # that, on the first run with es and ca present. Deferring the
+                # release worked while there were two corpora and stops
+                # working the moment there are more, so it is done per corpus
+                # here and the count stops mattering.
+                _release_gpu_models(retrieve_x)
+
             verify_all_papers_indexed(
                 cases,
                 _sources_in_store(stack_dev.vector_store) if stack_dev else set(),

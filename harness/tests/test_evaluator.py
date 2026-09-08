@@ -34,12 +34,27 @@ def test_search_set_and_blind_set_partition_all_gold_cases():
     assert set(ev.search_set_case_ids()).isdisjoint(ev.blind_set_case_ids())
 
 
-def test_every_gold_case_source_is_corpus_or_arxiv():
-    # If a third `source` value ever appears, the two functions above would
-    # silently stop partitioning all cases -- this pins the assumption they
-    # both depend on.
+def test_every_gold_case_source_is_known():
+    # This used to assert sources == {"corpus", "arxiv"}, because the search
+    # set was a whitelist and a third value would have silently stopped the
+    # two functions above from partitioning everything. The search set is now
+    # the complement of the blind set, so that failure mode is gone by
+    # construction -- what is still worth pinning is that no *unknown* source
+    # slips in, since anything not "arxiv" is now silently searched.
+    known = {"corpus", "corpus_es", "corpus_ca", "arxiv"}
     sources = {c["source"] for c in ev._gold_cases()}
-    assert sources == {"corpus", "arxiv"}
+    assert sources <= known, f"unknown gold-case source(s): {sources - known}"
+
+
+def test_the_search_set_covers_every_product_corpus():
+    # The regression the change above is about: two of the product's three
+    # stores were evaluated by the gate but invisible to the loop.
+    searched = set(ev.search_set_case_ids())
+    by_source = {}
+    for c in ev._gold_cases():
+        by_source.setdefault(c["source"], set()).add(c["id"])
+    for source in ("corpus", "corpus_es", "corpus_ca"):
+        assert by_source.get(source, set()) <= searched, f"{source} missing from the search set"
 
 
 def test_fast_tier_loader_rejects_a_blind_set_id(tmp_path):
