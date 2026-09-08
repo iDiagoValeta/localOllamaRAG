@@ -152,10 +152,14 @@ nvidia-smi --query-compute-apps=pid,used_memory --format=csv
 > builds two, and two do not fit (#123). Measured: 32 cases, zero
 > `infrastructure_error`, ~6.6 of 7.6 GiB resident.
 >
-> The practical consequence, plainly: **on a card this size you can run the
-> loop but not the gate.** A candidate the loop accepts still needs the full
-> gate before anyone believes it, and until #123 is resolved that has to
-> happen somewhere with more VRAM.
+> **The gate does fit here too, with `OLLAMA_KEEP_ALIVE=0`.** Measured
+> 2026-09-08 on the 4060 8 GB: all 83 gold cases, both corpora, 79/83 (95.2%)
+> in 20.0 minutes with zero `infrastructure_error`. This section previously
+> said "on a card this size you can run the loop but not the gate", which was
+> written from the 2026-09-01 run that had no keep-alive set; with it, the
+> second embedder starts. #123 is still the reason the workaround is needed at
+> all, and a candidate the loop accepts still needs the gate before anyone
+> believes it -- but that gate run can happen on this machine.
 
 > [!NOTE]
 > A dry-run given `--ledger-dir <a ledger holding anything not marked demo>`
