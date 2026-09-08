@@ -83,6 +83,21 @@ DEV_DOCS_DIR = REPO_ROOT / "rag" / "docs" / "en"
 # this because BLIND_DOCS_DIR's basename already differs from "en".
 EVAL_DEV_LABEL = EVAL_DIR / "dev_docs"
 
+# The other two language stores, evaluated the same way and for the same
+# reason the en store is: they are what the product actually serves. Each gets
+# its own path label for exactly the reason EVAL_DEV_LABEL exists -- deriving
+# the collection from rag/docs/es would hand this gate the store the web UI
+# writes into.
+#
+# Keyed by the case's "source" value, so a case says which corpus answers it
+# and nothing has to infer it from the language: `lang` is the language of the
+# *question*, and the gold set has always had Spanish and Catalan questions
+# asked against English papers.
+EXTRA_DEV_CORPORA = {
+    "corpus_es": (REPO_ROOT / "rag" / "docs" / "es", EVAL_DIR / "dev_docs_es", "dev set (es)"),
+    "corpus_ca": (REPO_ROOT / "rag" / "docs" / "ca", EVAL_DIR / "dev_docs_ca", "dev set (ca)"),
+}
+
 OLLAMA_BASE_URL = "http://localhost:11434"
 
 # The baseline was calibrated with this model. Other models can be measured
@@ -443,12 +458,30 @@ def verify_all_papers_indexed(
     cases: Sequence[Dict[str, Any]],
     dev_sources: set[str],
     blind_sources: set[str],
+    extra_sources: Optional[Dict[str, set]] = None,
 ) -> None:
-    """Final pre-run check: every paper a case references has an index entry."""
+    """Final pre-run check: every paper a case references has an index entry.
+
+    Args:
+        cases: The gold cases about to run.
+        dev_sources: Filenames indexed in the ``corpus`` (en) store.
+        blind_sources: Filenames indexed in the blind store.
+        extra_sources: Filenames indexed per additional dev corpus, keyed by
+            the same ``source`` value the cases carry. A source with no entry
+            here is treated as having nothing indexed, which is what makes a
+            missing corpus fail loudly instead of silently passing.
+    """
+    extra_sources = extra_sources or {}
     missing = []
     for case in cases:
         filename = f"{case['paper']}.pdf"
-        indexed = dev_sources if case["source"] == "corpus" else blind_sources
+        source = case["source"]
+        if source == "corpus":
+            indexed = dev_sources
+        elif source in EXTRA_DEV_CORPORA:
+            indexed = extra_sources.get(source, set())
+        else:
+            indexed = blind_sources
         if filename not in indexed:
             missing.append(f"{case['paper']} ({case['source']})")
     if missing:
@@ -927,6 +960,7 @@ def run_all_cases(
     *,
     stack_dev=None,
     stack_blind=None,
+    extra_corpora: Sequence[tuple] = (),
 ) -> List[Dict[str, Any]]:
     """Run every gold case via ``Retrieve``, retrieving everything before
     generating anything.
@@ -958,8 +992,13 @@ def run_all_cases(
     # Execution order changes, result order does not: records are restored to
     # the caller's case order below, so an artefact from this build is
     # comparable with one from before it.
+    # Extra corpora sit between the two originals rather than after them only
+    # because the order here is already documented as not affecting results;
+    # each is released before the next is touched, which is the property that
+    # matters on an 8 GB card no matter how many there are.
     for corpus_source, retrieve, evidence, stack in (
         ("corpus", retrieve_dev, evidence_dev, stack_dev),
+        *extra_corpora,
         ("arxiv", retrieve_blind, evidence_blind, stack_blind),
     ):
         corpus_cases = [c for c in cases if c["source"] == corpus_source]
@@ -1624,10 +1663,52 @@ def evaluate(
                     _eval_app_config(rag, BLIND_DOCS_DIR, config_overrides=config_overrides)
                 )
 
+            # One entry per extra language store that this run's cases
+            # actually reference. Built after the en and blind stores so the
+            # existing two-corpus path is untouched when no case needs them,
+            # which is every run predating the es/ca corpora.
+            extra_corpora = []
+            extra_sources = {}
+            for source, (docs_dir, path_label, label) in EXTRA_DEV_CORPORA.items():
+                required = set(_required_pdfs(cases, source))
+                if not required:
+                    continue
+                retrieve_x, evidence_x, stack_x = ensure_indexed(
+                    rag,
+                    docs_dir,
+                    required,
+                    label,
+                    path_label=path_label,
+                    config_overrides=config_overrides,
+                )
+                stacks_to_close.append(stack_x)
+                config_effective[source] = dataclasses.asdict(
+                    _eval_app_config(
+                        rag,
+                        docs_dir,
+                        path_label=path_label,
+                        config_overrides=config_overrides,
+                    )
+                )
+                extra_corpora.append((source, retrieve_x, evidence_x, stack_x))
+                extra_sources[source] = _sources_in_store(stack_x.vector_store)
+
+                # Released as soon as this corpus is indexed, not with the
+                # others further down. Indexing is a use, so it leaves a
+                # jina-clip worker (~3.2 GiB) and a reranker resident, and
+                # with four corpora the accumulation runs the card out before
+                # the third one can even start its worker -- measured, exactly
+                # that, on the first run with es and ca present. Deferring the
+                # release worked while there were two corpora and stops
+                # working the moment there are more, so it is done per corpus
+                # here and the count stops mattering.
+                _release_gpu_models(retrieve_x)
+
             verify_all_papers_indexed(
                 cases,
                 _sources_in_store(stack_dev.vector_store) if stack_dev else set(),
                 _sources_in_store(stack_blind.vector_store) if stack_blind else set(),
+                extra_sources=extra_sources,
             )
 
             # Indexing is a use, so it starts each corpus's jina-clip worker
@@ -1642,7 +1723,7 @@ def evaluate(
             # _process to None, and CrossEncoderReranker.release's docstring
             # states "a later rerank simply loads again". Releasing here costs
             # one model load and buys the phase the whole card.
-            _release_gpu_models(retrieve_dev, retrieve_blind)
+            _release_gpu_models(retrieve_dev, retrieve_blind, *[c[1] for c in extra_corpora])
             _release_ollama_models(required_models)
 
             print(
@@ -1654,6 +1735,7 @@ def evaluate(
                     rag, cases, retrieve_dev, retrieve_blind, evidence_dev,
                     evidence_blind, models,
                     stack_dev=stack_dev, stack_blind=stack_blind,
+                    extra_corpora=extra_corpora,
                 )
     finally:
         for stack in stacks_to_close:

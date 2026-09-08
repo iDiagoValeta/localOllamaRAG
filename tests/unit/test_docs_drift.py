@@ -460,7 +460,14 @@ def test_the_tree_parser_actually_found_something():
 _MARKDOWN_LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _EXTERNAL_SCHEMES = ("http://", "https://", "mailto:", "#")
 
-_NOT_REPO_MARKDOWN = frozenset({".venv", ".venv-mineru", "venv", "node_modules", ".git"})
+# .mineru_cache holds extraction output, not documentation: MinerU writes one
+# Markdown file per indexed PDF, and a Wikipedia article converts into hundreds
+# of relative links to images this check knows nothing about. It only started
+# matching when the corpora grew, which is why it is here and not in the
+# original list.
+_NOT_REPO_MARKDOWN = frozenset(
+    {".venv", ".venv-mineru", "venv", "node_modules", ".git", ".mineru_cache"}
+)
 
 
 def _repository_markdown():

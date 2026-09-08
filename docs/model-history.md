@@ -48,6 +48,7 @@ version moved three (see "Stack drift" below).
 | `hf.co/noctrex/OLMoE-1B-7B-0125-Instruct-MXFP4_MOE-GGUF:OLMoE-1B-7B-0125-Instruct-MXFP4_MOE` | MoE, 3.9 GB | **40 / 63** (63.5%) | 7.7 | 212.9 | 66 *(of 51)* | 0.31 | `20260903T143414Z` |
 | `hf.co/noctrex/LFM2-8B-A1B-MXFP4_MOE-GGUF:LFM2-8B-A1B-MXFP4_MOE` | MoE, 4.9 GB | **49 / 63** (77.8%) | 8.2 | 157.7 | 54 *(of 51)* | 0.37 | `20260903T161257Z` |
 | `hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE` *(re-measured)* | MoE, 4.9 GB | **61 / 63** (96.8%) | 7.8 | 110.1 | 16 *(of 51)* | 0.15 | `20260908T130135Z` |
+| `hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE` *(156-case set)* | MoE, 4.9 GB | **120 / 136** (88.2%) | 7.9 | 113.9 | 25 *(of 124)* | 0.22 | `20260908T200256Z` |
 | `hf.co/noctrex/Phi-mini-MoE-instruct-MXFP4_MOE-GGUF:Phi-mini-MoE-instruct-MXFP4_MOE` | MoE, 4.9 GB | **5 / 63** (7.9%) | 51.0 | 87.8 | 229 *(of 13)* | 2.52 | `20260903T180057Z` |
 | `qwen3:30b-a3b` | 30B MoE, 3B active, 18 GB | pending | | | | | in progress |
 | `qwen3:8b` | 8B dense, 5.2 GB | pending | | | | | in progress |
@@ -167,6 +168,19 @@ Then let the tool read the artifact and print the row:
 ```bash
 python tools/diagnostics/model_history_row.py tests/eval/runs/<artifact>.json
 ```
+
+> [!IMPORTANT]
+> **The denominator changed on 2026-09-08.** Runs up to and including
+> `20260908T130135Z` scored 63 answered cases out of an 83-case gold set,
+> built from 6 English papers plus the blind set. From `20260908T200256Z` on
+> it is 136 answered out of 156, over three corpora of 17 documents each --
+> the es and ca stores had never been evaluated at all. Percentages either
+> side of that line are not comparable, and a drop across it is a bigger,
+> harder set rather than a regression. The gate floor moved with it, 0.90 to
+> 0.82, which is the only time in this file's history it has gone down:
+> `--update-baseline` only ever raises, so this one was written by hand,
+> against a conclusive run (zero infrastructure errors) and using the value
+> the tool itself proposed.
 
 It reports the median of `tokens_per_second`, `eval_count` and their quotient
 per model, skipping records that lack the counts — a missing key means the
