@@ -1,0 +1,1096 @@
+{
+  "generated_at": "2026-09-08T09:14:02.985047+00:00",
+  "reference": {
+    "objective_raw": 46,
+    "objective_adjusted": 46,
+    "median_latency_answered_s": 16.16,
+    "median_latency_retrieval_only_s": 7.27,
+    "overrides_applied": {}
+  },
+  "ratchet": 46,
+  "best_iteration": null,
+  "iterations_run": 3,
+  "termination_reason": "patience",
+  "recovery_mode": {
+    "active": false,
+    "baseline_iteration": null,
+    "baseline_objective_adjusted": null,
+    "eligible_history_entries": 0
+  },
+  "environment": {
+    "fingerprint": {
+      "schema": 1,
+      "packages": {
+        "isolated:mineru": "3.4.5",
+        "isolated:transformers": "4.57.6",
+        "isolated:sentence-transformers": "5.6.1",
+        "isolated:torch": "2.6.0+cu124",
+        "isolated:faiss-cpu": null,
+        "isolated:rank-bm25": null,
+        "isolated:ollama": null,
+        "product:mineru": null,
+        "product:transformers": "5.16.1",
+        "product:sentence-transformers": "6.0.1",
+        "product:torch": "2.13.0",
+        "product:faiss-cpu": "1.15.0",
+        "product:rank-bm25": "0.2.2",
+        "product:ollama": "0.6.2"
+      }
+    },
+    "readable": true
+  },
+  "resolution_warning": {
+    "available_search_set_failures": 5,
+    "demonstrability_flip_threshold": 6,
+    "net_flips_under_known_sabotage": 3,
+    "sabotage_description": "RAG_TOP_K_FINAL=1 (single fragment retrieved; criterion 2, 2026-07-29)",
+    "message": "The search set can win at most 5 cases and moved only 3 net flips under a known-catastrophic single-field sabotage, below the ~6-flip threshold design doc section 3 sets for a demonstrable paired difference. An accepted improvement on today's corpus is a candidate for confirmation, not a demonstrated result -- see docs/design/2026-07-28-loop-automejorable.md section 3 and issue #30 (block B, the corpus expansion this harness is sized against)."
+  },
+  "iterations": [
+    {
+      "schema_version": 4,
+      "iteration": 1,
+      "parent_iteration": null,
+      "git_commit": "50877bab5c6c3a41a43284253771faa27f41dd72",
+      "config_overrides": {
+        "retrieval.top_k_final": 4
+      },
+      "effective_config": {
+        "models": {
+          "rag": "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE",
+          "chat": "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE",
+          "contextual": "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE",
+          "recomp": "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE",
+          "desc": "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF",
+          "ollama": {
+            "rag_num_ctx": 16384,
+            "query_num_ctx": 2048,
+            "recomp_num_ctx": 8192,
+            "contextual_num_ctx": 32768,
+            "request_timeout": 900,
+            "keep_alive": 0,
+            "generate_retries": 2,
+            "generate_retry_delay": 3,
+            "base_url": "http://localhost:11434"
+          }
+        },
+        "chunking": {
+          "chunk_size": 2000,
+          "chunk_overlap": 400,
+          "min_chunk_length": 150,
+          "contextual_doc_chars": 24000
+        },
+        "retrieval": {
+          "n_semantic_results": 80,
+          "n_keyword_results": 40,
+          "top_k_rerank_candidates": 200,
+          "top_k_final": 4,
+          "n_top_for_expansion": 3,
+          "rrf_k": 60,
+          "bm25_k1": 1.5,
+          "bm25_b": 0.75,
+          "weight_semantic_rrf": 0.55,
+          "weight_bm25_rrf": 0.45,
+          "min_question_length": 10
+        },
+        "reranking": {
+          "score_threshold": 0.65
+        },
+        "context": {
+          "max_context_chars": 24000
+        },
+        "flags": {
+          "usar_contextual_retrieval": false,
+          "usar_llm_query_decomposition": true,
+          "usar_busqueda_hibrida": true,
+          "usar_reranker": true,
+          "expandir_contexto": true,
+          "usar_optimizacion_contexto": true,
+          "usar_recomp_synthesis": true,
+          "usar_embeddings_imagen": true,
+          "usar_descripcion_imagen": true,
+          "logging_metricas": true,
+          "guardar_debug_rag": true
+        },
+        "paths": {
+          "base_dir": "/home/idiaval/dev/personal/localOllamaRAG/rag",
+          "data_dir": "/home/idiaval/dev/personal/localOllamaRAG/rag",
+          "docs_folder": "/home/idiaval/dev/personal/localOllamaRAG/rag/docs/en",
+          "path_db": "/home/idiaval/dev/personal/localOllamaRAG/rag/vector_db/dev_docs_jina_clip",
+          "collection_name": "docs_dev_docs",
+          "historial_path": "/home/idiaval/dev/personal/localOllamaRAG/rag/historial_chat.json",
+          "max_historial_mensajes": 40,
+          "carpeta_debug_rag": "/home/idiaval/dev/personal/localOllamaRAG/rag/debug_rag"
+        }
+      },
+      "proposer": "grid",
+      "proposer_rationale": null,
+      "proposer_model": null,
+      "proposer_fallback": false,
+      "proposer_fallback_reason": null,
+      "evaluated_case_set": "fast_tier",
+      "case_records": [
+        {
+          "id": "att-bleu-table",
+          "case_type": "table_retrieval",
+          "passed": true,
+          "elapsed_seconds": 19.63,
+          "infrastructure_error": false
+        },
+        {
+          "id": "dpo-pipeline-figure-es",
+          "case_type": "figure_retrieval",
+          "passed": false,
+          "elapsed_seconds": 7.4,
+          "infrastructure_error": false
+        },
+        {
+          "id": "gw-strain-figure",
+          "case_type": "figure_retrieval",
+          "passed": true,
+          "elapsed_seconds": 8.37,
+          "infrastructure_error": false
+        },
+        {
+          "id": "higgs-diphoton-figure",
+          "case_type": "figure_retrieval",
+          "passed": false,
+          "elapsed_seconds": 8.8,
+          "infrastructure_error": false
+        },
+        {
+          "id": "planck-contours-figure",
+          "case_type": "figure_retrieval",
+          "passed": false,
+          "elapsed_seconds": 9.98,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-n-layers",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 14.62,
+          "infrastructure_error": false
+        },
+        {
+          "id": "dpo-acronym",
+          "case_type": "factual_concept",
+          "passed": true,
+          "elapsed_seconds": 16.9,
+          "infrastructure_error": false
+        },
+        {
+          "id": "gw-snr",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 17.83,
+          "infrastructure_error": false
+        },
+        {
+          "id": "gw-site",
+          "case_type": "factual_concept",
+          "passed": false,
+          "elapsed_seconds": 18.44,
+          "infrastructure_error": false
+        },
+        {
+          "id": "higgs-significance",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 16.26,
+          "infrastructure_error": false
+        },
+        {
+          "id": "planck-sigma8-es",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 18.67,
+          "infrastructure_error": false
+        },
+        {
+          "id": "planck-h0-tension",
+          "case_type": "factual_concept",
+          "passed": false,
+          "elapsed_seconds": 17.31,
+          "infrastructure_error": false
+        },
+        {
+          "id": "ricci-hamilton-intro",
+          "case_type": "factual_concept",
+          "passed": true,
+          "elapsed_seconds": 15.34,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-study-outline",
+          "case_type": "study_outline",
+          "passed": true,
+          "elapsed_seconds": 5.81,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-study-summary",
+          "case_type": "study_summary",
+          "passed": true,
+          "elapsed_seconds": 5.85,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-study-quiz",
+          "case_type": "study_quiz",
+          "passed": true,
+          "elapsed_seconds": 6.01,
+          "infrastructure_error": false
+        }
+      ],
+      "summary": {
+        "total": 16,
+        "passed": 11,
+        "pass_rate": 0.6875,
+        "by_case_type": {
+          "table_retrieval": {
+            "total": 1,
+            "passed": 1,
+            "pass_rate": 1.0
+          },
+          "figure_retrieval": {
+            "total": 4,
+            "passed": 1,
+            "pass_rate": 0.25
+          },
+          "factual_number": {
+            "total": 4,
+            "passed": 4,
+            "pass_rate": 1.0
+          },
+          "factual_concept": {
+            "total": 4,
+            "passed": 2,
+            "pass_rate": 0.5
+          },
+          "study_outline": {
+            "total": 1,
+            "passed": 1,
+            "pass_rate": 1.0
+          },
+          "study_summary": {
+            "total": 1,
+            "passed": 1,
+            "pass_rate": 1.0
+          },
+          "study_quiz": {
+            "total": 1,
+            "passed": 1,
+            "pass_rate": 1.0
+          }
+        }
+      },
+      "objective_raw": 11,
+      "objective_adjusted": 11,
+      "median_latency_answered_s": 16.26,
+      "median_latency_retrieval_only_s": 8.8,
+      "reference_median_latency_answered_s": 16.16,
+      "reference_median_latency_retrieval_only_s": 7.27,
+      "latency_ceiling_multiplier": 1.2,
+      "verdict": "rejected_regression",
+      "reason": "fast-tier regression on ['dpo-pipeline-figure-es']",
+      "regression_baseline_iteration": null,
+      "environment_fingerprint": {
+        "schema": 1,
+        "packages": {
+          "isolated:mineru": "3.4.5",
+          "isolated:transformers": "4.57.6",
+          "isolated:sentence-transformers": "5.6.1",
+          "isolated:torch": "2.6.0+cu124",
+          "isolated:faiss-cpu": null,
+          "isolated:rank-bm25": null,
+          "isolated:ollama": null,
+          "product:mineru": null,
+          "product:transformers": "5.16.1",
+          "product:sentence-transformers": "6.0.1",
+          "product:torch": "2.13.0",
+          "product:faiss-cpu": "1.15.0",
+          "product:rank-bm25": "0.2.2",
+          "product:ollama": "0.6.2"
+        }
+      },
+      "evaluator": "real"
+    },
+    {
+      "schema_version": 4,
+      "iteration": 2,
+      "parent_iteration": 1,
+      "git_commit": "50877bab5c6c3a41a43284253771faa27f41dd72",
+      "config_overrides": {
+        "retrieval.top_k_final": 6
+      },
+      "effective_config": {
+        "models": {
+          "rag": "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE",
+          "chat": "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE",
+          "contextual": "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE",
+          "recomp": "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE",
+          "desc": "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF",
+          "ollama": {
+            "rag_num_ctx": 16384,
+            "query_num_ctx": 2048,
+            "recomp_num_ctx": 8192,
+            "contextual_num_ctx": 32768,
+            "request_timeout": 900,
+            "keep_alive": 0,
+            "generate_retries": 2,
+            "generate_retry_delay": 3,
+            "base_url": "http://localhost:11434"
+          }
+        },
+        "chunking": {
+          "chunk_size": 2000,
+          "chunk_overlap": 400,
+          "min_chunk_length": 150,
+          "contextual_doc_chars": 24000
+        },
+        "retrieval": {
+          "n_semantic_results": 80,
+          "n_keyword_results": 40,
+          "top_k_rerank_candidates": 200,
+          "top_k_final": 6,
+          "n_top_for_expansion": 3,
+          "rrf_k": 60,
+          "bm25_k1": 1.5,
+          "bm25_b": 0.75,
+          "weight_semantic_rrf": 0.55,
+          "weight_bm25_rrf": 0.45,
+          "min_question_length": 10
+        },
+        "reranking": {
+          "score_threshold": 0.65
+        },
+        "context": {
+          "max_context_chars": 24000
+        },
+        "flags": {
+          "usar_contextual_retrieval": false,
+          "usar_llm_query_decomposition": true,
+          "usar_busqueda_hibrida": true,
+          "usar_reranker": true,
+          "expandir_contexto": true,
+          "usar_optimizacion_contexto": true,
+          "usar_recomp_synthesis": true,
+          "usar_embeddings_imagen": true,
+          "usar_descripcion_imagen": true,
+          "logging_metricas": true,
+          "guardar_debug_rag": true
+        },
+        "paths": {
+          "base_dir": "/home/idiaval/dev/personal/localOllamaRAG/rag",
+          "data_dir": "/home/idiaval/dev/personal/localOllamaRAG/rag",
+          "docs_folder": "/home/idiaval/dev/personal/localOllamaRAG/rag/docs/en",
+          "path_db": "/home/idiaval/dev/personal/localOllamaRAG/rag/vector_db/dev_docs_jina_clip",
+          "collection_name": "docs_dev_docs",
+          "historial_path": "/home/idiaval/dev/personal/localOllamaRAG/rag/historial_chat.json",
+          "max_historial_mensajes": 40,
+          "carpeta_debug_rag": "/home/idiaval/dev/personal/localOllamaRAG/rag/debug_rag"
+        }
+      },
+      "proposer": "grid",
+      "proposer_rationale": null,
+      "proposer_model": null,
+      "proposer_fallback": false,
+      "proposer_fallback_reason": null,
+      "evaluated_case_set": "fast_tier",
+      "case_records": [
+        {
+          "id": "att-bleu-table",
+          "case_type": "table_retrieval",
+          "passed": true,
+          "elapsed_seconds": 19.72,
+          "infrastructure_error": false
+        },
+        {
+          "id": "dpo-pipeline-figure-es",
+          "case_type": "figure_retrieval",
+          "passed": false,
+          "elapsed_seconds": 7.26,
+          "infrastructure_error": false
+        },
+        {
+          "id": "gw-strain-figure",
+          "case_type": "figure_retrieval",
+          "passed": true,
+          "elapsed_seconds": 8.69,
+          "infrastructure_error": false
+        },
+        {
+          "id": "higgs-diphoton-figure",
+          "case_type": "figure_retrieval",
+          "passed": false,
+          "elapsed_seconds": 8.37,
+          "infrastructure_error": false
+        },
+        {
+          "id": "planck-contours-figure",
+          "case_type": "figure_retrieval",
+          "passed": false,
+          "elapsed_seconds": 10.27,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-n-layers",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 14.86,
+          "infrastructure_error": false
+        },
+        {
+          "id": "dpo-acronym",
+          "case_type": "factual_concept",
+          "passed": true,
+          "elapsed_seconds": 16.65,
+          "infrastructure_error": false
+        },
+        {
+          "id": "gw-snr",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 17.92,
+          "infrastructure_error": false
+        },
+        {
+          "id": "gw-site",
+          "case_type": "factual_concept",
+          "passed": false,
+          "elapsed_seconds": 18.53,
+          "infrastructure_error": false
+        },
+        {
+          "id": "higgs-significance",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 16.41,
+          "infrastructure_error": false
+        },
+        {
+          "id": "planck-sigma8-es",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 18.57,
+          "infrastructure_error": false
+        },
+        {
+          "id": "planck-h0-tension",
+          "case_type": "factual_concept",
+          "passed": false,
+          "elapsed_seconds": 23.17,
+          "infrastructure_error": true
+        },
+        {
+          "id": "ricci-hamilton-intro",
+          "case_type": "factual_concept",
+          "passed": true,
+          "elapsed_seconds": 15.69,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-study-outline",
+          "case_type": "study_outline",
+          "passed": true,
+          "elapsed_seconds": 6.58,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-study-summary",
+          "case_type": "study_summary",
+          "passed": true,
+          "elapsed_seconds": 5.9,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-study-quiz",
+          "case_type": "study_quiz",
+          "passed": true,
+          "elapsed_seconds": 6.46,
+          "infrastructure_error": false
+        }
+      ],
+      "summary": {
+        "total": 16,
+        "passed": 11,
+        "pass_rate": 0.6875,
+        "by_case_type": {
+          "table_retrieval": {
+            "total": 1,
+            "passed": 1,
+            "pass_rate": 1.0
+          },
+          "figure_retrieval": {
+            "total": 4,
+            "passed": 1,
+            "pass_rate": 0.25
+          },
+          "factual_number": {
+            "total": 4,
+            "passed": 4,
+            "pass_rate": 1.0
+          },
+          "factual_concept": {
+            "total": 4,
+            "passed": 2,
+            "pass_rate": 0.5
+          },
+          "study_outline": {
+            "total": 1,
+            "passed": 1,
+            "pass_rate": 1.0
+          },
+          "study_summary": {
+            "total": 1,
+            "passed": 1,
+            "pass_rate": 1.0
+          },
+          "study_quiz": {
+            "total": 1,
+            "passed": 1,
+            "pass_rate": 1.0
+          }
+        }
+      },
+      "objective_raw": 11,
+      "objective_adjusted": 11,
+      "median_latency_answered_s": 16.41,
+      "median_latency_retrieval_only_s": 8.69,
+      "reference_median_latency_answered_s": 16.16,
+      "reference_median_latency_retrieval_only_s": 7.27,
+      "latency_ceiling_multiplier": 1.2,
+      "verdict": "inconclusive",
+      "reason": "fast-tier evaluation carries infrastructure_error record(s) -- not scored",
+      "regression_baseline_iteration": null,
+      "environment_fingerprint": {
+        "schema": 1,
+        "packages": {
+          "isolated:mineru": "3.4.5",
+          "isolated:transformers": "4.57.6",
+          "isolated:sentence-transformers": "5.6.1",
+          "isolated:torch": "2.6.0+cu124",
+          "isolated:faiss-cpu": null,
+          "isolated:rank-bm25": null,
+          "isolated:ollama": null,
+          "product:mineru": null,
+          "product:transformers": "5.16.1",
+          "product:sentence-transformers": "6.0.1",
+          "product:torch": "2.13.0",
+          "product:faiss-cpu": "1.15.0",
+          "product:rank-bm25": "0.2.2",
+          "product:ollama": "0.6.2"
+        }
+      },
+      "evaluator": "real"
+    },
+    {
+      "schema_version": 4,
+      "iteration": 3,
+      "parent_iteration": 2,
+      "git_commit": "50877bab5c6c3a41a43284253771faa27f41dd72",
+      "config_overrides": {
+        "retrieval.top_k_final": 12
+      },
+      "effective_config": {
+        "models": {
+          "rag": "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE",
+          "chat": "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE",
+          "contextual": "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE",
+          "recomp": "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE",
+          "desc": "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF",
+          "ollama": {
+            "rag_num_ctx": 16384,
+            "query_num_ctx": 2048,
+            "recomp_num_ctx": 8192,
+            "contextual_num_ctx": 32768,
+            "request_timeout": 900,
+            "keep_alive": 0,
+            "generate_retries": 2,
+            "generate_retry_delay": 3,
+            "base_url": "http://localhost:11434"
+          }
+        },
+        "chunking": {
+          "chunk_size": 2000,
+          "chunk_overlap": 400,
+          "min_chunk_length": 150,
+          "contextual_doc_chars": 24000
+        },
+        "retrieval": {
+          "n_semantic_results": 80,
+          "n_keyword_results": 40,
+          "top_k_rerank_candidates": 200,
+          "top_k_final": 12,
+          "n_top_for_expansion": 3,
+          "rrf_k": 60,
+          "bm25_k1": 1.5,
+          "bm25_b": 0.75,
+          "weight_semantic_rrf": 0.55,
+          "weight_bm25_rrf": 0.45,
+          "min_question_length": 10
+        },
+        "reranking": {
+          "score_threshold": 0.65
+        },
+        "context": {
+          "max_context_chars": 24000
+        },
+        "flags": {
+          "usar_contextual_retrieval": false,
+          "usar_llm_query_decomposition": true,
+          "usar_busqueda_hibrida": true,
+          "usar_reranker": true,
+          "expandir_contexto": true,
+          "usar_optimizacion_contexto": true,
+          "usar_recomp_synthesis": true,
+          "usar_embeddings_imagen": true,
+          "usar_descripcion_imagen": true,
+          "logging_metricas": true,
+          "guardar_debug_rag": true
+        },
+        "paths": {
+          "base_dir": "/home/idiaval/dev/personal/localOllamaRAG/rag",
+          "data_dir": "/home/idiaval/dev/personal/localOllamaRAG/rag",
+          "docs_folder": "/home/idiaval/dev/personal/localOllamaRAG/rag/docs/en",
+          "path_db": "/home/idiaval/dev/personal/localOllamaRAG/rag/vector_db/dev_docs_jina_clip",
+          "collection_name": "docs_dev_docs",
+          "historial_path": "/home/idiaval/dev/personal/localOllamaRAG/rag/historial_chat.json",
+          "max_historial_mensajes": 40,
+          "carpeta_debug_rag": "/home/idiaval/dev/personal/localOllamaRAG/rag/debug_rag"
+        }
+      },
+      "proposer": "grid",
+      "proposer_rationale": null,
+      "proposer_model": null,
+      "proposer_fallback": false,
+      "proposer_fallback_reason": null,
+      "evaluated_case_set": "search_set",
+      "case_records": [
+        {
+          "id": "att-bleu-table",
+          "case_type": "table_retrieval",
+          "passed": true,
+          "elapsed_seconds": 8.21,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-arch-figure",
+          "case_type": "figure_retrieval",
+          "passed": true,
+          "elapsed_seconds": 6.69,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-arch-figure-es",
+          "case_type": "figure_retrieval",
+          "passed": true,
+          "elapsed_seconds": 7.23,
+          "infrastructure_error": false
+        },
+        {
+          "id": "dpo-pipeline-figure",
+          "case_type": "figure_retrieval",
+          "passed": true,
+          "elapsed_seconds": 7.05,
+          "infrastructure_error": false
+        },
+        {
+          "id": "dpo-pipeline-figure-es",
+          "case_type": "figure_retrieval",
+          "passed": true,
+          "elapsed_seconds": 7.28,
+          "infrastructure_error": false
+        },
+        {
+          "id": "gw-strain-figure",
+          "case_type": "figure_retrieval",
+          "passed": true,
+          "elapsed_seconds": 8.85,
+          "infrastructure_error": false
+        },
+        {
+          "id": "higgs-diphoton-figure",
+          "case_type": "figure_retrieval",
+          "passed": false,
+          "elapsed_seconds": 8.0,
+          "infrastructure_error": false
+        },
+        {
+          "id": "planck-contours-figure",
+          "case_type": "figure_retrieval",
+          "passed": true,
+          "elapsed_seconds": 8.88,
+          "infrastructure_error": false
+        },
+        {
+          "id": "planck-params-table",
+          "case_type": "table_retrieval",
+          "passed": true,
+          "elapsed_seconds": 8.81,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-arch-figure-ca",
+          "case_type": "figure_retrieval",
+          "passed": true,
+          "elapsed_seconds": 6.64,
+          "infrastructure_error": false
+        },
+        {
+          "id": "dpo-pipeline-figure-ca",
+          "case_type": "figure_retrieval",
+          "passed": true,
+          "elapsed_seconds": 6.71,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-bleu-ende",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 27.38,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-bleu-enfr",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 16.46,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-n-layers",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 15.01,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-dmodel",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 16.4,
+          "infrastructure_error": false
+        },
+        {
+          "id": "dpo-acronym",
+          "case_type": "factual_concept",
+          "passed": true,
+          "elapsed_seconds": 15.08,
+          "infrastructure_error": false
+        },
+        {
+          "id": "dpo-no-sampling",
+          "case_type": "factual_concept",
+          "passed": false,
+          "elapsed_seconds": 16.15,
+          "infrastructure_error": false
+        },
+        {
+          "id": "dpo-rlfree",
+          "case_type": "factual_concept",
+          "passed": true,
+          "elapsed_seconds": 13.62,
+          "infrastructure_error": false
+        },
+        {
+          "id": "dpo-model-scale",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 14.85,
+          "infrastructure_error": false
+        },
+        {
+          "id": "gw-snr",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 17.24,
+          "infrastructure_error": false
+        },
+        {
+          "id": "gw-final-mass",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 16.4,
+          "infrastructure_error": false
+        },
+        {
+          "id": "gw-site",
+          "case_type": "factual_concept",
+          "passed": true,
+          "elapsed_seconds": 17.4,
+          "infrastructure_error": false
+        },
+        {
+          "id": "gw-year-es",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 17.19,
+          "infrastructure_error": false
+        },
+        {
+          "id": "higgs-mass",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 16.11,
+          "infrastructure_error": false
+        },
+        {
+          "id": "higgs-significance",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 15.18,
+          "infrastructure_error": false
+        },
+        {
+          "id": "higgs-collider",
+          "case_type": "factual_concept",
+          "passed": true,
+          "elapsed_seconds": 15.32,
+          "infrastructure_error": false
+        },
+        {
+          "id": "higgs-luminosity-es",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 16.35,
+          "infrastructure_error": false
+        },
+        {
+          "id": "planck-h0",
+          "case_type": "factual_number",
+          "passed": false,
+          "elapsed_seconds": 22.07,
+          "infrastructure_error": true
+        },
+        {
+          "id": "planck-omega-m",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 15.27,
+          "infrastructure_error": false
+        },
+        {
+          "id": "planck-sigma8-es",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 17.3,
+          "infrastructure_error": false
+        },
+        {
+          "id": "planck-h0-tension",
+          "case_type": "factual_concept",
+          "passed": false,
+          "elapsed_seconds": 18.09,
+          "infrastructure_error": false
+        },
+        {
+          "id": "ricci-hamilton-intro",
+          "case_type": "factual_concept",
+          "passed": true,
+          "elapsed_seconds": 14.54,
+          "infrastructure_error": false
+        },
+        {
+          "id": "ricci-dimension",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 14.03,
+          "infrastructure_error": false
+        },
+        {
+          "id": "ricci-hamilton-es",
+          "case_type": "factual_concept",
+          "passed": true,
+          "elapsed_seconds": 15.78,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-study-outline",
+          "case_type": "study_outline",
+          "passed": true,
+          "elapsed_seconds": 5.39,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-study-summary",
+          "case_type": "study_summary",
+          "passed": true,
+          "elapsed_seconds": 5.63,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-study-quiz",
+          "case_type": "study_quiz",
+          "passed": true,
+          "elapsed_seconds": 6.57,
+          "infrastructure_error": false
+        },
+        {
+          "id": "planck-study-quiz",
+          "case_type": "study_quiz",
+          "passed": true,
+          "elapsed_seconds": 7.0,
+          "infrastructure_error": false
+        },
+        {
+          "id": "gw-year-ca",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 17.97,
+          "infrastructure_error": false
+        },
+        {
+          "id": "ricci-hamilton-ca",
+          "case_type": "factual_concept",
+          "passed": true,
+          "elapsed_seconds": 19.48,
+          "infrastructure_error": false
+        },
+        {
+          "id": "higgs-luminosity-ca",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 15.64,
+          "infrastructure_error": false
+        },
+        {
+          "id": "planck-sigma8-ca",
+          "case_type": "factual_number",
+          "passed": true,
+          "elapsed_seconds": 16.97,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-study-summary-es",
+          "case_type": "study_summary",
+          "passed": true,
+          "elapsed_seconds": 5.56,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-study-outline-es",
+          "case_type": "study_outline",
+          "passed": true,
+          "elapsed_seconds": 5.67,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-study-quiz-es",
+          "case_type": "study_quiz",
+          "passed": true,
+          "elapsed_seconds": 10.27,
+          "infrastructure_error": false
+        },
+        {
+          "id": "ricci-study-summary-es",
+          "case_type": "study_summary",
+          "passed": true,
+          "elapsed_seconds": 9.39,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-study-summary-ca",
+          "case_type": "study_summary",
+          "passed": true,
+          "elapsed_seconds": 6.75,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-study-outline-ca",
+          "case_type": "study_outline",
+          "passed": true,
+          "elapsed_seconds": 5.01,
+          "infrastructure_error": false
+        },
+        {
+          "id": "att-study-quiz-ca",
+          "case_type": "study_quiz",
+          "passed": true,
+          "elapsed_seconds": 5.72,
+          "infrastructure_error": false
+        },
+        {
+          "id": "gw-study-quiz-ca",
+          "case_type": "study_quiz",
+          "passed": false,
+          "elapsed_seconds": 1521.0,
+          "infrastructure_error": false
+        }
+      ],
+      "summary": {
+        "total": 50,
+        "passed": 45,
+        "pass_rate": 0.9,
+        "by_case_type": {
+          "table_retrieval": {
+            "total": 2,
+            "passed": 2,
+            "pass_rate": 1.0
+          },
+          "figure_retrieval": {
+            "total": 9,
+            "passed": 8,
+            "pass_rate": 0.8889
+          },
+          "factual_number": {
+            "total": 18,
+            "passed": 17,
+            "pass_rate": 0.9444
+          },
+          "factual_concept": {
+            "total": 9,
+            "passed": 7,
+            "pass_rate": 0.7778
+          },
+          "study_outline": {
+            "total": 3,
+            "passed": 3,
+            "pass_rate": 1.0
+          },
+          "study_summary": {
+            "total": 4,
+            "passed": 4,
+            "pass_rate": 1.0
+          },
+          "study_quiz": {
+            "total": 5,
+            "passed": 4,
+            "pass_rate": 0.8
+          }
+        }
+      },
+      "objective_raw": 45,
+      "objective_adjusted": 45,
+      "median_latency_answered_s": 15.32,
+      "median_latency_retrieval_only_s": 7.28,
+      "reference_median_latency_answered_s": 16.16,
+      "reference_median_latency_retrieval_only_s": 7.27,
+      "latency_ceiling_multiplier": 1.2,
+      "verdict": "inconclusive",
+      "reason": "search-set evaluation carries infrastructure_error record(s) -- not scored",
+      "regression_baseline_iteration": null,
+      "environment_fingerprint": {
+        "schema": 1,
+        "packages": {
+          "isolated:mineru": "3.4.5",
+          "isolated:transformers": "4.57.6",
+          "isolated:sentence-transformers": "5.6.1",
+          "isolated:torch": "2.6.0+cu124",
+          "isolated:faiss-cpu": null,
+          "isolated:rank-bm25": null,
+          "isolated:ollama": null,
+          "product:mineru": null,
+          "product:transformers": "5.16.1",
+          "product:sentence-transformers": "6.0.1",
+          "product:torch": "2.13.0",
+          "product:faiss-cpu": "1.15.0",
+          "product:rank-bm25": "0.2.2",
+          "product:ollama": "0.6.2"
+        }
+      },
+      "evaluator": "real"
+    }
+  ]
+}
