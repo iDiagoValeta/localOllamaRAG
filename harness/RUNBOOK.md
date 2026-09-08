@@ -100,15 +100,43 @@ nvidia-smi --query-compute-apps=pid,used_memory --format=csv
 ```
 
 > [!WARNING]
-> **On an 8 GB card, set `OLLAMA_KEEP_ALIVE=0` for the run.** Phase 1 holds
-> two jina-clip workers (one per corpus, ~2.8 GiB each) plus the reranker;
-> with a generator also resident, the second worker cannot start and every
-> blind-set case comes back `infrastructure_error`. Measured 2026-09-01: 19 of
-> 51 cases unevaluable after 28.7 minutes, the whole run discarded
-> (`[gate] INCONCLUSIVE ... this run measured nothing`). Issue #123 has the
-> allocator's own accounting; the keep-alive is a workaround, not a fix, and
-> it makes the run's timings incomparable with ledger history that did not use
-> it.
+> **`OLLAMA_KEEP_ALIVE=0` is for a *gate* run on an 8 GB card. Do not set it
+> for a campaign: it is what ends them.** The distinction is the whole point
+> and it used to be missing from this section, which is how a campaign
+> inherited a gate's workaround.
+>
+> *Why the gate needs it.* A full `run_eval.py` holds two jina-clip workers
+> (one per corpus, ~2.8 GiB each) plus the reranker; with a generator also
+> resident the second worker cannot start and every blind-set case comes back
+> `infrastructure_error`. Measured 2026-09-01: 19 of 51 cases unevaluable after
+> 28.7 minutes, the whole run discarded (`[gate] INCONCLUSIVE ... this run
+> measured nothing`). Issue #123 has the allocator's own accounting.
+>
+> *Why a campaign must not have it.* A campaign builds **one** embedder, not
+> two (see the TIP below), so the condition the workaround exists for never
+> arises. What the keep-alive does instead is force the generator to unload and
+> reload around every call, and on this card some reloads land while jina-clip
+> is still resident and come back `500` from `/api/generate`. A single
+> unevaluable case invalidates its whole iteration and still counts toward
+> `--patience`, so a couple of reproducible ones end the campaign before it
+> compares anything.
+>
+> Measured 2026-09-08, same machine, same reference, same commit, the two runs
+> differing only in this variable:
+>
+> | | `OLLAMA_KEEP_ALIVE=0` | unset |
+> |---|---|---|
+> | `inconclusive` iterations | 2 | 0 |
+> | stopped by | `patience` | `max_iterations` |
+> | reference on the search set | 45/50 (90.0%) | 47/50 (94.0%) |
+> | candidates actually compared | 0 | all of them |
+>
+> The two failing cases (`planck-h0`, `planck-h0-tension`) answer correctly in
+> the product and in a campaign without the variable. Nothing was wrong with
+> them.
+>
+> The keep-alive remains a workaround rather than a fix, and it makes a run's
+> timings incomparable with ledger history that did not use it.
 >
 > Do not run anything else on the card during a campaign, the jina-clip probe
 > in check 4 included. One probe alongside a live run is enough to take it
@@ -221,7 +249,9 @@ as universal is how someone budgets a night for something that takes seven.
 | full search-set evaluation | ~20 min | ~25 min (phase 1 dominates) |
 | fast tier (13 cases) | ~4 min | not measured here |
 
-The 4060 figures are with `OLLAMA_KEEP_ALIVE=0` (see the warning above), which
+The 4060 figures are from a run with `OLLAMA_KEEP_ALIVE=0` (which the warning
+above now restricts to gate runs -- a campaign measured without it answers
+each retrieval-only case faster), which
 is part of why retrieval is slower and generation is not: phase 2 runs with
 the card to itself either way. A candidate rejected at the fast tier costs the
 fast tier only. A night still fits many candidates on either machine — the
