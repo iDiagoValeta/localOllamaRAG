@@ -214,7 +214,10 @@ def test_evaluate_releases_both_stacks_before_the_run_starts(monkeypatch):
     import inspect
 
     source = inspect.getsource(run_eval.evaluate)
-    release_call = source.index("_release_gpu_models(retrieve_dev, retrieve_blind)")
+    # Prefix, not the whole call: the argument list grew when the es/ca dev
+    # corpora were added, and this test is about *when* the release happens,
+    # not about how many stacks it releases.
+    release_call = source.index("_release_gpu_models(retrieve_dev, retrieve_blind")
     run_call = source.index("records = run_all_cases(")
     assert release_call < run_call, (
         "evaluate() must release the indexing stacks BEFORE run_all_cases, or "

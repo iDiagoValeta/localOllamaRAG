@@ -88,6 +88,13 @@ rag/settings.json
 # local -- both were describing an intent nothing enforced, until a `git add -A`
 # committed a whole campaign's ledger.
 harness/ledger/
+
+# Corpus documents fetched by tools/fetch_corpus.py. Their identity lives in
+# rag/docs/corpus_manifest.json, which is versioned; the binaries are not, for
+# the same reason tests/eval/blind_docs is not. A .gitignore rule never applies
+# to a file git already tracks, so the documents committed before the fetcher
+# existed stay versioned exactly as they were.
+rag/docs/*/*.pdf
 rag/monkeygrab_boot.log
 rag/monkeygrab_server.port
 .env

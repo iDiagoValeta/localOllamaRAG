@@ -1,0 +1,52 @@
+{
+  "_comment": "Corpus manifest -- what tools/fetch_corpus.py downloads into rag/docs/<lang>/. See that script's docstring for why the PDFs themselves are not versioned. Wikipedia revids record which revision each case was verified against; the fetcher warns when the live article has moved past it.",
+  "en": {
+    "arxiv": [
+      {"id": "1412.6980", "filename": "adam-optimizer.pdf", "title": "Adam: A Method for Stochastic Optimization"},
+      {"id": "2103.00020", "filename": "clip-visual-models.pdf", "title": "Learning Transferable Visual Models From Natural Language Supervision"},
+      {"id": "1503.02531", "filename": "knowledge-distillation.pdf", "title": "Distilling the Knowledge in a Neural Network"},
+      {"id": "astro-ph/9812133", "filename": "high-redshift-supernovae.pdf", "title": "Measurements of Omega and Lambda from 42 High-Redshift Supernovae"}
+    ],
+    "wikipedia": [
+      {"title": "Photosynthesis", "revid": 1371284103},
+      {"title": "Great Barrier Reef", "revid": 1371796192},
+      {"title": "Roman Empire", "revid": 1373809062},
+      {"title": "Penicillin", "revid": 1368621719},
+      {"title": "Mount Everest", "revid": 1373671372},
+      {"title": "Printing press", "revid": 1373838526},
+      {"title": "Antarctica", "revid": 1373872434}
+    ]
+  },
+  "es": {
+    "wikipedia": [
+      {"title": "Teorema de Pitágoras", "revid": 174709880},
+      {"title": "Fotosíntesis", "revid": 175198350},
+      {"title": "Revolución francesa", "revid": 174942520},
+      {"title": "Miguel de Cervantes", "revid": 175227496},
+      {"title": "Tabla periódica de los elementos", "revid": 174043222},
+      {"title": "Cambio climático", "revid": 175158490},
+      {"title": "Inteligencia artificial", "revid": 175246657},
+      {"title": "Machu Picchu", "revid": 175078416},
+      {"title": "Sistema solar", "revid": 175176716},
+      {"title": "Flamenco", "revid": 173185954},
+      {"title": "Antibiótico", "revid": 174643327},
+      {"title": "Acueducto de Segovia", "revid": 174689335}
+    ]
+  },
+  "ca": {
+    "wikipedia": [
+      {"title": "Antoni Gaudí i Cornet", "revid": 38255090},
+      {"title": "Teoria de la relativitat", "revid": 36441804},
+      {"title": "Àcid desoxiribonucleic", "revid": 38220632},
+      {"title": "Salvador Dalí i Domènech", "revid": 38286233},
+      {"title": "Revolució Industrial", "revid": 38186776},
+      {"title": "Mar Mediterrània", "revid": 38139629},
+      {"title": "Català", "revid": 38320713},
+      {"title": "Energia solar", "revid": 38326894},
+      {"title": "Mercè Rodoreda i Gurguí", "revid": 38343769},
+      {"title": "Sistema immunitari", "revid": 38286403},
+      {"title": "Montserrat", "revid": 38345583},
+      {"title": "Basquetbol", "revid": 37483456}
+    ]
+  }
+}
