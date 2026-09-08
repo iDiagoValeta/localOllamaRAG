@@ -58,6 +58,21 @@ _MARKDOWN_EMPHASIS_RE = re.compile(r"[*_`]+")
 # LaTeX sizing commands (\left(, \right]) carry no literal content.
 _LATEX_SIZING_RE = re.compile(r"\\(left|right)")
 
+# LaTeX typographic wrappers: the command name goes, its braced content stays.
+# Only commands actually followed by a brace match, so semantic commands that
+# carry meaning of their own (\pm, \cdot, \times) are never touched -- this
+# strips how the answer was *set*, never what it says.
+#
+# Without it, "$N = \textbf{6}$" lost its braces but kept the command,
+# leaving "n = \textbf6": the digit welded to letters, matching neither
+# "n = 6" nor "6 identical layers". A correct answer graded as a miss.
+_LATEX_TEXT_STYLE_RE = re.compile(
+    r"\\(?:emph"
+    r"|text(?:bf|it|rm|sf|tt|up|sl|md|normal)?"
+    r"|math(?:bf|it|rm|sf|tt|bb|cal|frak|normal)?"
+    r")(?=\s*\{)"
+)
+
 # Digit, optional spaces, "x", optional spaces, digit -- the spacing around a
 # multiplication sign is typography, not content: "16 x 16" is "16x16".
 _MULTIPLICATION_SPACING_RE = re.compile(r"(\d)\s*[xX]\s*(\d)")
@@ -87,7 +102,7 @@ def _strip_markup(text: str) -> str:
 
     Returns:
         Lowercased text with Markdown emphasis and LaTeX math delimiters,
-        grouping braces and sizing commands removed. Digit-grouping
+        grouping braces, sizing commands and typographic wrappers removed. Digit-grouping
         (thousands separator vs. decimal comma) is left to the caller --
         see ``_normalize`` and ``_normalize_decimal_comma``.
     """
@@ -95,6 +110,8 @@ def _strip_markup(text: str) -> str:
     s = _MARKDOWN_EMPHASIS_RE.sub("", s)
     s = s.replace("$", "")  # LaTeX math delimiters
     s = _LATEX_SIZING_RE.sub("", s)
+    # Before the braces go, or the command name is left glued to its content.
+    s = _LATEX_TEXT_STYLE_RE.sub("", s)
     s = s.replace("{", "").replace("}", "")  # LaTeX grouping braces, e.g. 10^{-4}
     # Multiplication reaches us three ways for the same value: the Unicode sign
     # from a PDF, the LaTeX command from a model writing math, and a plain "x"

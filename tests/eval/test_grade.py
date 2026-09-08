@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from grade import grade_answer, grade_retrieval  # noqa: E402
+from grade import _contains_token, _normalize, grade_answer, grade_retrieval  # noqa: E402
 
 GOLD_FILE = ROOT / "gold_cases.jsonl"
 
@@ -382,3 +382,43 @@ def test_gw_snr_rejects_a_coincidental_number():
     correct = "The signal was observed with a matched-filter signal-to-noise ratio of 24."
     assert not grade_answer(wrong, case)["pass"]
     assert grade_answer(correct, case)["pass"]
+
+
+# LaTeX text-style commands (issue #208)
+
+
+def test_a_bolded_number_still_matches_the_expected_literal():
+    # Observed in a real run: the model answered "$N = \textbf{6}$ identical
+    # layers" -- correct, and graded as a miss. _strip_markup removed the
+    # braces but not the command name, leaving "n = \textbf6": the digit ends
+    # up glued to letters, so neither "n = 6" nor "6 identical layers" can
+    # match. The answer was right; the grader could not see it.
+    answer = "the encoder stack consists of $N = \\textbf{6}$ identical layers"
+
+    assert _contains_token(_normalize(answer), _normalize("n = 6"))
+    assert _contains_token(
+        _normalize(answer), _normalize("6 identical layers")
+    )
+
+
+def test_a_math_wrapped_unit_still_matches():
+    # The other shape the same defect takes, from the Higgs paper's own
+    # notation: \mathrm{} around a unit or a qualifier.
+    answer = "a mass of $126.0 \\pm 0.4 (\\mathrm{stat})$ GeV"
+
+    assert _contains_token(_normalize(answer), _normalize("126.0"))
+    assert _contains_token(_normalize(answer), _normalize("stat"))
+
+
+def test_stripping_a_style_command_does_not_fuse_words():
+    # \textbf must leave the content, not weld it to what precedes it: an
+    # answer saying "figure \textbf{3}" must not read as "figure3", which
+    # would match neither "figure 3" nor "3".
+    assert _normalize("figure \\textbf{3}") == "figure 3"
+
+
+def test_an_unrelated_backslash_command_is_left_alone():
+    # Only typographic wrappers are removed. \pm carries meaning and has no
+    # braced content to unwrap; stripping command names wholesale would
+    # silently rewrite what the answer says.
+    assert "\\pm" in _normalize("0.5 \\pm 0.1") or "±" in _normalize("0.5 \\pm 0.1")
