@@ -37,17 +37,20 @@ ls rag/web/frontend/dist/index.html          # built frontend; app serves a bare
 No `dist/`: `cd rag/web/frontend && pnpm install && pnpm run build` (pnpm only,
 `packageManager` is pinned).
 
-`--check` reports each component separately and never pulls anything. Two of
-its warnings are expected rather than blocking:
+`--check` reports each component separately and never pulls anything. One of
+its warnings is expected rather than blocking:
 
 - **jina-clip "BUSY, not missing"** means the card has no free memory because
   another instance or a resident Ollama model holds it. The install is fine.
   Free the VRAM and re-check.
-- **"missing model(s) for the configured roles"** can be false. It resolves
-  roles from the environment and its own module default, not from
-  `settings.json` (issue #215), so it names a model the app will not use.
-  `curl -s http://127.0.0.1:5000/api/models` is what the app actually resolves;
-  trust that against `ollama list`.
+
+**"missing model(s) for the configured roles"** names a role that genuinely is
+not pulled. It resolves the four roles through the same precedence the app
+does -- environment > `settings.json` > module default -- so a model chosen in
+the web UI is the one it checks for (issue #215; until then it read the
+environment and its own default only, and recommended pulling a model this
+machine would never load). `curl -s http://127.0.0.1:5000/api/models` shows
+the same resolution from the running app.
 
 Ollama does not need starting by hand. `start_ollama_if_needed()` in
 `rag/web/app.py` launches `ollama serve` on a daemon thread at boot when the

@@ -230,9 +230,59 @@ def _check_jina_worker() -> Tuple[bool, str]:
     return False, f"jina-clip: worker produced no ready event (exit {result.returncode})"
 
 
+def _settings_path() -> Path:
+    """Where the app keeps its persisted choices.
+
+    Mirrors ``DATA_DIR`` in ``rag/chat_pdfs.py``: ``MONKEYGRAB_DATA_DIR`` when
+    set, the ``rag/`` package dir otherwise. Duplicated rather than imported
+    because this script and its test must run on the standard library alone --
+    ``rag.engine.settings`` reaches ``rag/chat_pdfs.py`` and pulls torch in.
+    ``TestSettingsLocationDrift`` fails if the product's rule moves.
+    """
+    data_dir = os.getenv("MONKEYGRAB_DATA_DIR") or REPO_ROOT / "rag"
+    return Path(data_dir).resolve() / "settings.json"
+
+
+def _saved_roles() -> dict:
+    """The model roles saved by the web UI, or ``{}`` if unreadable.
+
+    Best-effort like ``rag/engine/settings.py``: a missing or corrupt file
+    leaves the defaults standing rather than failing a check whose job is to
+    report state.
+    """
+    try:
+        # utf-8-sig for the same reason the product reads it that way: the file
+        # may have been hand-edited with a tool that writes a BOM.
+        with open(_settings_path(), "r", encoding="utf-8-sig") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    roles = data.get("roles") if isinstance(data, dict) else None
+    if not isinstance(roles, dict):
+        return {}
+    return {
+        role: model
+        for role, model in roles.items()
+        if isinstance(model, str) and model.strip()
+    }
+
+
 def _configured_models() -> List[str]:
-    """The Ollama models the four roles resolve to, environment first."""
-    return sorted({os.getenv(var, DEFAULT_OLLAMA_MODEL) for var in OLLAMA_ROLE_VARS.values()})
+    """The Ollama models the four roles resolve to.
+
+    Same precedence the product runs under -- environment > ``settings.json`` >
+    module default (``AGENTS.md`` §3). Reading only the first and last was
+    issue #215: it recommended pulling gigabytes of a model this machine would
+    never load, and stayed green when a role saved in the UI named a tag that
+    was not pulled.
+    """
+    saved = _saved_roles()
+    return sorted(
+        {
+            os.getenv(var) or saved.get(role) or DEFAULT_OLLAMA_MODEL
+            for role, var in OLLAMA_ROLE_VARS.items()
+        }
+    )
 
 
 def _check_ollama() -> Tuple[bool, str]:
