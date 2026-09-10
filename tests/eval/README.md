@@ -28,19 +28,41 @@ implementation that happens to live in the test tree.
 
 ## Corpus
 
-Two sets of papers, mixed deliberately:
+Four sources, mixed deliberately (the `source` field in `gold_cases.jsonl`):
 
-- **Dev set** (`source: "corpus"`): the six papers already in `rag/docs/en/`. Their retrieved
-  chunks and reranking behavior are what the pipeline's heuristics were tuned against.
-- **Blind set** (`source: "arxiv"`, `arxiv_id` set): three papers never used to tune anything
-  — ResNet (`1512.03385`), BERT (`1810.04805`), ViT (`2010.11929`). A judge calibrated only on
-  the dev set can't tell "the pipeline retrieves well" from "the pipeline overfits these six
-  PDFs"; the blind set is what makes that distinction possible.
+- **`corpus`** -- the dev set: `rag/docs/en/`, 17 documents. Retrieved chunks and reranking
+  behavior here are what the pipeline's heuristics were tuned against.
+- **`arxiv`** (`arxiv_id` set) -- the blind set: ML papers fetched on demand by
+  `fetch_papers.py`, never used to tune anything. A judge calibrated only on the dev set can't
+  tell "the pipeline retrieves well" from "the pipeline overfits these PDFs"; the blind set is
+  what makes that distinction possible.
+- **`corpus_es`** / **`corpus_ca`** -- the product's own `rag/docs/es/` and `rag/docs/ca/`
+  stores (17 documents each), evaluated the same way and for the same reason `corpus` is: they
+  are what the product actually serves, not a probe of it. Each gets its own isolated FAISS
+  collection (`EXTRA_DEV_CORPORA` in `run_eval.py`), so evaluating them never touches the store
+  the web UI writes into.
+
+Counted directly from `gold_cases.jsonl`: 156 cases, of which 136 reach a generator and 20 are
+retrieval-only (`figure_retrieval` / `table_retrieval`); 85 `en`, 37 `es`, 34 `ca`; 75 cases
+over 17 `corpus` documents, 33 over 6 `arxiv` documents, 24 over 12 `corpus_es` documents, 24
+over 12 `corpus_ca` documents -- not every document in a store has a gold case yet. This is a
+count, not a target: recount it (one `json.loads` per line, a `Counter` over the field you
+care about) rather than trust a number written here if the file has grown since -- a stale
+count transcribed by hand is exactly how this section went stale before (#221).
+
+Some questions are deliberately cross-lingual: 10 `ca` and 13 `es` questions ask about
+`corpus`/`arxiv` (English) documents, not about `corpus_es`/`corpus_ca`. `run_eval.py`'s own
+comment on `EXTRA_DEV_CORPORA` explains why: "the gold set has always had Spanish and Catalan
+questions asked against English papers." `lang` is the question's language, never the
+document's -- `corpus_es`/`corpus_ca` cases are always asked in their own language, but
+`corpus`/`arxiv` mix a majority of `en` questions with that deliberate cross-lingual minority.
 
 Every `accepted_answers` / `expect_kind_any` value was checked by hand against the PDF (see
-each case's `verified_pages` — the physical page numbers, 1-indexed, as read directly from the
+each case's `verified_pages` -- the physical page numbers, 1-indexed, as read directly from the
 source PDF) before being added. A case whose answer could not be confirmed in the text does not
-go in the file.
+go in the file. The three `study_*` case types (see the schema below) are the exception: they
+grade a whole generated artifact against a document, not a literal against a page, so they
+carry no `verified_pages`.
 
 ## Schema (`gold_cases.jsonl`)
 
@@ -49,11 +71,11 @@ One case per line:
 | Field | Meaning |
 |---|---|
 | `id` | Unique, `<paper-slug>-<short-name>`. |
-| `paper` | Paper slug. Matches the corpus filename stem for `source: "corpus"`. |
-| `source` | `"corpus"` (already in `rag/docs/en/`) or `"arxiv"` (fetch first). |
+| `paper` | Paper slug. Matches the corpus filename stem for every `source` but `"arxiv"`. |
+| `source` | `"corpus"` / `"corpus_es"` / `"corpus_ca"` (already in the matching `rag/docs/<lang>/`) or `"arxiv"` (fetch first). |
 | `arxiv_id` | Only when `source == "arxiv"`; passed to `fetch_papers.py`. |
-| `case_type` | `factual_number` \| `factual_concept` \| `figure_retrieval` \| `table_retrieval`. |
-| `lang` | `en` \| `es` — the question's language, not the document's. |
+| `case_type` | `factual_number` \| `factual_concept` \| `figure_retrieval` \| `table_retrieval` \| `study_summary` \| `study_outline` \| `study_quiz`. |
+| `lang` | `en` \| `es` \| `ca` -- the question's language, not the document's. |
 | `question` | The query text (a retrieval query for the two `*_retrieval` types). |
 | `accepted_answers` | List of literals, any one of which counts as correct. Required for the two factual types. |
 | `expect_kind_any` | List among `text`/`table`/`image` — the content kind expected in the top-k. Required for the two retrieval types. |
@@ -63,6 +85,15 @@ One case per line:
 `table` and `image` match the content taxonomy produced by the current MinerU
 indexer. Tables retain their structured HTML and figures are embedded directly
 with Jina CLIP.
+
+The three `study_*` types (issue #140; graded by `grade_study` in `grade.py`) score a whole
+generated artifact against its source document, not a literal against a page -- they carry no
+`question` and no `verified_pages`, since the paper itself is the scope. Each carries its own
+bound instead: `study_summary` needs `min_sections` (optionally `required_all`, terms every
+section's text must mention); `study_outline` needs `min_nodes` (optionally
+`expect_titles_any`, real section titles the outline should hit at least one of);
+`study_quiz` needs `min_questions`. `test_grade.py`'s schema check is the authoritative list of
+what each actually requires.
 
 ## Adding a case
 
@@ -109,13 +140,14 @@ something is missing:
    not Ollama roles.
 2. Downloads any missing blind-set arXiv papers (reusing `fetch_papers.py`)
    and stages them under `blind_docs/<paper-slug>.pdf`.
-3. Indexes whatever is not already indexed -- dev-set papers read from
-   `rag/docs/en/` but stored in the eval's own isolated collection, blind-set
-   papers into their own collection under `blind_docs/` -- via the real
-   `indexar_documentos` pipeline. A paper is reused only when the store's
-   recorded index recipe (chunking, embeddings, index-time flags) matches
-   the configuration this run will use; a changed recipe discards the store
-   and rebuilds it.
+3. Indexes whatever is not already indexed -- dev-set papers for each of the three
+   language stores (`rag/docs/en/`, `rag/docs/es/`, `rag/docs/ca/`) read from the
+   product's own folders but stored in the eval's own isolated collections
+   (`EXTRA_DEV_CORPORA` in `run_eval.py`), blind-set papers into their own collection
+   under `blind_docs/` -- via the real `indexar_documentos` pipeline. A paper is reused
+   only when the store's recorded index recipe (chunking, embeddings, index-time flags)
+   matches the configuration this run will use; a changed recipe discards the store and
+   rebuilds it.
 4. Verifies every paper referenced by a gold case actually has an index
    entry before running anything.
 5. Runs every case through the real retrieval + (for factual cases)
@@ -145,9 +177,108 @@ something is missing:
 Infrastructure failures leave the run inconclusive. Only an unfiltered gold-set
 run (`case_ids is None`, the CLI) is compared against the baseline. A subset
 (the harness search set / fast tier / empty reachability probe) still reports
-`pass_rate` and can raise the baseline when asked, but is not the 51-case gate.
+`pass_rate` and can raise the baseline when asked, but is not the same thing as the
+full, unfiltered run the baseline is calibrated against -- see Corpus above for
+what "full" currently means.
+
+## Experiment standard
+
+`docs/model-history.md` exists so a model choice comes from numbers instead of memory, but a
+row is only worth comparing to another row if both were produced under the same conditions.
+Issue #218 is what happens when that goes unchecked: rows in that table were measured against
+three different gold sets side by side, with nothing in the artifact saying so. This section is
+what "same conditions" means for a `run_eval.py` invocation, so a later row can be trusted
+instead of re-derived from memory.
+
+### What the gate fixes for you
+
+- `flags.usar_contextual_retrieval` is forced to `False` regardless of the running
+  configuration (`_eval_app_config` in `run_eval.py`, the `with_overrides` call right after the
+  full flag block) -- the only one of the nine pipeline flags the gate overrides itself.
+- Generation's `keep_alive` is forced to 120 seconds for the run's duration
+  (`_EVAL_GENERATION_KEEP_ALIVE_SECONDS` in `run_eval.py`), so a cold first call per model is
+  not read as steady-state latency.
+- The `chat`, `contextual` and `recomp` roles are all pinned to `AUX_MODEL` for the whole
+  evaluation (`_scoped_model_roles` around the `evaluate()` call in `run_eval.py`). A
+  `--models` sweep varies only the `rag` role; the query decomposer a sweep might otherwise
+  also swap along with the generator is held fixed.
+
+### What it does not fix -- you have to, from outside
+
+- The other eight pipeline flags inherit whatever `rag/chat_pdfs.py`'s module globals resolve
+  to at import time (environment > `settings.json` > module default, per `AGENTS.md` §3). A
+  flag flipped in the environment or left over in `settings.json` changes the measurement with
+  nothing in the console output saying so.
+- Every numeric parameter -- `RAG_CHUNK_SIZE`, `RAG_TOP_K_FINAL`, `RAG_N_RESULTADOS_SEMANTICOS`,
+  the reranker threshold (`RAG_UMBRAL_SCORE_RERANKER`), the fusion weights
+  (`RAG_PESO_SEMANTICO_RRF` / `RAG_PESO_BM25_RRF`), `OLLAMA_RAG_NUM_CTX` and the rest -- reads
+  an `RAG_*`/`OLLAMA_*` environment variable with a module default in `rag/chat_pdfs.py`. An
+  exported variable changes the run and nothing flags it.
+- Sampling is fixed in code rather than read from the environment, but it still has to match
+  across runs being compared: `RAG_SAMPLING_OPTIONS`, `RECOMP_SAMPLING_OPTIONS` and
+  `QUERY_DECOMPOSER_SAMPLING_OPTIONS` in `rag/engine/wiring.py` set the `rag` role's
+  temperature to 0.15, `recomp` to 0.1, and the decomposer (the `chat` role, the same one
+  pinned to `AUX_MODEL` above) to 0.5.
+
+### Determinism -- the part that matters most
+
+No stage of the pipeline the gate exercises pins a random seed (issue #223); the `conditions`
+block records `"seed": null` because that is what actually happens, not because the field was
+left blank. Three stages sample at non-zero temperature -- the generator under test at 0.15,
+RECOMP synthesis at 0.1, and query decomposition at 0.5 -- and the decomposer is the one that
+matters beyond wording: it runs *before* retrieval, so a different sub-query on an otherwise
+identical run changes which fragments come back, which changes what generation ever sees.
+Variance is not confined to how the final answer happens to be phrased.
+
+The practical consequence: **a row in `docs/model-history.md` is n=1.** A gap of two or three
+cases between two models' pass rates is not distinguishable from resampling the same model
+twice; nothing in this repo currently re-runs a model to check. Treat a difference that size as
+noise, not as a finding, until it is checked against a measured noise floor -- see below, and
+note that the floor on record there needs re-measuring on the current 156-case set before it
+can be used for that check.
+
+### What now gets recorded
+
+Since issue #222, every run artifact under `runs/` carries a `conditions` block: the per-corpus
+`AppConfig` actually used, installed package and Ollama-server versions, GPU info, the git
+commit, a sha256 of `gold_cases.jsonl`, the sampling options per role, `seed: null`, and the
+`keep_alive` in effect. That block is what makes a row in `docs/model-history.md` verifiable
+after the fact instead of merely asserted -- read it with `tools/diagnostics/model_history_row.py`
+before trusting a row. Anything measured before this was added has no such record; treat
+pre-#222 rows as rows of undocumented conditions, not as rows comparable to a later one.
+
+### Adding a row to `docs/model-history.md`
+
+1. Confirm the GPU is actually free. `ollama ps` reporting nothing does **not** mean it is --
+   check `nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv` for who
+   actually holds VRAM, and stop the web app and any other resident model server first.
+2. Watch the console for `[index] <label>: cache hit, ...` for every corpus label, not
+   `indexing N missing paper(s)` or `recipe changed ... discarding and rebuilding`. A reindex
+   mid-run changes what is being measured, not just how long the run takes.
+3. Measure every model that fits in one `--models` invocation, rather than one invocation per
+   model. Retrieval is computed once per case and shared across every model in that invocation
+   (step 5 above), which is what makes the comparison paired instead of two independent
+   samples -- separate invocations give every model its own retrieval draw and lose that.
+   Issue #220 covers the reload cost this causes on an 8 GB card.
+4. Read the resulting artifact with `tools/diagnostics/model_history_row.py
+   tests/eval/runs/<artifact>.json`, not by re-deriving numbers from the console output.
+5. Record the artifact's filename (or timestamp) in the row -- that is what lets someone else
+   open its `conditions` block later and check what was actually measured.
+6. Confirm `infrastructure_errors` is empty in the artifact before treating the run as
+   conclusive; a run that had infrastructure failures answers a different question than the
+   one the row claims to answer.
 
 ## Measuring the noise floor and the gate's sensitivity
+
+The runs cited below are historical, measured 2026-07-29 against a 51-case gold set: six
+English papers as the dev set, three arXiv papers (ResNet, BERT, ViT) as the blind set, `lang`
+limited to `en`/`es`, and four `case_type` values -- not the 156-case, three-language,
+four-source set `gold_cases.jsonl` holds today (see Corpus above). The fractions below
+(`44/51`, `39/51`, `40/51`) belong to that older, smaller set and do not rescale to a
+denominator of 156; nobody has re-run this measurement against the current file. The procedure
+-- run twice, diff with `compare_runs.py` -- is unchanged and is exactly what a fresh
+measurement should still follow; only the numbers already on record here are frozen at the set
+they were measured on.
 
 Both need a GPU machine with Ollama running — the fast CI gate cannot run
 them. `compare_runs.py` itself is pure and is covered by the fast gate.
