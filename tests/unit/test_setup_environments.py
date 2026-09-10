@@ -19,6 +19,7 @@ Standard library only, like the script itself, so this runs in the fast gate's
 dependency-free `architecture` job.
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -40,17 +41,137 @@ class TestInterpreterLayout:
         assert setup._venv_python(tmp_path) == tmp_path / "bin" / "python"
 
 
+def _installed_models(monkeypatch, names):
+    """Double Ollama's ``/api/tags`` with the models it would report."""
+    payload = json.dumps({"models": [{"name": name} for name in names]}).encode("utf-8")
+
+    class _Response:
+        def read(self):
+            return payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(setup.urllib.request, "urlopen", lambda *a, **k: _Response())
+
+
+def _no_saved_settings(monkeypatch, tmp_path):
+    """Point the data dir at an empty directory, so no settings.json is found.
+
+    Without this the tests below read the repo's own ``rag/settings.json`` and
+    assert against whatever this machine happens to have saved.
+    """
+    monkeypatch.setenv("MONKEYGRAB_DATA_DIR", str(tmp_path))
+
+
+def _saved_settings(monkeypatch, tmp_path, roles):
+    """Write a settings.json holding ``roles`` and point the data dir at it."""
+    monkeypatch.setenv("MONKEYGRAB_DATA_DIR", str(tmp_path))
+    (tmp_path / "settings.json").write_text(
+        json.dumps({"roles": roles, "active_store": "ca"}), encoding="utf-8"
+    )
+
+
 class TestConfiguredModels:
-    def test_defaults_to_one_model_for_all_four_roles(self, monkeypatch):
+    def test_defaults_to_one_model_for_all_four_roles(self, monkeypatch, tmp_path):
+        _no_saved_settings(monkeypatch, tmp_path)
         for var in setup.OLLAMA_ROLE_VARS.values():
             monkeypatch.delenv(var, raising=False)
         assert setup._configured_models() == [setup.DEFAULT_OLLAMA_MODEL]
 
-    def test_the_environment_decides_and_duplicates_collapse(self, monkeypatch):
+    def test_the_environment_decides_and_duplicates_collapse(self, monkeypatch, tmp_path):
+        _no_saved_settings(monkeypatch, tmp_path)
         for var in setup.OLLAMA_ROLE_VARS.values():
             monkeypatch.setenv(var, "small:model")
         monkeypatch.setenv("OLLAMA_RAG_MODEL", "big:model")
         assert setup._configured_models() == ["big:model", "small:model"]
+
+
+class TestSavedRolesArePartOfThePrecedence:
+    """Issue #215. The check must resolve roles the way the product does.
+
+    Reading environment-then-module-default skipped the middle term and was
+    wrong in both directions: it named a model this machine would never load,
+    and it stayed silent about a saved role that was not pulled.
+    """
+
+    def test_the_saved_roles_are_what_gets_checked(self, monkeypatch, tmp_path):
+        _saved_settings(monkeypatch, tmp_path, {role: "saved:model" for role in setup.OLLAMA_ROLE_VARS})
+        for var in setup.OLLAMA_ROLE_VARS.values():
+            monkeypatch.delenv(var, raising=False)
+        assert setup._configured_models() == ["saved:model"]
+
+    def test_the_environment_still_outranks_a_saved_role(self, monkeypatch, tmp_path):
+        _saved_settings(monkeypatch, tmp_path, {role: "saved:model" for role in setup.OLLAMA_ROLE_VARS})
+        monkeypatch.delenv("OLLAMA_CHAT_MODEL", raising=False)
+        monkeypatch.delenv("OLLAMA_CONTEXTUAL_MODEL", raising=False)
+        monkeypatch.delenv("OLLAMA_RECOMP_MODEL", raising=False)
+        monkeypatch.setenv("OLLAMA_RAG_MODEL", "pinned:model")
+        assert setup._configured_models() == ["pinned:model", "saved:model"]
+
+    def test_a_role_saved_without_a_value_falls_through_to_the_default(
+        self, monkeypatch, tmp_path
+    ):
+        _saved_settings(monkeypatch, tmp_path, {"rag": "  ", "chat": "saved:model"})
+        for var in setup.OLLAMA_ROLE_VARS.values():
+            monkeypatch.delenv(var, raising=False)
+        assert setup._configured_models() == [setup.DEFAULT_OLLAMA_MODEL, "saved:model"]
+
+    def test_a_corrupt_settings_file_leaves_the_defaults_standing(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("MONKEYGRAB_DATA_DIR", str(tmp_path))
+        (tmp_path / "settings.json").write_text("{not json", encoding="utf-8")
+        for var in setup.OLLAMA_ROLE_VARS.values():
+            monkeypatch.delenv(var, raising=False)
+        assert setup._configured_models() == [setup.DEFAULT_OLLAMA_MODEL]
+
+    def test_a_saved_role_that_is_not_pulled_is_reported_missing(self, monkeypatch, tmp_path):
+        """The false negative: green while the run is going to fail at first use."""
+        _saved_settings(monkeypatch, tmp_path, {role: "saved:model" for role in setup.OLLAMA_ROLE_VARS})
+        for var in setup.OLLAMA_ROLE_VARS.values():
+            monkeypatch.delenv(var, raising=False)
+        _installed_models(monkeypatch, ["something:else"])
+
+        passed, message = setup._check_ollama()
+        assert not passed
+        assert "ollama pull saved:model" in message
+
+    def test_a_saved_role_that_is_pulled_is_reported_present(self, monkeypatch, tmp_path):
+        """The false positive: told to pull gigabytes it already has."""
+        _saved_settings(monkeypatch, tmp_path, {role: "saved:model" for role in setup.OLLAMA_ROLE_VARS})
+        for var in setup.OLLAMA_ROLE_VARS.values():
+            monkeypatch.delenv(var, raising=False)
+        _installed_models(monkeypatch, ["saved:model"])
+
+        passed, message = setup._check_ollama()
+        assert passed
+        assert setup.DEFAULT_OLLAMA_MODEL not in message
+
+
+class TestSettingsLocationDrift:
+    """The settings path is duplicated here; this is what stops it drifting.
+
+    ``_settings_path`` cannot import the product to ask where the file lives --
+    the fast gate's architecture job runs on the standard library alone. So the
+    rule is copied, and copied rules go stale silently. Reading the product's
+    own line back is the cheapest thing that fails loudly when it moves.
+    """
+
+    def test_the_product_still_derives_its_data_dir_the_way_this_script_assumes(self):
+        source = (REPO_ROOT / "rag" / "chat_pdfs.py").read_text(encoding="utf-8")
+        assert 'DATA_DIR = os.path.abspath(os.getenv("MONKEYGRAB_DATA_DIR", BASE_DIR))' in source
+        assert "BASE_DIR = os.path.dirname(os.path.abspath(__file__))" in source
+
+    def test_the_product_still_defaults_every_role_to_the_model_this_script_names(self):
+        source = (REPO_ROOT / "rag" / "chat_pdfs.py").read_text(encoding="utf-8")
+        for var in setup.OLLAMA_ROLE_VARS.values():
+            assert f'os.getenv("{var}", "{setup.DEFAULT_OLLAMA_MODEL}")' in source
+
+    def test_the_path_lands_on_the_repo_settings_file_by_default(self, monkeypatch):
+        monkeypatch.delenv("MONKEYGRAB_DATA_DIR", raising=False)
+        assert setup._settings_path() == REPO_ROOT / "rag" / "settings.json"
 
 
 class TestReporting:
