@@ -108,9 +108,11 @@ media/
 .cursor/
 AGENTS.md
 # Assistant instructions for this project are versioned so any clone (or CI
-# runner) picks them up; local session state and scratch files are not. This
-# block stays last: a later rule would otherwise re-ignore the file.
+# runner) picks them up; local session state and scratch files are not. Skills
+# are instructions too: a runbook only pays off if the next clone has it. This
+# block stays last: a later rule would otherwise re-ignore the files.
 CLAUDE.md
 .claude/*
 !.claude/CLAUDE.md
+!.claude/skills/
 **/.claude/settings.local.json

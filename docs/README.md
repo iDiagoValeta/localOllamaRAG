@@ -10,6 +10,7 @@
 | `harness/RUNBOOK.md` | An agent or person about to run a loop campaign: the procedure, the decision points, what each verdict means. Procedure only — the reasoning lives in `harness/README.md`. |
 | `docs/model-history.md` | Which models have been measured, on what corpus and how fast — append-only, one row per run, so a later choice comes from numbers instead of memory. |
 | `docs/design/*.md` | Current standing design decisions and their rationale; update them when architecture changes. |
+| `.claude/skills/*/SKILL.md` | An agent about to run something in this repo: the procedure, and how to tell a healthy run from a broken one. Procedure only, the same split `harness/RUNBOOK.md` makes. Never a second copy of `AGENTS.md`. |
 | Directory-local `README.md` | Only where a directory's purpose isn't obvious from its code — not one per folder by default. |
 
 ## What is NOT documented

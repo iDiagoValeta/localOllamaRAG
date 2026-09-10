@@ -88,6 +88,7 @@ tools/                    Repo tooling, not product: setup_environments.py (both
 assets/                   Images the READMEs embed
 docs/design/               Architecture design docs; current: 2026-07-26-monkeygrab-v2.md
 docs/README.md             Documentation standard
+.claude/skills/            Executable runbooks (run-local); procedure only, never a copy of this contract
 ```
 
 **Wiring today, not aspirational:**
@@ -206,6 +207,7 @@ Items 1–5 of §6 apply here too. What differs:
 **Two `.gitignore` files only:** root + `rag/web/frontend/`. No scattered `.gitignore`. Version the minimum needed to reproduce the product — code, `Modelfile`, small metric JSONs, scripts, corpus PDFs — never weights or vector indices.
 
 - **`rag/docs/`** — all corpora versioned (`es/`, `ca/`, `en/`). `rag/vector_db/` fully ignored. Local scratch results under `pipeline/output/` are ignored.
+- **`.claude/`** — instructions and skills are versioned (`CLAUDE.md`, `skills/`) so a clone or CI runner picks them up; everything else there, `settings.local.json` included, stays local.
 
 ---
 
