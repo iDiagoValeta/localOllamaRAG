@@ -128,7 +128,12 @@ something is missing:
    generator at all.
 6. Writes a dated JSON report to `runs/<timestamp>.json` (per-case detail:
    pass/fail, timing, and on failure the generated answer and retrieved
-   fragments) plus a console summary by case type and by model.
+   fragments) plus a console summary by case type and by model. The report
+   also carries a `conditions` block recording what produced that pass rate
+   -- the per-corpus `AppConfig` (chunking, retrieval, flags), sampling
+   parameters per Ollama role, installed stack versions, GPU, git commit and
+   a hash of `gold_cases.jsonl` -- so two runs measured under different
+   setups are distinguishable from the files alone (issue #222).
 7. Compares the overall pass rate against `baseline_min_pass_rate.txt` and
    exits non-zero if it dropped -- that comparison is the gate. `--update-baseline`
    additionally raises the file to `pass_rate - 0.05` (rounded down to the

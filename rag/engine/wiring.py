@@ -52,6 +52,31 @@ _RUNTIME_OVERRIDES = {
     "flags.guardar_debug_rag": "GUARDAR_DEBUG_RAG",
 }
 
+# Sampling options per Ollama role, used verbatim by the three builders below.
+# Pulled out as module constants (issue #222) so the eval artifact can record
+# exactly what a run used instead of a second, hand-copied literal living in
+# tests/eval/run_eval.py.
+RAG_SAMPLING_OPTIONS: Dict[str, Any] = {
+    "temperature": 0.15,
+    "top_p": 0.9,
+    "repeat_penalty": 1.15,
+    "repeat_last_n": 64,
+    "num_predict": -1,
+}
+
+RECOMP_SAMPLING_OPTIONS: Dict[str, Any] = {
+    "temperature": 0.1,
+    "num_predict": 1500,
+    "top_p": 0.9,
+    "repeat_penalty": 1.15,
+}
+
+QUERY_DECOMPOSER_SAMPLING_OPTIONS: Dict[str, Any] = {
+    "temperature": 0.5,
+    "num_predict": 400,
+    "stop": ["\n\n\n"],
+}
+
 
 def app_config_from_runtime() -> AppConfig:
     """Build an ``AppConfig`` reflecting the current runtime state.
@@ -231,13 +256,7 @@ def rag_chat_model(config: AppConfig) -> OllamaChatModel:
         request_timeout=ollama.request_timeout,
         generate_retries=ollama.generate_retries,
         generate_retry_delay=ollama.generate_retry_delay,
-        options={
-            "temperature": 0.15,
-            "top_p": 0.9,
-            "repeat_penalty": 1.15,
-            "repeat_last_n": 64,
-            "num_predict": -1,
-        },
+        options=RAG_SAMPLING_OPTIONS,
         base_url=ollama.base_url,
         model_unloader=OllamaModelUnloader(config.models, base_url=ollama.base_url),
     )
@@ -253,12 +272,7 @@ def recomp_chat_model(config: AppConfig) -> OllamaChatModel:
         request_timeout=ollama.request_timeout,
         generate_retries=ollama.generate_retries,
         generate_retry_delay=ollama.generate_retry_delay,
-        options={
-            "temperature": 0.1,
-            "num_predict": 1500,
-            "top_p": 0.9,
-            "repeat_penalty": 1.15,
-        },
+        options=RECOMP_SAMPLING_OPTIONS,
         base_url=ollama.base_url,
     )
 
@@ -282,7 +296,7 @@ def query_decomposer(config: AppConfig) -> OllamaChatModel:
         request_timeout=ollama.request_timeout,
         generate_retries=ollama.generate_retries,
         generate_retry_delay=ollama.generate_retry_delay,
-        options={"temperature": 0.5, "num_predict": 400, "stop": ["\n\n\n"]},
+        options=QUERY_DECOMPOSER_SAMPLING_OPTIONS,
         base_url=ollama.base_url,
     )
 

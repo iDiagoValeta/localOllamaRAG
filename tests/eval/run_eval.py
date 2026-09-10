@@ -1214,6 +1214,172 @@ def _update_baseline(pass_rate: float) -> None:
     )
 
 
+# RUN CONDITIONS (issue #222)
+
+# Distribution name importlib.metadata.version() takes for each package this
+# run cares about -- the PyPI name, not always the import name (faiss ships as
+# faiss-cpu; see rag/requirements.txt). MinerU normally lives in the isolated
+# .venv-mineru, not in the interpreter running this script, so reading back
+# None for it there is the degrade this dict exists to make legible, not a
+# bug in the lookup.
+_VERSION_PACKAGES = {
+    "mineru": "mineru",
+    "sentence_transformers": "sentence-transformers",
+    "torch": "torch",
+    "transformers": "transformers",
+    "faiss": "faiss-cpu",
+}
+
+
+def _package_version(distribution: str) -> Optional[str]:
+    """Installed version of a PyPI distribution, or None if it is not installed.
+
+    Reads package metadata only -- never imports the package, so this is
+    cheap even for torch and never triggers a CUDA init.
+    """
+    import importlib.metadata
+
+    try:
+        return importlib.metadata.version(distribution)
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
+def _ollama_server_version() -> Optional[str]:
+    """Ollama server version, via the same /api/ endpoint family preflight uses.
+
+    Best-effort, like _release_ollama_models: this runs after the pipeline has
+    already produced real pass/fail results, so a version lookup failing must
+    not cost the run its report.
+    """
+    import requests
+
+    try:
+        response = requests.get(f"{OLLAMA_BASE_URL}/api/version", timeout=5)
+        response.raise_for_status()
+        return response.json().get("version")
+    except Exception:  # noqa: BLE001 - best-effort, see docstring
+        return None
+
+
+def _gpu_info() -> Dict[str, Optional[Any]]:
+    """GPU name and total VRAM, read the cheapest way available.
+
+    Prefers torch.cuda when torch is already imported -- true for a real run
+    by the time this executes, since retrieval/generation already pulled it
+    in -- so this never pays torch's own import cost. Falls back to
+    nvidia-smi when torch was never loaded (e.g. a case_ids subset with
+    nothing to index). Either path degrades to None rather than raising.
+    """
+    torch = sys.modules.get("torch")
+    if torch is not None:
+        try:
+            if torch.cuda.is_available():
+                props = torch.cuda.get_device_properties(0)
+                return {
+                    "name": props.name,
+                    "vram_total_mib": round(props.total_memory / 2**20),
+                }
+        except Exception:  # noqa: BLE001 - best-effort, see docstring
+            pass
+        return {"name": None, "vram_total_mib": None}
+
+    import subprocess
+
+    try:
+        output = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5, check=True,
+        ).stdout.strip().splitlines()[0]
+        name, vram = (part.strip() for part in output.split(","))
+        return {"name": name, "vram_total_mib": int(vram)}
+    except Exception:  # noqa: BLE001 - best-effort, see docstring
+        return {"name": None, "vram_total_mib": None}
+
+
+def _git_info() -> Dict[str, Optional[Any]]:
+    """Short HEAD hash and whether the working tree is dirty.
+
+    Two separate subprocess calls rather than one combined format, so a
+    shallow clone or detached HEAD that breaks the dirty check does not also
+    lose the commit hash.
+    """
+    import subprocess
+
+    def _git(args: List[str]) -> str:
+        return subprocess.run(
+            ["git", *args], cwd=REPO_ROOT, capture_output=True, text=True,
+            timeout=5, check=True,
+        ).stdout.strip()
+
+    try:
+        commit_hash = _git(["rev-parse", "--short", "HEAD"])
+    except Exception:  # noqa: BLE001 - best-effort, see docstring
+        return {"hash": None, "dirty": None}
+
+    try:
+        dirty: Optional[bool] = bool(_git(["status", "--porcelain"]))
+    except Exception:  # noqa: BLE001 - best-effort, see docstring
+        dirty = None
+
+    return {"hash": commit_hash, "dirty": dirty}
+
+
+def _gold_cases_sha256() -> Optional[str]:
+    """SHA-256 of gold_cases.jsonl -- an edit that keeps the case count changes this."""
+    import hashlib
+
+    try:
+        return hashlib.sha256(GOLD_FILE.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def _run_conditions(
+    config_effective: Dict[str, Any],
+    sampling: Dict[str, Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Everything that decides what a pass rate means, gathered in one block.
+
+    Additive to the artifact: none of this feeds grading, it only lets two
+    runs that used a different AppConfig, flag, sampling parameter or stack
+    version be told apart after the fact -- which the eight fields the
+    artifact carried before this could not do (issue #222). Every sub-lookup
+    degrades to None on its own instead of raising: the pipeline has already
+    produced real pass/fail results by the time this runs, and losing the
+    report over, say, a missing nvidia-smi would throw those away for
+    nothing.
+
+    Args:
+        config_effective: The per-corpus AppConfig dict evaluate() already
+            builds via dataclasses.asdict() -- its own "config" return value,
+            reused rather than rebuilt so there is exactly one place that
+            turns runtime state into this shape.
+        sampling: Per-role sampling options. Read by the caller from
+            rag.engine.wiring's module constants and passed in rather than
+            imported here, so this function needs no engine import of its
+            own and stays testable with a plain dict.
+
+    Returns:
+        The "conditions" block written into the run artifact.
+    """
+    versions = {key: _package_version(dist) for key, dist in _VERSION_PACKAGES.items()}
+    versions["ollama_server"] = _ollama_server_version()
+    return {
+        "config": config_effective,
+        "versions": versions,
+        "hardware": _gpu_info(),
+        "git_commit": _git_info(),
+        "gold_sha256": _gold_cases_sha256(),
+        "sampling": sampling,
+        # No run has ever pinned a generation seed (issue #223) -- explicit
+        # None so a future reader learns that from the artifact instead of
+        # having to read the pipeline source to find out.
+        "seed": None,
+        "keep_alive_seconds": int(_EVAL_GENERATION_KEEP_ALIVE_SECONDS),
+    }
+
+
 # LIBRARY API
 
 # The dotted AppConfig keys evaluate()'s threaded config_overrides carries end
@@ -1754,6 +1920,17 @@ def evaluate(
         RESULTS_DIR.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         report_path = RESULTS_DIR / f"{timestamp}_{stack_slug}.json"
+        # rag.engine.wiring is already loaded by this point -- evaluate() has
+        # gone through generation to get here -- so this costs nothing. It
+        # stays deferred rather than a top-level import so run_eval.py keeps
+        # importing with nothing but the standard library when this function
+        # is never called (see e.g. test_preflight_model_tags.py).
+        from rag.engine.wiring import (
+            QUERY_DECOMPOSER_SAMPLING_OPTIONS,
+            RAG_SAMPLING_OPTIONS,
+            RECOMP_SAMPLING_OPTIONS,
+        )
+
         report_path.write_text(
             json.dumps(
                 {
@@ -1769,6 +1946,22 @@ def evaluate(
                     },
                     "summary": summary,
                     "results": records,
+                    # Sibling to "run", not nested inside it (issue #222):
+                    # "run" answers "what happened" (models, counts), this
+                    # answers "under what setup" -- separate questions with
+                    # separate readers. Neither existing reader is touched:
+                    # tools/diagnostics/model_history_row.py only reads
+                    # "results" and "run"/"id", and tests/eval/compare_runs.py
+                    # only reads "results" -- both ignore an unknown sibling
+                    # key by construction.
+                    "conditions": _run_conditions(
+                        config_effective,
+                        sampling={
+                            "rag": dict(RAG_SAMPLING_OPTIONS),
+                            "chat": dict(QUERY_DECOMPOSER_SAMPLING_OPTIONS),
+                            "recomp": dict(RECOMP_SAMPLING_OPTIONS),
+                        },
+                    ),
                 },
                 indent=2,
                 ensure_ascii=False,

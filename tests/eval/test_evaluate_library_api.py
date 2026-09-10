@@ -107,6 +107,12 @@ def _stub_pipeline(monkeypatch):
     monkeypatch.setattr(run_eval, "preflight_ollama", lambda *_a, **_kw: None)
     monkeypatch.setattr(run_eval, "stage_blind_papers", lambda cases: {})
     monkeypatch.setattr(run_eval, "verify_all_papers_indexed", lambda *_a, **_kw: None)
+    # write_report=True now also builds the "conditions" block (issue #222),
+    # which otherwise makes a real HTTP call to Ollama and a real nvidia-smi
+    # subprocess call -- neither belongs in a test that doubles the rest of
+    # the pipeline.
+    monkeypatch.setattr(run_eval, "_ollama_server_version", lambda: None)
+    monkeypatch.setattr(run_eval, "_gpu_info", lambda: {"name": None, "vram_total_mib": None})
     previous_roles = rag.chat_pdfs.get_model_roles()
     previous_flags = rag.chat_pdfs.get_pipeline_flags()
     yield
@@ -300,6 +306,79 @@ def test_write_report_true_writes_the_expected_json(monkeypatch, tmp_path):
     assert result["report_path"] == str(files[0])
     payload = json.loads(files[0].read_text(encoding="utf-8"))
     assert payload["run"]["num_cases"] == 1
+
+
+def test_write_report_includes_the_conditions_block(monkeypatch, tmp_path):
+    """Issue #222: the artifact must record what produced its pass rate, not
+    only the pass rate itself."""
+    monkeypatch.setattr(run_eval, "RESULTS_DIR", tmp_path)
+    _capture_ensure_indexed(monkeypatch, [])
+    _capture_run_all_cases(monkeypatch, [])
+
+    result = evaluate(models=["m"], case_ids=[_DEV_CASE_ID], write_report=True)
+
+    payload = json.loads(Path(result["report_path"]).read_text(encoding="utf-8"))
+    conditions = payload["conditions"]
+    assert set(conditions) == {
+        "config", "versions", "hardware", "git_commit", "gold_sha256",
+        "sampling", "seed", "keep_alive_seconds",
+    }
+    assert conditions["seed"] is None
+    assert conditions["keep_alive_seconds"] == int(run_eval._EVAL_GENERATION_KEEP_ALIVE_SECONDS)
+    assert len(conditions["gold_sha256"]) == 64
+    # "run" and "summary"/"results" are untouched by the new sibling key --
+    # the two existing readers never look past them.
+    assert payload["run"]["num_cases"] == 1
+    assert "results" in payload and "summary" in payload
+
+
+def test_conditions_config_is_the_run_s_own_config_not_a_rebuilt_default(monkeypatch, tmp_path):
+    """The block must reuse evaluate()'s own config_effective (already
+    exercised by test_config_overrides_reach_the_appconfig_and_ensure_indexed
+    above), not rebuild a fresh AppConfig -- a second source is exactly the
+    drift issue #222 exists to end."""
+    monkeypatch.setattr(run_eval, "RESULTS_DIR", tmp_path)
+    _capture_ensure_indexed(monkeypatch, [])
+    _capture_run_all_cases(monkeypatch, [])
+    overrides = {"retrieval.top_k_final": 3}
+
+    result = evaluate(
+        models=["m"], case_ids=[_DEV_CASE_ID], config_overrides=overrides, write_report=True
+    )
+
+    payload = json.loads(Path(result["report_path"]).read_text(encoding="utf-8"))
+    assert payload["conditions"]["config"] == result["config"]
+    assert payload["conditions"]["config"]["dev"]["retrieval"]["top_k_final"] == 3
+
+
+def test_conditions_sampling_matches_wiring_s_own_constants(monkeypatch, tmp_path):
+    """Pins the literal values, not just object equality with wiring.py's
+    constants -- a future edit to those constants must show up here, since
+    changing them silently changes what every later run measures (the exact
+    failure mode issue #222 names for the sampling parameters)."""
+    from rag.engine.wiring import (
+        QUERY_DECOMPOSER_SAMPLING_OPTIONS,
+        RAG_SAMPLING_OPTIONS,
+        RECOMP_SAMPLING_OPTIONS,
+    )
+
+    monkeypatch.setattr(run_eval, "RESULTS_DIR", tmp_path)
+    _capture_ensure_indexed(monkeypatch, [])
+    _capture_run_all_cases(monkeypatch, [])
+
+    result = evaluate(models=["m"], case_ids=[_DEV_CASE_ID], write_report=True)
+
+    payload = json.loads(Path(result["report_path"]).read_text(encoding="utf-8"))
+    sampling = payload["conditions"]["sampling"]
+    assert sampling == {
+        "rag": RAG_SAMPLING_OPTIONS,
+        "chat": QUERY_DECOMPOSER_SAMPLING_OPTIONS,
+        "recomp": RECOMP_SAMPLING_OPTIONS,
+    }
+    assert sampling["rag"]["temperature"] == 0.15
+    assert sampling["rag"]["repeat_last_n"] == 64
+    assert sampling["recomp"]["num_predict"] == 1500
+    assert sampling["chat"]["num_predict"] == 400
 
 
 def test_update_baseline_false_leaves_the_baseline_file_byte_identical(monkeypatch, tmp_path):
