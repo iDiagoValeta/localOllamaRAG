@@ -101,11 +101,13 @@ class EvaluationResult:
             evaluation actually ran with (reference config plus the expanded
             overrides) -- kept alongside the raw ``config_overrides`` deltas
             in the ledger so a default changing later cannot silently change
-            what an old entry meant (issue #31 spec section 5.3).
+            what an old entry meant (issue #31 spec section 5.3). ``None``
+            only for ``real_evaluate()``'s empty-``case_ids`` reachability
+            probe, which stages no corpus at all.
     """
 
     records: Tuple[CaseRecord, ...]
-    effective_config: Dict[str, Any]
+    effective_config: Optional[Dict[str, Any]]
 
 
 EvaluatorFn = Callable[[Mapping[str, Any], Sequence[str]], EvaluationResult]
@@ -375,7 +377,7 @@ def verify_reachable(evaluate: EvaluatorFn, probe_case_ids: Sequence[str] = ()) 
         ) from exc
 
 
-# REAL EVALUATOR (depends on sibling PR #56)
+# REAL EVALUATOR
 
 
 def _run_eval_module():
@@ -385,6 +387,23 @@ def _run_eval_module():
     ``import run_eval`` convention, so this is the one place harness/ reaches
     into tests/eval/ from, and every caller resolves to the same module
     object.
+
+    Deliberately a function-scoped import, not a module-level one, for two
+    still-live reasons (the original one -- waiting on the sibling PR #56 to
+    land ``run_eval.evaluate()`` -- ended when #56 merged):
+
+    - ``harness/tests/`` imports ``harness.evaluator`` in CI with no engine
+      dependencies installed. ``run_eval.py`` itself only needs the standard
+      library plus ``grade`` at its own module level (see this module's
+      docstring), so that alone would not force laziness -- but it means
+      importing ``harness.evaluator`` cannot regress this by growing a heavier
+      module-level dependency without anyone noticing here.
+    - ``harness/tests/test_evaluator.py`` replaces ``sys.modules["run_eval"]``
+      with a stub per test to exercise this function without the real
+      pipeline. A module-level ``import run_eval`` would bind the real module
+      the first time anything imports ``harness.evaluator`` -- before any
+      test's ``monkeypatch.setitem`` runs -- and the stub would never take
+      effect.
     """
     if str(EVAL_DIR) not in sys.path:
         sys.path.insert(0, str(EVAL_DIR))
@@ -393,23 +412,95 @@ def _run_eval_module():
     return run_eval
 
 
+# Every AppConfig section except ``paths`` (issue #230). ``paths`` is the one
+# section that names which corpus a config came from -- ``docs_folder``
+# identifies it, ``path_db``/``collection_name`` are derived from it via
+# ``derive_db_paths`` -- so it is the one section legitimately different
+# between two corpora ``real_evaluate()`` staged in the same call (measured:
+# today that is exactly ``docs_folder``, ``path_db`` and ``collection_name``,
+# nothing else). Every other section is built the same way regardless of
+# which corpus ``_eval_app_config`` indexes -- straight from
+# ``rag.chat_pdfs``'s module globals and this call's ``config_overrides`` --
+# so two corpora disagreeing on any of them is not a legitimate difference.
+# See ``_select_effective_config``.
+_CORPUS_INVARIANT_SECTIONS: Tuple[str, ...] = ("models", "chunking", "retrieval", "reranking", "context", "flags")
+
+
+class ConfigDivergenceError(RuntimeError):
+    """Raised when two corpora evaluated in one call disagree outside ``paths``.
+
+    ``real_evaluate()`` used to assume the harness only ever asked for
+    ``source: corpus`` cases and could record ``raw["config"]["dev"]``
+    unconditionally. That premise ended when ``search_set_case_ids()`` became
+    the complement of the blind set (issue #230): a campaign now requests all
+    three product corpora, and ``run_eval.evaluate()`` returns one config per
+    corpus it staged. Rather than pick one arbitrarily, ``_select_effective_config``
+    proves the thing that makes picking one safe -- that every corpus this
+    call touched agrees with the others on everything but ``paths`` -- and
+    raises this instead of silently recording a configuration that only
+    described a fraction of what ran.
+    """
+
+
+def _select_effective_config(
+    config_by_corpus: Mapping[str, Optional[Mapping[str, Any]]],
+) -> Optional[Dict[str, Any]]:
+    """Pick one corpus's config, after proving it speaks for every corpus evaluated.
+
+    ``EvaluationResult.effective_config`` is consumed everywhere (the ledger,
+    ``loop._comparable_config_view``, every harness test that builds one) as
+    a single flat ``AppConfig``-shaped dict, one corpus's worth -- not a dict
+    per corpus. This does not change that shape; it changes what justifies
+    handing back just one of them: every present, non-blind corpus must agree
+    with the others on every section but ``paths`` (``_CORPUS_INVARIANT_SECTIONS``).
+
+    Args:
+        config_by_corpus: ``raw["config"]`` from ``run_eval.evaluate()`` --
+            one entry per corpus key (``"dev"``, ``"blind"``, ``"corpus_es"``,
+            ``"corpus_ca"``), ``None`` for a corpus this call's ``case_ids``
+            never touched. ``"blind"`` is always ignored: the harness never
+            requests blind-set case ids (``search_set_case_ids()``), so it is
+            always ``None``/absent here in practice.
+
+    Returns:
+        The first present, non-blind corpus's config dict. ``None`` when
+        ``case_ids`` touched no corpus at all -- the empty-tuple reachability
+        probe (``verify_reachable``'s ``probe_case_ids`` defaults to
+        ``()``), which stages nothing to disagree about.
+
+    Raises:
+        ConfigDivergenceError: Two present corpora disagree on a section
+            outside ``paths``.
+    """
+    present = [(corpus, cfg) for corpus, cfg in config_by_corpus.items() if corpus != "blind" and cfg]
+    if not present:
+        return None
+    base_corpus, base_config = present[0]
+    for corpus, config in present[1:]:
+        for section in _CORPUS_INVARIANT_SECTIONS:
+            if config.get(section) != base_config.get(section):
+                raise ConfigDivergenceError(
+                    f"corpus {corpus!r} and {base_corpus!r} disagree on config.{section}, which "
+                    "should be identical across every corpus one real_evaluate() call indexes: "
+                    f"{config.get(section)!r} != {base_config.get(section)!r}"
+                )
+    return base_config
+
+
 def real_evaluate(config_overrides: Mapping[str, Any], case_ids: Sequence[str]) -> EvaluationResult:
     """Adapt ``tests/eval/run_eval.evaluate()`` (issue #31 spec section 5.2) to ``EvaluatorFn``.
 
-    Return shape confirmed against #56's actual contract (not the spec
-    sketch): ``{"records": [...], "config": {"dev": <AppConfig-as-dict>,
-    "blind": <...>}, ...}`` -- ``"results"``/``"effective_config"`` from an
-    earlier draft of this function do not exist on that dict and would raise
-    ``KeyError`` on the first real call. This harness only ever requests
-    ``source: corpus`` (dev-corpus) case ids -- see ``search_set_case_ids``/
-    ``load_fast_tier`` -- so ``config["dev"]`` is always the config this
-    evaluation actually ran with; ``config["blind"]`` is never read here.
-
-    TODO: depends on the sibling PR (#56) landing ``run_eval.evaluate()`` on
-    main. Guarded rather than imported at module level so importing
-    ``harness.evaluator`` (which ``harness/tests/`` does, in CI, with no
-    engine dependencies installed) never fails on this function's account --
-    only *calling* it before #56 lands does, with a message that says why.
+    Return shape confirmed against the real contract: ``{"records": [...],
+    "config": {"dev": <AppConfig-as-dict-or-None>, "blind": <...>,
+    "corpus_es": <...>, "corpus_ca": <...>}}`` -- the last two keys are only
+    present when this call's ``case_ids`` touched that corpus (``run_eval.py``'s
+    ``EXTRA_DEV_CORPORA``). ``search_set_case_ids()`` is the complement of the
+    blind set (issue #230), so a campaign requests cases from all three
+    product corpora and one call can return up to three non-blind configs.
+    ``_select_effective_config`` picks one to record -- but only after proving
+    every present corpus agrees with it outside ``paths``; see that function
+    and ``ConfigDivergenceError``. ``config["blind"]`` is never read here --
+    the harness never requests blind-set case ids.
 
     Args:
         config_overrides: Dotted-key overrides, as a proposer emits them
@@ -421,15 +512,10 @@ def real_evaluate(config_overrides: Mapping[str, Any], case_ids: Sequence[str]) 
         The adapted ``EvaluationResult``.
 
     Raises:
-        NotImplementedError: ``run_eval.py`` has no ``evaluate()`` yet.
+        ConfigDivergenceError: Two corpora this call evaluated disagree on a
+            config field outside ``paths``.
     """
     run_eval = _run_eval_module()
-    if not hasattr(run_eval, "evaluate"):
-        raise NotImplementedError(
-            "tests/eval/run_eval.py has no evaluate() yet -- the real evaluator "
-            "depends on the sibling PR (issue #31 spec section 5.2, #56). Use "
-            "evaluator.build_demo_evaluator() to exercise the harness without it."
-        )
     raw = run_eval.evaluate(
         models=run_eval.DEFAULT_MODELS,
         case_ids=tuple(case_ids),
@@ -450,7 +536,7 @@ def real_evaluate(config_overrides: Mapping[str, Any], case_ids: Sequence[str]) 
         )
         for r in raw["records"]
     )
-    return EvaluationResult(records=records, effective_config=raw["config"]["dev"])
+    return EvaluationResult(records=records, effective_config=_select_effective_config(raw["config"]))
 
 
 # DEMO EVALUATOR (no GPU, no Ollama -- harness/cli.py --dry-run)

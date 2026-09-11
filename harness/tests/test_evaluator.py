@@ -200,16 +200,24 @@ def test_every_declared_search_space_key_is_honoured_by_the_real_evaluate_contra
 
 
 # real_evaluate() -- HIGH 1 regression (#65 PR review): mapped raw["results"]/
-# raw.get("effective_config") from an earlier sketch of #56's API. The
-# actual contract #56 returns is {"records": [...], "config": {"dev": ...,
-# "blind": ...}}; the old mapping raised KeyError on the very first real
-# call. A stub `run_eval` module carrying the real shape is injected into
-# sys.modules so this is exercised without landing #56 or touching Ollama
-# (this round's constraint: no GPU/Ollama -- the full eval gate owns the card).
+# raw.get("effective_config") from an earlier sketch of the run_eval.evaluate()
+# API. The actual contract it returns is {"records": [...], "config":
+# {"dev": ..., "blind": ...}}; the old mapping raised KeyError on the very
+# first real call. A stub `run_eval` module carrying the real shape is
+# injected into sys.modules so this is exercised without touching Ollama or
+# a real corpus (no GPU/Ollama in this environment -- the full eval gate owns
+# the card).
 
 
-def _fake_run_eval_module(records, config_dev, seen=None):
-    """A stub `run_eval` module whose evaluate() carries #56's real return shape."""
+def _fake_run_eval_module(records, config_dev, seen=None, extra_config=None):
+    """A stub `run_eval` module whose evaluate() carries the real return shape.
+
+    Args:
+        extra_config: Extra non-dev, non-blind entries for ``config`` (e.g.
+            ``{"corpus_es": {...}}``) -- issue #230's ``real_evaluate()`` must
+            pick among every present corpus, not assume ``"dev"`` is the only
+            one a call can return.
+    """
     module = types.ModuleType("run_eval")
     module.DEFAULT_MODELS = ["gemma4:e2b"]
 
@@ -217,7 +225,9 @@ def _fake_run_eval_module(records, config_dev, seen=None):
         del models, case_ids, config_overrides, update_baseline
         if seen is not None:
             seen["write_report"] = write_report
-        return {"records": records, "config": {"dev": config_dev, "blind": {}}}
+        config = {"dev": config_dev, "blind": {}}
+        config.update(extra_config or {})
+        return {"records": records, "config": config}
 
     module.evaluate = evaluate
     return module
@@ -248,12 +258,101 @@ def test_real_evaluate_maps_the_actual_56_contract(monkeypatch):
     assert seen["write_report"] is False
 
 
-def test_real_evaluate_raises_not_implemented_without_an_evaluate_function(monkeypatch):
-    stub = types.ModuleType("run_eval")  # no .evaluate attribute -- matches pre-#56 main
-    monkeypatch.setitem(sys.modules, "run_eval", stub)
+# _select_effective_config -- issue #230: search_set_case_ids() is now the
+# complement of the blind set, so a campaign requests corpus/corpus_es/
+# corpus_ca cases in one call and evaluate() can return a config per corpus.
+# real_evaluate() used to record raw["config"]["dev"] unconditionally, which
+# would silently describe only a fraction of a multi-corpus run. These pin
+# the replacement: pick one corpus's config only after proving every present
+# corpus agrees with it on everything but paths (docs_folder/path_db/
+# collection_name -- the fields that legitimately name which corpus a config
+# came from), and raise loudly the moment that stops being true.
 
-    with pytest.raises(NotImplementedError):
-        ev.real_evaluate({}, ())
+
+def test_real_evaluate_accepts_agreeing_multi_corpus_configs(monkeypatch):
+    """Corpora that agree on everything but paths -- true today, per the
+    issue's own measurement -- must not raise, and dev (first in raw["config"])
+    is what gets recorded."""
+    records = [
+        {"id": "a", "case_type": "factual_number", "passed": True, "elapsed_seconds": 1.0},
+        {"id": "b", "case_type": "factual_number", "passed": True, "elapsed_seconds": 1.0},
+    ]
+    config_dev = {
+        "retrieval": {"top_k_final": 8},
+        "paths": {"docs_folder": "rag/docs/en", "collection_name": "docs_dev_docs"},
+    }
+    config_es = {
+        "retrieval": {"top_k_final": 8},
+        "paths": {"docs_folder": "rag/docs/es", "collection_name": "docs_dev_docs_es"},
+    }
+    monkeypatch.setitem(
+        sys.modules, "run_eval",
+        _fake_run_eval_module(records, config_dev, extra_config={"corpus_es": config_es}),
+    )
+
+    result = ev.real_evaluate({}, ("a", "b"))
+
+    assert result.effective_config == config_dev
+
+
+def test_real_evaluate_raises_when_a_second_corpus_diverges_on_a_searched_parameter(monkeypatch):
+    """Demonstration case for issue #230's closure criterion: two corpora
+    disagreeing on retrieval.top_k_final -- a field harness/search_space.py
+    declares in SEARCH_SPACE, i.e. one the harness actually searches over --
+    must fail loudly instead of silently recording whichever corpus
+    real_evaluate() happened to pick."""
+    records = [{"id": "a", "case_type": "factual_number", "passed": True, "elapsed_seconds": 1.0}]
+    config_dev = {"retrieval": {"top_k_final": 8}, "paths": {"docs_folder": "rag/docs/en"}}
+    config_es = {"retrieval": {"top_k_final": 4}, "paths": {"docs_folder": "rag/docs/es"}}
+    monkeypatch.setitem(
+        sys.modules, "run_eval",
+        _fake_run_eval_module(records, config_dev, extra_config={"corpus_es": config_es}),
+    )
+
+    with pytest.raises(ev.ConfigDivergenceError, match="retrieval"):
+        ev.real_evaluate({}, ("a",))
+
+
+def test_real_evaluate_ignores_the_blind_config_when_selecting(monkeypatch):
+    """config["blind"] is never requested by the harness (search_set_case_ids
+    is the blind set's complement) and must never be compared against -- a
+    real run leaves it populated with whatever the blind-set run produced,
+    unrelated to what corpus/corpus_es/corpus_ca ran under."""
+    records = [{"id": "a", "case_type": "factual_number", "passed": True, "elapsed_seconds": 1.0}]
+    config_dev = {"retrieval": {"top_k_final": 8}}
+    module = types.ModuleType("run_eval")
+    module.DEFAULT_MODELS = ["gemma4:e2b"]
+
+    def evaluate(**kwargs):
+        del kwargs
+        return {"records": records, "config": {"dev": config_dev, "blind": {"retrieval": {"top_k_final": 999}}}}
+
+    module.evaluate = evaluate
+    monkeypatch.setitem(sys.modules, "run_eval", module)
+
+    result = ev.real_evaluate({}, ("a",))
+
+    assert result.effective_config == config_dev
+
+
+def test_real_evaluate_returns_none_for_the_empty_case_ids_reachability_probe(monkeypatch):
+    """verify_reachable's probe_case_ids defaults to () (evaluator.py's own
+    docstring), and evaluate() then stages no corpus at all (run_eval.py's
+    own empty-case_ids early return) -- nothing to pick a config from, so
+    this must not raise ConfigDivergenceError against an empty set."""
+    module = types.ModuleType("run_eval")
+    module.DEFAULT_MODELS = ["gemma4:e2b"]
+
+    def evaluate(**kwargs):
+        del kwargs
+        return {"records": [], "config": {"dev": None, "blind": None}}
+
+    module.evaluate = evaluate
+    monkeypatch.setitem(sys.modules, "run_eval", module)
+
+    result = ev.real_evaluate({}, ())
+
+    assert result.effective_config is None
 
 
 # CRITERION 7 -- reconstruct-and-rerun pass vector.

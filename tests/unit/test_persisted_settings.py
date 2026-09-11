@@ -245,3 +245,36 @@ def test_role_env_vars_name_the_getenv_calls_that_read_them():
     }
     actual = {module_var: read_from.get(module_var) for module_var in expected}
     assert actual == expected
+
+
+# _DEFAULT_MODEL_ROLES / _DEFAULT_PIPELINE_FLAGS / _restaurar_roles_y_flags_por_defecto
+# -- issue #231: the test suite must not depend on this machine's settings.json.
+
+
+def test_default_pipeline_flags_covers_exactly_the_persisted_set():
+    """A flag missing here would come back mutated after cargar_ajustes_persistidos();
+    a flag present here but not in PERSISTED_FLAGS is dead weight. Either drift
+    should fail loudly instead of silently reopening issue #231 for that flag."""
+    assert set(rag_engine._DEFAULT_PIPELINE_FLAGS) == set(settings.PERSISTED_FLAGS)
+
+
+def test_default_model_roles_covers_every_role():
+    assert set(rag_engine._DEFAULT_MODEL_ROLES) == set(rag_engine.MODEL_ROLE_VARS)
+
+
+def test_restaurar_roles_y_flags_por_defecto_undoes_a_settings_json_style_mutation(data_dir):
+    """Simulates what cargar_ajustes_persistidos() does at rag.web.app import
+    time -- mutate every role and flag it can reach -- then asserts the
+    restore function used by tests/conftest.py's session fixture puts all of
+    them back, not just the three PIPELINE_RUNTIME_FLAGS the concrete bug
+    report named."""
+    rag_engine.set_model_roles_runtime({role: "settings-json-model" for role in rag_engine.MODEL_ROLE_VARS})
+    for flag in settings.PERSISTED_FLAGS:
+        setattr(rag_engine, flag, not getattr(rag_engine, flag))
+
+    rag_engine._restaurar_roles_y_flags_por_defecto()
+
+    assert rag_engine.get_model_roles() == rag_engine._DEFAULT_MODEL_ROLES
+    assert rag_engine.MODELO_DESC == rag_engine._inferir_descripcion_modelo(rag_engine._DEFAULT_MODEL_ROLES["rag"])
+    for flag, default in rag_engine._DEFAULT_PIPELINE_FLAGS.items():
+        assert getattr(rag_engine, flag) is default
