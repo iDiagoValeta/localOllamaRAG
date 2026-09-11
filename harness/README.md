@@ -161,21 +161,35 @@ fake evaluator that raises on a declared key makes startup fail loudly
 
 ## Sets
 
-- **Search set** (32 `source: corpus` cases) — the loop's objective.
-- **Blind set** (19 `source: arxiv` cases) — never requested. Structurally
-  unreachable: `evaluator.search_set_case_ids()`/`blind_set_case_ids()` both
-  filter `gold_cases.jsonl` by `source`, and every case-id list `loop.py`
-  ever hands an evaluator comes from one of those two functions or
-  `load_fast_tier()` (itself validated as a search-set subset) — never from
-  a proposer, which can only emit config overrides. Proven, not assumed:
-  `harness/tests/test_evaluator.py` asserts the blind set is disjoint from
-  both the search set and the fast tier.
-- **Fast tier** (13 fixed ids, `fast_tier.txt`) — regression filter only, it
-  **never declares an improvement**. Costs ~4 min at current measured rates
-  (8 answered cases × ~28.5 s + 5 retrieval-only × ~4.1 s), against a ~13 min
-  full search set — a real but much smaller saving than the design's ~32 min
-  estimate assumed (see the search-space note above); its job is rejecting a
-  bad candidate before it can contaminate the ratchet, not the minutes it
+- **Search set** (123 cases, `source != "arxiv"`) -- the loop's objective.
+  Not a whitelist of `source == "corpus"`: `evaluator.search_set_case_ids()`
+  returns the *complement* of the blind set, because the product grew from
+  one evaluated corpus to three (`corpus`, `corpus_es`, `corpus_ca`) and a
+  whitelist would have quietly dropped two thirds of the objective while
+  still looking like it partitioned everything (see the function's own
+  docstring; issue #225). Counted directly from `gold_cases.jsonl`: 75
+  `corpus` + 24 `corpus_es` + 24 `corpus_ca` = 123 -- a count, not a target;
+  recount it (a `Counter` over the `source` field) rather than trust this
+  number if the file has grown since.
+- **Blind set** (33 `source: arxiv` cases, also counted directly from
+  `gold_cases.jsonl`) -- never requested.
+  Structurally unreachable: `evaluator.search_set_case_ids()`/
+  `blind_set_case_ids()` both filter `gold_cases.jsonl` by `source`, and
+  every case-id list `loop.py` ever hands an evaluator comes from one of
+  those two functions or `load_fast_tier()` (itself validated as a
+  search-set subset) -- never from a proposer, which can only emit config
+  overrides. Proven, not assumed: `harness/tests/test_evaluator.py` asserts
+  the blind set is disjoint from both the search set and the fast tier.
+- **Fast tier** (16 fixed ids, `fast_tier.txt`) -- regression filter only, it
+  **never declares an improvement**. 13 of the 16 (8 answered + 5
+  retrieval-only) cost ~4 min at current measured rates (8 × ~28.5 s + 5 ×
+  ~4.1 s); the remaining three are study-artifact cases (issue #140) with
+  no per-case timing measured yet, so they are not priced into that total
+  (issue #226 -- see the file's own header for the full accounting). The
+  ~13 min comparison against a full search-set run this bullet used to make
+  is gone: that run measured the pre-#213 32-case search set, not today's
+  123, and nobody has re-timed a full run since. Its job is rejecting a bad
+  candidate before it can contaminate the ratchet, not the minutes it
   happens to save. Includes all 5 of today's known search-set failures
   (three figure-retrieval failures cost ~4 s each, nearly free to include,
   and give the regression filter real signal on the retrieval side).
@@ -244,18 +258,35 @@ the 32-case search set: still 0 flips. A delta of 0 is not an improvement
 
 ## Resolution warning
 
-The search set can win at most **5** cases today (27/32 pass on the
-reference run) — below the **~6 net flips** the design doc sets as the
-threshold for a paired difference not attributable to chance. Restricting
-the same paired comparison to the known-catastrophic sabotage used for
-criterion 2 (`RAG_TOP_K_FINAL=1`) gives only **3 net flips** on the search
-set, versus 7 on the full 51-case gate — the loop's own objective set is
-under-powered against the most destructive single-field change anyone has
-measured, not merely against subtle ones. Every `run_loop` report carries
-this as `resolution_warning`, so an accepted improvement on today's corpus
-reads as a candidate for confirmation, not a demonstrated result. This is
-the quantitative case for block B (#30, corpus expansion) — sharper than the
-design doc's own estimate — not a reason to withhold the harness.
+Stale in exactly the way `evaluator.search_set_case_ids()`'s own docstring
+warns about (issue #225): every number below was measured against the
+32-case search set that existed before #213 (the corpus expansion, block B
+of issue #30) grew it to 123 (see Sets above), and nobody has re-run either
+measurement against the current set.
+
+The **~6 net flips** the design doc (§3) sets as the threshold for a paired
+difference not attributable to chance is a fixed methodological constant,
+not derived from search-set size, so it does not by itself need
+re-measuring. What does: **"the search set can win at most 5 cases" (27/32
+pass on the 2026-08-19 reference run)** is a capacity claim that scales with
+the search set's size, and **"3 net flips under `RAG_TOP_K_FINAL=1`"**
+(criterion 2's known-catastrophic sabotage, versus 7 on the old 51-case
+gate) is a paired comparison that only means something re-run on the cases
+it is meant to describe. Both are hardcoded in `harness/loop.py`'s
+`RESOLUTION_WARNING` dict (`SEARCH_SET_AVAILABLE_FAILURES`,
+`SEARCH_SET_NET_FLIPS_UNDER_KNOWN_SABOTAGE`) and attached verbatim, via
+`message`, to every real campaign's `resolution_warning` -- so a report run
+today still describes a search set a quarter the size of the one the code
+actually evaluates against.
+
+Recomputing them for real needs two things nobody has measured yet, not an
+estimate: a reference evaluation over all 123 search-set cases (to count
+today's failures) and a paired comparison against a `RAG_TOP_K_FINAL=1`
+candidate over the same 123 (to count net flips). Until one of those runs
+exists, the honest statement is that the search set has roughly quadrupled
+since these figures were produced, and whether that changes the resolution
+picture for better or worse is not yet known -- not that it is still "5
+cases" and "3 net flips" today.
 
 > [!NOTE]
 > All of the numbers above come from four local, gitignored artifacts

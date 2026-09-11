@@ -2,6 +2,7 @@
 plus the objective/latency helpers those tests and loop.py both rely on.
 """
 
+import re
 import sys
 import types
 from pathlib import Path
@@ -85,6 +86,19 @@ def test_fast_tier_covers_every_case_type_in_the_search_set():
 def test_fast_tier_has_no_duplicate_ids():
     fast = ev.load_fast_tier()
     assert len(fast) == len(set(fast))
+
+
+def test_fast_tier_header_count_matches_the_ids_it_lists():
+    # Issue #226: #140 added three study-artifact ids without updating the
+    # "N cases" the header opens with, and the header stayed wrong (13,
+    # really 16) until someone counted by hand. Parsing the number back out
+    # of the header and comparing it to what load_fast_tier() actually
+    # returns is what makes that drift loud instead of silent.
+    header = ev.FAST_TIER_FILE.read_text(encoding="utf-8")
+    match = re.search(r"subset of the search set:\s*(\d+)\s*cases", header)
+    assert match, "fast_tier.txt header no longer states a case count this test can parse"
+    declared = int(match.group(1))
+    assert declared == len(ev.load_fast_tier())
 
 
 # UNREACHABLE CASES -- starts empty (see harness/unreachable_cases.txt header).
