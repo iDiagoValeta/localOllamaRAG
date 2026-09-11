@@ -214,10 +214,21 @@ def generar_respuesta_silenciosa(
             that most needs to compare generators -- could measure seconds per
             case but not tokens per second.
 
+            Also carries ``stage`` while the call is in flight: ``"context"``
+            during message preparation (RECOMP synthesis on the auxiliary
+            model, when that flag is on) and ``"generator"`` once the model
+            under test is streaming. The gate bounds this whole call with one
+            wall-clock budget, and without the marker a cut could not say
+            which of the two it cut (issue #234).
+
     Returns:
         Complete response text.
     """
+    if stats is not None:
+        stats["stage"] = "context"
     mensaje_usuario = cfg._preparar_mensaje_usuario_rag(pregunta, fragmentos)
+    if stats is not None:
+        stats["stage"] = "generator"
     return cfg._generar_respuesta_stream(mensaje_usuario, stats=stats)
 
 

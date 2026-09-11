@@ -40,7 +40,10 @@ turns this log into a ranking, which it is not.
 3. **Placement is part of the measurement.** Two models do not fit in 7.6 GiB
    alongside the auxiliary, so Ollama may load one into system RAM instead,
    silently. Where that was observed the row says so, and its speed columns
-   describe the degraded regime (issue #235).
+   describe the degraded regime (issue #235). The rows above were annotated
+   from `ollama ps` samples taken by hand every 20 s; artifacts written after
+   #235 carry `vram_fraction` on every generation record, and
+   `tools/diagnostics/model_history_row.py` fills the column from it.
 4. **The budget column is mostly not a model property, and it counts
    against the model anyway.** A generation is capped at 180 s (issue #229)
    and an exhausted budget is scored as a failure of the row's model. The
