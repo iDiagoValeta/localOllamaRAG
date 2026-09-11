@@ -258,7 +258,8 @@ pre-#222 rows as rows of undocumented conditions, not as rows comparable to a la
    model. Retrieval is computed once per case and shared across every model in that invocation
    (step 5 above), which is what makes the comparison paired instead of two independent
    samples -- separate invocations give every model its own retrieval draw and lose that.
-   Issue #220 covers the reload cost this causes on an 8 GB card.
+   Generation runs model-major (every pending case for one model, then the next), so a sweep
+   loads each generator once rather than once per case (issue #220).
 4. Read the resulting artifact with `tools/diagnostics/model_history_row.py
    tests/eval/runs/<artifact>.json`, not by re-deriving numbers from the console output.
 5. Record the artifact's filename (or timestamp) in the row -- that is what lets someone else
