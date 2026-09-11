@@ -230,12 +230,11 @@ matters beyond wording: it runs *before* retrieval, so a different sub-query on 
 identical run changes which fragments come back, which changes what generation ever sees.
 Variance is not confined to how the final answer happens to be phrased.
 
-The practical consequence: **a row in `docs/model-history.md` is n=1.** A gap of two or three
-cases between two models' pass rates is not distinguishable from resampling the same model
-twice; nothing in this repo currently re-runs a model to check. Treat a difference that size as
-noise, not as a finding, until it is checked against a measured noise floor -- see below, and
-note that the floor on record there needs re-measuring on the current 156-case set before it
-can be used for that check.
+The practical consequence: **a row in `docs/model-history.md` is one run, and one run moves
+by up to five cases.** Measured on this 156-case set on 2026-09-11 (four models run twice, see
+"Measuring the noise floor" below): resampling alone flipped 28 of 536 (case, model) pairs, a
+net movement of -2 to +5 cases per model. A gap that size between two models' pass rates is
+not distinguishable from running one of them again. Treat it as noise, not as a finding.
 
 ### What now gets recorded
 
@@ -327,6 +326,23 @@ threshold at roughly six net flips, with a usable margin of about five cases
 once figure cases are excluded. This note does not retract that count, it
 only sets the floor it is interpreted against; the inference also rests on a
 single pair of runs.
+
+**Measured 2026-09-11 on the current 156-case set**, tranche 1 of the model campaign
+(#218) run twice: `tests/eval/runs/20260911T032105Z_mineru-jina_clip-faiss.json` and
+`tests/eval/runs/20260911T230513Z_mineru-jina_clip-faiss.json`, four generators
+(`Ling-3.0-tiny`, `Llama-3.2-3B`, `Granite-4.0-H-Tiny`, `OLMoE-1B-7B`), `conditions`
+blocks equal field for field except `git_commit`. `compare_runs.py
+--exclude-infrastructure-errors` over the pair: 25 flipped to PASS, 12 flipped to FAIL, 521
+unchanged, 6 pairs excluded (Granite's `GGML_ASSERT` crash on `att-study-*`, 2 in the first
+run and 6 in the second). Two things move in those 37 flips. Nineteen are the 180 s
+generation budget (#229): the first run exhausted it 24 times, in two contiguous windows
+where every model ran past the cap, and the second run 5 times, all on two `study_summary`
+cases that exhaust it for every small model (#234). Dropping every pair that exhausted the
+budget in either run leaves 536 pairs and **28 flips, 16 up and 12 down, 4 to 11 per model,
+net -2 to +5 per model** -- that is the sampling floor of one row on this set. It is a floor
+for this `gold_cases.jsonl` and this `grade.py`, and it rests on one pair of runs, like the
+2026-07-29 figure above; the retrieval-only cases scored 17/20 in both, so the variance is
+in generation, as #223 predicted.
 
 **Sensitivity.** Compare a healthy run (either one from the noise-floor pair
 above) against a deliberately degraded one:

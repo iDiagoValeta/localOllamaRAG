@@ -22,11 +22,16 @@ reading, not because a reader can open them.
 Four qualifications, all of them measured rather than assumed. Skipping them
 turns this log into a ranking, which it is not.
 
-1. **Every row is n=1.** No stage of the pipeline fixes a seed and three of
-   them sample at non-zero temperature, one of which runs *before* retrieval
-   and so changes which fragments the generator ever sees (issue #223). Two
-   runs of one model can legitimately disagree. A gap of two or three cases
-   between two rows is not a finding.
+1. **A row is one run, and one run moves by up to five cases.** No stage
+   of the pipeline fixes a seed and three of them sample at non-zero
+   temperature, one of which runs *before* retrieval and so changes which
+   fragments the generator ever sees (issue #223). Measured once on this set
+   by running tranche 1 twice under identical conditions (`20260911T032105Z`
+   against `20260911T230513Z`, four models, see "Tranche 1 repeated" below):
+   sampling alone flipped **28 of 536** comparable (case, model) pairs, 4 to
+   11 per model, with a net movement per model between -2 and +5 cases. That
+   is the error bar of the `Answered` column. A gap of five cases between two
+   rows is inside it; the `Runs` column says how many runs a row rests on.
 2. **`s/answer` is the wall time of the generation call**, not tokens divided
    by the decode rate. The older form of this column understated the wait by
    a factor of 36 -- 0.22 s against a measured 7.89 s -- because it omitted
@@ -36,11 +41,18 @@ turns this log into a ranking, which it is not.
    alongside the auxiliary, so Ollama may load one into system RAM instead,
    silently. Where that was observed the row says so, and its speed columns
    describe the degraded regime (issue #235).
-4. **The budget column is not a model property.** A generation is capped at
-   180 s (issue #229). Tranche 1 exhausted that cap 24 times and tranche 2 not
-   once under identical declared conditions, so the two groups are not
-   perfectly comparable despite matching on every recorded condition. Issue
-   #234 tracks why.
+4. **The budget column is mostly not a model property, and it counts
+   against the model anyway.** A generation is capped at 180 s (issue #229)
+   and an exhausted budget is scored as a failure of the row's model. The
+   repeat of tranche 1 showed that 19 of its 24 exhaustions did not
+   reproduce: they sat in two contiguous windows of that run, where every
+   generation of every model ran past the cap while the decode rates on
+   either side were unchanged. The 5 that did reproduce are two `study_summary`
+   cases over whole documents (`ricci-study-summary-es`, 96 chunks, in all
+   four models both times; `att-study-summary-ca` at the edge, 171 s for the
+   one model that passed it). So tranche 1's rows carry about 5 cases of
+   run-level loss the other tranches do not, and a budget count of 4-6 on a
+   small model is that, not the model (issue #234).
 
 ---
 
@@ -50,25 +62,68 @@ turns this log into a ranking, which it is not.
 model in a run. Three corpora of 17 documents (en/es/ca) plus the blind set.
 Budget 180 s, `AUX_MODEL` = `Ling-3.0-tiny` for every row.
 
-| Model | Size | Answered (of 136) | Overall (of 156) | tokens/s | tokens/answer | s/answer | Budget hit | Infra | Placement | Run |
-|---|---|---|---|---|---|---|---|---|---|---|
-| `qwen3-coder-30b:latest` | 10 GB | **125 (91.9%)** | 142 (91.0%) | 45.4 | 90 | 15.03 | 0 | 1 | **~50% CPU** | `20260911T094107Z` |
-| `qwen3:30b-a3b` | 18 GB | 121 (89.0%) | 138 (88.5%) | 39.1 | **335** | 24.93 | 6 | 2 | **~70% CPU** | `20260911T171038Z` |
-| `gemma4:e2b` | 7.2 GB | 120 (88.2%) | 137 (87.8%) | 103.2 | 28 | 7.97 | 0 | 0 | GPU | `20260911T071629Z` |
-| `qwen3:8b` | 5.2 GB | 120 (88.2%) | 137 (87.8%) | 35.8 | 35 | 8.94 | 0 | 0 | **CPU offload** | `20260911T071629Z` |
-| `gemma4:e4b` *(shipped default)* | 9.6 GB | 119 (87.5%) | 136 (87.2%) | 59.9 | 28 | 11.84 | 0 | 0 | GPU | `20260911T094107Z` |
-| `hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE` | 4.9 GB | 116 (85.3%) | 133 (85.3%) | 116.3 | 27 | 7.52 | 6 | 0 | GPU | `20260911T032105Z` |
-| `granite4:small-h` | 19 GB | 116 (85.3%) | 133 (85.3%) | 17.4 | 70 | 20.52 | 5 | 0 | **~72% CPU** | `20260911T171038Z` |
-| `hf.co/noctrex/Granite-4.0-H-Tiny-MXFP4_MOE-GGUF:...` | 4.2 GB | 112 (82.4%) | 129 (82.7%) | 116.9 | 72 | 7.15 | 6 | 2 | GPU | `20260911T032105Z` |
-| `hf.co/noctrex/LFM2-8B-A1B-MXFP4_MOE-GGUF:...` | 4.9 GB | 108 (79.4%) | 125 (80.1%) | 156.2 | 56 | 6.92 | 0 | 0 | GPU | `20260911T071629Z` |
-| `mistral-small3.2:24b` | 15 GB | 107 (78.7%) | 124 (79.5%) | **5.2** | 24 | 20.94 | 12 | 0 | **~70% CPU** | `20260911T171038Z` |
-| `hf.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M` | 2.0 GB | 105 (77.2%) | 122 (78.2%) | 101.3 | 27 | 6.70 | 6 | 0 | GPU | `20260911T032105Z` |
-| `gpt-oss:20b` | 13 GB | 96 (70.6%) | 113 (72.4%) | 29.7 | 100 | 20.80 | 0 | 4 | **~60% CPU** | `20260911T094107Z` |
-| `hf.co/noctrex/OLMoE-1B-7B-0125-Instruct-MXFP4_MOE-GGUF:...` | 3.9 GB | 91 (66.9%) | 108 (69.2%) | 213.0 | 64 | 6.56 | 6 | 0 | GPU | `20260911T032105Z` |
-| `hf.co/noctrex/Phi-mini-MoE-instruct-MXFP4_MOE-GGUF:...` | 4.9 GB | 63 (46.3%) | 80 (51.3%) | 95.3 | 118 | 9.24 | 0 | 0 | GPU | `20260911T071629Z` |
+| Model | Size | Answered (of 136) | Overall (of 156) | tokens/s | tokens/answer | s/answer | Budget hit | Infra | Placement | Run | Runs |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `qwen3-coder-30b:latest` | 10 GB | **125 (91.9%)** | 142 (91.0%) | 45.4 | 90 | 15.03 | 0 | 1 | **~50% CPU** | `20260911T094107Z` | 1 |
+| `qwen3:30b-a3b` | 18 GB | 121 (89.0%) | 138 (88.5%) | 39.1 | **335** | 24.93 | 6 | 2 | **~70% CPU** | `20260911T171038Z` | 1 |
+| `gemma4:e2b` | 7.2 GB | 120 (88.2%) | 137 (87.8%) | 103.2 | 28 | 7.97 | 0 | 0 | GPU | `20260911T071629Z` | 1 |
+| `qwen3:8b` | 5.2 GB | 120 (88.2%) | 137 (87.8%) | 35.8 | 35 | 8.94 | 0 | 0 | **CPU offload** | `20260911T071629Z` | 1 |
+| `gemma4:e4b` *(shipped default)* | 9.6 GB | 119 (87.5%) | 136 (87.2%) | 59.9 | 28 | 11.84 | 0 | 0 | GPU | `20260911T094107Z` | 1 |
+| `hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE` | 4.9 GB | 116 (85.3%) | 133 (85.3%) | 116.3 | 27 | 7.52 | 6 | 0 | GPU | `20260911T032105Z` | 2 |
+| `granite4:small-h` | 19 GB | 116 (85.3%) | 133 (85.3%) | 17.4 | 70 | 20.52 | 5 | 0 | **~72% CPU** | `20260911T171038Z` | 1 |
+| `hf.co/noctrex/Granite-4.0-H-Tiny-MXFP4_MOE-GGUF:...` | 4.2 GB | 112 (82.4%) | 129 (82.7%) | 116.9 | 72 | 7.15 | 6 | 2 | GPU | `20260911T032105Z` | 2 |
+| `hf.co/noctrex/LFM2-8B-A1B-MXFP4_MOE-GGUF:...` | 4.9 GB | 108 (79.4%) | 125 (80.1%) | 156.2 | 56 | 6.92 | 0 | 0 | GPU | `20260911T071629Z` | 1 |
+| `mistral-small3.2:24b` | 15 GB | 107 (78.7%) | 124 (79.5%) | **5.2** | 24 | 20.94 | 12 | 0 | **~70% CPU** | `20260911T171038Z` | 1 |
+| `hf.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M` | 2.0 GB | 105 (77.2%) | 122 (78.2%) | 101.3 | 27 | 6.70 | 6 | 0 | GPU | `20260911T032105Z` | 2 |
+| `gpt-oss:20b` | 13 GB | 96 (70.6%) | 113 (72.4%) | 29.7 | 100 | 20.80 | 0 | 4 | **~60% CPU** | `20260911T094107Z` | 1 |
+| `hf.co/noctrex/OLMoE-1B-7B-0125-Instruct-MXFP4_MOE-GGUF:...` | 3.9 GB | 91 (66.9%) | 108 (69.2%) | 213.0 | 64 | 6.56 | 6 | 0 | GPU | `20260911T032105Z` | 2 |
+| `hf.co/noctrex/Phi-mini-MoE-instruct-MXFP4_MOE-GGUF:...` | 4.9 GB | 63 (46.3%) | 80 (51.3%) | 95.3 | 118 | 9.24 | 0 | 0 | GPU | `20260911T071629Z` | 1 |
 
-Retrieval-only was 17/20 in all four runs -- it does not vary by generator,
+Retrieval-only was 17/20 in all five runs -- it does not vary by generator,
 which is why it is reported once rather than folded into each row.
+
+`Runs` is how many full runs the row's model has on this set. The four with
+2 are tranche 1, repeated to measure the noise (next section); their row
+keeps the first run's figures so the table stays one artifact per row, and
+the second run sits below.
+
+### Tranche 1 repeated
+
+Same four generators, same declared conditions (`conditions` blocks equal
+field for field except `git_commit`: the repeat ran on `bbf284c`, three
+defect fixes later -- #237, #238, #239 -- none of them in the generation
+or grading path). `20260911T032105Z` first, `20260911T230513Z` second, 105
+min against 159.
+
+| Model | Answered, run 1 | Answered, run 2 | Flips (+/-) | Budget hit | Infra |
+|---|---|---|---|---|---|
+| `Ling-3.0-tiny` | 116 (85.3%) | 117 (86.0%) | +4 / -3 | 6 -> 2 | 0 -> 0 |
+| `Llama-3.2-3B` | 105 (77.2%) | 114 (83.8%) | +10 / -1 | 6 -> 1 | 0 -> 0 |
+| `Granite-4.0-H-Tiny` | 112 (82.4%) | 114 (83.8%) | +6 / -2 | 6 -> 1 | 2 -> 6 |
+| `OLMoE-1B-7B` | 91 (66.9%) | 90 (66.2%) | +5 / -6 | 6 -> 1 | 0 -> 0 |
+
+`python tests/eval/compare_runs.py --exclude-infrastructure-errors` over the
+pair: 25 flipped to PASS, 12 to FAIL, 521 unchanged, 6 pairs excluded (all
+Granite's `GGML_ASSERT` on `att-study-*`, which now hits six of the nine).
+Two effects sit in those 37 flips and they should not be read as one:
+
+- **Sampling.** Dropping every pair that exhausted the budget in either run
+  leaves 536 pairs and 28 flips (16 up, 12 down): 4 for Ling, 7 for Llama,
+  6 for Granite, 11 for OLMoE, net -2 to +5 per model. That is the noise
+  floor of one row. Decode rates and `s/answer` medians agree between the
+  runs to within 0.4 s, so the two runs measured the same machine in the
+  same state.
+- **Budget.** 24 exhaustions became 5. Llama's +9 net is mostly this: 6 of
+  its flips to PASS are cases that ran out of time in run 1 and answered in
+  9-12 s in run 2. The 19 that vanished were two contiguous windows of run 1
+  (records 225-240 and 248-255 in generation order, every model, `study`
+  and factual cases alike), and the 54 minutes of difference in wall time
+  is those 19 x 180 s. What made run 1 stall there is not in the artifact
+  (issue #234).
+
+The first-run figures stay in the table above because the repeat was made to
+measure the noise, not to pick the better of two draws; replacing a row with
+its best run is the selection bias the row count exists to expose.
 
 **The Infra column is cases the model never got to answer.** Granite's two
 are `GGML_ASSERT(buffer) failed` on `study_outline`; `gpt-oss:20b`'s four and
@@ -89,10 +144,11 @@ model in it, which is the clearest illustration available that speed and
 latency are different questions.
 
 The top is not a ranking. `qwen3-coder-30b` leads by five cases over a
-three-way cluster at 119-120, and that gap sits at the edge of what #223 and
-#234 leave uncertain; it is also the model that led the 23-case table on 2026-09-01, which
-is weak evidence but not none. `gemma4:e2b`,
-`qwen3:8b` and the shipped default `gemma4:e4b` are separated by one case.
+three-way cluster at 119-120, and five cases is inside the measured noise of
+a single run (4-11 flips per model, net up to +5); it is also the model that
+led the 23-case table on 2026-09-01, which is weak evidence but not none.
+`gemma4:e2b`, `qwen3:8b` and the shipped default `gemma4:e4b` are separated
+by one case.
 
 Placement is the finding that cuts across the table. The best measured model
 runs half in system RAM, `qwen3:8b` ties for third while never reaching the
@@ -119,7 +175,8 @@ Every generator the previous table listed, including the five rows it carried
 as "pending" or "not yet run", now has a row above measured on the same set.
 The tranches: `20260911T032105Z` (4 models, 159 min), `20260911T071629Z`
 (4, 144 min), `20260911T094107Z` (3, 144 min), `20260911T171038Z` (3, 278
-min). Total GPU time for the table: about 12 hours.
+min), plus the repeat of tranche 1, `20260911T230513Z` (4, 105 min). Total
+GPU time for the table: about 14 hours.
 
 ---
 
