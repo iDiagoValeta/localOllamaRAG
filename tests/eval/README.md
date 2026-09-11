@@ -417,10 +417,45 @@ decides whether it is worth it.
 
 This is that batch for the **language axis**: the `es/` (Castilian) and
 `ca/` (Valencian) document stores the product already ships in
-`rag/docs/es/` and `rag/docs/ca/` -- two of its three fixed language stores
--- which `gold_cases.jsonl` never exercises today. Provisioning cost is
-zero, since the PDFs already ship; the domain and form axes are out of
-scope here (see the design doc's composition table).
+`rag/docs/es/` and `rag/docs/ca/` -- two of its three fixed language
+stores. Measured 2026-08-12, before #213: `gold_cases.jsonl` had zero
+`corpus_es`/`corpus_ca` cases, so both stores were entirely unmeasured by
+the gate, which is the gap this probe was built to diagnose. Provisioning
+cost was zero, since the PDFs already shipped; the domain and form axes
+are out of scope here (see the design doc's composition table).
+
+**That gap in the gate is closed, but not by this file.** #213 gave the
+gate 24 `corpus_es` and 24 `corpus_ca` cases (see Corpus above for the
+current count), so "the language axis is unmeasured" is no longer true.
+Those 48 cases, though, sit entirely on the twelve documents per store
+that #213 added by fetching through `tools/fetch_corpus.py` (gitignored,
+downloaded on demand from a versioned manifest) -- none of them touch the
+five `es` and five `ca` documents that were already committed to git
+before #213 existed (`git ls-files rag/docs/es rag/docs/ca`), which
+include this probe's six. Those ten original documents carry zero
+`gold_cases.jsonl` cases, exactly as before #213:
+`Ciudad_de_las_Artes_y_las_Ciencias` and `Fallas_de_Valencia` (`es`),
+`Història_de_València` and `Paella_d'arròs` (`ca`) were never in this
+probe either, and remain unmeasured by both files. The probe and the gate
+now both cover the language axis, on entirely disjoint documents -- which
+is why none of the 18 ids below appear in `gold_cases.jsonl`, and why that
+overlap check is not the thing to fix here.
+
+The two also answer different questions, which is the more important
+reason this file stays. The gate's question, since #213, is "does the
+shipped product answer correctly in `es`/`ca`." This probe's question,
+per the design doc's section 3 ("Sonda previa"), is "does the language
+axis produce failures a self-improving loop can learn from" -- checked
+against the loop's own search set (`harness/evaluator.py`'s
+`search_set_case_ids()`, the complement of the blind set, which now
+includes #213's `corpus_es`/`corpus_ca` cases too). The verdict recorded
+below already answered that second question, on 2026-08-13, before #213:
+*viable tras arreglo* -- these six documents are too easy (17/18) to
+distinguish a loop improvement from a regression, not because the
+pipeline mishandles `es`/`ca`. #213 does not revisit that verdict: it
+added general product coverage, not the harder search-set documents the
+design doc's fix calls for, so the probe's seed cases are still waiting
+on that later batch (see the closing paragraph below).
 
 - **`probe_cases_lang.jsonl`**: 18 hand-verified cases (every
   `verified_pages` checked against the actual PDF page) over 6 documents --
