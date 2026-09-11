@@ -745,6 +745,28 @@ def run_study_case(
     produces is the thing under test, so a model swap has to be visible here
     the same way it is there.
 
+    Loops ``models`` case-major (one case, every model) -- kept for callers
+    that still want that shape (the probe scripts). ``run_all_cases`` instead
+    calls ``_run_study_case_for_model`` directly, model-major (issue #220).
+    """
+    return [
+        _run_study_case_for_model(case, fragments, model, retrieval_elapsed)
+        for model in models
+    ]
+
+
+def _run_study_case_for_model(
+    case: Dict[str, Any],
+    fragments: Sequence[Dict[str, Any]],
+    model: str,
+    retrieval_elapsed: float,
+) -> Dict[str, Any]:
+    """Build and grade one Study artifact for a single model.
+
+    Extracted from ``run_study_case``'s per-model loop body (issue #220) so
+    ``run_all_cases`` can run every pending case for one model before moving
+    to the next, instead of switching models inside a per-case loop.
+
     A ``Malformed*Error`` is a FAIL, not an ``infrastructure_error``. The model
     was reachable and answered; it answered in a shape the parse refuses, which
     is a quality result about that model and belongs in its score.
@@ -761,109 +783,103 @@ def run_study_case(
     from rag.engine import wiring
 
     malformed = (MalformedSummaryError, MalformedOutlineError, MalformedQuizError)
-    records: List[Dict[str, Any]] = []
 
-    for model in models:
-        t0 = time.perf_counter()
+    t0 = time.perf_counter()
 
-        def _generate() -> Dict[str, Any]:
-            # Bound as one call for the budget below (issue #229) -- config
-            # and fragment conversion are local and instant, only
-            # study.summarize/outline/quiz talks to Ollama, but wrapping the
-            # setup too keeps this a single opaque unit like run_factual_case's.
-            # Reading `model`/`case`/`fragments` from the loop is safe despite
-            # the closure: _run_with_budget joins before this loop advances,
-            # so the values cannot change out from under an in-flight call.
-            config = wiring.app_config_from_runtime().with_overrides(
-                **{"models.rag": model}
-            )
-            domain_fragments = [wiring.fragment_from_dict(f) for f in fragments]
-            study = Study(wiring.rag_chat_model(config))
-            lang_label = case.get("language")
-            if not lang_label:
-                lang = case.get("lang")
-                if lang == "es":
-                    lang_label = "Castellano"
-                elif lang == "ca":
-                    lang_label = "Valencià"
-                elif lang == "en":
-                    lang_label = "English"
+    def _generate() -> Dict[str, Any]:
+        # Bound as one call for the budget below (issue #229) -- config
+        # and fragment conversion are local and instant, only
+        # study.summarize/outline/quiz talks to Ollama, but wrapping the
+        # setup too keeps this a single opaque unit like run_factual_case's.
+        config = wiring.app_config_from_runtime().with_overrides(
+            **{"models.rag": model}
+        )
+        domain_fragments = [wiring.fragment_from_dict(f) for f in fragments]
+        study = Study(wiring.rag_chat_model(config))
+        lang_label = case.get("language")
+        if not lang_label:
+            lang = case.get("lang")
+            if lang == "es":
+                lang_label = "Castellano"
+            elif lang == "ca":
+                lang_label = "Valencià"
+            elif lang == "en":
+                lang_label = "English"
 
-            if case["case_type"] == "study_summary":
-                return summary_to_dict(
-                    study.summarize(domain_fragments, config, language=lang_label)
-                )
-            elif case["case_type"] == "study_outline":
-                return outline_to_dict(
-                    study.outline(domain_fragments, config, language=lang_label)
-                )
-            return quiz_to_dict(
-                study.quiz(
-                    domain_fragments,
-                    config,
-                    language=lang_label,
-                    question_count=int(case.get("question_count", 5)),
-                )
+        if case["case_type"] == "study_summary":
+            return summary_to_dict(
+                study.summarize(domain_fragments, config, language=lang_label)
             )
-
-        try:
-            artifact = _run_with_budget(
-                _generate, budget_seconds=GENERATION_BUDGET_SECONDS
+        elif case["case_type"] == "study_outline":
+            return outline_to_dict(
+                study.outline(domain_fragments, config, language=lang_label)
             )
-        except GenerationBudgetExceeded as exc:
-            elapsed = retrieval_elapsed + time.perf_counter() - t0
-            records.append({
-                "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
-                "lang": case["lang"], "model": model, "passed": False,
-                "budget_exceeded": True,
-                "reason": str(exc),
-                "elapsed_seconds": round(elapsed, 2),
-            })
-            print(f"  [BUDGET] {case['id']} / {model} ({elapsed:.1f}s) -- {exc}", flush=True)
-            continue
-        except malformed as exc:
-            elapsed = retrieval_elapsed + time.perf_counter() - t0
-            records.append({
-                "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
-                "lang": case["lang"], "model": model, "passed": False,
-                "reason": f"malformed artifact -- {type(exc).__name__}: {str(exc)[:120]}",
-                "elapsed_seconds": round(elapsed, 2),
-            })
-            print(
-                f"  [FAIL] {case['id']} / {model} ({elapsed:.1f}s) -- malformed artifact",
-                flush=True,
+        return quiz_to_dict(
+            study.quiz(
+                domain_fragments,
+                config,
+                language=lang_label,
+                question_count=int(case.get("question_count", 5)),
             )
-            continue
-        except Exception as exc:
-            elapsed = retrieval_elapsed + time.perf_counter() - t0
-            records.append({
-                "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
-                "lang": case["lang"], "model": model, "passed": False,
-                "infrastructure_error": True,
-                "reason": f"study failed -- {type(exc).__name__}: {exc}",
-                "elapsed_seconds": round(elapsed, 2),
-            })
-            print(
-                f"  [ERROR] {case['id']} / {model} ({elapsed:.1f}s): {type(exc).__name__}: {exc}",
-                flush=True,
-            )
-            continue
-
-        elapsed = retrieval_elapsed + time.perf_counter() - t0
-        result = grade.grade_study(artifact, case)
-        records.append({
-            "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
-            "lang": case["lang"], "model": model, "passed": result["pass"],
-            "reason": result["reason"],
-            "elapsed_seconds": round(elapsed, 2),
-        })
-        status = "PASS" if result["pass"] else "FAIL"
-        print(
-            f"  [{status}] {case['id']} / {model} ({elapsed:.1f}s) -- {result['reason']}",
-            flush=True,
         )
 
-    return records
+    try:
+        artifact = _run_with_budget(
+            _generate, budget_seconds=GENERATION_BUDGET_SECONDS
+        )
+    except GenerationBudgetExceeded as exc:
+        elapsed = retrieval_elapsed + time.perf_counter() - t0
+        record = {
+            "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
+            "lang": case["lang"], "model": model, "passed": False,
+            "budget_exceeded": True,
+            "reason": str(exc),
+            "elapsed_seconds": round(elapsed, 2),
+        }
+        print(f"  [BUDGET] {case['id']} / {model} ({elapsed:.1f}s) -- {exc}", flush=True)
+        return record
+    except malformed as exc:
+        elapsed = retrieval_elapsed + time.perf_counter() - t0
+        record = {
+            "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
+            "lang": case["lang"], "model": model, "passed": False,
+            "reason": f"malformed artifact -- {type(exc).__name__}: {str(exc)[:120]}",
+            "elapsed_seconds": round(elapsed, 2),
+        }
+        print(
+            f"  [FAIL] {case['id']} / {model} ({elapsed:.1f}s) -- malformed artifact",
+            flush=True,
+        )
+        return record
+    except Exception as exc:
+        elapsed = retrieval_elapsed + time.perf_counter() - t0
+        record = {
+            "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
+            "lang": case["lang"], "model": model, "passed": False,
+            "infrastructure_error": True,
+            "reason": f"study failed -- {type(exc).__name__}: {exc}",
+            "elapsed_seconds": round(elapsed, 2),
+        }
+        print(
+            f"  [ERROR] {case['id']} / {model} ({elapsed:.1f}s): {type(exc).__name__}: {exc}",
+            flush=True,
+        )
+        return record
+
+    elapsed = retrieval_elapsed + time.perf_counter() - t0
+    result = grade.grade_study(artifact, case)
+    record = {
+        "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
+        "lang": case["lang"], "model": model, "passed": result["pass"],
+        "reason": result["reason"],
+        "elapsed_seconds": round(elapsed, 2),
+    }
+    status = "PASS" if result["pass"] else "FAIL"
+    print(
+        f"  [{status}] {case['id']} / {model} ({elapsed:.1f}s) -- {result['reason']}",
+        flush=True,
+    )
+    return record
 
 
 def run_factual_case(
@@ -879,100 +895,126 @@ def run_factual_case(
     ``preparar_fragmentos_para_generacion`` does not depend on the generator,
     only on retrieval + reranking, so re-running it per model would be pure
     waste (and, more importantly, would not exercise anything different).
+
+    Loops ``models`` case-major (one case, every model), setting the "rag"
+    role before each generation call -- kept for callers that still want that
+    shape (the probe scripts). ``run_all_cases`` instead calls
+    ``_run_factual_case_for_model`` directly, model-major (issue #220), and
+    sets the role once per model rather than once per (case, model) pair.
     """
     if not fragments:
         return [
-            {
-                "id": case["id"],
-                "paper": case["paper"],
-                "case_type": case["case_type"],
-                "lang": case["lang"],
-                "model": model,
-                "passed": False,
-                "reason": "no fragments retrieved",
-                "elapsed_seconds": round(retrieval_elapsed, 2),
-            }
+            _run_factual_case_for_model(rag, case, fragments, model, retrieval_elapsed)
             for model in models
         ]
 
     records = []
     for model in models:
         rag.set_model_roles_runtime({"rag": model})
-        t0 = time.perf_counter()
-        gen_stats: Dict[str, Any] = {}
-        try:
-            answer = _run_with_budget(
-                lambda: rag.generar_respuesta_silenciosa(
-                    case["question"], list(fragments), stats=gen_stats
-                ),
-                budget_seconds=GENERATION_BUDGET_SECONDS,
-            )
-        except GenerationBudgetExceeded as exc:
-            gen_elapsed = time.perf_counter() - t0
-            records.append(
-                {
-                    "id": case["id"],
-                    "paper": case["paper"],
-                    "case_type": case["case_type"],
-                    "lang": case["lang"],
-                    "model": model,
-                    "passed": False,
-                    "budget_exceeded": True,
-                    "reason": str(exc),
-                    "elapsed_seconds": round(retrieval_elapsed + gen_elapsed, 2),
-                }
-            )
-            print(f"  [BUDGET] {case['id']} / {model} ({gen_elapsed:.1f}s) -- {exc}", flush=True)
-            continue
-        except Exception as exc:
-            # A dead or overloaded Ollama must not be reported as a quality
-            # regression: the run is inconclusive, which is a different verdict
-            # from "the system got worse". Marked as an infrastructure error so
-            # the gate can refuse to compare against the baseline at all.
-            gen_elapsed = time.perf_counter() - t0
-            records.append(
-                {
-                    "id": case["id"],
-                    "paper": case["paper"],
-                    "case_type": case["case_type"],
-                    "lang": case["lang"],
-                    "model": model,
-                    "passed": False,
-                    "infrastructure_error": True,
-                    "reason": f"{type(exc).__name__}: {exc}",
-                    "elapsed_seconds": round(retrieval_elapsed + gen_elapsed, 2),
-                }
-            )
-            print(f"  [ERROR] {case['id']} / {model} -- {type(exc).__name__}: {exc}", flush=True)
-            continue
+        records.append(
+            _run_factual_case_for_model(rag, case, fragments, model, retrieval_elapsed)
+        )
+    return records
+
+
+def _run_factual_case_for_model(
+    rag,
+    case: Dict[str, Any],
+    fragments: Sequence[Dict[str, Any]],
+    model: str,
+    retrieval_elapsed: float,
+) -> Dict[str, Any]:
+    """Generate and grade one factual_number/factual_concept answer for a
+    single already-selected model.
+
+    Extracted from ``run_factual_case``'s per-model loop body (issue #220).
+    Does not touch the "rag" role itself -- the caller sets it (once per
+    model in ``run_all_cases``'s model-major loop, or once per (case, model)
+    pair in ``run_factual_case``'s own case-major loop). The generation
+    budget (issue #229) is applied here, so both callers get it.
+    """
+    if not fragments:
+        return {
+            "id": case["id"],
+            "paper": case["paper"],
+            "case_type": case["case_type"],
+            "lang": case["lang"],
+            "model": model,
+            "passed": False,
+            "reason": "no fragments retrieved",
+            "elapsed_seconds": round(retrieval_elapsed, 2),
+        }
+
+    t0 = time.perf_counter()
+    gen_stats: Dict[str, Any] = {}
+    try:
+        answer = _run_with_budget(
+            lambda: rag.generar_respuesta_silenciosa(
+                case["question"], list(fragments), stats=gen_stats
+            ),
+            budget_seconds=GENERATION_BUDGET_SECONDS,
+        )
+    except GenerationBudgetExceeded as exc:
         gen_elapsed = time.perf_counter() - t0
-        result = grade.grade_answer(answer, case)
         record = {
             "id": case["id"],
             "paper": case["paper"],
             "case_type": case["case_type"],
             "lang": case["lang"],
             "model": model,
-            "passed": result["pass"],
-            "reason": result["reason"],
+            "passed": False,
+            "budget_exceeded": True,
+            "reason": str(exc),
             "elapsed_seconds": round(retrieval_elapsed + gen_elapsed, 2),
-            # Generation only, so models are comparable. elapsed_seconds
-            # includes the retrieval this case shares across every model, and
-            # on this corpus retrieval dominates it -- comparing generators by
-            # that number mostly compares how busy the card was.
-            "generation_seconds": round(gen_elapsed, 2),
-            **_decoding_metrics(gen_stats),
         }
-        if not result["pass"]:
-            record["answer"] = answer
-            record["retrieved"] = _fragment_diag(fragments)
-        records.append(record)
-        status = "PASS" if result["pass"] else "FAIL"
-        print(
-            f"  [{status}] {case['id']} / {model} ({gen_elapsed:.1f}s) -- {result['reason']}",
-            flush=True,
-        )
-    return records
+        print(f"  [BUDGET] {case['id']} / {model} ({gen_elapsed:.1f}s) -- {exc}", flush=True)
+        return record
+    except Exception as exc:
+        # A dead or overloaded Ollama must not be reported as a quality
+        # regression: the run is inconclusive, which is a different verdict
+        # from "the system got worse". Marked as an infrastructure error so
+        # the gate can refuse to compare against the baseline at all.
+        gen_elapsed = time.perf_counter() - t0
+        record = {
+            "id": case["id"],
+            "paper": case["paper"],
+            "case_type": case["case_type"],
+            "lang": case["lang"],
+            "model": model,
+            "passed": False,
+            "infrastructure_error": True,
+            "reason": f"{type(exc).__name__}: {exc}",
+            "elapsed_seconds": round(retrieval_elapsed + gen_elapsed, 2),
+        }
+        print(f"  [ERROR] {case['id']} / {model} -- {type(exc).__name__}: {exc}", flush=True)
+        return record
+    gen_elapsed = time.perf_counter() - t0
+    result = grade.grade_answer(answer, case)
+    record = {
+        "id": case["id"],
+        "paper": case["paper"],
+        "case_type": case["case_type"],
+        "lang": case["lang"],
+        "model": model,
+        "passed": result["pass"],
+        "reason": result["reason"],
+        "elapsed_seconds": round(retrieval_elapsed + gen_elapsed, 2),
+        # Generation only, so models are comparable. elapsed_seconds
+        # includes the retrieval this case shares across every model, and
+        # on this corpus retrieval dominates it -- comparing generators by
+        # that number mostly compares how busy the card was.
+        "generation_seconds": round(gen_elapsed, 2),
+        **_decoding_metrics(gen_stats),
+    }
+    if not result["pass"]:
+        record["answer"] = answer
+        record["retrieved"] = _fragment_diag(fragments)
+    status = "PASS" if result["pass"] else "FAIL"
+    print(
+        f"  [{status}] {case['id']} / {model} ({gen_elapsed:.1f}s) -- {result['reason']}",
+        flush=True,
+    )
+    return record
 
 
 # Measured in issue #27 (2026-07-29): with the product default KEEP_ALIVE=0,
@@ -1207,15 +1249,34 @@ def run_all_cases(
 
     print(f"\n[phase 2/2] generation for {len(pending)} case(s) (Ollama alone on GPU)", flush=True)
     with _generation_keep_alive(set(models) | {AUX_MODEL}):
-        for item in pending:
-            if item["case"]["case_type"] in _STUDY_CASE_TYPES:
-                records.extend(
-                    run_study_case(item["case"], item["fragments"], models, item["elapsed"])
-                )
-            else:
-                records.extend(
-                    run_factual_case(rag, item["case"], item["fragments"], models, item["elapsed"])
-                )
+        # Model-major, case-minor (issue #220): this 8 GB card holds one
+        # generator at a time, so switching models inside the case loop
+        # reloaded it len(pending) x len(models) times where len(models)
+        # loads are enough -- the same reasoning phase 1 already applied to
+        # corpora (issue #123, see the comment above it). Retrieval was
+        # already computed once and is shared via `pending`, so every model
+        # still sees identical fragments; only execution order changes.
+        #
+        # Each record still lands in `records` the moment it exists, so the
+        # partial artifact (issue #219) keeps its guarantee under the new
+        # order; only the in-memory tail is regrouped afterwards.
+        first_generation = len(records)
+        for model in models:
+            rag.set_model_roles_runtime({"rag": model})
+            for item in pending:
+                if item["case"]["case_type"] in _STUDY_CASE_TYPES:
+                    records.append(
+                        _run_study_case_for_model(
+                            item["case"], item["fragments"], model, item["elapsed"]
+                        )
+                    )
+                else:
+                    records.append(
+                        _run_factual_case_for_model(
+                            rag, item["case"], item["fragments"], model, item["elapsed"]
+                        )
+                    )
+        _restore_generation_order(records, cases, start=first_generation)
     return records
 
 
@@ -1231,6 +1292,31 @@ def _restore_case_order(records, pending, cases) -> None:
     position = {case["id"]: index for index, case in enumerate(cases)}
     records.sort(key=lambda record: position.get(record["id"], len(position)))
     pending.sort(key=lambda item: position.get(item["case"]["id"], len(position)))
+
+
+def _restore_generation_order(records, cases, *, start: int = 0) -> None:
+    """Sort phase 2's records, ``records[start:]``, back into the order
+    ``cases`` came in.
+
+    Phase 2 now runs model-major, case-minor (issue #220), so its records
+    arrive grouped by model rather than by case. ``sorted`` is stable, and
+    within a case each model contributes exactly one record, appended while
+    iterating ``models`` in the caller's order -- so this single sort by case
+    position also restores the original model order inside each case, making
+    the result identical to what the previous case-major loop wrote. Same
+    principle as ``_restore_case_order`` (issue #123): execution order
+    changes, result order does not.
+
+    Only the tail from ``start`` is touched: phase 1's records already sit
+    in case order ahead of it, and the previous loop appended phase 2 after
+    them rather than interleaving. Slice assignment goes through
+    ``list.__setitem__``, not ``_RecordSink.append``/``extend``, so nothing
+    is written to the partial artifact twice.
+    """
+    position = {case["id"]: index for index, case in enumerate(cases)}
+    records[start:] = sorted(
+        records[start:], key=lambda record: position.get(record["id"], len(position))
+    )
 
 
 def _run_retrieval_for_corpus(cases, retrieve, evidence, records, pending, store=None) -> None:
