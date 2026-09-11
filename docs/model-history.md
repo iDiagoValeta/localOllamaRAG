@@ -53,24 +53,28 @@ Budget 180 s, `AUX_MODEL` = `Ling-3.0-tiny` for every row.
 | Model | Size | Answered (of 136) | Overall (of 156) | tokens/s | tokens/answer | s/answer | Budget hit | Infra | Placement | Run |
 |---|---|---|---|---|---|---|---|---|---|---|
 | `qwen3-coder-30b:latest` | 10 GB | **125 (91.9%)** | 142 (91.0%) | 45.4 | 90 | 15.03 | 0 | 1 | **~50% CPU** | `20260911T094107Z` |
+| `qwen3:30b-a3b` | 18 GB | 121 (89.0%) | 138 (88.5%) | 39.1 | **335** | 24.93 | 6 | 2 | **~70% CPU** | `20260911T171038Z` |
 | `gemma4:e2b` | 7.2 GB | 120 (88.2%) | 137 (87.8%) | 103.2 | 28 | 7.97 | 0 | 0 | GPU | `20260911T071629Z` |
 | `qwen3:8b` | 5.2 GB | 120 (88.2%) | 137 (87.8%) | 35.8 | 35 | 8.94 | 0 | 0 | **CPU offload** | `20260911T071629Z` |
 | `gemma4:e4b` *(shipped default)* | 9.6 GB | 119 (87.5%) | 136 (87.2%) | 59.9 | 28 | 11.84 | 0 | 0 | GPU | `20260911T094107Z` |
 | `hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE` | 4.9 GB | 116 (85.3%) | 133 (85.3%) | 116.3 | 27 | 7.52 | 6 | 0 | GPU | `20260911T032105Z` |
+| `granite4:small-h` | 19 GB | 116 (85.3%) | 133 (85.3%) | 17.4 | 70 | 20.52 | 5 | 0 | **~72% CPU** | `20260911T171038Z` |
 | `hf.co/noctrex/Granite-4.0-H-Tiny-MXFP4_MOE-GGUF:...` | 4.2 GB | 112 (82.4%) | 129 (82.7%) | 116.9 | 72 | 7.15 | 6 | 2 | GPU | `20260911T032105Z` |
 | `hf.co/noctrex/LFM2-8B-A1B-MXFP4_MOE-GGUF:...` | 4.9 GB | 108 (79.4%) | 125 (80.1%) | 156.2 | 56 | 6.92 | 0 | 0 | GPU | `20260911T071629Z` |
+| `mistral-small3.2:24b` | 15 GB | 107 (78.7%) | 124 (79.5%) | **5.2** | 24 | 20.94 | 12 | 0 | **~70% CPU** | `20260911T171038Z` |
 | `hf.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M` | 2.0 GB | 105 (77.2%) | 122 (78.2%) | 101.3 | 27 | 6.70 | 6 | 0 | GPU | `20260911T032105Z` |
 | `gpt-oss:20b` | 13 GB | 96 (70.6%) | 113 (72.4%) | 29.7 | 100 | 20.80 | 0 | 4 | **~60% CPU** | `20260911T094107Z` |
 | `hf.co/noctrex/OLMoE-1B-7B-0125-Instruct-MXFP4_MOE-GGUF:...` | 3.9 GB | 91 (66.9%) | 108 (69.2%) | 213.0 | 64 | 6.56 | 6 | 0 | GPU | `20260911T032105Z` |
 | `hf.co/noctrex/Phi-mini-MoE-instruct-MXFP4_MOE-GGUF:...` | 4.9 GB | 63 (46.3%) | 80 (51.3%) | 95.3 | 118 | 9.24 | 0 | 0 | GPU | `20260911T071629Z` |
 
-Retrieval-only was 17/20 in all three runs -- it does not vary by generator,
+Retrieval-only was 17/20 in all four runs -- it does not vary by generator,
 which is why it is reported once rather than folded into each row.
 
 **The Infra column is cases the model never got to answer.** Granite's two
 are `GGML_ASSERT(buffer) failed` on `study_outline`; `gpt-oss:20b`'s four and
-`qwen3-coder-30b`'s one are `500 Server Error` from Ollama mid-stream, the
-signature of a model that does not fit running out of memory under offload.
+`qwen3-coder-30b`'s one and `qwen3:30b-a3b`'s two are `500 Server Error`
+from Ollama mid-stream, the signature of a model that does not fit running
+out of memory under offload.
 A row with a non-zero Infra count rests on fewer than 136 attempts, and the
 gate marks the whole run inconclusive by its own rule -- the figures are
 still the best available, but they are not a clean 136.
@@ -91,27 +95,31 @@ is weak evidence but not none. `gemma4:e2b`,
 `qwen3:8b` and the shipped default `gemma4:e4b` are separated by one case.
 
 Placement is the finding that cuts across the table. The best measured model
-runs half in system RAM, `qwen3:8b` ties for second while never reaching the
-GPU, and `gpt-oss:20b` at 60% CPU is both slow and the only model to lose
-four cases to the server itself. On this card, quality and fitting in VRAM
-are not the same axis, and a wait of 15 s against 8 s is the price of the
-five extra cases.
+runs half in system RAM, `qwen3:8b` ties for third while never reaching the
+GPU, and every model above 10 GB ran at 60-72% CPU. On this card, quality and
+fitting in VRAM are not the same axis, and a wait of 15-25 s against 7-8 s is
+the price of the extra cases.
+
+The four largest models answer the question the old "pending" rows left
+open, and the answer is not uniform. `qwen3:30b-a3b` reaches 89% but does it
+by reasoning inline -- a median of **335 tokens per answer** against 24-35
+for everything else, which is the truncation risk the old file described and
+here cost it six budget exhaustions and 25 s per answer. `granite4:small-h`
+matches `Ling-3.0-tiny` on quality at a third of the speed. `mistral-small3.2`
+at 5.2 tok/s is the slowest row in the table and exhausted the budget twelve
+times; with 70% of a 15 GB model in system RAM it is not a configuration
+anyone would run. The tranche took 278 minutes against 144-159 for the
+others.
 
 ---
 
-## Still to measure
+## Coverage
 
-These have never been run against the 156-case set. Listed so the gap is
-visible rather than inferred from absence.
-
-| Model | Size | Status |
-|---|---|---|
-| `mistral-small3.2:24b` | 15 GB | in progress, tranche 4 |
-| `qwen3:30b-a3b` | 18 GB | in progress, tranche 4 |
-| `granite4:small-h` | 19 GB | in progress, tranche 4 |
-
-All three exceed the card, so they are expected to run with CPU offload
-throughout, and their speed columns will describe that regime.
+Every generator the previous table listed, including the five rows it carried
+as "pending" or "not yet run", now has a row above measured on the same set.
+The tranches: `20260911T032105Z` (4 models, 159 min), `20260911T071629Z`
+(4, 144 min), `20260911T094107Z` (3, 144 min), `20260911T171038Z` (3, 278
+min). Total GPU time for the table: about 12 hours.
 
 ---
 
