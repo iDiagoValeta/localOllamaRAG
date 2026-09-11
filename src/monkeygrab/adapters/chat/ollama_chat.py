@@ -24,19 +24,26 @@ _DEFAULT_BASE_URL = DEFAULT_OLLAMA_BASE_URL
 
 
 @lru_cache(maxsize=None)
-def ollama_client_for(base_url: str) -> ollama.Client:
-    """Return the shared ``ollama.Client`` for one endpoint.
+def ollama_client_for(base_url: str, *, timeout: Optional[float] = None) -> ollama.Client:
+    """Return the shared ``ollama.Client`` for one endpoint (and timeout).
 
-    Cached per URL because ``wiring`` builds a fresh adapter for every query:
-    a client per instance would open a new HTTP connection pool per question
-    and never close it. The module-level ``ollama.chat`` this replaced had the
-    same one-client-per-process behaviour, minus the configurable host.
+    Cached per ``(base_url, timeout)`` because ``wiring`` builds a fresh
+    adapter for every query: a client per instance would open a new HTTP
+    connection pool per question and never close it. The module-level
+    ``ollama.chat`` this replaced had the same one-client-per-process
+    behaviour, minus the configurable host.
+
+    ``timeout`` has to be baked into the client at construction time: the
+    ``ollama`` package forwards it to ``httpx.Client(timeout=...)``, and
+    ``Client.chat()`` takes no per-call timeout argument to override it with.
+    Defaults to ``None`` (httpx's own "no timeout"), matching the client's
+    behaviour before ``OllamaChatModel.generate()`` started requesting one.
 
     Public because the CLI and web ``/chat`` modes call ``ollama.chat``
     directly instead of going through this adapter, and they must reach the
     same server the RAG pipeline does.
     """
-    return ollama.Client(host=base_url)
+    return ollama.Client(host=base_url, timeout=timeout)
 
 
 class OllamaChatModel:
@@ -56,7 +63,8 @@ class OllamaChatModel:
     image bytes. ``stream`` instead talks to ``/api/generate`` over raw HTTP,
     because it needs line-by-line JSON and a retry policy limited to 5xx --
     neither of which the client exposes. Both are bound to ``base_url``, so
-    the two paths cannot end up talking to different servers.
+    the two paths cannot end up talking to different servers, and both are
+    bound to ``request_timeout``, so neither can block past its deadline.
 
     ``model_unloader`` frees VRAM before streaming starts, and again before
     retrying a 5xx. It is injected rather than computed here because
@@ -86,7 +94,10 @@ class OllamaChatModel:
                 ``options``, overriding any ``num_ctx`` already in ``options``).
             keep_alive: Seconds to keep the model loaded after the call
                 (``0`` unloads immediately, matching ``OLLAMA_KEEP_ALIVE``).
-            request_timeout: HTTP timeout in seconds for ``stream``.
+            request_timeout: HTTP timeout in seconds, applied to both
+                ``generate`` and ``stream``. ``generate`` bakes it into the
+                ``ollama.Client`` it uses (see ``ollama_client_for``);
+                ``stream`` passes it straight to ``requests.post``.
             generate_retries: Total attempts for ``stream`` on repeated 5xx
                 responses (``1`` = no retry).
             generate_retry_delay: Seconds to wait between ``stream`` retries.
@@ -143,7 +154,9 @@ class OllamaChatModel:
             The complete generated text.
 
         Raises:
-            RuntimeError: On any generation failure.
+            RuntimeError: On any generation failure, including a request
+                that exceeds ``request_timeout`` -- this call has no other
+                deadline, so a stalled server would otherwise hang forever.
         """
         message: Dict[str, Any] = {"role": "user", "content": prompt}
         if images:
@@ -163,7 +176,9 @@ class OllamaChatModel:
             }
             if response_format is not None:
                 chat_kwargs["format"] = response_format
-            response = ollama_client_for(self._base_url).chat(**chat_kwargs)
+            response = ollama_client_for(self._base_url, timeout=self._request_timeout).chat(
+                **chat_kwargs
+            )
         except Exception as exc:
             raise RuntimeError(f"Ollama generate failed for model {self._model!r}: {exc}") from exc
 
