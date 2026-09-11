@@ -15,6 +15,12 @@ Pure over parsed JSON: no network, no GPU, no model.
 
 Usage:
     python tests/eval/compare_runs.py runs/<a>.json runs/<b>.json
+    python tests/eval/compare_runs.py --exclude-infrastructure-errors runs/<a>.json runs/<b>.json
+
+The second form is for a pair where one model crashed on a few cases in
+either run (issue #240): those (case, model) pairs are dropped from both
+sides and counted in the output, so the rest of the sweep can still be
+compared. The default refuses such a run outright.
 """
 
 from __future__ import annotations
@@ -34,6 +40,15 @@ def _outcomes(report: Dict[str, Any]) -> Dict[str, bool]:
     return {
         f"{r['id']} / {r['model'] or 'n-a'}": bool(r["passed"])
         for r in report["results"]
+    }
+
+
+def _infrastructure_keys(report: Dict[str, Any]) -> set:
+    """The ``"<case id> / <model>"`` keys whose record never really ran."""
+    return {
+        f"{r['id']} / {r['model'] or 'n-a'}"
+        for r in report["results"]
+        if r.get("infrastructure_error")
     }
 
 
@@ -71,6 +86,7 @@ def compare(
     *,
     label_a: str = "report_a",
     label_b: str = "report_b",
+    exclude_infrastructure_errors: bool = False,
 ) -> Dict[str, Any]:
     """Compare two run reports case by case.
 
@@ -81,17 +97,36 @@ def compare(
             passes the actual file path so a failure names the file, not the
             generic parameter name.
         label_b: Same, for ``report_b``.
+        exclude_infrastructure_errors: Drop every (case, model) pair that
+            hit an infrastructure error in either run instead of refusing
+            the run (issue #240). A pair that never ran is not a pass or a
+            fail, so counting it as a flip would inflate the noise floor,
+            and refusing the whole file throws away the hundreds of pairs
+            that did run. Off by default: the gate's own comparison keeps
+            the strict rule.
 
     Returns:
         ``flipped_to_pass`` and ``flipped_to_fail`` (sorted case keys),
-        ``stable`` (count unchanged) and ``pass_rate_delta`` (b minus a).
+        ``stable`` (count unchanged), ``pass_rate_delta`` (b minus a) and
+        ``excluded`` (sorted keys dropped under the flag, empty otherwise).
 
     Raises:
         ValueError: The two runs do not cover the same cases (a partial run
             would otherwise compare as a large improvement or regression),
             or either run is inconclusive or empty -- a run that measured
-            nothing must not be treated as a noise-free result.
+            nothing must not be treated as a noise-free result. Under the
+            flag, "inconclusive" narrows to "no comparable pair left".
     """
+    excluded: List[str] = []
+    if exclude_infrastructure_errors:
+        excluded = sorted(_infrastructure_keys(report_a) | _infrastructure_keys(report_b))
+        report_a = _without(report_a, excluded)
+        report_b = _without(report_b, excluded)
+        if not report_a["results"] or not report_b["results"]:
+            raise ValueError(
+                f"no comparable pair left: every record of {label_a} or {label_b} "
+                "hit an infrastructure error"
+            )
     _reject_unusable(report_a, label_a)
     _reject_unusable(report_b, label_b)
     a, b = _outcomes(report_a), _outcomes(report_b)
@@ -114,6 +149,19 @@ def compare(
         "flipped_to_fail": flipped_to_fail,
         "stable": total - len(flipped_to_pass) - len(flipped_to_fail),
         "pass_rate_delta": round(delta, 4),
+        "excluded": excluded,
+    }
+
+
+def _without(report: Dict[str, Any], keys: List[str]) -> Dict[str, Any]:
+    """A shallow copy of ``report`` with the records for ``keys`` removed."""
+    dropped = set(keys)
+    return {
+        **report,
+        "results": [
+            r for r in report["results"]
+            if f"{r['id']} / {r['model'] or 'n-a'}" not in dropped
+        ],
     }
 
 
@@ -131,17 +179,32 @@ def _print(result: Dict[str, Any]) -> None:
     for key in to_fail:
         print(f"  - {key}")
     print(f"pass rate delta: {result['pass_rate_delta']:+.4f}")
+    excluded: List[str] = result["excluded"]
+    if excluded:
+        print(f"{len(excluded)} pair(s) excluded (infrastructure error in one run):")
+        for key in excluded:
+            print(f"  ! {key}")
 
 
 def main(argv: List[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("report_a", type=Path)
     parser.add_argument("report_b", type=Path)
+    parser.add_argument(
+        "--exclude-infrastructure-errors",
+        action="store_true",
+        help="drop the (case, model) pairs that hit an infrastructure error in "
+             "either run instead of refusing the run; the count is printed",
+    )
     args = parser.parse_args(argv)
 
     report_a = json.loads(args.report_a.read_text(encoding="utf-8"))
     report_b = json.loads(args.report_b.read_text(encoding="utf-8"))
-    _print(compare(report_a, report_b, label_a=str(args.report_a), label_b=str(args.report_b)))
+    _print(compare(
+        report_a, report_b,
+        label_a=str(args.report_a), label_b=str(args.report_b),
+        exclude_infrastructure_errors=args.exclude_infrastructure_errors,
+    ))
     return 0
 
 

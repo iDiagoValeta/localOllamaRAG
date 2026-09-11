@@ -294,6 +294,13 @@ python tests/eval/compare_runs.py tests/eval/runs/<first>.json tests/eval/runs/<
 Every flip is noise. Record the observed number: no delta at or below it counts
 as a real change, and an optimisation loop must not treat one as an improvement.
 
+`compare_runs.py` refuses a report that carries an `infrastructure_error`, because a run
+that measured nothing must not compare as noise-free. A sweep that includes a model with a
+reproducible Ollama crash (Granite's `GGML_ASSERT` on the `att-study-*` cases, for one)
+trips that rule on every run. Pass `--exclude-infrastructure-errors` to drop the (case,
+model) pairs that never ran in either report and compare the rest; the output lists what
+was excluded, so the number you record says what it rests on (issue #240).
+
 **Measured 2026-07-29**, two full-gate runs, identical configuration and code,
 same index (both logged `cache hit` on the dev and blind sets, so neither
 reindexed): `tests/eval/runs/20260729T020233Z_mineru-jina_clip-faiss.json` and
