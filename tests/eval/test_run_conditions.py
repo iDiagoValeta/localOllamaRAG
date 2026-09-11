@@ -187,13 +187,14 @@ def test_run_conditions_has_every_field_the_issue_asks_for(_quiet_conditions):
 
     assert set(conditions) == {
         "config", "versions", "hardware", "git_commit", "gold_sha256",
-        "sampling", "seed", "keep_alive_seconds",
+        "sampling", "seed", "keep_alive_seconds", "generation_budget_seconds",
     }
     assert set(conditions["versions"]) == {
         "mineru", "sentence_transformers", "torch", "transformers", "faiss", "ollama_server",
     }
     assert conditions["seed"] is None
     assert conditions["keep_alive_seconds"] == int(run_eval._EVAL_GENERATION_KEEP_ALIVE_SECONDS)
+    assert conditions["generation_budget_seconds"] == run_eval.GENERATION_BUDGET_SECONDS
     assert len(conditions["gold_sha256"]) == 64
     assert conditions["sampling"] == sampling
 

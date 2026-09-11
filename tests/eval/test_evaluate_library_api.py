@@ -308,6 +308,89 @@ def test_write_report_true_writes_the_expected_json(monkeypatch, tmp_path):
     assert payload["run"]["num_cases"] == 1
 
 
+# PARTIAL ARTIFACT (issue #219)
+#
+# _RecordSink's own behavior (append/extend write JSONL, sort doesn't touch
+# the file, a None path is a no-op) is covered in test_partial_artifact.py,
+# which stays in the dependency-free fast gate. What belongs here instead is
+# evaluate()'s wiring around it: the partial path it computes before
+# run_all_cases starts, and the cleanup once a report is actually written --
+# both need the real evaluate() control flow, which is why these two live
+# next to this file's other evaluate()-level tests rather than there.
+
+
+def _capture_run_all_cases_writing_to_sink(monkeypatch, records, *, then_raise=False):
+    """Replace run_all_cases with a double that writes through the same
+    _RecordSink real run_all_cases would use, so these tests exercise
+    evaluate()'s partial_sink plumbing (not just a stub that ignores it).
+    """
+
+    def _fake(rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind,
+              models, *, partial_sink=None, **_stacks):
+        sink = run_eval._RecordSink(partial_sink)
+        sink.extend(records)
+        if then_raise:
+            raise RuntimeError("simulated crash mid-run")
+        return list(sink)
+
+    monkeypatch.setattr(run_eval, "run_all_cases", _fake)
+
+
+def test_a_run_that_dies_mid_generation_leaves_its_records_in_a_partial_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(run_eval, "RESULTS_DIR", tmp_path)
+    _capture_ensure_indexed(monkeypatch, [])
+    # Two records: enough that the whole file is no longer a single JSON
+    # value (json.loads would happily parse one object plus a trailing
+    # newline), which is the point of the assertion below.
+    records = [
+        {"id": _DEV_CASE_ID, "paper": "p", "case_type": "factual_number", "lang": "en",
+         "model": "m", "passed": True, "reason": "stub", "elapsed_seconds": 1.0},
+        {"id": _DEV_CASE_ID, "paper": "p", "case_type": "factual_number", "lang": "en",
+         "model": "m2", "passed": False, "reason": "stub", "elapsed_seconds": 2.0},
+    ]
+    _capture_run_all_cases_writing_to_sink(monkeypatch, records, then_raise=True)
+
+    with pytest.raises(RuntimeError, match="simulated crash mid-run"):
+        evaluate(models=["m"], case_ids=[_DEV_CASE_ID], write_report=True)
+
+    files = list(tmp_path.iterdir())
+    assert len(files) == 1
+    partial = files[0]
+    # Distinguishable from a completed report by construction, not just by
+    # convention: the closure criterion is that nothing can grade this as if
+    # it were the whole set, and a reader that tries what
+    # tools/diagnostics/model_history_row.py and compare_runs.py do --
+    # json.loads the whole file -- gets a parse error, not a plausible-looking
+    # but incomplete artifact.
+    assert partial.suffixes == [".partial", ".jsonl"]
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(partial.read_text(encoding="utf-8"))
+    written = [json.loads(line) for line in partial.read_text(encoding="utf-8").splitlines()]
+    assert written == records
+
+
+def test_a_completed_run_removes_its_partial_file(monkeypatch, tmp_path):
+    monkeypatch.setattr(run_eval, "RESULTS_DIR", tmp_path)
+    _capture_ensure_indexed(monkeypatch, [])
+    records = [
+        {"id": _DEV_CASE_ID, "paper": "p", "case_type": "factual_number", "lang": "en",
+         "model": "m", "passed": True, "reason": "stub", "elapsed_seconds": 1.0},
+    ]
+    _capture_run_all_cases_writing_to_sink(monkeypatch, records)
+
+    result = evaluate(models=["m"], case_ids=[_DEV_CASE_ID], write_report=True)
+
+    # Exactly the final report -- the partial sidecar this run actually wrote
+    # to (unlike test_write_report_true_writes_the_expected_json's stub,
+    # which never touches partial_sink at all) is gone, or a completed run
+    # would leave two files that both look authoritative for the same run.
+    files = list(tmp_path.iterdir())
+    assert len(files) == 1
+    assert files[0] == Path(result["report_path"])
+    payload = json.loads(files[0].read_text(encoding="utf-8"))
+    assert payload["results"] == records
+
+
 def test_write_report_includes_the_conditions_block(monkeypatch, tmp_path):
     """Issue #222: the artifact must record what produced its pass rate, not
     only the pass rate itself."""
@@ -321,10 +404,11 @@ def test_write_report_includes_the_conditions_block(monkeypatch, tmp_path):
     conditions = payload["conditions"]
     assert set(conditions) == {
         "config", "versions", "hardware", "git_commit", "gold_sha256",
-        "sampling", "seed", "keep_alive_seconds",
+        "sampling", "seed", "keep_alive_seconds", "generation_budget_seconds",
     }
     assert conditions["seed"] is None
     assert conditions["keep_alive_seconds"] == int(run_eval._EVAL_GENERATION_KEEP_ALIVE_SECONDS)
+    assert conditions["generation_budget_seconds"] == run_eval.GENERATION_BUDGET_SECONDS
     assert len(conditions["gold_sha256"]) == 64
     # "run" and "summary"/"results" are untouched by the new sibling key --
     # the two existing readers never look past them.

@@ -37,6 +37,7 @@ import math
 import os
 import shutil
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -120,6 +121,17 @@ AUX_MODEL = os.getenv(
 # variance (model sampling, Ollama warmup) from flipping the gate red.
 BASELINE_MARGIN = 0.05
 
+# Wall-clock ceiling on a single generation -- one model x one case call in
+# phase 2 -- covering the whole attempt, any internal HTTP retry included
+# (issue #229). Measured 2026-09-11 on 289 generations from a real campaign:
+# the 255 factual ones cluster at median 6.8s, max 10.9s, while the 34
+# study_* ones alone cost ~90 minutes, one of them (ricci-study-summary-es)
+# 26 minutes on its own. 180s is ~16x both the factual median and the factual
+# max -- generous for a legitimate long summary, still a real ceiling on the
+# pathological case. Configurable so this default is not the only way to
+# change it.
+GENERATION_BUDGET_SECONDS = int(os.getenv("EVAL_GENERATION_BUDGET_SECONDS", "180"))
+
 # Case types decided entirely by retrieval: they skip generation in
 # run_all_cases (a pass says a fragment of the right kind was surfaced, not
 # that any answer used it) and are reported in their own build_summary bucket,
@@ -134,6 +146,18 @@ class EvalSetupError(RuntimeError):
 
     Caught in main() and printed as a clean actionable message -- this is a
     self-sufficiency failure, not a bug, so it does not need a traceback.
+    """
+
+
+class GenerationBudgetExceeded(Exception):
+    """Raised when one generation call runs past GENERATION_BUDGET_SECONDS.
+
+    Deliberately not an EvalSetupError or anything caught as
+    infrastructure_error (issue #229): the model was reachable and it was
+    generating -- it simply did not stop in time, which is a property of
+    that generation, not evidence the run measured nothing. Grading it as a
+    plain FAIL would lose that distinction just as badly in the other
+    direction, so callers give it its own record field instead.
     """
 
 
@@ -629,6 +653,60 @@ def _decoding_metrics(stats: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# GENERATION BUDGET (issue #229)
+
+
+def _run_with_budget(fn, *, budget_seconds: float) -> Any:
+    """Call ``fn()`` on a daemon thread, bounded by ``budget_seconds`` wall clock.
+
+    Used to bound run_factual_case's and run_study_case's one call to the
+    model under test. ``fn`` runs as a single opaque unit, so an adapter that
+    retries internally (OllamaChatModel.stream's 5xx retry, generate_retries
+    in rag/chat_pdfs.py) is still bounded by one wall-clock ceiling rather
+    than multiplied by however many attempts it makes -- the alternative
+    would have been shortening the HTTP timeout instead, which retries would
+    have multiplied by generate_retries (2).
+
+    Args:
+        fn: Zero-argument callable; wrap the real call in a lambda/closure.
+        budget_seconds: Seconds to wait before giving up on ``fn``.
+
+    Returns:
+        Whatever ``fn()`` returned, if it returned within the budget.
+
+    Raises:
+        GenerationBudgetExceeded: ``fn`` was still running when the budget
+            expired.
+        BaseException: Whatever ``fn()`` raised, if it raised within the
+            budget -- re-raised as-is so callers keep classifying real
+            failures (a dead Ollama, a malformed artifact) exactly as before.
+    """
+    box: Dict[str, Any] = {}
+
+    def _target() -> None:
+        try:
+            box["result"] = fn()
+        except BaseException as exc:  # noqa: BLE001 - forwarded to the caller's thread
+            box["exc"] = exc
+
+    # Not cancelled on timeout -- Python cannot interrupt a blocking socket
+    # read, so an abandoned call may keep running against Ollama after this
+    # function returns. Daemonized so that residual call cannot also block
+    # interpreter shutdown; the harness accepts the leftover GPU cost of one
+    # orphaned call as the trade-off for the run itself staying bounded and
+    # able to move on to the next case.
+    thread = threading.Thread(target=_target, daemon=True)
+    thread.start()
+    thread.join(timeout=budget_seconds)
+    if thread.is_alive():
+        raise GenerationBudgetExceeded(
+            f"generation exceeded the {budget_seconds:.0f}s budget"
+        )
+    if "exc" in box:
+        raise box["exc"]
+    return box["result"]
+
+
 # STUDY ARTIFACTS (issue #140)
 
 # Study reads a whole document, not a query's top-k, so these cases take a
@@ -687,7 +765,15 @@ def run_study_case(
 
     for model in models:
         t0 = time.perf_counter()
-        try:
+
+        def _generate() -> Dict[str, Any]:
+            # Bound as one call for the budget below (issue #229) -- config
+            # and fragment conversion are local and instant, only
+            # study.summarize/outline/quiz talks to Ollama, but wrapping the
+            # setup too keeps this a single opaque unit like run_factual_case's.
+            # Reading `model`/`case`/`fragments` from the loop is safe despite
+            # the closure: _run_with_budget joins before this loop advances,
+            # so the values cannot change out from under an in-flight call.
             config = wiring.app_config_from_runtime().with_overrides(
                 **{"models.rag": model}
             )
@@ -704,51 +790,78 @@ def run_study_case(
                     lang_label = "English"
 
             if case["case_type"] == "study_summary":
-                artifact = summary_to_dict(
+                return summary_to_dict(
                     study.summarize(domain_fragments, config, language=lang_label)
                 )
             elif case["case_type"] == "study_outline":
-                artifact = outline_to_dict(
+                return outline_to_dict(
                     study.outline(domain_fragments, config, language=lang_label)
                 )
-            else:
-                artifact = quiz_to_dict(
-                    study.quiz(
-                        domain_fragments,
-                        config,
-                        language=lang_label,
-                        question_count=int(case.get("question_count", 5)),
-                    )
+            return quiz_to_dict(
+                study.quiz(
+                    domain_fragments,
+                    config,
+                    language=lang_label,
+                    question_count=int(case.get("question_count", 5)),
                 )
+            )
+
+        try:
+            artifact = _run_with_budget(
+                _generate, budget_seconds=GENERATION_BUDGET_SECONDS
+            )
+        except GenerationBudgetExceeded as exc:
+            elapsed = retrieval_elapsed + time.perf_counter() - t0
+            records.append({
+                "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
+                "lang": case["lang"], "model": model, "passed": False,
+                "budget_exceeded": True,
+                "reason": str(exc),
+                "elapsed_seconds": round(elapsed, 2),
+            })
+            print(f"  [BUDGET] {case['id']} / {model} ({elapsed:.1f}s) -- {exc}", flush=True)
+            continue
         except malformed as exc:
+            elapsed = retrieval_elapsed + time.perf_counter() - t0
             records.append({
                 "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
                 "lang": case["lang"], "model": model, "passed": False,
                 "reason": f"malformed artifact -- {type(exc).__name__}: {str(exc)[:120]}",
-                "elapsed_seconds": round(retrieval_elapsed + time.perf_counter() - t0, 2),
+                "elapsed_seconds": round(elapsed, 2),
             })
-            print(f"  [FAIL] {case['id']} / {model} -- malformed artifact", flush=True)
+            print(
+                f"  [FAIL] {case['id']} / {model} ({elapsed:.1f}s) -- malformed artifact",
+                flush=True,
+            )
             continue
         except Exception as exc:
+            elapsed = retrieval_elapsed + time.perf_counter() - t0
             records.append({
                 "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
                 "lang": case["lang"], "model": model, "passed": False,
                 "infrastructure_error": True,
                 "reason": f"study failed -- {type(exc).__name__}: {exc}",
-                "elapsed_seconds": round(retrieval_elapsed + time.perf_counter() - t0, 2),
+                "elapsed_seconds": round(elapsed, 2),
             })
-            print(f"  [ERROR] {case['id']} / {model}: {type(exc).__name__}: {exc}", flush=True)
+            print(
+                f"  [ERROR] {case['id']} / {model} ({elapsed:.1f}s): {type(exc).__name__}: {exc}",
+                flush=True,
+            )
             continue
 
+        elapsed = retrieval_elapsed + time.perf_counter() - t0
         result = grade.grade_study(artifact, case)
         records.append({
             "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
             "lang": case["lang"], "model": model, "passed": result["pass"],
             "reason": result["reason"],
-            "elapsed_seconds": round(retrieval_elapsed + time.perf_counter() - t0, 2),
+            "elapsed_seconds": round(elapsed, 2),
         })
         status = "PASS" if result["pass"] else "FAIL"
-        print(f"  [{status}] {case['id']} / {model} -- {result['reason']}", flush=True)
+        print(
+            f"  [{status}] {case['id']} / {model} ({elapsed:.1f}s) -- {result['reason']}",
+            flush=True,
+        )
 
     return records
 
@@ -788,9 +901,29 @@ def run_factual_case(
         t0 = time.perf_counter()
         gen_stats: Dict[str, Any] = {}
         try:
-            answer = rag.generar_respuesta_silenciosa(
-                case["question"], list(fragments), stats=gen_stats
+            answer = _run_with_budget(
+                lambda: rag.generar_respuesta_silenciosa(
+                    case["question"], list(fragments), stats=gen_stats
+                ),
+                budget_seconds=GENERATION_BUDGET_SECONDS,
             )
+        except GenerationBudgetExceeded as exc:
+            gen_elapsed = time.perf_counter() - t0
+            records.append(
+                {
+                    "id": case["id"],
+                    "paper": case["paper"],
+                    "case_type": case["case_type"],
+                    "lang": case["lang"],
+                    "model": model,
+                    "passed": False,
+                    "budget_exceeded": True,
+                    "reason": str(exc),
+                    "elapsed_seconds": round(retrieval_elapsed + gen_elapsed, 2),
+                }
+            )
+            print(f"  [BUDGET] {case['id']} / {model} ({gen_elapsed:.1f}s) -- {exc}", flush=True)
+            continue
         except Exception as exc:
             # A dead or overloaded Ollama must not be reported as a quality
             # regression: the run is inconclusive, which is a different verdict
@@ -949,6 +1082,55 @@ def _release_gpu_models(*retrievers) -> None:
                     print(f"[phase] {attribute}.{method}() failed, continuing: {exc}", flush=True)
 
 
+class _RecordSink(list):
+    """A ``list`` that also appends each record to a JSONL file as it lands.
+
+    Issue #219: before this, every record lived only in memory until
+    ``evaluate()``'s single ``report_path.write_text(...)`` at the very end,
+    so a run killed partway (crash, OOM, power cut, ^C) left nothing on
+    disk -- a multi-hour sweep's measurements gone with it. Subclassing
+    ``list`` instead of threading a callback through every call site means
+    ``run_all_cases``, ``_run_retrieval_for_corpus``, ``run_study_case`` and
+    ``run_factual_case`` keep doing plain ``records.append(...)`` /
+    ``records.extend(...)`` -- this is the one place that knows they should
+    also be durable.
+
+    Each line is flushed and fsynced immediately: the failure mode named in
+    the issue is a power cut, which OS write buffering alone would not
+    survive.
+
+    No header line and no run metadata -- just the records, in the order
+    they were produced. That is enough to know which (case, model) pairs
+    already ran; the operator already knows which run this belongs to, since
+    they are the one who started it. ``sink_path`` is ``None`` when the
+    caller has no on-disk artifact at all (``write_report=False``), in which
+    case this behaves like a plain list.
+    """
+
+    def __init__(self, sink_path: Optional[Path] = None):
+        super().__init__()
+        self._sink_path = sink_path
+
+    def append(self, record: Dict[str, Any]) -> None:
+        super().append(record)
+        self._write(record)
+
+    def extend(self, records: Iterable[Dict[str, Any]]) -> None:
+        records = list(records)
+        super().extend(records)
+        for record in records:
+            self._write(record)
+
+    def _write(self, record: Dict[str, Any]) -> None:
+        if self._sink_path is None:
+            return
+        with self._sink_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False))
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+
+
 def run_all_cases(
     rag,
     cases: Sequence[Dict[str, Any]],
@@ -961,6 +1143,7 @@ def run_all_cases(
     stack_dev=None,
     stack_blind=None,
     extra_corpora: Sequence[tuple] = (),
+    partial_sink: Optional[Path] = None,
 ) -> List[Dict[str, Any]]:
     """Run every gold case via ``Retrieve``, retrieving everything before
     generating anything.
@@ -976,8 +1159,16 @@ def run_all_cases(
     The cost is memory: every case's retrieved fragments are held until the
     generation phase. At 51 cases and a handful of fragments each, that is
     kilobytes.
+
+    Args:
+        partial_sink: When given, every record (both phases) is appended to
+            this path as JSONL as soon as it is produced, so a run that dies
+            partway still leaves its already-computed records on disk (issue
+            #219). ``None`` (the default) keeps this in-memory only, which
+            every caller that predates #219 -- and every test that stubs
+            this function out entirely -- still gets.
     """
-    records: List[Dict[str, Any]] = []
+    records: List[Dict[str, Any]] = _RecordSink(partial_sink)
     pending: List[Dict[str, Any]] = []
 
     print("[phase 1/2] retrieval for every case (embedder + reranker on GPU)", flush=True)
@@ -1377,6 +1568,10 @@ def _run_conditions(
         # having to read the pipeline source to find out.
         "seed": None,
         "keep_alive_seconds": int(_EVAL_GENERATION_KEEP_ALIVE_SECONDS),
+        # In effect for this run (issue #229) -- without it, two runs with a
+        # different budget are indistinguishable in the artifact, the same
+        # gap #222 closed for keep_alive_seconds above.
+        "generation_budget_seconds": GENERATION_BUDGET_SECONDS,
     }
 
 
@@ -1775,6 +1970,19 @@ def evaluate(
             required_models.add(chat_override)
     stack_slug = "mineru-jina_clip-faiss"
 
+    # Computed before any case runs, so phase 1/2 can stream records to disk
+    # as they are produced (issue #219) -- the final report_path is still
+    # only written once, at the end, on success; this is its own timestamp
+    # (run start, not run end) since the two files are never meant to coexist
+    # for long: the partial is removed the moment the final report lands.
+    # None when write_report is False, matching that mode's existing
+    # contract of leaving nothing on disk at all.
+    partial_path: Optional[Path] = None
+    if write_report:
+        RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        partial_timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        partial_path = RESULTS_DIR / f"{partial_timestamp}_{stack_slug}.partial.jsonl"
+
     stacks_to_close = []
     config_effective: Dict[str, Any] = {"dev": None, "blind": None}
     try:
@@ -1902,6 +2110,7 @@ def evaluate(
                     evidence_blind, models,
                     stack_dev=stack_dev, stack_blind=stack_blind,
                     extra_corpora=extra_corpora,
+                    partial_sink=partial_path,
                 )
     finally:
         for stack in stacks_to_close:
@@ -1968,6 +2177,14 @@ def evaluate(
             ),
             encoding="utf-8",
         )
+        # The consolidated report above now holds everything the partial
+        # sink was for -- same records, plus the summary/conditions it could
+        # never have had mid-run. Removing it here, only after a completed
+        # write, is what keeps a leftover .partial.jsonl meaning "this run
+        # never finished" (issue #219): a run that dies never reaches this
+        # line, so its partial survives exactly when it should.
+        if partial_path is not None:
+            partial_path.unlink(missing_ok=True)
 
     print_summary(summary)
     if report_path is not None:
