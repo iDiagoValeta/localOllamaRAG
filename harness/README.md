@@ -196,6 +196,16 @@ fake evaluator that raises on a declared key makes startup fail loudly
 
 ## Objective, constraint, noise floor
 
+**Which generator.** Every evaluation the loop runs -- the reference, each
+candidate, a replay -- generates with `run_eval.DEFAULT_MODELS`
+(`evaluator.real_evaluate` passes it), which is `Ling-3.0-tiny` unless
+`OLLAMA_RAG_MODEL` is set. That is the gate's default, not the product's
+(`gemma4:e4b`); the loop therefore searches for a retrieval configuration
+that helps the faster model the 0.82 floor was calibrated with, and a
+configuration it accepts has not been shown to help the shipped one. Export
+`OLLAMA_RAG_MODEL` to search for the product instead. Whether the two
+defaults should be one is issue #242.
+
 **Objective:** `objective_adjusted` = passing cases on the search set, minus
 cases listed in `unreachable_cases.txt` (excluded from both numerator and
 denominator, not just discounted). `unreachable_cases.txt` starts **empty**
@@ -363,14 +373,17 @@ python -m harness.cli --dry-run --max-iterations 3
 python -m harness.cli --proposer llm --max-iterations 8 --patience 3
 
 # Real campaign pinned to be comparable with prior ledger history -- e.g. a
-# criterion-5 recovery run against a sabotaged reference (--set is
-# repeatable; unknown keys abort at launch; pins reach EVERY measured
+# criterion-5 recovery run against a sabotaged reference. --set is
+# repeatable, unknown keys abort at launch, and pins reach EVERY measured
 # evaluation, the reference's included -- not just the harness's bookkeeping
-# config):
-RAG_TOP_K_FINAL=1 python -m harness.cli \
+# config. The generator is not a --set key: evaluate() refuses models.rag
+# (and models.recomp) as overrides because generation switches that role
+# from its own `models` argument. Pin it through the environment run_eval.py
+# reads -- OLLAMA_RAG_MODEL sets run_eval.DEFAULT_MODELS, OLLAMA_AUX_MODEL
+# the chat/contextual/recomp roles (issue #245):
+OLLAMA_RAG_MODEL=gemma4:e4b OLLAMA_AUX_MODEL=gemma4:e2b python -m harness.cli \
     --ledger-dir tests/eval/runs/harness-loop \
-    --set models.rag=gemma4:e4b --set models.chat=gemma4:e2b \
-    --set models.contextual=gemma4:e2b --set models.recomp=gemma4:e2b
+    --set retrieval.top_k_final=1
 
 # Criterion 7: reconstruct one ledger iteration and re-run its exact
 # overrides and case ids. Exit 0 iff the pass/fail vector matches.
