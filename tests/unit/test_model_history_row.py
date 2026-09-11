@@ -6,6 +6,7 @@ as zero. Counting a model's unreported generation as "0 tokens" would make it
 the cheapest model in the table for the one reason that is not a measurement.
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -13,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools.diagnostics.model_history_row import format_rows, summarise  # noqa: E402
+from tools.diagnostics.model_history_row import format_rows, main, summarise  # noqa: E402
 
 
 def _record(model, passed=True, rate=None, count=None):
@@ -91,3 +92,43 @@ class TestTheRow:
         # "not recorded *(of 0)*" states the same absence twice.
         rows = format_rows(summarise([_record("m")]), "run-1")
         assert "*(of 0)*" not in rows
+
+
+class TestReadingARealArtifact:
+    """Issue #222 adds a "conditions" block next to "run"/"summary"/"results"
+    in the artifact this tool reads -- main() only ever touches "results" and
+    "run"/"id", so an artifact carrying the new block must read exactly as it
+    did before."""
+
+    def _write_artifact(self, tmp_path):
+        payload = {
+            "run": {"timestamp": "20260101T000000Z", "stack": "s"},
+            "summary": {"overall": {"total": 2, "passed": 1, "pass_rate": 0.5}},
+            "results": [
+                _record("m", passed=True, rate=40, count=20),
+                _record("m", passed=False),
+            ],
+            "conditions": {
+                "config": {"dev": None, "blind": None},
+                "versions": {"torch": None},
+                "hardware": {"name": None, "vram_total_mib": None},
+                "git_commit": {"hash": "abc1234", "dirty": False},
+                "gold_sha256": "0" * 64,
+                "sampling": {"rag": {"temperature": 0.15}},
+                "seed": None,
+                "keep_alive_seconds": 120,
+            },
+        }
+        artifact = tmp_path / "artifact.json"
+        artifact.write_text(json.dumps(payload), encoding="utf-8")
+        return artifact
+
+    def test_main_prints_the_row_unaffected_by_the_conditions_block(self, tmp_path, capsys):
+        artifact = self._write_artifact(tmp_path)
+
+        exit_code = main([str(artifact)])
+
+        out = capsys.readouterr().out
+        assert exit_code == 0
+        assert "1 / 2" in out
+        assert "*(of 1)*" in out

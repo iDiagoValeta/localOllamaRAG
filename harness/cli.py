@@ -19,9 +19,9 @@ feasibility, ledger, latency constraint, termination -- can be exercised
 with no GPU, no Ollama and no PDFs, writing its ledger to a fresh temporary
 directory unless ``--ledger-dir`` is given (so a demo run never litters
 ``harness/ledger/``). Without it, the CLI uses the real evaluator
-(``evaluator.real_evaluate``), which depends on the sibling PR (issue #31
-spec section 5.2, #56) landing ``tests/eval/run_eval.evaluate()`` -- it
-fails with an actionable message, not a stack trace, until that lands.
+(``evaluator.real_evaluate``, issue #31 spec section 5.2), which runs the
+actual gate through ``tests/eval/run_eval.evaluate()`` -- GPU, Ollama and
+every model role this run needs.
 """
 
 from __future__ import annotations

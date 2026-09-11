@@ -40,6 +40,13 @@ caller its docstring points at. `release_embedder()` frees that worker after
 an indexing run that failed, where it would otherwise sit on ~1.7 GiB that
 the next attempt needs.
 
+The Cross-Encoder reranker is cached the same way, and `release_reranker()`
+drops its GPU weights on demand -- called from `/api/settings` when the
+reranker flag is turned off, since nothing will use it again until it is
+turned back on. It is deliberately not called on the per-query retrieval
+path itself: `wiring.rag_chat_model()`'s docstring has the measurement that
+decision rests on.
+
 [`engine/settings.py`](engine/settings.py) owns the other half of that
 agreement: the model roles, active store and pipeline flags the web control
 panel saves are read at startup so the session reopens under the user's

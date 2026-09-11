@@ -223,6 +223,13 @@ def _reset_db():
 def _chat_stream(pregunta: str) -> Generator[str, None, None]:
     """Generate tokens from chat mode via streaming.
 
+    Bypasses OllamaChatModel (which would apply the same deadline) because
+    this path predates it and still talks to ollama_client_for directly; see
+    issue #237. The client is built with OLLAMA_REQUEST_TIMEOUT baked in, so
+    a wedged server raises instead of blocking the Flask worker forever --
+    api_chat's generate() already turns any exception from this generator
+    into an SSE `error` event.
+
     Args:
         pregunta: User question text.
 
@@ -236,7 +243,7 @@ def _chat_stream(pregunta: str) -> Generator[str, None, None]:
     messages.extend(mensajes_recientes)
     messages.append({"role": "user", "content": pregunta})
 
-    stream = ollama_client_for(OLLAMA_BASE_URL).chat(
+    stream = ollama_client_for(OLLAMA_BASE_URL, timeout=rag_engine.OLLAMA_REQUEST_TIMEOUT).chat(
         model=rag_engine.MODELO_CHAT,
         messages=messages,
         stream=True,
@@ -1137,6 +1144,11 @@ def api_settings_post():
                 continue
             setattr(rag_engine, engine_var, val)
             updated[fe_key] = val
+            # Turned off: no query will call reranker() again until this is
+            # flipped back on, so its resident CUDA weights are now held for
+            # nothing (issue #239) -- give the VRAM back.
+            if engine_var == "USAR_RERANKER" and not val:
+                rag_engine.release_reranker()
     rag_engine.guardar_ajustes_persistidos()
     # contextualRetrieval, imageIndexing and imageDescription are index-time
     # flags (part of index_recipe): flipping any of them is the most likely

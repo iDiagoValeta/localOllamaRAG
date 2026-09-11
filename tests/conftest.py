@@ -15,13 +15,20 @@ the engine is unavailable. The same pytest command then works in both
 environments: everything runs where the stack is installed, and only the pure
 layers run where it is not.
 
-Dependencies: stdlib only (ast, importlib.util) -- this file must import in an
-environment with nothing but pytest available.
+Also resets a module-level leak in rag.chat_pdfs before the first test runs
+(see the fixture below) -- unrelated to the skip logic above, but this is the
+one conftest.py both environments load, and the leak needs to be undone
+before anything else in the session observes it.
+
+Dependencies: stdlib only (ast, importlib.util) plus pytest -- this file must
+import in an environment with nothing else available.
 """
 
 import ast
 import importlib.util
 from pathlib import Path
+
+import pytest
 
 # What importing rag.chat_pdfs pulls in, directly or through the adapters its
 # pipeline entry points wire up. Any one missing means the engine cannot be
@@ -93,3 +100,35 @@ else:
         for path in sorted(_HERE.rglob("test_*.py"))
         if _imports_engine(path)
     ]
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _restore_chat_pdfs_settings_globals():
+    """Undo rag/web/app.py's import-time settings load before any test runs.
+
+    Collection imports every test module up front, before any test-scoped
+    fixture gets a chance to run. Any file that imports rag.web.app (e.g.
+    tests/test_web_indexing_releases_worker.py, first in file order to do so)
+    triggers that module's own top-level ``rag_engine.cargar_ajustes_persistidos()``
+    (rag/web/app.py), which applies whatever this machine's real, gitignored
+    rag/settings.json holds -- active store, model roles and pipeline flags
+    -- onto rag.chat_pdfs's shared globals, for the rest of the process,
+    independent of which test happens to run first or last. A test asserting
+    one of those globals equals rag.chat_pdfs's own import-time default then
+    passes or fails depending on a file no other machine has, rather than on
+    the default it claims to check.
+
+    The docs-folder trio (``CARPETA_DOCS`` / ``PATH_DB`` / ``COLLECTION_NAME``)
+    was fixed this way first (issue #227, via ``set_docs_folder_runtime(None)``).
+    Model roles and pipeline flags had no equivalent restore-to-default path
+    until ``_restaurar_roles_y_flags_por_defecto`` (issue #231) -- both are
+    reset here, once, before the first test in the session executes,
+    restoring what the import silently changed rather than what any one test
+    changed.
+    """
+    try:
+        import rag.chat_pdfs as rag_engine
+    except ImportError:
+        return
+    rag_engine.set_docs_folder_runtime(None)
+    rag_engine._restaurar_roles_y_flags_por_defecto()

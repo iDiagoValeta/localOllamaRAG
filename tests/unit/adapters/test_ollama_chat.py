@@ -1,11 +1,17 @@
 """Unit tests for monkeygrab.adapters.chat.ollama_chat.OllamaChatModel.
 
 Stubs the ollama client and requests.post entirely -- no Ollama server, no
-network -- so these run in milliseconds.
+network -- so these run in milliseconds. The one exception is the request
+timeout regression test, which talks to a real loopback socket (still no
+Ollama server, no external network) because the deadline it pins lives in
+the real ollama.Client -> httpx.Client path a Python-level stub bypasses.
 """
 
 import logging
+import socket
 import sys
+import threading
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -22,15 +28,17 @@ from monkeygrab.domain.generation_chunk import GenerationChunk
 def _stub_chat(monkeypatch, calls, content="", error=None):
     """Replace the cached client factory with one recording every chat call.
 
-    Each recorded call carries the ``host`` its client was built for, so a test
-    can assert which server the adapter would have talked to.
+    Each recorded call carries the ``host`` and ``timeout`` its client was
+    built for, so a test can assert which server the adapter would have
+    talked to, and with what deadline.
     """
     class _FakeClient:
-        def __init__(self, host):
+        def __init__(self, host, timeout=None):
             self._host = host
+            self._timeout = timeout
 
         def chat(self, **kwargs):
-            calls.append({**kwargs, "host": self._host})
+            calls.append({**kwargs, "host": self._host, "client_timeout": self._timeout})
             if error is not None:
                 raise error
             return {"message": {"content": content}}
@@ -74,6 +82,19 @@ def test_generate_talks_to_the_configured_base_url(monkeypatch):
     assert calls[0]["host"] == "http://gpu-box:11434"
 
 
+def test_generate_builds_its_client_with_the_configured_request_timeout(monkeypatch):
+    """generate() used to build its client with no timeout at all (issue #232):
+    stream() applied request_timeout via requests.post, generate() dropped it
+    on the floor. The ollama client takes no per-call timeout, only one baked
+    in at construction, so this is the only place generate() can hand it over."""
+    calls = []
+    _stub_chat(monkeypatch, calls)
+
+    OllamaChatModel("m", num_ctx=100, request_timeout=42).generate("hello")
+
+    assert calls[0]["client_timeout"] == 42
+
+
 def test_generate_puts_the_system_prompt_first(monkeypatch):
     calls = []
     _stub_chat(monkeypatch, calls)
@@ -112,6 +133,64 @@ def test_generate_hard_fails_on_ollama_error(monkeypatch):
 
     with pytest.raises(RuntimeError, match="ollama down"):
         OllamaChatModel("m", num_ctx=100).generate("hello")
+
+
+def test_generate_raises_within_its_deadline_against_a_server_that_never_answers():
+    """Doubles a real, unresponsive server (not a Python-level stub) to pin
+    the issue #232 regression: generate() had no deadline of its own, so a
+    resident-but-stuck Ollama server left it blocked forever -- exactly what
+    made a 26-minute gate case (#229) impossible to bound from inside the
+    adapter. Nothing here monkeypatches ollama_client_for, so this exercises
+    the real ollama.Client -> httpx.Client path generate() actually takes.
+
+    A plain TCP listener that accepts the connection and then never writes
+    back is enough: the client's request write succeeds against the kernel's
+    receive buffer regardless of whether anything ever reads it, so the
+    adapter blocks on the response instead, which is the wait request_timeout
+    must bound.
+    """
+    request_timeout = 0.5
+
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    port = server.getsockname()[1]
+    stop = threading.Event()
+
+    def _accept_and_stay_silent():
+        try:
+            conn, _ = server.accept()
+        except OSError:
+            return  # server closed during teardown before a connection arrived
+        stop.wait(request_timeout + 5)  # hold the connection open, reply never sent
+        conn.close()
+
+    thread = threading.Thread(target=_accept_and_stay_silent, daemon=True)
+    thread.start()
+
+    # A distinct cache key per (base_url, timeout): nothing else in this
+    # module builds a real client against this port, but clearing keeps the
+    # real client this test builds from lingering in the cache afterwards.
+    module.ollama_client_for.cache_clear()
+    chat_model = OllamaChatModel(
+        "m", num_ctx=100, base_url=f"http://127.0.0.1:{port}", request_timeout=request_timeout
+    )
+
+    start = time.monotonic()
+    try:
+        with pytest.raises(RuntimeError, match="Ollama generate failed"):
+            chat_model.generate("hello")
+        elapsed = time.monotonic() - start
+    finally:
+        stop.set()
+        server.close()
+        thread.join(timeout=2)
+        module.ollama_client_for.cache_clear()
+
+    # Bounded by request_timeout, not by the server (which never answers) or
+    # by the suite's own patience -- and not near-instant either, which would
+    # mean the raise came from something other than the deadline expiring.
+    assert request_timeout <= elapsed < 5.0
 
 
 class _FakeStreamResponse:

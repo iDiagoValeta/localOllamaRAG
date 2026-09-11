@@ -81,6 +81,10 @@ with its own reason -- never by skipping a directory or file wholesale:
   ``rag/web/desktop.py`` reads as an OS install-location fallback; the OS
   sets these, not the user via ``.env``, and MonkeyGrab defines no default
   for either.
+- ``EVAL_GENERATION_BUDGET_SECONDS`` -- overrides the eval gate's per-
+  generation wall-clock budget (``tests/eval/run_eval.py``, issue #229);
+  a gate knob for tuning a measurement run, not a product configuration
+  variable a ``.env`` deployment would ever set.
 
 Nothing today is "documented but legitimately never read" -- that is what
 ``dead`` in ``test_every_documented_env_var_is_read_by_code`` catches, and
@@ -125,6 +129,7 @@ _CODE_READS_NOT_DOCUMENTED = {
     "RUN_OLLAMA_INTEGRATION",
     "OLLAMA_GEMMA4_TEST_MODEL",
     "OLLAMA_AUX_MODEL",
+    "EVAL_GENERATION_BUDGET_SECONDS",
     "DISABLE_HMR",
     "LOCALAPPDATA",
     "XDG_DATA_HOME",

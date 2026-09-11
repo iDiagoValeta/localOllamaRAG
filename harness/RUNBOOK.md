@@ -146,15 +146,22 @@ nvidia-smi --query-compute-apps=pid,used_memory --format=csv
 
 > [!TIP]
 > **A campaign fits on 8 GB even though a full gate run does not.** The
-> harness only ever asks for search-set ids (`source: corpus`), and
-> `evaluate()` builds a corpus's stack only when the filtered case list
-> needs it -- so a campaign builds one embedder where a full `run_eval.py`
-> builds two, and two do not fit (#123). Measured: 32 cases, zero
-> `infrastructure_error`, ~6.6 of 7.6 GiB resident.
+> harness only ever asks for search-set ids (the complement of the blind
+> set, `source != "arxiv"` -- see `harness/README.md`'s Sets section, issue
+> #225), and `evaluate()` builds a corpus's stack only when the filtered
+> case list needs it -- so a campaign builds one embedder where a full
+> `run_eval.py` builds two, and two do not fit (#123). Measured 2026-09-01:
+> 32 cases, zero `infrastructure_error`, ~6.6 of 7.6 GiB resident -- the
+> search set has since grown to 123 cases (#213) and this headroom has not
+> been re-measured at that size.
 >
 > **The gate does fit here too, with `OLLAMA_KEEP_ALIVE=0`.** Measured
 > 2026-09-08 on the 4060 8 GB: all 83 gold cases, both corpora, 79/83 (95.2%)
-> in 20.0 minutes with zero `infrastructure_error`. This section previously
+> in 20.0 minutes with zero `infrastructure_error`. `gold_cases.jsonl` grew
+> to 156 cases over four sources via #213 (2026-09-08; see
+> `tests/eval/README.md`'s Corpus section for the current count) -- this
+> capacity claim describes the 83-case, two-corpus gate that existed just
+> before that change, not the full gate as it runs today. This section previously
 > said "on a card this size you can run the loop but not the gate", which was
 > written from the 2026-09-01 run that had no keep-alive set; with it, the
 > second embedder starts. #123 is still the reason the workaround is needed at
@@ -251,7 +258,7 @@ as universal is how someone budgets a night for something that takes seven.
 | retrieval-only case | ~4.1 s | **~30 s** |
 | answered case | ~28.5 s | ~9-11 s |
 | full search-set evaluation | ~20 min | ~25 min (phase 1 dominates) |
-| fast tier (13 cases) | ~4 min | not measured here |
+| fast tier (16 cases) | ~4 min for 13 of them (unmeasured for the 3 study-artifact cases, issue #226) | not measured here |
 
 The 4060 figures are from a run with `OLLAMA_KEEP_ALIVE=0` (which the warning
 above now restricts to gate runs -- a campaign measured without it answers
@@ -322,12 +329,16 @@ red test.
 State these when reporting a campaign; they are not disclaimers, they are the
 measurement's actual resolution.
 
-- **The search set can win at most 5 cases**, and it registered only 3 net
-  flips under a known-catastrophic sabotage — below the ~6 flips the design
-  sets as the threshold for a difference not attributable to chance. An
-  accepted improvement on today's corpus is **a candidate for confirmation,
-  not a demonstrated result**. This is issue #30, the binding constraint on
-  the whole loop, and every report carries it as `resolution_warning`.
+- **The search-set win-margin and sabotage-flip numbers are stale.** "At
+  most 5 cases" and "3 net flips" were measured on the 32-case search set
+  that existed before #213 (block B, issue #30) grew it to 123 -- see
+  `harness/README.md`'s Resolution warning section (issue #225) for the
+  full account and what re-measuring them for real needs. `harness/loop.py`
+  still hardcodes those numbers into every report's `resolution_warning`,
+  so an accepted improvement on today's corpus still reads as **a candidate
+  for confirmation, not a demonstrated result** -- that conclusion holds
+  regardless; the specific numbers behind it just don't describe today's
+  search set yet.
 - **Index-time knobs are still not searched, but the tier is now costed.**
   Chunking and the index-time flags force a full reindex, which no budget
   survives inside a search loop. Declaring one in `SEARCH_SPACE` is still a red
@@ -336,7 +347,9 @@ measurement's actual resolution.
   share one rebuild — and a campaign is priced in fast-tier evaluations, the
   unit the patience budget is already spent in. It measures nothing itself; the
   reindex and evaluation seconds come from a real run. Whether such a candidate
-  can pay off at all is still block B's question (#30).
+  can pay off at all is still block B's question (#30) -- #213 grew the search
+  set, but the resolution warning above has not been re-measured against it,
+  so the answer still isn't in.
 - **Stage 1 is a single-field sweep from a fixed reference**, not a
   compounding hill climb. Two accepted single-field changes cannot combine
   within a run.

@@ -176,6 +176,21 @@ PIPELINE_RUNTIME_FLAGS = (
     "USAR_RECOMP_SYNTHESIS",
 )
 
+# Every flag rag.engine.settings.PERSISTED_FLAGS can overwrite via
+# cargar_ajustes_persistidos(): PIPELINE_RUNTIME_FLAGS plus the three
+# index-time flags set_pipeline_flags deliberately refuses as overrides (its
+# own docstring above). Snapshotted at this module's own import time, before
+# rag/web/app.py's import-time cargar_ajustes_persistidos() call can apply
+# this machine's gitignored settings.json onto any of them (issue #231) --
+# restored by _restaurar_roles_y_flags_por_defecto for tests/conftest.py's
+# session fixture, the same idea _DEFAULT_CARPETA_DOCS below serves for
+# set_docs_folder_runtime.
+_DEFAULT_PIPELINE_FLAGS: Dict[str, bool] = {
+    name: globals()[name]
+    for name in PIPELINE_RUNTIME_FLAGS
+    + ("USAR_CONTEXTUAL_RETRIEVAL", "USAR_EMBEDDINGS_IMAGEN", "USAR_DESCRIPCION_IMAGEN")
+}
+
 
 def get_pipeline_flags() -> Dict[str, bool]:
     """Return the runtime-toggleable pipeline flags used during inference."""
@@ -327,6 +342,12 @@ MODEL_ROLE_VARS = {
     "recomp": "MODELO_RECOMP",
 }
 
+# Snapshotted at this module's own import time, before rag/web/app.py's
+# import-time cargar_ajustes_persistidos() call can apply this machine's
+# gitignored settings.json onto any of the four roles (issue #231) -- see
+# _DEFAULT_PIPELINE_FLAGS above for the same reasoning applied to the flags.
+_DEFAULT_MODEL_ROLES: Dict[str, str] = {role: globals()[var] for role, var in MODEL_ROLE_VARS.items()}
+
 # The variable that pins each role, mirroring the ``os.getenv`` calls that read
 # them above. A role listed here whose variable is set keeps its environment
 # value: persisted UI choices describe an earlier run, the environment describes
@@ -373,6 +394,31 @@ def set_model_roles_runtime(overrides: Dict[str, str]) -> Dict[str, str]:
     if (overrides.get("rag") or "").strip():
         MODELO_DESC = _inferir_descripcion_modelo(MODELO_RAG)
     return get_model_roles()
+
+
+def _restaurar_roles_y_flags_por_defecto() -> None:
+    """Reset model roles and pipeline flags to this module's import-time defaults.
+
+    Used only by tests/conftest.py's session fixture (issue #231). pytest
+    collection imports every test module before any test runs; a file that
+    imports rag.web.app at module level (e.g.
+    tests/test_web_indexing_releases_worker.py) triggers that module's own
+    top-level cargar_ajustes_persistidos() (rag/engine/settings.py), which
+    applies this machine's real, gitignored rag/settings.json onto
+    MODELO_RAG/MODELO_CHAT/MODELO_CONTEXTUAL/MODELO_RECOMP and every flag in
+    _DEFAULT_PIPELINE_FLAGS -- for the rest of the process, independent of
+    which test happens to run first. A test asserting one of these equals
+    its module default then depends on a file no other machine has (issue
+    #231's concrete case: USAR_RERANKER/USAR_BUSQUEDA_HIBRIDA/
+    USAR_LLM_QUERY_DECOMPOSITION only pass on a machine whose settings.json
+    happens to agree). set_docs_folder_runtime(None) already restores
+    CARPETA_DOCS/PATH_DB/COLLECTION_NAME this same way (issue #227); this is
+    the same idea for the two pieces of state that had no import-time
+    default to fall back to.
+    """
+    set_model_roles_runtime(dict(_DEFAULT_MODEL_ROLES))
+    for name, value in _DEFAULT_PIPELINE_FLAGS.items():
+        globals()[name] = value
 
 
 # SYSTEM PROMPTS
@@ -508,6 +554,7 @@ from rag.engine.settings import (
 from rag.engine.wiring import (
     app_config_from_runtime,
     release_embedder,
+    release_reranker,
     reset_vector_store_cache,
     vector_store,
 )

@@ -109,3 +109,78 @@ def test_rejection_messages_name_the_files_when_labels_are_given():
     b = _report({"x": True})
     with pytest.raises(ValueError, match="runs/2026-01-01.json"):
         compare(a, b, label_a="runs/2026-01-01.json", label_b="runs/2026-01-02.json")
+
+
+def test_an_added_conditions_sibling_key_does_not_break_the_comparison():
+    # Issue #222 adds a top-level "conditions" key next to "run"/"results" --
+    # compare() must keep reading "results" the same way regardless of what
+    # else a real artifact carries.
+    a = _report({"x": True, "y": False})
+    b = _report({"x": True, "y": False})
+    a["conditions"] = {"git_commit": {"hash": "aaa1111", "dirty": False}}
+    b["conditions"] = {"git_commit": {"hash": "bbb2222", "dirty": True}}
+    a["run"] = {"timestamp": "2026-01-01T00:00:00Z"}
+    b["run"] = {"timestamp": "2026-01-02T00:00:00Z"}
+
+    result = compare(a, b)
+
+    assert result["flipped_to_pass"] == []
+    assert result["flipped_to_fail"] == []
+    assert result["stable"] == 2
+
+
+# --exclude-infrastructure-errors (issue #240)
+
+
+def _report_two_models(outcomes):
+    """Like _report, but ``outcomes`` maps "case / model" keys, so a fixture
+    can put an infrastructure error on one model without touching the
+    other's record of the same case."""
+    results = []
+    for key, passed in outcomes.items():
+        case_id, model = key.split(" / ")
+        results.append({"id": case_id, "model": model, "passed": passed})
+    return {"results": results}
+
+
+def test_excluding_infrastructure_errors_drops_the_pair_from_both_sides():
+    # Granite crashing on one study case in run b must not hide the other
+    # model's measurements, and must not count as a flip either: the pair
+    # is removed from a and b alike, and the removal is reported.
+    a = _report_two_models({"x / m1": True, "x / m2": True, "y / m1": False, "y / m2": True})
+    b = _report_two_models({"x / m1": True, "x / m2": True, "y / m1": True, "y / m2": True})
+    b["results"][3]["infrastructure_error"] = True  # y / m2 never ran in b
+    result = compare(a, b, exclude_infrastructure_errors=True)
+    assert result["excluded"] == ["y / m2"]
+    assert result["flipped_to_pass"] == ["y / m1"]
+    assert result["flipped_to_fail"] == []
+    assert result["stable"] == 2
+    # 3 pairs compared, one of them flipped to pass.
+    assert result["pass_rate_delta"] == round(1 / 3, 4)
+
+
+def test_excluding_infrastructure_errors_still_refuses_a_run_that_measured_nothing():
+    # The strict rule stays for the case it was written for: if every pair is
+    # an infrastructure error there is nothing to compare, and "0 unchanged"
+    # would read as a clean result.
+    a = _report({"x": True})
+    b = _report({"x": True})
+    b["results"][0]["infrastructure_error"] = True
+    with pytest.raises(ValueError, match="no comparable"):
+        compare(a, b, exclude_infrastructure_errors=True)
+
+
+def test_the_default_still_rejects_an_inconclusive_run():
+    # Opt-in only: the gate's own comparison keeps refusing a report with
+    # infrastructure errors unless the caller says otherwise.
+    a = _report({"x": True, "y": True})
+    b = _report({"x": True, "y": True})
+    b["results"][1]["infrastructure_error"] = True
+    with pytest.raises(ValueError, match="inconclusive"):
+        compare(a, b)
+    assert compare(a, b, exclude_infrastructure_errors=True)["excluded"] == ["y / m"]
+
+
+def test_without_exclusions_the_result_carries_an_empty_excluded_list():
+    report = _report({"a": True})
+    assert compare(report, report)["excluded"] == []

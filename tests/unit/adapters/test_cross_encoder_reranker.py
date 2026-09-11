@@ -161,5 +161,32 @@ def test_rerank_hard_fails_when_scoring_itself_raises(monkeypatch):
         CrossEncoderReranker().rerank("q", [_fragment("a")], top_k=1)
 
 
+def test_release_drops_the_model_so_the_next_rerank_reloads_it(monkeypatch):
+    """release() existed with no caller anywhere in the codebase (#239) and
+    no test either -- this pins what it must do: forget the loaded model, so
+    a later rerank() builds a fresh CrossEncoder instead of reusing the freed
+    one."""
+    _patch_crossencoder(monkeypatch)
+    _force_cpu(monkeypatch)
+
+    reranker = CrossEncoderReranker()
+    reranker.rerank("q", [_fragment("a")], top_k=1)
+    assert len(FakeCrossEncoder.instances) == 1
+
+    reranker.release()
+    reranker.rerank("q", [_fragment("a")], top_k=1)
+
+    assert len(FakeCrossEncoder.instances) == 2
+
+
+def test_release_before_any_rerank_call_does_not_load_anything(monkeypatch):
+    _patch_crossencoder(monkeypatch)
+    _force_cpu(monkeypatch)
+
+    CrossEncoderReranker().release()  # must not raise, must not load the model
+
+    assert FakeCrossEncoder.instances == []
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
