@@ -74,7 +74,8 @@ rag/                      Web interface and pipeline entry points
   chat_pdfs.py              Public facade + global config (see §1 rule 7)
   engine/                    wiring, retrieval, indexing, context, generation, chunking, debug, history, settings
   web/                       Flask backend + React frontend (pnpm; frontend/dist gitignored)
-  docs/                      Corpus PDFs (es/, ca/, en/); versioned
+  docs/                      Corpus PDFs (es/, ca/, en/): identity versioned in corpus_manifest.json,
+                             binaries fetched by tools/fetch_corpus.py (see section 8)
   vector_db/                 FAISS per corpus (gitignored)
 tests/
   unit/                      domain/ports/config/application + adapters, doubled infrastructure
@@ -84,7 +85,7 @@ tests/
                              no-infra CI job; each module docstring says why it lives here
 harness/                  Configuration search harness (issue #31); not product — see harness/README.md
 packaging/                PyInstaller desktop app build (see §3)
-tools/                    Repo tooling, not product: setup_environments.py (both venvs) + diagnostics/
+tools/                    Repo tooling, not product: setup_environments.py (both venvs), fetch_corpus.py (the corpora) + diagnostics/
 assets/                   Images the READMEs embed
 docs/design/               Architecture design docs; current: 2026-07-26-monkeygrab-v2.md
 docs/README.md             Documentation standard
@@ -204,9 +205,9 @@ Items 1–5 of §6 apply here too. What differs:
 
 ## 8. Git versioning policy
 
-**Two `.gitignore` files only:** root + `rag/web/frontend/`. No scattered `.gitignore`. Version the minimum needed to reproduce the product — code, `Modelfile`, small metric JSONs, scripts, corpus PDFs — never weights or vector indices.
+**Two `.gitignore` files only:** root + `rag/web/frontend/`. No scattered `.gitignore`. Version the minimum needed to reproduce the product — code, `Modelfile`, small metric JSONs, scripts, the corpus manifest — never weights, vector indices or fetched binaries.
 
-- **`rag/docs/`** — all corpora versioned (`es/`, `ca/`, `en/`). `rag/vector_db/` fully ignored. Local scratch results under `pipeline/output/` are ignored.
+- **`rag/docs/`** — the *identity* of every corpus document is versioned in `rag/docs/corpus_manifest.json` (arXiv id, or Wikipedia title plus the revision it was verified at); the PDFs themselves are fetched by `python tools/fetch_corpus.py` and ignored (`rag/docs/*/*.pdf`, since #213). The 13 documents committed before the fetcher existed stay tracked, because an ignore rule never applies to a file git already tracks — so a fresh clone holds 6 of 17 `en`, 5 of 17 `es` and 5 of 17 `ca` documents until the fetcher runs, and the gate refuses to run on that (`papers referenced by gold cases but not indexed`). `rag/vector_db/` fully ignored. Local scratch results under `pipeline/output/` are ignored.
 - **`.claude/`** — instructions and skills are versioned (`CLAUDE.md`, `skills/`) so a clone or CI runner picks them up; everything else there, `settings.local.json` included, stays local.
 
 ---
@@ -218,6 +219,7 @@ Items 1–5 of §6 apply here too. What differs:
 ```bash
 # Setup (both interpreters; --check verifies without installing)
 python tools/setup_environments.py             # .venv + .venv-mineru, then check
+python tools/fetch_corpus.py                   # the three corpora from rag/docs/corpus_manifest.json (--check: report only)
 
 # Web
 python rag/web/app.py                          # http://localhost:5000 (ES/EN/VAL UI + corpus selector via POST /api/corpus)

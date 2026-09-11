@@ -25,6 +25,9 @@ implementation that happens to live in the test tree.
 | `run_probe_lang.py` | Runs the probe against its own isolated FAISS collection. |
 | `probe_docs_lang/` | PDFs staged for the probe, copied from `rag/docs/es\|ca/`. Gitignored. |
 | `probe_runs_lang/` | Dated JSON results from each `run_probe_lang.py` run. Gitignored. |
+| `probe_cases_domain.jsonl` | Domain-axis diagnostic probe (same status as the language one — see below). |
+| `run_probe_domain.py` | Runs the domain probe against its own isolated FAISS collection. |
+| `probe_docs_domain/`, `probe_runs_domain/`, `probe_cache_domain/` | Staged PDFs, dated results and the arXiv download cache for the domain probe. Gitignored. |
 
 ## Corpus
 
@@ -32,6 +35,10 @@ Four sources, mixed deliberately (the `source` field in `gold_cases.jsonl`):
 
 - **`corpus`** -- the dev set: `rag/docs/en/`, 17 documents. Retrieved chunks and reranking
   behavior here are what the pipeline's heuristics were tuned against.
+  A fresh clone does not hold them all: since #213 the PDFs are gitignored and only their
+  identity is versioned (`rag/docs/corpus_manifest.json`), so run `python tools/fetch_corpus.py`
+  once before the gate (`--check` says what is missing). `run_eval.py` does not fetch them itself
+  and refuses to run on a partial store (`papers referenced by gold cases but not indexed`).
 - **`arxiv`** (`arxiv_id` set) -- the blind set: ML papers fetched on demand by
   `fetch_papers.py`, never used to tune anything. A judge calibrated only on the dev set can't
   tell "the pipeline retrieves well" from "the pipeline overfits these PDFs"; the blind set is
@@ -207,6 +214,12 @@ instead of re-derived from memory.
 - Generation's `keep_alive` is forced to 120 seconds for the run's duration
   (`_EVAL_GENERATION_KEEP_ALIVE_SECONDS` in `run_eval.py`), so a cold first call per model is
   not read as steady-state latency.
+- Every generation call is capped at 180 s of wall clock (`GENERATION_BUDGET_SECONDS`, issue
+  #229) and an exhausted cap is a failure of that (case, model) pair. The knob is
+  `EVAL_GENERATION_BUDGET_SECONDS`, an environment variable of the gate rather than of the
+  product, which is why `.env.example` does not list it; the value in effect is written to the
+  artifact's `conditions.generation_budget_seconds`, and two runs with different budgets are not
+  comparable rows.
 - The `chat`, `contextual` and `recomp` roles are all pinned to `AUX_MODEL` for the whole
   evaluation (`_scoped_model_roles` around the `evaluate()` call in `run_eval.py`). A
   `--models` sweep varies only the `rag` role; the query decomposer a sweep might otherwise
@@ -548,3 +561,25 @@ are not promoted into `gold_cases.jsonl`. If a later source on this axis
 comes back *viable*, its cases are written to survive promotion (per
 section 3's "los casos de la sonda se redactan para sobrevivir"): they are
 the seed of the full batch, not throwaway material.
+
+## Domain-axis probe (diagnostic, not the gate)
+
+The sibling of the probe above for the **domain axis** of the same design-doc
+section: does a corpus whose vocabulary is far from the ML/physics the
+pipeline was tuned on produce failures a loop could learn from? Three recent
+arXiv papers (two econometrics, one biomathematics), ten cases in
+`probe_cases_domain.jsonl`, staged from the `fetch_papers.py` cache into their
+own collection so the run can never write into a product or gate store:
+
+```bash
+python tests/eval/fetch_papers.py --dest tests/eval/probe_cache_domain 2608.18973v1 2608.18375v1 2608.17955v1
+python tests/eval/run_probe_domain.py                  # or --models <generator>
+```
+
+Same shape of output as `run_eval.py`, same human step afterwards. Measured
+2026-08-23 (`gemma4:e2b`, 9/10, artefact gitignored under `probe_runs_domain/`):
+no lexical collapse out of domain, the one failure a generation miss on
+retrieved evidence. The design doc records the verdict, *viable tras arreglo*,
+and why: arXiv feeds the pipeline from any field, but a source this easy does
+not give a loop enough failures to move. `test_probe_cases_domain.py` skips
+itself until the three papers are in the cache.
