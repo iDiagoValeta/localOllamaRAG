@@ -172,7 +172,16 @@ something is missing:
    nearest 0.01) *after* the gate check, and only if that is higher than the
    current value -- the baseline never moves down automatically. It also
    refuses more than one `--models` entry: the file holds one number,
-   calibrated on the default generator.
+   calibrated on the gate's default generator.
+
+   That default is `run_eval.DEFAULT_MODELS` -- `Ling-3.0-tiny` unless `OLLAMA_RAG_MODEL`
+   says otherwise -- and it is **not** the product's default (`gemma4:e4b`). The gate and the
+   configuration harness (`harness/evaluator.real_evaluate`, which passes `DEFAULT_MODELS`)
+   measure the faster model the 0.82 floor was set with, at 7.5 s per answer against 11.8 s
+   for the shipped one; a no-argument `python tests/eval/run_eval.py` is therefore a statement
+   about the pipeline under `Ling-3.0-tiny`, not about what a user runs. Pass
+   `--models gemma4:e4b` (or export `OLLAMA_RAG_MODEL`) to measure the product; whether the
+   two defaults should be made the same is issue #242.
 
 Infrastructure failures leave the run inconclusive. Only an unfiltered gold-set
 run (`case_ids is None`, the CLI) is compared against the baseline. A subset
@@ -245,6 +254,18 @@ commit, a sha256 of `gold_cases.jsonl`, the sampling options per role, `seed: nu
 after the fact instead of merely asserted -- read it with `tools/diagnostics/model_history_row.py`
 before trusting a row. Anything measured before this was added has no such record; treat
 pre-#222 rows as rows of undocumented conditions, not as rows comparable to a later one.
+
+Each record also says when and where it ran. `started_at` (UTC, to the second) is on every
+record, so a window of a run in which every generation slowed down is visible in the artifact
+instead of having to be counted off record positions (issue #234: nineteen budget exhaustions
+in one run were two such windows). A `budget_exceeded` record carries `stage_at_budget` --
+`context` (RECOMP synthesis on the auxiliary model, when on) or `generator` for a factual
+case, `setup` or `generator` for a study case -- read off the marker
+`generar_respuesta_silenciosa` sets in its `stats` dict as it goes. Every generation record
+carries `vram_fraction`, the share of the model's bytes Ollama reports resident in VRAM
+(`/api/ps`) right after the call: `1.0` is fully on the GPU, less is CPU offload, and the key is
+absent when Ollama could not be asked (issue #235). Artifacts written before these fields
+existed simply lack them; a reader must treat a missing key as "not recorded", never as zero.
 
 ### Adding a row to `docs/model-history.md`
 

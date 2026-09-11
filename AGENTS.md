@@ -137,7 +137,7 @@ user had picked it (issue #79). Jina CLIP v2 and BGE Reranker v2 M3 are fixed.
 
 Other env vars: `DOCS_FOLDER` (default `rag/docs/en/`), `MONKEYGRAB_DATA_DIR` (writable root for `vector_db`/history/debug; defaults to the package dir in dev, `%LOCALAPPDATA%/MonkeyGrab` in the packaged app), `OLLAMA_BASE_URL` (default `http://localhost:11434`, falling back to Ollama's own `OLLAMA_HOST`).
 
-The Ollama endpoint has exactly one reader, `monkeygrab.config.env.read_env_ollama_base_url`, feeding `AppConfig.models.ollama.base_url` and `rag.chat_pdfs.OLLAMA_BASE_URL`. Every generation call, both `/chat` modes and the reachability check (web control panel) resolve through it. Do not re-read the variable at a call site: a second resolution is how a health check once ended up reporting a server the pipeline never talked to.
+The Ollama endpoint has exactly one reader, `monkeygrab.config.env.read_env_ollama_base_url`, feeding `AppConfig.models.ollama.base_url` and `rag.chat_pdfs.OLLAMA_BASE_URL`. Every generation call, both `/chat` modes, the reachability check (web control panel) and the evaluation gate's own preflight, keep-alive release and version lookup (`tests/eval/run_eval.py`, issue #244) resolve through it. Do not re-read the variable at a call site, and do not hardcode `localhost` either: a second resolution is how a health check once ended up reporting a server the pipeline never talked to.
 
 Desktop app: `rag/web/desktop.py` is the pywebview entry point frozen by PyInstaller (`packaging/MonkeyGrab.spec`, `packaging/build_exe.py`) into `MonkeyGrab.exe`. Built-in corpora ship in the bundle; Ollama is an external prerequisite. See [`packaging/README.md`](packaging/README.md).
 

@@ -61,6 +61,7 @@ if str(EVAL_DIR) not in sys.path:
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 import grade  # noqa: E402  (tests/eval sibling module)
+from monkeygrab.config.env import read_env_ollama_base_url  # noqa: E402
 
 GOLD_FILE = EVAL_DIR / "gold_cases.jsonl"
 BASELINE_FILE = EVAL_DIR / "baseline_min_pass_rate.txt"
@@ -99,7 +100,11 @@ EXTRA_DEV_CORPORA = {
     "corpus_ca": (REPO_ROOT / "rag" / "docs" / "ca", EVAL_DIR / "dev_docs_ca", "dev set (ca)"),
 }
 
-OLLAMA_BASE_URL = "http://localhost:11434"
+# The same resolution the pipeline under test uses (AGENTS.md section 3):
+# the preflight, the keep-alive release and the version lookup must talk to
+# the server that actually generates, or a health check passes against one
+# server while the measurement runs on another (issue #244).
+OLLAMA_BASE_URL = read_env_ollama_base_url()
 
 # The baseline was calibrated with this model. Other models can be measured
 DEFAULT_MODELS = [
@@ -653,6 +658,50 @@ def _decoding_metrics(stats: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _utc_now_iso() -> str:
+    """Wall-clock start of a record, so a window in a run is visible.
+
+    Issue #234: nineteen budget exhaustions turned out to be two contiguous
+    windows of one run, and the only way to see that was to count record
+    positions by hand. Seconds are enough; the artifact's own timestamp gives
+    the date.
+    """
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _placement(model: str) -> Dict[str, Any]:
+    """Where ``model`` is resident right now, as the share of its bytes in VRAM.
+
+    Issue #235: on an 8 GB card Ollama silently loads a model that does not
+    fit next to the auxiliary into system RAM, and a record's speed columns
+    then describe that regime with nothing saying so. Read right after the
+    generation call, while keep-alive still holds the weights, from the same
+    ``/api/ps`` a human would check by hand.
+
+    Best-effort like ``_ollama_server_version``: the record already holds a
+    real pass/fail, so a failed lookup returns ``{}`` rather than costing it.
+    The key is absent rather than null for the same reason ``_decoding_metrics``
+    omits its keys -- an absent value cannot be averaged by accident.
+
+    Returns:
+        ``{"vram_fraction": f}`` with ``f`` in ``[0, 1]`` (1.0 is fully on the
+        GPU), or ``{}`` when Ollama is unreachable or no longer lists the model.
+    """
+    try:
+        # Lazy and inside the try: the fast CI gate installs no `requests`,
+        # and a diagnostic must degrade to "not recorded" there, not fail.
+        import requests
+
+        response = requests.get(f"{OLLAMA_BASE_URL}/api/ps", timeout=5)
+        response.raise_for_status()
+        for entry in response.json().get("models", []):
+            if model in (entry.get("name"), entry.get("model")) and entry.get("size"):
+                return {"vram_fraction": round(entry.get("size_vram", 0) / entry["size"], 3)}
+    except Exception:  # noqa: BLE001 - best-effort, see docstring
+        pass
+    return {}
+
+
 # GENERATION BUDGET (issue #229)
 
 
@@ -784,18 +833,26 @@ def _run_study_case_for_model(
 
     malformed = (MalformedSummaryError, MalformedOutlineError, MalformedQuizError)
 
+    started_at = _utc_now_iso()
     t0 = time.perf_counter()
+    # Which stage the budget cut, if it cuts (issue #234). Study has no shared
+    # stage -- no decomposition, no RECOMP -- so this can only ever say the
+    # generator, which is itself the finding when a case exhausts the budget
+    # in every model.
+    progress: Dict[str, str] = {}
 
     def _generate() -> Dict[str, Any]:
         # Bound as one call for the budget below (issue #229) -- config
         # and fragment conversion are local and instant, only
         # study.summarize/outline/quiz talks to Ollama, but wrapping the
         # setup too keeps this a single opaque unit like run_factual_case's.
+        progress["stage"] = "setup"
         config = wiring.app_config_from_runtime().with_overrides(
             **{"models.rag": model}
         )
         domain_fragments = [wiring.fragment_from_dict(f) for f in fragments]
         study = Study(wiring.rag_chat_model(config))
+        progress["stage"] = "generator"
         lang_label = case.get("language")
         if not lang_label:
             lang = case.get("lang")
@@ -833,8 +890,11 @@ def _run_study_case_for_model(
             "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
             "lang": case["lang"], "model": model, "passed": False,
             "budget_exceeded": True,
+            "stage_at_budget": progress.get("stage", "unknown"),
             "reason": str(exc),
             "elapsed_seconds": round(elapsed, 2),
+            "started_at": started_at,
+            **_placement(model),
         }
         print(f"  [BUDGET] {case['id']} / {model} ({elapsed:.1f}s) -- {exc}", flush=True)
         return record
@@ -845,6 +905,8 @@ def _run_study_case_for_model(
             "lang": case["lang"], "model": model, "passed": False,
             "reason": f"malformed artifact -- {type(exc).__name__}: {str(exc)[:120]}",
             "elapsed_seconds": round(elapsed, 2),
+            "started_at": started_at,
+            **_placement(model),
         }
         print(
             f"  [FAIL] {case['id']} / {model} ({elapsed:.1f}s) -- malformed artifact",
@@ -859,6 +921,7 @@ def _run_study_case_for_model(
             "infrastructure_error": True,
             "reason": f"study failed -- {type(exc).__name__}: {exc}",
             "elapsed_seconds": round(elapsed, 2),
+            "started_at": started_at,
         }
         print(
             f"  [ERROR] {case['id']} / {model} ({elapsed:.1f}s): {type(exc).__name__}: {exc}",
@@ -873,6 +936,8 @@ def _run_study_case_for_model(
         "lang": case["lang"], "model": model, "passed": result["pass"],
         "reason": result["reason"],
         "elapsed_seconds": round(elapsed, 2),
+        "started_at": started_at,
+        **_placement(model),
     }
     status = "PASS" if result["pass"] else "FAIL"
     print(
@@ -943,9 +1008,14 @@ def _run_factual_case_for_model(
             "passed": False,
             "reason": "no fragments retrieved",
             "elapsed_seconds": round(retrieval_elapsed, 2),
+            "started_at": _utc_now_iso(),
         }
 
+    started_at = _utc_now_iso()
     t0 = time.perf_counter()
+    # generar_respuesta_silenciosa marks "context" (RECOMP, when on) and
+    # "generator" in here as it goes, so a budget cut can say which one it
+    # cut (issue #234) instead of leaving it to be guessed from the case.
     gen_stats: Dict[str, Any] = {}
     try:
         answer = _run_with_budget(
@@ -964,8 +1034,11 @@ def _run_factual_case_for_model(
             "model": model,
             "passed": False,
             "budget_exceeded": True,
+            "stage_at_budget": gen_stats.get("stage", "unknown"),
             "reason": str(exc),
             "elapsed_seconds": round(retrieval_elapsed + gen_elapsed, 2),
+            "started_at": started_at,
+            **_placement(model),
         }
         print(f"  [BUDGET] {case['id']} / {model} ({gen_elapsed:.1f}s) -- {exc}", flush=True)
         return record
@@ -985,6 +1058,7 @@ def _run_factual_case_for_model(
             "infrastructure_error": True,
             "reason": f"{type(exc).__name__}: {exc}",
             "elapsed_seconds": round(retrieval_elapsed + gen_elapsed, 2),
+            "started_at": started_at,
         }
         print(f"  [ERROR] {case['id']} / {model} -- {type(exc).__name__}: {exc}", flush=True)
         return record
@@ -1004,7 +1078,9 @@ def _run_factual_case_for_model(
         # on this corpus retrieval dominates it -- comparing generators by
         # that number mostly compares how busy the card was.
         "generation_seconds": round(gen_elapsed, 2),
+        "started_at": started_at,
         **_decoding_metrics(gen_stats),
+        **_placement(model),
     }
     if not result["pass"]:
         record["answer"] = answer
@@ -1332,6 +1408,7 @@ def _run_retrieval_for_corpus(cases, retrieve, evidence, records, pending, store
     is open, and still land in ``pending`` because generation is phase 2's job.
     """
     for case in cases:
+        started_at = _utc_now_iso()
         t0 = time.perf_counter()
         if case["case_type"] in _STUDY_CASE_TYPES:
             if store is None:
@@ -1341,6 +1418,7 @@ def _run_retrieval_for_corpus(cases, retrieve, evidence, records, pending, store
                     "infrastructure_error": True,
                     "reason": "study case needs the vector store and none was provided",
                     "elapsed_seconds": 0.0,
+                    "started_at": started_at,
                 })
                 continue
             fragments = document_chunks(store, f"{case['paper']}.pdf")
@@ -1352,6 +1430,7 @@ def _run_retrieval_for_corpus(cases, retrieve, evidence, records, pending, store
                     "infrastructure_error": True,
                     "reason": f"no stored chunks for {case['paper']}.pdf",
                     "elapsed_seconds": round(elapsed, 2),
+                    "started_at": started_at,
                 })
                 print(f"  [ERROR] {case['id']} -- no chunks for {case['paper']}.pdf", flush=True)
                 continue
@@ -1379,6 +1458,7 @@ def _run_retrieval_for_corpus(cases, retrieve, evidence, records, pending, store
                     "infrastructure_error": True,
                     "reason": f"retrieval failed -- {type(exc).__name__}: {exc}",
                     "elapsed_seconds": round(time.perf_counter() - t0, 2),
+                    "started_at": started_at,
                 }
             )
             print(f"  [ERROR] {case['id']} -- retrieval: {type(exc).__name__}: {exc}", flush=True)
@@ -1394,7 +1474,7 @@ def _run_retrieval_for_corpus(cases, retrieve, evidence, records, pending, store
         # "retrieved" and quietly inflate the figure and table scores -- the
         # two the multimodal stack exists to move.
         if case["case_type"] in _RETRIEVAL_ONLY_CASE_TYPES:
-            record = run_retrieval_case(case, retrieved, elapsed)
+            record = {**run_retrieval_case(case, retrieved, elapsed), "started_at": started_at}
             records.append(record)
             status = "PASS" if record["passed"] else "FAIL"
             print(f"  [{status}] {case['id']} ({elapsed:.1f}s) -- {record['reason']}", flush=True)
