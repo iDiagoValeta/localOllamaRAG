@@ -245,8 +245,18 @@ def rag_chat_model(config: AppConfig) -> OllamaChatModel:
     ``num_predict`` is unbounded because a truncated answer to a document
     question is indistinguishable from a wrong one.
 
-    The unloader is wired in here because this model runs last and needs the
-    VRAM the embedder and reranker were holding.
+    The unloader is wired in here because this model runs last, but it only
+    reaches other Ollama-served roles (query decomposer, RECOMP, contextual)
+    via keep_alive=0 -- it has no path to the embedder's worker process or
+    the reranker's in-process CUDA weights (issue #239), so neither is
+    implied to be free by the time this model loads. Both stay resident
+    across queries by design: #25's 2026-07-29 measurement found
+    embedder+reranker+a small Ollama model coexisting at 7514 of 8188 MiB
+    with 2-5s of contention, not the multi-minute stall once feared, so
+    reloading either on every query traded a measured, small cost for an
+    unmeasured one. ``release_embedder`` and ``release_reranker`` exist for
+    callers who know a reload is due anyway (a failed re-index; the reranker
+    flag being turned off) rather than for the per-query path itself.
     """
     ollama = config.models.ollama
     return OllamaChatModel(
@@ -362,10 +372,13 @@ def reranker(config: AppConfig) -> CrossEncoderReranker:
     megabytes of weights on first ``rerank()`` call, competing for the same
     GPU (#46).
 
-    Like ``embedder``, this slot is a singleton with no reset path today,
-    so the #57 read race does not apply -- see that function's docstring
-    for why, and for what adding an invalidation path here would require
-    instead of the tuple trick used by ``vector_store``/``lexical_index``.
+    Like ``embedder``, this slot is a singleton the #57 read race does not
+    apply to -- see that function's docstring for why, and for what adding
+    an invalidation path here would require instead of the tuple trick used
+    by ``vector_store``/``lexical_index``. Unlike ``embedder``,
+    ``release_reranker`` below drops the cached instance's weights without
+    discarding the singleton itself: ``CrossEncoderReranker.rerank()``
+    reloads lazily on next use, so there is no worker process to rebuild.
 
     Args:
         config: Current pipeline configuration.
@@ -379,6 +392,29 @@ def reranker(config: AppConfig) -> CrossEncoderReranker:
             if _reranker_cache["reranker"] is None:
                 _reranker_cache["reranker"] = CrossEncoderReranker()
     return _reranker_cache["reranker"]
+
+
+def release_reranker() -> None:
+    """Drop the cached reranker's GPU weights, keeping the singleton slot.
+
+    Issue #239: the reranker loads once and its weights stayed resident for
+    the rest of the process's life, since nothing ever called
+    ``CrossEncoderReranker.release()``. Not wired into the per-query
+    retrieval path itself -- see ``rag_chat_model``'s docstring for why that
+    would trade a measured, small VRAM-contention cost for an unmeasured
+    latency one on every question. Exists for callers who know the reranker
+    will not be needed again soon: today, that is ``/api/settings`` turning
+    ``USAR_RERANKER`` off (``rag/web/app.py``), where the alternative is
+    weights held for nothing until the flag is turned back on.
+
+    Safe to call before ``reranker()`` has ever built one (the cache slot is
+    still empty) and after weights are already released -- both leave
+    nothing to do.
+    """
+    with _reranker_cache_lock:
+        instance = _reranker_cache["reranker"]
+    if instance is not None:
+        instance.release()
 
 
 def answer(store: VectorStore, config: AppConfig) -> Answer:
@@ -570,6 +606,7 @@ __all__ = [
     "recomp_chat_model",
     "reranker",
     "release_embedder",
+    "release_reranker",
     "reset_vector_store_cache",
     "retrieval_metrics_to_legacy",
     "vector_store",

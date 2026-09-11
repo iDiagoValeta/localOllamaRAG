@@ -554,6 +554,7 @@ from rag.engine.settings import (
 from rag.engine.wiring import (
     app_config_from_runtime,
     release_embedder,
+    release_reranker,
     reset_vector_store_cache,
     vector_store,
 )
