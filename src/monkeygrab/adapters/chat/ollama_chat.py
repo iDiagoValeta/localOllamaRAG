@@ -50,8 +50,10 @@ class GenerationDeadlineExceeded(RuntimeError):
     """A streamed generation ran past ``generation_deadline`` and was closed.
 
     A ``RuntimeError`` like every other failure this adapter raises (hard-fail
-    policy), kept distinct so a caller that set the deadline can tell "the
-    model kept going" from "the server failed".
+    policy), kept distinct so a caller of ``stream`` that set the deadline
+    can tell "the model kept going" from "the server failed". ``generate``
+    does not raise it: there the deadline is enforced by the client's own
+    read timeout, whose error surfaces as the generic ``RuntimeError``.
     """
 
 
@@ -248,10 +250,15 @@ class OllamaChatModel:
             deadline = (
                 time.monotonic() + self._generation_deadline if self._generation_deadline else None
             )
+            # The read timeout is bounded by the deadline too: the per-line
+            # check below only runs when a line arrives, so a server that
+            # goes silent mid-stream would otherwise hold the slot for the
+            # full request_timeout, which is the #249 window in another form.
+            timeout = self._request_timeout
+            if self._generation_deadline:
+                timeout = min(timeout, self._generation_deadline)
             try:
-                with requests.post(
-                    url=url, json=payload, stream=True, timeout=self._request_timeout
-                ) as resp:
+                with requests.post(url=url, json=payload, stream=True, timeout=timeout) as resp:
                     resp.raise_for_status()
                     for line in resp.iter_lines():
                         if deadline is not None and time.monotonic() > deadline:
