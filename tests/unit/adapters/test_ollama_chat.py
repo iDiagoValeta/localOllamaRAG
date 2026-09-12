@@ -427,3 +427,71 @@ def test_stream_hard_fails_after_exhausting_5xx_retries(monkeypatch):
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+# generation_deadline (issue #249)
+
+
+class _NeverEndingStreamResponse(_FakeStreamResponse):
+    """A server that keeps sending tokens and never says done -- the shape of
+    a runaway generation. Records whether the adapter let go of it."""
+
+    def __init__(self, delay=0.01):
+        super().__init__(lines=[])
+        self._delay = delay
+        self.closed = False
+
+    def __exit__(self, *exc_info):
+        self.closed = True
+        return False
+
+    def iter_lines(self):
+        while True:
+            time.sleep(self._delay)
+            yield b'{"response": "x", "done": false}'
+
+
+def test_stream_closes_a_runaway_request_when_its_deadline_passes(monkeypatch):
+    """The evaluation budget abandons the thread consuming this stream, and
+    without a deadline of its own the request kept the server's single slot
+    for as long as the model cared to generate (issue #249: 96,000 tokens).
+    Leaving the ``with requests.post(...)`` block is what closes the
+    connection, and the disconnect is what makes Ollama cancel the task."""
+    response = _NeverEndingStreamResponse()
+    monkeypatch.setattr(module.requests, "post", lambda **kwargs: response)
+    model = OllamaChatModel("m", num_ctx=8, generation_deadline=0.05)
+
+    start = time.perf_counter()
+    with pytest.raises(RuntimeError, match="deadline"):
+        list(model.stream("prompt"))
+
+    assert time.perf_counter() - start < 1.0
+    assert response.closed
+
+
+def test_stream_without_a_deadline_lets_a_slow_stream_finish(monkeypatch):
+    # Zero is the product default and means what it always meant: the read
+    # timeout is the only bound.
+    lines = [b'{"response": "a", "done": false}', b'{"response": "", "done": true}']
+
+    class _Slow(_FakeStreamResponse):
+        def iter_lines(self):
+            for line in self._lines:
+                time.sleep(0.02)
+                yield line
+
+    monkeypatch.setattr(module.requests, "post", lambda **kwargs: _Slow(lines))
+    model = OllamaChatModel("m", num_ctx=8, generation_deadline=0)
+    assert [c.text for c in model.stream("prompt")] == ["a", ""]
+
+
+def test_generate_bounds_its_client_timeout_by_the_deadline(monkeypatch):
+    """generate() is not streamed, so nothing arrives before the answer is
+    complete and the client's read timeout is, in effect, its total deadline.
+    A deadline shorter than request_timeout must therefore win there."""
+    calls = []
+    _stub_chat(monkeypatch, calls, content="ok")
+    OllamaChatModel("m", num_ctx=8, request_timeout=900, generation_deadline=10).generate("p")
+    OllamaChatModel("m", num_ctx=8, request_timeout=900, generation_deadline=0).generate("p")
+    OllamaChatModel("m", num_ctx=8, request_timeout=5, generation_deadline=10).generate("p")
+    assert [c["client_timeout"] for c in calls] == [10, 900, 5]

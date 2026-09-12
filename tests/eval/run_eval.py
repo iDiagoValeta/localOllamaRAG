@@ -1107,6 +1107,14 @@ def _run_factual_case_for_model(
 # lookup, no GPU work) without pinning a model once the harness itself exits.
 _EVAL_GENERATION_KEEP_ALIVE_SECONDS = "120"
 
+# How far past GENERATION_BUDGET_SECONDS the adapter's own deadline sits
+# (issue #249). The budget decides the verdict; the deadline only closes the
+# request the budget walked away from, so the server's single slot is free
+# for the next case instead of serving a runaway for as long as it lasts.
+# Strictly later than the budget so the record is always classified by the
+# budget (budget_exceeded), never by the adapter's exception.
+_EVAL_DEADLINE_MARGIN_SECONDS = 5
+
 
 def _release_ollama_models(model_names: Iterable[str]) -> None:
     """POST keep_alive=0 for each model, best-effort.
@@ -1166,15 +1174,22 @@ def _generation_keep_alive(models_used: Iterable[str]):
         models_used: Every Ollama model name this phase may have loaded
             (generator(s) under test plus AUX_MODEL), released on exit.
     """
-    previous = os.environ.get("OLLAMA_KEEP_ALIVE")
-    os.environ["OLLAMA_KEEP_ALIVE"] = _EVAL_GENERATION_KEEP_ALIVE_SECONDS
+    scoped = {
+        "OLLAMA_KEEP_ALIVE": _EVAL_GENERATION_KEEP_ALIVE_SECONDS,
+        # Same lever, same reason (issue #249): the deadline reaches the
+        # adapter through AppConfig.from_env() like keep_alive does.
+        "OLLAMA_GENERATION_DEADLINE": str(GENERATION_BUDGET_SECONDS + _EVAL_DEADLINE_MARGIN_SECONDS),
+    }
+    previous = {name: os.environ.get(name) for name in scoped}
+    os.environ.update(scoped)
     try:
         yield
     finally:
-        if previous is None:
-            os.environ.pop("OLLAMA_KEEP_ALIVE", None)
-        else:
-            os.environ["OLLAMA_KEEP_ALIVE"] = previous
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
         _release_ollama_models(models_used)
 
 
@@ -1830,6 +1845,10 @@ _UNREACHABLE_CONFIG_OVERRIDE_REASONS = {
     "models.ollama.recomp_num_ctx": "see models.ollama.rag_num_ctx",
     "models.ollama.contextual_num_ctx": "see models.ollama.rag_num_ctx",
     "models.ollama.request_timeout": "see models.ollama.rag_num_ctx",
+    "models.ollama.generation_deadline": (
+        "see models.ollama.rag_num_ctx; run_eval.py scopes its own deadline "
+        "separately (_generation_keep_alive, issue #249), unrelated to config_overrides"
+    ),
     "models.ollama.keep_alive": (
         "see models.ollama.rag_num_ctx; run_eval.py scopes its own keep-alive "
         "separately (_generation_keep_alive), unrelated to config_overrides"

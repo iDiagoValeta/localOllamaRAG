@@ -220,6 +220,12 @@ instead of re-derived from memory.
   product, which is why `.env.example` does not list it; the value in effect is written to the
   artifact's `conditions.generation_budget_seconds`, and two runs with different budgets are not
   comparable rows.
+- The adapter's own deadline, `OLLAMA_GENERATION_DEADLINE`, is set to the budget plus five
+  seconds for the generation phase (issue #249). The budget only stops *waiting*; the deadline is
+  what closes the request the budget walked away from, which is what makes Ollama cancel the
+  task and free its single slot for the next case. Before this, one runaway generation (96,000
+  tokens from a quiz call) turned every case queued behind it into a budget exhaustion for as
+  long as it lasted -- the "windows" of tranche 1 in `docs/model-history.md`.
 - The `chat`, `contextual` and `recomp` roles are all pinned to `AUX_MODEL` for the whole
   evaluation (`_scoped_model_roles` around the `evaluate()` call in `run_eval.py`). A
   `--models` sweep varies only the `rag` role; the query decomposer a sweep might otherwise

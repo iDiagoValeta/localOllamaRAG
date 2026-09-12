@@ -50,12 +50,17 @@ turns this log into a ranking, which it is not.
    repeat of tranche 1 showed that 19 of its 24 exhaustions did not
    reproduce: they sat in two contiguous windows of that run, where every
    generation of every model ran past the cap while the decode rates on
-   either side were unchanged. The 5 that did reproduce are two `study_summary`
-   cases over whole documents (`ricci-study-summary-es`, 96 chunks, in all
-   four models both times; `att-study-summary-ca` at the edge, 171 s for the
-   one model that passed it). So tranche 1's rows carry about 5 cases of
-   run-level loss the other tranches do not, and a budget count of 4-6 on a
-   small model is that, not the model (issue #234).
+   either side were unchanged. The mechanism was found on 2026-09-12 (issue
+   #249): the budget walked away from a runaway generation without closing
+   its request, Ollama serves one request at a time, and every case queued
+   behind it waited out its own 180 s. Runs before that fix carry it; runs
+   after it close the request a few seconds past the budget. The 5 that did
+   reproduce are two `study_summary` cases over whole documents
+   (`ricci-study-summary-es`, 96 chunks, in all four models both times;
+   `att-study-summary-ca` at the edge, 171 s for the one model that passed
+   it). So tranche 1's rows carry about 5 cases of run-level loss the other
+   tranches do not, and a budget count of 4-6 on a small model is that, not
+   the model (issue #234).
 
 ---
 
@@ -121,8 +126,10 @@ Two effects sit in those 37 flips and they should not be read as one:
   9-12 s in run 2. The 19 that vanished were two contiguous windows of run 1
   (records 225-240 and 248-255 in generation order, every model, `study`
   and factual cases alike), and the 54 minutes of difference in wall time
-  is those 19 x 180 s. What made run 1 stall there is not in the artifact
-  (issue #234).
+  is those 19 x 180 s. What made run 1 stall there was found later, with
+  the runaway caught in the act in Ollama's own log: one generation that
+  never stopped held the server's single slot, and the budget had abandoned
+  it without closing the request (issue #249).
 
 The first-run figures stay in the table above because the repeat was made to
 measure the noise, not to pick the better of two draws; replacing a row with

@@ -141,6 +141,11 @@ OLLAMA_QUERY_NUM_CTX = _leer_env_int("OLLAMA_QUERY_NUM_CTX", 2048)
 OLLAMA_RECOMP_NUM_CTX = _leer_env_int("OLLAMA_RECOMP_NUM_CTX", 8192)
 OLLAMA_CONTEXTUAL_NUM_CTX = _leer_env_int("OLLAMA_CONTEXTUAL_NUM_CTX", 32768)
 OLLAMA_REQUEST_TIMEOUT = _leer_env_int("OLLAMA_REQUEST_TIMEOUT", 900)
+# Wall-clock cap on one generation call; 0 (the default) means only the read
+# timeout above applies. The evaluation gate sets this for its generation
+# phase so a generation its budget abandons is also cancelled on the server
+# (issue #249); the product leaves it off and bounds the chat stream itself.
+OLLAMA_GENERATION_DEADLINE = _leer_env_int("OLLAMA_GENERATION_DEADLINE", 0)
 # Seconds to keep weights in VRAM after each Ollama call; 0 unloads immediately.
 # Model load is 93-95% of query wall time (issue #25, 2026-07-29): at 120s,
 # queries within that window reuse the resident weights instead of paying a
