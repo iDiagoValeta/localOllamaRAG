@@ -106,12 +106,12 @@ EXTRA_DEV_CORPORA = {
 # server while the measurement runs on another (issue #244).
 OLLAMA_BASE_URL = read_env_ollama_base_url()
 
-# The baseline was calibrated with this model. Other models can be measured
-DEFAULT_MODELS = [
-    os.getenv(
-        "OLLAMA_RAG_MODEL", "hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE"
-    )
-]
+# The product's own default generator (rag/chat_pdfs.py MODELO_RAG), so a
+# no-argument run states something about what ships. Until 2026-09-12 this
+# was Ling-3.0-tiny, the faster model the 0.82 floor was first set with
+# (issue #242); gemma4:e4b clears that floor at 136/156 = 0.872 on
+# 20260911T094107Z, so the floor did not move. Other models can be measured
+DEFAULT_MODELS = [os.getenv("OLLAMA_RAG_MODEL", "gemma4:e4b")]
 
 # Model used for the auxiliary Ollama roles during this run: query
 # decomposition, contextual-retrieval enrichment and RECOMP synthesis. Kept

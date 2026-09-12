@@ -68,7 +68,11 @@ turns this log into a ranking, which it is not.
 
 156 cases: 136 reach a generator, 20 are retrieval-only and shared by every
 model in a run. Three corpora of 17 documents (en/es/ca) plus the blind set.
-Budget 180 s, `AUX_MODEL` = `Ling-3.0-tiny` for every row.
+Budget 180 s, `AUX_MODEL` = `Ling-3.0-tiny` for every row. Every row was
+measured with the `rag` role's `num_predict` at -1 (unbounded); the product
+caps it at 4,096 since 2026-09-12, which changes no passing answer (the
+campaign's 99th percentile is 2,138 tokens), so later rows remain comparable
+with these.
 
 | Model | Size | Answered (of 136) | Overall (of 156) | tokens/s | tokens/answer | s/answer | Budget hit | Infra | Placement | Run | Runs |
 |---|---|---|---|---|---|---|---|---|---|---|---|

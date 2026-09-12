@@ -10,7 +10,7 @@ name: Full eval gate
 # test doubles.
 #
 # THIS GATE REQUIRES A LOCAL OLLAMA SERVER AND A CUDA GPU. The models it
-# calls (gemma4:e2b by default) and the
+# calls (gemma4:e4b by default, the product's own) and the
 # reranker CrossEncoder are not available on hosted GitHub runners, so this
 # workflow only runs on a self-hosted runner where those prerequisites are
 # already met, and it is never triggered automatically (workflow_dispatch
@@ -28,7 +28,7 @@ on:
       models:
         description: "Space-separated Ollama generator models to evaluate"
         required: false
-        default: "gemma4:e2b"
+        default: "gemma4:e4b"
       update_baseline:
         description: "Raise the pass-rate baseline if this run is green (never lowers it)"
         type: boolean
