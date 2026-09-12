@@ -137,3 +137,30 @@ def test_release_swallows_a_post_failure_for_one_model_and_continues(monkeypatch
     _release_ollama_models(["flaky", "other"])  # must not raise
 
     assert set(calls) == {"flaky", "other"}
+
+
+# OLLAMA_GENERATION_DEADLINE (issue #249)
+
+
+def test_a_generation_deadline_just_past_the_budget_is_set_during_the_block(monkeypatch):
+    """The budget decides the verdict at GENERATION_BUDGET_SECONDS; the
+    adapter's own deadline, a few seconds later, is what closes the request
+    the budget walked away from, so the server's slot is free for the next
+    case instead of serving a runaway for as long as it lasts (#249)."""
+    monkeypatch.delenv("OLLAMA_GENERATION_DEADLINE", raising=False)
+    monkeypatch.setattr(run_eval, "GENERATION_BUDGET_SECONDS", 180)
+    with _generation_keep_alive(["some-model"]):
+        assert os.environ["OLLAMA_GENERATION_DEADLINE"] == str(
+            180 + run_eval._EVAL_DEADLINE_MARGIN_SECONDS
+        )
+        assert AppConfig.from_env().models.ollama.generation_deadline == (
+            180 + run_eval._EVAL_DEADLINE_MARGIN_SECONDS
+        )
+    assert "OLLAMA_GENERATION_DEADLINE" not in os.environ
+
+
+def test_the_deadline_restores_a_prior_value(monkeypatch):
+    monkeypatch.setenv("OLLAMA_GENERATION_DEADLINE", "42")
+    with _generation_keep_alive(["some-model"]):
+        assert os.environ["OLLAMA_GENERATION_DEADLINE"] != "42"
+    assert os.environ["OLLAMA_GENERATION_DEADLINE"] == "42"

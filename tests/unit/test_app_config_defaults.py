@@ -43,6 +43,7 @@ _FIELD_MAP = [
     ("models.ollama.contextual_num_ctx", "OLLAMA_CONTEXTUAL_NUM_CTX"),
     ("models.ollama.request_timeout", "OLLAMA_REQUEST_TIMEOUT"),
     ("models.ollama.keep_alive", "OLLAMA_KEEP_ALIVE"),
+    ("models.ollama.generation_deadline", "OLLAMA_GENERATION_DEADLINE"),
     ("models.ollama.generate_retries", "OLLAMA_GENERATE_RETRIES"),
     ("models.ollama.generate_retry_delay", "OLLAMA_GENERATE_RETRY_DELAY"),
     ("models.ollama.base_url", "OLLAMA_BASE_URL"),

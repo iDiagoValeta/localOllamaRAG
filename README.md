@@ -285,7 +285,10 @@ UI pick is still there.
 `OLLAMA_KEEP_ALIVE` keeps the generator's weights in VRAM for that many seconds
 after each call, since loading them back is most of a query's latency — on a
 small or shared GPU that also means the model squats on VRAM for that long
-afterward, so lower it (or set it to `0`) there.
+afterward, so lower it (or set it to `0`) there. `OLLAMA_GENERATION_DEADLINE`
+caps one generation call in seconds of wall clock and is off (`0`) by default:
+the request timeout never trips on a model that keeps producing tokens, so this
+is the only bound on a generator that does not stop.
 
 Each corpus has its own Jina CLIP and FAISS index under `rag/vector_db/`. The
 web interface detects when a stored index no longer matches the active chunking,

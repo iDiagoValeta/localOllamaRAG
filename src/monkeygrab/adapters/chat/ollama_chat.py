@@ -46,6 +46,15 @@ def ollama_client_for(base_url: str, *, timeout: Optional[float] = None) -> olla
     return ollama.Client(host=base_url, timeout=timeout)
 
 
+class GenerationDeadlineExceeded(RuntimeError):
+    """A streamed generation ran past ``generation_deadline`` and was closed.
+
+    A ``RuntimeError`` like every other failure this adapter raises (hard-fail
+    policy), kept distinct so a caller that set the deadline can tell "the
+    model kept going" from "the server failed".
+    """
+
+
 class OllamaChatModel:
     """One Ollama-backed model role: single-shot generation or token streaming.
 
@@ -82,6 +91,7 @@ class OllamaChatModel:
         num_ctx: int,
         keep_alive: int = 0,
         request_timeout: int = 900,
+        generation_deadline: float = 0,
         generate_retries: int = 1,
         generate_retry_delay: int = 3,
         options: Optional[Dict[str, Any]] = None,
@@ -98,6 +108,16 @@ class OllamaChatModel:
                 ``generate`` and ``stream``. ``generate`` bakes it into the
                 ``ollama.Client`` it uses (see ``ollama_client_for``);
                 ``stream`` passes it straight to ``requests.post``.
+            generation_deadline: Wall-clock cap in seconds on one call,
+                ``0`` for none. ``request_timeout`` is a *read* timeout: a
+                streamed generation that never stops delivers a token every
+                few milliseconds and so never trips it, and the request holds
+                the server's slot for as long as the model keeps going
+                (issue #249: 96,000 tokens from one quiz call). ``stream``
+                closes the connection when the deadline passes, which is
+                what makes Ollama cancel the task; ``generate`` is not
+                streamed, so its read timeout already is a total deadline
+                and is simply bounded by this one.
             generate_retries: Total attempts for ``stream`` on repeated 5xx
                 responses (``1`` = no retry).
             generate_retry_delay: Seconds to wait between ``stream`` retries.
@@ -116,6 +136,7 @@ class OllamaChatModel:
         self._num_ctx = num_ctx
         self._keep_alive = keep_alive
         self._request_timeout = request_timeout
+        self._generation_deadline = generation_deadline
         self._generate_retries = max(1, generate_retries)
         self._generate_retry_delay = generate_retry_delay
         self._base_options = dict(options or {})
@@ -176,9 +197,10 @@ class OllamaChatModel:
             }
             if response_format is not None:
                 chat_kwargs["format"] = response_format
-            response = ollama_client_for(self._base_url, timeout=self._request_timeout).chat(
-                **chat_kwargs
-            )
+            timeout = self._request_timeout
+            if self._generation_deadline:
+                timeout = min(timeout, self._generation_deadline)
+            response = ollama_client_for(self._base_url, timeout=timeout).chat(**chat_kwargs)
         except Exception as exc:
             raise RuntimeError(f"Ollama generate failed for model {self._model!r}: {exc}") from exc
 
@@ -202,7 +224,9 @@ class OllamaChatModel:
 
         Raises:
             RuntimeError: On any generation failure (after exhausting the
-                5xx retry budget).
+                5xx retry budget), or when ``generation_deadline`` passes
+                mid-stream -- raised from inside the ``with`` so the
+                connection is closed on the way out.
         """
         payload: Dict[str, Any] = {
             "model": self._model,
@@ -221,12 +245,20 @@ class OllamaChatModel:
         url = f"{self._base_url}/api/generate"
 
         for attempt in range(self._generate_retries):
+            deadline = (
+                time.monotonic() + self._generation_deadline if self._generation_deadline else None
+            )
             try:
                 with requests.post(
                     url=url, json=payload, stream=True, timeout=self._request_timeout
                 ) as resp:
                     resp.raise_for_status()
                     for line in resp.iter_lines():
+                        if deadline is not None and time.monotonic() > deadline:
+                            raise GenerationDeadlineExceeded(
+                                f"Ollama stream generation for model {self._model!r} passed "
+                                f"its {self._generation_deadline:.0f}s deadline; request closed"
+                            )
                         if not line:
                             continue
                         data = json.loads(line)
@@ -259,6 +291,8 @@ class OllamaChatModel:
                 raise RuntimeError(
                     f"Ollama stream generation failed for model {self._model!r}: {exc}"
                 ) from exc
+            except GenerationDeadlineExceeded:
+                raise
             except Exception as exc:
                 raise RuntimeError(
                     f"Ollama stream generation failed for model {self._model!r}: {exc}"
