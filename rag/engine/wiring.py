@@ -61,7 +61,14 @@ RAG_SAMPLING_OPTIONS: Dict[str, Any] = {
     "top_p": 0.9,
     "repeat_penalty": 1.15,
     "repeat_last_n": 64,
-    "num_predict": -1,
+    # Was -1 (unbounded) until 2026-09-12. Across the 3,167 answers of the
+    # model campaign the 99th percentile was 2,138 tokens and every longer
+    # one was a failing answer; one unbounded quiz call reached ~96,000
+    # tokens and held Ollama's only slot for fifteen minutes (issue #249).
+    # 4,096 truncates no real answer on record and cuts a runaway in about
+    # forty seconds on this card. Rows measured under -1 stay comparable:
+    # no passing answer came near the cap.
+    "num_predict": 4096,
 }
 
 RECOMP_SAMPLING_OPTIONS: Dict[str, Any] = {
@@ -242,8 +249,10 @@ def rag_chat_model(config: AppConfig) -> OllamaChatModel:
 
     Sampling is cold and repetition-penalised: the answer must stay inside the
     retrieved evidence, and a wandering generator is worse than a terse one.
-    ``num_predict`` is unbounded because a truncated answer to a document
-    question is indistinguishable from a wrong one.
+    ``num_predict`` is capped at 4,096 (see ``RAG_SAMPLING_OPTIONS``): a
+    truncated answer to a document question is indistinguishable from a wrong
+    one, which is why the cap sits nearly twice above the 99th percentile of
+    every answer measured rather than at a typical length.
 
     The unloader is wired in here because this model runs last, but it only
     reaches other Ollama-served roles (query decomposer, RECOMP, contextual)

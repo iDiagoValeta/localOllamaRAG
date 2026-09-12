@@ -201,13 +201,14 @@ fake evaluator that raises on a declared key makes startup fail loudly
 
 **Which generator.** Every evaluation the loop runs -- the reference, each
 candidate, a replay -- generates with `run_eval.DEFAULT_MODELS`
-(`evaluator.real_evaluate` passes it), which is `Ling-3.0-tiny` unless
-`OLLAMA_RAG_MODEL` is set. That is the gate's default, not the product's
-(`gemma4:e4b`); the loop therefore searches for a retrieval configuration
-that helps the faster model the 0.82 floor was calibrated with, and a
-configuration it accepts has not been shown to help the shipped one. Export
-`OLLAMA_RAG_MODEL` to search for the product instead. Whether the two
-defaults should be one is issue #242.
+(`evaluator.real_evaluate` passes it): `gemma4:e4b`, the product's own
+default, unless `OLLAMA_RAG_MODEL` is set (decided 2026-09-12, issue #242;
+it was `Ling-3.0-tiny` before). A configuration the loop accepts is
+therefore measured on the generator a user runs. The auxiliary roles stay
+pinned to `AUX_MODEL` (`Ling-3.0-tiny`) as in every gate run. The noise
+floor and resolution figures below were measured with `Ling-3.0-tiny` and
+are being re-measured with `gemma4:e4b`; until that lands, read them as the
+Ling figures they are.
 
 **Objective:** `objective_adjusted` = passing cases on the search set, minus
 cases listed in `unreachable_cases.txt` (excluded from both numerator and

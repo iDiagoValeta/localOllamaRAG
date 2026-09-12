@@ -181,14 +181,15 @@ something is missing:
    refuses more than one `--models` entry: the file holds one number,
    calibrated on the gate's default generator.
 
-   That default is `run_eval.DEFAULT_MODELS` -- `Ling-3.0-tiny` unless `OLLAMA_RAG_MODEL`
-   says otherwise -- and it is **not** the product's default (`gemma4:e4b`). The gate and the
-   configuration harness (`harness/evaluator.real_evaluate`, which passes `DEFAULT_MODELS`)
-   measure the faster model the 0.82 floor was set with, at 7.5 s per answer against 11.8 s
-   for the shipped one; a no-argument `python tests/eval/run_eval.py` is therefore a statement
-   about the pipeline under `Ling-3.0-tiny`, not about what a user runs. Pass
-   `--models gemma4:e4b` (or export `OLLAMA_RAG_MODEL`) to measure the product; whether the
-   two defaults should be made the same is issue #242.
+   That default is `run_eval.DEFAULT_MODELS`: `gemma4:e4b` unless `OLLAMA_RAG_MODEL` says
+   otherwise -- the product's own default, so a no-argument `python tests/eval/run_eval.py`,
+   the `full-eval` workflow and the configuration harness (`harness/evaluator.real_evaluate`,
+   which passes `DEFAULT_MODELS`) all measure what a user runs. Decided 2026-09-12 (issue
+   #242); until then the default was `Ling-3.0-tiny`, the faster model the 0.82 floor was first
+   set with (7.5 s per answer against 11.8 s). The floor did not move with the switch:
+   `gemma4:e4b` scored 136/156 = 0.872 on `20260911T094107Z`, and the rule sets the floor at
+   the rate minus 0.05, which is 0.82 again. The auxiliary roles stay pinned to `AUX_MODEL`
+   (`Ling-3.0-tiny`) for every run, as the experiment standard below requires.
 
 Infrastructure failures leave the run inconclusive. Only an unfiltered gold-set
 run (`case_ids is None`, the CLI) is compared against the baseline. A subset
@@ -220,6 +221,11 @@ instead of re-derived from memory.
   product, which is why `.env.example` does not list it; the value in effect is written to the
   artifact's `conditions.generation_budget_seconds`, and two runs with different budgets are not
   comparable rows.
+- The `rag` role's `num_predict` is 4,096 since 2026-09-12 (it was -1, unbounded; issue #249
+  and the decision after it). Rows measured under -1 remain comparable with rows measured
+  under 4,096: across the campaign's 3,167 answers the 99th percentile was 2,138 tokens and
+  every longer answer failed anyway, so the cap changes no passing answer. The value in effect
+  is in the artifact's `conditions.sampling.rag`.
 - The adapter's own deadline, `OLLAMA_GENERATION_DEADLINE`, is set to the budget plus five
   seconds for the generation phase (issue #249). The budget only stops *waiting*; the deadline is
   what closes the request the budget walked away from, which is what makes Ollama cancel the
