@@ -325,8 +325,16 @@ an error instead of a quiz. A wrong key is the one failure here that would not
 look like one.
 Ollama is started automatically if it is installed but not running. Three fixed
 language stores — English, Castellano, Valencià — map to `rag/docs/{en,es,ca}/`.
-The `es` and `ca` stores ship with a few sample articles so a fresh clone has
-something to show; treat them as demo content and replace them with your own PDFs.
+Each holds 17 documents, but a fresh clone carries only the handful committed
+before the corpus grew: the rest are described in `rag/docs/corpus_manifest.json`
+and fetched once with
+
+```bash
+python tools/fetch_corpus.py       # --check reports what is missing without downloading
+```
+
+Treat them as demo content and replace them with your own PDFs; the evaluation
+gate is the one thing that needs all 17.
 
 The **desktop app** wraps the web interface in a Windows executable with
 [PyInstaller](https://pyinstaller.org/) and [pywebview](https://pywebview.flowrl.com/).
