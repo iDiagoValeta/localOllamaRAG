@@ -310,15 +310,17 @@ existed simply lack them; a reader must treat a missing key as "not recorded", n
 
 ## Measuring the noise floor and the gate's sensitivity
 
-The runs cited below are historical, measured 2026-07-29 against a 51-case gold set: six
-English papers as the dev set, three arXiv papers (ResNet, BERT, ViT) as the blind set, `lang`
-limited to `en`/`es`, and four `case_type` values -- not the 156-case, three-language,
-four-source set `gold_cases.jsonl` holds today (see Corpus above). The fractions below
+The first runs cited below are historical, measured 2026-07-29 against a 51-case gold set:
+six English papers as the dev set, three arXiv papers (ResNet, BERT, ViT) as the blind set,
+`lang` limited to `en`/`es`, and four `case_type` values -- not the 156-case, three-language,
+four-source set `gold_cases.jsonl` holds today (see Corpus above). The fractions there
 (`44/51`, `39/51`, `40/51`) belong to that older, smaller set and do not rescale to a
-denominator of 156; nobody has re-run this measurement against the current file. The procedure
--- run twice, diff with `compare_runs.py` -- is unchanged and is exactly what a fresh
-measurement should still follow; only the numbers already on record here are frozen at the set
-they were measured on.
+denominator of 156. Both measurements have since been repeated on the current set -- the
+noise floor on all 156 cases with four generators (2026-09-11, below) and the noise floor
+and the sensitivity on the 123-case search set with the gate's default generator (2026-09-12,
+`harness/README.md`, "Resolution warning"). The procedure -- run twice, diff with
+`compare_runs.py` -- is unchanged; the older numbers stay on record for the set they were
+measured on.
 
 Both need a GPU machine with Ollama running — the fast CI gate cannot run
 them. `compare_runs.py` itself is pure and is covered by the fast gate.

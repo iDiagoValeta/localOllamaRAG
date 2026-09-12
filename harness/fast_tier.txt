@@ -1,81 +1,57 @@
 # Fast tier -- regression filter only (never declares an improvement).
-# Fixed, versioned subset of the search set: 16 cases spanning every
-# case_type, drawn from 6 of the search set's 41 papers -- all of them
-# English documents of the `corpus` source, chosen before #213 added the
-# `corpus_es`/`corpus_ca` stores. Those two stores have no fast-tier case,
-# so a regression confined to them passes this filter (issue #247).
+# Fixed, versioned subset of the search set: 25 cases, re-derived on
+# 2026-09-12 from the search-set reference run
+# tests/eval/runs/20260912T003549Z_mineru-jina_clip-faiss.json (Ling-3.0-tiny,
+# 107/123, issue #243) by one rule, so it can be re-derived again the same
+# way after the next corpus change (issue #247):
+#
+#   every case that run failed (16), plus the first passing case in
+#   gold_cases.jsonl order for every case_type and every source that the
+#   failures alone did not cover (9).
+#
+# Spans every case_type (7) and every source (corpus, corpus_es, corpus_ca)
+# of the search set; harness/tests/test_evaluator.py asserts both, so the
+# next corpus expansion cannot strand a store here again as #213 did.
 #
 # Its job is not to save minutes -- it is to reject a bad candidate without
-# contaminating the ratchet, before paying for the full search set. Earlier
-# revisions of this file justified the tier by an evaluation-time budget
-# (the design's original ~2.8 h/candidate estimate); that budget was wrong
-# by a factor of ~6 (issue #27's keep-alive fix removed a per-case cold
-# model load the original figure baked in -- measured 2026-08-12,
-# tests/eval/runs/20260812T194812Z_mineru-jina_clip-faiss.json, local and
-# gitignored) and the saving this tier buys is correspondingly smaller than
-# assumed. The tier stays regardless: its function (a regression filter the
-# ratchet needs) does not depend on how many minutes it happens to save.
+# contaminating the ratchet, before paying for the full search set. Cost,
+# from that run's own per-case elapsed_seconds (retrieval plus generation):
+# ~330 s for the 24 cases that finished, plus one study_quiz
+# (gw-study-quiz-ca) that exhausted the 180 s generation budget -- about
+# 8.5 min against ~31 min for the whole search set. The budget case stays:
+# the deadline that #249 added bounds it, and a candidate that fixes or
+# breaks the quiz path shows up here first.
 #
-# Sizing arithmetic, recomputed against the 2026-08-12 measurement's bucket
-# medians (answered 28.5 s, retrieval-only 4.1 s -- both down from the
-# 2026-07-29 reference's 201.1 s/198.4 s and 3.9 s/4.5 s respectively; only
-# the answered bucket moved, since retrieval-only cases never call the
-# generator the keep-alive fix affects):
-#   8 answered cases  x ~28.5s = ~228s
-#   5 retrieval-only  x ~4.1s  =  ~21s
-#   total ~249s ~= 4 min for these 13 cases -- still worth running first,
-#   just not for the reason originally assumed. The three study-artifact
-#   cases below (issue #140) are not priced into that total: no per-case
-#   timing exists for study_summary/study_outline/study_quiz, so say that
-#   instead of guessing -- the tier's real cost is ~249s plus an unmeasured
-#   amount for three full-document generations (see the note below).
-#   The ~13 min full-search-set comparison this line used to make is gone
-#   for the same reason harness/README.md's Sets section was rewritten
-#   (issue #225): it measured a 32-case search set that #213 grew to 123
-#   cases, and nobody has re-timed a full run since.
-#
-# Includes all 5 of the search-set failures known on 2026-08-12, when the
-# search set had 32 cases (dpo-pipeline-figure-es, higgs-diphoton-figure,
-# planck-contours-figure, planck-sigma8-es, planck-h0-tension); which cases
-# fail on today's 123 is issue #243's measurement, and this list has not
-# been re-derived from it -- the three figure failures cost ~4s each, so including
-# them is nearly free and gives the regression filter real signal on the
-# retrieval side; the two answered failures satisfy "at least two of five"
-# before the figures are even counted.
+# The failing cases are here so the filter has signal on both sides: a
+# candidate that fixes one shows a gain the tier does not act on, a candidate
+# that breaks a passing one is rejected before the ratchet sees it. The
+# three figure failures cost ~9 s each and are the retrieval-side signal.
 
-# -- answered (8): factual_number / factual_concept --
-planck-sigma8-es
-planck-h0-tension
-att-n-layers
-dpo-acronym
-gw-snr
-gw-site
-higgs-significance
-ricci-hamilton-intro
-
-# -- retrieval-only (5): figure_retrieval / table_retrieval --
-att-bleu-table
-dpo-pipeline-figure-es
+# -- failed in the reference run (16) --
 higgs-diphoton-figure
 planck-contours-figure
-gw-strain-figure
+planck-h0-tension
+gw-study-quiz-ca
+adam-beta2
+adam-stepsize
+supernovae-lab
+photosynthesis-chloroplasts
+antarctica-ice-thickness
+antarctica-freshwater
+fotosintesis-carbono
+machupicchu-restaurado
+acueducto-altura
+mediterrania-grecs
+basquet-naixement
+catala-llengua-habitual
 
-# -- study artifacts (3): study_summary / study_outline / study_quiz --
-#
-# Present because the tier's own rule is to span every case_type in the search
-# set (harness/tests/test_evaluator.py), and issue #140 added three. They are
-# not free: each one is a full generation over a whole document, so this tier
-# costs three more answered-bucket cases than it did.
-#
-# Worth it for the same reason the failing figure cases are here. Only one knob
-# in SEARCH_SPACE reaches them at all -- flags.usar_optimizacion_contexto, the
-# one that decides what text the generator sees -- and it reaches them harder
-# than it reaches an answered case, because a Study artifact reads a whole
-# document rather than a top-k. A candidate that degrades context assembly
-# shows up here first.
-#
-# One paper, all three types: they share its chunks, so the document is loaded
-# once for the three.
-att-study-summary
+# -- passing coverage: one per case_type / source not covered above (9) --
+att-bleu-ende
+att-bleu-table
+att-arch-figure
+dpo-acronym
 att-study-outline
+att-study-summary
 att-study-quiz
+pitagoras-pruebas
+gaudi-montserrat
