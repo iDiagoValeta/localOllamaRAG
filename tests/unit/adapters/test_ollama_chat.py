@@ -495,3 +495,21 @@ def test_generate_bounds_its_client_timeout_by_the_deadline(monkeypatch):
     OllamaChatModel("m", num_ctx=8, request_timeout=900, generation_deadline=0).generate("p")
     OllamaChatModel("m", num_ctx=8, request_timeout=5, generation_deadline=10).generate("p")
     assert [c["client_timeout"] for c in calls] == [10, 900, 5]
+
+
+def test_stream_bounds_its_read_timeout_by_the_deadline_so_a_silent_server_is_cut_too(monkeypatch):
+    """The per-line clock check cannot fire while no line arrives. A server
+    that goes silent mid-stream is bounded by requests' read timeout, so that
+    timeout must not exceed the deadline either."""
+    seen = []
+    lines = [b'{"response": "", "done": true}']
+
+    def fake_post(**kwargs):
+        seen.append(kwargs["timeout"])
+        return _FakeStreamResponse(lines)
+
+    monkeypatch.setattr(module.requests, "post", fake_post)
+    list(OllamaChatModel("m", num_ctx=8, request_timeout=900, generation_deadline=185).stream("p"))
+    list(OllamaChatModel("m", num_ctx=8, request_timeout=900, generation_deadline=0).stream("p"))
+    list(OllamaChatModel("m", num_ctx=8, request_timeout=60, generation_deadline=185).stream("p"))
+    assert seen == [185, 900, 60]
