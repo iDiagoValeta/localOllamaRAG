@@ -257,11 +257,11 @@ def test_fast_tier_regression_is_rejected_before_paying_for_the_full_set(tmp_pat
 
 def test_a_gain_equal_to_the_noise_floor_is_rejected_as_no_gain(tmp_path):
     """The floor is measured, not decorative: two runs of the same
-    configuration on the search set flipped three cases (#243), so a
-    candidate three cases up on the reference has shown nothing."""
+    configuration on the search set flipped two cases (#243), so a
+    candidate two cases up on the reference has shown nothing."""
     search_ids = ("a", "b", "c", "d", "e", "f", "g", "h")
     fast_ids = ("a",)
-    recovered = ("f", "g", "h")
+    recovered = ("g", "h")
     assert len(recovered) == loop.NOISE_FLOOR_CASES
 
     def evaluate(overrides, case_ids):
@@ -286,8 +286,8 @@ def test_a_gain_equal_to_the_noise_floor_is_rejected_as_no_gain(tmp_path):
 
     entry = report["iterations"][0]
     assert entry["verdict"] == "rejected_no_gain"
-    assert "noise floor (3)" in entry["reason"]
-    assert report["ratchet"] == 5
+    assert "noise floor (2)" in entry["reason"]
+    assert report["ratchet"] == 6
 
 
 def test_a_real_improvement_is_accepted_and_moves_the_ratchet(tmp_path):
@@ -295,8 +295,8 @@ def test_a_real_improvement_is_accepted_and_moves_the_ratchet(tmp_path):
     fast_ids = ("a",)
     recovered = ("g", "h", "i", "j", "k", "l")
     # Reference passes 6/12; the improved candidate passes all 12 -- a gain of
-    # six, past the measured noise floor of three (loop.NOISE_FLOOR_CASES) and
-    # at the design doc's ~6-flip demonstrability threshold.
+    # six, past the measured noise floor (loop.NOISE_FLOOR_CASES) and at the
+    # design doc's ~6-flip demonstrability threshold.
     assert len(recovered) > loop.NOISE_FLOOR_CASES
 
     def evaluate(overrides, case_ids):
@@ -345,9 +345,9 @@ def test_resolution_warning_is_always_present_in_the_report(tmp_path):
     assert report["resolution_warning"] == loop.RESOLUTION_WARNING
     # The measured figures of 2026-09-12 (#243), so a re-measurement that
     # forgets this dict shows up here rather than in a stale report.
-    assert report["resolution_warning"]["available_search_set_failures"] == 16
-    assert report["resolution_warning"]["net_flips_under_known_sabotage"] == 10
-    assert report["resolution_warning"]["noise_floor_cases"] == loop.NOISE_FLOOR_CASES == 3
+    assert report["resolution_warning"]["available_search_set_failures"] == 17
+    assert report["resolution_warning"]["net_flips_under_known_sabotage"] == 6
+    assert report["resolution_warning"]["noise_floor_cases"] == loop.NOISE_FLOOR_CASES == 2
     assert report["resolution_warning"]["demonstrability_flip_threshold"] == 6
 
 
@@ -599,7 +599,7 @@ def test_recovery_candidate_reaches_the_search_set_when_reference_is_degraded(tm
     fast_ids = ("lucky",)
     # High water (healthy): fails 'lucky', passes everything else -> 6. The
     # degraded reference passes only 'lucky' -> 1, so restoring health is a
-    # gain of five over the ratchet, past the noise floor of three.
+    # gain of five over the ratchet, past the noise floor.
     _seed_entry(
         tmp_path,
         1,
@@ -648,7 +648,7 @@ def test_recovery_candidate_reaches_the_search_set_when_reference_is_degraded(tm
     assert report["recovery_mode"]["baseline_objective_adjusted"] == 6
     entry = report["iterations"][0]
     assert entry["evaluated_case_set"] == "search_set"  # got past the fast tier
-    assert entry["verdict"] == "accepted"  # restored health: 6 > ratchet 1 + floor 3
+    assert entry["verdict"] == "accepted"  # restored health: 6 > ratchet 1 + floor
     assert entry["regression_baseline_iteration"] == 1
 
 
