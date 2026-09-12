@@ -1255,6 +1255,14 @@ export default function App() {
                           />
                         ) : msg.content ? (
                           <MarkdownContent text={msg.content} />
+                        ) : msg.isStreaming && msg.mode === 'study' ? (
+                          // A study artifact is one generation over the whole
+                          // document, and a long one legitimately takes minutes
+                          // on a small model; say so instead of blinking.
+                          <span className="inline-flex items-center gap-2 text-xs text-ink-muted">
+                            <span className="inline-block w-2 h-5 bg-ink-muted rounded-sm animate-pulse" />
+                            {T.studyWorking}
+                          </span>
                         ) : msg.isStreaming ? (
                           <span className="inline-block w-2 h-5 bg-ink-muted rounded-sm animate-pulse" />
                         ) : null}
