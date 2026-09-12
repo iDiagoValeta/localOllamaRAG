@@ -255,16 +255,54 @@ def test_fast_tier_regression_is_rejected_before_paying_for_the_full_set(tmp_pat
     assert full_eval_calls["count"] == 1
 
 
-def test_a_real_improvement_is_accepted_and_moves_the_ratchet(tmp_path):
+def test_a_gain_equal_to_the_noise_floor_is_rejected_as_no_gain(tmp_path):
+    """The floor is measured, not decorative: two runs of the same
+    configuration on the search set flipped three cases (#243), so a
+    candidate three cases up on the reference has shown nothing."""
     search_ids = ("a", "b", "c", "d", "e", "f", "g", "h")
     fast_ids = ("a",)
+    recovered = ("f", "g", "h")
+    assert len(recovered) == loop.NOISE_FLOOR_CASES
 
     def evaluate(overrides, case_ids):
         better = overrides.get("retrieval.top_k_final") == 12
-        # Reference passes 6/8; the improved candidate passes all 8 -- a
-        # clear gain, well past the noise floor of 0.
         records = [
-            _rec(cid, "factual_number", better or cid not in ("g", "h"), 200.0) for cid in case_ids
+            _rec(cid, "factual_number", better or cid not in recovered, 200.0) for cid in case_ids
+        ]
+        return ev.EvaluationResult(records=tuple(records), effective_config=dict(overrides))
+
+    report = loop.run_loop(
+        reference=AppConfig(),
+        evaluate=evaluate,
+        proposer=_FixedProposer({"retrieval.top_k_final": 12}),
+        search_set_ids=search_ids,
+        fast_tier_ids=fast_ids,
+        unreachable_ids=(),
+        max_iterations=1,
+        patience=None,
+        ledger_dir=tmp_path,
+        verify_reachability=False,
+    )
+
+    entry = report["iterations"][0]
+    assert entry["verdict"] == "rejected_no_gain"
+    assert "noise floor (3)" in entry["reason"]
+    assert report["ratchet"] == 5
+
+
+def test_a_real_improvement_is_accepted_and_moves_the_ratchet(tmp_path):
+    search_ids = ("a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l")
+    fast_ids = ("a",)
+    recovered = ("g", "h", "i", "j", "k", "l")
+    # Reference passes 6/12; the improved candidate passes all 12 -- a gain of
+    # six, past the measured noise floor of three (loop.NOISE_FLOOR_CASES) and
+    # at the design doc's ~6-flip demonstrability threshold.
+    assert len(recovered) > loop.NOISE_FLOOR_CASES
+
+    def evaluate(overrides, case_ids):
+        better = overrides.get("retrieval.top_k_final") == 12
+        records = [
+            _rec(cid, "factual_number", better or cid not in recovered, 200.0) for cid in case_ids
         ]
         return ev.EvaluationResult(records=tuple(records), effective_config=dict(overrides))
 
@@ -284,7 +322,7 @@ def test_a_real_improvement_is_accepted_and_moves_the_ratchet(tmp_path):
 
     entry = report["iterations"][0]
     assert entry["verdict"] == "accepted"
-    assert report["ratchet"] == 8
+    assert report["ratchet"] == 12
     assert report["best_iteration"] == entry["iteration"]
 
 
@@ -305,7 +343,11 @@ def test_resolution_warning_is_always_present_in_the_report(tmp_path):
         verify_reachability=False,
     )
     assert report["resolution_warning"] == loop.RESOLUTION_WARNING
-    assert report["resolution_warning"]["available_search_set_failures"] == 5
+    # The measured figures of 2026-09-12 (#243), so a re-measurement that
+    # forgets this dict shows up here rather than in a stale report.
+    assert report["resolution_warning"]["available_search_set_failures"] == 16
+    assert report["resolution_warning"]["net_flips_under_known_sabotage"] == 10
+    assert report["resolution_warning"]["noise_floor_cases"] == loop.NOISE_FLOOR_CASES == 3
     assert report["resolution_warning"]["demonstrability_flip_threshold"] == 6
 
 
@@ -553,13 +595,15 @@ def test_recovery_candidate_reaches_the_search_set_when_reference_is_degraded(tm
     because the sabotage lucked into it; the healthy high-water state in the
     ledger fails it. Recovery pairing must let a candidate that restores
     health through to acceptance instead of rejecting it at the fast tier."""
-    search_ids = ("lucky", "a", "b", "c", "d")
+    search_ids = ("lucky", "a", "b", "c", "d", "e", "f")
     fast_ids = ("lucky",)
-    # High water (healthy): fails 'lucky', passes everything else -> 4.
+    # High water (healthy): fails 'lucky', passes everything else -> 6. The
+    # degraded reference passes only 'lucky' -> 1, so restoring health is a
+    # gain of five over the ratchet, past the noise floor of three.
     _seed_entry(
         tmp_path,
         1,
-        4,
+        6,
         [
             {
                 "id": "lucky",
@@ -569,7 +613,7 @@ def test_recovery_candidate_reaches_the_search_set_when_reference_is_degraded(tm
             },
             *[
                 {"id": cid, "case_type": "factual_number", "passed": True, "elapsed_seconds": 200.0}
-                for cid in ("a", "b", "c", "d")
+                for cid in ("a", "b", "c", "d", "e", "f")
             ],
         ],
     )
@@ -601,10 +645,10 @@ def test_recovery_candidate_reaches_the_search_set_when_reference_is_degraded(tm
 
     assert report["recovery_mode"]["active"] is True
     assert report["recovery_mode"]["baseline_iteration"] == 1
-    assert report["recovery_mode"]["baseline_objective_adjusted"] == 4
+    assert report["recovery_mode"]["baseline_objective_adjusted"] == 6
     entry = report["iterations"][0]
     assert entry["evaluated_case_set"] == "search_set"  # got past the fast tier
-    assert entry["verdict"] == "accepted"  # restored health: 4 > ratchet 1
+    assert entry["verdict"] == "accepted"  # restored health: 6 > ratchet 1 + floor 3
     assert entry["regression_baseline_iteration"] == 1
 
 

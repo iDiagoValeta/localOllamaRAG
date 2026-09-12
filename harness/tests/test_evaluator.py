@@ -83,6 +83,16 @@ def test_fast_tier_covers_every_case_type_in_the_search_set():
     assert fast_case_types == search_case_types
 
 
+def test_fast_tier_covers_every_source_in_the_search_set():
+    # Issue #247: the tier chosen before #213 covered six English documents
+    # of one store, so a regression confined to the es/ca stores passed it
+    # untouched. Case-type coverage alone let that happen for weeks.
+    source_by_id = {c["id"]: c["source"] for c in ev._gold_cases()}
+    search_sources = {source_by_id[i] for i in ev.search_set_case_ids()}
+    fast_sources = {source_by_id[i] for i in ev.load_fast_tier()}
+    assert fast_sources == search_sources
+
+
 def test_fast_tier_has_no_duplicate_ids():
     fast = ev.load_fast_tier()
     assert len(fast) == len(set(fast))

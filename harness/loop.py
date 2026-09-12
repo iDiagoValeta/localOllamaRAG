@@ -17,13 +17,16 @@ full numbers and why they cannot be re-derived from a fresh clone):
    for fewer/cheaper generator calls without the constraint noticing.
    ``_latency_breach`` checks each bucket against its own reference median
    independently.
-2. **``resolution_warning`` in the final report.** The search set (32
-   ``source: corpus`` cases) can win at most 5 cases today, and moved only 3
-   net flips under the most destructive single-field change anyone has
-   measured (``RAG_TOP_K_FINAL=1``) -- both below the ~6-flip threshold
-   design doc section 3 sets for a paired difference not attributable to
-   chance. Every report says so, so an accepted improvement reads as a
-   candidate for confirmation, not a demonstrated result.
+2. **``resolution_warning`` in the final report.** The search set (123
+   non-arXiv cases since #213) can win at most 16 cases today, resampling
+   moves 3 of them, and the most destructive single-field change anyone has
+   measured (``retrieval.top_k_final=1``) moves 10 net -- above the ~6-flip
+   threshold design doc section 3 sets for a paired difference not
+   attributable to chance, so a catastrophic change is now detectable
+   (measured 2026-09-12, issue #243). A gain of four or five cases clears
+   the noise floor but not that threshold. Every report says so, so an
+   accepted improvement of that size reads as a candidate for confirmation,
+   not a demonstrated result.
 3. **A ``rejected_regression`` verdict also fires at the search-set stage**
    when the retrieval-only bucket loses cases net against the reference
    (paired by id), even if the blended ``objective_adjusted`` still went up.
@@ -106,44 +109,68 @@ from harness import search_space
 
 # NOISE FLOOR
 
-# Measured 2026-07-29 (docs/design/2026-07-28-loop-automejorable.md,
-# criterion 1 note): two runs of the same configuration and code, same index
-# (both recorded a cache hit), zero flips across all 51 gold cases --
-# tests/eval/runs/20260729T020233Z_mineru-jina_clip-faiss.json and
-# tests/eval/runs/20260729T040824Z_mineru-jina_clip-faiss.json (both local,
-# gitignored, so not reproducible from a fresh clone -- see harness/README.md).
-# Independently re-verified in this PR restricted to just the 32-case search
-# set this harness actually uses: still 0 flips. A delta of zero cases is not
-# an improvement. If tests/eval/grade.py's scoring rules ever change, this
-# floor must be remeasured -- it is specific to that grader, not a law of the
+# Measured 2026-09-12 on the search set this harness actually evaluates
+# (the 123 non-arXiv cases, evaluator.search_set_case_ids()) with the
+# generator it actually runs (run_eval.DEFAULT_MODELS, Ling-3.0-tiny): two
+# evaluate() calls of the identical configuration, identical `conditions`
+# block field for field, 31 min each --
+# tests/eval/runs/20260912T003549Z_mineru-jina_clip-faiss.json (107/123) and
+# tests/eval/runs/20260912T013552Z_mineru-jina_clip-faiss.json (104/123), both
+# local and gitignored (see harness/README.md). compare_runs.py over the
+# pair: 0 flipped to PASS, 3 flipped to FAIL, 120 unchanged. Three cases is
+# what resampling the same configuration moves, so a candidate three up on
+# the reference has shown nothing (issue #243).
+#
+# This replaces the 2026-07-29 figure of zero flips, measured on the 51-case
+# gold set that preceded #213 and re-verified then on the 32-case search set;
+# the 156-case set flips on sampling alone (docs/model-history.md, "How to
+# read", item 1) and so does this subset of it. If tests/eval/grade.py's
+# scoring rules or the gold set change, this floor must be remeasured -- it
+# is specific to that grader, that set and that generator, not a law of the
 # pipeline.
-NOISE_FLOOR_CASES = 0
+NOISE_FLOOR_CASES = 3
 
 # The latency constraint's multiplier (design doc section 5).
 LATENCY_CEILING_MULTIPLIER = 1.20
 
 # RESOLUTION LIMIT (see module docstring point 2)
 
-SEARCH_SET_AVAILABLE_FAILURES = 5
+# Both from the same 2026-09-12 runs as the noise floor. Available failures:
+# the first reference run failed 16 of 123 (11 factual_number, 2
+# factual_concept, 2 figure_retrieval, 1 study_quiz that exhausted the 180 s
+# budget). Sensitivity: the criterion-2 sabotage, retrieval.top_k_final=1
+# through evaluate()'s config_overrides
+# (tests/eval/runs/20260912T010521Z_mineru-jina_clip-faiss.json, 97/123),
+# flipped 2 to PASS and 12 to FAIL against that reference -- 10 net -- and
+# 4 to PASS, 11 to FAIL against the second reference. Against the 32-case
+# set the same sabotage moved 3 net flips; on today's set it clears the
+# ~6-flip demonstrability threshold, so the set can now show a catastrophic
+# single-field change. What it still cannot do is show a *small* one: a
+# gain of four or five cases clears the noise floor but not the threshold.
+SEARCH_SET_AVAILABLE_FAILURES = 16
 DEMONSTRABILITY_FLIP_THRESHOLD = 6
-SEARCH_SET_NET_FLIPS_UNDER_KNOWN_SABOTAGE = 3
+SEARCH_SET_NET_FLIPS_UNDER_KNOWN_SABOTAGE = 10
 SEARCH_SET_SABOTAGE_DESCRIPTION = (
-    "RAG_TOP_K_FINAL=1 (single fragment retrieved; criterion 2, 2026-07-29)"
+    "retrieval.top_k_final=1 (single fragment retrieved; criterion 2, 2026-09-12, "
+    "run 20260912T010521Z against reference 20260912T003549Z)"
 )
 
 RESOLUTION_WARNING: Dict[str, Any] = {
     "available_search_set_failures": SEARCH_SET_AVAILABLE_FAILURES,
     "demonstrability_flip_threshold": DEMONSTRABILITY_FLIP_THRESHOLD,
     "net_flips_under_known_sabotage": SEARCH_SET_NET_FLIPS_UNDER_KNOWN_SABOTAGE,
+    "noise_floor_cases": NOISE_FLOOR_CASES,
     "sabotage_description": SEARCH_SET_SABOTAGE_DESCRIPTION,
     "message": (
-        "The search set can win at most 5 cases and moved only 3 net flips under "
-        "a known-catastrophic single-field sabotage, below the ~6-flip threshold "
-        "design doc section 3 sets for a demonstrable paired difference. An "
-        "accepted improvement on today's corpus is a candidate for confirmation, "
-        "not a demonstrated result -- see "
-        "docs/design/2026-07-28-loop-automejorable.md section 3 and issue #30 "
-        "(block B, the corpus expansion this harness is sized against)."
+        "The search set can win at most 16 cases (2026-09-12 reference, 107/123). "
+        "Resampling the same configuration moves 3 of them, so an accepted "
+        "improvement is at least 4 cases up on the ratchet; the ~6-flip threshold "
+        "design doc section 3 sets for a demonstrable paired difference is what a "
+        "known-catastrophic single-field sabotage (retrieval.top_k_final=1) now "
+        "clears at 10 net flips. An accepted gain of 4 or 5 cases is therefore a "
+        "candidate for confirmation, not a demonstrated result; 6 or more is at "
+        "the threshold -- see docs/design/2026-07-28-loop-automejorable.md "
+        "section 3 and issue #243."
     ),
 }
 

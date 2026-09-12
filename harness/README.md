@@ -180,19 +180,22 @@ fake evaluator that raises on a declared key makes startup fail loudly
   search-set subset) -- never from a proposer, which can only emit config
   overrides. Proven, not assumed: `harness/tests/test_evaluator.py` asserts
   the blind set is disjoint from both the search set and the fast tier.
-- **Fast tier** (16 fixed ids, `fast_tier.txt`) -- regression filter only, it
-  **never declares an improvement**. 13 of the 16 (8 answered + 5
-  retrieval-only) cost ~4 min at current measured rates (8 × ~28.5 s + 5 ×
-  ~4.1 s); the remaining three are study-artifact cases (issue #140) with
-  no per-case timing measured yet, so they are not priced into that total
-  (issue #226 -- see the file's own header for the full accounting). The
-  ~13 min comparison against a full search-set run this bullet used to make
-  is gone: that run measured the pre-#213 32-case search set, not today's
-  123, and nobody has re-timed a full run since. Its job is rejecting a bad
-  candidate before it can contaminate the ratchet, not the minutes it
-  happens to save. Includes all 5 of today's known search-set failures
-  (three figure-retrieval failures cost ~4 s each, nearly free to include,
-  and give the regression filter real signal on the retrieval side).
+- **Fast tier** (25 fixed ids, `fast_tier.txt`) -- regression filter only, it
+  **never declares an improvement**. Re-derived on 2026-09-12 from the
+  search-set reference run by one rule (issue #247): every case that run
+  failed (16), plus the first passing case in `gold_cases.jsonl` order for
+  every `case_type` and every `source` the failures left uncovered (9). It
+  spans all seven case types and all three stores, and
+  `harness/tests/test_evaluator.py` asserts both, so the next corpus
+  expansion cannot strand a store here again as #213 did. Cost, from that
+  run's own per-case timings: about 8.5 min, of which 3 are one
+  `study_quiz` that exhausts the generation budget (kept: the deadline
+  #249 added bounds it, and the quiz path shows up here first). Its job is
+  rejecting a bad candidate before it can contaminate the ratchet, not the
+  minutes it happens to save against a ~31 min full search-set run. The
+  failures are here so the filter has signal on both sides: a candidate
+  that fixes one shows a gain the tier does not act on, a candidate that
+  breaks a passing one is rejected before the ratchet sees it.
 
 ## Objective, constraint, noise floor
 
@@ -209,16 +212,14 @@ defaults should be one is issue #242.
 **Objective:** `objective_adjusted` = passing cases on the search set, minus
 cases listed in `unreachable_cases.txt` (excluded from both numerator and
 denominator, not just discounted). `unreachable_cases.txt` starts **empty**
-and stays that way as of 2026-08-12: the `reason` field of all five of
-today's search-set failures was read against the reference gate run and
-none is the generator failing to answer over a figure it saw — three are
-`figure_retrieval` cases (never call the generator) that fail because
-retrieval surfaced text where an image chunk was wanted, exactly what fusion
-weights/`top_k_final`/the reranker threshold move; the other two are a
-number present in the abstract that did not survive into the generated
-answer. All five are inside stage 1's action space. See the file's header
-for the full citation. `objective_raw` (unreachable cases included) is
-tracked alongside so the exclusion mechanism is auditable before it is ever
+and stays that way as of 2026-09-12: the reference run on the current
+123-case search set (`20260912T003549Z`, 107/123) fails 16 cases -- 11
+`factual_number`, 2 `factual_concept`, 2 `figure_retrieval`, 1 `study_quiz`
+that exhausted the generation budget -- and every one of them is a
+retrieval or generation outcome the declared search space can move, not a
+case no configuration could reach. Their ids are the first block of
+`fast_tier.txt`. `objective_raw` (unreachable cases included) is tracked
+alongside so the exclusion mechanism is auditable before it is ever
 needed — today `raw == adjusted`.
 
 **Constraint, per bucket, not blended.** Answered cases (`factual_number`/
@@ -260,54 +261,58 @@ counts toward `--patience`) and raises `evaluator.InconclusiveEvaluationError`
 before the loop even starts if the **reference** measurement itself carries
 one — no ratchet baseline can be trusted in that case.
 
-**Noise floor: 0 cases.** Measured 2026-07-29 (design doc, criterion 1
-note): two runs of the same configuration and code, same index, zero flips
-across 51 gold cases. Independently re-verified in this PR restricted to
-the 32-case search set: still 0 flips. A delta of 0 is not an improvement
-(`loop.NOISE_FLOOR_CASES`).
+**Noise floor: 3 cases.** Measured 2026-09-12 on the search set this loop
+evaluates and with the generator it runs (`Ling-3.0-tiny`): two
+`evaluate()` calls of the identical configuration, `conditions` equal field
+for field, `20260912T003549Z` (107/123) and `20260912T013552Z` (104/123);
+`compare_runs.py` over the pair: 0 flipped to PASS, 3 flipped to FAIL, 120
+unchanged. A candidate three cases up on the ratchet is rejected as
+`rejected_no_gain` (`loop.NOISE_FLOOR_CASES`); four is the smallest
+accepted gain. This replaces the 2026-07-29 figure of zero flips, which was
+measured on the 51-case set that preceded #213 and re-verified on the
+32-case search set of the time; the current 156-case set flips on sampling
+alone (`docs/model-history.md`, "How to read", item 1), and so does this
+subset of it (issue #243).
 
 ## Resolution warning
 
-Stale in exactly the way `evaluator.search_set_case_ids()`'s own docstring
-warns about (issue #225): every number below was measured against the
-32-case search set that existed before #213 (the corpus expansion, block B
-of issue #30) grew it to 123 (see Sets above), and nobody has re-run either
-measurement against the current set.
+Measured 2026-09-12 on the current 123-case search set, with the same three
+runs as the noise floor above (issue #243), replacing figures that had been
+measured on the 32-case set that preceded #213:
 
-The **~6 net flips** the design doc (§3) sets as the threshold for a paired
-difference not attributable to chance is a fixed methodological constant,
-not derived from search-set size, so it does not by itself need
-re-measuring. What does: **"the search set can win at most 5 cases" (27/32
-pass on the 2026-08-19 reference run)** is a capacity claim that scales with
-the search set's size, and **"3 net flips under `RAG_TOP_K_FINAL=1`"**
-(criterion 2's known-catastrophic sabotage, versus 7 on the old 51-case
-gate) is a paired comparison that only means something re-run on the cases
-it is meant to describe. Both are hardcoded in `harness/loop.py`'s
-`RESOLUTION_WARNING` dict (`SEARCH_SET_AVAILABLE_FAILURES`,
-`SEARCH_SET_NET_FLIPS_UNDER_KNOWN_SABOTAGE`) and attached verbatim, via
-`message`, to every real campaign's `resolution_warning` -- so a report run
-today still describes a search set a quarter the size of the one the code
-actually evaluates against.
+- **Available failures: 16 of 123** (`20260912T003549Z`, 107/123). The old
+  figure was "at most 5" on 27/32.
+- **Net flips under the known-catastrophic sabotage: 10.** The criterion-2
+  sabotage, `retrieval.top_k_final=1` passed through `evaluate()`'s
+  `config_overrides` (`20260912T010521Z`, 97/123), flipped 2 cases to PASS
+  and 12 to FAIL against the first reference, 4 and 11 against the second.
+  The old figure was 3 net on the 32-case set.
+- **Demonstrability threshold: ~6 net flips**, the design doc's (§3) fixed
+  methodological constant, unchanged.
 
-Recomputing them for real needs two things nobody has measured yet, not an
-estimate: a reference evaluation over all 123 search-set cases (to count
-today's failures) and a paired comparison against a `RAG_TOP_K_FINAL=1`
-candidate over the same 123 (to count net flips). Until one of those runs
-exists, the honest statement is that the search set has roughly quadrupled
-since these figures were produced, and whether that changes the resolution
-picture for better or worse is not yet known -- not that it is still "5
-cases" and "3 net flips" today.
+So the resolution picture has changed for the better: a catastrophic
+single-field change now clears the threshold and is detectable on the
+search set. What the set still cannot do is demonstrate a *small*
+improvement. With a noise floor of 3, an accepted candidate is at least 4
+cases up on the ratchet, and 4 or 5 is above the floor but below the
+threshold -- a candidate for confirmation, not a demonstrated result. All
+of this is in `harness/loop.py`'s `RESOLUTION_WARNING` dict
+(`SEARCH_SET_AVAILABLE_FAILURES`, `SEARCH_SET_NET_FLIPS_UNDER_KNOWN_SABOTAGE`,
+`noise_floor_cases`) and attached verbatim, via `message`, to every real
+campaign's report.
 
 > [!NOTE]
-> All of the numbers above come from four local, gitignored artifacts
-> (`tests/eval/runs/20260729T020233Z_...json`, `...040824Z...`,
-> `...081129Z...json`, `...20260812T194812Z...json`) — `tests/eval/runs/` is
-> in `.gitignore`, so they are not reproducible from a fresh clone. They are
-> cited, not shipped. The three 2026-07-29 runs predate issue #27's
-> keep-alive fix and are cited for their PASS/FAIL evidence (noise floor,
-> sabotage flips, resolution limit), which the fix did not touch
-> (`compare_runs.py` against the healthy 2026-07-29 run reports 51 cases
-> unchanged); the 2026-08-12 run is cited for current timing.
+> The three 2026-09-12 artifacts (`tests/eval/runs/20260912T003549Z_...json`,
+> `...010521Z...`, `...013552Z...`), like every run artifact, are local and
+> gitignored -- cited, not shipped. They were produced by calling
+> `run_eval.evaluate()` exactly as `evaluator.real_evaluate()` does
+> (`models=run_eval.DEFAULT_MODELS`, `search_space.expand_overrides`,
+> `update_baseline=False`) with `write_report=True`, on `main` at `ee56ea9`,
+> 31 minutes each, no infrastructure errors, one budget exhaustion each.
+> The 2026-07-29 and 2026-08-12 runs the previous version of this section
+> cited (`20260729T020233Z`, `...040824Z`, `...081129Z`,
+> `20260812T194812Z`) remain the source of the per-bucket latency medians
+> above; nothing here retracts them, they simply described a smaller set.
 
 ## Proposers
 
