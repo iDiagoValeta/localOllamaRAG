@@ -180,22 +180,21 @@ fake evaluator that raises on a declared key makes startup fail loudly
   search-set subset) -- never from a proposer, which can only emit config
   overrides. Proven, not assumed: `harness/tests/test_evaluator.py` asserts
   the blind set is disjoint from both the search set and the fast tier.
-- **Fast tier** (25 fixed ids, `fast_tier.txt`) -- regression filter only, it
+- **Fast tier** (26 fixed ids, `fast_tier.txt`) -- regression filter only, it
   **never declares an improvement**. Re-derived on 2026-09-12 from the
-  search-set reference run by one rule (issue #247): every case that run
-  failed (16), plus the first passing case in `gold_cases.jsonl` order for
-  every `case_type` and every `source` the failures left uncovered (9). It
-  spans all seven case types and all three stores, and
-  `harness/tests/test_evaluator.py` asserts both, so the next corpus
-  expansion cannot strand a store here again as #213 did. Cost, from that
-  run's own per-case timings: about 8.5 min, of which 3 are one
-  `study_quiz` that exhausts the generation budget (kept: the deadline
-  #249 added bounds it, and the quiz path shows up here first). Its job is
-  rejecting a bad candidate before it can contaminate the ratchet, not the
-  minutes it happens to save against a ~31 min full search-set run. The
-  failures are here so the filter has signal on both sides: a candidate
-  that fixes one shows a gain the tier does not act on, a candidate that
-  breaks a passing one is rejected before the ratchet sees it.
+  search-set reference run with the product's generator by one rule (issue
+  #247): every case that run failed (17), plus the first passing case in
+  `gold_cases.jsonl` order for every `case_type` and every `source` the
+  failures left uncovered (9). It spans all seven case types and all three
+  stores, and `harness/tests/test_evaluator.py` asserts both, so the next
+  corpus expansion cannot strand a store here again as #213 did. Cost, from
+  that run's own per-case timings: about 7 min against ~30 min for a full
+  search-set run, no case near the generation budget. Its job is rejecting
+  a bad candidate before it can contaminate the ratchet, not the minutes it
+  happens to save. The failures are here so the filter has signal on both
+  sides: a candidate that fixes one shows a gain the tier does not act on,
+  a candidate that breaks a passing one is rejected before the ratchet sees
+  it.
 
 ## Objective, constraint, noise floor
 
@@ -206,20 +205,20 @@ default, unless `OLLAMA_RAG_MODEL` is set (decided 2026-09-12, issue #242;
 it was `Ling-3.0-tiny` before). A configuration the loop accepts is
 therefore measured on the generator a user runs. The auxiliary roles stay
 pinned to `AUX_MODEL` (`Ling-3.0-tiny`) as in every gate run. The noise
-floor and resolution figures below were measured with `Ling-3.0-tiny` and
-are being re-measured with `gemma4:e4b`; until that lands, read them as the
-Ling figures they are.
+floor and resolution figures below are measured with `gemma4:e4b`; the
+same three runs were made with `Ling-3.0-tiny` first, and where the two
+differ the text says so.
 
 **Objective:** `objective_adjusted` = passing cases on the search set, minus
 cases listed in `unreachable_cases.txt` (excluded from both numerator and
 denominator, not just discounted). `unreachable_cases.txt` starts **empty**
 and stays that way as of 2026-09-12: the reference run on the current
-123-case search set (`20260912T003549Z`, 107/123) fails 16 cases -- 11
-`factual_number`, 2 `factual_concept`, 2 `figure_retrieval`, 1 `study_quiz`
-that exhausted the generation budget -- and every one of them is a
-retrieval or generation outcome the declared search space can move, not a
-case no configuration could reach. Their ids are the first block of
-`fast_tier.txt`. `objective_raw` (unreachable cases included) is tracked
+123-case search set with the product's generator (`20260912T034029Z`,
+`gemma4:e4b`, 106/123) fails 17 cases -- 11 `factual_number`, 3
+`factual_concept`, 2 `figure_retrieval`, 1 `study_outline` -- and every one
+of them is a retrieval or generation outcome the declared search space can
+move, not a case no configuration could reach. Their ids are the first
+block of `fast_tier.txt`. `objective_raw` (unreachable cases included) is tracked
 alongside so the exclusion mechanism is auditable before it is ever
 needed — today `raw == adjusted`.
 
@@ -262,56 +261,66 @@ counts toward `--patience`) and raises `evaluator.InconclusiveEvaluationError`
 before the loop even starts if the **reference** measurement itself carries
 one — no ratchet baseline can be trusted in that case.
 
-**Noise floor: 3 cases.** Measured 2026-09-12 on the search set this loop
-evaluates and with the generator it runs (`Ling-3.0-tiny`): two
-`evaluate()` calls of the identical configuration, `conditions` equal field
-for field, `20260912T003549Z` (107/123) and `20260912T013552Z` (104/123);
-`compare_runs.py` over the pair: 0 flipped to PASS, 3 flipped to FAIL, 120
-unchanged. A candidate three cases up on the ratchet is rejected as
-`rejected_no_gain` (`loop.NOISE_FLOOR_CASES`); four is the smallest
-accepted gain. This replaces the 2026-07-29 figure of zero flips, which was
-measured on the 51-case set that preceded #213 and re-verified on the
-32-case search set of the time; the current 156-case set flips on sampling
-alone (`docs/model-history.md`, "How to read", item 1), and so does this
-subset of it (issue #243).
+**Noise floor: 2 cases.** Measured 2026-09-12 on the search set this loop
+evaluates and with the generator it runs (`gemma4:e4b`): two `evaluate()`
+calls of the identical configuration, `conditions` equal field for field,
+`20260912T034029Z` (106/123) and `20260912T043930Z` (106/123);
+`compare_runs.py` over the pair: 1 flipped to PASS, 1 flipped to FAIL, 121
+unchanged, both study artifacts over the attention paper. A candidate two
+cases up on the ratchet is rejected as `rejected_no_gain`
+(`loop.NOISE_FLOOR_CASES`); three is the smallest accepted gain. The same
+pair with `Ling-3.0-tiny`, the gate's default until #254
+(`20260912T003549Z` 107/123, `20260912T013552Z` 104/123), moved three
+cases, all to FAIL. This replaces the 2026-07-29 figure of zero flips,
+which was measured on the 51-case set that preceded #213 and re-verified
+on the 32-case search set of the time; the current 156-case set flips on
+sampling alone (`docs/model-history.md`, "How to read", item 1), and so
+does this subset of it (issue #243).
 
 ## Resolution warning
 
-Measured 2026-09-12 on the current 123-case search set, with the same three
-runs as the noise floor above (issue #243), replacing figures that had been
-measured on the 32-case set that preceded #213:
+Measured 2026-09-12 on the current 123-case search set with the product's
+generator, `gemma4:e4b`, in the same three runs as the noise floor above
+(issue #243), replacing figures measured on the 32-case set that preceded
+#213:
 
-- **Available failures: 16 of 123** (`20260912T003549Z`, 107/123). The old
+- **Available failures: 17 of 123** (`20260912T034029Z`, 106/123). The old
   figure was "at most 5" on 27/32.
-- **Net flips under the known-catastrophic sabotage: 10.** The criterion-2
+- **Net flips under the known-catastrophic sabotage: 6.** The criterion-2
   sabotage, `retrieval.top_k_final=1` passed through `evaluate()`'s
-  `config_overrides` (`20260912T010521Z`, 97/123), flipped 2 cases to PASS
-  and 12 to FAIL against the first reference, 4 and 11 against the second.
-  The old figure was 3 net on the 32-case set.
+  `config_overrides` (`20260912T040928Z`, 100/123), flipped 2 cases to PASS
+  and 8 to FAIL against the first reference, 3 and 9 against the second: 6
+  net both times. The old figure was 3 net on the 32-case set.
 - **Demonstrability threshold: ~6 net flips**, the design doc's (§3) fixed
   methodological constant, unchanged.
 
-So the resolution picture has changed for the better: a catastrophic
-single-field change now clears the threshold and is detectable on the
-search set. What the set still cannot do is demonstrate a *small*
-improvement. With a noise floor of 3, an accepted candidate is at least 4
-cases up on the ratchet, and 4 or 5 is above the floor but below the
-threshold -- a candidate for confirmation, not a demonstrated result. All
-of this is in `harness/loop.py`'s `RESOLUTION_WARNING` dict
+So a catastrophic single-field change now sits exactly at the threshold:
+detectable, but only just. With `Ling-3.0-tiny` the same sabotage moved 10
+net against 16 available failures (`20260912T010521Z` against
+`20260912T003549Z`); the shipped generator absorbs more of a retrieval
+collapse, which is a fact about the product, not a defect of the set. What
+the set still cannot do is demonstrate a *small* improvement. With a noise
+floor of 2, an accepted candidate is at least 3 cases up on the ratchet, and
+3 to 5 is above the floor but below the threshold -- a candidate for
+confirmation, not a demonstrated result. All of this is in
+`harness/loop.py`'s `RESOLUTION_WARNING` dict
 (`SEARCH_SET_AVAILABLE_FAILURES`, `SEARCH_SET_NET_FLIPS_UNDER_KNOWN_SABOTAGE`,
 `noise_floor_cases`) and attached verbatim, via `message`, to every real
 campaign's report.
 
 > [!NOTE]
-> The three 2026-09-12 artifacts (`tests/eval/runs/20260912T003549Z_...json`,
-> `...010521Z...`, `...013552Z...`), like every run artifact, are local and
-> gitignored -- cited, not shipped. They were produced by calling
-> `run_eval.evaluate()` exactly as `evaluator.real_evaluate()` does
-> (`models=run_eval.DEFAULT_MODELS`, `search_space.expand_overrides`,
-> `update_baseline=False`) with `write_report=True`, on `main` at `ee56ea9`,
-> 31 minutes each, no infrastructure errors, one budget exhaustion each.
-> The 2026-07-29 and 2026-08-12 runs the previous version of this section
-> cited (`20260729T020233Z`, `...040824Z`, `...081129Z`,
+> The 2026-09-12 artifacts (`tests/eval/runs/20260912T034029Z_...json`,
+> `...040928Z...`, `...043930Z...` for `gemma4:e4b`; `...003549Z...`,
+> `...010521Z...`, `...013552Z...` for `Ling-3.0-tiny`), like every run
+> artifact, are local and gitignored -- cited, not shipped. They were
+> produced by calling `run_eval.evaluate()` exactly as
+> `evaluator.real_evaluate()` does (`models=run_eval.DEFAULT_MODELS`,
+> `search_space.expand_overrides`, `update_baseline=False`) with
+> `write_report=True`, on `main` at `c0e9f17` (gemma4) and `ee56ea9` (Ling),
+> about 30 minutes each, no infrastructure errors; the gemma4 runs had no
+> budget exhaustion and no answer near the 4,096-token cap (longest: 129
+> tokens). The 2026-07-29 and 2026-08-12 runs the previous version of this
+> section cited (`20260729T020233Z`, `...040824Z`, `...081129Z`,
 > `20260812T194812Z`) remain the source of the per-bucket latency medians
 > above; nothing here retracts them, they simply described a smaller set.
 

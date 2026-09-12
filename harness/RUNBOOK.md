@@ -253,12 +253,12 @@ start without at least one; it is what guarantees termination.
 **Budget, and whose machine the number came from.** Quoting one GPU's timings
 as universal is how someone budgets a night for something that takes seven.
 
-| | reference GPU (2026-08-19) | RTX 4060 Laptop 8 GB (2026-09-01) | RTX 4060 Laptop 8 GB (2026-09-12, `20260912T003549Z`, 123 cases, `Ling-3.0-tiny`) |
+| | reference GPU (2026-08-19) | RTX 4060 Laptop 8 GB (2026-09-01) | RTX 4060 Laptop 8 GB (2026-09-12, `20260912T034029Z`, 123 cases, `gemma4:e4b`) |
 |---|---|---|---|
-| retrieval-only case | ~4.1 s | **~30 s** | ~8.3 s |
-| answered case | ~28.5 s | ~9-11 s | ~7.3 s generation, ~14.9 s with its retrieval |
-| full search-set evaluation | ~20 min | ~25 min (phase 1 dominates) | ~31 min (three runs, 31 min each) |
-| fast tier | ~4 min for 13 of the 16 then listed (issue #226) | not measured here | ~8.5 min for the 25 now listed, 3 of them one budget-exhausting `study_quiz` |
+| retrieval-only case | ~4.1 s | **~30 s** | ~7.9 s |
+| answered case | ~28.5 s | ~9-11 s | ~8.1 s generation, ~15.7 s with its retrieval |
+| full search-set evaluation | ~20 min | ~25 min (phase 1 dominates) | ~30 min (three runs, 29-30 min each) |
+| fast tier | ~4 min for 13 of the 16 then listed (issue #226) | not measured here | ~7 min for the 26 now listed, none near the generation budget |
 
 The 4060 figures are from a run with `OLLAMA_KEEP_ALIVE=0` (which the warning
 above now restricts to gate runs -- a campaign measured without it answers
@@ -329,14 +329,15 @@ red test.
 State these when reporting a campaign; they are not disclaimers, they are the
 measurement's actual resolution.
 
-- **The search-set figures were re-measured on 2026-09-12** (issue #243,
-  `harness/README.md`'s Resolution warning section): 16 available failures
-  of 123, a noise floor of 3 cases between two identical runs, and 10 net
-  flips under the known-catastrophic sabotage -- above the ~6-flip
-  threshold, so a catastrophic change is detectable now. An accepted gain
-  of 4 or 5 cases still reads as **a candidate for confirmation, not a
-  demonstrated result**; 6 or more is at the threshold. `harness/loop.py`
-  carries these numbers into every report's `resolution_warning`.
+- **The search-set figures were re-measured on 2026-09-12 with the
+  product's generator** (`gemma4:e4b`; issue #243, `harness/README.md`'s
+  Resolution warning section): 17 available failures of 123, a noise floor
+  of 2 cases between two identical runs, and 6 net flips under the
+  known-catastrophic sabotage -- exactly the ~6-flip threshold, so a
+  catastrophic change is detectable, but only just. An accepted gain of 3
+  to 5 cases reads as **a candidate for confirmation, not a demonstrated
+  result**; 6 or more is at the threshold. `harness/loop.py` carries these
+  numbers into every report's `resolution_warning`.
 - **Index-time knobs are still not searched, but the tier is now costed.**
   Chunking and the index-time flags force a full reindex, which no budget
   survives inside a search loop. Declaring one in `SEARCH_SPACE` is still a red

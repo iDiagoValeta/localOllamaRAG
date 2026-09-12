@@ -1,11 +1,12 @@
 # Fast tier -- regression filter only (never declares an improvement).
-# Fixed, versioned subset of the search set: 25 cases, re-derived on
+# Fixed, versioned subset of the search set: 26 cases, re-derived on
 # 2026-09-12 from the search-set reference run
-# tests/eval/runs/20260912T003549Z_mineru-jina_clip-faiss.json (Ling-3.0-tiny,
-# 107/123, issue #243) by one rule, so it can be re-derived again the same
-# way after the next corpus change (issue #247):
+# tests/eval/runs/20260912T034029Z_mineru-jina_clip-faiss.json (gemma4:e4b,
+# the product's generator since #254; 106/123, issue #243) by one rule, so
+# it can be re-derived again the same way after the next corpus or
+# generator change (issue #247):
 #
-#   every case that run failed (16), plus the first passing case in
+#   every case that run failed (17), plus the first passing case in
 #   gold_cases.jsonl order for every case_type and every source that the
 #   failures alone did not cover (9).
 #
@@ -16,42 +17,41 @@
 # Its job is not to save minutes -- it is to reject a bad candidate without
 # contaminating the ratchet, before paying for the full search set. Cost,
 # from that run's own per-case elapsed_seconds (retrieval plus generation):
-# ~330 s for the 24 cases that finished, plus one study_quiz
-# (gw-study-quiz-ca) that exhausted the 180 s generation budget -- about
-# 8.5 min against ~31 min for the whole search set. The budget case stays:
-# the deadline that #249 added bounds it, and a candidate that fixes or
-# breaks the quiz path shows up here first.
+# ~400 s, about 7 min against ~30 min for the whole search set, with no
+# case near the 180 s generation budget (the rag role is capped at 4,096
+# tokens since #254, and the #249 deadline bounds the rest).
 #
 # The failing cases are here so the filter has signal on both sides: a
 # candidate that fixes one shows a gain the tier does not act on, a candidate
 # that breaks a passing one is rejected before the ratchet sees it. The
-# three figure failures cost ~9 s each and are the retrieval-side signal.
+# two figure failures cost ~9 s each and are the retrieval-side signal.
 
-# -- failed in the reference run (16) --
+# -- failed in the reference run (17) --
+dpo-no-sampling
 higgs-diphoton-figure
-planck-contours-figure
 planck-h0-tension
-gw-study-quiz-ca
-adam-beta2
+planck-contours-figure
+att-study-outline-ca
 adam-stepsize
 supernovae-lab
-photosynthesis-chloroplasts
-antarctica-ice-thickness
 antarctica-freshwater
 fotosintesis-carbono
+tabla-sintetizados
 machupicchu-restaurado
 acueducto-altura
 mediterrania-grecs
 basquet-naixement
 catala-llengua-habitual
+solar-constant
+solar-superficie
 
 # -- passing coverage: one per case_type / source not covered above (9) --
-att-bleu-ende
-att-bleu-table
-att-arch-figure
 dpo-acronym
+att-bleu-ende
+att-arch-figure
 att-study-outline
-att-study-summary
 att-study-quiz
-pitagoras-pruebas
+att-study-summary
+att-bleu-table
 gaudi-montserrat
+pitagoras-pruebas
