@@ -22,6 +22,22 @@ class OllamaRuntimeConfig:
     base_url: str = DEFAULT_OLLAMA_BASE_URL
 
 
+# The two chat backends a role can run on. "ollama" is the product's own
+# server; "openai" is any server speaking the OpenAI chat API (llama-server,
+# Daimon's model gateway, LM Studio, vLLM). Validated by read_env_choice so a
+# typo fails at startup instead of silently keeping Ollama.
+CHAT_BACKENDS = ("ollama", "openai")
+
+
+@dataclass(frozen=True)
+class OpenAICompatRuntimeConfig:
+    """Connection settings shared by every role that runs on the OpenAI backend."""
+
+    base_url: str = "http://127.0.0.1:8000/v1"
+    api_key: str = ""
+    timeout: int = 900
+
+
 @dataclass(frozen=True)
 class ModelsConfig:
     """Ollama generation roles; jina-clip-v2 is the fixed embedder."""
@@ -32,6 +48,11 @@ class ModelsConfig:
     recomp: str = "gemma4:e4b"
     desc: str = "gemma4"
     ollama: OllamaRuntimeConfig = OllamaRuntimeConfig()
+    rag_backend: str = "ollama"
+    chat_backend: str = "ollama"
+    contextual_backend: str = "ollama"
+    recomp_backend: str = "ollama"
+    openai: OpenAICompatRuntimeConfig = OpenAICompatRuntimeConfig()
 
 
 def infer_model_description(model_name: str) -> str:

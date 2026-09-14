@@ -20,8 +20,10 @@ from monkeygrab.config.chunking import ChunkingConfig
 from monkeygrab.config.context import ContextConfig
 from monkeygrab.config.flags import PipelineFlagsConfig
 from monkeygrab.config.models import (
+    CHAT_BACKENDS,
     ModelsConfig,
     OllamaRuntimeConfig,
+    OpenAICompatRuntimeConfig,
     infer_model_description,
 )
 from monkeygrab.config.paths import RAG_BASE_DIR, PathsConfig, derive_db_paths
@@ -113,6 +115,17 @@ class AppConfig:
                 generate_retries=env.read_env_int("OLLAMA_GENERATE_RETRIES", 2),
                 generate_retry_delay=env.read_env_int("OLLAMA_GENERATE_RETRY_DELAY", 3),
                 base_url=env.read_env_ollama_base_url(),
+            ),
+            rag_backend=env.read_env_choice("MONKEYGRAB_RAG_BACKEND", "ollama", CHAT_BACKENDS),
+            chat_backend=env.read_env_choice("MONKEYGRAB_CHAT_BACKEND", "ollama", CHAT_BACKENDS),
+            contextual_backend=env.read_env_choice(
+                "MONKEYGRAB_CONTEXTUAL_BACKEND", "ollama", CHAT_BACKENDS
+            ),
+            recomp_backend=env.read_env_choice("MONKEYGRAB_RECOMP_BACKEND", "ollama", CHAT_BACKENDS),
+            openai=OpenAICompatRuntimeConfig(
+                base_url=env.read_env_str("MONKEYGRAB_OPENAI_BASE_URL", "http://127.0.0.1:8000/v1"),
+                api_key=env.read_env_str("MONKEYGRAB_OPENAI_API_KEY", ""),
+                timeout=env.read_env_int("MONKEYGRAB_OPENAI_TIMEOUT", 900),
             ),
         )
 

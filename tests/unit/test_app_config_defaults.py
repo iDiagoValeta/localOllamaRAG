@@ -95,7 +95,15 @@ _FIELD_MAP = [
 # implementation, which is why swapping one meant editing wiring code. Their
 # defaults are covered by tests/unit/test_stack_selection.py, which asserts that
 # an unset environment reproduces the current production stack.
-_FIELDS_WITHOUT_ENGINE_COUNTERPART = set()
+_FIELDS_WITHOUT_ENGINE_COUNTERPART = {
+    "models.rag_backend",
+    "models.chat_backend",
+    "models.contextual_backend",
+    "models.recomp_backend",
+    "models.openai.base_url",
+    "models.openai.api_key",
+    "models.openai.timeout",
+}
 
 
 def _resolve(obj, dotted_path):
