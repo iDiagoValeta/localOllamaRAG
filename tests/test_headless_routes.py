@@ -19,7 +19,7 @@ def _health(ok=True, reason=None):
                                        {"rag": {"backend": "openai", "model": "m"}})
 
 
-def _service(*, events=None, index=None, status=None, index_error=None):
+def _service(*, events=None, index=None, status=None, index_error=None, status_error=None):
     def answer_stream(paths, question):
         if len(question) < 10:
             raise QuestionTooShort("short")
@@ -34,11 +34,16 @@ def _service(*, events=None, index=None, status=None, index_error=None):
         return index or {"documents_indexed": 1, "documents_skipped": 0, "chunks_indexed": 4,
                          "fingerprint": "fp", "seconds": 1.5}
 
+    def status_store(paths):
+        if status_error:
+            raise status_error
+        return status or {"exists": True, "documents": ["a.pdf"], "chunks_total": 4,
+                          "fingerprint": "fp", "stale": False}
+
     return types.SimpleNamespace(
         answer_stream=answer_stream,
         index_store=index_store,
-        status_store=lambda paths: status or {"exists": True, "documents": ["a.pdf"], "chunks_total": 4,
-                                              "fingerprint": "fp", "stale": False},
+        status_store=status_store,
     )
 
 
@@ -107,6 +112,14 @@ def test_status_reads_paths_from_the_query_string():
     assert resp.status_code == 200 and resp.get_json()["documents"] == ["a.pdf"]
 
 
+def test_status_failure_is_502_with_the_message():
+    resp = _client(service=_service(status_error=RuntimeError("index corrupt"))).get(
+        "/stores/cv1/status", query_string=PATHS
+    )
+    assert resp.status_code == 502
+    assert "index corrupt" in resp.get_json()["message"]
+
+
 def test_rag_streams_tokens_then_done():
     events = [("token", {"token": "Ho"}), ("token", {"token": "la"}),
               ("done", {"done": True, "sources": [{"document": "a.pdf", "pages": [1], "best_page": 1}], "metrics": {}})]
@@ -138,6 +151,14 @@ def test_rag_no_results_is_a_200_with_ok_false():
 def test_rag_short_question_is_400():
     resp = _client().post("/stores/cv1/rag", json={**PATHS, "message": "hola"})
     assert resp.status_code == 400 and resp.get_json()["error"] == "question_too_short"
+
+
+def test_rag_rejects_a_non_boolean_stream_flag():
+    resp = _client().post(
+        "/stores/cv1/rag", json={**PATHS, "message": "¿Qué dice el documento?", "stream": "false"}
+    )
+    assert resp.status_code == 400
+    assert "stream" in resp.get_json()["message"]
 
 
 def test_rag_mid_stream_failure_becomes_an_error_event():

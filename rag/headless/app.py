@@ -95,14 +95,22 @@ def create_app(
     @app.get("/stores/<store_id>/status")
     def get_status(store_id: str):
         paths = _resolve(store_id, request.args.to_dict())
-        return jsonify({"store_id": store_id, **service.status_store(paths)})
+        try:
+            result = service.status_store(paths)
+        except Exception as exc:
+            logging.exception("status failed for store %s", store_id)
+            return jsonify({"ok": False, "error": "status_failed", "message": str(exc)}), 502
+        return jsonify({"store_id": store_id, **result})
 
     @app.post("/stores/<store_id>/rag")
     def post_rag(store_id: str):
         body = request.get_json(silent=True) or {}
         paths = _resolve(store_id, body)
         question = str(body.get("message") or "").strip()
-        stream = bool(body.get("stream", True))
+        raw_stream = body.get("stream", True)
+        if not isinstance(raw_stream, bool):
+            abort(400, description="stream must be a boolean")
+        stream = raw_stream
         try:
             events: Iterator[Tuple[str, Dict[str, Any]]] = service.answer_stream(paths, question)
             first = next(events, None)
