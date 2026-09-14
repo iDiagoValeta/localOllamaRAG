@@ -10,7 +10,9 @@ import logging
 import os
 from typing import List, Optional
 
+from monkeygrab.adapters.extraction.by_suffix_extractor import PdfOnlyImageExtractor
 from monkeygrab.adapters.extraction.mineru_extractor import MineruImageExtractor
+from monkeygrab.adapters.extraction.text_extractor import TEXT_SUFFIXES
 from monkeygrab.application.index_corpus import IndexCorpus
 from monkeygrab.application.index_fingerprint import compute_index_fingerprint, fingerprint_is_stale
 from monkeygrab.composition import build_extractor
@@ -18,10 +20,28 @@ from monkeygrab.config.app_config import AppConfig
 from monkeygrab.ports.vector_store import VectorStore
 from rag.engine import wiring
 
+SUPPORTED_DOCUMENT_SUFFIXES = (".pdf",) + TEXT_SUFFIXES
+
 
 def _build_image_extractor(config: AppConfig):
     del config
-    return MineruImageExtractor()
+    return PdfOnlyImageExtractor(MineruImageExtractor())
+
+
+def listar_documentos(carpeta: str) -> List[str]:
+    """Return the indexable file names in ``carpeta``, sorted, by suffix.
+
+    Args:
+        carpeta: Folder to list. Created if missing, like ``indexar_documentos``
+            always did.
+
+    Returns:
+        Bare file names whose suffix is a PDF or a text suffix.
+    """
+    os.makedirs(carpeta, exist_ok=True)
+    return sorted(
+        f for f in os.listdir(carpeta) if f.lower().endswith(SUPPORTED_DOCUMENT_SUFFIXES)
+    )
 
 
 def indexar_documentos(
@@ -31,7 +51,7 @@ def indexar_documentos(
     silent: bool = False,
     progress_callback=None,
 ) -> int:
-    """Index PDFs from a folder via ``IndexCorpus`` and the configured stack.
+    """Index PDFs and text files from a folder via ``IndexCorpus`` and the configured stack.
 
     MinerU, jina-clip-v2 and FAISS are the only supported backends.
 
@@ -54,14 +74,13 @@ def indexar_documentos(
             (issue #192). A run where only *some* files failed returns
             normally: those failures are logged per file.
     """
-    os.makedirs(carpeta, exist_ok=True)
-    archivos_pdf = [f for f in os.listdir(carpeta) if f.endswith(".pdf")]
+    archivos_pdf = listar_documentos(carpeta)
     if solo_archivos is not None:
         archivos_pdf = [f for f in archivos_pdf if f in solo_archivos]
 
     if not archivos_pdf:
         if not silent:
-            logging.warning("No PDF files found in folder")
+            logging.warning("No documents found in folder")
         return 0
 
     if not silent:

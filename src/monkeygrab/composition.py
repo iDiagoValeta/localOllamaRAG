@@ -29,9 +29,11 @@ def _isolated_python() -> str:
 
 def build_extractor(config: AppConfig) -> Any:
     del config
+    from monkeygrab.adapters.extraction.by_suffix_extractor import BySuffixExtractor
     from monkeygrab.adapters.extraction.mineru_extractor import MineruExtractor
+    from monkeygrab.adapters.extraction.text_extractor import TextFileExtractor
 
-    return MineruExtractor()
+    return BySuffixExtractor(MineruExtractor(), TextFileExtractor())
 
 
 def build_vector_store(config: AppConfig) -> Any:
