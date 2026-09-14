@@ -15,6 +15,8 @@ breaks callers at once.
 chat_pdfs.py    facade: runtime configuration, prompts, re-exports
 web/            Flask backend, React frontend, desktop (pywebview) entry point
 engine/         pipeline entry points
+  sources.py    document/page references for an answer (shared by web and headless)
+headless/       Flask service for other applications: health.py (probe), service.py (index/status/answer over the engine entry points), app.py (routes)
 docs/           corpus PDFs, one folder per language store
 ```
 

@@ -73,6 +73,7 @@ src/monkeygrab/          Hexagonal core (see src/monkeygrab/README.md)
 rag/                      Web interface and pipeline entry points
   chat_pdfs.py              Public facade + global config (see §1 rule 7)
   engine/                    wiring, retrieval, indexing, context, generation, chunking, debug, history, settings
+  headless/                  Headless HTTP service for other apps (Daimon): health, service, app
   web/                       Flask backend + React frontend (pnpm; frontend/dist gitignored)
   docs/                      Corpus PDFs (es/, ca/, en/): identity versioned in corpus_manifest.json,
                              binaries fetched by tools/fetch_corpus.py (see section 8)
@@ -135,6 +136,8 @@ user had picked it (issue #79). Jina CLIP v2 and BGE Reranker v2 M3 are fixed.
 | Contextual retrieval | `OLLAMA_CONTEXTUAL_MODEL` | Chunk enrichment at indexing (`USAR_CONTEXTUAL_RETRIEVAL`) |
 | RECOMP synthesis | `OLLAMA_RECOMP_MODEL` | Pre-generation context synthesis (`USAR_RECOMP_SYNTHESIS`) |
 | Reranker | fixed | `BAAI/bge-reranker-v2-m3`; not an Ollama model |
+
+Each role also has a backend, `MONKEYGRAB_<ROLE>_BACKEND` = `ollama` (default) or `openai` (`src/monkeygrab/adapters/chat/openai_compat_chat.py`, endpoint from `MONKEYGRAB_OPENAI_BASE_URL`). The figure describer follows the `chat` role.
 
 Other env vars: `DOCS_FOLDER` (default `rag/docs/en/`), `MONKEYGRAB_DATA_DIR` (writable root for `vector_db`/history/debug; defaults to the package dir in dev, `%LOCALAPPDATA%/MonkeyGrab` in the packaged app), `OLLAMA_BASE_URL` (default `http://localhost:11434`, falling back to Ollama's own `OLLAMA_HOST`).
 
