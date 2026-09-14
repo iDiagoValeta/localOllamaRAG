@@ -14,10 +14,11 @@ BM25 corpus would otherwise be rebuilt on every question.
 
 import logging
 import threading
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel
 from monkeygrab.adapters.chat.ollama_model_unloader import OllamaModelUnloader
+from monkeygrab.adapters.chat.openai_compat_chat import OpenAICompatChatModel
 from monkeygrab.adapters.lexical.bm25_index import Bm25LexicalIndex
 from monkeygrab.adapters.reranking.cross_encoder_reranker import CrossEncoderReranker
 from monkeygrab.application.answer import Answer
@@ -25,6 +26,8 @@ from monkeygrab.composition import build_embedder, build_vector_store
 from monkeygrab.config.app_config import AppConfig
 from monkeygrab.domain.chunk_metadata import ChunkMetadata
 from monkeygrab.domain.fragment import Fragment
+from monkeygrab.ports.chat_model import ChatModel
+from monkeygrab.ports.model_unloader import ModelUnloader
 from monkeygrab.ports.vector_store import VectorStore
 from rag.engine.runtime import get_runtime
 
@@ -83,6 +86,95 @@ QUERY_DECOMPOSER_SAMPLING_OPTIONS: Dict[str, Any] = {
     "num_predict": 400,
     "stop": ["\n\n\n"],
 }
+
+# Ollama option name -> OpenAI request field. Absent keys (repeat_penalty,
+# repeat_last_n, num_ctx) have no OpenAI equivalent and are dropped: a role on
+# that backend runs without repetition penalty, which docs/model-history.md
+# records for any row measured there.
+_OPENAI_OPTION_NAMES = {
+    "temperature": "temperature",
+    "top_p": "top_p",
+    "num_predict": "max_tokens",
+    "stop": "stop",
+}
+
+_ROLES = ("rag", "chat", "contextual", "recomp")
+
+
+def openai_options_from_ollama(options: Dict[str, Any]) -> Dict[str, Any]:
+    """Translate a role's Ollama sampling options into OpenAI request fields.
+
+    Args:
+        options: One of the ``*_SAMPLING_OPTIONS`` dicts above, or the inline
+            dicts ``rag/engine/indexing.py`` builds for its two roles.
+
+    Returns:
+        Only the keys the OpenAI API understands. ``num_predict=-1``
+        (unbounded) is dropped rather than sent as ``max_tokens=-1``.
+    """
+    translated: Dict[str, Any] = {}
+    for name, value in options.items():
+        target = _OPENAI_OPTION_NAMES.get(name)
+        if target is None:
+            continue
+        if name == "num_predict" and isinstance(value, int) and value < 0:
+            continue
+        translated[target] = value
+    return translated
+
+
+def chat_model_for_role(
+    config: AppConfig,
+    role: str,
+    *,
+    options: Dict[str, Any],
+    num_ctx: int,
+    keep_alive: int,
+    generation_deadline: float,
+    model_unloader: Optional[ModelUnloader] = None,
+) -> ChatModel:
+    """Build the ``ChatModel`` for one role on the backend its config names.
+
+    Args:
+        config: Current config; ``models.<role>`` is the model name and
+            ``models.<role>_backend`` picks Ollama or the OpenAI adapter.
+        role: One of ``rag``, ``chat``, ``contextual``, ``recomp``.
+        options: Ollama-named sampling options; translated for OpenAI.
+        num_ctx: Context window (Ollama only; OpenAI servers own theirs).
+        keep_alive: VRAM residency after the call (Ollama only).
+        generation_deadline: Wall-clock cap in seconds, ``0`` for none
+            (Ollama only; the OpenAI adapter is bounded by its timeout).
+        model_unloader: Ollama VRAM unloader for the role that runs last,
+            or ``None``.
+
+    Raises:
+        ValueError: ``role`` is not one of the four.
+    """
+    if role not in _ROLES:
+        raise ValueError(f"Unknown model role {role!r}; valid: {', '.join(_ROLES)}")
+    model = getattr(config.models, role)
+    if getattr(config.models, f"{role}_backend") == "openai":
+        openai = config.models.openai
+        return OpenAICompatChatModel(
+            model,
+            base_url=openai.base_url,
+            api_key=openai.api_key,
+            options=openai_options_from_ollama(options),
+            timeout=openai.timeout,
+        )
+    ollama = config.models.ollama
+    return OllamaChatModel(
+        model,
+        num_ctx=num_ctx,
+        keep_alive=keep_alive,
+        request_timeout=ollama.request_timeout,
+        generation_deadline=generation_deadline,
+        generate_retries=ollama.generate_retries,
+        generate_retry_delay=ollama.generate_retry_delay,
+        options=options,
+        base_url=ollama.base_url,
+        model_unloader=model_unloader,
+    )
 
 
 def app_config_from_runtime() -> AppConfig:
@@ -244,7 +336,7 @@ def release_embedder() -> None:
         _close_quietly(instance)
 
 
-def rag_chat_model(config: AppConfig) -> OllamaChatModel:
+def rag_chat_model(config: AppConfig) -> ChatModel:
     """Build the model that writes the final answer.
 
     Sampling is cold and repetition-penalised: the answer must stay inside the
@@ -268,37 +360,29 @@ def rag_chat_model(config: AppConfig) -> OllamaChatModel:
     flag being turned off) rather than for the per-query path itself.
     """
     ollama = config.models.ollama
-    return OllamaChatModel(
-        config.models.rag,
+    return chat_model_for_role(
+        config, "rag",
+        options=RAG_SAMPLING_OPTIONS,
         num_ctx=ollama.rag_num_ctx,
         keep_alive=ollama.keep_alive,
-        request_timeout=ollama.request_timeout,
         generation_deadline=ollama.generation_deadline,
-        generate_retries=ollama.generate_retries,
-        generate_retry_delay=ollama.generate_retry_delay,
-        options=RAG_SAMPLING_OPTIONS,
-        base_url=ollama.base_url,
         model_unloader=OllamaModelUnloader(config.models, base_url=ollama.base_url),
     )
 
 
-def recomp_chat_model(config: AppConfig) -> OllamaChatModel:
+def recomp_chat_model(config: AppConfig) -> ChatModel:
     """Build the model that compresses retrieved evidence before generation."""
     ollama = config.models.ollama
-    return OllamaChatModel(
-        config.models.recomp,
+    return chat_model_for_role(
+        config, "recomp",
+        options=RECOMP_SAMPLING_OPTIONS,
         num_ctx=ollama.recomp_num_ctx,
         keep_alive=ollama.keep_alive,
-        request_timeout=ollama.request_timeout,
         generation_deadline=ollama.generation_deadline,
-        generate_retries=ollama.generate_retries,
-        generate_retry_delay=ollama.generate_retry_delay,
-        options=RECOMP_SAMPLING_OPTIONS,
-        base_url=ollama.base_url,
     )
 
 
-def query_decomposer(config: AppConfig) -> OllamaChatModel:
+def query_decomposer(config: AppConfig) -> ChatModel:
     """Build the auxiliary chat model that generates search sub-queries.
 
     Sampling is deliberately warmer than the answer generator's: sub-queries
@@ -310,16 +394,12 @@ def query_decomposer(config: AppConfig) -> OllamaChatModel:
     # model resident alongside Jina CLIP and the reranker exhausts VRAM on
     # 8 GB cards (issue #164).
     ollama = config.models.ollama
-    return OllamaChatModel(
-        config.models.chat,
+    return chat_model_for_role(
+        config, "chat",
+        options=QUERY_DECOMPOSER_SAMPLING_OPTIONS,
         num_ctx=ollama.query_num_ctx,
         keep_alive=0,
-        request_timeout=ollama.request_timeout,
         generation_deadline=ollama.generation_deadline,
-        generate_retries=ollama.generate_retries,
-        generate_retry_delay=ollama.generate_retry_delay,
-        options=QUERY_DECOMPOSER_SAMPLING_OPTIONS,
-        base_url=ollama.base_url,
     )
 
 

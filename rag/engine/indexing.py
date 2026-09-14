@@ -10,7 +10,6 @@ import logging
 import os
 from typing import List, Optional
 
-from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel
 from monkeygrab.adapters.extraction.mineru_extractor import MineruImageExtractor
 from monkeygrab.application.index_corpus import IndexCorpus
 from monkeygrab.application.index_fingerprint import compute_index_fingerprint, fingerprint_is_stale
@@ -73,15 +72,12 @@ def indexar_documentos(
     ollama = config.models.ollama
     contextual_model = None
     if config.flags.usar_contextual_retrieval:
-        contextual_model = OllamaChatModel(
-            config.models.contextual,
+        contextual_model = wiring.chat_model_for_role(
+            config, "contextual",
+            options={"temperature": 0.1, "num_predict": 250},
             num_ctx=ollama.contextual_num_ctx,
             keep_alive=ollama.keep_alive,
-            request_timeout=ollama.request_timeout,
-            generate_retries=ollama.generate_retries,
-            generate_retry_delay=ollama.generate_retry_delay,
-            options={"temperature": 0.1, "num_predict": 250},
-            base_url=ollama.base_url,
+            generation_deadline=0,
         )
 
     image_extractor = None
@@ -90,15 +86,12 @@ def indexar_documentos(
 
     image_describer = None
     if config.flags.usar_descripcion_imagen:
-        image_describer = OllamaChatModel(
-            config.models.chat,
+        image_describer = wiring.chat_model_for_role(
+            config, "chat",
+            options={"temperature": 0.1, "num_predict": 400},
             num_ctx=ollama.query_num_ctx,
             keep_alive=ollama.keep_alive,
-            request_timeout=ollama.request_timeout,
-            generate_retries=ollama.generate_retries,
-            generate_retry_delay=ollama.generate_retry_delay,
-            options={"temperature": 0.1, "num_predict": 400},
-            base_url=ollama.base_url,
+            generation_deadline=0,
         )
 
     use_case = IndexCorpus(
