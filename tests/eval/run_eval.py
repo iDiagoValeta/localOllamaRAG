@@ -1860,6 +1860,22 @@ _UNREACHABLE_CONFIG_OVERRIDE_REASONS = {
         "generations to its own OLLAMA_BASE_URL constant, so the endpoint the "
         "gate uses would not move with the threaded config either"
     ),
+    "models.rag_backend": (
+        "which backend serves a role is read from the process environment "
+        "(MONKEYGRAB_<ROLE>_BACKEND) by wiring.chat_model_for_role through "
+        "app_config_from_runtime; the gate does not thread it as an override, "
+        "and a run on the OpenAI backend is recorded in conditions instead "
+        "(see rag_backend/chat_backend there)"
+    ),
+    "models.chat_backend": "see models.rag_backend",
+    "models.contextual_backend": "see models.rag_backend",
+    "models.recomp_backend": "see models.rag_backend",
+    "models.openai.base_url": (
+        "see models.ollama.rag_num_ctx for the one-level nesting limit; read "
+        "from MONKEYGRAB_OPENAI_BASE_URL by the process environment"
+    ),
+    "models.openai.api_key": "see models.openai.base_url",
+    "models.openai.timeout": "see models.openai.base_url",
     "retrieval.min_question_length": "not read anywhere in src/monkeygrab -- Retrieve.run() has no question-length gate",
     "flags.logging_metricas": "generar_respuesta_silenciosa never calls the debug-dump path this flag gates",
     "flags.guardar_debug_rag": "generar_respuesta_silenciosa skips the debug dump entirely",

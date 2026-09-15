@@ -211,12 +211,17 @@ def test_concurrent_index_on_the_same_store_is_409():
 
     thread = threading.Thread(target=run_first)
     thread.start()
-    assert entered.wait(timeout=2), "the first request never reached index_store"
-    resp = client_b.post("/stores/cv1/index", json=PATHS)
-    assert resp.status_code == 409
-    assert resp.get_json()["error"] == "index_in_progress"
-    gate.set()
-    thread.join(timeout=2)
+    try:
+        # A failing assert below must still release the gate and join the
+        # thread -- otherwise a non-daemon thread is left blocked on it and
+        # pytest hangs instead of reporting the failure.
+        assert entered.wait(timeout=2), "the first request never reached index_store"
+        resp = client_b.post("/stores/cv1/index", json=PATHS)
+        assert resp.status_code == 409
+        assert resp.get_json()["error"] == "index_in_progress"
+    finally:
+        gate.set()
+        thread.join(timeout=10)
     assert results["first"].status_code == 200
 
 
