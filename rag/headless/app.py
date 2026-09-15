@@ -17,7 +17,7 @@ import rag.chat_pdfs  # noqa: F401
 from monkeygrab.config.app_config import AppConfig
 from rag.headless import health as health_module
 from rag.headless import service as service_module
-from rag.headless.service import QuestionTooShort, StoreConflict, StorePaths, StoreRegistry
+from rag.headless.service import QuestionTooShort, StoreBusy, StoreConflict, StorePaths, StoreRegistry
 
 
 def _sse_event(event: str, payload: Dict[str, Any]) -> str:
@@ -56,7 +56,9 @@ def create_app(
         if token is None:
             return None
         supplied = request.headers.get("Authorization", "")
-        if not hmac.compare_digest(supplied, f"Bearer {token}"):
+        # bytes, not str: compare_digest rejects non-ASCII str operands with a
+        # TypeError, which before_request would otherwise turn into an HTML 500.
+        if not hmac.compare_digest(supplied.encode("utf-8"), f"Bearer {token}".encode("utf-8")):
             abort(401)
         return None
 
@@ -86,7 +88,10 @@ def create_app(
     def post_index(store_id: str):
         paths = _resolve(store_id, request.get_json(silent=True) or {})
         try:
-            result = service.index_store(paths)
+            with stores.indexing(store_id):
+                result = service.index_store(paths)
+        except StoreBusy as exc:
+            return jsonify({"ok": False, "error": "index_in_progress", "message": str(exc)}), 409
         except Exception as exc:
             logging.exception("indexing failed for store %s", store_id)
             return jsonify({"ok": False, "error": "index_failed", "message": str(exc)}), 502

@@ -1,10 +1,13 @@
 """What the headless routes do, without Flask: index a folder, report a store, answer.
 
-Each function takes explicit ``StorePaths`` and builds its ``AppConfig`` per
-call, so two stores served by one process never share a docs folder or an
-index. Everything else is the same ``rag.engine`` entry point the web uses:
-the pipeline Daimon gets is the pipeline the web and the gate measure.
+The per-request ``AppConfig`` only selects the store: ``wiring.vector_store(config)``
+is keyed by the request's paths. Models, flags and every other section come from
+the process configuration (``wiring.app_config_from_runtime()``: environment plus
+``rag.chat_pdfs`` defaults), because the engine entry points read it themselves.
+The headless never loads ``settings.json`` nor mutates those globals, so the
+environment is the whole configuration of a headless process.
 """
+import contextlib
 import os
 import threading
 import time
@@ -34,6 +37,10 @@ class StoreConflict(ValueError):
     """The same store id arrived with different paths within this process."""
 
 
+class StoreBusy(RuntimeError):
+    """An index run is already in progress for this store id."""
+
+
 class QuestionTooShort(ValueError):
     """Below ``retrieval.min_question_length``; nothing is retrieved or generated."""
 
@@ -57,6 +64,7 @@ class StoreRegistry:
     def __init__(self) -> None:
         self._paths: Dict[str, StorePaths] = {}
         self._lock = threading.Lock()
+        self._index_locks: Dict[str, threading.Lock] = {}
 
     def resolve(self, store_id: str, docs_folder: str, data_dir: str) -> StorePaths:
         paths = StorePaths(os.path.abspath(docs_folder), os.path.abspath(data_dir))
@@ -71,6 +79,26 @@ class StoreRegistry:
                 f"not {paths.docs_folder} / {paths.data_dir}"
             )
         return known
+
+    @contextlib.contextmanager
+    def indexing(self, store_id: str) -> Iterator[None]:
+        """Serialize index runs per store id; a second one fails instead of queuing.
+
+        A blocking lock would queue the second request behind the first one's
+        full index run (minutes, for a cold store); the caller wants to know
+        now that one is already in flight, not wait to find out.
+
+        Raises:
+            StoreBusy: An index run for this store id is already in progress.
+        """
+        with self._lock:
+            lock = self._index_locks.setdefault(store_id, threading.Lock())
+        if not lock.acquire(blocking=False):
+            raise StoreBusy(f"store {store_id!r} is already being indexed")
+        try:
+            yield
+        finally:
+            lock.release()
 
 
 def config_for(paths: StorePaths) -> AppConfig:
@@ -91,7 +119,10 @@ def index_store(paths: StorePaths) -> Dict[str, Any]:
         Counts, the fingerprint on disk afterwards and wall seconds.
 
     Raises:
-        RuntimeError: From ``indexar_documentos`` when every file failed.
+        RuntimeError: From ``indexar_documentos`` when every file failed, or
+            raised here when some (but not all) pending files did not land in
+            the store -- ``indexar_documentos`` only raises on total failure,
+            but a corpus version with a missing file is not a valid version.
     """
     started = time.perf_counter()
     config = config_for(paths)
@@ -100,12 +131,20 @@ def index_store(paths: StorePaths) -> Dict[str, Any]:
     available = listar_documentos(paths.docs_folder)
     pending = [name for name in available if name not in present]
     chunks = 0
+    failed: list = []
     if pending:
         chunks = indexar_documentos(
             paths.docs_folder, store, solo_archivos=None if not present else pending, silent=True
         )
+        after = set(obtener_documentos_indexados(store))
+        failed = [name for name in pending if name not in after]
+        if failed:
+            raise RuntimeError(
+                f"{len(failed)} document(s) failed to index or produced no chunks: "
+                f"{', '.join(failed)}"
+            )
     return {
-        "documents_indexed": len(pending),
+        "documents_indexed": len(pending) - len(failed),
         "documents_skipped": len(available) - len(pending),
         "chunks_indexed": chunks,
         "fingerprint": store.read_fingerprint(),

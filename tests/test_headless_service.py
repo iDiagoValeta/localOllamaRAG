@@ -5,6 +5,7 @@ same ``rag.engine`` entry points the web uses; the doubles record what they
 were handed so the test can assert the store and folder were the request's,
 not the process defaults.
 """
+import dataclasses
 import sys
 from pathlib import Path
 
@@ -15,8 +16,10 @@ for path in (ROOT, ROOT / "src"):
 
 import pytest
 
+import rag.chat_pdfs  # noqa: F401 -- must precede rag.engine.wiring, see its module docstring
+from rag.engine import wiring
 from rag.headless import service
-from rag.headless.service import QuestionTooShort, StoreConflict, StorePaths, StoreRegistry
+from rag.headless.service import QuestionTooShort, StoreBusy, StoreConflict, StorePaths, StoreRegistry
 
 
 class _Store:
@@ -38,6 +41,18 @@ def test_registry_binds_a_store_id_to_its_paths_once(tmp_path):
     assert registry.resolve("cv1", str(tmp_path / "docs"), str(tmp_path / "data")) == first
     with pytest.raises(StoreConflict):
         registry.resolve("cv1", str(tmp_path / "other"), str(tmp_path / "data"))
+
+
+def test_registry_indexing_lock_is_per_store_and_non_blocking(tmp_path):
+    registry = StoreRegistry()
+    with registry.indexing("a"):
+        with pytest.raises(StoreBusy):
+            with registry.indexing("a"):
+                pass
+        with registry.indexing("b"):
+            pass
+    with registry.indexing("a"):
+        pass
 
 
 def test_config_for_derives_the_faiss_path_inside_data_dir(tmp_path):
@@ -80,9 +95,12 @@ def test_index_store_on_an_empty_store_runs_a_full_index(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(service.wiring, "vector_store", lambda config: store)
     monkeypatch.setattr(service, "obtener_documentos_indexados", lambda s: list(s.docs))
-    monkeypatch.setattr(service, "indexar_documentos",
-                        lambda carpeta, collection, solo_archivos=None, silent=False, progress_callback=None:
-                        calls.append(solo_archivos) or 2)
+    def fake_indexar(carpeta, collection, solo_archivos=None, silent=False, progress_callback=None):
+        calls.append(solo_archivos)
+        collection.docs.append("a.pdf")  # the fake must land the file, or the new after-check fires
+        return 2
+
+    monkeypatch.setattr(service, "indexar_documentos", fake_indexar)
     service.index_store(StorePaths(str(docs), str(tmp_path / "data")))
     assert calls == [None]
 
@@ -96,6 +114,24 @@ def test_index_store_with_nothing_pending_does_not_call_the_indexer(monkeypatch,
     monkeypatch.setattr(service, "indexar_documentos", lambda *a, **k: pytest.fail("must not index"))
     result = service.index_store(StorePaths(str(docs), str(tmp_path / "data")))
     assert result["documents_indexed"] == 0 and result["chunks_indexed"] == 0
+
+
+def test_index_store_fails_when_a_pending_document_did_not_land_in_the_store(monkeypatch, tmp_path):
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    for name in ("a.pdf", "b.md", "c.pdf"):
+        (docs / name).write_bytes(b"x")
+    store = _Store()
+    monkeypatch.setattr(service.wiring, "vector_store", lambda config: store)
+    monkeypatch.setattr(service, "obtener_documentos_indexados", lambda s: list(s.docs))
+
+    def fake_indexar(carpeta, collection, solo_archivos=None, silent=False, progress_callback=None):
+        collection.docs.extend(["a.pdf", "c.pdf"])  # b.md silently produced no chunks
+        return 6
+
+    monkeypatch.setattr(service, "indexar_documentos", fake_indexar)
+    with pytest.raises(RuntimeError, match="b.md"):
+        service.index_store(StorePaths(str(docs), str(tmp_path / "data")))
 
 
 def test_status_store_reports_documents_chunks_and_staleness(monkeypatch, tmp_path):
@@ -159,3 +195,12 @@ def test_answer_stream_rejects_a_short_question(monkeypatch):
     _stub_pipeline(monkeypatch, ranked=[], finales=[], tokens=[])
     with pytest.raises(QuestionTooShort):
         list(service.answer_stream(StorePaths("d", "x"), "hola"))
+
+
+def test_per_request_config_matches_process_config_except_paths(tmp_path):
+    a = service.config_for(StorePaths(str(tmp_path / "docs"), str(tmp_path / "data")))
+    b = wiring.app_config_from_runtime()
+    a_dict, b_dict = dataclasses.asdict(a), dataclasses.asdict(b)
+    for section in ("models", "chunking", "retrieval", "reranking", "context", "flags"):
+        assert a_dict[section] == b_dict[section]
+    assert a_dict["paths"] != b_dict["paths"]

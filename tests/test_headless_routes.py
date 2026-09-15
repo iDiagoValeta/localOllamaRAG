@@ -1,6 +1,7 @@
 """HTTP contract of the headless service, with the service functions doubled."""
 import json
 import sys
+import threading
 import types
 from pathlib import Path
 
@@ -19,7 +20,8 @@ def _health(ok=True, reason=None):
                                        {"rag": {"backend": "openai", "model": "m"}})
 
 
-def _service(*, events=None, index=None, status=None, index_error=None, status_error=None):
+def _service(*, events=None, index=None, status=None, index_error=None, status_error=None,
+             index_gate=None, index_entered=None):
     def answer_stream(paths, question):
         if len(question) < 10:
             raise QuestionTooShort("short")
@@ -29,6 +31,10 @@ def _service(*, events=None, index=None, status=None, index_error=None, status_e
             yield event
 
     def index_store(paths):
+        if index_gate is not None:
+            if index_entered is not None:
+                index_entered.set()
+            index_gate.wait()
         if index_error:
             raise index_error
         return index or {"documents_indexed": 1, "documents_skipped": 0, "chunks_indexed": 4,
@@ -187,3 +193,35 @@ def test_health_is_probed_with_the_process_config():
 
     _client(health=health).get("/health")
     assert len(seen) == 1 and seen[0].models is not None
+
+
+def test_concurrent_index_on_the_same_store_is_409():
+    gate = threading.Event()
+    entered = threading.Event()
+    registry = StoreRegistry()
+    app = create_app(service=_service(index_gate=gate, index_entered=entered), health=_health(),
+                      registry=registry)
+    app.testing = True
+    client_a = app.test_client()
+    client_b = app.test_client()
+    results = {}
+
+    def run_first():
+        results["first"] = client_a.post("/stores/cv1/index", json=PATHS)
+
+    thread = threading.Thread(target=run_first)
+    thread.start()
+    assert entered.wait(timeout=2), "the first request never reached index_store"
+    resp = client_b.post("/stores/cv1/index", json=PATHS)
+    assert resp.status_code == 409
+    assert resp.get_json()["error"] == "index_in_progress"
+    gate.set()
+    thread.join(timeout=2)
+    assert results["first"].status_code == 200
+
+
+def test_non_ascii_bearer_is_a_json_401():
+    client = _client(token="s3cret")
+    resp = client.get("/health", headers={"Authorization": "Bearer é"})
+    assert resp.status_code == 401
+    assert resp.get_json()["error"] == "unauthorized"
