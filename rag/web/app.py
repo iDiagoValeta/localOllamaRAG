@@ -258,38 +258,10 @@ def _chat_stream(pregunta: str) -> Generator[str, None, None]:
             yield content
 
 
-def _format_sources(fragments: list) -> list:
-    """Format source references for the JSON response.
+from rag.engine.sources import format_sources
 
-    Args:
-        fragments: List of fragment dicts with metadata (source, page).
-            Fragments must be ordered by descending relevance score so that
-            the first occurrence of each document is its highest-scoring fragment.
-
-    Returns:
-        List of dicts with 'document', 'pages', and 'best_page' keys, sorted
-        by document name. 'best_page' is the page of the highest-scoring fragment
-        for that document, intended as the default scroll target in the viewer.
-    """
-    sources_map = {}
-    for frag in fragments:
-        meta = frag.get("metadata", {})
-        doc = meta.get("source", "?")
-        page = meta.get("page", 0)
-        page_num = page + 1 if isinstance(page, int) else page
-        score = frag.get("score_reranker", frag.get("score_final", 0.0))
-        if doc not in sources_map:
-            sources_map[doc] = {"pages": set(), "best_page": page_num, "best_score": score}
-        else:
-            if score > sources_map[doc]["best_score"]:
-                sources_map[doc]["best_score"] = score
-                sources_map[doc]["best_page"] = page_num
-        sources_map[doc]["pages"].add(page_num)
-
-    return [
-        {"document": doc, "pages": sorted(info["pages"]), "best_page": info["best_page"]}
-        for doc, info in sorted(sources_map.items())
-    ]
+# Kept as an alias: tests/test_web_routes.py imports this name from here.
+_format_sources = format_sources
 
 
 def _sse_event(event: str, payload: dict) -> str:

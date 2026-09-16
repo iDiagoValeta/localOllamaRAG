@@ -226,6 +226,22 @@ run.
 python rag/web/app.py      # web UI at http://localhost:5000
 ```
 
+### Headless service (for another application)
+
+```bash
+python -m rag.headless      # 127.0.0.1:5050; MONKEYGRAB_HEADLESS_PORT / _TOKEN in .env.example
+```
+
+No interface, no fixed stores: `POST /stores/<id>/index` and `POST /stores/<id>/rag`
+take the document folder and the data directory in the request, and `/health`
+says whether the full stack can run here (isolated environment, CUDA). The
+pipeline is the same one the web app and the evaluation gate run.
+
+Every model role can run on Ollama (default) or on any server speaking the
+OpenAI chat API (`MONKEYGRAB_<ROLE>_BACKEND=openai` plus
+`MONKEYGRAB_OPENAI_BASE_URL`), which is how Daimon has MonkeyGrab answer with
+its own model. Text files (`.txt`, `.md`) index alongside PDFs.
+
 <details>
 <summary><strong>Install, models and configuration</strong></summary>
 <br/>

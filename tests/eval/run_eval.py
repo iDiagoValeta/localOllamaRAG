@@ -61,6 +61,7 @@ if str(EVAL_DIR) not in sys.path:
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 import grade  # noqa: E402  (tests/eval sibling module)
+from monkeygrab.config import AppConfig  # noqa: E402
 from monkeygrab.config.env import read_env_ollama_base_url  # noqa: E402
 
 GOLD_FILE = EVAL_DIR / "gold_cases.jsonl"
@@ -1860,6 +1861,22 @@ _UNREACHABLE_CONFIG_OVERRIDE_REASONS = {
         "generations to its own OLLAMA_BASE_URL constant, so the endpoint the "
         "gate uses would not move with the threaded config either"
     ),
+    "models.rag_backend": (
+        "which backend serves a role is read from the process environment "
+        "(MONKEYGRAB_<ROLE>_BACKEND) by wiring.chat_model_for_role through "
+        "app_config_from_runtime; the gate does not thread it as an override, "
+        "and a run on the OpenAI backend is recorded in conditions instead "
+        "(see rag_backend/chat_backend there)"
+    ),
+    "models.chat_backend": "see models.rag_backend",
+    "models.contextual_backend": "see models.rag_backend",
+    "models.recomp_backend": "see models.rag_backend",
+    "models.openai.base_url": (
+        "see models.ollama.rag_num_ctx for the one-level nesting limit; read "
+        "from MONKEYGRAB_OPENAI_BASE_URL by the process environment"
+    ),
+    "models.openai.api_key": "see models.openai.base_url",
+    "models.openai.timeout": "see models.openai.base_url",
     "retrieval.min_question_length": "not read anywhere in src/monkeygrab -- Retrieve.run() has no question-length gate",
     "flags.logging_metricas": "generar_respuesta_silenciosa never calls the debug-dump path this flag gates",
     "flags.guardar_debug_rag": "generar_respuesta_silenciosa skips the debug dump entirely",
@@ -2066,6 +2083,9 @@ def evaluate(
     Returns:
         A dict with ``summary`` (``build_summary()``'s blocks), ``records``
         (every per-case result dict), ``models``, ``aux_model``,
+        ``rag_backend``, ``chat_backend`` (which backend, "ollama" or
+        "openai", actually served each role this run), ``openai_base_url``
+        (set when either role above is "openai", else ``None``),
         ``num_cases``, ``num_records``, ``elapsed_seconds``, ``pass_rate``,
         ``baseline`` (the threshold this run was compared against, or
         ``None``), ``infrastructure_errors``, ``baseline_updated``,
@@ -2115,11 +2135,19 @@ def evaluate(
     # floor (0.00 < 0.77) and write a junk report -- measured 2026-08-13 on
     # the first real harness run (issue #71).
     if case_ids is not None and not cases:
+        probe_backends = AppConfig.from_env().models
         return {
             "summary": build_summary([]),
             "records": [],
             "models": list(models),
             "aux_model": AUX_MODEL,
+            "rag_backend": probe_backends.rag_backend,
+            "chat_backend": probe_backends.chat_backend,
+            "openai_base_url": (
+                probe_backends.openai.base_url
+                if "openai" in (probe_backends.rag_backend, probe_backends.chat_backend)
+                else None
+            ),
             "num_cases": 0,
             "num_records": 0,
             "elapsed_seconds": round(time.perf_counter() - run_started, 1),
@@ -2132,7 +2160,16 @@ def evaluate(
             "config": {"dev": None, "blind": None},
         }
 
-    required_models = set(models) | {AUX_MODEL}
+    # Only roles served by Ollama need to exist in Ollama: with
+    # MONKEYGRAB_RAG_BACKEND=openai the generator under test lives on the
+    # OpenAI-compatible server instead (see docs/model-history.md for the
+    # rows measured that way).
+    role_backends = AppConfig.from_env().models
+    required_models = set()
+    if role_backends.rag_backend == "ollama":
+        required_models |= set(models)
+    if role_backends.chat_backend == "ollama":
+        required_models.add(AUX_MODEL)
     # An overridden models.contextual is otherwise invisible to preflight:
     # ensure_indexed builds an OllamaChatModel from it unconditionally once
     # flags.usar_contextual_retrieval is on, and IndexCorpus swallows that
@@ -2333,6 +2370,13 @@ def evaluate(
                         "stack": stack_slug,
                         "models": list(models),
                         "aux_model": AUX_MODEL,
+                        "rag_backend": role_backends.rag_backend,
+                        "chat_backend": role_backends.chat_backend,
+                        "openai_base_url": (
+                            role_backends.openai.base_url
+                            if "openai" in (role_backends.rag_backend, role_backends.chat_backend)
+                            else None
+                        ),
                         "num_cases": len(cases),
                         "num_records": len(records),
                         "elapsed_seconds": round(elapsed_total, 1),
@@ -2426,6 +2470,13 @@ def evaluate(
         "records": records,
         "models": list(models),
         "aux_model": AUX_MODEL,
+        "rag_backend": role_backends.rag_backend,
+        "chat_backend": role_backends.chat_backend,
+        "openai_base_url": (
+            role_backends.openai.base_url
+            if "openai" in (role_backends.rag_backend, role_backends.chat_backend)
+            else None
+        ),
         "num_cases": len(cases),
         "num_records": len(records),
         "elapsed_seconds": round(elapsed_total, 1),

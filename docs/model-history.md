@@ -183,6 +183,36 @@ others.
 
 ---
 
+### Measured on the OpenAI backend (`rag` role on llama-server)
+
+One run, added 2026-09-15. Same gold set, same `AUX_MODEL` (Ling-3.0-tiny on
+Ollama for chat, contextual and RECOMP), same 180 s budget. It is not a row of
+the table above because two conditions differ, both deliberate: the `rag` role
+ran through `MONKEYGRAB_RAG_BACKEND=openai` against llama-server (the OpenAI
+adapter sends no `repeat_penalty`, which has no OpenAI equivalent), and
+llama-server was started with `--cpu-moe --no-kv-offload --ctx-size 16384`, so
+the experts and the KV cache lived in system RAM and the card held about
+1.0 GiB of the generator next to jina-clip and the reranker. The OpenAI API
+reports no decode timings, so `tokens/s` is empty; `s/answer` is the median of
+the 119 records that carry it. The artifact's `run` block records
+`rag_backend`, `chat_backend` and `openai_base_url`.
+
+| Model | Answered (of 136) | Overall (of 156) | s/answer | Budget hit | Infra | Placement | Run |
+|---|---|---|---|---|---|---|---|
+| `qwen3-vl-30b` (Qwen3-VL-30B-A3B-Instruct IQ4_XS, llama-server) | 110 (80.9%) | 127 (81.4%) | 4.64 | 17 | 0 | experts + KV in RAM, ~1.0 GiB VRAM | `20260915T114118Z` |
+
+Reading: the factual cases score 88.7% (`factual_number`) and 88.9%
+(`factual_concept`), above the shipped default's 87.5%, and retrieval is the
+usual 17/20. Every one of the 12 `study_*` cases exhausted the budget: those
+prompts are whole documents of 8k to 15.7k tokens, and prompt evaluation with
+the experts on CPU is what does not fit in 180 s, not the model's answers. The
+same run was attempted twice before and neither attempt is a row: with
+`--ctx-size 8192` llama-server returned 400 on 19 cases (requests up to 15.7k
+tokens), and with the vision projector loaded on the card the reranker OOMed
+during phase 1. Both are placement findings for anyone serving this model
+next to the fixed stack on 8 GB: at least 16384 of context per slot, and about
+4.5 GiB of VRAM left free for jina-clip and the reranker.
+
 ## Coverage
 
 Every generator the previous table listed, including the five rows it carried
