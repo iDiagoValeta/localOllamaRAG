@@ -78,9 +78,13 @@ class AppConfig:
         Reproduces the exact defaults ``rag/chat_pdfs.py`` section 3 binds
         at import time -- every ``os.getenv(NAME, default)`` call there has
         a one-to-one counterpart here reading the same ``NAME`` with the
-        same ``default``, and every plain Python literal (the 10 pipeline
-        flags, ``MAX_HISTORIAL_MENSAJES``) is reproduced as the same
-        literal, not newly wired to an environment variable. See
+        same ``default``, and every pipeline flag (``USAR_*``,
+        ``EXPANDIR_CONTEXTO``, ``LOGGING_METRICAS``, ``GUARDAR_DEBUG_RAG``)
+        is read from the environment with the same literal as its default,
+        mirroring the ``_leer_env_bool`` binding ``rag/chat_pdfs.py``
+        applies to its own globals. An explicit export changes behaviour
+        only for the process that declares it; nothing unset ever differs
+        from the historical literals. See
         ``tests/unit/test_app_config_defaults.py`` for the field-by-field
         equality check against a live ``rag.chat_pdfs`` import.
 
@@ -158,10 +162,22 @@ class AppConfig:
             max_context_chars=env.read_env_int("MAX_CONTEXTO_CHARS", 24000),
         )
 
-        # All 10 pipeline flags are hardcoded True in rag/chat_pdfs.py section
-        # -- none of them are read from the environment there, so none
-        # are read from the environment here either.
-        flags = PipelineFlagsConfig()
+        # Pipeline flags: same variables, same defaults as the
+        # _leer_env_bool binding in rag/chat_pdfs.py section 3.4. Unset
+        # variables reproduce the historical literals exactly.
+        flags = PipelineFlagsConfig(
+            usar_contextual_retrieval=env.read_env_bool("USAR_CONTEXTUAL_RETRIEVAL", True),
+            usar_llm_query_decomposition=env.read_env_bool("USAR_LLM_QUERY_DECOMPOSITION", True),
+            usar_busqueda_hibrida=env.read_env_bool("USAR_BUSQUEDA_HIBRIDA", True),
+            usar_reranker=env.read_env_bool("USAR_RERANKER", True),
+            expandir_contexto=env.read_env_bool("EXPANDIR_CONTEXTO", True),
+            usar_optimizacion_contexto=env.read_env_bool("USAR_OPTIMIZACION_CONTEXTO", True),
+            usar_recomp_synthesis=env.read_env_bool("USAR_RECOMP_SYNTHESIS", True),
+            usar_embeddings_imagen=env.read_env_bool("USAR_EMBEDDINGS_IMAGEN", True),
+            usar_descripcion_imagen=env.read_env_bool("USAR_DESCRIPCION_IMAGEN", False),
+            logging_metricas=env.read_env_bool("LOGGING_METRICAS", True),
+            guardar_debug_rag=env.read_env_bool("GUARDAR_DEBUG_RAG", True),
+        )
 
         base_dir = RAG_BASE_DIR
         data_dir = os.path.abspath(env.read_env_str("MONKEYGRAB_DATA_DIR", base_dir))

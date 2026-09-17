@@ -35,11 +35,11 @@ to fix it:
 1. ``os.getenv(name)`` / ``os.environ.get(name)`` / ``os.environ[name]``
    (a *read* subscript, not an assignment) / ``os.environ.pop(name, ...)``.
 2. ``monkeygrab.config.env``'s typed readers -- ``read_env_str``,
-   ``read_env_int``, ``read_env_float``, ``read_env_choice`` -- plus
-   ``rag/chat_pdfs.py``'s own pre-``monkeygrab`` equivalents,
-   ``_leer_env_int`` / ``_leer_env_float``. All six take the variable name
-   as their first positional argument, so a literal string there is exactly
-   as much a "read" as ``os.getenv("NAME")``.
+   ``read_env_int``, ``read_env_float``, ``read_env_bool``,
+   ``read_env_choice`` -- plus ``rag/chat_pdfs.py``'s own pre-``monkeygrab``
+   equivalents, ``_leer_env_int`` / ``_leer_env_float`` / ``_leer_env_bool``.
+   All take the variable name as their first positional argument, so a
+   literal string there is exactly as much a "read" as ``os.getenv("NAME")``.
 3. ``env.setdefault(name, ...)`` on a dict assigned from
    ``os.environ.copy()`` -- how ``MINERU_MODEL_SOURCE`` reaches the MinerU
    subprocess (``src/monkeygrab/adapters/extraction/mineru_extractor.py``):
@@ -144,9 +144,11 @@ _LITERAL_ARG_READER_NAMES = {
     "read_env_str",
     "read_env_int",
     "read_env_float",
+    "read_env_bool",
     "read_env_choice",
     "_leer_env_int",
     "_leer_env_float",
+    "_leer_env_bool",
 }
 
 # Dict methods checked only when the receiver is os.environ itself (or a

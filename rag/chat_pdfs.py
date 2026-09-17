@@ -116,6 +116,38 @@ def _leer_env_float(nombre_variable: str, default: float) -> float:
         return default
 
 
+def _leer_env_bool(nombre_variable: str, default: bool) -> bool:
+    """Parse a boolean environment variable, honouring an explicit export.
+
+    Accepts ``true``/``false``, ``1``/``0``, ``yes``/``no``, ``y``/``n`` and
+    ``on``/``off`` (case-insensitive, surrounding whitespace ignored). Unlike
+    ``_leer_env_int``/``_leer_env_float`` above, a set-but-unparseable value
+    raises instead of silently falling back: the pipeline must run under the
+    configuration the operator declared, not a default nobody asked for
+    (hard-fail policy; mirrors ``monkeygrab.config.env.read_env_bool`` so
+    both paths agree on invalid input too).
+
+    Args:
+        nombre_variable: Environment variable name to inspect.
+        default: Fallback value when the variable is undefined.
+
+    Returns:
+        Parsed boolean value, or ``default``.
+
+    Raises:
+        ValueError: If the variable is set to an unrecognized spelling.
+    """
+    raw = os.getenv(nombre_variable)
+    if raw is None:
+        return default
+    normalized = raw.strip().lower()
+    if normalized in ("1", "true", "yes", "y", "on"):
+        return True
+    if normalized in ("0", "false", "no", "n", "off"):
+        return False
+    raise ValueError(f"Invalid boolean for {nombre_variable}: {raw!r}")
+
+
 def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
     """Extract the base model name by stripping the tag suffix.
 
@@ -158,18 +190,23 @@ OLLAMA_GENERATE_RETRY_DELAY = _leer_env_int("OLLAMA_GENERATE_RETRY_DELAY", 3)
 
 # Pipeline flags
 
-USAR_CONTEXTUAL_RETRIEVAL = True
-USAR_LLM_QUERY_DECOMPOSITION = True
-USAR_BUSQUEDA_HIBRIDA = True
-USAR_RERANKER = True
-EXPANDIR_CONTEXTO = True
-USAR_OPTIMIZACION_CONTEXTO = True
-USAR_RECOMP_SYNTHESIS = True
-USAR_EMBEDDINGS_IMAGEN = True
+# Each flag honours an explicit environment export for this process and falls
+# back to the historical literal when unset (defaults unchanged). The headless
+# service never loads settings.json, so this binding is its whole flag
+# configuration surface; the web UI can still toggle the runtime subset below
+# afterwards via set_pipeline_flags.
+USAR_CONTEXTUAL_RETRIEVAL = _leer_env_bool("USAR_CONTEXTUAL_RETRIEVAL", True)
+USAR_LLM_QUERY_DECOMPOSITION = _leer_env_bool("USAR_LLM_QUERY_DECOMPOSITION", True)
+USAR_BUSQUEDA_HIBRIDA = _leer_env_bool("USAR_BUSQUEDA_HIBRIDA", True)
+USAR_RERANKER = _leer_env_bool("USAR_RERANKER", True)
+EXPANDIR_CONTEXTO = _leer_env_bool("EXPANDIR_CONTEXTO", True)
+USAR_OPTIMIZACION_CONTEXTO = _leer_env_bool("USAR_OPTIMIZACION_CONTEXTO", True)
+USAR_RECOMP_SYNTHESIS = _leer_env_bool("USAR_RECOMP_SYNTHESIS", True)
+USAR_EMBEDDINGS_IMAGEN = _leer_env_bool("USAR_EMBEDDINGS_IMAGEN", True)
 # Index-time; requires a vision-capable OLLAMA_CHAT_MODEL and a fresh index.
-USAR_DESCRIPCION_IMAGEN = False
-LOGGING_METRICAS = True
-GUARDAR_DEBUG_RAG = True
+USAR_DESCRIPCION_IMAGEN = _leer_env_bool("USAR_DESCRIPCION_IMAGEN", False)
+LOGGING_METRICAS = _leer_env_bool("LOGGING_METRICAS", True)
+GUARDAR_DEBUG_RAG = _leer_env_bool("GUARDAR_DEBUG_RAG", True)
 
 # Runtime toggles are inference-time only; indexing flags require a fresh index.
 PIPELINE_RUNTIME_FLAGS = (
