@@ -953,19 +953,22 @@ export default function App() {
         <div className="flex px-6 mb-2">
           <div className="flex w-full bg-field p-1 border border-edge rounded-xl">
             <button
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${mainPanel === null ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
+              aria-pressed={mainPanel === null}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-divider ${mainPanel === null ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
               onClick={() => { setMainPanel(null); setActiveTab('docs'); }}
             >
               {T.tabDocs}
             </button>
             <button
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${mainPanel === 'models' ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
+              aria-pressed={mainPanel === 'models'}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-divider ${mainPanel === 'models' ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
               onClick={() => openMainPanel('models')}
             >
               {T.tabModels}
             </button>
             <button
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${mainPanel === 'pipeline' ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
+              aria-pressed={mainPanel === 'pipeline'}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-divider ${mainPanel === 'pipeline' ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
               onClick={() => openMainPanel('pipeline')}
             >
               {T.tabPipeline}
@@ -995,7 +998,7 @@ export default function App() {
                         <button
                           key={store.name}
                           type="button"
-                          className={`group flex w-full items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-all focus:outline-none disabled:cursor-not-allowed ${isActive
+                          className={`group flex w-full items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-divider disabled:cursor-not-allowed ${isActive
                             ? 'border-divider bg-surface-raised'
                             : 'border-transparent hover:border-edge hover:bg-surface-raised/50'
                             }`}
@@ -1127,7 +1130,7 @@ export default function App() {
         <header className="h-20 border-b border-divider flex items-center justify-between gap-3 px-4 bg-surface-raised z-10">
           <div className="flex items-center gap-3 min-w-0">
             <button
-              className="p-2.5 text-ink-muted hover:text-ink bg-field hover:bg-surface border border-edge rounded-lg transition-colors flex-shrink-0"
+              className="p-2.5 text-ink-muted hover:text-ink bg-field hover:bg-surface border border-edge rounded-lg transition-colors flex-shrink-0 focus:outline-none focus-visible:ring-1 focus-visible:ring-divider"
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             >
               <Menu className="w-5 h-5" />
@@ -1135,21 +1138,24 @@ export default function App() {
 
             <div className="flex bg-field p-1 border border-edge rounded-xl flex-shrink-0">
               <button
-                className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide rounded-lg transition-all flex items-center gap-2 ${mode === 'chat' ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
+                aria-pressed={mode === 'chat'}
+                className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide rounded-lg transition-all flex items-center gap-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-divider ${mode === 'chat' ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
                 onClick={() => handleModeChange('chat')}
               >
                 <Ollama className="w-4 h-4 text-ink" />
                 CHAT
               </button>
               <button
-                className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide rounded-lg transition-all flex items-center gap-2 ${mode === 'rag' ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
+                aria-pressed={mode === 'rag'}
+                className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide rounded-lg transition-all flex items-center gap-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-divider ${mode === 'rag' ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
                 onClick={() => handleModeChange('rag')}
               >
                 <Database className="w-4 h-4" />
                 RAG
               </button>
               <button
-                className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide rounded-lg transition-all flex items-center gap-2 ${mode === 'study' ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
+                aria-pressed={mode === 'study'}
+                className={`min-w-[84px] justify-center px-4 py-2 text-xs font-bold tracking-wide rounded-lg transition-all flex items-center gap-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-divider ${mode === 'study' ? 'bg-surface-raised text-ink' : 'text-ink-muted hover:text-ink'}`}
                 onClick={() => handleModeChange('study')}
               >
                 <BookOpen className="w-4 h-4" />
@@ -1162,7 +1168,8 @@ export default function App() {
             <button
               type="button"
               onClick={toggleTheme}
-              className="p-2 text-ink-muted hover:text-ink bg-field hover:bg-surface border border-edge rounded-lg transition-colors"
+              aria-pressed={theme === 'dark'}
+              className="p-2 text-ink-muted hover:text-ink bg-field hover:bg-surface border border-edge rounded-lg transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-divider"
               title={theme === 'dark' ? T.themeLight : T.themeDark}
               aria-label={theme === 'dark' ? T.themeLight : T.themeDark}
             >
@@ -1170,7 +1177,7 @@ export default function App() {
             </button>
             <LanguageToggle lang={lang} setLang={setLang} />
             <button
-              className="p-2 text-ink-muted hover:text-ink bg-field hover:bg-surface border border-edge rounded-lg transition-colors"
+              className="p-2 text-ink-muted hover:text-ink bg-field hover:bg-surface border border-edge rounded-lg transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-divider"
               onClick={handleClear}
               title={T.clearChat}
               aria-label={T.clearChat}
@@ -1384,8 +1391,9 @@ export default function App() {
                       <button
                         key={kind}
                         type="button"
+                        aria-pressed={studyKind === kind}
                         onClick={() => setStudyKind(kind)}
-                        className={`px-3 py-2 text-[11px] font-bold tracking-wide uppercase rounded transition-all ${
+                        className={`px-3 py-2 text-[11px] font-bold tracking-wide uppercase rounded transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-divider ${
                           studyKind === kind
                             ? 'bg-surface-raised text-ink'
                             : 'text-ink-muted hover:text-ink'
@@ -1398,7 +1406,7 @@ export default function App() {
                   <button
                     onClick={handleSend}
                     disabled={!input.trim() || isLoading}
-                    className="p-3 bg-ink text-surface hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:bg-surface-raised disabled:text-ink-faint transition-all flex-shrink-0 rounded-xl"
+                    className="p-3 bg-ink text-surface hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:bg-surface-raised disabled:text-ink-faint transition-all flex-shrink-0 rounded-xl focus:outline-none focus-visible:ring-1 focus-visible:ring-divider"
                   >
                     {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 ml-0.5" />}
                   </button>
@@ -1407,7 +1415,7 @@ export default function App() {
                 <button
                   onClick={handleSend}
                   disabled={!input.trim() || isLoading}
-                  className="p-3.5 bg-ink text-surface hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:bg-surface-raised disabled:text-ink-faint transition-all flex-shrink-0 rounded-2xl"
+                  className="p-3.5 bg-ink text-surface hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:bg-surface-raised disabled:text-ink-faint transition-all flex-shrink-0 rounded-2xl focus:outline-none focus-visible:ring-1 focus-visible:ring-divider"
                 >
                   {isLoading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
