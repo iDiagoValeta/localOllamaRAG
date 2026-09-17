@@ -985,7 +985,7 @@ export default function App() {
                 className="space-y-6"
               >
                 <div className="space-y-2">
-                  <div className="pl-2 text-[10px] font-bold text-ink-faint uppercase tracking-widest">
+                  <div className="pl-2 text-[10px] font-bold text-ink-muted uppercase tracking-widest">
                     {T.storesLabel}
                   </div>
                   <div className={`rounded-2xl border border-edge bg-field p-1.5 space-y-1 ${storeBusy || isReindexing || isLoading ? 'opacity-50' : ''}`}>
@@ -1035,7 +1035,7 @@ export default function App() {
 
                 {/* Documents list */}
                 <div className="space-y-3">
-                  <div className="text-[10px] font-bold text-ink-faint uppercase tracking-widest pl-2">
+                  <div className="text-[10px] font-bold text-ink-muted uppercase tracking-widest pl-2">
                     {fill(T.collection, { n: documents.length })}
                   </div>
 
@@ -1220,13 +1220,13 @@ export default function App() {
                       {/* Meta label + copy */}
                       <div className="flex items-center gap-2 px-2 group/meta">
                         {msg.role === 'assistant' && (
-                          <span className="text-[9px] px-2 py-0.5 rounded-full uppercase tracking-widest font-bold bg-field text-ink-faint border border-edge">
+                          <span className="text-[9px] px-2 py-0.5 rounded-full uppercase tracking-widest font-bold bg-field text-ink-muted border border-edge">
                             {msg.mode}
                           </span>
                         )}
                         <button
                           onClick={() => handleCopyMessage(msg)}
-                          className="p-2 rounded-full text-ink-faint hover:text-ink hover:bg-surface-raised focus-visible:text-ink transition-all"
+                          className="p-2 rounded-full text-ink-muted hover:text-ink hover:bg-surface-raised focus-visible:text-ink transition-all"
                           title={T.copyMsg}
                         >
                           {copiedId === msg.id ? (
@@ -1368,7 +1368,7 @@ export default function App() {
                   }
                 }}
                 placeholder={mode === 'study' ? T.studyPlaceholder : mode === 'rag' ? T.placeholderRag : T.placeholderChat}
-                className={`${mode === 'study' ? 'w-full max-h-40 min-h-[44px]' : 'flex-1 max-h-48 min-h-[52px]'} bg-transparent border-none focus:ring-0 focus:outline-none resize-none py-3.5 px-4 text-[15px] text-ink placeholder:text-ink-faint custom-scrollbar font-medium`}
+                className={`${mode === 'study' ? 'w-full max-h-40 min-h-[44px]' : 'flex-1 max-h-48 min-h-[52px]'} bg-transparent border-none focus:ring-0 focus:outline-none resize-none py-3.5 px-4 text-[15px] text-ink placeholder:text-ink-muted custom-scrollbar font-medium`}
                 rows={1}
                 disabled={isLoading}
               />
