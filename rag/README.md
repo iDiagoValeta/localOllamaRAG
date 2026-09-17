@@ -55,6 +55,13 @@ panel saves are read at startup so the session reopens under the user's
 choices. The environment outranks the file, the file outranks the defaults
 in `chat_pdfs.py`.
 
+That agreement is web-only. `headless/` never loads `settings.json` and
+mutates no runtime global, so a headless process runs under environment plus
+`chat_pdfs.py` defaults alone — and the `USAR_*` pipeline flags have no
+environment binding, only web-UI toggles headless ignores. Operator notes
+(auth, store pinning, 8 GB levers, what `/health`'s commit means to Daimon)
+live in the [root README](../README.md)'s headless section, not here.
+
 - **Hexagonal core, layers, how to add an adapter:** [`src/monkeygrab/README.md`](../src/monkeygrab/README.md)
 - **Design rationale and phased rollout:** [`docs/design/2026-07-26-monkeygrab-v2.md`](../docs/design/2026-07-26-monkeygrab-v2.md)
 - **Pipeline behavior as currently observed:** [`tests/characterization/`](../tests/characterization/)
