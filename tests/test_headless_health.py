@@ -8,7 +8,7 @@ for path in (ROOT, ROOT / "src"):
         sys.path.insert(0, str(path))
 
 from monkeygrab.config import AppConfig
-from rag.headless.health import probe
+from rag.headless.health import _reset_probe_cache, cached_probe, probe
 
 
 def _cuda_ok(python):
@@ -61,3 +61,60 @@ def test_cuda_probe_failure_is_reported_not_swallowed():
     report = probe(AppConfig.from_env(), isolated_python=lambda: "/p", cuda_probe=broken, git_commit=lambda: None)
     assert report.ok is False
     assert "torch failed to import" in report.reason
+
+
+def _counting_cuda(calls, result=None):
+    def cuda_probe(python):
+        calls.append(python)
+        return result or {"available": True, "device": "RTX 4060", "torch": "2.6.0"}
+
+    return cuda_probe
+
+
+def _config_with_rag(model):
+    return AppConfig.from_env().with_overrides(**{"models.rag": model})
+
+
+def test_cached_probe_probes_once_within_the_ttl():
+    _reset_probe_cache()
+    calls = []
+    kwargs = {"isolated_python": lambda: "/p", "cuda_probe": _counting_cuda(calls),
+              "git_commit": lambda: "abc"}
+    first = cached_probe(_config_with_rag("cache-hit-model"), **kwargs)
+    second = cached_probe(_config_with_rag("cache-hit-model"), **kwargs)
+    assert first.ok is True and second.ok is True
+    assert calls == ["/p"]
+
+
+def test_cached_probe_reprobes_once_the_ttl_expires():
+    _reset_probe_cache()
+    calls = []
+    kwargs = {"isolated_python": lambda: "/p", "cuda_probe": _counting_cuda(calls),
+              "git_commit": lambda: "abc", "ttl": 0}
+    cached_probe(_config_with_rag("cache-ttl-model"), **kwargs)
+    cached_probe(_config_with_rag("cache-ttl-model"), **kwargs)
+    assert calls == ["/p", "/p"]
+
+
+def test_cached_probe_reprobes_when_the_roles_change():
+    _reset_probe_cache()
+    calls = []
+    kwargs = {"isolated_python": lambda: "/p", "cuda_probe": _counting_cuda(calls),
+              "git_commit": lambda: "abc"}
+    cached_probe(_config_with_rag("cache-roles-a"), **kwargs)
+    cached_probe(_config_with_rag("cache-roles-b"), **kwargs)
+    assert calls == ["/p", "/p"]
+
+
+def test_cached_probe_caches_a_failure_report_too():
+    _reset_probe_cache()
+    calls = []
+    config = _config_with_rag("cache-failure-model")
+    kwargs = {"isolated_python": lambda: "/p",
+              "cuda_probe": _counting_cuda(
+                  calls, {"available": False, "device": None, "torch": "2.6.0"}),
+              "git_commit": lambda: None}
+    first = cached_probe(config, **kwargs)
+    second = cached_probe(config, **kwargs)
+    assert first.ok is False and second.ok is False
+    assert calls == ["/p"]

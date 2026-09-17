@@ -35,7 +35,7 @@ def _paths_from(values: Dict[str, Any]) -> Tuple[str, str]:
 def create_app(
     *,
     service: Any = service_module,
-    health: Callable[[AppConfig], health_module.HealthReport] = health_module.probe,
+    health: Callable[[AppConfig], health_module.HealthReport] = health_module.cached_probe,
     token: Optional[str] = None,
     registry: Optional[StoreRegistry] = None,
 ) -> Flask:
@@ -44,7 +44,9 @@ def create_app(
     Args:
         service: Module-like object with ``index_store``, ``status_store``
             and ``answer_stream`` (the real module by default; a double in tests).
-        health: The probe to run on ``/health``.
+        health: The probe to run on ``/health``. Cached with a short TTL by
+            default (``health_module.cached_probe``) so Daimon's polling never
+            pays a torch/CUDA subprocess per request; a double in tests.
         token: Bearer token to require, or ``None`` for no auth.
         registry: Store-id registry; one per process by default.
     """

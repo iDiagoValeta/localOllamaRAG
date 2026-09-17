@@ -112,8 +112,9 @@ class OpenAICompatChatModel:
             The complete generated text.
 
         Raises:
-            RuntimeError: On any HTTP failure or a body without
-                ``choices[0].message.content``.
+            RuntimeError: On any HTTP failure, a body without
+                ``choices[0].message.content``, or content that is not a
+                string (tool calls and refusals arrive as ``null``).
         """
         payload = self._payload(self._messages(prompt, system, images), stream=False)
         if response_format is not None:
@@ -126,7 +127,13 @@ class OpenAICompatChatModel:
                 self.url(), headers=self._headers(), json=payload, timeout=self._timeout
             )
             response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
+            content = response.json()["choices"][0]["message"]["content"]
+            if not isinstance(content, str):
+                raise RuntimeError(
+                    f"OpenAI-compatible generate returned non-string content "
+                    f"for model {self._model!r}: {type(content).__name__}"
+                )
+            return content
         except Exception as exc:
             raise RuntimeError(
                 f"OpenAI-compatible generate failed for model {self._model!r}: {exc}"

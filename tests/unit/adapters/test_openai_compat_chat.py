@@ -110,6 +110,18 @@ def test_generate_raises_runtime_error_on_malformed_body(monkeypatch):
         _model().generate("x")
 
 
+def test_generate_raises_runtime_error_on_null_content(monkeypatch):
+    _stub_post(monkeypatch, [], _Response(body={"choices": [{"message": {"content": None}}]}))
+    with pytest.raises(RuntimeError, match="non-string content"):
+        _model().generate("x")
+
+
+def test_generate_raises_runtime_error_on_list_content(monkeypatch):
+    _stub_post(monkeypatch, [], _Response(body={"choices": [{"message": {"content": []}}]}))
+    with pytest.raises(RuntimeError, match="non-string content"):
+        _model().generate("x")
+
+
 def _sse(obj):
     return ("data: " + json.dumps(obj)).encode("utf-8")
 

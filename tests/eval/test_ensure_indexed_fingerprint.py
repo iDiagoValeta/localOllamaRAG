@@ -6,11 +6,11 @@ silently drops a paper must raise EvalSetupError instead. Nothing enforced
 that order: hoisting the write above the raise passed every other test.
 
 Needs the full engine importable, like ensure_indexed itself does (it
-unconditionally imports OllamaChatModel/Bm25LexicalIndex/CrossEncoderReranker
-before any of its own branching runs, regardless of which flags this test
-forces off). The monkeygrab.adapters import below is what lets
-tests/conftest.py's heuristic skip this file in the dependency-free fast
-gate, the same way it already skips tests/unit/adapters/*.
+unconditionally imports the MinerU/BM25/reranker adapters before any of its
+own branching runs, regardless of which flags this test forces off). The
+monkeygrab.adapters import below is what lets tests/conftest.py's heuristic
+skip this file in the dependency-free fast gate, the same way it already
+skips tests/unit/adapters/*.
 """
 
 import sys
@@ -134,10 +134,9 @@ def _stub_cache_hit_collaborators(monkeypatch, store, config):
         "monkeygrab.adapters.lexical.bm25_index.Bm25LexicalIndex",
         lambda *_a, **_kw: object(),
     )
-    monkeypatch.setattr("monkeygrab.application.answer.Answer", lambda *_a, **_kw: object())
+    monkeypatch.setattr("rag.engine.wiring.answer", lambda _store, _config: object())
     monkeypatch.setattr("monkeygrab.application.retrieve.Retrieve", _CapturingRetrieve)
     monkeypatch.setattr("rag.engine.wiring.query_decomposer", lambda _c: "decomposer-sentinel")
-    monkeypatch.setattr("rag.engine.wiring.rag_chat_model", lambda _c: object())
     _CapturingRetrieve.calls = []
 
 
@@ -184,3 +183,31 @@ def test_ensure_indexed_leaves_query_decomposer_off_when_the_flag_is_off(monkeyp
 
     assert _CapturingRetrieve.calls[0]["query_decomposer"] is None
     assert decomposer_calls == []
+
+
+def test_ensure_indexed_builds_evidence_through_wiring_answer(monkeypatch, tmp_path):
+    """Issue #260: the gate used to build Answer without a recomp_chat_model
+    while the product wires RECOMP through wiring.answer whenever the flag is
+    on. A test that only checks the returned triple's shape would still pass
+    that old bug."""
+    store = _PresentStore()
+    config = AppConfig().with_overrides(
+        **{
+            "flags.usar_embeddings_imagen": False,
+            "flags.usar_contextual_retrieval": False,
+            "flags.usar_reranker": False,
+            "flags.usar_llm_query_decomposition": False,
+        }
+    )
+    answer_calls = []
+    _stub_cache_hit_collaborators(monkeypatch, store, config)
+    monkeypatch.setattr(
+        "rag.engine.wiring.answer",
+        lambda answer_store, answer_config: answer_calls.append(
+            (answer_store, answer_config)) or object(),
+    )
+
+    _, evidence, _ = run_eval.ensure_indexed(_FakeRag(), tmp_path, ["paper.pdf"], "dev set")
+
+    assert evidence is not None
+    assert answer_calls == [(store, config)]
