@@ -10,18 +10,18 @@
   /* Semantic tokens — dark by default. [data-theme="light"] overrides them. */
   --color-surface: #1a1917;
   --color-surface-raised: #21201d;
-  --color-field: #141311;
+  --color-field: #100f0d;
   --color-ink: #e8e4dc;
   --color-ink-soft: #d2cec6;
   --color-ink-muted: #a09c93;
   --color-ink-faint: #6f6c64;
-  --color-edge: rgb(255 255 255 / 0.10);
-  --color-divider: rgb(255 255 255 / 0.18);
-  --color-brand: #f6b8d0;
+  --color-edge: rgb(255 255 255 / 0.14);
+  --color-divider: rgb(255 255 255 / 0.24);
+  --color-brand: #f087ad;
   --color-brand-contrast: #141311;
   --color-composer: #262421;
   --color-composer-border: rgb(255 255 255 / 0.14);
-  --color-raster: rgb(255 255 255 / 0.02);
+  --color-raster: rgb(255 255 255 / 0.028);
   --color-danger: #e4948c;
   --color-warning: #d9ab6a;
   --color-ok: #8fbf9a;
@@ -38,28 +38,28 @@
 [data-theme="dark"] {
   --color-surface: #1a1917;
   --color-surface-raised: #21201d;
-  --color-field: #141311;
+  --color-field: #100f0d;
   --color-ink: #e8e4dc;
   --color-ink-soft: #d2cec6;
   --color-ink-muted: #a09c93;
   --color-ink-faint: #6f6c64;
-  --color-edge: rgb(255 255 255 / 0.10);
-  --color-divider: rgb(255 255 255 / 0.18);
-  --color-brand: #f6b8d0;
+  --color-edge: rgb(255 255 255 / 0.14);
+  --color-divider: rgb(255 255 255 / 0.24);
+  --color-brand: #f087ad;
   --color-brand-contrast: #141311;
   --color-composer: #262421;
   --color-composer-border: rgb(255 255 255 / 0.14);
-  --color-raster: rgb(255 255 255 / 0.02);
+  --color-raster: rgb(255 255 255 / 0.028);
   --color-danger: #e4948c;
   --color-warning: #d9ab6a;
   --color-ok: #8fbf9a;
 }
 
 [data-theme="light"] {
-  --color-surface: #c7c5c0;
+  --color-surface: #cbc9c3;
   --color-surface-raised: #d6d3cc;
   --color-field: #bcbab3;
-  --color-ink: #1a191c;
+  --color-ink: #121114;
   --color-ink-soft: #333236;
   --color-ink-muted: #5c5a54;
   --color-ink-faint: #807d75;
@@ -131,7 +131,7 @@ body::after {
   border-radius: 1.6rem;
   background: var(--color-composer);
   border: 1px solid var(--color-composer-border);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 14px 48px rgba(0, 0, 0, 0.24);
 }
 
 .custom-scrollbar::-webkit-scrollbar {

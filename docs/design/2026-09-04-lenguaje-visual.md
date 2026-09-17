@@ -48,18 +48,19 @@ claro". Un token descriptivo miente en cuanto cambia el tema.
 
 | Token | Oscuro (por defecto) | Claro |
 |---|---|---|
-| `surface` | `#1a1917` | `#c7c5c0` |
+| `surface` | `#1a1917` | `#cbc9c3` |
 | `surface-raised` | `#21201d` | `#d6d3cc` |
-| `field` | `#141311` | `#bcbab3` |
-| `ink` | `#e8e4dc` | `#1a191c` |
+| `field` | `#100f0d` | `#bcbab3` |
+| `ink` | `#e8e4dc` | `#121114` |
 | `ink-soft` | `#d2cec6` | `#333236` |
 | `ink-muted` | `#a09c93` | `#5c5a54` |
 | `ink-faint` | `#6f6c64` | `#807d75` |
-| `edge` | `rgb(255 255 255 / 0.10)` | `rgb(0 0 0 / 0.12)` |
-| `divider` | `rgb(255 255 255 / 0.18)` | `rgb(0 0 0 / 0.22)` |
-| `brand` | `#f6b8d0` | `#b23a76` |
+| `edge` | `rgb(255 255 255 / 0.14)` | `rgb(0 0 0 / 0.12)` |
+| `divider` | `rgb(255 255 255 / 0.24)` | `rgb(0 0 0 / 0.22)` |
+| `brand` | `#f087ad` | `#b23a76` |
 | `composer` | `#262421` | `#dbd8d1` |
 | `composer-border` | `rgb(255 255 255 / 0.14)` | `rgb(0 0 0 / 0.18)` |
+| `raster` | `rgb(255 255 255 / 0.028)` | `rgb(0 0 0 / 0.028)` |
 
 Cuatro grados de tinta, no dos. La jerarquía de la interfaz se construye con
 `ink`, `ink-soft`, `ink-muted` e `ink-faint` sobre un fondo casi plano, en lugar

@@ -940,7 +940,7 @@ export default function App() {
         {/* Sidebar Header */}
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="MonkeyGrab" className="w-9 h-9 object-cover flex-shrink-0 grayscale" />
+            <img src="/logo.png" alt="MonkeyGrab" className="w-9 h-9 object-cover flex-shrink-0" />
             <h1 className="flex font-extrabold text-lg tracking-tight"><ShimmerText text="MonkeyGrab" /></h1>
           </div>
           <button className="md:hidden text-ink-faint hover:text-ink transition-colors bg-field p-2 rounded-full" onClick={() => setIsSidebarOpen(false)}>
