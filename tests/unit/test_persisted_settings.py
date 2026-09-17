@@ -50,6 +50,8 @@ def data_dir(monkeypatch, tmp_path):
     for variable in rag_engine.MODEL_ROLE_ENV_VARS.values():
         monkeypatch.delenv(variable, raising=False)
     monkeypatch.delenv("DOCS_FOLDER", raising=False)
+    for flag_var in settings.PERSISTED_FLAGS + ("LOGGING_METRICAS", "GUARDAR_DEBUG_RAG"):
+        monkeypatch.delenv(flag_var, raising=False)
     return tmp_path
 
 
@@ -209,8 +211,6 @@ def test_saving_then_loading_reproduces_the_active_configuration(data_dir):
     assert rag_engine.USAR_RECOMP_SYNTHESIS is False
 
 
-
-
 def test_every_role_declares_the_variable_that_pins_it():
     """A role missing from MODEL_ROLE_ENV_VARS would silently lose its env override."""
     assert set(rag_engine.MODEL_ROLE_ENV_VARS) == set(rag_engine.MODEL_ROLE_VARS)
@@ -278,3 +278,52 @@ def test_restaurar_roles_y_flags_por_defecto_undoes_a_settings_json_style_mutati
     assert rag_engine.MODELO_DESC == rag_engine._inferir_descripcion_modelo(rag_engine._DEFAULT_MODEL_ROLES["rag"])
     for flag, default in rag_engine._DEFAULT_PIPELINE_FLAGS.items():
         assert getattr(rag_engine, flag) is default
+
+
+def test_the_environment_outranks_a_saved_flag(data_dir, monkeypatch):
+    """An exported USAR_RERANKER=False survives; flags it does not name still follow the file.
+
+    Mirrors ``test_the_environment_outranks_a_saved_role``: the export
+    describes this run, the file an earlier one.
+    """
+    monkeypatch.setenv("USAR_RERANKER", "False")
+    monkeypatch.setattr(rag_engine, "USAR_RERANKER", False)
+    _save(data_dir, flags={"USAR_RERANKER": True, "USAR_BUSQUEDA_HIBRIDA": False})
+
+    settings.cargar_ajustes_persistidos()
+
+    assert rag_engine.USAR_RERANKER is False
+    assert rag_engine.USAR_BUSQUEDA_HIBRIDA is False
+
+
+def test_save_does_not_erase_a_flag_the_environment_is_pinning(data_dir, monkeypatch):
+    """Same contract as issue #79 for roles, applied to flags.
+
+    Sequence: env pins the reranker off, settings.json records the user's
+    pick (on), load (runtime follows the env), save. The file must still
+    record the user's pick so unsetting the variable restores it.
+    """
+    monkeypatch.setenv("USAR_RERANKER", "False")
+    monkeypatch.setattr(rag_engine, "USAR_RERANKER", False)
+    _save(data_dir, flags={"USAR_RERANKER": True})
+
+    settings.cargar_ajustes_persistidos()
+    settings.guardar_ajustes_persistidos()
+
+    on_disk = json.loads((Path(data_dir) / "settings.json").read_text(encoding="utf-8"))
+    assert on_disk["flags"]["USAR_RERANKER"] is True
+    assert rag_engine.USAR_RERANKER is False
+
+
+def test_save_does_not_freeze_an_env_override_as_a_stored_choice(data_dir, monkeypatch):
+    """No prior pick for a pinned flag: omit it rather than persist the override."""
+    monkeypatch.setenv("USAR_RERANKER", "False")
+    monkeypatch.setattr(rag_engine, "USAR_RERANKER", False)
+    _save(data_dir, flags={"USAR_BUSQUEDA_HIBRIDA": True})
+
+    settings.cargar_ajustes_persistidos()
+    settings.guardar_ajustes_persistidos()
+
+    on_disk = json.loads((Path(data_dir) / "settings.json").read_text(encoding="utf-8"))
+    assert "USAR_RERANKER" not in on_disk["flags"]
+    assert on_disk["flags"]["USAR_BUSQUEDA_HIBRIDA"] is True

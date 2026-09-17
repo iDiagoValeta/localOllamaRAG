@@ -119,6 +119,30 @@ def _store_a_persistir(on_disk: dict) -> str:
     return _nombre_store_activo()
 
 
+def _flags_a_persistir(on_disk: dict) -> dict:
+    """Effective flags, except any the environment is pinning this run.
+
+    Same contract as ``_roles_a_persistir`` (issue #79) applied to the
+    ``USAR_*`` binding: writing the env override back would replace the
+    user's stored pick with it, so the choice is gone when the variable is
+    unset. Keep the on-disk value when there is one; omit the flag when
+    there is not, rather than freeze the override as if the user had
+    chosen it.
+    """
+    flags = {var: bool(getattr(cfg, var, False)) for var in PERSISTED_FLAGS}
+    saved = on_disk.get("flags")
+    saved = saved if isinstance(saved, dict) else {}
+    for var in list(flags):
+        if os.getenv(var) is None:
+            continue
+        previous = saved.get(var)
+        if isinstance(previous, bool):
+            flags[var] = previous
+        else:
+            flags.pop(var, None)
+    return flags
+
+
 def guardar_ajustes_persistidos() -> None:
     """Write the active model roles, store and pipeline flags to the settings file."""
     try:
@@ -126,7 +150,7 @@ def guardar_ajustes_persistidos() -> None:
         data = {
             "roles": _roles_a_persistir(on_disk),
             "active_store": _store_a_persistir(on_disk),
-            "flags": {var: bool(getattr(cfg, var, False)) for var in PERSISTED_FLAGS},
+            "flags": _flags_a_persistir(on_disk),
         }
         ruta = ruta_ajustes()
         os.makedirs(os.path.dirname(ruta), exist_ok=True)
@@ -199,9 +223,14 @@ def _aplicar_store(nombre: Any) -> None:
 
 
 def _aplicar_flags(flags: Any) -> None:
-    """Apply saved pipeline flags, ignoring any name outside PERSISTED_FLAGS."""
+    """Apply saved pipeline flags, ignoring any name outside PERSISTED_FLAGS.
+
+    A flag the environment pins for this run keeps its exported value: the
+    export describes this run, the file an earlier one (same precedence as
+    ``_aplicar_roles``).
+    """
     if not isinstance(flags, dict):
         return
     for var, valor in flags.items():
-        if var in PERSISTED_FLAGS:
+        if var in PERSISTED_FLAGS and os.getenv(var) is None:
             setattr(cfg, var, bool(valor))

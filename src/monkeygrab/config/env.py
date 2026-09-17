@@ -85,6 +85,34 @@ def read_env_float(name: str, default: float) -> float:
         raise ValueError(f"Invalid float for {name}: {raw!r}") from exc
 
 
+def read_env_bool(name: str, default: bool) -> bool:
+    """Read a boolean environment variable, or ``default`` if unset.
+
+    Accepts ``true``/``false``, ``1``/``0``, ``yes``/``no``, ``y``/``n`` and
+    ``on``/``off`` (case-insensitive, surrounding whitespace ignored), the
+    spellings the rest of the codebase already uses for ad-hoc flag parsing.
+
+    Args:
+        name: Environment variable name.
+        default: Value to use when ``name`` is unset.
+
+    Returns:
+        The parsed boolean.
+
+    Raises:
+        ValueError: If ``name`` is set but not a recognized boolean spelling.
+    """
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    normalized = raw.strip().lower()
+    if normalized in ("1", "true", "yes", "y", "on"):
+        return True
+    if normalized in ("0", "false", "no", "n", "off"):
+        return False
+    raise ValueError(f"Invalid boolean for {name}: {raw!r}")
+
+
 def read_env_str(name: str, default: str) -> str:
     """Read a string environment variable, or ``default`` if unset.
 

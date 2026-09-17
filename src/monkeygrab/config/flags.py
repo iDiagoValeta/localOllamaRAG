@@ -1,14 +1,19 @@
 """PipelineFlagsConfig -- togglable pipeline stages.
 
-Defaults copy ``rag/chat_pdfs.py`` section 3.4 literally: every flag there
-is a hardcoded ``True``, not read from the environment at all -- so
-``AppConfig.from_env`` does not read any env var for this section either,
-it just sets the same literals. (``rag/chat_pdfs.py``'s ``set_pipeline_flags``
-only lets a subset -- the ones marked "runtime" below -- change after
-startup; index-time flags require a fresh vector store to compare fairly.
-``AppConfig.with_overrides`` does not enforce that split: unlike the mutable
-module-global it replaces, overriding an index-time flag here cannot corrupt
-already-running state -- it just produces a new, distinct ``AppConfig``.)
+Defaults copy ``rag/chat_pdfs.py`` section 3.4 literally. Each flag is also
+bound to its ``USAR_*`` (``EXPANDIR_CONTEXTO``, ``LOGGING_METRICAS``,
+``GUARDAR_DEBUG_RAG``) environment variable: when the variable is set it
+wins for that process, when it is unset the default below stands -- so an
+explicit export changes behaviour only for the process that declares it, and
+nothing about the defaults moved (AGENTS.md rule 6). ``rag/chat_pdfs.py``
+binds the same variables onto its own globals at import, which is what keeps
+``AppConfig.from_env()`` and the ``chat_pdfs``-backed runtime in agreement.
+``rag/chat_pdfs.py``'s ``set_pipeline_flags`` only lets a subset -- the ones
+marked "runtime" below -- change after startup; index-time flags require a
+fresh vector store to compare fairly. ``AppConfig.with_overrides`` does not
+enforce that split: unlike the mutable module-global it replaces, overriding
+an index-time flag here cannot corrupt already-running state -- it just
+produces a new, distinct ``AppConfig``.)
 """
 
 from dataclasses import dataclass

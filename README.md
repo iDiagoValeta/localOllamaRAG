@@ -252,14 +252,13 @@ carry over to `python -m rag.headless`.
 Two consequences for operators (notably Daimon, which launches this service
 per project):
 
-- **Pipeline flags (`USAR_*`) have no environment binding.** They default to
-  on (figure descriptions excepted) and only the web UI can change them,
-  which headless ignores — so exporting `USAR_RERANKER=False` does nothing
-  today. Until flag-from-env wiring lands here (and Daimon's launcher forwards
-  `USAR_*` through its scoped environment, which it currently drops), the 8 GB
-  levers that do work over env are `RERANKER_DEVICE=cpu` (reranker off the GPU,
-  slower per query) and `OLLAMA_KEEP_ALIVE=0` (generator weights released
-  instead of held in VRAM between calls).
+- **Pipeline flags (`USAR_*`) are bound from the environment.** They default
+  to on (figure descriptions excepted), and an explicit export wins for that
+  process — so `USAR_RERANKER=False` in the headless process actually turns
+  the reranker off. The 8 GB levers that work over env are therefore
+  `USAR_RERANKER=False` (no BGE weights held at all), `RERANKER_DEVICE=cpu`
+  (reranker off the GPU, slower per query) and `OLLAMA_KEEP_ALIVE=0`
+  (generator weights released instead of held in VRAM between calls).
 - **Stores are pinned per process.** The first request for a store id binds it
   to that request's (`docs_folder`, `data_dir`); reusing the id with different
   paths fails with `409 store_conflict`, and a second index run while one is in
