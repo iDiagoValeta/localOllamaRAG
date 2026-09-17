@@ -35,7 +35,7 @@ export function ModelSelect({
         type="button"
         disabled={disabled}
         onClick={() => setOpen(o => !o)}
-        className="flex w-full items-center justify-between gap-2 rounded-xl border border-edge bg-field px-2.5 py-2 text-xs text-ink transition-colors hover:border-divider focus:border-divider focus:outline-none disabled:opacity-50"
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-edge bg-field px-2.5 py-2 text-xs text-ink transition-colors hover:border-divider focus:border-divider focus:outline-none focus-visible:ring-1 focus-visible:ring-divider disabled:opacity-50"
       >
         <span className="truncate">{value || '—'}</span>
         <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 text-ink-faint transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -56,7 +56,7 @@ export function ModelSelect({
                   <button
                     type="button"
                     onClick={() => { onChange(name); setOpen(false); }}
-                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors ${
+                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-divider ${
                       selected ? 'bg-surface text-ink font-medium' : 'text-ink-soft hover:bg-surface hover:text-ink'
                     }`}
                   >

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Database, FileUp, Loader2, Ollama,
   Power, RefreshCw, X,
@@ -70,6 +70,13 @@ export function SettingsOverlay({
   handleReindex,
   strings,
 }: SettingsOverlayProps) {
+  // Same pattern as PdfPane: Escape closes the overlay.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   const renderModelsPanel = () => (
     <div className="mx-auto w-full max-w-4xl space-y-4">
       {/* Ollama server status */}
@@ -253,7 +260,7 @@ export function SettingsOverlay({
         <button
           type="button"
           onClick={onClose}
-          className="p-2 text-ink-muted hover:text-ink bg-field hover:bg-surface border border-edge rounded-lg transition-colors flex-shrink-0"
+          className="p-2 text-ink-muted hover:text-ink bg-field hover:bg-surface border border-edge rounded-lg transition-colors flex-shrink-0 focus:outline-none focus-visible:ring-1 focus-visible:ring-divider"
           title={strings.close}
           aria-label={strings.close}
         >

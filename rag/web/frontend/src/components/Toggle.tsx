@@ -4,7 +4,7 @@ export function Toggle({ label, checked, onChange, desc }: { label: string; chec
       type="button"
       role="switch"
       aria-checked={checked}
-      className="flex w-full items-center justify-between gap-4 rounded-lg p-2 text-left transition-colors hover:bg-surface-raised focus:outline-none focus:ring-1 focus:ring-edge group"
+      className="flex w-full items-center justify-between gap-4 rounded-lg p-2 text-left transition-colors hover:bg-surface-raised focus:outline-none focus-visible:ring-1 focus-visible:ring-edge group"
       onClick={onChange}
     >
       <span className="flex-1">

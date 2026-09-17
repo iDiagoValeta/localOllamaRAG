@@ -10,7 +10,7 @@ export function LanguageToggle({ lang, setLang }: { lang: Lang; setLang: (lang: 
         <button
           key={option.code}
           type="button"
-          className={`w-9 text-center px-1 py-1 text-[10px] font-bold tracking-wide rounded transition-all ${
+          className={`w-9 text-center px-1 py-1 text-[10px] font-bold tracking-wide rounded transition-all focus:outline-none focus-visible:ring-1 focus-visible:ring-divider ${
             lang === option.code
               ? 'bg-surface-raised text-ink'
               : 'text-ink-muted hover:text-ink'
