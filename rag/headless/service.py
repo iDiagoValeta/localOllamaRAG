@@ -102,8 +102,14 @@ class StoreRegistry:
 
 
 def config_for(paths: StorePaths) -> AppConfig:
-    """The process's environment config with this store's paths substituted."""
-    return AppConfig.from_env().with_overrides(
+    """The process's runtime config with this store's paths substituted.
+
+    Starts from ``wiring.app_config_from_runtime()`` (environment plus the
+    live ``rag.chat_pdfs`` globals) rather than a bare ``AppConfig.from_env()``,
+    so the store opens under the same models, flags and chunking the engine
+    entry points themselves read (issue #262). Only the two path fields differ.
+    """
+    return wiring.app_config_from_runtime().with_overrides(
         **{"paths.docs_folder": paths.docs_folder, "paths.data_dir": paths.data_dir}
     )
 

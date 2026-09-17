@@ -347,15 +347,15 @@ def ensure_indexed(
     Raises:
         EvalSetupError: A required PDF is still missing after indexing.
     """
-    from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel
+    from monkeygrab.adapters.extraction.by_suffix_extractor import PdfOnlyImageExtractor
     from monkeygrab.adapters.extraction.mineru_extractor import MineruImageExtractor
     from monkeygrab.adapters.lexical.bm25_index import Bm25LexicalIndex
     from monkeygrab.adapters.reranking.cross_encoder_reranker import CrossEncoderReranker
-    from monkeygrab.application.answer import Answer
     from monkeygrab.application.index_corpus import IndexCorpus
     from monkeygrab.application.index_fingerprint import compute_index_fingerprint
     from monkeygrab.application.retrieve import Retrieve
     from monkeygrab.composition import build_stack
+    from rag.engine import wiring
 
     required = set(required_pdfs)
     rag.set_docs_folder_runtime(str(carpeta))
@@ -385,17 +385,23 @@ def ensure_indexed(
         else:
             print(f"[index] {label}: indexing {len(missing)} missing paper(s): {missing}")
             t0 = time.perf_counter()
+            # Built exactly like rag/engine/indexing.py builds them (issue
+            # #259): wiring.chat_model_for_role honours the OpenAI backends
+            # and endpoint the bare OllamaChatModel this used before ignored,
+            # and the PdfOnly wrapper keeps text files out of MinerU like the
+            # product does.
             image_extractor = None
             if config.flags.usar_embeddings_imagen:
-                image_extractor = MineruImageExtractor()
+                image_extractor = PdfOnlyImageExtractor(MineruImageExtractor())
             contextual_model = None
             if config.flags.usar_contextual_retrieval:
                 ollama = config.models.ollama
-                contextual_model = OllamaChatModel(
-                    config.models.contextual,
+                contextual_model = wiring.chat_model_for_role(
+                    config, "contextual",
+                    options={"temperature": 0.1, "num_predict": 250},
                     num_ctx=ollama.contextual_num_ctx,
                     keep_alive=ollama.keep_alive,
-                    options={"temperature": 0.1, "num_predict": 250},
+                    generation_deadline=0,
                 )
             # Same wiring the product's indexing path uses (rag/engine/
             # indexing.py): the vision-capable "chat" role describes each
@@ -403,11 +409,12 @@ def ensure_indexed(
             image_describer = None
             if config.flags.usar_descripcion_imagen:
                 ollama = config.models.ollama
-                image_describer = OllamaChatModel(
-                    config.models.chat,
+                image_describer = wiring.chat_model_for_role(
+                    config, "chat",
+                    options={"temperature": 0.1, "num_predict": 400},
                     num_ctx=ollama.query_num_ctx,
                     keep_alive=ollama.keep_alive,
-                    options={"temperature": 0.1, "num_predict": 400},
+                    generation_deadline=0,
                 )
             indexer = IndexCorpus(
                 stack.extractor,
@@ -434,8 +441,6 @@ def ensure_indexed(
         # index. A half-built store keeps its old (or absent) value and gets
         # rebuilt on the next run.
         store.write_fingerprint(expected_fingerprint)
-
-        from rag.engine import wiring
 
         lexical = Bm25LexicalIndex(store, config.retrieval)
         # Reranking runs on whatever device the adapter detects, which is CUDA
@@ -473,7 +478,11 @@ def ensure_indexed(
         # character budget first. Building the same use case here is what keeps
         # this runner from grading answers written off evidence no user's query
         # would have produced.
-        evidence = Answer(store, wiring.rag_chat_model(config), config)
+        # Wired through wiring.answer (issue #260), the same constructor the
+        # product uses: with usar_recomp_synthesis on (the default) the
+        # evidence stage runs the RECOMP synthesis the gate used to skip by
+        # building Answer without a recomp_chat_model.
+        evidence = wiring.answer(store, config)
 
         print(
             f"[index] {label}: stack=mineru-jina_clip-faiss chunks={store.count()}",
@@ -587,6 +596,15 @@ def _eval_app_config(
             "flags.usar_recomp_synthesis": rag.USAR_RECOMP_SYNTHESIS,
         }
     )
+    # Divergence from the product, kept deliberately (issue #264): the
+    # product indexes with contextual enrichment by default
+    # (flags default True) while this gate measures without it. The
+    # fingerprint is computed over this same config, so the gate is
+    # internally consistent -- but it does not exercise the contextual path
+    # any user runs, and a change breaking that path still passes. Removing
+    # this override flips a measured pipeline flag (different index recipe,
+    # full reindex, incomparable pass rates), so per AGENTS.md section 1
+    # rule 6 it needs explicit agreement first; document, do not flip.
     config = config.with_overrides(**{"flags.usar_contextual_retrieval": False})
     if path_label is not None:
         path_db, collection_name = derive_db_paths(str(path_label), config.paths.data_dir)
@@ -2171,7 +2189,7 @@ def evaluate(
     if role_backends.chat_backend == "ollama":
         required_models.add(AUX_MODEL)
     # An overridden models.contextual is otherwise invisible to preflight:
-    # ensure_indexed builds an OllamaChatModel from it unconditionally once
+    # ensure_indexed builds it via wiring.chat_model_for_role once
     # flags.usar_contextual_retrieval is on, and IndexCorpus swallows that
     # call's failure (an unpulled model raises there) into an empty
     # situational-context string instead of aborting -- then writes a
