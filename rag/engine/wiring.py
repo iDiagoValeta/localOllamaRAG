@@ -143,7 +143,9 @@ def chat_model_for_role(
         num_ctx: Context window (Ollama only; OpenAI servers own theirs).
         keep_alive: VRAM residency after the call (Ollama only).
         generation_deadline: Wall-clock cap in seconds, ``0`` for none
-            (Ollama only; the OpenAI adapter is bounded by its timeout).
+            (Ollama only; on the OpenAI backend it caps ``timeout`` instead:
+            the adapter is bounded by ``min(timeout, generation_deadline)``,
+            since the OpenAI API has no per-call deadline of its own).
         model_unloader: Ollama VRAM unloader for the role that runs last,
             or ``None``.
 
@@ -155,12 +157,15 @@ def chat_model_for_role(
     model = getattr(config.models, role)
     if getattr(config.models, f"{role}_backend") == "openai":
         openai = config.models.openai
+        timeout = openai.timeout
+        if generation_deadline:
+            timeout = min(timeout, generation_deadline)
         return OpenAICompatChatModel(
             model,
             base_url=openai.base_url,
             api_key=openai.api_key,
             options=openai_options_from_ollama(options),
-            timeout=openai.timeout,
+            timeout=timeout,
         )
     ollama = config.models.ollama
     return OllamaChatModel(

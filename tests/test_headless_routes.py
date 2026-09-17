@@ -139,11 +139,12 @@ def test_rag_streams_tokens_then_done():
 
 def test_rag_without_stream_returns_json():
     events = [("token", {"token": "Ho"}), ("token", {"token": "la"}),
-              ("done", {"done": True, "sources": [], "metrics": {}})]
+              ("done", {"done": True, "sources": [], "metrics": {"fase_contexto": {}}})]
     resp = _client(service=_service(events=events)).post(
         "/stores/cv1/rag", json={**PATHS, "message": "¿Qué dice el documento?", "stream": False}
     )
-    assert resp.get_json() == {"ok": True, "response": "Hola", "sources": []}
+    assert resp.get_json() == {"ok": True, "response": "Hola", "sources": [],
+                               "metrics": {"fase_contexto": {}}}
 
 
 def test_rag_no_results_is_a_200_with_ok_false():

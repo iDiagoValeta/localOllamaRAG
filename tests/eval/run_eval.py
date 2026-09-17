@@ -1309,7 +1309,7 @@ def run_all_cases(
     twenty-minute one.
 
     The cost is memory: every case's retrieved fragments are held until the
-    generation phase. At 51 cases and a handful of fragments each, that is
+    generation phase. With a handful of fragments per case, that is
     kilobytes.
 
     Args:

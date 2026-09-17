@@ -120,13 +120,24 @@ def create_app(
         stream = raw_stream
         try:
             events: Iterator[Tuple[str, Dict[str, Any]]] = service.answer_stream(paths, question)
-            first = next(events, None)
         except QuestionTooShort:
             return jsonify({"ok": False, "error": "question_too_short",
                             "message": "Pregunta demasiado corta. Formula una pregunta concreta."}), 400
         except Exception as exc:
             logging.exception("retrieval failed for store %s", store_id)
             return jsonify({"ok": False, "error": "retrieval_failed", "message": str(exc)}), 502
+        try:
+            first = next(events, None)
+        except QuestionTooShort:
+            return jsonify({"ok": False, "error": "question_too_short",
+                            "message": "Pregunta demasiado corta. Formula una pregunta concreta."}), 400
+        except Exception as exc:
+            # The service is a lazy generator: this first pull drives both
+            # retrieval and the first generated token, so a failure here
+            # cannot be attributed to retrieval alone. A neutral kind keeps
+            # Daimon from reindexing on what may be a model failure.
+            logging.exception("rag failed for store %s", store_id)
+            return jsonify({"ok": False, "error": "rag_failed", "message": str(exc)}), 502
         if first is None or first[0] == "no_results":
             return jsonify({"ok": False, "error": "no_results",
                             "message": "No se encontró información relevante en los documentos."}), 200
@@ -149,15 +160,17 @@ def create_app(
 
         text = ""
         sources: Any = []
+        metrics: Dict[str, Any] = {}
         try:
             for kind, payload in replay():
                 if kind == "token":
                     text += payload["token"]
                 elif kind == "done":
                     sources = payload["sources"]
+                    metrics = payload.get("metrics", {})
         except Exception as exc:
             logging.exception("generation failed for store %s", store_id)
             return jsonify({"ok": False, "error": "generation_failed", "message": str(exc)}), 502
-        return jsonify({"ok": True, "response": text, "sources": sources})
+        return jsonify({"ok": True, "response": text, "sources": sources, "metrics": metrics})
 
     return app

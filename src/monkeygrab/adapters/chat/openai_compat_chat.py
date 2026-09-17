@@ -35,6 +35,11 @@ class OpenAICompatChatModel:
 
     Not subclassed from ``monkeygrab.ports.chat_model.ChatModel``: conformance
     is structural, like every other adapter in this package.
+
+    Ollama's ``generation_deadline`` has no OpenAI equivalent and is ignored
+    here: this adapter is bounded only by ``timeout``. Callers that take a
+    deadline (``rag.engine.wiring.chat_model_for_role``) pass
+    ``min(timeout, generation_deadline)`` as the timeout instead.
     """
 
     def __init__(
