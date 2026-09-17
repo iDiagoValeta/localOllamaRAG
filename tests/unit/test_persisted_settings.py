@@ -315,7 +315,7 @@ def test_save_does_not_erase_a_flag_the_environment_is_pinning(data_dir, monkeyp
     assert rag_engine.USAR_RERANKER is False
 
 
-def test_save_does_not_freeze_an_env_override_as_a_stored_choice(data_dir, monkeypatch):
+def test_save_does_not_freeze_a_flag_override_as_a_stored_choice(data_dir, monkeypatch):
     """No prior pick for a pinned flag: omit it rather than persist the override."""
     monkeypatch.setenv("USAR_RERANKER", "False")
     monkeypatch.setattr(rag_engine, "USAR_RERANKER", False)
