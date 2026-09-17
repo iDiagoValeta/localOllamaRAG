@@ -267,5 +267,55 @@ def test_only_the_last_of_several_query_variants_unloads_the_embedding_model():
     assert embedder.keep_alive_calls == [None, None, 0]
 
 
+def _named_doc_setup():
+    """Two-document fusion where the lexical+semantic consensus favors notes.
+
+    Semantic ranks overview-doc first in both query variants, but notes also
+    ranks second semantically AND first lexically, so plain RRF fusion puts
+    notes on top. Naming overview-doc.pdf in the question must flip that.
+    """
+    overview = _fragment("overview-doc.pdf_pag0_chunk0")
+    notes = _fragment("notes.md_pag0_chunk0")
+    sem_hits = [overview, notes]
+    embedder = FakeEmbedder()
+    store = FakeVectorStore(hits_by_call=[list(sem_hits), list(sem_hits)])
+    lexical = FakeLexicalIndex(hits=[notes])
+    # Reranker off so the threshold filter (which falls back to score_final
+    # when nothing was reranked) does not empty these small RRF scores.
+    config = _config(**{"flags.usar_reranker": False})
+    return embedder, store, lexical, config
+
+
+def test_naming_a_document_boosts_it_above_the_fusion_winner():
+    embedder, store, lexical, config = _named_doc_setup()
+
+    result = Retrieve(embedder, store, config, lexical_index=lexical).run(
+        "What does overview-doc.pdf say about the topic?"
+    )
+
+    assert [f.id for f in result.fragments] == [
+        "overview-doc.pdf_pag0_chunk0",
+        "notes.md_pag0_chunk0",
+    ]
+    assert result.metrics["filename_mentioned"] == ["overview-doc.pdf"]
+
+
+def test_a_generic_word_matching_part_of_a_filename_boosts_nothing():
+    """'overview' alone must not name 'overview-doc.pdf': only the full
+    filename or its whole stem counts, so ordinary vocabulary cannot hijack
+    the ranking of an unrelated corpus."""
+    embedder, store, lexical, config = _named_doc_setup()
+
+    result = Retrieve(embedder, store, config, lexical_index=lexical).run(
+        "Give me an overview of the whole topic here"
+    )
+
+    assert [f.id for f in result.fragments] == [
+        "notes.md_pag0_chunk0",
+        "overview-doc.pdf_pag0_chunk0",
+    ]
+    assert result.metrics["filename_mentioned"] == []
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))

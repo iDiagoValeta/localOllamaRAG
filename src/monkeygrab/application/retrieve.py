@@ -18,8 +18,9 @@ directly. Neither can drift from the other.
 """
 
 import dataclasses
+import re
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Collection, Dict, List, Optional, Set
 
 from monkeygrab.application.keywords import extract_keywords, is_coherent_query
 from monkeygrab.application.rrf_fusion import fuse_semantic_and_keyword
@@ -194,6 +195,87 @@ def _branch_counts(fused: List[Fragment]) -> Dict[str, int]:
     }
 
 
+# Multiplier applied to the fused score of fragments whose document the
+# question names explicitly (e.g. "Según DAIMON-Overview.pdf, ...").
+# Scale-free on purpose: it survives an RRF_K/weight retune, unlike an
+# additive bonus in RRF units. Value 2.0 puts a named document's best
+# fragments above dual-branch competitors without reordering anything else.
+_FILENAME_MENTION_BOOST = 2.0
+
+# Stems shorter than this never trigger the boost on their own: a stem like
+# "a" or "io" is a substring of almost every question. The full filename
+# (extension included) has no such guard -- "io.pdf" is specific enough.
+_FILENAME_STEM_MIN_LEN = 4
+
+
+def _mentioned_sources(question: str, sources: Collection[str]) -> Set[str]:
+    """Return the fused sources the question names explicitly.
+
+    A source counts as named when the question contains its full filename
+    ("DAIMON-Overview.pdf") or its stem ("DAIMON-Overview", separators
+    normalized), case-insensitively. Single generic words never match: asking
+    for "an overview" does not name "DAIMON-Overview.pdf", but writing the
+    filename does. Deliberately substring-based rather than token-based, so a
+    garbled extraction (a PDF whose own chunks misspell its title) still
+    matches -- the filename is assigned at index time, not extracted.
+
+    Args:
+        question: The original user question.
+        sources: Distinct document names in the fused candidate set.
+
+    Returns:
+        The subset of ``sources`` the question names.
+    """
+    lowered = question.lower()
+    normalized_question = re.sub(r"[^a-z0-9]+", " ", lowered)
+    mentioned = set()
+    for source in sources:
+        name = source.lower()
+        if name and name in lowered:
+            mentioned.add(source)
+            continue
+        stem = name.rsplit(".", 1)[0] if "." in name else name
+        normalized_stem = re.sub(r"[^a-z0-9]+", " ", stem).strip()
+        if len(stem) >= _FILENAME_STEM_MIN_LEN and normalized_stem and normalized_stem in normalized_question:
+            mentioned.add(source)
+    return mentioned
+
+
+def _boost_filename_mentions(question: str, fused: List[Fragment]) -> Set[str]:
+    """Upweight fused fragments from explicitly named documents, in place order.
+
+    Naming a file is the strongest relevance signal a question can carry, and
+    neither retrieval branch honors it: BM25 matches chunk text (a scanned
+    title can garble the very words the filename holds), and the embedding
+    measures prose similarity, not filename identity. Without this, a
+    filename-anchored question over a corpus where one document dominates the
+    vocabulary retrieves only the dominant document.
+
+    The boost is a no-op when the question names nothing: scores and order
+    are untouched, which is what keeps the existing characterization fixtures
+    (generic questions, synthetic filenames) pinned.
+
+    Args:
+        question: The original user question.
+        fused: Fragments after RRF fusion, best-first. Re-sorted in place
+            when a document is named (a stable sort, so ties keep fusion
+            order and fragments within a document keep their relative order).
+
+    Returns:
+        The named sources, empty when the question names none.
+    """
+    if not fused:
+        return set()
+    mentioned = _mentioned_sources(question, {f.metadata.source for f in fused})
+    if not mentioned:
+        return mentioned
+    for i, frag in enumerate(fused):
+        if frag.metadata.source in mentioned:
+            fused[i] = dataclasses.replace(frag, score_final=frag.score_final * _FILENAME_MENTION_BOOST)
+    fused.sort(key=lambda f: f.score_final, reverse=True)
+    return mentioned
+
+
 class Retrieve:
     """Query decomposition (opt.) -> semantic + lexical search -> RRF fusion
     -> reranking (opt.) -> reranker-threshold filter.
@@ -287,6 +369,7 @@ class Retrieve:
             retrieval.weight_bm25_rrf,
         )
         fused_candidates = len(fused)
+        mentioned_sources = _boost_filename_mentions(question, fused)
         branch_counts = _branch_counts(fused)
 
         reranked = False
@@ -319,6 +402,7 @@ class Retrieve:
             "rerank_seconds": rerank_seconds,
             "candidates_above_threshold": len(filtered),
             "final_count": len(final_fragments),
+            "filename_mentioned": sorted(mentioned_sources),
         }
         return RetrieveResult(fragments=final_fragments, metrics=metrics)
 
