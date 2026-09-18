@@ -15,6 +15,7 @@ from flask import Flask, Response, abort, jsonify, request, stream_with_context
 # module-level side effect, so it must be the first project import here.
 import rag.chat_pdfs  # noqa: F401
 from monkeygrab.config.app_config import AppConfig
+from rag.engine import wiring
 from rag.headless import health as health_module
 from rag.headless import service as service_module
 from rag.headless.service import QuestionTooShort, StoreBusy, StoreConflict, StorePaths, StoreRegistry
@@ -83,7 +84,7 @@ def create_app(
 
     @app.get("/health")
     def get_health():
-        report = health(AppConfig.from_env())
+        report = health(wiring.app_config_from_runtime())
         return jsonify(report.to_dict()), (200 if report.ok else 503)
 
     @app.post("/stores/<store_id>/index")
