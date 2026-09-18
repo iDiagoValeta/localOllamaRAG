@@ -1,15 +1,20 @@
 """HTTP contract of the headless service, with the service functions doubled."""
 import json
+import os
+import subprocess
 import sys
 import threading
 import types
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 for path in (ROOT, ROOT / "src"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
+from rag.headless.__main__ import resolve_port
 from rag.headless.app import create_app
 from rag.headless.health import HealthReport
 from rag.headless.service import QuestionTooShort, StoreRegistry
@@ -231,3 +236,17 @@ def test_non_ascii_bearer_is_a_json_401():
     resp = client.get("/health", headers={"Authorization": "Bearer é"})
     assert resp.status_code == 401
     assert resp.get_json()["error"] == "unauthorized"
+
+
+def test_resolve_port_rejects_a_non_integer_with_a_usage_message():
+    with pytest.raises(SystemExit, match=r"must be an integer port, got 'abc'"):
+        resolve_port("abc")
+
+
+def test_headless_module_with_a_non_integer_port_exits_without_serving():
+    env = {**os.environ, "MONKEYGRAB_HEADLESS_PORT": "abc"}
+    proc = subprocess.run([sys.executable, "-m", "rag.headless"], capture_output=True,
+                          text=True, cwd=ROOT, env=env, timeout=120)
+    assert proc.returncode != 0
+    assert "MONKEYGRAB_HEADLESS_PORT must be an integer port, got 'abc'" in proc.stderr
+    assert "Traceback" not in proc.stderr
