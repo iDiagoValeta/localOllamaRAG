@@ -5,6 +5,8 @@ The operating contract for this repo — humans and agents alike — is
 a change must carry, and how issues and PRs are run. The documentation
 standard (what gets documented where) is [`docs/README.md`](docs/README.md).
 
+Detail standards: [code style](docs/standards/code-style.md), [comments](docs/standards/comments.md), [commits](docs/standards/commits.md), [branches](docs/standards/branches.md), [tests](docs/standards/tests.md), [security](docs/standards/security.md), [releases](docs/standards/releases.md). Index: [Standards](docs/standards/README.md).
+
 ## Setup
 
 ```bash
