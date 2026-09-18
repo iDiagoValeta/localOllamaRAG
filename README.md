@@ -245,8 +245,8 @@ its own model. Text files (`.txt`, `.md`) index alongside PDFs.
 Headless configuration is environment-only: it never reads the web UI's
 `settings.json` (only `rag/web/app.py` loads that file, at startup), so
 everything a headless process runs under comes from the environment — see
-[`.env.example`](.env.example) — or else from the code defaults in
-`rag/chat_pdfs.py`. A model or flag picked in the web control panel does not
+[`.env.example`](.env.example) — or else from the code defaults
+(`src/monkeygrab/config/app_config.py`). A model or flag picked in the web control panel does not
 carry over to `python -m rag.headless`.
 
 Two consequences for operators (notably Daimon, which launches this service
@@ -282,7 +282,10 @@ it never contacts the Ollama or OpenAI server, so a healthy `/health` says
 nothing about whether the model answers. Daimon should therefore treat the
 first `rag_failed` from `POST /stores/<id>/rag` as the generator signal
 (see the first-pull comment in `rag/headless/app.py`), not as a reason to
-reindex.
+reindex. The probe result is cached for 60 s
+(`rag/headless/health.py:_PROBE_CACHE_TTL_SECONDS`), keyed by role,
+backend and model, so polling never pays a torch/CUDA subprocess per
+request and a model switch re-probes immediately.
 
 `GET /stores/<id>/status` reports `stale:true` when the index fingerprint on
 disk disagrees with the configuration in force
