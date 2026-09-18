@@ -31,7 +31,9 @@ La ruta de producción combina cuatro tecnologías:
 
 No existen selectores de extractor, modelo de embeddings, almacén vectorial o
 reranker. Cambiar una de estas piezas exige una decisión de arquitectura, una
-evaluación completa y una modificación del punto de composición.
+evaluación completa y una modificación del punto de composición. Los
+selectores `MONKEYGRAB_<ROL>_BACKEND` eligen el backend de los roles de chat
+(`rag`, `chat`, `contextual`, `recomp`), no de estas piezas.
 
 Los pesos descargables de Jina CLIP v2 se distribuyen bajo
 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). Esta
@@ -46,8 +48,11 @@ Los fragmentos de tabla se etiquetan como `table`; el resto del contenido
 textual como `markdown`.
 
 Las figuras y gráficos se extraen como imágenes. Jina CLIP los representa
-directamente junto con su leyenda, si existe. No se genera una descripción
-intermedia con un modelo de visión.
+directamente junto con su leyenda, si existe. La descripción intermedia con
+un modelo de visión es optativa y está apagada por defecto
+(`USAR_DESCRIPCION_IMAGEN`, que requiere `USAR_EMBEDDINGS_IMAGEN`): cuando
+está activa, el modelo del rol `chat` describe cada figura y esa descripción
+se guarda como texto del fragmento.
 
 El enriquecimiento contextual es opcional. Cuando está activo, un modelo
 Ollama antepone a cada fragmento textual un resumen situacional. Las tablas
@@ -67,9 +72,12 @@ Reciprocal Rank Fusion combina ambas ramas. BGE vuelve a puntuar los candidatos,
 se aplica el umbral de relevancia y pueden añadirse fragmentos vecinos.
 Opcionalmente RECOMP sintetiza la evidencia antes de la generación.
 
-Ollama se usa para conversación, descomposición de consultas, enriquecimiento
-contextual, síntesis RECOMP y respuesta final. No se usa para extraer PDFs,
-generar embeddings, buscar vectores ni describir figuras.
+Ollama es el backend por defecto para conversación, descomposición de
+consultas, enriquecimiento contextual, síntesis RECOMP y respuesta final. Cada
+rol de chat admite `MONKEYGRAB_<ROL>_BACKEND` (`ollama` u `openai`). Ningún
+rol se usa para extraer PDFs, generar embeddings ni buscar vectores; la
+descripción de figuras solo ocurre cuando `USAR_DESCRIPCION_IMAGEN` está
+activa.
 
 ## Arquitectura hexagonal
 
@@ -130,8 +138,9 @@ un conjunto ciego de artículos de arXiv. Incluye preguntas factuales,
 recuperación de figuras y recuperación de tablas.
 
 El grader es determinista. El resultado solo es comparable con el baseline
-cuando usa el modelo generador calibrado y completa todos los casos. El baseline
-actual es `0.77`; solo puede subir mediante la opción explícita del runner.
+cuando usa el modelo generador calibrado y completa todos los casos. El suelo
+vive en `tests/eval/baseline_min_pass_rate.txt`; solo puede subir mediante la
+opción explícita del runner.
 
 Este sistema es un ratchet de medición, no un optimizador autónomo: detecta
 regresiones y registra mejoras, pero no modifica código ni prompts por sí solo.
@@ -146,3 +155,15 @@ regresiones y registra mejoras, pero no modifica código ni prompts por sí solo
 - BGE Reranker v2 M3 como único reranker.
 - Sin fallbacks silenciosos entre tecnologías.
 - Baselines ligados a una configuración comparable.
+
+## Enmienda 2026-09-18 (issue #285, correctiva: el código ya se había movido)
+
+- Descripción de figuras optativa vía `USAR_DESCRIPCION_IMAGEN` (apagada por
+  defecto, sigue el rol `chat`). Corrige los absolutos de §Indexación y
+  §Recuperación y respuesta, que la excluían.
+- Selectores de backend por rol de chat (`MONKEYGRAB_<ROL>_BACKEND`: `ollama`
+  u `openai`); el extractor, los embeddings, el almacén vectorial y el
+  reranker siguen sin selector.
+- Baseline sin cifra en este documento: el valor vive en
+  `tests/eval/baseline_min_pass_rate.txt` (0.77 aquí era deriva, el fichero
+  dice 0.82).
