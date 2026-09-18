@@ -80,7 +80,7 @@ with these.
 | `qwen3:30b-a3b` | 18 GB | 121 (89.0%) | 138 (88.5%) | 39.1 | **335** | 24.93 | 6 | 2 | **~70% CPU** | `20260911T171038Z` | 1 |
 | `gemma4:e2b` | 7.2 GB | 120 (88.2%) | 137 (87.8%) | 103.2 | 28 | 7.97 | 0 | 0 | GPU | `20260911T071629Z` | 1 |
 | `qwen3:8b` | 5.2 GB | 120 (88.2%) | 137 (87.8%) | 35.8 | 35 | 8.94 | 0 | 0 | **CPU offload** | `20260911T071629Z` | 1 |
-| `gemma4:e4b` *(shipped default)* | 9.6 GB | 119 (87.5%) | 136 (87.2%) | 59.9 | 28 | 11.84 | 0 | 0 | GPU | `20260911T094107Z` | 1 |
+| `gemma4:e4b` *(rag-role default as of 2026-09-18, see `src/monkeygrab/config/app_config.py`)* | 9.6 GB | 119 (87.5%) | 136 (87.2%) | 59.9 | 28 | 11.84 | 0 | 0 | GPU | `20260911T094107Z` | 1 |
 | `hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE` | 4.9 GB | 116 (85.3%) | 133 (85.3%) | 116.3 | 27 | 7.52 | 6 | 0 | GPU | `20260911T032105Z` | 2 |
 | `granite4:small-h` | 19 GB | 116 (85.3%) | 133 (85.3%) | 17.4 | 70 | 20.52 | 5 | 0 | **~72% CPU** | `20260911T171038Z` | 1 |
 | `hf.co/noctrex/Granite-4.0-H-Tiny-MXFP4_MOE-GGUF:...` | 4.2 GB | 112 (82.4%) | 129 (82.7%) | 116.9 | 72 | 7.15 | 6 | 2 | GPU | `20260911T032105Z` | 2 |
@@ -161,7 +161,8 @@ The top is not a ranking. `qwen3-coder-30b` leads by five cases over a
 three-way cluster at 119-120, and five cases is inside the measured noise of
 a single run (4-11 flips per model, net up to +5); it is also the model that
 led the 23-case table on 2026-09-01, which is weak evidence but not none.
-`gemma4:e2b`, `qwen3:8b` and the shipped default `gemma4:e4b` are separated
+`gemma4:e2b`, `qwen3:8b` and `gemma4:e4b` (the rag-role default as of
+2026-09-18) are separated
 by one case.
 
 Placement is the finding that cuts across the table. The best measured model
