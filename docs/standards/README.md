@@ -11,5 +11,5 @@ Short rules for working in this repo. `CONTRIBUTING.md` stays the entry point fo
 | [Tests](tests.md) | Where each test lives and which gate runs it. |
 | [Security](security.md) | Secrets, `.env`, headless token. |
 | [Releases](releases.md) | Merge flow and changelog note. |
-| [Pull requests](../..//CONTRIBUTING.md#pr-standard) | Kept in `CONTRIBUTING.md`. |
-| [Issues](../..//CONTRIBUTING.md#issue-standard) | Kept in `CONTRIBUTING.md`. |
+| [Pull requests](../../CONTRIBUTING.md#pr-standard) | Kept in `CONTRIBUTING.md`. |
+| [Issues](../../CONTRIBUTING.md#issue-standard) | Kept in `CONTRIBUTING.md`. |
