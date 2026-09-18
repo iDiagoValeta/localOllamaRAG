@@ -14,10 +14,11 @@ for path in (ROOT, ROOT / "src"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
+import rag.chat_pdfs
 from rag.headless.__main__ import resolve_port
 from rag.headless.app import create_app
 from rag.headless.health import HealthReport
-from rag.headless.service import QuestionTooShort, StoreRegistry
+from rag.headless.service import QuestionTooShort, StorePaths, StoreRegistry, config_for
 
 
 def _health(ok=True, reason=None):
@@ -199,6 +200,23 @@ def test_health_is_probed_with_the_process_config():
 
     _client(health=health).get("/health")
     assert len(seen) == 1 and seen[0].models is not None
+
+
+def test_health_sees_the_same_runtime_models_as_the_pipeline():
+    previous = rag.chat_pdfs.MODELO_RAG
+    rag.chat_pdfs.set_model_roles_runtime({"rag": "health-runtime-model"})
+    try:
+        seen = []
+
+        def health(config):
+            seen.append(config)
+            return _health()(config)
+
+        _client(health=health).get("/health")
+        pipeline = config_for(StorePaths("/d", "/x"))
+        assert seen[0].models.rag == "health-runtime-model" == pipeline.models.rag
+    finally:
+        rag.chat_pdfs.set_model_roles_runtime({"rag": previous})
 
 
 def test_concurrent_index_on_the_same_store_is_409():
