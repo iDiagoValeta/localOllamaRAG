@@ -32,9 +32,7 @@ live in an isolated `.venv-mineru/` interpreter — see the root `README.md`.
 
 ## Workflow
 
-1. Branch off `main`. Name it `<type>/issue-<n>-<slug>` where type is one of
-   `feat`, `fix`, `cleanup`, `probe`, `docs`; use `issue-0-<slug>` only when
-   there is genuinely no tracking issue (then open one first).
+1. Branch off `main`. Naming and scope rules: [Branches](docs/standards/branches.md).
 2. One concern per branch. If your working tree mixes two concerns, commit
    and PR them separately — review and revert both depend on it.
 3. Every change carries its own tests and its own doc updates in the same PR
@@ -48,11 +46,7 @@ live in an isolated `.venv-mineru/` interpreter — see the root `README.md`.
    ruff check .
    ```
 
-5. CI green → squash-merge → delete the branch. The squash subject follows
-   the repo's commit style: imperative mood, issue number in parentheses,
-   e.g. `Wire the eval gate's query decomposer the same way the product does (#64)`.
-   The body explains why, not what; durable references (`#NNN`, measured
-   dates) beat references to plan steps.
+5. CI green, squash-merge, delete the branch. Message shape: [Commits](docs/standards/commits.md).
 
 ### PR standard
 
