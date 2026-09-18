@@ -1,12 +1,14 @@
 """Persistence of the user's runtime choices: model roles, store, pipeline flags.
 
 The web control panel writes these to ``settings.json`` in the writable data dir
-so the desktop app reopens where the user left it. Both interfaces read it: a
-choice made in the web UI is the configuration the CLI must run under too.
-Otherwise the two sessions index and answer under different recipes over the
-same store, and the index-fingerprint warning (issue #36) fires in a CLI session
-that contains nothing to explain it and cannot fix it -- reindexing there would
-rebuild under the CLI's own unsynchronised config.
+so the desktop app reopens where the user left it. The web UI is the only
+reader (the terminal was retired and the headless service is environment-only
+by design): a choice made in the web UI is the configuration the next web
+session runs under. The headless service never loads this file, so the
+environment is the whole configuration of a headless process.
+Otherwise two sessions could index and answer under different recipes over the
+same store, and the index-fingerprint warning (issue #36) would fire in a
+session that contains nothing to explain it.
 
 Precedence is environment > settings.json > module defaults. A variable exported
 for this run (or read from ``.env``) is an explicit statement about this run and
@@ -31,7 +33,7 @@ from rag.engine.runtime import get_runtime
 cfg = get_runtime()
 
 # The three fixed language stores, each bound to rag/docs/<id>/. Lives here
-# rather than in the web app because the CLI resolves a persisted store name too.
+# rather than in the web app so the store identity has a single home.
 STORE_IDS = ("en", "es", "ca")
 
 # Pipeline flags the control panel persists. The first two are index-time flags:
