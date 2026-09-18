@@ -12,6 +12,14 @@
 | `docs/design/*.md` | Current standing design decisions and their rationale; update them when architecture changes. |
 | `.claude/skills/*/SKILL.md` | An agent about to run something in this repo: the procedure, and how to tell a healthy run from a broken one. Procedure only, the same split `harness/RUNBOOK.md` makes. Never a second copy of `AGENTS.md`. |
 | Directory-local `README.md` | Only where a directory's purpose isn't obvious from its code — not one per folder by default. |
+| `docs/standards/README.md` | Index of all working standards. |
+| `docs/standards/code-style.md` | Layer naming, imports, docstrings beyond `AGENTS.md`. |
+| `docs/standards/comments.md` | Why-not-what rule for Python and TSX. |
+| `docs/standards/commits.md` | Message shape and squash-merge. |
+| `docs/standards/branches.md` | Branch naming and scope. |
+| `docs/standards/tests.md` | Where each test lives and which gate runs it. |
+| `docs/standards/security.md` | Secrets and headless auth minimum. |
+| `docs/standards/releases.md` | Merge flow and changelog note. |
 
 ## What is NOT documented
 

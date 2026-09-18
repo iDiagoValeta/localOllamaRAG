@@ -455,6 +455,25 @@ contract for humans and agents alike is [`AGENTS.md`](AGENTS.md).
 
 ---
 
+## Standards
+
+How to work in this repo:
+
+- [Contributing](CONTRIBUTING.md)
+- [Code style](docs/standards/code-style.md)
+- [Comments](docs/standards/comments.md)
+- [Commits](docs/standards/commits.md)
+- [Branches](docs/standards/branches.md)
+- [Tests](docs/standards/tests.md)
+- [Security](docs/standards/security.md)
+- [Releases](docs/standards/releases.md)
+- [Pull requests](CONTRIBUTING.md#pr-standard)
+- [Issues](CONTRIBUTING.md#issue-standard)
+- [Operating contract](AGENTS.md)
+- [Documentation standard](docs/README.md)
+
+---
+
 ## Acknowledgements
 
 MonkeyGrab is built on external open-source projects and openly available
