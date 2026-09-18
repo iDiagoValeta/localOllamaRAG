@@ -275,6 +275,17 @@ that commit against the revision it deployed (its `pin_match`): a mismatch
 means the running service is not the version Daimon expects — redeploy or
 re-pin, don't retry the query.
 
+`GET /stores/<id>/status` reports `stale:true` when the index fingerprint on
+disk disagrees with the configuration in force
+(`rag/headless/service.py:status_store`, via the fingerprint mismatch checked
+at `rag/headless/service.py:172`). It means the indexed chunks were built
+under different chunking or embedding settings, not that documents are
+missing. `POST /stores/<id>/index` does not repair this:
+`rag/headless/service.py:index_store` only indexes pending file names.
+Recovery is: delete `vector_db/<collection>` under that store's `data_dir`
+(the `path_db` derived from its `docs_folder` and `data_dir`) and re-run
+`POST /stores/<id>/index` for a full run.
+
 <details>
 <summary><strong>Install, models and configuration</strong></summary>
 <br/>
