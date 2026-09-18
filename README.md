@@ -275,6 +275,15 @@ that commit against the revision it deployed (its `pin_match`): a mismatch
 means the running service is not the version Daimon expects — redeploy or
 re-pin, don't retry the query.
 
+`GET /health` covers the isolated interpreter and CUDA visibility, with the
+commit and the per-role backend/model as labels
+(`rag/headless/health.py:82-117`). What it does not cover is the generator:
+it never contacts the Ollama or OpenAI server, so a healthy `/health` says
+nothing about whether the model answers. Daimon should therefore treat the
+first `rag_failed` from `POST /stores/<id>/rag` as the generator signal
+(see the first-pull comment in `rag/headless/app.py`), not as a reason to
+reindex.
+
 `GET /stores/<id>/status` reports `stale:true` when the index fingerprint on
 disk disagrees with the configuration in force
 (`rag/headless/service.py:status_store`, via the fingerprint mismatch checked
