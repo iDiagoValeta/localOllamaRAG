@@ -133,22 +133,33 @@ def index_store(paths: StorePaths) -> Dict[str, Any]:
     started = time.perf_counter()
     config = config_for(paths)
     store = wiring.vector_store(config)
-    present = set(obtener_documentos_indexados(store))
-    available = listar_documentos(paths.docs_folder)
-    pending = [name for name in available if name not in present]
-    chunks = 0
-    failed: list = []
-    if pending:
-        chunks = indexar_documentos(
-            paths.docs_folder, store, solo_archivos=None if not present else pending, silent=True
-        )
-        after = set(obtener_documentos_indexados(store))
-        failed = [name for name in pending if name not in after]
-        if failed:
-            raise RuntimeError(
-                f"{len(failed)} document(s) failed to index or produced no chunks: "
-                f"{', '.join(failed)}"
+    try:
+        present = set(obtener_documentos_indexados(store))
+        available = listar_documentos(paths.docs_folder)
+        pending = [name for name in available if name not in present]
+        chunks = 0
+        failed: list = []
+        if pending:
+            chunks = indexar_documentos(
+                paths.docs_folder, store, solo_archivos=None if not present else pending, silent=True
             )
+            after = set(obtener_documentos_indexados(store))
+            failed = [name for name in pending if name not in after]
+            if failed:
+                raise RuntimeError(
+                    f"{len(failed)} document(s) failed to index or produced no chunks: "
+                    f"{', '.join(failed)}"
+                )
+    except Exception:
+        # The worker that just failed this run is holding ~1.7 GiB and the
+        # next attempt would fail on memory this failure is holding (issue
+        # #191; the web path releases for the same reason). Safe here: the
+        # failed store admits no useful retrieval in flight, close() waits
+        # for an in-flight request instead of killing it mid-write, and the
+        # next retrieval rebuilds a fresh worker through the emptied slot.
+        # A no-op when the run died before any embedder was built.
+        wiring.release_embedder()
+        raise
     return {
         "documents_indexed": len(pending) - len(failed),
         "documents_skipped": len(available) - len(pending),

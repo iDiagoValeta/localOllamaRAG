@@ -278,8 +278,8 @@ def embedder(config: AppConfig):
     object it points to. Case 1 is safe because the instance being replaced
     is already dead -- every call on it fails regardless of who holds it, so
     a concurrent holder loses nothing. Case 2 is not safe in general, which
-    is why ``release_embedder`` has exactly one caller and that caller runs
-    where indexing has already failed; see its docstring.
+    is why ``release_embedder`` has exactly two callers and both run where
+    an index run has already failed; see its docstring.
     """
     cached = _embedder_cache["embedder"]
     if cached is not None and not _is_unusable(cached):
@@ -318,9 +318,10 @@ def _close_quietly(instance) -> None:
 def release_embedder() -> None:
     """Close the cached embedder and empty the slot.
 
-    Exists for one caller: the web layer's background indexing thread, on
-    the path where a run failed (issue #191). A worker that has just failed
-    a whole re-index is holding ~1.7 GiB and nothing is going to use it
+    Exists for two callers, both on the path where an index run failed: the
+    web layer's background indexing thread (issue #191) and the headless
+    ``index_store`` (issue #273). A worker that has just failed a whole
+    re-index is holding ~1.7 GiB and nothing is going to use it
     again, which is what made the *next* attempt fail on memory the previous
     failure was holding -- naming a PID with no visible connection to
     anything the user did.

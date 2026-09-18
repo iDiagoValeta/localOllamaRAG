@@ -134,6 +134,89 @@ def test_index_store_fails_when_a_pending_document_did_not_land_in_the_store(mon
         service.index_store(StorePaths(str(docs), str(tmp_path / "data")))
 
 
+class _Embedder:
+    """Doubled cached worker: records close(), reports itself usable."""
+
+    def __init__(self):
+        self.closed = 0
+
+    def close(self):
+        self.closed += 1
+
+
+def test_index_store_failure_releases_embedder_and_retry_rebuilds(monkeypatch, tmp_path):
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "a.pdf").write_bytes(b"x")
+    store = _Store()
+    monkeypatch.setattr(service.wiring, "vector_store", lambda config: store)
+    monkeypatch.setattr(service, "obtener_documentos_indexados", lambda s: list(s.docs))
+    attempts = []
+
+    def fake_indexar(carpeta, collection, solo_archivos=None, silent=False, progress_callback=None):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise RuntimeError("worker died")
+        collection.docs.append("a.pdf")
+        return 2
+
+    monkeypatch.setattr(service, "indexar_documentos", fake_indexar)
+    dead = _Embedder()
+    monkeypatch.setitem(wiring._embedder_cache, "embedder", dead)
+    paths = StorePaths(str(docs), str(tmp_path / "data"))
+    with pytest.raises(RuntimeError, match="worker died"):
+        service.index_store(paths)
+    assert dead.closed == 1
+    assert wiring._embedder_cache["embedder"] is None
+    fresh = _Embedder()
+    monkeypatch.setattr(wiring, "build_embedder", lambda config: fresh)
+    assert wiring.embedder(service.config_for(paths)) is fresh
+    result = service.index_store(paths)
+    assert result["documents_indexed"] == 1 and fresh.closed == 0
+
+
+def test_index_store_partial_failure_releases_embedder(monkeypatch, tmp_path):
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    for name in ("a.pdf", "b.md"):
+        (docs / name).write_bytes(b"x")
+    store = _Store()
+    monkeypatch.setattr(service.wiring, "vector_store", lambda config: store)
+    monkeypatch.setattr(service, "obtener_documentos_indexados", lambda s: list(s.docs))
+
+    def fake_indexar(carpeta, collection, solo_archivos=None, silent=False, progress_callback=None):
+        collection.docs.append("a.pdf")  # b.md silently produced no chunks
+        return 3
+
+    monkeypatch.setattr(service, "indexar_documentos", fake_indexar)
+    dead = _Embedder()
+    monkeypatch.setitem(wiring._embedder_cache, "embedder", dead)
+    with pytest.raises(RuntimeError, match="b.md"):
+        service.index_store(StorePaths(str(docs), str(tmp_path / "data")))
+    assert dead.closed == 1
+    assert wiring._embedder_cache["embedder"] is None
+
+
+def test_index_store_success_keeps_the_cached_embedder(monkeypatch, tmp_path):
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "a.pdf").write_bytes(b"x")
+    store = _Store()
+    monkeypatch.setattr(service.wiring, "vector_store", lambda config: store)
+    monkeypatch.setattr(service, "obtener_documentos_indexados", lambda s: list(s.docs))
+
+    def fake_indexar(carpeta, collection, solo_archivos=None, silent=False, progress_callback=None):
+        collection.docs.append("a.pdf")
+        return 2
+
+    monkeypatch.setattr(service, "indexar_documentos", fake_indexar)
+    live = _Embedder()
+    monkeypatch.setitem(wiring._embedder_cache, "embedder", live)
+    service.index_store(StorePaths(str(docs), str(tmp_path / "data")))
+    assert live.closed == 0
+    assert wiring._embedder_cache["embedder"] is live
+
+
 def test_status_store_reports_documents_chunks_and_staleness(monkeypatch, tmp_path):
     store = _Store(docs=["a.pdf", "b.md"])
     monkeypatch.setattr(service.wiring, "vector_store", lambda config: store)
