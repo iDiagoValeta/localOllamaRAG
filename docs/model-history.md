@@ -86,11 +86,11 @@ with these.
 | `granite4:small-h` | 19 GB | 116 (85.3%) | 133 (85.3%) | 17.4 | 70 | 20.52 | 5 | 0 | **~72% CPU** | `20260911T171038Z` | 1 |
 | `hf.co/noctrex/Granite-4.0-H-Tiny-MXFP4_MOE-GGUF:...` | 4.2 GB | 112 (82.4%) | 129 (82.7%) | 116.9 | 72 | 7.15 | 6 | 2 | GPU | `20260911T032105Z` | 2 |
 | `deepseek-r1:14b` | 9.0 GB | 112 (82.4%) | 129 (82.7%) | 10.3 | **275** | 35.92 | 15 | 0 | **~46% CPU** | `20260919T182547Z` | 1 |
-| `qwen2.5-coder:32b` | 19 GB | 110 (80.9%) | 127 (81.4%) | 3.6 | 32 | 21.11 | 13 | 0 | **~73% CPU** | `20260919T031747Z` | 1 |
-| `qwen2.5:32b` | 19 GB | 110 (80.9%) | 127 (81.4%) | 3.6 | 26 | 19.15 | 12 | 0 | **~73% CPU** | `20260919T031747Z` | 1 |
-| `qwen3:32b` | 20 GB | 109 (80.1%) | 126 (80.8%) | 3.3 | 35 | 24.21 | 12 | 0 | **~75% CPU** | `20260919T182547Z` | 1 |
+| `qwen2.5-coder:32b` | 19 GB | 110 (80.9%) | 127 (81.4%) | **3.6** | 32 | 21.11 | 13 | 0 | **~73% CPU** | `20260919T031747Z` | 1 |
+| `qwen2.5:32b` | 19 GB | 110 (80.9%) | 127 (81.4%) | **3.6** | 26 | 19.15 | 12 | 0 | **~73% CPU** | `20260919T031747Z` | 1 |
+| `qwen3:32b` | 20 GB | 109 (80.1%) | 126 (80.8%) | **3.3** | 35 | 24.21 | 12 | 0 | **~75% CPU** | `20260919T182547Z` | 1 |
 | `hf.co/noctrex/LFM2-8B-A1B-MXFP4_MOE-GGUF:...` | 4.9 GB | 108 (79.4%) | 125 (80.1%) | 156.2 | 56 | 6.92 | 0 | 0 | GPU | `20260911T071629Z` | 1 |
-| `mistral-small3.2:24b` | 15 GB | 107 (78.7%) | 124 (79.5%) | **5.2** | 24 | 20.94 | 12 | 0 | **~70% CPU** | `20260911T171038Z` | 1 |
+| `mistral-small3.2:24b` | 15 GB | 107 (78.7%) | 124 (79.5%) | 5.2 | 24 | 20.94 | 12 | 0 | **~70% CPU** | `20260911T171038Z` | 1 |
 | `hf.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M` | 2.0 GB | 105 (77.2%) | 122 (78.2%) | 101.3 | 27 | 6.70 | 6 | 0 | GPU | `20260911T032105Z` | 2 |
 | `deepseek-r1:32b` | 19 GB | 102 (75.0%) | 119 (76.3%) | 3.4 | **264** | 90.37 | 25 | 0 | **~75% CPU** | `20260919T182547Z` | 1 |
 | `gpt-oss:20b` | 13 GB | 96 (70.6%) | 113 (72.4%) | 29.7 | 100 | 20.80 | 0 | 4 | **~60% CPU** | `20260911T094107Z` | 1 |
@@ -182,8 +182,10 @@ open, and the answer is not uniform. `qwen3:30b-a3b` reaches 89% but does it
 by reasoning inline -- a median of **335 tokens per answer** against 24-35
 for everything else, which is the truncation risk the old file described and
 here cost it six budget exhaustions and 25 s per answer. `granite4:small-h`
-matches `Ling-3.0-tiny` on quality at a third of the speed. `mistral-small3.2`
-at 5.2 tok/s is the slowest row in the table and exhausted the budget twelve
+matches `Ling-3.0-tiny` on quality at a third of the speed. `qwen3:32b`
+at 3.3 tok/s is now the slowest row in the table, with `deepseek-r1:32b` at
+3.4 and `qwen2.5:32b` / `qwen2.5-coder:32b` at 3.6 tok/s just above it;
+`mistral-small3.2` at 5.2 tok/s exhausted the budget twelve
 times; with 70% of a 15 GB model in system RAM it is not a configuration
 anyone would run. The tranche took 278 minutes against 144-159 for the
 others.
