@@ -78,15 +78,21 @@ with these.
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | `qwen3-coder-30b:latest` | 10 GB | **125 (91.9%)** | 142 (91.0%) | 45.4 | 90 | 15.03 | 0 | 1 | **~50% CPU** | `20260911T094107Z` | 1 |
 | `qwen3:30b-a3b` | 18 GB | 121 (89.0%) | 138 (88.5%) | 39.1 | **335** | 24.93 | 6 | 2 | **~70% CPU** | `20260911T171038Z` | 1 |
+| `qwen3:14b` | 9.3 GB | 121 (89.0%) | 138 (88.5%) | 10.6 | 32 | 11.88 | 1 | 0 | **~44% CPU** | `20260919T031747Z` | 1 |
 | `gemma4:e2b` | 7.2 GB | 120 (88.2%) | 137 (87.8%) | 103.2 | 28 | 7.97 | 0 | 0 | GPU | `20260911T071629Z` | 1 |
 | `qwen3:8b` | 5.2 GB | 120 (88.2%) | 137 (87.8%) | 35.8 | 35 | 8.94 | 0 | 0 | **CPU offload** | `20260911T071629Z` | 1 |
 | `gemma4:e4b` *(rag-role default as of 2026-09-18, see `src/monkeygrab/config/app_config.py`)* | 9.6 GB | 119 (87.5%) | 136 (87.2%) | 59.9 | 28 | 11.84 | 0 | 0 | GPU | `20260911T094107Z` | 1 |
 | `hf.co/noctrex/Ling-3.0-tiny-MXFP4_MOE-GGUF:MXFP4_MOE` | 4.9 GB | 116 (85.3%) | 133 (85.3%) | 116.3 | 27 | 7.52 | 6 | 0 | GPU | `20260911T032105Z` | 2 |
 | `granite4:small-h` | 19 GB | 116 (85.3%) | 133 (85.3%) | 17.4 | 70 | 20.52 | 5 | 0 | **~72% CPU** | `20260911T171038Z` | 1 |
 | `hf.co/noctrex/Granite-4.0-H-Tiny-MXFP4_MOE-GGUF:...` | 4.2 GB | 112 (82.4%) | 129 (82.7%) | 116.9 | 72 | 7.15 | 6 | 2 | GPU | `20260911T032105Z` | 2 |
+| `deepseek-r1:14b` | 9.0 GB | 112 (82.4%) | 129 (82.7%) | 10.3 | **275** | 35.92 | 15 | 0 | **~46% CPU** | `20260919T182547Z` | 1 |
+| `qwen2.5-coder:32b` | 19 GB | 110 (80.9%) | 127 (81.4%) | **3.6** | 32 | 21.11 | 13 | 0 | **~73% CPU** | `20260919T031747Z` | 1 |
+| `qwen2.5:32b` | 19 GB | 110 (80.9%) | 127 (81.4%) | **3.6** | 26 | 19.15 | 12 | 0 | **~73% CPU** | `20260919T031747Z` | 1 |
+| `qwen3:32b` | 20 GB | 109 (80.1%) | 126 (80.8%) | **3.3** | 35 | 24.21 | 12 | 0 | **~75% CPU** | `20260919T182547Z` | 1 |
 | `hf.co/noctrex/LFM2-8B-A1B-MXFP4_MOE-GGUF:...` | 4.9 GB | 108 (79.4%) | 125 (80.1%) | 156.2 | 56 | 6.92 | 0 | 0 | GPU | `20260911T071629Z` | 1 |
-| `mistral-small3.2:24b` | 15 GB | 107 (78.7%) | 124 (79.5%) | **5.2** | 24 | 20.94 | 12 | 0 | **~70% CPU** | `20260911T171038Z` | 1 |
+| `mistral-small3.2:24b` | 15 GB | 107 (78.7%) | 124 (79.5%) | 5.2 | 24 | 20.94 | 12 | 0 | **~70% CPU** | `20260911T171038Z` | 1 |
 | `hf.co/bartowski/Llama-3.2-3B-Instruct-GGUF:Q4_K_M` | 2.0 GB | 105 (77.2%) | 122 (78.2%) | 101.3 | 27 | 6.70 | 6 | 0 | GPU | `20260911T032105Z` | 2 |
+| `deepseek-r1:32b` | 19 GB | 102 (75.0%) | 119 (76.3%) | 3.4 | **264** | 90.37 | 25 | 0 | **~75% CPU** | `20260919T182547Z` | 1 |
 | `gpt-oss:20b` | 13 GB | 96 (70.6%) | 113 (72.4%) | 29.7 | 100 | 20.80 | 0 | 4 | **~60% CPU** | `20260911T094107Z` | 1 |
 | `hf.co/noctrex/OLMoE-1B-7B-0125-Instruct-MXFP4_MOE-GGUF:...` | 3.9 GB | 91 (66.9%) | 108 (69.2%) | 213.0 | 64 | 6.56 | 6 | 0 | GPU | `20260911T032105Z` | 2 |
 | `hf.co/noctrex/Phi-mini-MoE-instruct-MXFP4_MOE-GGUF:...` | 4.9 GB | 63 (46.3%) | 80 (51.3%) | 95.3 | 118 | 9.24 | 0 | 0 | GPU | `20260911T071629Z` | 1 |
@@ -176,8 +182,10 @@ open, and the answer is not uniform. `qwen3:30b-a3b` reaches 89% but does it
 by reasoning inline -- a median of **335 tokens per answer** against 24-35
 for everything else, which is the truncation risk the old file described and
 here cost it six budget exhaustions and 25 s per answer. `granite4:small-h`
-matches `Ling-3.0-tiny` on quality at a third of the speed. `mistral-small3.2`
-at 5.2 tok/s is the slowest row in the table and exhausted the budget twelve
+matches `Ling-3.0-tiny` on quality at a third of the speed. `qwen3:32b`
+at 3.3 tok/s is now the slowest row in the table, with `deepseek-r1:32b` at
+3.4 and `qwen2.5:32b` / `qwen2.5-coder:32b` at 3.6 tok/s just above it;
+`mistral-small3.2` at 5.2 tok/s exhausted the budget twelve
 times; with 70% of a 15 GB model in system RAM it is not a configuration
 anyone would run. The tranche took 278 minutes against 144-159 for the
 others.
@@ -222,6 +230,17 @@ The tranches: `20260911T032105Z` (4 models, 159 min), `20260911T071629Z`
 (4, 144 min), `20260911T094107Z` (3, 144 min), `20260911T171038Z` (3, 278
 min), plus the repeat of tranche 1, `20260911T230513Z` (4, 105 min). Total
 GPU time for the table: about 14 hours.
+
+Calibration 2026-09-18: `gemma4:e4b` re-measured 121/136 (Overall 138/156)
+under run `20260918T225530Z`, +2 over its September row and inside the
+5-case noise floor. Recorded here as a dated note, not a new row: the
+default's row above stands.
+
+Campaign 2026-09-19 (reduced scope, 6 measured): `20260919T031747Z`
+(`qwen2.5-coder:32b`, `qwen2.5:32b`, `qwen3:14b`) and `20260919T182547Z`
+(`qwen3:32b`, `deepseek-r1:14b`, `deepseek-r1:32b`). No newcomer reached the
+125 adoption bar, so the default stays `gemma4:e4b`; all six were pruned from
+the SSD. Nine candidates remain pending.
 
 ---
 
