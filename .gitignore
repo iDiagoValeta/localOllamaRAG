@@ -102,6 +102,11 @@ rag/monkeygrab_server.port
 
 .reasonix/
 
+# Agent orchestration scratch (plans, briefs, round logs): local work notes,
+# never committed. One file once slipped in via `git add -A`; the rule below
+# only bites on untracked paths, the tracked one was removed with `git rm`.
+.orchestration/
+
 media/
 
 .codex
