@@ -1,7 +1,9 @@
 """Flask surface of the headless service. Routes only; the work is in ``service``.
 
 Bound to 127.0.0.1 by ``__main__``. With ``MONKEYGRAB_HEADLESS_TOKEN`` set,
-every request must carry ``Authorization: Bearer <token>``.
+every request must carry ``Authorization: Bearer <token>``. Without a token
+the service runs without auth on loopback; exposing the port beyond loopback
+without a token is unsupported.
 """
 import hmac
 import json
@@ -48,10 +50,16 @@ def create_app(
         health: The probe to run on ``/health``. Cached with a short TTL by
             default (``health_module.cached_probe``) so Daimon's polling never
             pays a torch/CUDA subprocess per request; a double in tests.
-        token: Bearer token to require, or ``None`` for no auth.
+        token: Bearer token to require, or ``None`` for no auth. Without a
+            token the app serves loopback only; exposing the port beyond
+            loopback without a token is unsupported.
         registry: Store-id registry; one per process by default.
     """
     app = Flask(__name__)
+    if token is None:
+        # Non-breaking notice: Daimon already injects a token, so a set token
+        # stays silent; only the no-auth loopback case warns.
+        logging.warning("running without auth on loopback; exposing beyond loopback unsupported")
     stores = registry or StoreRegistry()
 
     @app.before_request

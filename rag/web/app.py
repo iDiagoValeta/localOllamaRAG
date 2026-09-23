@@ -915,6 +915,12 @@ def api_topics():
 # for the error contract to drift apart.
 _STUDY_KINDS = ("summary", "outline", "quiz")
 
+# Allowlist for the Study language: the three store display names plus
+# "Català" as an alias of "Valencià" (same ca store, both names in use).
+# The use case interpolates this into the prompt ("in {language}"), so free
+# text here is prompt injection by design -- reject before any engine work.
+_STUDY_LANGUAGES = ("English", "Castellano", "Valencià", "Català")
+
 
 @app.route("/api/study", methods=["POST"])
 def api_study():
@@ -922,6 +928,10 @@ def api_study():
 
     Body: ``{"kind": "summary"|"outline"|"quiz", "document": str,
     "language": str|None, "question_count": int|None}``.
+
+    ``language`` follows an allowlist (``None`` plus the store display
+    names): it is interpolated into the prompt, so anything else is a 400
+    before any engine work.
 
     A malformed generator reply comes back as 422 with ``kind: "malformed"``,
     separate from a 500: the model ignored the format, which is actionable
@@ -939,6 +949,10 @@ def api_study():
         return jsonify({"ok": False, "error": "document is required"}), 400
 
     idioma = data.get("language") or None
+    if idioma is not None:
+        idioma = str(idioma).strip() or None
+    if idioma is not None and idioma not in _STUDY_LANGUAGES:
+        return jsonify({"ok": False, "error": f"language must be one of {', '.join(_STUDY_LANGUAGES)}"}), 400
     coll = _get_collection()
     if documento not in rag_engine.obtener_documentos_indexados(coll):
         return jsonify({"ok": False, "error": f"{documento} is not indexed"}), 404

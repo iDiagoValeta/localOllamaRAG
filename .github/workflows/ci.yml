@@ -20,6 +20,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege by default: every job here only reads the tree.
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: "3.13"
 

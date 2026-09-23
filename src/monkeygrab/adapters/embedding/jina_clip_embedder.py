@@ -24,6 +24,7 @@ without torch, CUDA, or the model ever being touched.
 
 import itertools
 import json
+import logging
 import math
 import os
 import queue
@@ -32,6 +33,8 @@ import sys
 import threading
 from pathlib import Path
 from typing import Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 # Not subclassed from monkeygrab.ports.embedder.Embedder /
 # monkeygrab.ports.image_embedder.ImageEmbedder: Protocol conformance here is
@@ -248,8 +251,8 @@ class JinaClipEmbedder:
             for line in process.stderr:
                 stderr_tail.append(line.rstrip())
                 del stderr_tail[:-20]  # keep only the tail for the eventual error message
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("jina-clip stderr pump exiting best-effort: %s", exc)
 
     def _format_stderr(self) -> str:
         return " | ".join(self._stderr_tail) if self._stderr_tail else "(no stderr captured)"

@@ -35,6 +35,11 @@ on:
         required: false
         default: false
 
+# Least privilege by default: this job only checks out the tree, runs the
+# eval locally and uploads the results artifact.
+permissions:
+  contents: read
+
 jobs:
   full-eval:
     name: Full eval gate (real pipeline, self-hosted)

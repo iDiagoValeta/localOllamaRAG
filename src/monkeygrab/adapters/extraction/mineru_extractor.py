@@ -259,8 +259,9 @@ def _run_mineru(
         ``(md_path, content_list_path)`` -- see ``_validate_output``.
 
     Raises:
-        RuntimeError: MinerU binary not found, CLI exited non-zero, or its
-            output failed validation (see ``_validate_output``).
+        RuntimeError: MinerU binary not found, CLI launch failed, CLI timed
+            out, CLI exited non-zero, or its output failed validation
+            (see ``_validate_output``).
         FileNotFoundError: ``pdf_path`` does not exist.
     """
     resolved_bin = _resolve_runnable_bin(mineru_bin)
@@ -300,6 +301,13 @@ def _run_mineru(
         proc = subprocess.run(
             cmd, capture_output=True, text=True, env=env, timeout=timeout_seconds, check=False,
         )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"MinerU CLI timed out after {timeout_seconds}s for {pdf_path.name} "
+            f"(command: {' '.join(cmd)}). The PDF may need a larger "
+            "timeout_seconds, or the MinerU install in .venv-mineru may be "
+            "stalled downloading models (check MINERU_MODEL_SOURCE)."
+        ) from exc
     except OSError as exc:
         raise RuntimeError(f"Failed to launch MinerU CLI ({resolved_bin!r}): {exc}") from exc
 
@@ -378,12 +386,20 @@ def _content_list_to_pages(blocks: List[Dict[str, Any]]) -> List[ExtractedPage]:
         ``_DISCARDED_BLOCK_TYPES``) is omitted rather than emitted empty.
     """
     by_page: Dict[int, List[str]] = {}
+    dropped_missing_page_idx = 0
     for block in blocks:
         if "page_idx" not in block:
+            dropped_missing_page_idx += 1
             continue
         rendered = _render_block_text(block)
         if rendered:
             by_page.setdefault(int(block["page_idx"]), []).append(rendered)
+
+    if dropped_missing_page_idx:
+        logger.warning(
+            "Discarding %d MinerU block(s) without page_idx",
+            dropped_missing_page_idx,
+        )
 
     return [
         ExtractedPage(page=page_idx, text="\n\n".join(parts))

@@ -1,4 +1,9 @@
-"""``python -m rag.headless``: serve MonkeyGrab's pipeline on 127.0.0.1."""
+"""``python -m rag.headless``: serve MonkeyGrab's pipeline on 127.0.0.1.
+
+Without ``MONKEYGRAB_HEADLESS_TOKEN`` the service runs without auth on
+loopback; exposing the port beyond loopback without a token is unsupported.
+"""
+import logging
 import os
 import sys
 from typing import Optional
@@ -19,4 +24,8 @@ def resolve_port(raw: Optional[str] = None) -> int:
 if __name__ == "__main__":
     port = resolve_port()
     token = os.getenv("MONKEYGRAB_HEADLESS_TOKEN", "") or None
+    if token is None:
+        # Bound to 127.0.0.1 below; the warning names the unsupported case
+        # so an operator does not republish the port without auth.
+        logging.warning("running without auth on loopback; exposing beyond loopback unsupported")
     create_app(token=token).run(host="127.0.0.1", port=port, threaded=True)

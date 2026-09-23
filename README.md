@@ -466,6 +466,7 @@ How to work in this repo:
 - [Branches](docs/standards/branches.md)
 - [Tests](docs/standards/tests.md)
 - [Security](docs/standards/security.md)
+- [Security policy](SECURITY.md)
 - [Releases](docs/standards/releases.md)
 - [Pull requests](CONTRIBUTING.md#pr-standard)
 - [Issues](CONTRIBUTING.md#issue-standard)

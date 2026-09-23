@@ -109,7 +109,7 @@ rag/monkeygrab_server.port
 
 media/
 
-.codex
+.codex/*
 .cursor/
 AGENTS.md
 # Assistant instructions for this project are versioned so any clone (or CI
@@ -118,6 +118,7 @@ AGENTS.md
 # block stays last: a later rule would otherwise re-ignore the files.
 CLAUDE.md
 .claude/*
+!.codex/AGENTS.md
 !.claude/CLAUDE.md
 !.claude/skills/
 **/.claude/settings.local.json

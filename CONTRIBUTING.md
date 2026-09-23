@@ -136,3 +136,7 @@ them once cost weeks of silent drift:
 Use the bug template. Include the exact command, the full traceback, your OS
 + GPU + Ollama model list (`ollama list`) and, if indexing is involved,
 whether `.venv-mineru/` exists beside the repo.
+
+Suspected vulnerabilities or leaked secrets do not go through the bug
+template: rotate first, then report privately as described in
+[`SECURITY.md`](SECURITY.md).
