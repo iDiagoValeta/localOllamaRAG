@@ -17,11 +17,6 @@ from typing import Any, Dict, Sequence, Tuple
 from monkeygrab.domain.fragment import Fragment
 
 
-# ─────────────────────────────────────────────
-# SECTION 1: PARAGRAPH REJOINING
-# ─────────────────────────────────────────────
-
-
 def _es_continuacion_parrafo(linea_previa: str, linea_actual: str) -> bool:
     """Heuristic to detect whether the current line continues a paragraph.
 

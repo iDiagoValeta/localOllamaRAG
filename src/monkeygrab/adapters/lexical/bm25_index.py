@@ -5,9 +5,9 @@ from typing import List, Optional, Tuple
 
 from rank_bm25 import BM25Okapi
 
-from monkeygrab.application.keywords import tokenize_bm25
 from monkeygrab.config.retrieval import RetrievalConfig
 from monkeygrab.domain.fragment import Fragment
+from monkeygrab.domain.lexical_text import tokenize_bm25
 from monkeygrab.ports.vector_store import VectorStore
 
 # Not subclassed from monkeygrab.ports.lexical_index.LexicalIndex: Protocol

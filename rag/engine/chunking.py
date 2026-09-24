@@ -6,7 +6,7 @@ configuration stays owned by rag.chat_pdfs and is read lazily through ``cfg``
 are observed without any per-call synchronization.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from monkeygrab.application.text_chunking import (
     adjacent_chunk_ids,
@@ -21,8 +21,8 @@ cfg = get_runtime()
 
 def dividir_en_chunks(
     texto: str,
-    chunk_size: int = cfg.CHUNK_SIZE,
-    overlap: int = cfg.CHUNK_OVERLAP
+    chunk_size: Optional[int] = None,
+    overlap: Optional[int] = None,
 ) -> List[Dict[str, str]]:
     """Split text into chunks by Markdown sections with overlap.
 
@@ -39,6 +39,11 @@ def dividir_en_chunks(
     Returns:
         List of dicts with ``"text"`` and ``"header"`` keys.
     """
+    if chunk_size is None:
+        chunk_size = cfg.CHUNK_SIZE
+    if overlap is None:
+        overlap = cfg.CHUNK_OVERLAP
+
     # Implementation lives in monkeygrab.application.text_chunking
     # (split_markdown_into_chunks) -- a literal port, equivalence-tested
     # against this function in tests/unit/application/test_text_chunking_

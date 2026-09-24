@@ -46,6 +46,25 @@ def _top_level_imports(py_file: Path) -> Set[str]:
     return modules
 
 
+def _monkeygrab_import_targets(py_file: Path) -> Set[str]:
+    """Return the full dotted path of every ``monkeygrab.*`` import."""
+    tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+    targets: Set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "monkeygrab" or alias.name.startswith("monkeygrab."):
+                    targets.add(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level and node.module is None:
+                continue
+            if node.module and (
+                node.module == "monkeygrab" or node.module.startswith("monkeygrab.")
+            ):
+                targets.add(node.module)
+    return targets
+
+
 def _python_files(package_dir: Path):
     return sorted(package_dir.rglob("*.py"))
 
@@ -62,6 +81,25 @@ def test_no_adapter_module_imports_the_rag_package():
     assert not violations, (
         "adapters/ must never import the legacy rag package (it reaches "
         f"rag.chat_pdfs via rag.engine.runtime.get_runtime()): {violations}"
+    )
+
+
+def test_no_adapter_module_imports_application():
+    """Adapters may depend on ports/domain/config, not application use cases."""
+    violations = {}
+    for py_file in _python_files(ADAPTERS_DIR):
+        forbidden = sorted(
+            target
+            for target in _monkeygrab_import_targets(py_file)
+            if target == "monkeygrab.application"
+            or target.startswith("monkeygrab.application.")
+        )
+        if forbidden:
+            violations[str(py_file.relative_to(ROOT))] = forbidden
+
+    assert not violations, (
+        "adapters/ must not import application-layer use cases: "
+        f"{violations}"
     )
 
 

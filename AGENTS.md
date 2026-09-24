@@ -104,8 +104,10 @@ docs/README.md             Documentation standard
   package's mutable globals and the immutable `AppConfig` the core takes.
 - **`rag/engine/` is wiring, not logic.** Each module builds adapters, calls a
   use case, and converts between domain entities and the dicts the interfaces
-  consume. `rag/engine/context.py` remains the home of the pure context-
-  assembly helpers the core imports.
+  consume. Pure context assembly lives in
+  `src/monkeygrab/application/context_assembly.py`; `rag/engine/context.py` is
+  a compatibility facade that adapts legacy dicts and re-exports the helper
+  names.
 - `Answer` exposes `select_evidence` / `build_user_message` / `stream`
   separately as well as a composing `run`. The split is load-bearing: the web
   layer sends cited sources before the first token, so it cannot have prompt

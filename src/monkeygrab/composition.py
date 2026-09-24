@@ -1,15 +1,18 @@
 """Single composition root for the multimodal pipeline."""
 
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import NamedTuple
 
 from monkeygrab.config.app_config import AppConfig
+from monkeygrab.ports.embedder import Embedder
+from monkeygrab.ports.pdf_extractor import PdfExtractor
+from monkeygrab.ports.vector_store import VectorStore
 
 
 class Stack(NamedTuple):
-    extractor: Any
-    vector_store: Any
-    embedder: Any
+    extractor: PdfExtractor
+    vector_store: VectorStore
+    embedder: Embedder
 
 
 def _isolated_python() -> str:
@@ -27,7 +30,7 @@ def _isolated_python() -> str:
     )
 
 
-def build_extractor(config: AppConfig) -> Any:
+def build_extractor(config: AppConfig) -> PdfExtractor:
     del config
     from monkeygrab.adapters.extraction.by_suffix_extractor import BySuffixExtractor
     from monkeygrab.adapters.extraction.mineru_extractor import MineruExtractor
@@ -36,13 +39,13 @@ def build_extractor(config: AppConfig) -> Any:
     return BySuffixExtractor(MineruExtractor(), TextFileExtractor())
 
 
-def build_vector_store(config: AppConfig) -> Any:
+def build_vector_store(config: AppConfig) -> VectorStore:
     from monkeygrab.adapters.vectorstore.faiss_store import FaissVectorStore
 
     return FaissVectorStore(config.paths)
 
 
-def build_embedder(config: AppConfig) -> Any:
+def build_embedder(config: AppConfig) -> Embedder:
     del config
     from monkeygrab.adapters.embedding.jina_clip_embedder import JinaClipEmbedder
 

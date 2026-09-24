@@ -33,10 +33,6 @@ degraded state.
 import json
 import sys
 
-# ─────────────────────────────────────────────
-# SECTION 1: CONSTANTS
-# ─────────────────────────────────────────────
-
 _MODEL_NAME = "jinaai/jina-clip-v2"
 # Matryoshka truncation: jina-clip-v2's native dimension is 1024; 512 is the
 # value verified in the spike (loads, produces correctly-discriminating

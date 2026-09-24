@@ -1,67 +1,18 @@
-"""Pure text analysis shared by lexical retrieval and query expansion.
+"""Pure query-text analysis for retrieval.
 
-Holds the vocabulary and the three pure functions that both the BM25 adapter
-and the ``Retrieve`` use case need: the stopword set, the BM25 tokenizer, the
-keyword extractor that builds a fallback query variant, and the coherence
-check that rejects bag-of-words queries.
-
-These used to exist twice: once in the running pipeline and once copied into
-the BM25 adapter, to keep the adapter free of the legacy package's import
-chain. This module is the single home for both, and depends on nothing but
-the standard library.
+The BM25 vocabulary and tokenizer live in the neutral domain module so the
+BM25 adapter and this application layer share them without an adapter
+importing application code. They are re-exported here for the existing
+``rag.chat_pdfs`` compatibility surface.
 """
 
 import re
 from collections import Counter
 from typing import List
 
-# Words carrying no retrieval signal, dropped from both BM25 tokens and
-# extracted keywords. Covers the three corpus languages plus the phrasing
-# users put in questions ("explica", "following", ...), which would otherwise
-# match every chunk equally.
-STOPWORDS = {
-    # Castellano
-    'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'de', 'del', 'en', 'a', 'al',
-    'por', 'para', 'con', 'sin', 'sobre', 'entre', 'hacia', 'desde', 'hasta', 'durante', 'mediante',
-    'según', 'contra', 'que', 'quien', 'cual', 'cuales', 'cuyo', 'cuya', 'cuyos', 'cuyas',
-    'este', 'esta', 'estos', 'estas', 'ese', 'esa', 'esos', 'esas', 'aquel', 'aquella', 'aquellos', 'aquellas',
-    'esto', 'eso', 'aquello', 'y', 'o', 'pero', 'sino', 'aunque', 'si', 'porque', 'cuando', 'donde',
-    'como', 'más', 'menos', 'muy', 'poco', 'mucho', 'algo', 'nada', 'todo', 'toda', 'todos', 'todas',
-    'cada', 'otro', 'otra', 'otros', 'otras', 'mismo', 'misma', 'mismos', 'mismas',
-    'es', 'son', 'está', 'están', 'era', 'eran', 'fue', 'fueron', 'ser', 'estar',
-    'hay', 'había', 'han', 'haber', 'tiene', 'tienen', 'tenía', 'tener', 'puede', 'pueden', 'poder',
-    'se', 'me', 'te', 'nos', 'os', 'le', 'lo', 'les', 'su', 'sus', 'mi', 'tu', 'nuestro', 'vuestro',
-    'aquí', 'ahí', 'allí', 'así', 'ya', 'también', 'solo', 'sólo', 'siempre', 'nunca', 'después', 'antes',
-    'explica', 'explicar', 'describe', 'describir', 'detalla', 'detallar', 'indica', 'indicar',
-    'respuesta', 'pregunta', 'preguntas', 'siguientes', 'siguiente', 'puntos', 'punto', 'ejemplo',
-    'manera', 'forma', 'tipo', 'tipos', 'parte', 'partes', 'primer', 'primera', 'segundo', 'segunda',
-    'tercer', 'tercera', 'uno', 'dos', 'tres', 'cuáles', 'cómo', 'qué', 'podrías', 'decirme', 'puedes',
-    'principales', 'llaman', 'tanto', 'tan', 'fue', 'sido', 'siendo', 'hacer', 'ir',
-    # English
-    'the', 'a', 'an', 'and', 'or', 'but', 'if', 'then', 'else', 'when', 'at', 'by', 'for', 'with',
-    'about', 'against', 'between', 'into', 'through', 'during', 'before', 'after', 'above', 'below',
-    'to', 'from', 'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further',
-    'here', 'there', 'where', 'why', 'how', 'all', 'each', 'few', 'more', 'most', 'other', 'some',
-    'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 'just', 'now',
-    'is', 'are', 'was', 'were', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
-    'would', 'could', 'should', 'may', 'might', 'must', 'shall', 'can', 'will', 'this', 'that',
-    'it', 'its', 'they', 'them', 'their', 'we', 'our', 'you', 'your', 'he', 'she', 'him', 'her',
-    'what', 'which', 'who', 'whom', 'whose',
-    # Valencian
-    'els', 'les', 'uns', 'unes', 'dels', 'als',
-    'per', 'per a', 'amb', 'sense', 'des de', 'fins a', 'fins', 'dins', 'envers',
-    'que', 'qui', 'qual', 'quals', 'què', 'aquest', 'aquesta', 'aquests', 'aquestes',
-    'aquell', 'aquella', 'aquells', 'aquelles', 'això', 'allò', 'i', 'o', 'però', 'sinó',
-    'perquè', 'quan', 'com', 'més', 'menys', 'molt', 'poc', 'res', 'tot', 'tota', 'tots', 'totes',
-    'cada', 'altre', 'altra', 'altres', 'mateix', 'mateixa', 'mateixos', 'mateixes',
-    'és', 'són', 'està', 'estan', 'era', 'eren', 'ha', 'han', 'hi ha', 'hi havia',
-    'pot', 'poden', 'ser', 'estar', 'tenir', 'fer', 'anar', 'dir', 'veure',
-    'aquí', 'allà', 'així', 'ja', 'també', 'només', 'sempre', 'mai', 'després', 'abans',
-    'explica', 'explicar', 'descriu', 'detalla', 'detallar', 'indica', 'indicar',
-    'resposta', 'pregunta', 'preguntes', 'següents', 'següent', 'punts', 'punt', 'exemple',
-    'manera', 'forma', 'tipus', 'part', 'parts', 'primer', 'primera', 'segon', 'segona',
-    'tercer', 'tercera', 'un', 'dos', 'tres', 'quins', 'quines', 'quin', 'quina',
-}
+from monkeygrab.domain.lexical_text import STOPWORDS
+from monkeygrab.domain.lexical_text import tokenize_bm25 as tokenize_bm25
+
 # Words common enough in academic prose that using one as a search term
 # retrieves everything and discriminates nothing. Applied only to extracted
 # keywords, never to BM25 tokens: BM25's own IDF already discounts them.
@@ -75,8 +26,6 @@ GENERIC_TERMS_BLACKLIST = {
     "compare", "evaluate", "section", "table", "figure", "described",
 }
 
-
-_BM25_TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 
 _KEYWORD_STRIP_CHARS = '\u00bf?.,;:()[]{}"\'-'
 
@@ -96,30 +45,6 @@ _CONNECTORS = {
     # Valencia
     "com", "quins", "quines", "quan", "quin", "quina", "per", "que",
 }
-
-
-def tokenize_bm25(text: str) -> List[str]:
-    """Tokenize text for BM25 scoring.
-
-    Lowercases, splits on non-alphanumeric boundaries, and drops stopwords
-    and tokens shorter than three characters unless they contain a digit, so
-    identifiers and metrics such as "q4" survive. The corpus and the query
-    must go through this same function or BM25 term matching breaks.
-
-    Args:
-        text: Raw text to tokenize.
-
-    Returns:
-        Normalized tokens, in order of appearance.
-    """
-    tokens = []
-    for token in _BM25_TOKEN_RE.findall(text.lower()):
-        if token in STOPWORDS:
-            continue
-        if len(token) < 3 and not any(c.isdigit() for c in token):
-            continue
-        tokens.append(token)
-    return tokens
 
 
 def extract_keywords(text: str) -> List[str]:

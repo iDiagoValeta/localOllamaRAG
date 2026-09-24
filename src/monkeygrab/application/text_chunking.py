@@ -26,10 +26,6 @@ from typing import List
 from monkeygrab.domain.chunk_metadata import ChunkMetadata
 
 
-# ─────────────────────────────────────────────
-# TEXT CHUNK
-
-
 @dataclass(frozen=True)
 class TextChunk:
     """One chunk of split text, before positional metadata (page, index) exists.

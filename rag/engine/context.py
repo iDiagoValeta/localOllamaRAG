@@ -12,8 +12,15 @@ import requests
 from typing import Any, Dict, List
 
 from monkeygrab.application.context_assembly import (
+    _es_continuacion_parrafo as _es_continuacion_parrafo,
+    _marcar_fragmento_incompleto as _marcar_fragmento_incompleto,
+    _reunir_parrafos as _reunir_parrafos,
+    _texto_fuente_fragmento as _texto_fuente_fragmento,
+    RECOMP_FACTS_HEADER as _RECOMP_FACTS_HEADER,
     build_context_for_model,
+    normalize_recomp_output as _normalizar_salida_recomp,
     optimize_context_text,
+    strip_ollama_think_blocks as _strip_ollama_think_blocks,
 )
 from monkeygrab.domain.chunk_metadata import ChunkMetadata
 from monkeygrab.domain.fragment import Fragment
@@ -21,106 +28,6 @@ from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
 # CONTEXT AND GENERATION
-
-
-def _es_continuacion_parrafo(linea_previa: str, linea_actual: str) -> bool:
-    """Heuristic to detect whether the current line continues a paragraph.
-
-    Avoids false paragraph breaks caused by PDF extraction double-spacing.
-
-    Args:
-        linea_previa: The preceding line (right-stripped).
-        linea_actual: The current line (stripped).
-
-    Returns:
-        ``True`` if the current line likely continues the paragraph.
-    """
-    if not linea_previa or not linea_actual:
-        return False
-
-    prev_stripped = linea_previa.rstrip()
-    curr_stripped = linea_actual.strip()
-
-    if not prev_stripped or not curr_stripped:
-        return False
-
-    prev_end = prev_stripped[-1]
-
-    if prev_end in '.?!':
-        return False
-
-    if re.match(r'^\d+[.\)]', curr_stripped):
-        return False
-    if curr_stripped.startswith('#'):
-        return False
-    if re.match(r'^[-*•]\s', curr_stripped):
-        return False
-    if curr_stripped.startswith('**'):
-        return False
-
-    if prev_end in ',;(':
-        return True
-    if curr_stripped[0].islower():
-        return True
-
-    if prev_end not in '.?!:':
-        return True
-
-    return False
-
-
-def _reunir_parrafos(texto: str) -> str:
-    """Re-join lines split by PDF extraction using look-ahead for continuations.
-
-    Args:
-        texto: Text with potentially broken paragraph lines.
-
-    Returns:
-        Text with properly joined paragraphs.
-    """
-    lines = texto.split('\n')
-    result = []
-    buffer = ""
-
-    i = 0
-    while i < len(lines):
-        stripped = lines[i].strip()
-
-        if not stripped:
-            if buffer:
-                j = i + 1
-                while j < len(lines) and not lines[j].strip():
-                    j += 1
-
-                if j < len(lines) and _es_continuacion_parrafo(buffer, lines[j].strip()):
-                    buffer += ' ' + lines[j].strip()
-                    i = j + 1
-                    continue
-                else:
-                    result.append(buffer)
-                    buffer = ""
-                    result.append("")
-                    i = j if j < len(lines) else i + 1
-                    continue
-            else:
-                result.append("")
-                i += 1
-                continue
-
-        if not buffer:
-            buffer = stripped
-        elif _es_continuacion_parrafo(buffer, stripped):
-            buffer += ' ' + stripped
-        else:
-            result.append(buffer)
-            buffer = stripped
-
-        i += 1
-
-    if buffer:
-        result.append(buffer)
-
-    return '\n'.join(result)
 
 
 def optimizar_texto_contexto(texto: str) -> str:
@@ -136,71 +43,7 @@ def optimizar_texto_contexto(texto: str) -> str:
     """
     # Implementation lives in monkeygrab.application.context_assembly
     # (optimize_context_text) -- a literal port, no config dependency.
-    # _reunir_parrafos/_es_continuacion_parrafo above are kept even though
-    # this function no longer calls them: rag/chat_pdfs.py imports them by
-    # name as part of its frozen public facade (see AGENTS.md rule 7).
     return optimize_context_text(texto)
-
-
-def _marcar_fragmento_incompleto(texto: str) -> str:
-    """Append ``[excerpt ends mid-sentence]`` if text lacks closing punctuation.
-
-    Args:
-        texto: Fragment text to inspect.
-
-    Returns:
-        Original text, possibly with an appended incompleteness marker.
-    """
-    stripped = texto.rstrip()
-    if not stripped:
-        return texto
-    _CLOSING = frozenset('.?!:")]')
-    if stripped[-1] not in _CLOSING and not stripped[-1].isdigit():
-        return texto + '\n[excerpt ends mid-sentence]'
-    return texto
-
-
-def _texto_fuente_fragmento(doc: str) -> str:
-    """Return chunk body without the contextual-retrieval summary prefix.
-
-    Indexed chunks store ``<summary>\\n\\n<body>`` using the *literal* 6-char
-    sequence ``\\n\\n`` (backslash-n-backslash-n) as separator, intentionally
-    distinct from real paragraph breaks (``\n\n``).  Do NOT replace with real
-    newlines: PDF body text naturally contains ``\n\n``, so a real-newline
-    separator would produce false splits on the first paragraph break.
-
-    Args:
-        doc: Raw ``fragment['doc']`` string.
-
-    Returns:
-        Source body text, or full ``doc`` if no separator is present.
-    """
-    if "\\n\\n" in doc:
-        _, cuerpo = doc.split("\\n\\n", 1)
-        return cuerpo.strip()
-    return doc.strip()
-
-
-def _strip_ollama_think_blocks(text: str) -> str:
-    """Remove ``...</think>`` wrappers often emitted by Qwen-style Ollama models."""
-    if not text:
-        return text
-    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-
-
-_RECOMP_FACTS_HEADER = "## Facts relevant to the question"
-
-
-def _normalizar_salida_recomp(texto: str) -> str:
-    """Ensure RECOMP briefing has the expected markdown header when possible."""
-    t = texto.strip()
-    if not t:
-        return t
-    if _RECOMP_FACTS_HEADER.lower() in t.lower():
-        return t
-    if re.search(r"^-\s+\S", t, flags=re.MULTILINE):
-        return f"{_RECOMP_FACTS_HEADER}\n{t}"
-    return t
 
 
 def construir_contexto_para_modelo(fragmentos: List[Dict[str, Any]]) -> str:

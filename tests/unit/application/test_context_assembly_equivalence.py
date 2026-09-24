@@ -16,7 +16,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import rag.chat_pdfs as rag  # noqa: E402
+import rag.engine.context as context  # noqa: E402
 
+from monkeygrab.application import context_assembly  # noqa: E402
 from monkeygrab.application.context_assembly import (  # noqa: E402
     build_context_for_model,
     optimize_context_text,
@@ -33,6 +35,21 @@ def _fragment(doc, source, page, chunk=0):
 
 def _as_dict(frag):
     return {"doc": frag.doc, "metadata": {"source": frag.metadata.source, "page": frag.metadata.page, "chunk": frag.metadata.chunk}}
+
+
+def test_legacy_context_facade_reuses_application_helpers():
+    """The engine facade must not keep a second implementation of pure helpers."""
+    aliases = {
+        "_es_continuacion_parrafo": "_es_continuacion_parrafo",
+        "_reunir_parrafos": "_reunir_parrafos",
+        "_marcar_fragmento_incompleto": "_marcar_fragmento_incompleto",
+        "_texto_fuente_fragmento": "_texto_fuente_fragmento",
+        "_strip_ollama_think_blocks": "strip_ollama_think_blocks",
+        "_normalizar_salida_recomp": "normalize_recomp_output",
+    }
+
+    for facade_name, application_name in aliases.items():
+        assert getattr(context, facade_name) is getattr(context_assembly, application_name)
 
 
 def test_sorted_and_renumbered_output_matches_original(monkeypatch):

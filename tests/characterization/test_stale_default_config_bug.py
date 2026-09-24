@@ -1,29 +1,12 @@
-"""Characterization test for THE LATENT BUG this suite exists to protect
-against fixing accidentally: several engine functions capture pipeline
-configuration in Python DEFAULT ARGUMENT VALUES, which are evaluated once
-at module-import time (e.g. ``def dividir_en_chunks(texto,
-chunk_size=cfg.CHUNK_SIZE, ...)`` in rag/engine/chunking.py). Reads inside
-the function BODY (``cfg.MIN_CHUNK_LENGTH`` etc.) are dynamic and do observe
-runtime config changes; the bound DEFAULTS never do.
+"""Regression tests for the historical stale-default configuration bug.
 
-Concretely: ``rag.chat_pdfs.set_pipeline_flags`` and the web control panel's
-model/config endpoints mutate ``rag.chat_pdfs`` globals in-place, assuming
-every engine function reads them live. That assumption is only true for
-config read inside a function body, not for config baked into a default
-argument. So a hot config change silently applies to some parameters and
-not others, with no error or warning anywhere.
-
-Design doc docs/design/2026-07-26-monkeygrab-v2.md (section on "Configuracion
-en caliente funciona a medias") calls this out explicitly and section 4
-("AppConfig inmutable inyectada") describes the fix: an immutable config
-object passed explicitly into use cases, which makes "stale default" a
-non-representable state.
-
-THIS IS THE ONE TEST IN tests/characterization/ THAT IS EXPECTED TO CHANGE.
-Once the migration eliminates the stale-default pattern (AppConfig injected
-per-call, no more ``arg=cfg.X`` defaults), update this test to assert the
-FIXED behavior: that a config change is honored by a call made with no
-explicit override, instead of asserting today's broken passthrough.
+Several engine functions used to capture pipeline configuration in Python
+default argument values evaluated at module-import time. Runtime changes to
+``rag.chat_pdfs`` then affected parameters read in function bodies but not
+parameters bound in signatures. ``dividir_en_chunks`` now resolves omitted
+chunking values from the live runtime module; the tests below keep that
+contract explicit and document the older stale-default locations that were
+already migrated.
 """
 
 import inspect
@@ -37,21 +20,23 @@ if str(ROOT) not in sys.path:
 import rag.chat_pdfs as rag
 
 
-def test_hot_changing_chunk_size_does_not_affect_calls_without_an_explicit_argument(monkeypatch):
-    """``dividir_en_chunks``'s ``chunk_size`` default was bound to
-    ``cfg.CHUNK_SIZE`` at import time (2000). Mutating ``rag.CHUNK_SIZE`` at
-    runtime -- exactly what ``set_pipeline_flags``-style hot config changes
-    do for OTHER parameters -- has NO effect on a call that relies on the
-    default. The text below (500 chars) stays a single, unsplit chunk even
-    though the "new" configured chunk_size (50) should have forced a split.
+def test_hot_changing_chunk_size_and_overlap_affect_omitted_arguments(monkeypatch):
+    """Omitted chunking parameters are resolved from live runtime config.
+
+    A hot change to both values must produce the same result as passing those
+    values explicitly. This catches the old import-time ``cfg.CHUNK_SIZE`` and
+    ``cfg.CHUNK_OVERLAP`` defaults without loading a second implementation.
     """
-    monkeypatch.setattr(rag, "CHUNK_SIZE", 50)
+    monkeypatch.setattr(rag, "CHUNK_SIZE", 80)
+    monkeypatch.setattr(rag, "CHUNK_OVERLAP", 10)
+    monkeypatch.setattr(rag, "MIN_CHUNK_LENGTH", 10)
 
-    texto = "word " * 100  # 500 chars, well above the "new" 50-char budget
-    chunks = rag.dividir_en_chunks(texto)  # no explicit chunk_size: uses the stale default
+    texto = "word " * 100
+    from_runtime = rag.dividir_en_chunks(texto)
+    explicit = rag.dividir_en_chunks(texto, chunk_size=80, overlap=10)
 
-    assert len(chunks) == 1
-    assert len(chunks[0]["text"]) > 50  # the stale default (2000), not the live 50, was applied
+    assert from_runtime == explicit
+    assert len(from_runtime) > 1
 
 
 def test_keyword_result_limit_now_follows_a_config_change():

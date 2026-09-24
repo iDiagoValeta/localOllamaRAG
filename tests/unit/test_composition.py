@@ -22,6 +22,7 @@ Covered:
 import sys
 import types
 from pathlib import Path
+from typing import get_type_hints
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -31,6 +32,9 @@ import pytest  # noqa: E402
 
 from monkeygrab import composition  # noqa: E402
 from monkeygrab.config.app_config import AppConfig  # noqa: E402
+from monkeygrab.ports.embedder import Embedder  # noqa: E402
+from monkeygrab.ports.pdf_extractor import PdfExtractor  # noqa: E402
+from monkeygrab.ports.vector_store import VectorStore  # noqa: E402
 
 
 def _install_stub_module(monkeypatch, name, **attrs):
@@ -49,6 +53,18 @@ def _install_stub_module(monkeypatch, name, **attrs):
         setattr(module, key, value)
     monkeypatch.setitem(sys.modules, name, module)
     return module
+
+
+def test_stack_and_builders_use_concrete_port_types():
+    """Composition exposes the port contracts, not untyped ``Any`` values."""
+    assert get_type_hints(composition.Stack) == {
+        "extractor": PdfExtractor,
+        "vector_store": VectorStore,
+        "embedder": Embedder,
+    }
+    assert get_type_hints(composition.build_extractor)["return"] is PdfExtractor
+    assert get_type_hints(composition.build_vector_store)["return"] is VectorStore
+    assert get_type_hints(composition.build_embedder)["return"] is Embedder
 
 
 def test_build_stack_packs_each_builder_result_in_order(monkeypatch):
