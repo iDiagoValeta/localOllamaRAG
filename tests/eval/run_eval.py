@@ -634,9 +634,20 @@ def _fragment_diag(fragments: Sequence[Dict[str, Any]], limit: int = 8) -> List[
 def run_retrieval_case(
     case: Dict[str, Any], fragments: Sequence[Dict[str, Any]], elapsed: float
 ) -> Dict[str, Any]:
-    """Grade a figure_retrieval/table_retrieval case against retrieved content kinds."""
-    hit_kinds = [_kind_from_format(f.get("metadata", {}).get("format")) for f in fragments]
-    result = grade.grade_retrieval(hit_kinds, case)
+    """Grade expected kinds using paper slugs and 1-indexed PDF pages."""
+    hits: List[Dict[str, Any]] = []
+    for fragment in fragments:
+        metadata = fragment.get("metadata", {})
+        raw_source = metadata.get("source")
+        raw_page = metadata.get("page")
+        hits.append(
+            {
+                "kind": _kind_from_format(metadata.get("format")),
+                "source": Path(raw_source).stem if isinstance(raw_source, str) else None,
+                "page": raw_page + 1 if isinstance(raw_page, int) else None,
+            }
+        )
+    result = grade.grade_retrieval(hits, case)
     record = {
         "id": case["id"],
         "paper": case["paper"],

@@ -14,11 +14,12 @@ Two independent graders, matching the two case shapes in gold_cases.jsonl:
 
 - ``grade_answer``: a generated answer against ``case["accepted_answers"]``
   (``factual_number`` / ``factual_concept`` cases).
-- ``grade_retrieval``: the content kinds of the retrieved top-k against
-  ``case["expect_kind_any"]`` (``figure_retrieval`` / ``table_retrieval``
+- ``grade_retrieval``: the content kind, source and page of the retrieved
+  top-k against ``case["expect_kind_any"]``, ``case["paper"]`` and
+  ``case["verified_pages"]`` (``figure_retrieval`` / ``table_retrieval``
   cases).
 
-Both are pure functions over plain data (strings/lists) so they run without
+Both are pure functions over plain data structures so they run without
 network, GPU or even the rest of the pipeline -- see ``test_grade.py``.
 
 Normalization rationale (the substring-match bug this module fixes):
@@ -46,7 +47,7 @@ normalization (``_normalize_decimal_comma``) alongside the default one.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Sequence
+from typing import Any, Dict, Mapping, Sequence
 
 # NORMALIZATION
 
@@ -304,27 +305,58 @@ def grade_answer(answer: str, case: Dict[str, Any]) -> Dict[str, Any]:
     return {"pass": False, "reason": f"none of {accepted} found in answer"}
 
 
-def grade_retrieval(hit_kinds: Sequence[str], case: Dict[str, Any]) -> Dict[str, Any]:
-    """Score retrieval by whether an expected content kind was surfaced.
+def grade_retrieval(
+    hits: Sequence[Mapping[str, Any]], case: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Score retrieval by expected evidence identity in the retrieved top-k.
 
     Args:
-        hit_kinds: The ``kind`` (e.g. ``"text"``, ``"table"``, ``"image"``)
-            of every fragment in the retrieved top-k, in any order.
+        hits: Neutral mappings with ``kind`` (e.g. ``"text"``, ``"table"``,
+            ``"image"``), paper-slug ``source`` and 1-indexed PDF ``page`` for
+            every retrieved fragment, in any order.
         case: A parsed gold_cases.jsonl record with an ``expect_kind_any``
-            list (``figure_retrieval`` / ``table_retrieval`` cases).
+            list, the expected ``paper`` and its ``verified_pages``
+            (``figure_retrieval`` / ``table_retrieval`` cases).
 
     Returns:
         ``{"pass": bool, "reason": str}``.
     """
-    expected = case.get("expect_kind_any") or []
-    if not expected:
+    expected_kinds = case.get("expect_kind_any") or []
+    if not expected_kinds:
         return {"pass": False, "reason": "case has no expect_kind_any to grade against"}
 
-    hit_set = set(hit_kinds)
-    for kind in expected:
-        if kind in hit_set:
-            return {"pass": True, "reason": f"kind {kind!r} present in retrieved hits"}
-    return {"pass": False, "reason": f"wanted one of {expected}, got {sorted(hit_set)}"}
+    expected_paper = case.get("paper")
+    if not expected_paper:
+        return {"pass": False, "reason": "case has no paper to grade against"}
+
+    verified_pages = set(case.get("verified_pages") or [])
+    if not verified_pages:
+        return {"pass": False, "reason": "case has no verified_pages to grade against"}
+
+    for hit in hits:
+        kind = hit.get("kind")
+        source = hit.get("source")
+        page = hit.get("page")
+        if (
+            kind in expected_kinds
+            and source == expected_paper
+            and page in verified_pages
+        ):
+            return {
+                "pass": True,
+                "reason": (
+                    f"kind {kind!r} from {expected_paper!r} on verified page "
+                    f"{page!r} present in retrieved hits"
+                ),
+            }
+
+    return {
+        "pass": False,
+        "reason": (
+            f"wanted one of {expected_kinds} from {expected_paper!r} on pages "
+            f"{sorted(verified_pages)}, got {list(hits)!r}"
+        ),
+    }
 
 
 # STUDY ARTIFACTS (issue #140)

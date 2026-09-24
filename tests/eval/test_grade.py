@@ -33,6 +33,10 @@ _VALID_KINDS = {"text", "table", "image"}
 _RETRIEVAL_CASE_TYPES = {"figure_retrieval", "table_retrieval"}
 
 
+def _retrieval_hit(kind, source="expected-paper", page=1):
+    return {"kind": kind, "source": source, "page": page}
+
+
 def test_exact_number_matches():
     case = {"accepted_answers": ["28.4"]}
     result = grade_answer("The BLEU score is 28.4 points.", case)
@@ -204,23 +208,98 @@ def test_markdown_emphasis_is_stripped():
 
 
 def test_retrieval_passes_when_expected_kind_present():
-    case = {"expect_kind_any": ["image"]}
-    assert grade_retrieval(["text", "image"], case)["pass"]
+    case = {
+        "expect_kind_any": ["image"],
+        "paper": "expected-paper",
+        "verified_pages": [1],
+    }
+    hits = [_retrieval_hit("text"), _retrieval_hit("image")]
+    assert grade_retrieval(hits, case)["pass"]
 
 
 def test_retrieval_fails_when_expected_kind_absent():
-    case = {"expect_kind_any": ["image"]}
-    assert not grade_retrieval(["text", "text"], case)["pass"]
+    case = {
+        "expect_kind_any": ["image"],
+        "paper": "expected-paper",
+        "verified_pages": [1],
+    }
+    hits = [_retrieval_hit("text"), _retrieval_hit("text")]
+    assert not grade_retrieval(hits, case)["pass"]
+
+
+def test_retrieval_case_accepts_expected_document_and_verified_page():
+    from run_eval import run_retrieval_case
+
+    case = {
+        "id": "expected-image",
+        "paper": "expected-paper",
+        "case_type": "figure_retrieval",
+        "lang": "en",
+        "expect_kind_any": ["image"],
+        "verified_pages": [3],
+    }
+    fragment = {
+        "metadata": {
+            "format": "image",
+            "source": "expected-paper.pdf",
+            "page": 2,
+        }
+    }
+
+    result = run_retrieval_case(case, [fragment], elapsed=0.01)
+
+    assert result["passed"]
+
+
+def test_retrieval_case_rejects_wrong_document_or_page():
+    """A matching image is not a hit unless it identifies the expected evidence."""
+    from run_eval import run_retrieval_case
+
+    case = {
+        "id": "expected-image",
+        "paper": "expected-paper",
+        "case_type": "figure_retrieval",
+        "lang": "en",
+        "expect_kind_any": ["image"],
+        "verified_pages": [3],
+    }
+    competing_images = [
+        {
+            "metadata": {
+                "format": "image",
+                "source": "other-paper.pdf",
+                "page": 2,
+            }
+        },
+        {
+            "metadata": {
+                "format": "image",
+                "source": "expected-paper.pdf",
+                "page": 3,
+            }
+        },
+    ]
+
+    for fragment in competing_images:
+        result = run_retrieval_case(case, [fragment], elapsed=0.01)
+
+        assert not result["passed"], fragment["metadata"]
 
 
 def test_retrieval_any_of_multiple_expected_kinds_is_enough():
-    case = {"expect_kind_any": ["table", "image"]}
-    assert grade_retrieval(["text", "table"], case)["pass"]
+    case = {
+        "expect_kind_any": ["table", "image"],
+        "paper": "expected-paper",
+        "verified_pages": [1],
+    }
+    hits = [_retrieval_hit("text"), _retrieval_hit("table")]
+    assert grade_retrieval(hits, case)["pass"]
 
 
 def test_retrieval_missing_expectation_fails_closed():
-    assert not grade_retrieval(["text"], {"expect_kind_any": []})["pass"]
-    assert not grade_retrieval(["text"], {})["pass"]
+    hits = [_retrieval_hit("text")]
+    assert not grade_retrieval(hits, {"expect_kind_any": []})["pass"]
+    assert not grade_retrieval(hits, {})["pass"]
 
 
 def _load_gold_cases():
