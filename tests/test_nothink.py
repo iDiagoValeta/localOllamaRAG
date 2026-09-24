@@ -23,7 +23,6 @@ import json
 import os
 import subprocess
 import tempfile
-import time
 from pathlib import Path
 
 import requests
@@ -140,7 +139,6 @@ def run_nothink_experiment() -> dict[str, str]:
         },
     })
     print(f"  -> {assess(resp_a)}")
-    time.sleep(1)
 
     sep("B) raw:true + /no_think in user message")
     prompt_b = (
@@ -160,7 +158,6 @@ def run_nothink_experiment() -> dict[str, str]:
         },
     })
     print(f"  -> {assess(resp_b)}")
-    time.sleep(1)
 
     sep("C) Derived Modelfile with native Qwen3 template")
     with tempfile.NamedTemporaryFile(
@@ -200,7 +197,6 @@ def run_nothink_experiment() -> dict[str, str]:
                 "options": {"temperature": 0.1, "num_ctx": 2048},
             })
             print(f"  -> {assess(resp_c_no)}")
-            time.sleep(1)
             print("Testing think:true ...")
             resp_c_yes = stream_generate({
                 "model": MODEL_TEST,

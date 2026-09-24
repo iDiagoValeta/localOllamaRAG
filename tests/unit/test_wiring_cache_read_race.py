@@ -27,7 +27,6 @@ the fix.
 import os
 import sys
 import threading
-import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -187,10 +186,12 @@ def test_reset_during_in_flight_build_serializes_on_the_lock(monkeypatch):
     publication and leave the cache empty.
     """
     calls = {"count": 0}
+    entered = threading.Event()
     release = threading.Event()
 
     def blocking_build(config):
         calls["count"] += 1
+        entered.set()
         release.wait(timeout=5)
         return object()
 
@@ -200,10 +201,7 @@ def test_reset_during_in_flight_build_serializes_on_the_lock(monkeypatch):
     t_build = threading.Thread(target=wiring.vector_store, args=(config,))
     t_build.start()
 
-    deadline = time.time() + 5
-    while calls["count"] < 1 and time.time() < deadline:
-        time.sleep(0.001)
-    assert calls["count"] == 1, "builder never entered construction"
+    assert entered.wait(timeout=5), "builder never entered construction"
 
     t_reset = threading.Thread(target=wiring.reset_vector_store_cache)
     t_reset.start()

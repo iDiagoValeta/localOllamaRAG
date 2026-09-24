@@ -19,7 +19,6 @@ observes the slot already populated (1 build).
 
 import sys
 import threading
-import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -45,16 +44,35 @@ class BlockingBuilder:
     def __init__(self):
         self.calls = 0
         self._count_lock = threading.Lock()
+        self.entered_event = threading.Event()
         self.release_event = threading.Event()
 
     def __call__(self, *args, **kwargs):
         with self._count_lock:
             self.calls += 1
+            self.entered_event.set()
         self.release_event.wait(timeout=5)
         return object()
 
 
-def _race_two_callers(target, args, builder):
+class _ObservedLock:
+    """Signal when T2 reaches the cache lock, then delegate to the real lock."""
+
+    def __init__(self, lock, second_attempted):
+        self._lock = lock
+        self._second_attempted = second_attempted
+
+    def __enter__(self):
+        if threading.current_thread().name == "T2":
+            self._second_attempted.set()
+        self._lock.acquire()
+        return self
+
+    def __exit__(self, *_exc_info):
+        self._lock.release()
+
+
+def _race_two_callers(target, args, builder, lock_name, monkeypatch):
     """Call ``target(*args)`` from two threads, racing a first-build window.
 
     ``builder`` is the ``BlockingBuilder`` the caller already patched into
@@ -63,23 +81,21 @@ def _race_two_callers(target, args, builder):
     underlying constructor actually ran.
     """
     results = [None, None]
+    second_attempted = threading.Event()
+    observed_lock = _ObservedLock(getattr(wiring, lock_name), second_attempted)
+    monkeypatch.setattr(wiring, lock_name, observed_lock)
 
     def call(i):
         results[i] = target(*args)
 
-    t1 = threading.Thread(target=call, args=(0,))
-    t2 = threading.Thread(target=call, args=(1,))
+    t1 = threading.Thread(target=call, args=(0,), name="T1")
+    t2 = threading.Thread(target=call, args=(1,), name="T2")
 
     t1.start()
-    deadline = time.time() + 5
-    while builder.calls < 1 and time.time() < deadline:
-        time.sleep(0.001)
-    assert builder.calls == 1, "first thread never entered the constructor"
+    assert builder.entered_event.wait(timeout=5), "first thread never entered the constructor"
 
     t2.start()
-    # Give t2 a real chance to reach the constructor too (buggy code) or to
-    # start blocking on the lock (fixed code) before we let t1 finish.
-    time.sleep(0.05)
+    assert second_attempted.wait(timeout=5), "second thread never reached the cache lock"
 
     builder.release_event.set()
     t1.join(timeout=5)
@@ -108,7 +124,9 @@ def test_concurrent_first_calls_build_embedder_exactly_once(monkeypatch):
     monkeypatch.setattr(wiring, "build_embedder", builder)
 
     config = AppConfig()
-    results = _race_two_callers(wiring.embedder, (config,), builder)
+    results = _race_two_callers(
+        wiring.embedder, (config,), builder, "_embedder_cache_lock", monkeypatch
+    )
 
     assert builder.calls == 1
     assert results[0] is results[1]
@@ -119,7 +137,9 @@ def test_concurrent_first_calls_build_vector_store_exactly_once(monkeypatch):
     monkeypatch.setattr(wiring, "build_vector_store", builder)
 
     config = AppConfig()
-    results = _race_two_callers(wiring.vector_store, (config,), builder)
+    results = _race_two_callers(
+        wiring.vector_store, (config,), builder, "_store_cache_lock", monkeypatch
+    )
 
     assert builder.calls == 1
     assert results[0] is results[1]
@@ -131,7 +151,13 @@ def test_concurrent_first_calls_build_lexical_index_exactly_once(monkeypatch):
 
     config = AppConfig()
     store = object()  # cache key uses id(store); a real VectorStore is not needed
-    results = _race_two_callers(wiring.lexical_index, (store, config), builder)
+    results = _race_two_callers(
+        wiring.lexical_index,
+        (store, config),
+        builder,
+        "_lexical_cache_lock",
+        monkeypatch,
+    )
 
     assert builder.calls == 1
     assert results[0] is results[1]
@@ -142,7 +168,9 @@ def test_concurrent_first_calls_build_reranker_exactly_once(monkeypatch):
     monkeypatch.setattr(wiring, "CrossEncoderReranker", builder)
 
     config = AppConfig()
-    results = _race_two_callers(wiring.reranker, (config,), builder)
+    results = _race_two_callers(
+        wiring.reranker, (config,), builder, "_reranker_cache_lock", monkeypatch
+    )
 
     assert builder.calls == 1
     assert results[0] is results[1]
