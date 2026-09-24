@@ -120,6 +120,10 @@ def run_nothink_experiment() -> dict[str, str]:
 
     Returns:
         Mapping from strategy label to full model response text.
+
+    Each request helper consumes the response synchronously, so the next
+    experiment starts only after the previous operation has completed; no
+    inter-request sleep is needed.
     """
     sep("A) raw:true + <think></think> pre-filled")
     prompt_a = (

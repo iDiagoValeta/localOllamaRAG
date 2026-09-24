@@ -15,6 +15,7 @@ for path in (ROOT, ROOT / "src"):
         sys.path.insert(0, str(path))
 
 import rag.chat_pdfs
+from monkeygrab.config.app_config import AppConfig
 from rag.headless.__main__ import resolve_port
 from rag.headless.app import create_app
 from rag.headless.health import HealthReport
@@ -199,7 +200,8 @@ def test_health_is_probed_with_the_process_config():
         return _health()(config)
 
     _client(health=health).get("/health")
-    assert len(seen) == 1 and seen[0].models is not None
+    assert len(seen) == 1
+    assert seen[0].models == AppConfig.from_env().models
 
 
 def test_health_sees_the_same_runtime_models_as_the_pipeline():
