@@ -25,6 +25,7 @@ import in an environment with nothing else available.
 """
 
 import ast
+import copy
 import importlib.util
 from pathlib import Path
 
@@ -92,6 +93,37 @@ def _imports_engine(path: Path) -> bool:
     return False
 
 
+def _snapshot_mutable_globals(module) -> dict[str, object]:
+    """Capture data-valued module globals, including private defaults.
+
+    Tests may monkeypatch or directly assign configuration values beyond the
+    public runtime mutators. Restoring only the known mutator surface leaves
+    those values alive for the rest of the process, so the isolation boundary
+    snapshots the complete uppercase data namespace instead.
+    """
+    snapshot = {}
+    for name, value in vars(module).items():
+        if not (name.isupper() or name.lstrip("_").isupper()):
+            continue
+        try:
+            snapshot[name] = copy.deepcopy(value)
+        except (TypeError, ValueError):
+            # Imported objects are not configuration state and cannot be
+            # meaningfully copied; the mutable values in this module are data.
+            continue
+    return snapshot
+
+
+def _restore_mutable_globals(module, snapshot: dict[str, object]) -> None:
+    """Restore a snapshot and remove uppercase globals added by a test."""
+    current_names = set(vars(module))
+    for name in current_names - set(snapshot):
+        if name.isupper() or name.lstrip("_").isupper():
+            delattr(module, name)
+    for name, value in snapshot.items():
+        setattr(module, name, copy.deepcopy(value))
+
+
 if _engine_importable():
     collect_ignore = []
 else:
@@ -104,31 +136,40 @@ else:
 
 @pytest.fixture(autouse=True, scope="session")
 def _restore_chat_pdfs_settings_globals():
-    """Undo rag/web/app.py's import-time settings load before any test runs.
+    """Undo import-time settings mutations before the first test runs.
 
     Collection imports every test module up front, before any test-scoped
-    fixture gets a chance to run. Any file that imports rag.web.app (e.g.
-    tests/test_web_indexing_releases_worker.py, first in file order to do so)
-    triggers that module's own top-level ``rag_engine.cargar_ajustes_persistidos()``
-    (rag/web/app.py), which applies whatever this machine's real, gitignored
-    rag/settings.json holds -- active store, model roles and pipeline flags
-    -- onto rag.chat_pdfs's shared globals, for the rest of the process,
-    independent of which test happens to run first or last. A test asserting
-    one of those globals equals rag.chat_pdfs's own import-time default then
-    passes or fails depending on a file no other machine has, rather than on
-    the default it claims to check.
-
-    The docs-folder trio (``CARPETA_DOCS`` / ``PATH_DB`` / ``COLLECTION_NAME``)
-    was fixed this way first (issue #227, via ``set_docs_folder_runtime(None)``).
-    Model roles and pipeline flags had no equivalent restore-to-default path
-    until ``_restaurar_roles_y_flags_por_defecto`` (issue #231) -- both are
-    reset here, once, before the first test in the session executes,
-    restoring what the import silently changed rather than what any one test
-    changed.
+    fixture gets a chance to run. Any file that imports rag.web.app triggers
+    its top-level ``cargar_ajustes_persistidos()`` call, which applies the
+    machine's gitignored settings.json to shared ``rag.chat_pdfs`` globals.
+    The session initializer puts the known persisted choices back before the
+    per-test snapshot boundary is established.
     """
     try:
         import rag.chat_pdfs as rag_engine
     except ImportError:
-        return
+        return None
     rag_engine.set_docs_folder_runtime(None)
     rag_engine._restaurar_roles_y_flags_por_defecto()
+    return rag_engine
+
+
+@pytest.fixture(autouse=True)
+def _restore_chat_pdfs_mutable_globals(_restore_chat_pdfs_settings_globals):
+    """Restore every mutable chat_pdfs global around each test.
+
+    The public mutators cover paths, roles, and pipeline flags, but tests can
+    also touch lower-level constants directly. A complete snapshot prevents a
+    test's direct assignments (and nested edits to configuration maps) from
+    becoming an order-dependent input to the next test.
+    """
+    rag_engine = _restore_chat_pdfs_settings_globals
+    if rag_engine is None:
+        yield
+        return
+
+    snapshot = _snapshot_mutable_globals(rag_engine)
+    try:
+        yield
+    finally:
+        _restore_mutable_globals(rag_engine, snapshot)
