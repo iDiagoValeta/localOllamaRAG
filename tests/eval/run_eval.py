@@ -485,7 +485,7 @@ def ensure_indexed(
         evidence = wiring.answer(store, config)
 
         print(
-            f"[index] {label}: stack=mineru-jina_clip-faiss chunks={store.count()}",
+            f"[index] {label}: stack={_stack_slug()} chunks={store.count()}",
             flush=True,
         )
         return retrieve, evidence, stack
@@ -552,6 +552,19 @@ def _fragment_to_dict(fragment) -> Dict[str, Any]:
     from rag.engine.wiring import fragment_to_dict
 
     return fragment_to_dict(fragment)
+
+
+def _stack_slug() -> str:
+    """Name the extraction/embedding/store stack in logs and report file names.
+
+    The embedder is selectable (MONKEYGRAB_EMBEDDER), and two runs over
+    different embedders must not produce artifacts that read as the same stack.
+    """
+    import rag.chat_pdfs as rag
+
+    if rag.EMBEDDER == "gemma2":
+        return "mineru-eg2-faiss"
+    return "mineru-jina_clip-faiss"
 
 
 def _eval_app_config(
@@ -2233,7 +2246,7 @@ def evaluate(
         chat_override = (config_overrides or {}).get("models.chat")
         if chat_override:
             required_models.add(chat_override)
-    stack_slug = "mineru-jina_clip-faiss"
+    stack_slug = _stack_slug()
 
     # Computed before any case runs, so phase 1/2 can stream records to disk
     # as they are produced (issue #219) -- the final report_path is still
