@@ -46,7 +46,23 @@ def build_vector_store(config: AppConfig) -> VectorStore:
 
 
 def build_embedder(config: AppConfig) -> Embedder:
-    del config
+    """Build the embedder the active config selects.
+
+    Args:
+        config: Runtime configuration naming the embedder and its endpoint.
+
+    Returns:
+        A jina-clip-v2 worker (default) or an HTTP embeddinggemma-2 client.
+    """
+    if config.models.embedder == "gemma2":
+        from monkeygrab.adapters.embedding.llama_server_embedder import LlamaServerEmbedder
+
+        embedding = config.models.embedding
+        return LlamaServerEmbedder(
+            embedding.base_url,
+            dimensions=embedding.dimensions,
+            timeout_s=embedding.timeout,
+        )
     from monkeygrab.adapters.embedding.jina_clip_embedder import JinaClipEmbedder
 
     return JinaClipEmbedder(_isolated_python())

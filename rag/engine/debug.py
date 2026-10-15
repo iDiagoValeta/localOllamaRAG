@@ -13,6 +13,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from rag.engine.runtime import get_runtime
+from monkeygrab.config.models import embedding_display_name
 
 cfg = get_runtime()
 
@@ -186,7 +187,7 @@ def guardar_debug_rag(
                 'config': {
                     'modelo_rag': cfg._inferir_descripcion_modelo(cfg.MODELO_RAG),
                     'modelo_rag_tag': cfg.MODELO_RAG,
-                    'modelo_embedding': 'jinaai/jina-clip-v2',
+                    'modelo_embedding': embedding_display_name(cfg.EMBEDDER),
                     'modelo_recomp': cfg.MODELO_RECOMP,
                     'modelo_chat': cfg.MODELO_CHAT,
                     'contextual_retrieval': cfg.USAR_CONTEXTUAL_RETRIEVAL,

@@ -160,7 +160,7 @@ The rest of the stack is not an Ollama model:
 |---|---|---|
 | **Reranker** | [`BAAI/bge-reranker-v2-m3`](https://huggingface.co/BAAI/bge-reranker-v2-m3). Downloaded from Hugging Face on first use. | fixed |
 | **Lexical search** | [Okapi BM25](https://github.com/dorianbrown/rank_bm25), always on when hybrid search is | — |
-| **Embeddings** | [`jinaai/jina-clip-v2`](https://huggingface.co/jinaai/jina-clip-v2), shared text/image space | fixed |
+| **Embeddings** | [`jinaai/jina-clip-v2`](https://huggingface.co/jinaai/jina-clip-v2) (default), shared text/image space; or [`google/embeddinggemma-2`](https://huggingface.co/google/embeddinggemma-2) via a local `llama-server` | `MONKEYGRAB_EMBEDDER` |
 | **Vector store** | [FAISS](https://github.com/facebookresearch/faiss), exact cosine search | fixed |
 | **PDF extraction** | [MinerU](https://github.com/opendatalab/MinerU), structured text, tables and figures | fixed |
 
@@ -183,6 +183,35 @@ actually measured, each figure citing the run artifact it came from, live
 in [`docs/model-history.md`](docs/model-history.md) -- not here, since a
 benchmark number copied into this file goes stale the moment a later run
 supersedes it.
+
+### Lite profile (4 GB of VRAM)
+
+`MONKEYGRAB_PROFILE=lite` applies a bundle of defaults for a 4 GB GPU: the
+generator becomes a ~3 GB Q4 model, embeddinggemma-2 runs on the CPU, and the
+BGE reranker is turned off (on its own it needs ~1.1 GB of VRAM). An
+explicitly exported variable always wins over the profile.
+
+The profile selects the pieces; it does not install them. Two are needed:
+
+1. The generator, pulled through Ollama:
+
+   ```bash
+   ollama pull hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0
+   ```
+
+2. The CPU embedding server -- [llama.cpp](https://github.com/ggml-org/llama.cpp)
+   build b11669 or newer, serving the GGUFs from
+   [`ggml-org/embeddinggemma-2-GGUF`](https://huggingface.co/ggml-org/embeddinggemma-2-GGUF):
+
+   ```bash
+   llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf \
+     --embedding -ngl 0 --no-mmproj-offload --host 127.0.0.1 --port 8091 \
+     -c 8192 -ub 8192 -b 8192
+   ```
+
+   `-ngl 0` keeps it on the CPU, leaving the whole 4 GB for the generator.
+
+Métricas: ver docs/model-history.md
 
 ---
 

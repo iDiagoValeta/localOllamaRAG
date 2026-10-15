@@ -24,6 +24,7 @@ from monkeygrab.adapters.reranking.cross_encoder_reranker import CrossEncoderRer
 from monkeygrab.application.answer import Answer
 from monkeygrab.composition import build_embedder, build_vector_store
 from monkeygrab.config.app_config import AppConfig
+from monkeygrab.config.models import embedding_display_name
 from monkeygrab.domain.chunk_metadata import ChunkMetadata
 from monkeygrab.domain.fragment import Fragment
 from monkeygrab.ports.chat_model import ChatModel
@@ -248,7 +249,7 @@ def reset_vector_store_cache() -> None:
 
 
 def embedder(config: AppConfig):
-    """Return the reusable jina-clip-v2 worker.
+    """Return the reusable embedder worker the active config selects.
 
     Double-checked locking: two concurrent first callers must not both
     construct one, since each duplicate later starts its own worker
@@ -658,7 +659,7 @@ def retrieval_metrics_to_legacy(metrics: Dict[str, Any], config: AppConfig) -> D
         "fase_semantica": {
             "queries_generadas": len(metrics["query_variants"]),
             "fragmentos_unicos": distances["unique_fragments"],
-            "modelo_embedding": "jinaai/jina-clip-v2",
+            "modelo_embedding": embedding_display_name(config.models.embedder),
             "n_resultados_por_query": retrieval.n_semantic_results,
             "resultados_por_query": metrics["semantic_hits_per_query"],
             "distancia_l2_min": distances["l2_min"],

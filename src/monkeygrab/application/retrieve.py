@@ -348,11 +348,18 @@ class Retrieve:
         queries = self._build_query_variants(question, llm_queries, keywords)
 
         semantic_hits_per_query: List[List[Fragment]] = []
+        # Asymmetric embedders (embeddinggemma-2) need a query-specific prefix
+        # their embed_query hook applies; jina and every test double expose no
+        # such method, so they keep the plain embed(..., keep_alive=...) call.
+        embed_query = getattr(self._embedder, "embed_query", None)
         for q_idx, q in enumerate(queries):
-            embedding = self._embedder.embed(
-                q,
-                keep_alive=_embedding_keep_alive(q_idx, len(queries)),
-            )
+            if embed_query is not None:
+                embedding = embed_query(q)
+            else:
+                embedding = self._embedder.embed(
+                    q,
+                    keep_alive=_embedding_keep_alive(q_idx, len(queries)),
+                )
             semantic_hits_per_query.append(
                 self._vector_store.query(embedding, retrieval.n_semantic_results)
             )

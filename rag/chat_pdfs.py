@@ -55,6 +55,15 @@ except ImportError:
     pass
 
 
+# Import the config package before this module reads any environment variable.
+# Its import-time ``apply_profile()`` seeds a MONKEYGRAB_PROFILE's defaults with
+# setdefault, and both this module's globals and AppConfig.from_env() read those
+# same variables from the process environment -- seeding once, here, is what
+# keeps the two from disagreeing about which defaults are in force.
+from monkeygrab.config import env as _config_env  # noqa: F401
+from monkeygrab.config.paths import derive_db_paths as _derive_db_paths
+
+
 # Compatibility constants, kept because the CLI and the web UI display them.
 # They no longer gate anything: extraction, reranking and lexical search each
 # import their own library inside the adapter that uses it, and each raises
@@ -268,20 +277,23 @@ DATA_DIR = os.path.abspath(os.getenv("MONKEYGRAB_DATA_DIR", BASE_DIR))
 
 CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "en"))
 
+# Active embedder: "jina" (jina-clip-v2, default) or "gemma2"
+# (embeddinggemma-2 behind llama-server). Read here as well as by
+# AppConfig.from_env so this module's PATH_DB and the core agree; the profile
+# defaults are already seeded by the monkeygrab.config.env import above.
+EMBEDDER = os.getenv("MONKEYGRAB_EMBEDDER", "jina")
 
-def _derivar_paths_db(carpeta: str) -> tuple[str, str]:
-    """Derive the fixed jina-clip/FAISS path for a docs folder.
+
+def _derivar_paths_db(carpeta: str, embedder: str | None = None) -> tuple[str, str]:
+    """Derive the per-embedder FAISS path for a docs folder.
 
     Args:
         carpeta: PDF directory (absolute or relative).
+        embedder: Embedder key; defaults to the process's active ``EMBEDDER``.
     Returns:
         Tuple ``(path_db, collection_name)``.
     """
-    nombre = os.path.basename(os.path.abspath(carpeta))
-    return (
-        os.path.join(DATA_DIR, "vector_db", f"{nombre}_jina_clip"),
-        f"docs_{nombre}",
-    )
+    return _derive_db_paths(carpeta, DATA_DIR, embedder or EMBEDDER)
 
 
 PATH_DB, COLLECTION_NAME = _derivar_paths_db(CARPETA_DOCS)
