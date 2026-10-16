@@ -165,7 +165,9 @@ def main() -> int:
         from monkeygrab.config.paths import derive_db_paths
 
         path_db, collection_name = derive_db_paths(
-            str(ROOT / "tests" / "eval" / "dev_docs"), config.paths.data_dir
+            str(ROOT / "tests" / "eval" / "dev_docs"),
+            config.paths.data_dir,
+            embedder=config.models.embedder,
         )
         config = config.with_overrides(
             **{"paths.path_db": path_db, "paths.collection_name": collection_name}

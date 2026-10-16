@@ -42,6 +42,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 import rag.chat_pdfs as rag_engine
+from monkeygrab.config.models import embedding_display_name
 
 _web_dir = os.path.dirname(os.path.abspath(__file__))
 _react_dist = os.path.join(_web_dir, "frontend", "dist")
@@ -1232,7 +1233,7 @@ def api_stores_list():
             "ok": True,
             "stores": _all_stores(),
             "active": _active_store_name(),
-            "embedding": "jinaai/jina-clip-v2",
+            "embedding": embedding_display_name(rag_engine.EMBEDDER),
         }
     )
 

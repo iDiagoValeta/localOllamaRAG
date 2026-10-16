@@ -47,6 +47,7 @@ _FIELD_MAP = [
     ("models.ollama.generate_retries", "OLLAMA_GENERATE_RETRIES"),
     ("models.ollama.generate_retry_delay", "OLLAMA_GENERATE_RETRY_DELAY"),
     ("models.ollama.base_url", "OLLAMA_BASE_URL"),
+    ("models.embedder", "EMBEDDER"),
     ("chunking.chunk_size", "CHUNK_SIZE"),
     ("chunking.chunk_overlap", "CHUNK_OVERLAP"),
     ("chunking.min_chunk_length", "MIN_CHUNK_LENGTH"),
@@ -103,6 +104,12 @@ _FIELDS_WITHOUT_ENGINE_COUNTERPART = {
     "models.openai.base_url",
     "models.openai.api_key",
     "models.openai.timeout",
+    # The HTTP embedder's endpoint/width/timeout have no module global in
+    # rag/chat_pdfs.py: the gemma2 embedder is built from AppConfig alone, and
+    # rag/chat_pdfs.py only carries the embedder *key* (EMBEDDER, mapped above).
+    "models.embedding.base_url",
+    "models.embedding.dimensions",
+    "models.embedding.timeout",
 }
 
 

@@ -485,7 +485,7 @@ def ensure_indexed(
         evidence = wiring.answer(store, config)
 
         print(
-            f"[index] {label}: stack=mineru-jina_clip-faiss chunks={store.count()}",
+            f"[index] {label}: stack={_stack_slug()} chunks={store.count()}",
             flush=True,
         )
         return retrieve, evidence, stack
@@ -554,6 +554,19 @@ def _fragment_to_dict(fragment) -> Dict[str, Any]:
     return fragment_to_dict(fragment)
 
 
+def _stack_slug() -> str:
+    """Name the extraction/embedding/store stack in logs and report file names.
+
+    The embedder is selectable (MONKEYGRAB_EMBEDDER), and two runs over
+    different embedders must not produce artifacts that read as the same stack.
+    """
+    import rag.chat_pdfs as rag
+
+    if rag.EMBEDDER == "gemma2":
+        return "mineru-eg2-faiss"
+    return "mineru-jina_clip-faiss"
+
+
 def _eval_app_config(
     rag,
     carpeta: Path,
@@ -607,7 +620,9 @@ def _eval_app_config(
     # rule 6 it needs explicit agreement first; document, do not flip.
     config = config.with_overrides(**{"flags.usar_contextual_retrieval": False})
     if path_label is not None:
-        path_db, collection_name = derive_db_paths(str(path_label), config.paths.data_dir)
+        path_db, collection_name = derive_db_paths(
+            str(path_label), config.paths.data_dir, embedder=config.models.embedder
+        )
         config = config.with_overrides(
             **{"paths.path_db": path_db, "paths.collection_name": collection_name}
         )
@@ -1867,6 +1882,18 @@ _UNREACHABLE_CONFIG_OVERRIDE_REASONS = {
         "flags.usar_recomp_synthesis, but not wired -- out of scope for this pass"
     ),
     "models.desc": "derived automatically from models.rag; nothing evaluate() runs reads it",
+    "models.embedder": (
+        "read from MONKEYGRAB_EMBEDDER by the process environment; the gate "
+        "does not thread it as an override, and switching it changes the "
+        "index's vector space, so pass rates measured under two embedders are "
+        "not comparable"
+    ),
+    "models.embedding.base_url": (
+        "see models.ollama.rag_num_ctx for the one-level nesting limit; read "
+        "from MONKEYGRAB_EMBEDDER_URL by the process environment"
+    ),
+    "models.embedding.dimensions": "see models.embedding.base_url",
+    "models.embedding.timeout": "see models.embedding.base_url",
     "models.ollama.rag_num_ctx": (
         "AppConfig.with_overrides supports one level of section.field nesting; "
         "models.ollama.* would need replacing the whole models.ollama object"
@@ -2219,7 +2246,7 @@ def evaluate(
         chat_override = (config_overrides or {}).get("models.chat")
         if chat_override:
             required_models.add(chat_override)
-    stack_slug = "mineru-jina_clip-faiss"
+    stack_slug = _stack_slug()
 
     # Computed before any case runs, so phase 1/2 can stream records to disk
     # as they are produced (issue #219) -- the final report_path is still

@@ -43,7 +43,7 @@ web interface, and nothing leaves the machine.
 - **Local-first** — indexing, retrieval and generation all run on your hardware; [Ollama](https://ollama.com/) provides the language models. No API keys.
 - **Hybrid retrieval** — vector search and [Okapi BM25](https://www.staff.city.ac.uk/~sbrp622/papers/foundations_bm25_review.pdf) fused with [Reciprocal Rank Fusion](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf), then re-scored by a [cross-encoder](https://www.sbert.net/examples/applications/cross-encoder/README.html).
 - **Multilingual** — Castellano, English and Valencià, in both the interface and the corpus.
-- **Multimodal** — [MinerU](https://github.com/opendatalab/MinerU) preserves document structure, while [Jina CLIP v2](https://huggingface.co/jinaai/jina-clip-v2) makes text and images searchable in the same semantic space.
+- **Multimodal** — [MinerU](https://github.com/opendatalab/MinerU) preserves document structure, while [embeddinggemma-2](https://huggingface.co/google/embeddinggemma-2) makes text and images searchable in the same semantic space.
 - **Two interfaces** — [Flask](https://flask.palletsprojects.com/) + [React](https://react.dev/) web app, and a packaged Windows desktop app.
 
 <details>
@@ -72,13 +72,13 @@ app and evaluation pipeline all use the same four-part multimodal path.
    content, and separates figures and charts as images. It does not answer
    questions; it prepares the source material.
 
-2. **[Jina CLIP v2](https://huggingface.co/jinaai/jina-clip-v2) connects text
-   and images.** It maps both modalities into one aligned semantic space, so a
-   written question can retrieve a figure directly without first turning that
-   figure into a text description. MonkeyGrab uses its 512-dimensional
-   Matryoshka representation. The downloadable model is licensed under
-   [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/), so local
-   use is non-commercial unless a separate commercial licence is obtained.
+2. **[embeddinggemma-2](https://huggingface.co/google/embeddinggemma-2) connects
+   text and images.** It maps both modalities into one aligned semantic space,
+   so a written question can retrieve a figure directly without first turning
+   that figure into a text description. MonkeyGrab uses its 512-dimensional
+   Matryoshka representation, served by a local `llama-server`.
+   [Jina CLIP v2](https://huggingface.co/jinaai/jina-clip-v2) remains available
+   as `MONKEYGRAB_EMBEDDER=jina`.
 
 3. **[FAISS](https://github.com/facebookresearch/faiss) stores and searches the
    representations.** MonkeyGrab uses an exact, normalized inner-product index,
@@ -160,7 +160,7 @@ The rest of the stack is not an Ollama model:
 |---|---|---|
 | **Reranker** | [`BAAI/bge-reranker-v2-m3`](https://huggingface.co/BAAI/bge-reranker-v2-m3). Downloaded from Hugging Face on first use. | fixed |
 | **Lexical search** | [Okapi BM25](https://github.com/dorianbrown/rank_bm25), always on when hybrid search is | — |
-| **Embeddings** | [`jinaai/jina-clip-v2`](https://huggingface.co/jinaai/jina-clip-v2), shared text/image space | fixed |
+| **Embeddings** | [`google/embeddinggemma-2`](https://huggingface.co/google/embeddinggemma-2) (default) via a local `llama-server`; or [`jinaai/jina-clip-v2`](https://huggingface.co/jinaai/jina-clip-v2) | `MONKEYGRAB_EMBEDDER` |
 | **Vector store** | [FAISS](https://github.com/facebookresearch/faiss), exact cosine search | fixed |
 | **PDF extraction** | [MinerU](https://github.com/opendatalab/MinerU), structured text, tables and figures | fixed |
 
@@ -183,6 +183,42 @@ actually measured, each figure citing the run artifact it came from, live
 in [`docs/model-history.md`](docs/model-history.md) -- not here, since a
 benchmark number copied into this file goes stale the moment a later run
 supersedes it.
+
+### Lite profile (4 GB of VRAM)
+
+`MONKEYGRAB_PROFILE=lite` applies a bundle of defaults for a 4 GB GPU: the
+generator becomes a ~3 GB Q4 model, embeddinggemma-2 runs on the CPU, and the
+BGE reranker and RECOMP synthesis are turned off (the reranker alone peaked at
+2.6 GB of VRAM, and a 2B model's synthesis lost the figures its answer
+needed). An explicitly exported variable always wins over the profile.
+
+The profile selects the pieces; it does not install them. Two are needed:
+
+1. The generator, pulled through Ollama:
+
+   ```bash
+   ollama pull hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0
+   ```
+
+2. The CPU embedding server -- [llama.cpp](https://github.com/ggml-org/llama.cpp)
+   build b11669 or newer, serving the GGUFs from
+   [`ggml-org/embeddinggemma-2-GGUF`](https://huggingface.co/ggml-org/embeddinggemma-2-GGUF):
+
+   ```bash
+   llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf \
+     --embedding -ngl 0 --no-mmproj-offload --host 127.0.0.1 --port 8091 \
+     -c 8192 -ub 8192 -b 8192
+   ```
+
+   `-ngl 0` keeps it on the CPU, leaving the whole 4 GB for the generator.
+
+Measured on the gold set (RTX 4060 Laptop): **130/156 and 129/156** over two
+runs, against the 0.82 floor, with the generator's process peaking at
+**2602 MiB** of VRAM and the embedding server at 0 MiB, ~1.2 s per answer.
+The Q6_K build of the same model (`hf.co/unsloth/gemma-4-E2B-it-GGUF:Q6_K`)
+scored 132/156 at 3340 MiB -- inside the noise, so Q4_0 stays the default.
+Runs and conditions are in
+[`docs/model-history.md`](docs/model-history.md#lite-profile-4-gb-of-vram).
 
 ---
 
@@ -362,10 +398,10 @@ caps one generation call in seconds of wall clock and is off (`0`) by default:
 the request timeout never trips on a model that keeps producing tokens, so this
 is the only bound on a generator that does not stop.
 
-Each corpus has its own Jina CLIP and FAISS index under `rag/vector_db/`. The
+Each corpus has its own FAISS index per embedder under `rag/vector_db/`. The
 web interface detects when a stored index no longer matches the active chunking,
 extraction or index-time flags and warns about it, but never reindexes on its
-own — a settings change must not silently trigger a MinerU + jina-clip pass
+own — a settings change must not silently trigger a MinerU + embedding pass
 over the corpus, which can take an hour. Use the web UI's reindex action
 explicitly to rebuild after changing the corpus, extraction
 behaviour or chunking rules. This detection needs an index built with this
@@ -421,7 +457,7 @@ worker ships inside the bundle. See [`packaging/README.md`](packaging/README.md)
 > [!WARNING]
 > - **Vector graphics** (SVG figures) embedded in PDFs are not extracted.
 > - **Structured extraction is not perfect.** MinerU preserves tables and separates figures, but complex layouts, mathematical notation and unusual PDFs can still be misread.
-> - **Jina CLIP v2 has a non-commercial local licence.** A commercial deployment needs separate licensing or a replacement embedding model.
+> - **Jina CLIP v2 (the opt-in embedder) has a non-commercial local licence.** A commercial deployment that still uses it needs separate licensing; the default embedder is embeddinggemma-2.
 > - **The reranker downloads its model on first use**, a one-time step that needs internet. Everything after runs offline; turn reranking off if you need a fully air-gapped first run.
 > - **Optional stages fail loudly.** If an enabled stage cannot run, the query raises instead of silently returning worse results. Turn the stage off to proceed without it.
 > - **Indexing cost** grows with corpus size, contextual enrichment and the number of extracted images.

@@ -222,6 +222,74 @@ during phase 1. Both are placement findings for anyone serving this model
 next to the fixed stack on 8 GB: at least 16384 of context per slot, and about
 4.5 GiB of VRAM left free for jina-clip and the reranker.
 
+## Lite profile (4 GB of VRAM)
+
+Issue #292. `MONKEYGRAB_PROFILE=lite`, so these rows differ from the table
+above in more than the generator, and are not ranked against it: the embedder
+is `google/embeddinggemma-2@512` served by llama.cpp b11669 on the CPU, the
+reranker is off, `OLLAMA_RAG_NUM_CTX` is 8192, `MAX_CONTEXTO_CHARS` is 16000,
+and `AUX_MODEL` (`OLLAMA_AUX_MODEL`) is the row's own generator rather than
+`Ling-3.0-tiny`, because a 4 GB card has room for one model. Same 156 cases,
+same 180 s budget, `USAR_DESCRIPCION_IMAGEN=false` exported over
+`settings.json` like every row above. Rows produced by
+`tools/diagnostics/model_history_row.py`.
+
+| Model | RECOMP | Answered | Overall | tokens/s | tokens/answer | s/answer | decode s/answer | Budget hit | Infra | Placement | Run |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0` | on | 108 / 136 (79.4%) | 126 / 156 (80.8%) | 91.5 | 30 *(of 124)* | 8.96 *(of 124)* | 0.33 | 0 | 0 | GPU | `20261016T002405Z` |
+| `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0` | **off** | 112 / 136 (82.4%) | **130 / 156 (83.3%)** | 101.6 | 32 *(of 124)* | 1.17 *(of 124)* | 0.31 | 0 | 0 | GPU | `20261016T003731Z` |
+| `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0` | **off** | 111 / 136 (81.6%) | 129 / 156 (82.7%) | 101.8 | 31 *(of 124)* | 1.15 *(of 124)* | 0.30 | 0 | 0 | GPU | `20261016T004926Z` |
+| `hf.co/unsloth/gemma-4-E2B-it-GGUF:Q6_K` | off | 114 / 136 (83.8%) | 132 / 156 (84.6%) | 85.0 | 27 *(of 124)* | 1.27 *(of 124)* | 0.31 | 0 | 0 | GPU | `20261016T010240Z` |
+
+The first run carries the stack name `mineru-jina_clip-faiss` in its file
+name although it ran on embeddinggemma-2: the name was hardcoded until
+`e671d80`. Its `conditions` block records `"embedder": "gemma2"` and the
+embedding server's URL.
+
+RECOMP is off in the profile because of the first two rows: 22 of the first
+run's 28 failed answers had a verified page among the retrieved fragments,
+and the 2B model's synthesis was where the figure got lost. Turning it off
+moved the run by +4 and +3 cases (inside the five-case noise of one run, but
+in both repeats) and cut each answer from ~9 s to ~1.2 s.
+
+VRAM, sampled every 0.5 s per process with `nvidia-smi` through each whole
+run (RTX 4060 Laptop, 8 GiB): the Ollama runner peaked at **2602 MiB** for
+Q4_0 and **3340 MiB** for Q6_K; the embedding server stayed at **0 MiB**; the
+pipeline process itself holds no CUDA memory with the reranker off. Q6_K's
++3 cases are inside the noise and cost 738 MiB of the 4 GB budget, which is
+why Q4_0 is the profile default. For the record, the reranker this profile
+leaves off measured 2640 MiB on the GPU scoring 200 candidates, and ~70 s for
+40 candidates on the CPU.
+
+## Embedder A/B (issue #292)
+
+Same stored chunks, same 144 non-study gold questions, image pixels included
+(930/930 image rows matched to files). Dense retrieval alone, then the
+product's hybrid (dense top-80 + BM25 top-40, weighted RRF). Script:
+`tools/diagnostics/embedder_ab.py`. Artifact: `/tmp/embedder_ab/report.md`.
+
+| arm | dense R@1 | dense R@5 | dense MRR@10 | hybrid R@1 | hybrid R@5 | hybrid MRR@10 |
+|---|---|---|---|---|---|---|
+| jina-clip-v2@512 | 0.417 | 0.750 | 0.551 | 0.542 | 0.812 | 0.653 |
+| embeddinggemma-2@512 | **0.618** | **0.910** | **0.741** | **0.583** | **0.903** | **0.719** |
+
+Paired sign test, gemma512 vs jina: dense 74 better / 18 worse / 52 tie
+(p=0.000); hybrid 51 / 19 / 74 (p=0.000). Catalan R@1 is the one slice jina
+still wins (dense 0.583 vs 0.458; hybrid 0.792 vs 0.667); English, figures
+and tables move the other way by more.
+
+End-to-end on the 156-case gate, same generator (`gemma4:e4b`), reranker and
+RECOMP on, only the embedder swapped:
+
+| Embedder | Overall | Run |
+|---|---|---|
+| jina-clip-v2 | 138 / 156 (88.5%) | `20261016T015206Z` |
+| embeddinggemma-2@512 | 139 / 156 (89.1%) | `20261016T022930Z` |
+
++1 case is inside the five-case noise of one run, so the gate does not decide
+the swap; the retrieval A/B does. Default is embeddinggemma-2 from this
+commit. Existing jina indexes stay valid under `MONKEYGRAB_EMBEDDER=jina`.
+
 ## Coverage
 
 Every generator the previous table listed, including the five rows it carried
@@ -252,7 +320,7 @@ the generator does.
 | Role | Model | Where it runs | Notes |
 |---|---|---|---|
 | PDF extraction | **MinerU 3.4.5** | `.venv-mineru`, GPU | Downloads its own models on first use. Its 2.x line produced a different output layout and different block types -- not interchangeable, see #118. |
-| Text+image embedding | **jinaai/jina-clip-v2**, 512-dim Matryoshka | `.venv-mineru`, GPU, ~2.8 GiB | Fixed by design. CC BY-NC 4.0: local use is non-commercial. |
+| Text+image embedding | **google/embeddinggemma-2@512** (default since #292) | `llama-server`, CPU 0 MiB | Replaced jina-clip-v2 after an A/B on the gold questions (dense MRR@10 0.741 vs 0.551, hybrid 0.719 vs 0.653; 74/18/52 paired, p=0.000). `MONKEYGRAB_EMBEDDER=jina` still builds the historical index. |
 | Reranking | **BAAI/bge-reranker-v2-m3** | product venv, GPU, ~1.5 GiB | Cross-encoder. Not an Ollama model. |
 | Query decomposition, RECOMP, contextual | Ollama, `AUX_MODEL` | Ollama | Pinned for a whole run so a `--models` sweep varies only the generator. Shares the card with it -- see placement, above. |
 | Answer generation | Ollama, `rag` role | Ollama | The only role the table varies. |

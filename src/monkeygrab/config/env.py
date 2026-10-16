@@ -12,6 +12,7 @@ never had to handle correctly because nobody had set it yet.
 """
 
 import os
+from typing import Dict, MutableMapping, Optional
 
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 
@@ -149,3 +150,73 @@ def read_env_choice(name: str, default: str, choices: tuple[str, ...]) -> str:
         valid = ", ".join(choices)
         raise ValueError(f"Invalid value for {name}: {raw!r}. Valid: {valid}")
     return raw
+
+
+# Hardware profiles seed the environment with the exports one machine class
+# needs, so the operator sets a single MONKEYGRAB_PROFILE instead of a wall of
+# variables. "lite" targets a 4 GB GPU (issue #292, measured on an RTX 4060):
+# the Gemma-4-E2B Q4_0 generator peaks at 2602 MiB over a full gate run and
+# embeddinggemma-2 runs on the CPU at 0 MiB. The BGE reranker stays off: it
+# peaked at 2640 MiB on the GPU for 200 candidates, and took ~70 s for 40 on
+# the CPU. RECOMP is off too: with a 2B generator the synthesis step dropped
+# the very figures the answer needed, and skipping it raised the gate from
+# 126/156 to 130/156 while cutting each answer from ~9 s to ~1.5 s.
+PROFILES: Dict[str, Dict[str, str]] = {
+    "lite": {
+        "MONKEYGRAB_EMBEDDER": "gemma2",
+        "MONKEYGRAB_EMBEDDER_DIM": "512",
+        "OLLAMA_RAG_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
+        "OLLAMA_CHAT_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
+        "OLLAMA_CONTEXTUAL_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
+        "OLLAMA_RECOMP_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
+        "OLLAMA_RAG_NUM_CTX": "8192",
+        "OLLAMA_RECOMP_NUM_CTX": "4096",
+        "OLLAMA_CONTEXTUAL_NUM_CTX": "8192",
+        "CONTEXTUAL_DOC_CHARS": "12000",
+        "MAX_CONTEXTO_CHARS": "16000",
+        "USAR_RERANKER": "false",
+        "USAR_RECOMP_SYNTHESIS": "false",
+    },
+}
+
+_STANDARD_PROFILE_NAMES = ("", "standard")
+
+
+def apply_profile(environ: Optional[MutableMapping[str, str]] = None) -> Optional[str]:
+    """Fill a hardware profile's defaults into ``environ`` without clobbering exports.
+
+    Args:
+        environ: Mapping to seed; defaults to ``os.environ``. Passed explicitly
+            by tests so they never mutate the real process environment.
+
+    Returns:
+        The applied profile name, or ``None`` when the selector is unset or
+        ``standard``.
+
+    Raises:
+        ValueError: If ``MONKEYGRAB_PROFILE`` names an unknown profile.
+    """
+    if environ is None:
+        environ = os.environ
+    # The env-drift audit only recognises literal os.getenv/read_env_* reads, so
+    # read the selector through os.getenv as well as the passed mapping. Without
+    # this the variable looks undocumented and could not be listed in
+    # .env.example, which the audit requires for every code-read variable.
+    name = (environ.get("MONKEYGRAB_PROFILE") or os.getenv("MONKEYGRAB_PROFILE") or "").strip()
+    if name in _STANDARD_PROFILE_NAMES:
+        return None
+    if name not in PROFILES:
+        valid = ", ".join(sorted(("standard", *PROFILES)))
+        raise ValueError(f"Unknown MONKEYGRAB_PROFILE {name!r}. Valid: {valid}")
+    # setdefault, not assignment: an explicitly exported variable always wins
+    # over the profile, and unsetting it later restores the profile default.
+    for key, value in PROFILES[name].items():
+        environ.setdefault(key, value)
+    return name
+
+
+# Applied once at import so every reader starts from the same environment:
+# rag/chat_pdfs.py's module globals and AppConfig.from_env() both read these
+# variables from the process environment, and a second place applying the
+# profile could leave the two disagreeing about which defaults are in force.
+apply_profile()

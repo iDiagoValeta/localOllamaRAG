@@ -65,6 +65,25 @@ _RECIPE_VERSION = 1
 _FINGERPRINT_CHARS = 16
 
 
+def _embedding_id(config: AppConfig) -> str:
+    """Return the index-recipe id of the active embedder.
+
+    ``jina`` keeps the historical fixed id so every index built before the
+    embedder became selectable stays valid; ``gemma2`` names its Matryoshka
+    width, since two widths are different vector spaces and must not share an
+    index.
+
+    Args:
+        config: The configuration an index was, or would be, built under.
+
+    Returns:
+        The embedding identifier string for the recipe.
+    """
+    if config.models.embedder == "gemma2":
+        return f"google/embeddinggemma-2@{config.models.embedding.dimensions}"
+    return _EMBEDDING_ID
+
+
 def index_recipe(config: AppConfig) -> Dict[str, Any]:
     """Return the configuration that decides an index's stored content.
 
@@ -81,7 +100,7 @@ def index_recipe(config: AppConfig) -> Dict[str, Any]:
     """
     recipe: Dict[str, Any] = {
         "extractor": _EXTRACTOR_ID,
-        "embedding": _EMBEDDING_ID,
+        "embedding": _embedding_id(config),
         "chunk_size": config.chunking.chunk_size,
         "chunk_overlap": config.chunking.chunk_overlap,
         "min_chunk_length": config.chunking.min_chunk_length,

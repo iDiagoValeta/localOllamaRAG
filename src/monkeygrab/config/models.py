@@ -29,6 +29,27 @@ class OllamaRuntimeConfig:
 CHAT_BACKENDS = ("ollama", "openai")
 
 
+# Selectable embedders. "gemma2" is embeddinggemma-2 behind an OpenAI-compatible
+# llama-server and the default (better recall and MRR than jina-clip-v2 on the
+# gold set; CPU-friendly). "jina" is jina-clip-v2, run in the isolated interpreter.
+EMBEDDERS = ("jina", "gemma2")
+
+# Matryoshka widths embeddinggemma-2 can be truncated to. An index built at one
+# width is a different vector space from another, so the width is part of both
+# the store path and the index fingerprint; an unsupported value must abort
+# rather than silently change the geometry.
+EMBEDDING_DIMENSIONS = (768, 512, 256, 128)
+
+
+@dataclass(frozen=True)
+class EmbeddingRuntimeConfig:
+    """Where and how the HTTP embedder (embeddinggemma-2) is reached."""
+
+    base_url: str = "http://127.0.0.1:8091"
+    dimensions: int = 512
+    timeout: int = 120
+
+
 @dataclass(frozen=True)
 class OpenAICompatRuntimeConfig:
     """Connection settings shared by every role that runs on the OpenAI backend."""
@@ -40,7 +61,7 @@ class OpenAICompatRuntimeConfig:
 
 @dataclass(frozen=True)
 class ModelsConfig:
-    """Ollama generation roles; jina-clip-v2 is the fixed embedder."""
+    """Ollama generation roles plus the selectable embedder."""
 
     rag: str = "gemma4:e4b"
     chat: str = "gemma4:e4b"
@@ -53,7 +74,24 @@ class ModelsConfig:
     contextual_backend: str = "ollama"
     recomp_backend: str = "ollama"
     openai: OpenAICompatRuntimeConfig = OpenAICompatRuntimeConfig()
+    embedder: str = "gemma2"
+    embedding: EmbeddingRuntimeConfig = EmbeddingRuntimeConfig()
 
 
 def infer_model_description(model_name: str) -> str:
     return model_name.split(":")[0]
+
+
+def embedding_display_name(embedder: str) -> str:
+    """Return the embedder's model name for metrics and the UI.
+
+    Args:
+        embedder: Embedder key from ``EMBEDDERS``.
+
+    Returns:
+        The version-less model name shown to users; unknown keys fall back to
+        the jina name, which is the product default.
+    """
+    if embedder == "gemma2":
+        return "google/embeddinggemma-2"
+    return "jinaai/jina-clip-v2"
