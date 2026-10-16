@@ -55,11 +55,12 @@ def test_registry_indexing_lock_is_per_store_and_non_blocking(tmp_path):
         pass
 
 
-def test_config_for_derives_the_faiss_path_inside_data_dir(tmp_path):
+def test_config_for_derives_the_faiss_path_inside_data_dir(monkeypatch, tmp_path):
+    monkeypatch.delenv("MONKEYGRAB_EMBEDDER", raising=False)  # default embedder
     config = service.config_for(StorePaths(str(tmp_path / "docs"), str(tmp_path / "data")))
     assert config.paths.docs_folder == str(tmp_path / "docs")
     assert config.paths.data_dir == str(tmp_path / "data")
-    assert config.paths.path_db == str(tmp_path / "data" / "vector_db" / "docs_jina_clip")
+    assert config.paths.path_db == str(tmp_path / "data" / "vector_db" / "docs_eg2")
 
 
 def test_index_store_indexes_only_pending_documents(monkeypatch, tmp_path):
@@ -218,11 +219,12 @@ def test_index_store_success_keeps_the_cached_embedder(monkeypatch, tmp_path):
 
 
 def test_status_store_reports_documents_chunks_and_staleness(monkeypatch, tmp_path):
+    monkeypatch.delenv("MONKEYGRAB_EMBEDDER", raising=False)  # default embedder
     store = _Store(docs=["a.pdf", "b.md"])
     monkeypatch.setattr(service.wiring, "vector_store", lambda config: store)
     monkeypatch.setattr(service, "obtener_documentos_indexados", lambda s: list(s.docs))
     monkeypatch.setattr(service, "index_fingerprint_mismatch", lambda s: True)
-    (tmp_path / "data" / "vector_db" / "docs_jina_clip").mkdir(parents=True)
+    (tmp_path / "data" / "vector_db" / "docs_eg2").mkdir(parents=True)
     status = service.status_store(StorePaths(str(tmp_path / "docs"), str(tmp_path / "data")))
     assert status == {
         "exists": True, "documents": ["a.pdf", "b.md"], "chunks_total": 6,

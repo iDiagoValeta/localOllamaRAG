@@ -69,7 +69,7 @@ src/monkeygrab/          Hexagonal core (see src/monkeygrab/README.md)
   ports/                   Protocols the application layer depends on
   application/             Use cases (IndexCorpus, Retrieve, Answer) + pure helpers
   config/                  AppConfig — immutable, from_env() / with_overrides()
-  adapters/                Port implementations: MinerU, jina-clip, FAISS, Ollama, BM25, BGE
+  adapters/                Port implementations: MinerU, embeddinggemma-2 (llama-server), jina-clip, FAISS, Ollama, BM25, BGE
 rag/                      Web interface and pipeline entry points
   chat_pdfs.py              Public facade + global config (see §1 rule 7)
   engine/                    wiring, retrieval, indexing, context, generation, chunking, debug, history, settings
@@ -143,7 +143,7 @@ default); BGE Reranker v2 M3 is fixed.
 
 Each role also has a backend, `MONKEYGRAB_<ROLE>_BACKEND` = `ollama` (default) or `openai` (`src/monkeygrab/adapters/chat/openai_compat_chat.py`, endpoint from `MONKEYGRAB_OPENAI_BASE_URL`). The figure describer follows the `chat` role.
 
-`MONKEYGRAB_PROFILE` applies a named bundle of these defaults for a hardware class with `setdefault` (an exported variable always wins): `standard` (default) changes nothing, `lite` fits a 4 GB VRAM GPU — a ~3 GB Q4 generator, the `gemma2` embedder on the CPU and the reranker off (`monkeygrab.config.env.PROFILES`). Which models have actually been measured, on what and how fast, is [`docs/model-history.md`](docs/model-history.md).
+The low-VRAM variant (4 GB) lives on the `rag-lite` branch, not here. Which models have actually been measured, on what and how fast, is [`docs/model-history.md`](docs/model-history.md).
 
 Other env vars: `DOCS_FOLDER` (default `rag/docs/en/`), `MONKEYGRAB_DATA_DIR` (writable root for `vector_db`/history/debug; defaults to the package dir in dev, `%LOCALAPPDATA%/MonkeyGrab` in the packaged app), `OLLAMA_BASE_URL` (default `http://localhost:11434`, falling back to Ollama's own `OLLAMA_HOST`).
 
@@ -175,7 +175,7 @@ presented as pipeline coverage, and vice versa:
   server answers).
 - **Full gate** (`.github/workflows/full-eval.yml`, `workflow_dispatch` only,
   self-hosted GPU runner with Ollama installed): runs the real pipeline —
-  Ollama generation, Jina CLIP embeddings, hybrid BM25+semantic retrieval,
+  Ollama generation, embeddings from the active embedder, hybrid BM25+semantic retrieval,
   BGE reranking — against every case in `tests/eval/gold_cases.jsonl`
   via `tests/eval/run_eval.py`, and fails if the pass rate drops below
   `tests/eval/baseline_min_pass_rate.txt`. This is the gate that must be
@@ -265,6 +265,6 @@ beyond the standard library; `adapters/` reuse what `rag/requirements.txt`
 installs (FAISS, Ollama, Pillow, sentence-transformers). MinerU and Jina CLIP
 run through the isolated `.venv-mineru` environment.
 
-System: Python 3.10+, Ollama running locally. A CUDA GPU is recommended once the
-multimodal retrieval stack (jina-clip, FAISS) is in use — see
+System: Python 3.10+, Ollama running locally. A CUDA GPU is recommended for the generator and
+reranker, and required by jina-clip when it is the selected embedder — see
 `docs/design/2026-07-26-monkeygrab-v2.md`.

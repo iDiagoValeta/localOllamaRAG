@@ -36,6 +36,7 @@ import json
 import math
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any, List, Optional
 
@@ -123,8 +124,13 @@ class LlamaServerEmbedder:
             timeout_s: Per-request socket timeout in seconds.
 
         Raises:
-            ValueError: If ``dimensions`` is not one of the supported widths.
+            ValueError: If ``dimensions`` is not one of the supported widths,
+                or ``base_url`` is not ``http``/``https``.
         """
+        # urlopen also follows file:// and custom schemes; this adapter only
+        # ever talks to an HTTP server, so anything else is a misconfiguration.
+        if urllib.parse.urlsplit(base_url).scheme not in ("http", "https"):
+            raise ValueError(f"base_url must be http(s), got {base_url!r}")
         if dimensions not in _ALLOWED_DIMENSIONS:
             raise ValueError(
                 f"dimensions must be one of {_ALLOWED_DIMENSIONS} (embeddinggemma-2 "
@@ -177,7 +183,8 @@ class LlamaServerEmbedder:
                 JSON, naming ``base_url`` and the server's own message.
         """
         try:
-            with urllib.request.urlopen(request, timeout=self._timeout_s) as response:
+            # Scheme checked in __init__: every request URL is built on base_url.
+            with urllib.request.urlopen(request, timeout=self._timeout_s) as response:  # nosec B310
                 status = getattr(response, "status", 200)
                 raw = response.read()
         except urllib.error.HTTPError as exc:
