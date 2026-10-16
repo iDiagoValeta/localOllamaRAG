@@ -27,23 +27,12 @@ required ports and run `IndexCorpus`, `Retrieve` and `Answer` from
 [`src/monkeygrab/`](../src/monkeygrab/README.md).
 [`engine/wiring.py`](engine/wiring.py) is the single bridge between this
 package's mutable runtime configuration and the immutable `AppConfig` the core
-expects. MinerU, the selected embedder (embeddinggemma-2 by default, or Jina CLIP) and
-FAISS are built by the composition root.
+expects. MinerU, embeddinggemma-2 and FAISS are built by the composition root.
 
 The consequence worth knowing: the web app, desktop wrapper and evaluation
 gate execute the same indexing, retrieval and generation implementations.
 
-`wiring.py` also owns the jina-clip worker's lifetime, since it holds the one
-instance the whole process shares. A worker that dies between calls (the OOM
-killer picks it first, being the largest resident process after the model
-server) is replaced on the next request rather than making every later query
-fail until a restart. The adapter itself still never respawns its own worker,
-so a genuine crash loop stays visible as repeated failures; `wiring` is the
-caller its docstring points at. `release_embedder()` frees that worker after
-an indexing run that failed, where it would otherwise sit on ~1.7 GiB that
-the next attempt needs.
-
-The Cross-Encoder reranker is cached the same way, and `release_reranker()`
+The Cross-Encoder reranker is cached, and `release_reranker()`
 drops its GPU weights on demand -- called from `/api/settings` when the
 reranker flag is turned off, since nothing will use it again until it is
 turned back on. It is deliberately not called on the per-query retrieval
