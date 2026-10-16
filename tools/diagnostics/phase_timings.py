@@ -4,7 +4,7 @@
 Issue #12 ("does Rust buy anything measurable here?") cannot be answered from
 the evaluation gate's per-case totals: the gate records one elapsed number
 per case, so the time *inside* native/library calls (Ollama, torch, FAISS,
-the isolated jina-clip worker) is not separated from the time *between* them
+the embedding server) is not separated from the time *between* them
 (the Python orchestration a rewrite could actually move). This probe makes
 that split by wrapping every port in a timing recorder -- the hexagonal
 boundary means no product code changes are needed to measure it.
@@ -51,7 +51,7 @@ GOLD_CASES = ROOT / "tests" / "eval" / "gold_cases.jsonl"
 # exposes that is not listed here passes through untouched.
 _TIMED_METHODS = {
     "decompose": ("generate",),              # query decomposer (ChatModel)
-    "embed": ("embed",),                     # jina-clip worker (Embedder)
+    "embed": ("embed",),                     # embedding server (Embedder)
     "vector_search": ("query", "get_by_ids"),  # FAISS store (VectorStore)
     "bm25": ("search",),                     # rank_bm25 (LexicalIndex)
     "rerank": ("rerank",),                   # cross-encoder (Reranker)
@@ -167,7 +167,6 @@ def main() -> int:
         path_db, collection_name = derive_db_paths(
             str(ROOT / "tests" / "eval" / "dev_docs"),
             config.paths.data_dir,
-            embedder=config.models.embedder,
         )
         config = config.with_overrides(
             **{"paths.path_db": path_db, "paths.collection_name": collection_name}
@@ -258,7 +257,7 @@ def main() -> int:
             f"  ({100.0 * glue / wall:.1f}% of wall)"
         )
     print("\nIssue #12 reads this as: the glue share is what a rewrite could move;")
-    print("everything else is already native (Ollama, torch, FAISS, rank_bm25, the jina worker).")
+    print("everything else is already native (Ollama, torch, FAISS, rank_bm25, llama-server).")
     return 0
 
 

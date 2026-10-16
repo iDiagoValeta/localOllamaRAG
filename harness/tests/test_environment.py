@@ -2,7 +2,7 @@
 
 Issue #107. Comparable-view equality (models, chunking, index-time flags)
 does not capture stack drift, so an August high-water entry can hold passes
-today's MinerU/jina-clip cannot reach, and every criterion-5 campaign ends
+today's stack cannot reach, and every criterion-5 campaign ends
 ``rejected_regression`` on passes nobody can earn back.
 
 The tests here fix the two decisions that make the fingerprint honest rather

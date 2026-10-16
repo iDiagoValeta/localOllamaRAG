@@ -45,7 +45,7 @@ def data_dir(monkeypatch, tmp_path):
     for flag in settings.PERSISTED_FLAGS:
         monkeypatch.setattr(rag_engine, flag, True)
     monkeypatch.setattr(rag_engine, "CARPETA_DOCS", str(DOCS_ROOT / "en"))
-    monkeypatch.setattr(rag_engine, "PATH_DB", str(tmp_path / "vector_db" / "en_jina_clip"))
+    monkeypatch.setattr(rag_engine, "PATH_DB", str(tmp_path / "vector_db" / "en_eg2"))
     monkeypatch.setattr(rag_engine, "COLLECTION_NAME", "docs_en")
     for variable in rag_engine.MODEL_ROLE_ENV_VARS.values():
         monkeypatch.delenv(variable, raising=False)

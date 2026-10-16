@@ -91,7 +91,7 @@ One case per line:
 
 `table` and `image` match the content taxonomy produced by the current MinerU
 indexer. Tables retain their structured HTML and figures are embedded directly
-with Jina CLIP.
+with embeddinggemma-2.
 
 The three `study_*` types (issue #140; graded by `grade_study` in `grade.py`) score a whole
 generated artifact against its source document, not a literal against a page -- they carry no
@@ -143,8 +143,8 @@ something is missing:
 
 1. Checks Ollama is reachable and every required model (`--models`, plus the
    fixed auxiliary model used for query decomposition, contextual retrieval
-   and RECOMP) is installed. Jina CLIP and BGE are local Hugging Face models,
-   not Ollama roles.
+   and RECOMP) is installed. The embedder (llama-server) and BGE are not
+   Ollama roles.
 2. Downloads any missing blind-set arXiv papers (reusing `fetch_papers.py`)
    and stages them under `blind_docs/<paper-slug>.pdf`.
 3. Indexes whatever is not already indexed -- dev-set papers for each of the three

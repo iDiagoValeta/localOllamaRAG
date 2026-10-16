@@ -2,13 +2,13 @@
 
 Issue #123. The loop used to pick a stack per case from `case["source"]`, so
 an interleaved case list kept both corpora's stacks resident for the whole
-phase. Each jina-clip worker costs ~2.8 GiB; on an 8 GB card the second one
+phase. Each stack's GPU models cost gigabytes; on an 8 GB card the second one
 could not start, and every blind-set case came back `infrastructure_error` --
 19 of 51, after paying the full indexing time, with the gate correctly
 refusing to compare the run against the baseline. Measured 2026-09-01 on an
 RTX 4060 Laptop.
 
-Grouping is enough because the workers start lazily on first use: nothing has
+Grouping is enough because the models load lazily on first use: nothing has
 to be constructed later than it already is, only released earlier.
 
 These tests use fakes. The point is the *order of operations* -- which stack
@@ -200,7 +200,7 @@ def test_a_missing_stack_is_skipped_rather_than_dereferenced(harness):
 
 # RELEASING AFTER INDEXING (issue #123, second half).
 #
-# Indexing is a use: it starts each corpus's jina-clip worker and loads its
+# Indexing is a use: it loads each corpus's GPU models, including its
 # reranker, and both stay resident. Phase 1 then opens the one it needs on top
 # of them. Measured 2026-09-01 -- indexing three new blind papers left two
 # workers alive, and every dev case failed reranking with CUDA OOM before
@@ -237,12 +237,12 @@ def test_the_release_is_safe_because_both_halves_reload():
     # dragging the stack in.
     root = Path(__file__).resolve().parents[2] / "src" / "monkeygrab" / "adapters"
 
-    embedder = (root / "embedding" / "jina_clip_embedder.py").read_text(encoding="utf-8")
-    ensure = embedder[embedder.index("def _ensure_worker") :]
-    ensure = ensure[: ensure.index("\n    def ", 1)]
-    assert "self._start_worker()" in ensure, (
-        "JinaClipEmbedder._ensure_worker no longer restarts a closed worker; "
-        "releasing after indexing would leave phase 1 with no embedder"
+    embedder = (root / "embedding" / "llama_server_embedder.py").read_text(encoding="utf-8")
+    close = embedder[embedder.index("def close") :]
+    close = close[: close.index("\n    def ", 1)]
+    assert "Release nothing" in close, (
+        "LlamaServerEmbedder.close now releases something; check that a closed "
+        "embedder still answers, or phase 1 is left with no embedder"
     )
 
     reranker = (root / "reranking" / "cross_encoder_reranker.py").read_text(encoding="utf-8")

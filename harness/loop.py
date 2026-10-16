@@ -319,7 +319,7 @@ def is_comparable_search_set_entry(
     An entry measured on a KNOWN-different stack is rejected too (issue #107).
     Configuration equality says the two runs asked the pipeline the same
     question; it says nothing about whether the pipeline was the same, and a
-    2026-08 baseline held passes the current MinerU/jina-clip cannot reach --
+    2026-08 baseline held passes the current stack cannot reach --
     so recovery paired against a high water nobody could climb back to and
     every campaign ended ``rejected_regression`` with no bug to fix.
 

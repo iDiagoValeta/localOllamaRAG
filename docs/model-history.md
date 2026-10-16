@@ -288,7 +288,7 @@ RECOMP on, only the embedder swapped:
 
 +1 case is inside the five-case noise of one run, so the gate does not decide
 the swap; the retrieval A/B does. Default is embeddinggemma-2 from this
-commit. Existing jina indexes stay valid under `MONKEYGRAB_EMBEDDER=jina`.
+commit.
 
 ## Coverage
 
@@ -320,7 +320,7 @@ the generator does.
 | Role | Model | Where it runs | Notes |
 |---|---|---|---|
 | PDF extraction | **MinerU 3.4.5** | `.venv-mineru`, GPU | Downloads its own models on first use. Its 2.x line produced a different output layout and different block types -- not interchangeable, see #118. |
-| Text+image embedding | **google/embeddinggemma-2@512** (default since #292) | `llama-server`, CPU 0 MiB | Replaced jina-clip-v2 after an A/B on the gold questions (dense MRR@10 0.741 vs 0.551, hybrid 0.719 vs 0.653; 74/18/52 paired, p=0.000). `MONKEYGRAB_EMBEDDER=jina` still builds the historical index. |
+| Text+image embedding | **google/embeddinggemma-2@512** (default since #292) | `llama-server`, CPU 0 MiB | Replaced jina-clip-v2 after an A/B on the gold questions (dense MRR@10 0.741 vs 0.551, hybrid 0.719 vs 0.653; 74/18/52 paired, p=0.000). |
 | Reranking | **BAAI/bge-reranker-v2-m3** | product venv, GPU, ~1.5 GiB | Cross-encoder. Not an Ollama model. |
 | Query decomposition, RECOMP, contextual | Ollama, `AUX_MODEL` | Ollama | Pinned for a whole run so a `--models` sweep varies only the generator. Shares the card with it -- see placement, above. |
 | Answer generation | Ollama, `rag` role | Ollama | The only role the table varies. |

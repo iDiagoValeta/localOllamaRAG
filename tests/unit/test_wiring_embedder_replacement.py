@@ -1,15 +1,10 @@
-"""Tests for replacing a dead jina-clip worker instead of poisoning the process (#191).
+"""Tests for replacing a dead embedder instead of poisoning the process (#191).
 
-``JinaClipEmbedder`` deliberately never respawns its own worker: a crash loop
-must stay a visible, repeated failure rather than hide behind what looks like
-uninterrupted operation. Its class docstring names the way out -- "a caller
-that wants a fresh worker constructs a new JinaClipEmbedder" -- and this is
-that caller. Before this, ``wiring.embedder`` cached one instance for the
-life of the process, so a worker killed by the OOM killer made every
-subsequent query fail until the whole server was restarted.
-
-The adapter's own policy is unchanged and still pinned by
-tests/unit/adapters/test_jina_clip_embedder.py.
+An adapter that owns a worker never respawns it itself: a crash loop must stay
+a visible, repeated failure rather than hide behind what looks like
+uninterrupted operation. ``wiring.embedder`` is the caller that builds a fresh
+instance once the cached one reports ``is_unusable``; without it, a dead
+worker made every subsequent query fail until the whole server was restarted.
 """
 
 import sys
@@ -26,7 +21,7 @@ from rag.engine import wiring  # noqa: E402
 
 
 class _FakeEmbedder:
-    """Stands in for JinaClipEmbedder: only the liveness contract matters."""
+    """Stands in for an embedder: only the liveness contract matters."""
 
     def __init__(self):
         self.unusable = False
@@ -147,8 +142,7 @@ class _RefusingEmbedder(_FakeEmbedder):
 def test_replacement_under_concurrency_builds_exactly_one_new_embedder(monkeypatch):
     # Same race the double-checked locking in this module exists to close
     # (#46): two threads observing the same dead instance must not each
-    # construct a replacement, since each duplicate loads jina-clip onto the
-    # same 8GB card.
+    # construct a replacement, since each duplicate would load its own model.
     _reset_cache()
     built = _patch_builder(monkeypatch)
     config = AppConfig()

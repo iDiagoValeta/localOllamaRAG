@@ -18,9 +18,8 @@ cd rag/web/frontend && pnpm install && pnpm run build   # frontend (pnpm only)
 without installing anything, and names the component that is missing rather
 than the whole setup.
 
-Ollama must be running locally with a generator model pulled; a CUDA GPU is
-required for indexing (jina-clip hard-fails without one). MinerU and Jina CLIP
-live in an isolated `.venv-mineru/` interpreter — see the root `README.md`.
+Ollama must be running locally with a generator model pulled. MinerU lives in
+an isolated `.venv-mineru/` interpreter; see the root `README.md`.
 
 ## Two CI gates, know which one you need
 

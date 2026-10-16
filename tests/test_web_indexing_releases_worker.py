@@ -1,4 +1,4 @@
-"""Tests that a failed indexing run releases the jina-clip worker (issue #191).
+"""Tests that a failed indexing run releases the cached embedder (issue #191).
 
 The observed shape: a re-index failed on every file, and seven minutes later
 the worker was still alive holding 1784 MiB. The next attempt then failed with
@@ -59,7 +59,7 @@ def test_a_failed_indexing_run_releases_the_worker(monkeypatch):
 
 def test_a_successful_indexing_run_keeps_the_worker(monkeypatch):
     # Deliberate asymmetry: that worker is the one the next query will use,
-    # and reloading jina-clip costs ~29s. Releasing here would trade an
+    # and reloading it costs latency. Releasing here would trade an
     # orphaned-VRAM bug for a latency one.
     _reset_state(monkeypatch)
     released = _track_release(monkeypatch)

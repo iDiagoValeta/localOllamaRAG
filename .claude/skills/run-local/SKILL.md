@@ -1,6 +1,6 @@
 ---
 name: run-local
-description: Use when launching MonkeyGrab locally, verifying a running instance is actually healthy, or diagnosing a start that fails or runs oddly slowly. Covers Ollama not answering, missing model roles, a stale frontend build, a port already taken, and the two shapes of VRAM contention between the generator and the jina-clip worker: a CUDA out-of-memory, or a silent fallback to CPU.
+description: Use when launching MonkeyGrab locally, verifying a running instance is actually healthy, or diagnosing a start that fails or runs oddly slowly. Covers Ollama not answering, missing model roles, a stale frontend build, a port already taken, and the two shapes of VRAM contention between the generator and the reranker: a CUDA out-of-memory, or a silent fallback to CPU.
 ---
 
 # Run MonkeyGrab locally
@@ -9,8 +9,9 @@ description: Use when launching MonkeyGrab locally, verifying a running instance
 
 Running MonkeyGrab means two processes, not one: the **Ollama server**, which
 holds LLM weights in VRAM, and the **Flask app**, which owns retrieval and
-embeds queries through the isolated jina-clip worker. They are separate
-processes competing for the same card, and that is where local runs break.
+reranks on the GPU (queries are embedded by a CPU `llama-server`). They are
+separate processes competing for the same card, and that is where local runs
+break.
 
 Reference material lives elsewhere and is not repeated here: install and
 configuration in `README.md`, the operating contract in `AGENTS.md`, per-command
@@ -30,19 +31,14 @@ detail in `AGENTS.md` §9.
 ## 1. Preflight
 
 ```bash
-python tools/setup_environments.py --check   # both interpreters, CUDA, MinerU, jina-clip, model roles
+python tools/setup_environments.py --check   # both interpreters, CUDA, MinerU, model roles
 ls rag/web/frontend/dist/index.html          # built frontend; app serves a bare page without it
 ```
 
 No `dist/`: `cd rag/web/frontend && pnpm install && pnpm run build` (pnpm only,
 `packageManager` is pinned).
 
-`--check` reports each component separately and never pulls anything. One of
-its warnings is expected rather than blocking:
-
-- **jina-clip "BUSY, not missing"** means the card has no free memory because
-  another instance or a resident Ollama model holds it. The install is fine.
-  Free the VRAM and re-check.
+`--check` reports each component separately and never pulls anything.
 
 **"missing model(s) for the configured roles"** names a role that genuinely is
 not pulled. It resolves the four roles through the same precedence the app
@@ -114,20 +110,14 @@ which is what §4 covers.
 
 ### VRAM contention, in its two shapes
 
-On a small card (8 GB) the generator and the jina-clip worker do not both fit.
+On a small card (8 GB) the generator and the reranker may not both fit.
 Which symptom you get depends on **which process reached the GPU first**, and
 Ollama decides GPU or CPU once, when it loads the weights.
 
 **Ollama got there first.** It takes several GB, and the next query that has to
-embed a question hard-fails, correctly (`AGENTS.md` rule 8):
+rerank hard-fails with a CUDA out-of-memory, correctly (`AGENTS.md` rule 8).
 
-```
-jina-clip worker reported an error for op='text': CUDA out of memory.
-Tried to allocate 490.00 MiB. GPU 0 has a total capacity of 7.60 GiB of
-which 422.62 MiB is free.
-```
-
-**The worker got there first.** Nothing fails. Ollama quietly loads the model
+**The reranker got there first.** Nothing fails. Ollama quietly loads the model
 into system RAM instead and generation gets much slower. The repo's no-silent-
 fallback policy does not reach here: that decision belongs to the Ollama server,
 not to an adapter in this codebase, so nothing in the app will tell you.
