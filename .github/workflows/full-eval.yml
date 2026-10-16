@@ -1,6 +1,6 @@
 name: Full eval gate
 
-# Full gate: runs the REAL pipeline (Ollama generation, Jina CLIP embeddings, hybrid
+# Full gate: runs the REAL pipeline (Ollama generation, embeddinggemma-2 embeddings, hybrid
 # BM25+semantic retrieval, Cross-Encoder reranking) against every case in
 # tests/eval/gold_cases.jsonl and fails the run if the pass rate drops below
 # tests/eval/baseline_min_pass_rate.txt. This is the "gate completo" required
