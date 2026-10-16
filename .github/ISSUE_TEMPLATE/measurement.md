@@ -29,7 +29,7 @@ paragraph when there is more than one figure:
 gitignored: say so explicitly and give the path anyway, so the machine that
 holds it can reproduce the reading. Cited, not shipped.
 
-Example: tests/eval/runs/20260729T020233Z_mineru-jina_clip-faiss.json (local) -->
+Example: tests/eval/runs/20261016T120000Z_mineru-eg2-faiss.json (local) -->
 
 ## What it implies
 

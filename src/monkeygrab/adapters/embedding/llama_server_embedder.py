@@ -20,9 +20,8 @@ Two wire endpoints, both verified against the real server:
 
 Task prefixes (EmbeddingGemma 2 model card) are applied here rather than by
 the caller, unlike what the ``Embedder`` port describes: the indexing use case
-calls ``embed`` with raw chunk text for every embedder, and jina-clip needs no
-prefix at all. ``embed`` therefore formats its input as a document and
-``embed_query`` -- which ``Retrieve`` prefers when an embedder offers it --
+calls ``embed`` with raw chunk text. ``embed`` therefore formats its input as a
+document and ``embed_query`` -- which ``Retrieve`` prefers when an embedder offers it --
 formats it as a search query. Images are embedded without a prefix.
 
 Failure policy: hard-fail (project-wide). Any connection error, non-200
@@ -101,7 +100,7 @@ class LlamaServerEmbedder:
     stripping whitespace, the caption is embedded as a document
     (``format_document``) and the result is the L2-normalized element-wise SUM
     of the normalized image vector and the normalized caption vector -- never a
-    raw, sub-unit-norm average (the same rule the Jina CLIP adapter documents).
+    raw, sub-unit-norm average.
     A blank caption embeds the image alone.
 
     Failure policy: hard-fail, no retries, no fallbacks. See the module
@@ -147,8 +146,8 @@ class LlamaServerEmbedder:
     def is_unusable(self) -> bool:
         """Whether this instance has retired itself for good.
 
-        Always ``False``: unlike the in-process Jina CLIP adapter, this one
-        owns no worker process, so it has no liveness of its own to lose. It
+        Always ``False``: this adapter owns no worker process, so it has no
+        liveness of its own to lose. It
         exists to satisfy the structural contract ``rag/engine/wiring.py``
         reads (see ``_is_unusable``) without that caller having to special-case
         this adapter.

@@ -2,17 +2,15 @@
 """setup_environments.py -- build the two interpreters MonkeyGrab needs, and check them.
 
 Issue #120. ``README.md`` said "there is no setup script for this yet", and the
-consequence was that the isolated environment's contents lived only in a
-docstring: ``src/monkeygrab/adapters/embedding/jina_clip_worker.py`` names
-torch 2.6.0+cu124, transformers 4.57.6 and sentence-transformers 5.6.1, and a
-reader had to turn that into pip invocations, in the right order, from the
-right index.
+consequence was that the isolated environment's contents lived only in prose:
+MinerU runs out of its own interpreter (``.venv-mineru``) with a CUDA build of
+torch, and a reader had to turn that into pip invocations, in the right order,
+from the right index.
 
-The order is the part that is not obvious and fails late. ``mineru[core]``
-resolves its own dependency tree, so installing it AFTER the pins upgrades
-transformers past 4.x, and the failure surfaces much later as jina-clip's
-``Tensor.item() cannot be called on meta tensors`` at index time -- the exact
-error ``rag/requirements.txt`` cites as the reason the isolated venv exists.
+The order is the part that is not obvious and fails late. The CUDA torch build
+comes first, from the PyTorch index, so the CPU wheel is never chosen, and
+``mineru[core]`` is installed afterwards because it resolves a large dependency
+tree of its own.
 
 Usage:
     python tools/setup_environments.py            # build both, then check
@@ -47,20 +45,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PRODUCT_VENV = REPO_ROOT / ".venv"
 ISOLATED_VENV = REPO_ROOT / ".venv-mineru"
 
-# The pins jina_clip_worker.py's docstring names, and the index torch's CUDA
-# build comes from. Not read from a requirements file on purpose: there is no
-# requirements file for this environment, and adding one would put a second
-# source of truth beside that docstring.
+# The CUDA build of torch MinerU needs, and the index it comes from. Not read
+# from a requirements file on purpose: there is no requirements file for this
+# environment.
 TORCH_PIN = "torch==2.6.0"
 TORCHVISION_PIN = "torchvision==0.21.0"
 TORCH_INDEX = "https://download.pytorch.org/whl/cu124"
-TRANSFORMERS_PIN = "transformers==4.57.6"
-SENTENCE_TRANSFORMERS_PIN = "sentence-transformers==5.6.1"
-# jina-clip-v2's remote code imports these directly; they are not pulled in by
-# anything above.
-JINA_RUNTIME_DEPS = ("einops", "timm", "pillow")
-
-WORKER_SCRIPT = REPO_ROOT / "src" / "monkeygrab" / "adapters" / "embedding" / "jina_clip_worker.py"
 
 OLLAMA_ROLE_VARS = {
     "rag": "OLLAMA_RAG_MODEL",
@@ -111,13 +101,10 @@ def build_product_venv() -> None:
 
 
 def build_isolated_venv() -> None:
-    """``.venv-mineru`` -- MinerU and jina-clip, in the order that survives.
+    """``.venv-mineru`` -- MinerU's own interpreter.
 
-    torch first (from the CUDA index, so the CPU wheel is never chosen),
-    ``mineru[core]`` second (it resolves a large tree of its own), and the
-    transformers/sentence-transformers pins LAST, so MinerU's resolution
-    cannot leave transformers on 5.x -- which loads fine and then fails at
-    index time inside jina-clip's remote code.
+    torch first (from the CUDA index, so the CPU wheel is never chosen), then
+    ``mineru[core]`` (it resolves a large tree of its own).
     """
     if not _venv_python(ISOLATED_VENV).exists():
         _run([sys.executable, "-m", "venv", str(ISOLATED_VENV)], label="creating .venv-mineru")
@@ -128,11 +115,6 @@ def build_isolated_venv() -> None:
         label="installing CUDA torch",
     )
     _run([python, "-m", "pip", "install", "mineru[core]"], label="installing MinerU")
-    _run(
-        [python, "-m", "pip", "install", TRANSFORMERS_PIN, SENTENCE_TRANSFORMERS_PIN,
-         *JINA_RUNTIME_DEPS],
-        label="pinning the jina-clip runtime",
-    )
 
 
 def _check_interpreter(venv: Path, label: str) -> Tuple[bool, str]:
@@ -148,11 +130,10 @@ def _check_interpreter(venv: Path, label: str) -> Tuple[bool, str]:
 
 
 def _check_cuda() -> Tuple[bool, str]:
-    """CUDA must be visible to the ISOLATED interpreter -- that is where it is needed.
+    """CUDA must be visible to the ISOLATED interpreter -- that is where MinerU runs.
 
-    jina_clip_worker.py hard-fails without it (~100 s/document on CPU makes
-    indexing a real corpus infeasible), so a CPU-only isolated venv is a setup
-    failure, not a slower setup.
+    MinerU is the only component in ``.venv-mineru`` and the one that uses the
+    GPU, so this reports the isolated interpreter's own view of the card.
     """
     python = _venv_python(ISOLATED_VENV)
     if not python.exists():
@@ -185,49 +166,6 @@ def _check_mineru_binary() -> Tuple[bool, str]:
             version = lines[-1] if lines else "present, but --version printed nothing"
             return True, f"MinerU: {version}"
     return False, f"MinerU: no binary under {ISOLATED_VENV}"
-
-
-def _check_jina_worker() -> Tuple[bool, str]:
-    """Actually start the worker. Loading is what fails, not importing.
-
-    The first run downloads the model (~30 s afterwards, several minutes the
-    first time), which is why this has a generous timeout and says so.
-    """
-    python = _venv_python(ISOLATED_VENV)
-    # Name which of the two is absent. "one of these is missing" sends the
-    # reader to check both, and the wrong one first half the time.
-    if not python.exists():
-        return False, f"jina-clip: cannot check, no interpreter at {python}"
-    if not WORKER_SCRIPT.exists():
-        return False, f"jina-clip: cannot check, worker script missing at {WORKER_SCRIPT}"
-    print("       (starting the jina-clip worker; the first run downloads the model)")
-    result = subprocess.run(
-        [str(python), str(WORKER_SCRIPT)],
-        input=json.dumps({"id": 1, "op": "text", "text": "setup probe"}) + "\n",
-        capture_output=True,
-        text=True,
-        timeout=1800,
-    )
-    for line in result.stdout.splitlines():
-        line = line.strip()
-        if not line.startswith("{"):
-            continue
-        message = json.loads(line)
-        if message.get("event") == "ready":
-            return True, f"jina-clip: worker ready, dim {message['dim']}"
-        if message.get("event") == "fatal":
-            error = message["error"]
-            # "Installed but the card is busy" is not "not installed", and
-            # rebuilding the venv fixes nothing. A gate run or a resident
-            # Ollama model holding the 8 GB is the ordinary cause.
-            if "out of memory" in error.lower():
-                return False, (
-                    "jina-clip: installed, but the GPU has no free memory right now "
-                    "(another run or a resident Ollama model is holding it) -- "
-                    "BUSY, not missing. Free the card and re-check."
-                )
-            return False, f"jina-clip: {error[:200]}"
-    return False, f"jina-clip: worker produced no ready event (exit {result.returncode})"
 
 
 def _settings_path() -> Path:
@@ -315,7 +253,6 @@ def run_checks() -> int:
         (".venv-mineru", lambda: _check_interpreter(ISOLATED_VENV, ".venv-mineru")),
         ("CUDA", _check_cuda),
         ("MinerU", _check_mineru_binary),
-        ("jina-clip", _check_jina_worker),
         ("Ollama", _check_ollama),
     ]
     print("\nChecking:")
@@ -332,11 +269,10 @@ def run_checks() -> int:
             # and leave the remaining components unreported -- the state this
             # script exists to describe is exactly the broken one.
             passed, message = False, f"{label}: raised {type(exc).__name__}: {exc}"
-        # Two states are not setup failures and must not read as one:
-        # Ollama is the component this script does not build (a missing model
-        # is a pull away), and a busy GPU means installed-and-occupied, which
-        # rebuilding does not fix.
-        not_a_missing_component = "Ollama:" in message or "BUSY, not missing" in message
+        # Ollama is the one component this script does not build, and a missing
+        # model is a pull away rather than a failed setup, so it warns instead
+        # of failing.
+        not_a_missing_component = "Ollama:" in message
         if passed:
             marker = OK
         elif not_a_missing_component:

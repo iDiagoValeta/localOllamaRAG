@@ -53,7 +53,7 @@ def indexar_documentos(
 ) -> int:
     """Index PDFs and text files from a folder via ``IndexCorpus`` and the configured stack.
 
-    MinerU, jina-clip-v2 and FAISS are the only supported backends.
+    MinerU, embeddinggemma-2 and FAISS are the only supported backends.
 
     Args:
         carpeta: Path to the folder containing PDF files.

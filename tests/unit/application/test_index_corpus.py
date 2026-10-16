@@ -67,7 +67,7 @@ class FakeEmbedder:
 
 
 class FakeMultimodalEmbedder(FakeEmbedder):
-    """Text embedder that also satisfies ImageEmbedder (jina-style)."""
+    """Text embedder that also satisfies ImageEmbedder (one shared text/image space)."""
 
     def __init__(self):
         super().__init__()

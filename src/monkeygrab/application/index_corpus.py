@@ -165,7 +165,7 @@ class IndexCorpus:
     -- there is nothing to invoke otherwise, the same pattern used by
     ``Retrieve``'s and ``Answer``'s optional ports.
 
-    ``image_extractor`` is required for image indexing. The configured Jina CLIP
+    ``image_extractor`` is required for image indexing. The configured embeddinggemma-2
     adapter satisfies both the text and image embedding ports. When
     ``flags.usar_descripcion_imagen`` is on, an optional ``image_describer``
     (a vision-capable ``ChatModel``) also writes a textual description of each
@@ -296,7 +296,7 @@ class IndexCorpus:
         """Extract figures and embed them via ``ImageEmbedder.embed_image``.
 
         Writes each ``ExtractedImage``'s bytes to a temp file because the
-        ``ImageEmbedder`` port takes a path (the jina worker loads from disk).
+        ``ImageEmbedder`` port takes a path (the adapter reads it from disk).
         Chunk ``text`` keeps the caption when present so lexical/debug views
         still have something readable; the vector itself is from pixels.
         With ``flags.usar_descripcion_imagen`` and an ``image_describer``

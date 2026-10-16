@@ -1,73 +1,46 @@
-"""Unit tests for selecting the embedder (gemma2 default, jina opt-in).
+"""Unit tests for how the embedder is wired.
 
-The default configuration uses embeddinggemma-2 -- index path suffix ``_eg2``,
-embedding id ``google/embeddinggemma-2@512``, ``LlamaServerEmbedder`` -- and
-jina-clip-v2 must still change all three places that name an embedder. The
-historical ``_EMBEDDING_ID`` constant stays the jina-clip-v2 string so existing
-indexes remain valid. ``Retrieve`` must also prefer an embedder's
-``embed_query`` hook when it has one, since embeddinggemma-2 is asymmetric.
+embeddinggemma-2 names the index path suffix ``_eg2``, the embedding id
+``google/embeddinggemma-2@<width>`` and the ``LlamaServerEmbedder`` the stack
+builds. ``Retrieve`` must also prefer an embedder's ``embed_query`` hook when it
+has one, since embeddinggemma-2 is asymmetric.
 """
 
-import pytest
-
-from monkeygrab.application.index_fingerprint import (
-    _EMBEDDING_ID,
-    compute_index_fingerprint,
-    index_recipe,
-)
+from monkeygrab.application.index_fingerprint import compute_index_fingerprint, index_recipe
 from monkeygrab.application.retrieve import Retrieve
 from monkeygrab.composition import build_embedder
 from monkeygrab.config.app_config import AppConfig
+from monkeygrab.config.models import EmbeddingRuntimeConfig
 from monkeygrab.config.paths import derive_db_paths
-
-
-def _jina_config():
-    return AppConfig().with_overrides(**{"models.embedder": "jina"})
 
 
 # derive_db_paths
 
-def test_derive_db_paths_uses_eg2_slug_by_default(tmp_path):
+def test_derive_db_paths_uses_the_eg2_slug(tmp_path):
     path_db, collection_name = derive_db_paths(str(tmp_path / "en"), str(tmp_path))
 
     assert path_db.endswith("en_eg2")
     assert collection_name == "docs_en"
 
 
-def test_derive_db_paths_uses_jina_clip_slug_for_jina(tmp_path):
-    path_db, collection_name = derive_db_paths(
-        str(tmp_path / "en"), str(tmp_path), embedder="jina"
-    )
-
-    assert path_db.endswith("en_jina_clip")
-    assert collection_name == "docs_en"
-
-
-def test_derive_db_paths_rejects_an_unknown_embedder(tmp_path):
-    with pytest.raises(ValueError, match="Valid"):
-        derive_db_paths(str(tmp_path / "en"), str(tmp_path), embedder="other")
-
-
 # index fingerprint
 
-def test_default_embedding_id_is_embeddinggemma2():
-    assert _EMBEDDING_ID == "jinaai/jina-clip-v2@512"
+def test_embedding_id_names_embeddinggemma2_and_its_width():
     assert index_recipe(AppConfig())["embedding"] == "google/embeddinggemma-2@512"
 
 
-def test_jina_embedding_id_keeps_the_historical_constant():
-    recipe = index_recipe(_jina_config())
+def test_a_different_width_changes_the_fingerprint():
+    narrower = AppConfig().with_overrides(
+        **{"models.embedding": EmbeddingRuntimeConfig(dimensions=256)}
+    )
 
-    assert recipe["embedding"] == _EMBEDDING_ID
-
-
-def test_jina_changes_the_fingerprint():
-    assert compute_index_fingerprint(_jina_config()) != compute_index_fingerprint(AppConfig())
+    assert index_recipe(narrower)["embedding"] == "google/embeddinggemma-2@256"
+    assert compute_index_fingerprint(narrower) != compute_index_fingerprint(AppConfig())
 
 
 # composition
 
-def test_build_embedder_returns_llama_server_embedder_by_default():
+def test_build_embedder_returns_llama_server_embedder():
     from monkeygrab.adapters.embedding.llama_server_embedder import LlamaServerEmbedder
 
     embedder = build_embedder(AppConfig())
@@ -83,7 +56,7 @@ class _VectorStoreDouble:
 
 
 class _RecordingEmbedder:
-    """Embedder exposing only ``embed``; the plain path every real jina double uses."""
+    """Embedder exposing only ``embed``; the plain path every test double uses."""
 
     def __init__(self):
         self.calls = []

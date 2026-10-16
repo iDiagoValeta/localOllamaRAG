@@ -21,7 +21,7 @@ Usage:
     python tests/eval/run_eval.py --models gemma4:e2b gemma4:e4b
     python tests/eval/run_eval.py --update-baseline
 
-Dependencies: the full multimodal stack (FAISS, MinerU, jina-clip-v2,
+Dependencies: the full multimodal stack (FAISS, MinerU, embeddinggemma-2,
 sentence-transformers and Ollama) plus a running local Ollama
 server and, in practice, a GPU -- the reranker and every model role run on
 CPU otherwise, which is not a supported configuration for this gate.
@@ -444,7 +444,7 @@ def ensure_indexed(
 
         lexical = Bm25LexicalIndex(store, config.retrieval)
         # Reranking runs on whatever device the adapter detects, which is CUDA
-        # here. It no longer has to share the card with the jina worker: the
+        # here. It does not share the card with a resident generator: the
         # runner retrieves every case first and only then generates, so the two
         # models are never resident at the same time.
         reranker = CrossEncoderReranker() if config.flags.usar_reranker else None
@@ -555,16 +555,8 @@ def _fragment_to_dict(fragment) -> Dict[str, Any]:
 
 
 def _stack_slug() -> str:
-    """Name the extraction/embedding/store stack in logs and report file names.
-
-    The embedder is selectable (MONKEYGRAB_EMBEDDER), and two runs over
-    different embedders must not produce artifacts that read as the same stack.
-    """
-    import rag.chat_pdfs as rag
-
-    if rag.EMBEDDER == "gemma2":
-        return "mineru-eg2-faiss"
-    return "mineru-jina_clip-faiss"
+    """Name the extraction/embedding/store stack in logs and report file names."""
+    return "mineru-eg2-faiss"
 
 
 def _eval_app_config(
@@ -620,9 +612,7 @@ def _eval_app_config(
     # rule 6 it needs explicit agreement first; document, do not flip.
     config = config.with_overrides(**{"flags.usar_contextual_retrieval": False})
     if path_label is not None:
-        path_db, collection_name = derive_db_paths(
-            str(path_label), config.paths.data_dir, embedder=config.models.embedder
-        )
+        path_db, collection_name = derive_db_paths(str(path_label), config.paths.data_dir)
         config = config.with_overrides(
             **{"paths.path_db": path_db, "paths.collection_name": collection_name}
         )
@@ -1349,10 +1339,10 @@ def run_all_cases(
     records: List[Dict[str, Any]] = _RecordSink(partial_sink)
     pending: List[Dict[str, Any]] = []
 
-    print("[phase 1/2] retrieval for every case (embedder + reranker on GPU)", flush=True)
+    print("[phase 1/2] retrieval for every case (embedder + reranker)", flush=True)
     # One corpus at a time, releasing each before the next is touched (issue
     # #123). Interleaving them by case order kept both stacks resident, and
-    # each jina-clip worker costs ~2.8 GiB: on an 8 GB card the second one
+    # each stack's GPU models cost gigabytes: on an 8 GB card the second one
     # could not start, so every blind-set case came back
     # infrastructure_error and the whole run was discarded -- after paying the
     # full indexing time. The workers start lazily on first use, so grouping
@@ -1882,12 +1872,6 @@ _UNREACHABLE_CONFIG_OVERRIDE_REASONS = {
         "flags.usar_recomp_synthesis, but not wired -- out of scope for this pass"
     ),
     "models.desc": "derived automatically from models.rag; nothing evaluate() runs reads it",
-    "models.embedder": (
-        "read from MONKEYGRAB_EMBEDDER by the process environment; the gate "
-        "does not thread it as an override, and switching it changes the "
-        "index's vector space, so pass rates measured under two embedders are "
-        "not comparable"
-    ),
     "models.embedding.base_url": (
         "see models.ollama.rag_num_ctx for the one-level nesting limit; read "
         "from MONKEYGRAB_EMBEDDER_URL by the process environment"
@@ -2346,8 +2330,8 @@ def evaluate(
                 extra_sources[source] = _sources_in_store(stack_x.vector_store)
 
                 # Released as soon as this corpus is indexed, not with the
-                # others further down. Indexing is a use, so it leaves a
-                # jina-clip worker (~3.2 GiB) and a reranker resident, and
+                # others further down. Indexing is a use, so it leaves its
+                # GPU models resident, and
                 # with four corpora the accumulation runs the card out before
                 # the third one can even start its worker -- measured, exactly
                 # that, on the first run with es and ca present. Deferring the
@@ -2363,16 +2347,15 @@ def evaluate(
                 extra_sources=extra_sources,
             )
 
-            # Indexing is a use, so it starts each corpus's jina-clip worker
-            # and loads its reranker, and both stay resident afterwards.
+            # Indexing is a use, so it loads each corpus's GPU models
+            # (embedder and reranker), and both stay resident afterwards.
             # Phase 1 then opens the one it needs on top of them: measured
             # 2026-09-01, indexing three new blind papers left two workers
             # alive and every dev case failed reranking with CUDA OOM before
             # retrieval had touched the second corpus at all (issue #123).
             #
-            # Safe because both reload on next use and say so: the embedder's
-            # _ensure_worker starts a new process when close() has set
-            # _process to None, and CrossEncoderReranker.release's docstring
+            # Safe because both reload on next use: the HTTP embedder holds no
+            # GPU state of its own, and CrossEncoderReranker.release's docstring
             # states "a later rerank simply loads again". Releasing here costs
             # one model load and buys the phase the whole card.
             _release_gpu_models(retrieve_dev, retrieve_blind, *[c[1] for c in extra_corpora])

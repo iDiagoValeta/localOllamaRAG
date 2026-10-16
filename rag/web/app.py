@@ -42,7 +42,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 import rag.chat_pdfs as rag_engine
-from monkeygrab.config.models import embedding_display_name
+from monkeygrab.config.models import EMBEDDING_DISPLAY_NAME
 
 _web_dir = os.path.dirname(os.path.abspath(__file__))
 _react_dist = os.path.join(_web_dir, "frontend", "dist")
@@ -579,7 +579,7 @@ def _api_init_logic():
         "document_details": _collection_document_details(coll),
         "history_count": len(_state["historial_chat"]),
         # Detection only -- a mismatch is never auto-reindexed here (issue #36):
-        # a settings change must not silently trigger a MinerU + jina-clip pass.
+        # a settings change must not silently trigger a MinerU + embedding pass.
         # Reindexing stays the explicit /api/reindex action.
         "fingerprint_stale": rag_engine.index_fingerprint_mismatch(coll),
         **_init_paths_payload(),
@@ -1233,7 +1233,7 @@ def api_stores_list():
             "ok": True,
             "stores": _all_stores(),
             "active": _active_store_name(),
-            "embedding": embedding_display_name(rag_engine.EMBEDDER),
+            "embedding": EMBEDDING_DISPLAY_NAME,
         }
     )
 

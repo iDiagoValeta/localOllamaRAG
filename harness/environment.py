@@ -3,7 +3,7 @@
 Issue #107. Two ledger entries are treated as comparable when their models,
 chunking and index-time flags match (``loop._comparable_config_view``). That
 view is complete for *configuration* and blind to everything else: MinerU and
-jina-clip get upgraded, an upstream fix changes what a page extracts to, the
+the embedder get upgraded, an upstream fix changes what a page extracts to, the
 corpus is reindexed. The entry from August still declares itself comparable,
 still holds passes the current stack cannot reach, and recovery mode pairs
 against a high water nobody can climb back to -- so every campaign ends
@@ -18,7 +18,7 @@ whether it is standing in the same world.
 Two environments decide a case's outcome, and they are not the same
 environment (README.md, "Install, models and configuration"):
 
-- **isolated** (``.venv-mineru``) -- MinerU and jina-clip-v2 build the index.
+- **isolated** (``.venv-mineru``) -- MinerU extracts what the index stores.
   A change here changes stored content, which no amount of retrieval tuning
   can undo.
 - **product** (whatever interpreter runs the gate) -- the BGE reranker, FAISS
@@ -72,8 +72,8 @@ FINGERPRINT_SCHEMA = 1
 # without pretending the product venv holds MinerU.
 TRACKED_PACKAGES = (
     "mineru",                 # extraction: what a PDF becomes
-    "transformers",           # jina-clip's and the reranker's runtime
-    "sentence-transformers",  # BGE reranker; jina-clip's loader in the isolated venv
+    "transformers",           # the reranker's runtime
+    "sentence-transformers",  # BGE reranker
     "torch",                  # numerics under both of the above
     "faiss-cpu",              # the index and its search
     "rank-bm25",              # the keyword half of hybrid retrieval

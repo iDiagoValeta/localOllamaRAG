@@ -7,7 +7,7 @@ class ImageEmbedder(Protocol):
     """Embeds one image into the same vector space as this embedder's text.
 
     Kept separate from ``Embedder`` because text and image inputs have
-    different method contracts. The production Jina CLIP adapter satisfies
+    different method contracts. The production embeddinggemma-2 adapter satisfies
     both protocols and places both modalities in one aligned vector space.
 
     Combining an image with its caption is part of THIS port's contract,

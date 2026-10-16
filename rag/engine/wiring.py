@@ -24,7 +24,7 @@ from monkeygrab.adapters.reranking.cross_encoder_reranker import CrossEncoderRer
 from monkeygrab.application.answer import Answer
 from monkeygrab.composition import build_embedder, build_vector_store
 from monkeygrab.config.app_config import AppConfig
-from monkeygrab.config.models import embedding_display_name
+from monkeygrab.config.models import EMBEDDING_DISPLAY_NAME
 from monkeygrab.domain.chunk_metadata import ChunkMetadata
 from monkeygrab.domain.fragment import Fragment
 from monkeygrab.ports.chat_model import ChatModel
@@ -186,7 +186,7 @@ def chat_model_for_role(
 def app_config_from_runtime() -> AppConfig:
     """Build an ``AppConfig`` reflecting the current runtime state.
 
-    The fixed MinerU, Jina CLIP and FAISS composition sits outside this
+    The fixed MinerU, embeddinggemma-2 and FAISS composition sits outside this
     configuration object. Paths, model roles and pipeline flags are overridden
     from the live ``rag.chat_pdfs`` globals, so
     ``set_docs_folder_runtime``, ``set_model_roles_runtime`` and
@@ -252,21 +252,19 @@ def embedder(config: AppConfig):
     """Return the reusable embedder worker the active config selects.
 
     Double-checked locking: two concurrent first callers must not both
-    construct one, since each duplicate later starts its own worker
-    subprocess and loads jina-clip on first use (~29s), and the losing
-    instance is unreachable yet pinned alive by its own stdout/stderr pump
-    threads once its worker has started, so nothing ever closes it (#46).
+    construct one. An embedder that owns a worker process would start one per
+    duplicate, and the losing instance would stay alive with nothing left to
+    close it (#46).
 
     This slot is never re-keyed by corpus or config -- there is no
     config-dependent identity to switch -- but it *is* invalidated in two
     cases, both added for issue #191:
 
-    1. The cached instance reports ``is_unusable``. ``JinaClipEmbedder``
-       deliberately refuses to respawn its own worker so a crash loop stays
-       visible; its docstring names this caller as the one that builds a
-       replacement. Without that, a worker killed by the OOM killer made
-       every later query fail with "no longer usable" until the whole
-       server was restarted.
+    1. The cached instance reports ``is_unusable``. An adapter that owns a
+       worker never respawns it itself, so a crash loop stays visible; this
+       caller builds the replacement. Without that, a dead worker would make
+       every later query fail until the whole server was restarted. The
+       llama-server embedder owns no worker and always reports usable.
     2. ``release_embedder`` was called (see below).
 
     Both paths run under ``_embedder_cache_lock``, so two threads that
@@ -322,13 +320,13 @@ def release_embedder() -> None:
     Exists for two callers, both on the path where an index run failed: the
     web layer's background indexing thread (issue #191) and the headless
     ``index_store`` (issue #273). A worker that has just failed a whole
-    re-index is holding ~1.7 GiB and nothing is going to use it
+    re-index may hold GPU memory nothing is going to use
     again, which is what made the *next* attempt fail on memory the previous
     failure was holding -- naming a PID with no visible connection to
     anything the user did.
 
     Deliberately not called after a successful run: that worker is the one
-    the next query will use, and reloading jina-clip costs ~29s.
+    the next query will use, and reloading it would cost latency.
 
     Ownership rule, since ``embedder`` above returns a bare reference: only
     call this where no retrieval can be in flight. The failed-indexing path
@@ -398,7 +396,7 @@ def query_decomposer(config: AppConfig) -> ChatModel:
     """
     # keep_alive is 0 because query decomposition is an auxiliary pre-retrieval
     # step immediately followed by Cross-Encoder reranking; keeping the chat
-    # model resident alongside Jina CLIP and the reranker exhausts VRAM on
+    # model resident alongside the reranker exhausts VRAM on
     # 8 GB cards (issue #164).
     ollama = config.models.ollama
     return chat_model_for_role(
@@ -659,7 +657,7 @@ def retrieval_metrics_to_legacy(metrics: Dict[str, Any], config: AppConfig) -> D
         "fase_semantica": {
             "queries_generadas": len(metrics["query_variants"]),
             "fragmentos_unicos": distances["unique_fragments"],
-            "modelo_embedding": embedding_display_name(config.models.embedder),
+            "modelo_embedding": EMBEDDING_DISPLAY_NAME,
             "n_resultados_por_query": retrieval.n_semantic_results,
             "resultados_por_query": metrics["semantic_hits_per_query"],
             "distancia_l2_min": distances["l2_min"],

@@ -1030,7 +1030,7 @@ def test_candidate_overrides_win_over_reference_pins(tmp_path):
 
 # ENVIRONMENT DRIFT (issue #107): comparable-view equality covers models,
 # chunking and index-time flags, and nothing else. A healthy August baseline
-# can therefore hold passes today's MinerU/jina-clip cannot reach -- recovery
+# can therefore hold passes today's stack cannot reach -- recovery
 # pairs against a high water nobody can climb back to, every campaign ends
 # rejected_regression on ghost passes, and there is no bug to fix. The stack
 # each iteration ran on is recorded per entry, and a KNOWN-different stack

@@ -25,7 +25,7 @@ Usage:
     python tests/eval/run_probe_lang.py --models gemma4:e2b
 
 Dependencies: identical to run_eval.py -- the full multimodal stack (FAISS,
-MinerU, jina-clip-v2, sentence-transformers, BGE reranker) plus a running
+MinerU, embeddinggemma-2, sentence-transformers, BGE reranker) plus a running
 local Ollama server and, in practice, a GPU.
 """
 

@@ -349,7 +349,7 @@ class Retrieve:
 
         semantic_hits_per_query: List[List[Fragment]] = []
         # Asymmetric embedders (embeddinggemma-2) need a query-specific prefix
-        # their embed_query hook applies; jina and every test double expose no
+        # their embed_query hook applies; plain test doubles expose no
         # such method, so they keep the plain embed(..., keep_alive=...) call.
         embed_query = getattr(self._embedder, "embed_query", None)
         for q_idx, q in enumerate(queries):
