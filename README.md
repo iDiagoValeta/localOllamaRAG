@@ -97,7 +97,7 @@ the strongest evidence; and only then does Ollama write the answer.
 The pipeline logic itself lives in a
 [hexagonal core](https://alistair.cockburn.us/hexagonal-architecture/) under
 [`src/monkeygrab/`](src/monkeygrab/README.md). It depends on plain contracts,
-not on MinerU, Jina CLIP, FAISS or Ollama. The concrete technologies are
+not on MinerU, the embedder, FAISS or Ollama. The concrete technologies are
 connected at the application boundary.
 
 **The dependency rule points one way.** `application` may import
@@ -165,8 +165,9 @@ The rest of the stack is not an Ollama model:
 | **PDF extraction** | [MinerU](https://github.com/opendatalab/MinerU), structured text, tables and figures | fixed |
 
 > [!NOTE]
-> MinerU is an external CLI, and `jina_clip` runs in an isolated interpreter,
-> which needs a CUDA GPU, because its dependencies conflict with the
+> MinerU is an external CLI, embeddinggemma-2 (the default embedder) is served
+> by `llama-server`, and `jina_clip` (when selected) runs in an isolated
+> interpreter, which needs a CUDA GPU, because its dependencies conflict with the
 > product's — see [`src/monkeygrab/README.md`](src/monkeygrab/README.md).
 
 ### Choosing a generator
@@ -184,41 +185,14 @@ in [`docs/model-history.md`](docs/model-history.md) -- not here, since a
 benchmark number copied into this file goes stale the moment a later run
 supersedes it.
 
-### Lite profile (4 GB of VRAM)
+### Low-VRAM variant (4 GB)
 
-`MONKEYGRAB_PROFILE=lite` applies a bundle of defaults for a 4 GB GPU: the
-generator becomes a ~3 GB Q4 model, embeddinggemma-2 runs on the CPU, and the
-BGE reranker and RECOMP synthesis are turned off (the reranker alone peaked at
-2.6 GB of VRAM, and a 2B model's synthesis lost the figures its answer
-needed). An explicitly exported variable always wins over the profile.
-
-The profile selects the pieces; it does not install them. Two are needed:
-
-1. The generator, pulled through Ollama:
-
-   ```bash
-   ollama pull hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0
-   ```
-
-2. The CPU embedding server -- [llama.cpp](https://github.com/ggml-org/llama.cpp)
-   build b11669 or newer, serving the GGUFs from
-   [`ggml-org/embeddinggemma-2-GGUF`](https://huggingface.co/ggml-org/embeddinggemma-2-GGUF):
-
-   ```bash
-   llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf \
-     --embedding -ngl 0 --no-mmproj-offload --host 127.0.0.1 --port 8091 \
-     -c 8192 -ub 8192 -b 8192
-   ```
-
-   `-ngl 0` keeps it on the CPU, leaving the whole 4 GB for the generator.
-
-Measured on the gold set (RTX 4060 Laptop): **130/156 and 129/156** over two
-runs, against the 0.82 floor, with the generator's process peaking at
-**2602 MiB** of VRAM and the embedding server at 0 MiB, ~1.2 s per answer.
-The Q6_K build of the same model (`hf.co/unsloth/gemma-4-E2B-it-GGUF:Q6_K`)
-scored 132/156 at 3340 MiB -- inside the noise, so Q4_0 stays the default.
-Runs and conditions are in
-[`docs/model-history.md`](docs/model-history.md#lite-profile-4-gb-of-vram).
+`main` is the full pipeline: reranker, RECOMP synthesis and the default
+generator. A trimmed variant for 4 GB GPUs (a ~3 GB Q4 generator,
+embeddinggemma-2 on the CPU, reranker and RECOMP off) lives on the
+[`rag-lite`](https://github.com/iDiagoValeta/localOllamaRAG/tree/rag-lite)
+branch, where it is selected with `MONKEYGRAB_PROFILE=lite`. Its measured runs
+are in [`docs/model-history.md`](docs/model-history.md#lite-profile-4-gb-of-vram).
 
 ---
 
