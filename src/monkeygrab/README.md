@@ -12,7 +12,7 @@ ports/         Protocols the application layer depends on (PdfExtractor, Embedde
 application/   use cases: IndexCorpus, Retrieve, Answer, Study, + pure helpers (rrf_fusion,
                text_chunking, context_assembly, keywords)
 config/        AppConfig — immutable, built once via from_env(), changed via with_overrides() (never mutated)
-adapters/      port implementations (MinerU, embeddinggemma-2 over llama-server, jina-clip, FAISS, Ollama, BM25, CrossEncoder)
+adapters/      port implementations (MinerU, jina-clip, FAISS, Ollama, BM25, CrossEncoder)
 ```
 
 Dependency rule: `application` → `domain`/`ports`/`config`; `ports` → `domain`;
@@ -32,7 +32,7 @@ not by convention.
 ## Current wiring (read before assuming more than this)
 
 **All three stages run through the core.** `rag/engine/indexing.py` runs
-`IndexCorpus` with MinerU, the selected embedder (`MONKEYGRAB_EMBEDDER`) and FAISS.
+`IndexCorpus` with the fixed MinerU + jina-clip + FAISS composition.
 `rag/engine/retrieval.py` runs `Retrieve` and
 `rag/engine/generation.py` runs `Answer`. `tests/eval/run_eval.py` constructs
 the same use cases, so the evaluation gate and the shipped product cannot

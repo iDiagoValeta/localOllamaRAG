@@ -224,7 +224,7 @@ next to the fixed stack on 8 GB: at least 16384 of context per slot, and about
 
 ## Lite profile (4 GB of VRAM)
 
-Issue #292. Measured on the `rag-lite` branch with `MONKEYGRAB_PROFILE=lite`, so these rows differ from the table
+Issue #292. `MONKEYGRAB_PROFILE=lite`, so these rows differ from the table
 above in more than the generator, and are not ranked against it: the embedder
 is `google/embeddinggemma-2@512` served by llama.cpp b11669 on the CPU, the
 reranker is off, `OLLAMA_RAG_NUM_CTX` is 8192, `MAX_CONTEXTO_CHARS` is 16000,

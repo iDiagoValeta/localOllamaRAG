@@ -83,7 +83,7 @@ curl -s http://127.0.0.1:5000/api/init      # loads the collection; slow on firs
 ```
 
 Then the pipeline itself, which is the only check that exercises Ollama, the
-FAISS index and the active embedder together:
+FAISS index and the jina-clip worker together:
 
 ```bash
 curl -s -N -X POST http://127.0.0.1:5000/api/rag \

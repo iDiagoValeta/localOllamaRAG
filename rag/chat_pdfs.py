@@ -55,6 +55,12 @@ except ImportError:
     pass
 
 
+# Import the config package before this module reads any environment variable.
+# Its import-time ``apply_profile()`` seeds a MONKEYGRAB_PROFILE's defaults with
+# setdefault, and both this module's globals and AppConfig.from_env() read those
+# same variables from the process environment -- seeding once, here, is what
+# keeps the two from disagreeing about which defaults are in force.
+from monkeygrab.config import env as _config_env  # noqa: F401
 from monkeygrab.config.paths import derive_db_paths as _derive_db_paths
 
 
@@ -273,7 +279,8 @@ CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "en"))
 
 # Active embedder: "gemma2" (embeddinggemma-2 behind llama-server, default)
 # or "jina" (jina-clip-v2). Read here as well as by
-# AppConfig.from_env so this module's PATH_DB and the core agree.
+# AppConfig.from_env so this module's PATH_DB and the core agree; the profile
+# defaults are already seeded by the monkeygrab.config.env import above.
 EMBEDDER = os.getenv("MONKEYGRAB_EMBEDDER", "gemma2")
 
 
