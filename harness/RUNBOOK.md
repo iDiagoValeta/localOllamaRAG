@@ -47,7 +47,7 @@ and check 6 both exist because a real run on 2026-09-01 skipped them and paid
 ```
 
 Six components, each reported separately: both interpreters, CUDA visible to
-the isolated one, the MinerU binary, the jina-clip worker actually loading,
+the isolated one, the MinerU binary,
 and which configured Ollama models are missing. A `FAIL` here means no
 campaign is possible; a `warn` means something it does not build needs
 attention (see `tools/setup_environments.py`).
@@ -86,10 +86,9 @@ ruff check .
 curl -s -m 5 http://localhost:11434/api/tags -o /dev/null -w '%{http_code}\n'   # expect 200
 ollama list
 
-# 4. The isolated stack loads on this GPU. ~30 s the first time, then cached.
-echo '{"id": 1, "op": "text", "text": "probe"}' \
-  | .venv-mineru/bin/python src/monkeygrab/adapters/embedding/jina_clip_worker.py
-# expect: {"event": "ready", "dim": 512} then {"id": 1, "ok": true, "vector": [...]}
+# 4. The embedding server answers.
+curl -s -m 10 http://127.0.0.1:8091/v1/embeddings -H 'Content-Type: application/json' \
+  -d '{"input": "probe"}' -o /dev/null -w '%{http_code}\n'   # expect 200
 
 # 5. The wiring runs end to end, with no GPU and no models, into a temp dir.
 python -m harness.cli --dry-run --max-iterations 3
@@ -105,7 +104,7 @@ nvidia-smi --query-compute-apps=pid,used_memory --format=csv
 > and it used to be missing from this section, which is how a campaign
 > inherited a gate's workaround.
 >
-> *Why the gate needs it.* A full `run_eval.py` holds two jina-clip workers
+> *Why the gate needs it.* A full `run_eval.py` held two embedder workers
 > (one per corpus, ~2.8 GiB each) plus the reranker; with a generator also
 > resident the second worker cannot start and every blind-set case comes back
 > `infrastructure_error`. Measured 2026-09-01: 19 of 51 cases unevaluable after
@@ -115,8 +114,8 @@ nvidia-smi --query-compute-apps=pid,used_memory --format=csv
 > *Why a campaign must not have it.* A campaign builds **one** embedder, not
 > two (see the TIP below), so the condition the workaround exists for never
 > arises. What the keep-alive does instead is force the generator to unload and
-> reload around every call, and on this card some reloads land while jina-clip
-> is still resident and come back `500` from `/api/generate`. A single
+> reload around every call, and on this card some reloads land while other GPU
+> models are still resident and come back `500` from `/api/generate`. A single
 > unevaluable case invalidates its whole iteration and still counts toward
 > `--patience`, so a couple of reproducible ones end the campaign before it
 > compares anything.
@@ -138,8 +137,8 @@ nvidia-smi --query-compute-apps=pid,used_memory --format=csv
 > The keep-alive remains a workaround rather than a fix, and it makes a run's
 > timings incomparable with ledger history that did not use it.
 >
-> Do not run anything else on the card during a campaign, the jina-clip probe
-> in check 4 included. One probe alongside a live run is enough to take it
+> Do not run anything else on the card during a campaign, the probes
+> above included. One probe alongside a live run is enough to take it
 > down. Two campaigns at once will take each other down -- check `pgrep -f
 > harness.cli` before launching, since a backgrounded one leaves no obvious
 > trace in the terminal.

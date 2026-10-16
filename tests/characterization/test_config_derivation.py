@@ -23,15 +23,12 @@ import pytest
 import rag.chat_pdfs as rag
 
 
-def test_derivar_paths_db_uses_a_slug_per_embedder():
+def test_derivar_paths_db_uses_the_embedder_slug():
     carpeta = os.path.join("rag", "docs", "en")
 
-    path_db, collection_name = rag._derivar_paths_db(carpeta, "gemma2")
-    jina_path, _ = rag._derivar_paths_db(carpeta, "jina")
+    path_db, collection_name = rag._derivar_paths_db(carpeta)
 
     assert path_db == os.path.join(rag.DATA_DIR, "vector_db", "en_eg2")
-    # Historical name: indexes built with jina-clip-v2 live under it.
-    assert jina_path == os.path.join(rag.DATA_DIR, "vector_db", "en_jina_clip")
     assert collection_name == "docs_en"
 
 

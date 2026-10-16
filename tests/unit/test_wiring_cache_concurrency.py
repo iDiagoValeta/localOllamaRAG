@@ -35,7 +35,7 @@ from rag.engine import wiring
 class BlockingBuilder:
     """Constructor double that counts calls and blocks until released.
 
-    Simulates the slow, VRAM-hungry construction (JinaClipEmbedder,
+    Simulates the slow, VRAM-hungry construction (an embedder,
     CrossEncoderReranker, ...) that makes the race in #46 costly: the
     ``threading.Event.wait()`` releases the GIL, so a second thread gets a
     real chance to run concurrently while the first is still "building".

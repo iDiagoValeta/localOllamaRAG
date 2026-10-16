@@ -69,7 +69,7 @@ src/monkeygrab/          Hexagonal core (see src/monkeygrab/README.md)
   ports/                   Protocols the application layer depends on
   application/             Use cases (IndexCorpus, Retrieve, Answer) + pure helpers
   config/                  AppConfig — immutable, from_env() / with_overrides()
-  adapters/                Port implementations: MinerU, jina-clip, FAISS, Ollama, BM25, BGE
+  adapters/                Port implementations: MinerU, embeddinggemma-2 (llama-server), FAISS, Ollama, BM25, BGE
 rag/                      Web interface and pipeline entry points
   chat_pdfs.py              Public facade + global config (see §1 rule 7)
   engine/                    wiring, retrieval, indexing, context, generation, chunking, debug, history, settings
@@ -125,12 +125,12 @@ Ollama roles are configured via env vars; defaults are the second arg of
 > module defaults. **Which models have actually been measured, on what and how
 fast, is [`docs/model-history.md`](docs/model-history.md)** — append a row
 there when you run the gate against a model, rather than deciding the next
-default from memory. It covers the fixed stack too (MinerU, jina-clip, the
+default from memory. It covers the fixed stack too (MinerU, the embedder, the
 reranker), because a version change there has moved more cases than any
 generator swap this project has measured. The environment wins for this run, including over a
 choice saved in the web UI; a save does not persist that override as if the
-user had picked it (issue #79). The embedder is selectable (embeddinggemma-2 by
-default); BGE Reranker v2 M3 is fixed.
+user had picked it (issue #79). The embedder is embeddinggemma-2;
+BGE Reranker v2 M3 is fixed.
 
 | Role | Env var | Notes |
 |------|---------|-------|
@@ -138,7 +138,7 @@ default); BGE Reranker v2 M3 is fixed.
 | Chat + sub-queries | `OLLAMA_CHAT_MODEL` | Chat mode and RAG query decomposition; `think=False` |
 | Contextual retrieval | `OLLAMA_CONTEXTUAL_MODEL` | Chunk enrichment at indexing (`USAR_CONTEXTUAL_RETRIEVAL`) |
 | RECOMP synthesis | `OLLAMA_RECOMP_MODEL` | Pre-generation context synthesis (`USAR_RECOMP_SYNTHESIS`) |
-| Embedder | `MONKEYGRAB_EMBEDDER` | `gemma2` (default, embeddinggemma-2 behind an OpenAI-compatible `llama-server`, endpoint from `MONKEYGRAB_EMBEDDER_URL`; Matryoshka width from `MONKEYGRAB_EMBEDDER_DIM`) or `jina` (jina-clip-v2, shared text/image space). Each embedder has its own index path and fingerprint. |
+| Embedder | `MONKEYGRAB_EMBEDDER_URL` | embeddinggemma-2 behind an OpenAI-compatible `llama-server`, one text/image space; Matryoshka width from `MONKEYGRAB_EMBEDDER_DIM`, part of the index fingerprint. |
 | Reranker | fixed | `BAAI/bge-reranker-v2-m3`; not an Ollama model |
 
 Each role also has a backend, `MONKEYGRAB_<ROLE>_BACKEND` = `ollama` (default) or `openai` (`src/monkeygrab/adapters/chat/openai_compat_chat.py`, endpoint from `MONKEYGRAB_OPENAI_BASE_URL`). The figure describer follows the `chat` role.
@@ -262,9 +262,9 @@ pip install -r rag/web/requirements.txt                  # Web UI (optional)
 added to `sys.path` (`rag/chat_pdfs.py`'s bootstrap; `pytest.ini`'s
 `pythonpath = . src`). `domain`/`ports`/`config`/`application` need nothing
 beyond the standard library; `adapters/` reuse what `rag/requirements.txt`
-installs (FAISS, Ollama, Pillow, sentence-transformers). MinerU and Jina CLIP
-run through the isolated `.venv-mineru` environment.
+installs (FAISS, Ollama, Pillow, sentence-transformers). MinerU runs
+through the isolated `.venv-mineru` environment.
 
-System: Python 3.10+, Ollama running locally. A CUDA GPU is recommended once the
-multimodal retrieval stack (jina-clip, FAISS) is in use — see
+System: Python 3.10+, Ollama running locally. A CUDA GPU is recommended for the generator and
+reranker; see
 `docs/design/2026-07-26-monkeygrab-v2.md`.

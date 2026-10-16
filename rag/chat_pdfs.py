@@ -277,23 +277,15 @@ DATA_DIR = os.path.abspath(os.getenv("MONKEYGRAB_DATA_DIR", BASE_DIR))
 
 CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "en"))
 
-# Active embedder: "gemma2" (embeddinggemma-2 behind llama-server, default)
-# or "jina" (jina-clip-v2). Read here as well as by
-# AppConfig.from_env so this module's PATH_DB and the core agree; the profile
-# defaults are already seeded by the monkeygrab.config.env import above.
-EMBEDDER = os.getenv("MONKEYGRAB_EMBEDDER", "gemma2")
-
-
-def _derivar_paths_db(carpeta: str, embedder: str | None = None) -> tuple[str, str]:
-    """Derive the per-embedder FAISS path for a docs folder.
+def _derivar_paths_db(carpeta: str) -> tuple[str, str]:
+    """Derive the FAISS path for a docs folder.
 
     Args:
         carpeta: PDF directory (absolute or relative).
-        embedder: Embedder key; defaults to the process's active ``EMBEDDER``.
     Returns:
         Tuple ``(path_db, collection_name)``.
     """
-    return _derive_db_paths(carpeta, DATA_DIR, embedder or EMBEDDER)
+    return _derive_db_paths(carpeta, DATA_DIR)
 
 
 PATH_DB, COLLECTION_NAME = _derivar_paths_db(CARPETA_DOCS)
@@ -500,16 +492,16 @@ Use this reference to explain how the system works or which parts are mandatory 
 #### 1. INDEXING PHASE
 * **CORE (Mandatory):**
     * **Extraction & Chunking:** MinerU preserves text, tables and figures.
-    * **Embeddings:** jina-clip-v2 embeds text and images in one shared space and stores them in FAISS.
+    * **Embeddings:** embeddinggemma-2 embeds text and images in one shared space and stores them in FAISS.
 * **OPTIONAL (Flag: `USAR_CONTEXTUAL_RETRIEVAL`):**
     * **Contextual Retrieval:** Uses `MODELO_CONTEXTUAL` configured through `OLLAMA_CONTEXTUAL_MODEL` to generate summary/context for each chunk before indexing to improve retrieval accuracy.
 * **OPTIONAL (Flag: `USAR_EMBEDDINGS_IMAGEN`):**
-    * **Image Indexing:** MinerU extracts figures and jina-clip-v2 embeds them directly.
+    * **Image Indexing:** MinerU extracts figures and embeddinggemma-2 embeds them directly.
 
 #### 2. RETRIEVAL PHASE
 Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; optional components extend it.
 * **CORE (Mandatory):**
-    * **Semantic Search:** Cosine search in the shared jina-clip-v2 space; always performed.
+    * **Semantic Search:** Cosine search in the shared embeddinggemma-2 space; always performed.
 * **OPTIONAL (execution order):**
     * **Query Decomposition** (`USAR_LLM_QUERY_DECOMPOSITION`): Uses `MODELO_CHAT` configured through `OLLAMA_CHAT_MODEL` to generate sub-queries before semantic search; activates for long questions (>60 chars).
     * **Hybrid Search** (`USAR_BUSQUEDA_HIBRIDA`): Adds Okapi BM25 lexical search (Robertson & Zaragoza 2009) over the indexed chunks, then fuses the BM25 ranking with semantic retrieval using Reciprocal Rank Fusion (RRF).
@@ -533,7 +525,7 @@ Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; o
 2. **Honesty:** Never fabricate system state or document contents. If you don't know, say so.
 3. **Guidance:** If a user asks "what should I do?", provide concrete next steps (e.g., suggest switching to RAG mode to search their PDFs).
 4. **Mode Enforcement:** If the user asks for information contained in the documents while in CHAT mode, redirect them to use RAG mode for document-grounded answers.
-5. **Configuration framing:** Distinguish the configurable Ollama generation roles from the fixed MinerU, Jina CLIP, FAISS and BGE retrieval stack.
+5. **Configuration framing:** Distinguish the configurable Ollama generation roles from the fixed MinerU, embeddinggemma-2, FAISS and BGE retrieval stack.
 6. **Language:** Always respond in the exact same language the user uses. If they write in Spanish, respond in Spanish. If they write in Catalan, respond in Catalan. If they write in English, respond in English. Never switch languages mid-conversation.
 7. **Tone:** Professional, academic, yet approachable.
 8. **Math formatting:** Use LaTeX notation for all formulas: $...$ inline, $$...$$ for display equations.

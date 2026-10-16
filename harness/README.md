@@ -83,7 +83,7 @@ searches without a red test.
 **Index-time keys are excluded and the exclusion is enforced,** not
 remembered: `chunking.*` and `flags.usar_contextual_retrieval`/
 `usar_embeddings_imagen` change what gets stored, forcing a full MinerU +
-jina-clip reindex per candidate — far more expensive than the ~13 min a
+embedding reindex per candidate — far more expensive than the ~13 min a
 retrieval/generation-only evaluation now costs, whatever the exact multiple
 turns out to be once block B (#30) measures it. Declaring one is a red test
 (`INDEX_TIME_KEYS`, checked by `_validate_declared_space`).
@@ -551,8 +551,8 @@ history instead of refreshing it.
 `environment.py` records what was *installed*, per entry, alongside what was
 configured:
 
-- **Two environments, never merged.** `.venv-mineru` (MinerU, jina-clip) builds
-  the index; the product interpreter (BGE reranker, FAISS, BM25, the Ollama
+- **Two environments, never merged.** `.venv-mineru` (MinerU) and the embedding
+  server build the index; the product interpreter (BGE reranker, FAISS, BM25, the Ollama
   client) decides retrieval and generation. `transformers`,
   `sentence-transformers` and `torch` are installed in both at deliberately
   different versions, so keys are qualified (`isolated:transformers` vs

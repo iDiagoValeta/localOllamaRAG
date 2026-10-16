@@ -12,7 +12,7 @@ ports/         Protocols the application layer depends on (PdfExtractor, Embedde
 application/   use cases: IndexCorpus, Retrieve, Answer, Study, + pure helpers (rrf_fusion,
                text_chunking, context_assembly, keywords)
 config/        AppConfig — immutable, built once via from_env(), changed via with_overrides() (never mutated)
-adapters/      port implementations (MinerU, jina-clip, FAISS, Ollama, BM25, CrossEncoder)
+adapters/      port implementations (MinerU, embeddinggemma-2 over llama-server, FAISS, Ollama, BM25, CrossEncoder)
 ```
 
 Dependency rule: `application` → `domain`/`ports`/`config`; `ports` → `domain`;
@@ -32,7 +32,7 @@ not by convention.
 ## Current wiring (read before assuming more than this)
 
 **All three stages run through the core.** `rag/engine/indexing.py` runs
-`IndexCorpus` with the fixed MinerU + jina-clip + FAISS composition.
+`IndexCorpus` with MinerU, embeddinggemma-2 and FAISS.
 `rag/engine/retrieval.py` runs `Retrieve` and
 `rag/engine/generation.py` runs `Answer`. `tests/eval/run_eval.py` constructs
 the same use cases, so the evaluation gate and the shipped product cannot
@@ -44,7 +44,7 @@ folder index (never after an incremental add, which cannot vouch for the rest
 of an existing store) and exposes `index_fingerprint_mismatch()`; the
 web app calls it to warn when a stored index no longer matches the active
 config, and leave reindexing to the user rather than triggering it — an hour
-of MinerU + jina-clip must never start silently. A store with no recorded
+of MinerU + embedding must never start silently. A store with no recorded
 fingerprint (every index built before this feature existed) reads as unknown,
 not stale.
 
@@ -73,16 +73,12 @@ Cross-Encoder weights and the tokenized BM25 corpus.
 
 ## Adapters whose dependencies collide with the product's
 
-`adapters/embedding/jina_clip_embedder.py` is the first adapter whose
-library doesn't fit the product's pinned stack at all: jina-clip-v2's remote
-code only loads under an older transformers than the one the product runs.
-Rather than downgrade the product environment for one model, the pattern is
-to run the dependency in its own isolated interpreter (here, `.venv-mineru`)
-as a persistent subprocess, speaking line-JSON over stdin/stdout
-(`jina_clip_worker.py`, never imported by product code). MinerU follows the
-same isolation idea as an external CLI (never a product Python dependency).
-The jina adapter itself stays pure stdlib either way, so its unit tests never
-need the isolated environment.
+A dependency that does not fit the product's pinned stack runs outside it
+rather than downgrading the product environment. MinerU runs as an external
+CLI from its own isolated interpreter (`.venv-mineru`), never a product Python
+dependency. embeddinggemma-2 runs in an external `llama-server` the adapter
+reaches over HTTP (`adapters/embedding/llama_server_embedder.py`). Both
+adapters stay pure stdlib, so their unit tests never need either runtime.
 
 ## Adding a new adapter (e.g. to compare a retrieval technology)
 

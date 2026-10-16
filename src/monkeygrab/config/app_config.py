@@ -21,7 +21,6 @@ from monkeygrab.config.context import ContextConfig
 from monkeygrab.config.flags import PipelineFlagsConfig
 from monkeygrab.config.models import (
     CHAT_BACKENDS,
-    EMBEDDERS,
     EMBEDDING_DIMENSIONS,
     EmbeddingRuntimeConfig,
     ModelsConfig,
@@ -119,7 +118,6 @@ class AppConfig:
             ValueError: If any environment variable is set to an invalid value.
         """
         rag_model = env.read_env_str("OLLAMA_RAG_MODEL", "gemma4:e4b")
-        embedder = env.read_env_choice("MONKEYGRAB_EMBEDDER", "gemma2", EMBEDDERS)
         models = ModelsConfig(
             rag=rag_model,
             chat=env.read_env_str("OLLAMA_CHAT_MODEL", "gemma4:e4b"),
@@ -151,7 +149,6 @@ class AppConfig:
                 api_key=env.read_env_str("MONKEYGRAB_OPENAI_API_KEY", ""),
                 timeout=env.read_env_int("MONKEYGRAB_OPENAI_TIMEOUT", 900),
             ),
-            embedder=embedder,
             embedding=EmbeddingRuntimeConfig(
                 base_url=env.read_env_str("MONKEYGRAB_EMBEDDER_URL", "http://127.0.0.1:8091"),
                 dimensions=_read_embedding_dimensions(),
@@ -207,7 +204,7 @@ class AppConfig:
         base_dir = RAG_BASE_DIR
         data_dir = os.path.abspath(env.read_env_str("MONKEYGRAB_DATA_DIR", base_dir))
         docs_folder = env.read_env_str("DOCS_FOLDER", os.path.join(base_dir, "docs", "en"))
-        path_db, collection_name = derive_db_paths(docs_folder, data_dir, embedder=embedder)
+        path_db, collection_name = derive_db_paths(docs_folder, data_dir)
 
         paths = PathsConfig(
             base_dir=base_dir,
@@ -307,12 +304,8 @@ class AppConfig:
         new_paths = sections["paths"]
         if changes_by_section["paths"]:
             new_paths = dataclasses.replace(new_paths, **changes_by_section["paths"])
-        # The embedder selection also lives in the store path, so a change to it
-        # has to re-derive the paths exactly as a docs_folder change does.
-        if "docs_folder" in changes_by_section["paths"] or "embedder" in changes_by_section["models"]:
-            path_db, collection_name = derive_db_paths(
-                new_paths.docs_folder, new_paths.data_dir, embedder=new_models.embedder
-            )
+        if "docs_folder" in changes_by_section["paths"]:
+            path_db, collection_name = derive_db_paths(new_paths.docs_folder, new_paths.data_dir)
             new_paths = dataclasses.replace(new_paths, path_db=path_db, collection_name=collection_name)
 
         new_sections = {"models": new_models, "paths": new_paths}

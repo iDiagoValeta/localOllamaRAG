@@ -30,7 +30,6 @@ from monkeygrab.config.app_config import AppConfig
 # extractor or the embedding model is replaced -- exactly the kind of change
 # that has to invalidate every index built before it.
 _EXTRACTOR_ID = "mineru"
-_EMBEDDING_ID = "jinaai/jina-clip-v2@512"
 
 # Bumped BY HAND when the code that turns a recipe into stored content
 # changes -- never for a configuration change, since every config value this
@@ -49,29 +48,24 @@ _EMBEDDING_ID = "jinaai/jina-clip-v2@512"
 # zero reindexing on its own. The key starts appearing only once a human
 # bumps this past 1, which is also the point every existing index legitimately
 # needs rebuilding. See
-# tests/unit/application/test_index_fingerprint.py::test_recipe_version_is_omitted_at_v1_and_matches_pre_change_main
-# for the test that makes this safe rather than clever, and
-# ::test_recipe_version_bump_actually_changes_the_recipe_and_the_fingerprint
+# tests/unit/application/test_index_fingerprint.py::test_recipe_version_is_omitted_at_v1
+# and ::test_recipe_version_bump_actually_changes_the_recipe_and_the_fingerprint
 # for proof the mechanism itself is live, not just its state at v1.
 #
-# When you bump this: test_recipe_version_is_omitted_at_v1_and_matches_pre_change_main
-# will fail on its hardcoded hash -- DELETE it, do not "fix" it by pasting in
-# the new hash. Its only job was to pin v1's zero-cost guarantee, which no
-# longer applies once this is 2+. ::test_default_app_config_fingerprint_is_pinned
-# is a different kind of pin (the default config's current fingerprint, not
-# v1's zero-cost property) and DOES need its hash updated, not deleted.
+# When you bump this: test_recipe_version_is_omitted_at_v1 will fail -- DELETE
+# it, its only job is the v1 omission. ::test_default_app_config_fingerprint_is_pinned
+# pins the default config's current fingerprint and DOES need its hash
+# updated, not deleted.
 _RECIPE_VERSION = 1
 
 _FINGERPRINT_CHARS = 16
 
 
 def _embedding_id(config: AppConfig) -> str:
-    """Return the index-recipe id of the active embedder.
+    """Return the index-recipe id of the embedder.
 
-    ``jina`` keeps the historical fixed id so every index built before the
-    embedder became selectable stays valid; ``gemma2`` names its Matryoshka
-    width, since two widths are different vector spaces and must not share an
-    index.
+    Names the Matryoshka width, since two widths are different vector spaces
+    and must not share an index.
 
     Args:
         config: The configuration an index was, or would be, built under.
@@ -79,9 +73,7 @@ def _embedding_id(config: AppConfig) -> str:
     Returns:
         The embedding identifier string for the recipe.
     """
-    if config.models.embedder == "gemma2":
-        return f"google/embeddinggemma-2@{config.models.embedding.dimensions}"
-    return _EMBEDDING_ID
+    return f"google/embeddinggemma-2@{config.models.embedding.dimensions}"
 
 
 def index_recipe(config: AppConfig) -> Dict[str, Any]:

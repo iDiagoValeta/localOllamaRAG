@@ -106,39 +106,20 @@ def test_description_model_only_counts_when_the_stage_runs():
     assert compute_index_fingerprint(off) != compute_index_fingerprint(on)
 
 
-def test_recipe_version_is_omitted_at_v1_and_matches_pre_change_main():
-    """recipe_version must not move a single existing fingerprint at v1.
+def test_recipe_version_is_omitted_at_v1():
+    """recipe_version must not appear in the recipe while it is 1.
 
-    Uses a contextual-off config specifically so this test isolates
-    recipe_version's own effect from the deliberate, unrelated
-    contextual_num_ctx addition tested above (issue #37 item 2): that
-    addition legitimately changes the fingerprint of a *contextual-on*
-    config -- including the all-defaults AppConfig, since
-    usar_contextual_retrieval defaults to True. No product code reads or
-    writes fingerprint.txt today (only tests/eval/run_eval.py does --
-    wiring it into rag/engine/indexing.py and the CLI/web is #36, still
-    open), so that particular invalidation costs nothing right now; it will
-    once #36 lands. This test is only about recipe_version, which must move
-    nothing on its own, ever.
-
-    Value computed on main @ 8b4f16d (before recipe_version or
-    contextual_num_ctx existed in the recipe) via:
-        compute_index_fingerprint(
-            AppConfig().with_overrides(**{"flags.usar_contextual_retrieval": False})
-        )
-    Main's only embedder was jina-clip-v2, so the comparison pins it.
+    Version 1 is defined as the recipe before recipe_version existed, so the
+    key stays out of the dict until a human bumps it.
     """
-    config = AppConfig().with_overrides(
-        **{"flags.usar_contextual_retrieval": False, "models.embedder": "jina"}
-    )
-    assert compute_index_fingerprint(config) == "3802ef9e11d5e813"
+    config = AppConfig().with_overrides(**{"flags.usar_contextual_retrieval": False})
     assert "recipe_version" not in index_recipe(config)
 
 
 def test_recipe_version_bump_actually_changes_the_recipe_and_the_fingerprint(monkeypatch):
     """Exercises the mechanism itself, not just its at-rest state at v1.
 
-    test_recipe_version_is_omitted_at_v1_and_matches_pre_change_main above
+    test_recipe_version_is_omitted_at_v1 above
     only proves the key is absent while _RECIPE_VERSION == 1 -- equally true
     of a tree where the two lines
         if _RECIPE_VERSION != 1:
@@ -161,8 +142,7 @@ def test_recipe_version_bump_actually_changes_the_recipe_and_the_fingerprint(mon
 def test_default_app_config_fingerprint_is_pinned():
     """Pins the branch every product user actually takes -- contextual ON.
 
-    The pin above (test_recipe_version_is_omitted_at_v1_and_matches_pre_change_main)
-    only exercises the contextual-OFF path, which is the eval gate's own
+    test_recipe_version_is_omitted_at_v1 above only exercises the contextual-OFF path, which is the eval gate's own
     config, not the product default: usar_contextual_retrieval defaults to
     True, so a stray field added inside
     `if config.flags.usar_contextual_retrieval:` would move every real

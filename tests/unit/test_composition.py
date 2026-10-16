@@ -13,7 +13,7 @@ Covered:
   into a ``Stack`` in order.
 - Each builder forwards the right config value to the right adapter
   (``config.paths`` to the FAISS store, the isolated interpreter to the
-  jina-clip embedder, both inner extractors to the suffix router).
+  llama-server embedder, both inner extractors to the suffix router).
 - ``_isolated_python`` raises ``FileNotFoundError`` with an actionable
   message naming both conventional ``.venv-mineru`` layouts when neither
   exists, and returns the existing candidate otherwise.
@@ -32,6 +32,7 @@ import pytest  # noqa: E402
 
 from monkeygrab import composition  # noqa: E402
 from monkeygrab.config.app_config import AppConfig  # noqa: E402
+from monkeygrab.config.models import EmbeddingRuntimeConfig  # noqa: E402
 from monkeygrab.ports.embedder import Embedder  # noqa: E402
 from monkeygrab.ports.pdf_extractor import PdfExtractor  # noqa: E402
 from monkeygrab.ports.vector_store import VectorStore  # noqa: E402
@@ -169,26 +170,27 @@ def test_build_vector_store_receives_config_paths(monkeypatch):
     assert captured["paths"] is config.paths
 
 
-def test_build_embedder_forwards_the_isolated_interpreter(monkeypatch):
-    """jina-clip-v2 still runs under ``.venv-mineru``, never the current interpreter."""
+def test_build_embedder_forwards_the_configured_endpoint(monkeypatch):
+    """The llama-server client gets the endpoint, width and timeout from config."""
     captured = {}
 
     class _FakeEmbedder:
-        def __init__(self, python_executable):
-            captured["python"] = python_executable
+        def __init__(self, base_url, *, dimensions, timeout_s):
+            captured.update(base_url=base_url, dimensions=dimensions, timeout_s=timeout_s)
 
     _install_stub_module(
         monkeypatch,
-        "monkeygrab.adapters.embedding.jina_clip_embedder",
-        JinaClipEmbedder=_FakeEmbedder,
+        "monkeygrab.adapters.embedding.llama_server_embedder",
+        LlamaServerEmbedder=_FakeEmbedder,
     )
-    monkeypatch.setattr(composition, "_isolated_python", lambda: "/fake/.venv-mineru/bin/python")
+    config = AppConfig().with_overrides(
+        **{"models.embedding": EmbeddingRuntimeConfig("http://e:1", dimensions=256, timeout=7)}
+    )
 
-    config = AppConfig().with_overrides(**{"models.embedder": "jina"})
     result = composition.build_embedder(config)
 
     assert isinstance(result, _FakeEmbedder)
-    assert captured["python"] == "/fake/.venv-mineru/bin/python"
+    assert captured == {"base_url": "http://e:1", "dimensions": 256, "timeout_s": 7}
 
 
 def test_isolated_python_raises_actionable_error_when_venv_is_missing(monkeypatch):

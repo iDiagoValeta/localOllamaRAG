@@ -44,7 +44,7 @@ class HealthReport:
 
 
 def _cuda_probe(python: str) -> Dict[str, Any]:
-    """Ask the ISOLATED interpreter whether CUDA is visible: that is where jina-clip runs.
+    """Ask the ISOLATED interpreter whether CUDA is visible: that is where MinerU runs.
 
     Same probe as ``tools/setup_environments.py``; duplicated here because
     ``tools/`` is repo tooling, not product, and the service cannot import it.

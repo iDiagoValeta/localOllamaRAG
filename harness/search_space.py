@@ -34,7 +34,7 @@ Four things live here besides the declared tunables:
 
 - ``INDEX_TIME_KEYS``: excluded from stage 1 (issue #31 spec section 2.1).
   Any of these changes what is stored, which moves the index fingerprint and
-  forces a full MinerU + jina-clip reindex per candidate -- far more
+  forces a full MinerU + embedding reindex per candidate -- far more
   expensive than the ~13 min a retrieval/generation-only evaluation now
   costs (see above). Their own tier is declared in ``harness/slow_tier.py``
   (#102): it batches candidates by the index they need and prices a campaign

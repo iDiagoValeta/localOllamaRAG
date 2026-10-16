@@ -5,15 +5,10 @@ is what the script says afterwards, because a check that reports the wrong
 state is worse than no check -- it sends someone to rebuild an environment that
 is fine, or tells them a broken one is ready.
 
-Two distinctions carry the whole design and are asserted here:
-
-1. **Missing is not the same as busy.** jina-clip failing with CUDA OOM means
-   installed-and-occupied, usually because a gate run or a resident Ollama
-   model holds the 8 GB. Rebuilding the venv fixes nothing, so it must not
-   read as a missing component or exit non-zero.
-2. **Missing is not the same as not-built-here.** Ollama is the one component
-   this script does not install; a missing model is a `pull` away and is
-   reported with that command, not as a setup failure.
+One distinction carries the design and is asserted here: **missing is not the
+same as not-built-here.** Ollama is the one component this script does not
+install; a missing model is a `pull` away and is reported with that command,
+not as a setup failure.
 
 Standard library only, like the script itself, so this runs in the fast gate's
 dependency-free `architecture` job.
@@ -183,37 +178,17 @@ class TestReporting:
             "_check_interpreter",
             lambda venv, label: results.get(label, (True, f"{label}: fine")),
         )
-        for name in ("_check_cuda", "_check_mineru_binary", "_check_jina_worker", "_check_ollama"):
+        for name in ("_check_cuda", "_check_mineru_binary", "_check_ollama"):
             monkeypatch.setattr(setup, name, lambda name=name: results[name])
 
     def test_everything_present_exits_zero(self, monkeypatch, capsys):
         self._with_checks(monkeypatch, {
             "_check_cuda": (True, "CUDA: a card"),
             "_check_mineru_binary": (True, "MinerU: 3.4.5"),
-            "_check_jina_worker": (True, "jina-clip: worker ready, dim 512"),
             "_check_ollama": (True, "Ollama: reachable"),
         })
         assert setup.run_checks() == 0
         assert "All components present" in capsys.readouterr().out
-
-    def test_a_busy_gpu_is_a_warning_not_a_missing_component(self, monkeypatch, capsys):
-        """Rebuilding the venv would not free the card, so telling someone to
-        rebuild it is the wrong instruction, and exit 1 is the wrong answer."""
-        self._with_checks(monkeypatch, {
-            "_check_cuda": (True, "CUDA: a card"),
-            "_check_mineru_binary": (True, "MinerU: 3.4.5"),
-            "_check_jina_worker": (
-                False,
-                "jina-clip: installed, but the GPU has no free memory right now "
-                "(another run or a resident Ollama model is holding it) -- "
-                "BUSY, not missing. Free the card and re-check.",
-            ),
-            "_check_ollama": (True, "Ollama: reachable"),
-        })
-        assert setup.run_checks() == 0
-        out = capsys.readouterr().out
-        assert "warning(s) above" in out
-        assert "Run without --check to build them" not in out
 
     def test_a_missing_ollama_model_is_a_warning_carrying_the_pull_command(
         self, monkeypatch, capsys
@@ -221,7 +196,6 @@ class TestReporting:
         self._with_checks(monkeypatch, {
             "_check_cuda": (True, "CUDA: a card"),
             "_check_mineru_binary": (True, "MinerU: 3.4.5"),
-            "_check_jina_worker": (True, "jina-clip: worker ready, dim 512"),
             "_check_ollama": (False, "Ollama: reachable, missing model(s) ... ollama pull x:y"),
         })
         assert setup.run_checks() == 0
@@ -231,7 +205,6 @@ class TestReporting:
         self._with_checks(monkeypatch, {
             "_check_cuda": (False, "CUDA: not available to .venv-mineru"),
             "_check_mineru_binary": (True, "MinerU: 3.4.5"),
-            "_check_jina_worker": (True, "jina-clip: worker ready, dim 512"),
             "_check_ollama": (True, "Ollama: reachable"),
         })
         assert setup.run_checks() == 1
@@ -253,7 +226,6 @@ class TestSurvivingWhatItDiagnoses:
         monkeypatch.setattr(setup, "_check_interpreter", lambda venv, label: (True, f"{label}: ok"))
         monkeypatch.setattr(setup, "_check_cuda", lambda: (_ for _ in ()).throw(OSError("boom")))
         monkeypatch.setattr(setup, "_check_mineru_binary", lambda: (True, "MinerU: 3.4.5"))
-        monkeypatch.setattr(setup, "_check_jina_worker", lambda: (True, "jina-clip: ready"))
         monkeypatch.setattr(setup, "_check_ollama", lambda: (True, "Ollama: reachable"))
 
         assert setup.run_checks() == 1
