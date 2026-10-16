@@ -188,8 +188,9 @@ supersedes it.
 
 `MONKEYGRAB_PROFILE=lite` applies a bundle of defaults for a 4 GB GPU: the
 generator becomes a ~3 GB Q4 model, embeddinggemma-2 runs on the CPU, and the
-BGE reranker is turned off (on its own it needs ~1.1 GB of VRAM). An
-explicitly exported variable always wins over the profile.
+BGE reranker and RECOMP synthesis are turned off (the reranker alone peaked at
+2.6 GB of VRAM, and a 2B model's synthesis lost the figures its answer
+needed). An explicitly exported variable always wins over the profile.
 
 The profile selects the pieces; it does not install them. Two are needed:
 
@@ -211,7 +212,13 @@ The profile selects the pieces; it does not install them. Two are needed:
 
    `-ngl 0` keeps it on the CPU, leaving the whole 4 GB for the generator.
 
-Métricas: ver docs/model-history.md
+Measured on the gold set (RTX 4060 Laptop): **130/156 and 129/156** over two
+runs, against the 0.82 floor, with the generator's process peaking at
+**2602 MiB** of VRAM and the embedding server at 0 MiB, ~1.2 s per answer.
+The Q6_K build of the same model (`hf.co/unsloth/gemma-4-E2B-it-GGUF:Q6_K`)
+scored 132/156 at 3340 MiB -- inside the noise, so Q4_0 stays the default.
+Runs and conditions are in
+[`docs/model-history.md`](docs/model-history.md#lite-profile-4-gb-of-vram).
 
 ---
 

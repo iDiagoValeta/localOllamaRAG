@@ -222,6 +222,45 @@ during phase 1. Both are placement findings for anyone serving this model
 next to the fixed stack on 8 GB: at least 16384 of context per slot, and about
 4.5 GiB of VRAM left free for jina-clip and the reranker.
 
+## Lite profile (4 GB of VRAM)
+
+Issue #292. `MONKEYGRAB_PROFILE=lite`, so these rows differ from the table
+above in more than the generator, and are not ranked against it: the embedder
+is `google/embeddinggemma-2@512` served by llama.cpp b11669 on the CPU, the
+reranker is off, `OLLAMA_RAG_NUM_CTX` is 8192, `MAX_CONTEXTO_CHARS` is 16000,
+and `AUX_MODEL` (`OLLAMA_AUX_MODEL`) is the row's own generator rather than
+`Ling-3.0-tiny`, because a 4 GB card has room for one model. Same 156 cases,
+same 180 s budget, `USAR_DESCRIPCION_IMAGEN=false` exported over
+`settings.json` like every row above. Rows produced by
+`tools/diagnostics/model_history_row.py`.
+
+| Model | RECOMP | Answered | Overall | tokens/s | tokens/answer | s/answer | decode s/answer | Budget hit | Infra | Placement | Run |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0` | on | 108 / 136 (79.4%) | 126 / 156 (80.8%) | 91.5 | 30 *(of 124)* | 8.96 *(of 124)* | 0.33 | 0 | 0 | GPU | `20261016T002405Z` |
+| `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0` | **off** | 112 / 136 (82.4%) | **130 / 156 (83.3%)** | 101.6 | 32 *(of 124)* | 1.17 *(of 124)* | 0.31 | 0 | 0 | GPU | `20261016T003731Z` |
+| `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0` | **off** | 111 / 136 (81.6%) | 129 / 156 (82.7%) | 101.8 | 31 *(of 124)* | 1.15 *(of 124)* | 0.30 | 0 | 0 | GPU | `20261016T004926Z` |
+| `hf.co/unsloth/gemma-4-E2B-it-GGUF:Q6_K` | off | 114 / 136 (83.8%) | 132 / 156 (84.6%) | 85.0 | 27 *(of 124)* | 1.27 *(of 124)* | 0.31 | 0 | 0 | GPU | `20261016T010240Z` |
+
+The first run carries the stack name `mineru-jina_clip-faiss` in its file
+name although it ran on embeddinggemma-2: the name was hardcoded until
+`e671d80`. Its `conditions` block records `"embedder": "gemma2"` and the
+embedding server's URL.
+
+RECOMP is off in the profile because of the first two rows: 22 of the first
+run's 28 failed answers had a verified page among the retrieved fragments,
+and the 2B model's synthesis was where the figure got lost. Turning it off
+moved the run by +4 and +3 cases (inside the five-case noise of one run, but
+in both repeats) and cut each answer from ~9 s to ~1.2 s.
+
+VRAM, sampled every 0.5 s per process with `nvidia-smi` through each whole
+run (RTX 4060 Laptop, 8 GiB): the Ollama runner peaked at **2602 MiB** for
+Q4_0 and **3340 MiB** for Q6_K; the embedding server stayed at **0 MiB**; the
+pipeline process itself holds no CUDA memory with the reranker off. Q6_K's
++3 cases are inside the noise and cost 738 MiB of the 4 GB budget, which is
+why Q4_0 is the profile default. For the record, the reranker this profile
+leaves off measured 2640 MiB on the GPU scoring 200 candidates, and ~70 s for
+40 candidates on the CPU.
+
 ## Coverage
 
 Every generator the previous table listed, including the five rows it carried
