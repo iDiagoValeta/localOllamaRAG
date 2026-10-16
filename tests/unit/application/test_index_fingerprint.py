@@ -126,8 +126,11 @@ def test_recipe_version_is_omitted_at_v1_and_matches_pre_change_main():
         compute_index_fingerprint(
             AppConfig().with_overrides(**{"flags.usar_contextual_retrieval": False})
         )
+    Main's only embedder was jina-clip-v2, so the comparison pins it.
     """
-    config = AppConfig().with_overrides(**{"flags.usar_contextual_retrieval": False})
+    config = AppConfig().with_overrides(
+        **{"flags.usar_contextual_retrieval": False, "models.embedder": "jina"}
+    )
     assert compute_index_fingerprint(config) == "3802ef9e11d5e813"
     assert "recipe_version" not in index_recipe(config)
 
@@ -168,10 +171,11 @@ def test_default_app_config_fingerprint_is_pinned():
     this value differs from main's 70b88d55bb078bf9 -- and only a pin on the
     default config, not the contextual-off one, would have caught it.
 
-    Value computed on this branch, after recipe_version + contextual_num_ctx:
-        compute_index_fingerprint(AppConfig()) == "b4bc32189fbd3efe"
+    Value computed on this branch after the default embedder became
+    embeddinggemma-2 (issue #292):
+        compute_index_fingerprint(AppConfig()) == "41c129b913131f7d"
     """
-    assert compute_index_fingerprint(AppConfig()) == "b4bc32189fbd3efe"
+    assert compute_index_fingerprint(AppConfig()) == "41c129b913131f7d"
 
 
 def test_fingerprint_is_short_hex():
@@ -183,7 +187,7 @@ def test_fingerprint_is_short_hex():
 def test_recipe_is_json_serializable_and_names_the_fixed_stack():
     recipe = index_recipe(AppConfig())
     assert recipe["extractor"] == "mineru"
-    assert recipe["embedding"].startswith("jinaai/jina-clip-v2")
+    assert recipe["embedding"].startswith("google/embeddinggemma-2")
 
 
 # fingerprint_is_stale -- the product-facing tri-state read of a comparison

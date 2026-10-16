@@ -52,7 +52,7 @@ def build_embedder(config: AppConfig) -> Embedder:
         config: Runtime configuration naming the embedder and its endpoint.
 
     Returns:
-        A jina-clip-v2 worker (default) or an HTTP embeddinggemma-2 client.
+        An HTTP embeddinggemma-2 client (default) or a jina-clip-v2 worker.
     """
     if config.models.embedder == "gemma2":
         from monkeygrab.adapters.embedding.llama_server_embedder import LlamaServerEmbedder

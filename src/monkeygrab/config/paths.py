@@ -14,7 +14,7 @@ RAG_BASE_DIR = os.path.join(_PROJECT_ROOT, "rag")
 _EMBEDDER_SLUGS = {"jina": "jina_clip", "gemma2": "eg2"}
 
 
-def derive_db_paths(docs_folder: str, data_dir: str, embedder: str = "jina") -> Tuple[str, str]:
+def derive_db_paths(docs_folder: str, data_dir: str, embedder: str = "gemma2") -> Tuple[str, str]:
     """Return the FAISS path and collection name for a PDF corpus.
 
     Args:

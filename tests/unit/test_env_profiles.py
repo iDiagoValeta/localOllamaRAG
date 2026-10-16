@@ -65,25 +65,25 @@ def test_apply_profile_unknown_profile_raises(monkeypatch):
         apply_profile({"MONKEYGRAB_PROFILE": "turbo"})
 
 
-def test_from_env_defaults_to_jina(monkeypatch):
+def test_from_env_defaults_to_gemma2(monkeypatch):
     for name in ("MONKEYGRAB_EMBEDDER", "MONKEYGRAB_EMBEDDER_URL", "MONKEYGRAB_EMBEDDER_DIM"):
         monkeypatch.delenv(name, raising=False)
 
     cfg = AppConfig.from_env()
 
-    assert cfg.models.embedder == "jina"
+    assert cfg.models.embedder == "gemma2"
     assert cfg.models.embedding.base_url == "http://127.0.0.1:8091"
     assert cfg.models.embedding.dimensions == 512
 
 
 def test_from_env_reads_embedder_selection(monkeypatch):
-    monkeypatch.setenv("MONKEYGRAB_EMBEDDER", "gemma2")
+    monkeypatch.setenv("MONKEYGRAB_EMBEDDER", "jina")
     monkeypatch.setenv("MONKEYGRAB_EMBEDDER_URL", "http://embed.example:8091")
     monkeypatch.setenv("MONKEYGRAB_EMBEDDER_DIM", "256")
 
     cfg = AppConfig.from_env()
 
-    assert cfg.models.embedder == "gemma2"
+    assert cfg.models.embedder == "jina"
     assert cfg.models.embedding.base_url == "http://embed.example:8091"
     assert cfg.models.embedding.dimensions == 256
 

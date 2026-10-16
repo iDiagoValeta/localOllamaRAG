@@ -277,11 +277,11 @@ DATA_DIR = os.path.abspath(os.getenv("MONKEYGRAB_DATA_DIR", BASE_DIR))
 
 CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "en"))
 
-# Active embedder: "jina" (jina-clip-v2, default) or "gemma2"
-# (embeddinggemma-2 behind llama-server). Read here as well as by
+# Active embedder: "gemma2" (embeddinggemma-2 behind llama-server, default)
+# or "jina" (jina-clip-v2). Read here as well as by
 # AppConfig.from_env so this module's PATH_DB and the core agree; the profile
 # defaults are already seeded by the monkeygrab.config.env import above.
-EMBEDDER = os.getenv("MONKEYGRAB_EMBEDDER", "jina")
+EMBEDDER = os.getenv("MONKEYGRAB_EMBEDDER", "gemma2")
 
 
 def _derivar_paths_db(carpeta: str, embedder: str | None = None) -> tuple[str, str]:

@@ -170,7 +170,7 @@ def test_build_vector_store_receives_config_paths(monkeypatch):
 
 
 def test_build_embedder_forwards_the_isolated_interpreter(monkeypatch):
-    """The embedder runs under ``.venv-mineru``, never the current interpreter."""
+    """jina-clip-v2 still runs under ``.venv-mineru``, never the current interpreter."""
     captured = {}
 
     class _FakeEmbedder:
@@ -184,7 +184,8 @@ def test_build_embedder_forwards_the_isolated_interpreter(monkeypatch):
     )
     monkeypatch.setattr(composition, "_isolated_python", lambda: "/fake/.venv-mineru/bin/python")
 
-    result = composition.build_embedder(AppConfig())
+    config = AppConfig().with_overrides(**{"models.embedder": "jina"})
+    result = composition.build_embedder(config)
 
     assert isinstance(result, _FakeEmbedder)
     assert captured["python"] == "/fake/.venv-mineru/bin/python"

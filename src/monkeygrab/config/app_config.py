@@ -119,7 +119,7 @@ class AppConfig:
             ValueError: If any environment variable is set to an invalid value.
         """
         rag_model = env.read_env_str("OLLAMA_RAG_MODEL", "gemma4:e4b")
-        embedder = env.read_env_choice("MONKEYGRAB_EMBEDDER", "jina", EMBEDDERS)
+        embedder = env.read_env_choice("MONKEYGRAB_EMBEDDER", "gemma2", EMBEDDERS)
         models = ModelsConfig(
             rag=rag_model,
             chat=env.read_env_str("OLLAMA_CHAT_MODEL", "gemma4:e4b"),

@@ -29,9 +29,9 @@ class OllamaRuntimeConfig:
 CHAT_BACKENDS = ("ollama", "openai")
 
 
-# Selectable embedders. "jina" is jina-clip-v2, run in the isolated interpreter
-# and default; "gemma2" is embeddinggemma-2 behind an OpenAI-compatible
-# llama-server, which is what a 4 GB machine can afford in CPU-only mode.
+# Selectable embedders. "gemma2" is embeddinggemma-2 behind an OpenAI-compatible
+# llama-server and the default (better recall and MRR than jina-clip-v2 on the
+# gold set; CPU-friendly). "jina" is jina-clip-v2, run in the isolated interpreter.
 EMBEDDERS = ("jina", "gemma2")
 
 # Matryoshka widths embeddinggemma-2 can be truncated to. An index built at one
@@ -74,7 +74,7 @@ class ModelsConfig:
     contextual_backend: str = "ollama"
     recomp_backend: str = "ollama"
     openai: OpenAICompatRuntimeConfig = OpenAICompatRuntimeConfig()
-    embedder: str = "jina"
+    embedder: str = "gemma2"
     embedding: EmbeddingRuntimeConfig = EmbeddingRuntimeConfig()
 
 

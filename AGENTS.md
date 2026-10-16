@@ -129,7 +129,7 @@ default from memory. It covers the fixed stack too (MinerU, jina-clip, the
 reranker), because a version change there has moved more cases than any
 generator swap this project has measured. The environment wins for this run, including over a
 choice saved in the web UI; a save does not persist that override as if the
-user had picked it (issue #79). The embedder is selectable (jina-clip-v2 by
+user had picked it (issue #79). The embedder is selectable (embeddinggemma-2 by
 default); BGE Reranker v2 M3 is fixed.
 
 | Role | Env var | Notes |
@@ -138,7 +138,7 @@ default); BGE Reranker v2 M3 is fixed.
 | Chat + sub-queries | `OLLAMA_CHAT_MODEL` | Chat mode and RAG query decomposition; `think=False` |
 | Contextual retrieval | `OLLAMA_CONTEXTUAL_MODEL` | Chunk enrichment at indexing (`USAR_CONTEXTUAL_RETRIEVAL`) |
 | RECOMP synthesis | `OLLAMA_RECOMP_MODEL` | Pre-generation context synthesis (`USAR_RECOMP_SYNTHESIS`) |
-| Embedder | `MONKEYGRAB_EMBEDDER` | `jina` (default, jina-clip-v2, shared text/image space) or `gemma2` (embeddinggemma-2 behind an OpenAI-compatible `llama-server`, endpoint from `MONKEYGRAB_EMBEDDER_URL`; Matryoshka width from `MONKEYGRAB_EMBEDDER_DIM`). Each embedder has its own index path and fingerprint. |
+| Embedder | `MONKEYGRAB_EMBEDDER` | `gemma2` (default, embeddinggemma-2 behind an OpenAI-compatible `llama-server`, endpoint from `MONKEYGRAB_EMBEDDER_URL`; Matryoshka width from `MONKEYGRAB_EMBEDDER_DIM`) or `jina` (jina-clip-v2, shared text/image space). Each embedder has its own index path and fingerprint. |
 | Reranker | fixed | `BAAI/bge-reranker-v2-m3`; not an Ollama model |
 
 Each role also has a backend, `MONKEYGRAB_<ROLE>_BACKEND` = `ollama` (default) or `openai` (`src/monkeygrab/adapters/chat/openai_compat_chat.py`, endpoint from `MONKEYGRAB_OPENAI_BASE_URL`). The figure describer follows the `chat` role.
