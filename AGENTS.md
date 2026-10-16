@@ -143,7 +143,7 @@ BGE Reranker v2 M3 is fixed.
 
 Each role also has a backend, `MONKEYGRAB_<ROLE>_BACKEND` = `ollama` (default) or `openai` (`src/monkeygrab/adapters/chat/openai_compat_chat.py`, endpoint from `MONKEYGRAB_OPENAI_BASE_URL`). The figure describer follows the `chat` role.
 
-`MONKEYGRAB_PROFILE` applies a named bundle of these defaults for a hardware class with `setdefault` (an exported variable always wins): `standard` (default) changes nothing, `lite` fits a 4 GB VRAM GPU — a ~3 GB Q4 generator, the `gemma2` embedder on the CPU and the reranker off (`monkeygrab.config.env.PROFILES`). Which models have actually been measured, on what and how fast, is [`docs/model-history.md`](docs/model-history.md).
+`MONKEYGRAB_PROFILE` applies a named bundle of these defaults for a hardware class with `setdefault` (an exported variable always wins): `standard` (default) changes nothing, `lite` fits a 4 GB VRAM GPU — a ~3 GB Q4 generator, embeddinggemma-2 on the CPU and the reranker off (`monkeygrab.config.env.PROFILES`). Which models have actually been measured, on what and how fast, is [`docs/model-history.md`](docs/model-history.md).
 
 Other env vars: `DOCS_FOLDER` (default `rag/docs/en/`), `MONKEYGRAB_DATA_DIR` (writable root for `vector_db`/history/debug; defaults to the package dir in dev, `%LOCALAPPDATA%/MonkeyGrab` in the packaged app), `OLLAMA_BASE_URL` (default `http://localhost:11434`, falling back to Ollama's own `OLLAMA_HOST`).
 

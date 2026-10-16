@@ -277,6 +277,7 @@ DATA_DIR = os.path.abspath(os.getenv("MONKEYGRAB_DATA_DIR", BASE_DIR))
 
 CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "en"))
 
+
 def _derivar_paths_db(carpeta: str) -> tuple[str, str]:
     """Derive the FAISS path for a docs folder.
 

@@ -163,7 +163,6 @@ def read_env_choice(name: str, default: str, choices: tuple[str, ...]) -> str:
 # 126/156 to 130/156 while cutting each answer from ~9 s to ~1.5 s.
 PROFILES: Dict[str, Dict[str, str]] = {
     "lite": {
-        "MONKEYGRAB_EMBEDDER": "gemma2",
         "MONKEYGRAB_EMBEDDER_DIM": "512",
         "OLLAMA_RAG_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
         "OLLAMA_CHAT_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",

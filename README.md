@@ -95,7 +95,7 @@ the strongest evidence; and only then does Ollama write the answer.
 The pipeline logic itself lives in a
 [hexagonal core](https://alistair.cockburn.us/hexagonal-architecture/) under
 [`src/monkeygrab/`](src/monkeygrab/README.md). It depends on plain contracts,
-not on MinerU, Jina CLIP, FAISS or Ollama. The concrete technologies are
+not on MinerU, the embedder, FAISS or Ollama. The concrete technologies are
 connected at the application boundary.
 
 **The dependency rule points one way.** `application` may import
@@ -390,7 +390,7 @@ caps one generation call in seconds of wall clock and is off (`0`) by default:
 the request timeout never trips on a model that keeps producing tokens, so this
 is the only bound on a generator that does not stop.
 
-Each corpus has its own FAISS index per embedder under `rag/vector_db/`. The
+Each corpus has its own FAISS index under `rag/vector_db/`. The
 web interface detects when a stored index no longer matches the active chunking,
 extraction or index-time flags and warns about it, but never reindexes on its
 own — a settings change must not silently trigger a MinerU + embedding pass
