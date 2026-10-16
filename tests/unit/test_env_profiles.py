@@ -16,6 +16,7 @@ def test_lite_profile_exists_and_selects_gemma2():
     assert "lite" in PROFILES
     assert PROFILES["lite"]["MONKEYGRAB_EMBEDDER"] == "gemma2"
     assert PROFILES["lite"]["USAR_RERANKER"] == "false"
+    assert PROFILES["lite"]["USAR_RECOMP_SYNTHESIS"] == "false"
 
 
 def test_apply_profile_seeds_every_unset_entry(monkeypatch):
@@ -114,6 +115,7 @@ def test_lite_profile_values_drive_from_env(monkeypatch):
     assert cfg.models.embedder == "gemma2"
     assert cfg.models.embedding.dimensions == 512
     assert cfg.flags.usar_reranker is False
+    assert cfg.flags.usar_recomp_synthesis is False
     assert cfg.models.ollama.rag_num_ctx == 8192
     assert cfg.models.ollama.recomp_num_ctx == 4096
     assert cfg.chunking.contextual_doc_chars == 12000

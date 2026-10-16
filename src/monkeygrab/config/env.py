@@ -154,10 +154,13 @@ def read_env_choice(name: str, default: str, choices: tuple[str, ...]) -> str:
 
 # Hardware profiles seed the environment with the exports one machine class
 # needs, so the operator sets a single MONKEYGRAB_PROFILE instead of a wall of
-# variables. "lite" targets a 4 GB GPU: one ~3 GB Q4 generator in VRAM, the
-# embeddinggemma-2 embedder served by llama-server on the CPU, and the BGE
-# reranker off -- on its own it needs ~1.1 GB of VRAM, which does not fit next
-# to the generator.
+# variables. "lite" targets a 4 GB GPU (issue #292, measured on an RTX 4060):
+# the Gemma-4-E2B Q4_0 generator peaks at 2602 MiB over a full gate run and
+# embeddinggemma-2 runs on the CPU at 0 MiB. The BGE reranker stays off: it
+# peaked at 2640 MiB on the GPU for 200 candidates, and took ~70 s for 40 on
+# the CPU. RECOMP is off too: with a 2B generator the synthesis step dropped
+# the very figures the answer needed, and skipping it raised the gate from
+# 126/156 to 130/156 while cutting each answer from ~9 s to ~1.5 s.
 PROFILES: Dict[str, Dict[str, str]] = {
     "lite": {
         "MONKEYGRAB_EMBEDDER": "gemma2",
@@ -172,6 +175,7 @@ PROFILES: Dict[str, Dict[str, str]] = {
         "CONTEXTUAL_DOC_CHARS": "12000",
         "MAX_CONTEXTO_CHARS": "16000",
         "USAR_RERANKER": "false",
+        "USAR_RECOMP_SYNTHESIS": "false",
     },
 }
 
