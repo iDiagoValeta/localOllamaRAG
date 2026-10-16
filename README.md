@@ -77,8 +77,6 @@ app and evaluation pipeline all use the same four-part multimodal path.
    so a written question can retrieve a figure directly without first turning
    that figure into a text description. MonkeyGrab uses its 512-dimensional
    Matryoshka representation, served by a local `llama-server`.
-   [Jina CLIP v2](https://huggingface.co/jinaai/jina-clip-v2) remains available
-   as `MONKEYGRAB_EMBEDDER=jina`.
 
 3. **[FAISS](https://github.com/facebookresearch/faiss) stores and searches the
    representations.** MonkeyGrab uses an exact, normalized inner-product index,
@@ -160,14 +158,14 @@ The rest of the stack is not an Ollama model:
 |---|---|---|
 | **Reranker** | [`BAAI/bge-reranker-v2-m3`](https://huggingface.co/BAAI/bge-reranker-v2-m3). Downloaded from Hugging Face on first use. | fixed |
 | **Lexical search** | [Okapi BM25](https://github.com/dorianbrown/rank_bm25), always on when hybrid search is | — |
-| **Embeddings** | [`google/embeddinggemma-2`](https://huggingface.co/google/embeddinggemma-2) (default) via a local `llama-server`; or [`jinaai/jina-clip-v2`](https://huggingface.co/jinaai/jina-clip-v2) | `MONKEYGRAB_EMBEDDER` |
+| **Embeddings** | [`google/embeddinggemma-2`](https://huggingface.co/google/embeddinggemma-2) via a local `llama-server` | `MONKEYGRAB_EMBEDDER_URL` |
 | **Vector store** | [FAISS](https://github.com/facebookresearch/faiss), exact cosine search | fixed |
 | **PDF extraction** | [MinerU](https://github.com/opendatalab/MinerU), structured text, tables and figures | fixed |
 
 > [!NOTE]
-> MinerU is an external CLI, and `jina_clip` runs in an isolated interpreter,
-> which needs a CUDA GPU, because its dependencies conflict with the
-> product's — see [`src/monkeygrab/README.md`](src/monkeygrab/README.md).
+> MinerU is an external CLI that runs in an isolated interpreter, because its
+> dependencies conflict with the product's, and embeddinggemma-2 is served by
+> `llama-server`. See [`src/monkeygrab/README.md`](src/monkeygrab/README.md).
 
 ### Choosing a generator
 
@@ -252,8 +250,7 @@ placeholder — and nothing answerable.
 
 ## Running it
 
-Requires [Python 3.10+](https://www.python.org/downloads/), a CUDA GPU (the
-multimodal embedder hard-fails without one; details below), and
+Requires [Python 3.10+](https://www.python.org/downloads/) and
 [Ollama](https://ollama.com/download) running locally, with at least a generator
 model pulled. Drop PDFs into `rag/docs/en/` — the index builds itself on first
 run.
@@ -342,10 +339,10 @@ Dependencies are in [`rag/requirements.txt`](rag/requirements.txt) (core) and
 [`rag/web/requirements.txt`](rag/web/requirements.txt) (web UI). Pull the Ollama
 models selected in your configuration. The reranker downloads itself on first use.
 
-MinerU and Jina CLIP v2 do not run in that environment: their dependencies
-collide with the product's, so both are installed together into one isolated
-interpreter at `.venv-mineru/Scripts/python.exe` (Windows) or
-`.venv-mineru/bin/python` (Linux/Mac), at the project root, following each
+MinerU does not run in that environment: its dependencies collide with the
+product's, so it is installed into one isolated interpreter at
+`.venv-mineru/Scripts/python.exe` (Windows) or
+`.venv-mineru/bin/python` (Linux/Mac), at the project root, following the
 project's own install instructions.
 
 > [!NOTE]
@@ -357,13 +354,8 @@ project's own install instructions.
 > issue #118, where it turned out to extract nothing on a fresh install.
 > MinerU also names its output directory after the backend that ran
 > (`hybrid_auto/` rather than 2.x's `auto/`) — the adapter finds it either
-> way. That interpreter needs a CUDA GPU: Jina
-CLIP v2 can run on CPU (that is how the roughly 100 seconds per document
-figure was measured, impractical for indexing), but this project's worker
-refuses to start it there. That is the same "no silent fallbacks" policy
-from above, applied to a slow device instead of a missing one. See
-[`src/monkeygrab/README.md`](src/monkeygrab/README.md) for how the isolation
-is used.
+> way. See [`src/monkeygrab/README.md`](src/monkeygrab/README.md) for how the
+isolation is used.
 
 Both environments can be built and verified in one command:
 
@@ -373,8 +365,8 @@ python tools/setup_environments.py --check    # verify only: is this machine set
 ```
 
 `--check` reports each component separately — both interpreters, CUDA visible
-to the isolated one, the MinerU binary, the jina-clip worker actually loading,
-and which configured Ollama models are missing. It never pulls models: that is
+to the isolated one, the MinerU binary, and which configured Ollama models are
+missing. It never pulls models: that is
 gigabytes over your connection. Teardown is `rm -rf .venv .venv-mineru`.
 
 Copy [`.env.example`](.env.example) to `.env` at the project root; it documents
@@ -446,9 +438,9 @@ gate is the one thing that needs all 17.
 
 The **desktop app** wraps the web interface in a Windows executable with
 [PyInstaller](https://pyinstaller.org/) and [pywebview](https://pywebview.flowrl.com/).
-It needs the isolated MinerU/Jina runtime (`.venv-mineru`) beside the
-executable; without it, indexing and retrieval fail visibly. The jina-clip
-worker ships inside the bundle. See [`packaging/README.md`](packaging/README.md).
+It needs the isolated MinerU runtime (`.venv-mineru`) beside the
+executable; without it, indexing and retrieval fail visibly. See
+[`packaging/README.md`](packaging/README.md).
 
 ---
 
@@ -457,7 +449,6 @@ worker ships inside the bundle. See [`packaging/README.md`](packaging/README.md)
 > [!WARNING]
 > - **Vector graphics** (SVG figures) embedded in PDFs are not extracted.
 > - **Structured extraction is not perfect.** MinerU preserves tables and separates figures, but complex layouts, mathematical notation and unusual PDFs can still be misread.
-> - **Jina CLIP v2 (the opt-in embedder) has a non-commercial local licence.** A commercial deployment that still uses it needs separate licensing; the default embedder is embeddinggemma-2.
 > - **The reranker downloads its model on first use**, a one-time step that needs internet. Everything after runs offline; turn reranking off if you need a fully air-gapped first run.
 > - **Optional stages fail loudly.** If an enabled stage cannot run, the query raises instead of silently returning worse results. Turn the stage off to proceed without it.
 > - **Indexing cost** grows with corpus size, contextual enrichment and the number of extracted images.
@@ -516,7 +507,7 @@ How to work in this repo:
 MonkeyGrab is built on external open-source projects and openly available
 models. Thank you to the teams behind
 [MinerU](https://github.com/opendatalab/MinerU),
-[Jina CLIP v2](https://huggingface.co/jinaai/jina-clip-v2),
+[embeddinggemma-2](https://huggingface.co/google/embeddinggemma-2),
 [FAISS](https://github.com/facebookresearch/faiss) and
 [BGE/FlagEmbedding](https://github.com/FlagOpen/FlagEmbedding) for making this
 multimodal stack possible. The project also relies on

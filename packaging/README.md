@@ -37,7 +37,7 @@ pyinstaller packaging/MonkeyGrab.spec --noconfirm --clean --distpath dist
 |---|---|
 | App code, ML libs, Python runtime, built-in corpora (`es`/`ca`/`en`), React UI | inside the bundle (`MonkeyGrab/_internal/`) |
 | The three FAISS language stores, chat history and debug dumps | per-user data dir `MONKEYGRAB_DATA_DIR` (default `%LOCALAPPDATA%\MonkeyGrab`) |
-| Isolated MinerU + Jina CLIP runtime | external `.venv-mineru/` beside `MonkeyGrab.exe` |
+| Isolated MinerU runtime | external `.venv-mineru/` beside `MonkeyGrab.exe` |
 
 Routing writable data to `MONKEYGRAB_DATA_DIR` keeps the install read-only-safe;
 in source/dev runs the variable is unset and everything stays repo-relative.
@@ -45,10 +45,10 @@ in source/dev runs the variable is unset and everything stays repo-relative.
 ## Target prerequisites
 
 - **Ollama** running locally with the desired models.
-- **The isolated multimodal runtime** at
+- **The isolated MinerU runtime** at
   `MonkeyGrab/.venv-mineru/Scripts/python.exe`. The current PyInstaller recipe
-  does not create or bundle it; prepare it separately with the MinerU and Jina
-  CLIP dependencies before distributing the folder.
+  does not create or bundle it; prepare it separately with the MinerU
+  dependencies before distributing the folder.
 - **Edge WebView2 runtime** — preinstalled on Windows 11; on older Windows install
   the [Evergreen runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
 
@@ -61,10 +61,3 @@ in source/dev runs the variable is unset and everything stays repo-relative.
   (one-time, needs internet) into the user cache.
 - A desktop bundle without `.venv-mineru` starts, but indexing and retrieval
   fail visibly because the fixed multimodal stack has no fallback.
-- `jina_clip_worker.py` ships as a PyInstaller data file (see the spec's
-  comment next to its `datas` entry), landing beside the frozen
-  `jina_clip_embedder` module under `_internal/`. `JinaClipEmbedder` resolves
-  it with the same `Path(__file__).with_name(...)` lookup it uses in a source
-  checkout, so no dev/frozen branch is needed — the two layouts mirror each
-  other by construction, the same way `_isolated_python()` already resolves
-  `.venv-mineru` in both ([#26](https://github.com/iDiagoValeta/localOllamaRAG/issues/26)).
