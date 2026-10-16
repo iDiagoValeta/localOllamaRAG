@@ -348,3 +348,9 @@ def test_close_is_a_no_op_and_the_instance_is_never_unusable(monkeypatch):
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+@pytest.mark.parametrize("url", ["file:///etc/passwd", "ftp://host", "localhost:8091"])
+def test_rejects_a_base_url_that_is_not_http(url):
+    with pytest.raises(ValueError, match="http"):
+        module.LlamaServerEmbedder(url)
