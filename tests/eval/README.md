@@ -143,8 +143,8 @@ something is missing:
 
 1. Checks Ollama is reachable and every required model (`--models`, plus the
    fixed auxiliary model used for query decomposition, contextual retrieval
-   and RECOMP) is installed. The embedder (llama-server) and BGE are not
-   Ollama roles.
+   and RECOMP) is installed, then checks the embedder (`llama-server`) answers
+   `GET <MONKEYGRAB_EMBEDDER_URL>/health`. BGE is not an Ollama role.
 2. Downloads any missing blind-set arXiv papers (reusing `fetch_papers.py`)
    and stages them under `blind_docs/<paper-slug>.pdf`.
 3. Indexes whatever is not already indexed -- dev-set papers for each of the three
