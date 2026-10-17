@@ -13,7 +13,9 @@ Rather than maintain a list of paths in the workflow, which drifts the moment a
 test is added, each test file is inspected for an ``import rag`` and skipped when
 the engine is unavailable. The same pytest command then works in both
 environments: everything runs where the stack is installed, and only the pure
-layers run where it is not.
+layers run where it is not. A ``rag`` module that is standard-library-only at
+import time is exempt from that heuristic -- see ``_STDLIB_ONLY_RAG_MODULES`` --
+because importing it cannot bring the stack in.
 
 Also resets a module-level leak in rag.chat_pdfs before the first test runs
 (see the fixture below) -- unrelated to the skip logic above, but this is the
@@ -44,6 +46,14 @@ _ENGINE_REQUIREMENTS = (
     "sentence_transformers",
 )
 
+# ``rag`` module paths that import only the standard library at module scope.
+# ``rag.web.desktop`` defers pywebview, werkzeug and the backend to the
+# functions that need them (a windowed build must set the data dir first), so
+# its unit tests can run in the dependency-free job like the pure layers. The
+# ``rag.web`` package itself is deliberately not exempt: its ``__init__`` is a
+# docstring today, but an import of the app there would bring the stack in.
+_STDLIB_ONLY_RAG_MODULES = frozenset({"rag.web.desktop"})
+
 _HERE = Path(__file__).parent
 
 
@@ -68,6 +78,8 @@ def _is_infrastructure_import(module: str) -> bool:
     else under ``monkeygrab`` is pure and safe to collect anywhere.
     """
     if not module:
+        return False
+    if module in _STDLIB_ONLY_RAG_MODULES:
         return False
     root = module.split(".")[0]
     return root == "rag" or module.startswith("monkeygrab.adapters")
