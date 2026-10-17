@@ -144,7 +144,8 @@ something is missing:
 1. Checks Ollama is reachable and every required model (`--models`, plus the
    fixed auxiliary model used for query decomposition, contextual retrieval
    and RECOMP) is installed, then checks the embedder (`llama-server`) answers
-   `GET <MONKEYGRAB_EMBEDDER_URL>/health`. BGE is not an Ollama role.
+   `GET <MONKEYGRAB_EMBEDDER_URL>/health` and identifies embeddinggemma-2 in
+   its `GET /props` (`model_path` or `model_alias`). BGE is not an Ollama role.
 2. Downloads any missing blind-set arXiv papers (reusing `fetch_papers.py`)
    and stages them under `blind_docs/<paper-slug>.pdf`.
 3. Indexes whatever is not already indexed -- dev-set papers for each of the three
@@ -276,7 +277,8 @@ not distinguishable from running one of them again. Treat it as noise, not as a 
 ### What now gets recorded
 
 Since issue #222, every run artifact under `runs/` carries a `conditions` block: the per-corpus
-`AppConfig` actually used, installed package and Ollama-server versions, GPU info, the git
+`AppConfig` actually used, installed package and Ollama-server versions, the embedder identity
+the preflight accepted from `/props` (issue #384), GPU info, the git
 commit, a sha256 of `gold_cases.jsonl`, the sampling options per role, `seed: null`, and the
 `keep_alive` in effect. That block is what makes a row in `docs/model-history.md` verifiable
 after the fact instead of merely asserted -- read it with `tools/diagnostics/model_history_row.py`

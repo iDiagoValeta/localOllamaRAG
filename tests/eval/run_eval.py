@@ -9,7 +9,8 @@ with an actionable message the moment a prerequisite is missing:
 
     1. Ollama must be reachable and every model this run needs must already
        be pulled (section 2), and the embeddinggemma-2 llama-server must
-       answer its /health probe.
+       answer its /health probe and identify embeddinggemma-2 in /props
+       (issue #384).
     2. The blind-set arXiv papers are downloaded if missing, reusing
        fetch_papers.py (section 3).
     3. Both corpora (dev set under rag/docs/en/, blind set under
@@ -236,16 +237,64 @@ def preflight_ollama(required_models: Iterable[str]) -> None:
         raise EvalSetupError(f"{len(missing)} required Ollama model(s) not installed:\n{pulls}")
 
 
-def preflight_embedder() -> None:
-    """Fail fast if the llama-server embedder is not answering.
+# Substring every llama-server /props identifier must contain for the gate to
+# trust the embedder: the vectors this run compares come from that model's
+# space, and /health alone accepts any model (issue #384).
+_EMBEDDER_MODEL_MARKER = "embeddinggemma"
+
+
+def _embedder_identity(props: Any) -> Optional[str]:
+    """Return the identifier in a ``/props`` body that names embeddinggemma-2.
+
+    Args:
+        props: Parsed ``GET /props`` JSON body.
+
+    Returns:
+        The ``model_alias`` when it identifies the model, else the
+        ``model_path``. The alias is preferred because it is stable across
+        machines while the path is local. None when neither names it.
+    """
+    if not isinstance(props, Mapping):
+        return None
+    # Alias first: it does not leak this machine's filesystem layout into an
+    # artifact meant to be compared with runs from elsewhere.
+    for key in ("model_alias", "model_path"):
+        value = props.get(key)
+        if isinstance(value, str) and _EMBEDDER_MODEL_MARKER in value.casefold():
+            return value
+    return None
+
+
+def _describe_served_model(props: Any) -> str:
+    """Describe what a ``/props`` body reports, for an error naming it."""
+    if not isinstance(props, Mapping):
+        return repr(props)
+    named = {
+        key: props[key]
+        for key in ("model_path", "model_alias")
+        if isinstance(props.get(key), str) and props[key]
+    }
+    return repr(named) if named else "neither model_path nor model_alias"
+
+
+def preflight_embedder() -> str:
+    """Fail fast if the embedder is not answering or serves the wrong model.
 
     The gate embeds every gold question and every indexed chunk through
     embeddinggemma-2, so an Ollama-only preflight let a run with the embedder
-    down get all the way into retrieval before failing (issue #297).
+    down get all the way into retrieval before failing (issue #297). A
+    ``/health`` 200 alone does not prove the server serves that model either:
+    any llama-server answers it, including one started without ``--embedding``
+    (issue #384).
+
+    Returns:
+        The identifier from ``/props`` (alias, else model path) naming
+        embeddinggemma-2, recorded in the run artifact's conditions block.
 
     Raises:
         EvalSetupError: The embedder at ``models.embedding.base_url`` does not
-            answer ``GET /health`` with HTTP 200.
+            answer ``GET /health`` with HTTP 200, its ``/props`` cannot be
+            read, or the model it reports is not embeddinggemma-2.
     """
     # Deferred for the same reason as in _installed_ollama_models: importing
     # this module must not require requests, because the fast CI gate installs
@@ -268,6 +317,33 @@ def preflight_embedder() -> None:
             f"--embedding --port {port}`, or point MONKEYGRAB_EMBEDDER_URL "
             "at a running server."
         ) from exc
+
+    props_url = f"{base_url}/props"
+    try:
+        props_response = requests.get(props_url, timeout=5)
+        props_response.raise_for_status()
+        props = props_response.json()
+    except (requests.RequestException, ValueError) as exc:
+        # ValueError covers a non-JSON body: requests' JSONDecodeError is one.
+        # Either way the gate cannot verify the model, so it stops here.
+        port = urlsplit(base_url).port or 8091
+        raise EvalSetupError(
+            f"Embedder (llama-server) /props check failed at {props_url} ({exc}). "
+            "The gate needs it to verify the served model; start it with "
+            "`llama-server -m <embeddinggemma-2.gguf> --embedding "
+            f"--port {port}`, or point MONKEYGRAB_EMBEDDER_URL at a running server."
+        ) from exc
+
+    identity = _embedder_identity(props)
+    if identity is None:
+        port = urlsplit(base_url).port or 8091
+        raise EvalSetupError(
+            f"Embedder (llama-server) at {base_url} is not serving "
+            f"embeddinggemma-2: /props reports {_describe_served_model(props)}. "
+            "Start it with `llama-server -m <embeddinggemma-2.gguf> --embedding "
+            f"--port {port}`, or point MONKEYGRAB_EMBEDDER_URL at the right server."
+        )
+    return identity
 
 
 # CORPUS STAGING
@@ -1781,6 +1857,7 @@ def _gold_cases_sha256() -> Optional[str]:
 def _run_conditions(
     config_effective: Dict[str, Any],
     sampling: Dict[str, Dict[str, Any]],
+    embedder: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Everything that decides what a pass rate means, gathered in one block.
 
@@ -1802,6 +1879,10 @@ def _run_conditions(
             rag.engine.wiring's module constants and passed in rather than
             imported here, so this function needs no engine import of its
             own and stays testable with a plain dict.
+        embedder: The identifier preflight_embedder() accepted off
+            ``/props`` (issue #384). The stack slug is a constant, so without
+            this a run on another embedder model would be indistinguishable in
+            the artifact.
 
     Returns:
         The "conditions" block written into the run artifact.
@@ -1811,6 +1892,7 @@ def _run_conditions(
     return {
         "config": config_effective,
         "versions": versions,
+        "embedder": embedder,
         "hardware": _gpu_info(),
         "git_commit": _git_info(),
         "gold_sha256": _gold_cases_sha256(),
@@ -2285,7 +2367,7 @@ def evaluate(
     config_effective: Dict[str, Any] = {"dev": None, "blind": None}
     try:
         preflight_ollama(required_models)
-        preflight_embedder()
+        embedder_identity = preflight_embedder()
 
         # Heavy import (FAISS, sentence-transformers, rank-bm25...) only
         # after the cheap network/model preflight has already passed.
@@ -2475,6 +2557,7 @@ def evaluate(
                             "chat": dict(QUERY_DECOMPOSER_SAMPLING_OPTIONS),
                             "recomp": dict(RECOMP_SAMPLING_OPTIONS),
                         },
+                        embedder=embedder_identity,
                     ),
                 },
                 indent=2,

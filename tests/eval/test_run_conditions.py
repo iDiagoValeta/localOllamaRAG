@@ -186,17 +186,28 @@ def test_run_conditions_has_every_field_the_issue_asks_for(_quiet_conditions):
     conditions = run_eval._run_conditions({"dev": None, "blind": None}, sampling)
 
     assert set(conditions) == {
-        "config", "versions", "hardware", "git_commit", "gold_sha256",
+        "config", "versions", "embedder", "hardware", "git_commit", "gold_sha256",
         "sampling", "seed", "keep_alive_seconds", "generation_budget_seconds",
     }
     assert set(conditions["versions"]) == {
         "mineru", "sentence_transformers", "torch", "transformers", "faiss", "ollama_server",
     }
     assert conditions["seed"] is None
+    assert conditions["embedder"] is None
     assert conditions["keep_alive_seconds"] == int(run_eval._EVAL_GENERATION_KEEP_ALIVE_SECONDS)
     assert conditions["generation_budget_seconds"] == run_eval.GENERATION_BUDGET_SECONDS
     assert len(conditions["gold_sha256"]) == 64
     assert conditions["sampling"] == sampling
+
+
+def test_run_conditions_records_the_embedder_the_preflight_identified(_quiet_conditions):
+    """Issue #384: the identity check is only accountable if the artifact says
+    which model the preflight accepted."""
+    conditions = run_eval._run_conditions(
+        {"dev": None, "blind": None}, sampling={}, embedder="embeddinggemma-2-300m.gguf"
+    )
+
+    assert conditions["embedder"] == "embeddinggemma-2-300m.gguf"
 
 
 def test_run_conditions_reuses_the_config_it_is_given_not_a_fresh_default(_quiet_conditions):
