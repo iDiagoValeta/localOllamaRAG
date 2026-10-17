@@ -24,6 +24,7 @@ Two decisions, both tested here:
    only answer that cannot be missed in a log.
 """
 
+import dataclasses
 import sys
 from pathlib import Path
 
@@ -34,6 +35,7 @@ for path in (ROOT, ROOT / "src"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
+from monkeygrab.config.app_config import AppConfig  # noqa: E402
 from harness import cli  # noqa: E402
 from harness import ledger as ledger_mod  # noqa: E402
 
@@ -45,7 +47,7 @@ def _entry(iteration: int, evaluator):
         parent_iteration=None,
         git_commit=None,
         config_overrides={},
-        effective_config={},
+        effective_config=dataclasses.asdict(AppConfig()),
         proposer="grid",
         proposer_rationale=None,
         proposer_model=None,
@@ -147,8 +149,8 @@ def test_demo_entries_are_never_a_pairing_baseline(tmp_path):
     )
 
     entries = list(ledger_mod.read_history(tmp_path))
-    view = loop._comparable_config_view({})
-    high_water = loop._historical_high_water(entries, view)
+    view = loop._comparable_config_view(dataclasses.asdict(AppConfig()))
+    high_water = loop._historical_high_water(entries, view, search_set_ids=())
     assert high_water is not None and high_water.iteration == 2, (
         "a demo entry must never be selected as the pairing baseline"
     )

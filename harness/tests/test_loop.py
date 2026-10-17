@@ -894,7 +894,7 @@ def test_healthy_reference_at_or_above_high_water_keeps_reference_pairing(tmp_pa
 
 
 def test_describe_comparability_on_an_empty_ledger():
-    info = loop.describe_ledger_comparability(AppConfig(), [])
+    info = loop.describe_ledger_comparability(AppConfig(), [], search_set_ids=())
     assert info == {
         "history_entries": 0,
         "comparable_search_set_states": 0,
@@ -914,7 +914,7 @@ def test_describe_comparability_counts_a_matching_search_set_entry(tmp_path):
     from harness import ledger as ledger_mod
 
     entries = list(ledger_mod.read_history(tmp_path))
-    info = loop.describe_ledger_comparability(AppConfig(), entries)
+    info = loop.describe_ledger_comparability(AppConfig(), entries, search_set_ids=("a",))
     assert info["history_entries"] == 1
     assert info["comparable_search_set_states"] == 1
     assert info["high_water_objective_adjusted"] == 27
@@ -937,7 +937,7 @@ def test_describe_comparability_names_the_role_that_drifted(tmp_path):
     from harness import ledger as ledger_mod
 
     entries = list(ledger_mod.read_history(tmp_path))
-    info = loop.describe_ledger_comparability(AppConfig(), entries)
+    info = loop.describe_ledger_comparability(AppConfig(), entries, search_set_ids=("a",))
     assert info["comparable_search_set_states"] == 0
     assert info["incomparable_reasons"] == ["models.chat: this launch 'gemma4:e4b', ledger 'gemma4:e2b'"]
 
@@ -953,7 +953,9 @@ def test_describe_comparability_explains_fast_tier_only_history(tmp_path):
     )
     from harness import ledger as ledger_mod
 
-    info = loop.describe_ledger_comparability(AppConfig(), list(ledger_mod.read_history(tmp_path)))
+    info = loop.describe_ledger_comparability(
+        AppConfig(), list(ledger_mod.read_history(tmp_path)), search_set_ids=("a",)
+    )
     assert info["comparable_search_set_states"] == 0
     assert info["incomparable_reasons"] == [
         "config matches the latest entry but it carries no complete search-set pass vector"
@@ -1049,7 +1051,8 @@ def test_an_entry_measured_on_a_different_stack_is_not_comparable(tmp_path):
 
     _seed_entry(tmp_path, 1, 27, _ONE_PASS, environment_fingerprint=_STACK_AUGUST)
     info = loop.describe_ledger_comparability(
-        AppConfig(), list(ledger_mod.read_history(tmp_path)), launch_environment=_STACK_TODAY
+        AppConfig(), list(ledger_mod.read_history(tmp_path)),
+        search_set_ids=("a",), launch_environment=_STACK_TODAY
     )
     assert info["comparable_search_set_states"] == 0
     assert info["high_water_objective_adjusted"] is None
@@ -1063,7 +1066,8 @@ def test_an_entry_from_the_same_stack_is_comparable_and_reported_as_verified(tmp
 
     _seed_entry(tmp_path, 1, 27, _ONE_PASS, environment_fingerprint=_STACK_TODAY)
     info = loop.describe_ledger_comparability(
-        AppConfig(), list(ledger_mod.read_history(tmp_path)), launch_environment=_STACK_TODAY
+        AppConfig(), list(ledger_mod.read_history(tmp_path)),
+        search_set_ids=("a",), launch_environment=_STACK_TODAY
     )
     assert info["comparable_search_set_states"] == 1
     assert info["environment_verified_states"] == 1
@@ -1078,7 +1082,8 @@ def test_an_entry_without_a_fingerprint_stays_comparable_but_counts_as_unverifie
 
     _seed_entry(tmp_path, 1, 27, _ONE_PASS, environment_fingerprint=None)
     info = loop.describe_ledger_comparability(
-        AppConfig(), list(ledger_mod.read_history(tmp_path)), launch_environment=_STACK_TODAY
+        AppConfig(), list(ledger_mod.read_history(tmp_path)),
+        search_set_ids=("a",), launch_environment=_STACK_TODAY
     )
     assert info["comparable_search_set_states"] == 1
     assert info["environment_verified_states"] == 0
@@ -1093,7 +1098,8 @@ def test_an_unreadable_launch_environment_verifies_nothing_and_rejects_nothing(t
 
     _seed_entry(tmp_path, 1, 27, _ONE_PASS, environment_fingerprint=_STACK_AUGUST)
     info = loop.describe_ledger_comparability(
-        AppConfig(), list(ledger_mod.read_history(tmp_path)), launch_environment=None
+        AppConfig(), list(ledger_mod.read_history(tmp_path)),
+        search_set_ids=("a",), launch_environment=None
     )
     assert info["comparable_search_set_states"] == 1
     assert info["environment_unverified_states"] == 1
@@ -1111,11 +1117,217 @@ def test_the_high_water_skips_an_entry_measured_on_a_different_stack(tmp_path):
 
     view = loop._comparable_config_view(dataclasses.asdict(AppConfig()))
 
-    high_water = loop._historical_high_water(entries, view, launch_environment=_STACK_TODAY)
+    high_water = loop._historical_high_water(
+        entries, view, search_set_ids=("a",), launch_environment=_STACK_TODAY
+    )
     assert high_water is not None and high_water.iteration == 2
 
-    both = loop._historical_high_water(entries, view, launch_environment=None)
+    both = loop._historical_high_water(
+        entries, view, search_set_ids=("a",), launch_environment=None
+    )
     assert both is not None and both.iteration == 1
+
+
+# EMBEDDER IDENTITY (issue #338): the embedder is an external llama-server, so
+# harness/environment.py's pip-package fingerprint cannot see it. Its URL and
+# Matryoshka width decide the vectors a case is answered from, and an entry
+# measured with another embedder holds passes this campaign cannot climb back
+# to -- the #107 failure arriving through a stack the environment never saw.
+
+
+def _config_with_embedding(**changes):
+    import dataclasses
+
+    config = dataclasses.asdict(AppConfig())
+    config["models"]["embedding"].update(changes)
+    return config
+
+
+def test_an_entry_measured_with_another_embedder_is_not_comparable(tmp_path):
+    from harness import ledger as ledger_mod
+
+    _seed_entry(
+        tmp_path, 1, 30, _ONE_PASS,
+        effective_config=_config_with_embedding(base_url="http://127.0.0.1:8092"),
+    )
+    info = loop.describe_ledger_comparability(
+        AppConfig(), list(ledger_mod.read_history(tmp_path)), search_set_ids=("a",)
+    )
+    assert info["comparable_search_set_states"] == 0
+    assert info["high_water_objective_adjusted"] is None
+    assert info["incomparable_reasons"] == [
+        "models.embedding.base_url: this launch 'http://127.0.0.1:8091', "
+        "ledger 'http://127.0.0.1:8092'"
+    ]
+
+
+def test_an_entry_measured_at_another_embedding_width_is_not_comparable(tmp_path):
+    from harness import ledger as ledger_mod
+
+    _seed_entry(
+        tmp_path, 1, 30, _ONE_PASS, effective_config=_config_with_embedding(dimensions=768)
+    )
+    info = loop.describe_ledger_comparability(
+        AppConfig(), list(ledger_mod.read_history(tmp_path)), search_set_ids=("a",)
+    )
+    assert info["comparable_search_set_states"] == 0
+    assert info["high_water_objective_adjusted"] is None
+    assert info["incomparable_reasons"] == [
+        "models.embedding.dimensions: this launch 512, ledger 768"
+    ]
+
+
+def test_an_entry_without_embedder_identity_is_not_comparable(tmp_path):
+    """Entries written before ``models.embedding`` existed cannot say which
+    embedder measured them. Unlike a missing index-time flag (absent == off),
+    absence here is unknown, not a match: reading it as one is exactly how an
+    eg2@512 entry becomes the high water of an eg2@256 campaign."""
+    import dataclasses
+
+    from harness import ledger as ledger_mod
+
+    config = dataclasses.asdict(AppConfig())
+    del config["models"]["embedding"]
+    _seed_entry(tmp_path, 1, 30, _ONE_PASS, effective_config=config)
+    info = loop.describe_ledger_comparability(
+        AppConfig(), list(ledger_mod.read_history(tmp_path)), search_set_ids=("a",)
+    )
+    assert info["comparable_search_set_states"] == 0
+    assert info["high_water_objective_adjusted"] is None
+    assert info["incomparable_reasons"] == [
+        "models.embedding: this launch "
+        "{'base_url': 'http://127.0.0.1:8091', 'dimensions': 512}, "
+        "ledger None (entry records no embedder identity)"
+    ]
+
+
+def test_a_higher_entry_from_another_embedder_does_not_arm_recovery(tmp_path):
+    """The #338 failure end to end: the historical entry outscores the
+    degraded reference, but its passes were measured in another vector space,
+    so pairing against it would demand ground this launch never had."""
+    search_ids = ("lucky", "a")
+    fast_ids = ("lucky",)
+    _seed_entry(
+        tmp_path,
+        1,
+        2,
+        [
+            {"id": "lucky", "case_type": "factual_number", "passed": False, "elapsed_seconds": 200.0},
+            {"id": "a", "case_type": "factual_number", "passed": True, "elapsed_seconds": 200.0},
+        ],
+        effective_config=_config_with_embedding(dimensions=768),
+    )
+
+    def evaluate(overrides, case_ids):
+        healthy = bool(overrides)
+        records = [
+            _rec(cid, "factual_number", healthy if cid != "lucky" else not healthy, 200.0)
+            for cid in case_ids
+        ]
+        return ev.EvaluationResult(records=tuple(records), effective_config=dict(overrides))
+
+    report = loop.run_loop(
+        reference=AppConfig(),
+        evaluate=evaluate,
+        proposer=_FixedProposer({"retrieval.top_k_final": 12}),
+        search_set_ids=search_ids,
+        fast_tier_ids=fast_ids,
+        unreachable_ids=(),
+        max_iterations=1,
+        patience=None,
+        ledger_dir=tmp_path,
+        verify_reachability=False,
+    )
+
+    assert report["recovery_mode"]["active"] is False
+    entry = report["iterations"][0]
+    assert entry["verdict"] == "rejected_regression"
+    assert entry["regression_baseline_iteration"] is None
+
+
+# SEARCH-SET IDENTITY (issue #339): ``evaluated_case_set == "search_set"`` says
+# the entry measured *a* complete search set, not *this* one. A ledger written
+# before the set changed size or membership would otherwise lend its pass
+# count to a campaign it never measured.
+
+
+def test_an_entry_measured_on_another_search_set_is_not_comparable(tmp_path):
+    from harness import ledger as ledger_mod
+
+    _seed_entry(tmp_path, 1, 30, _ONE_PASS)
+    info = loop.describe_ledger_comparability(
+        AppConfig(), list(ledger_mod.read_history(tmp_path)), search_set_ids=("a", "b")
+    )
+    assert info["comparable_search_set_states"] == 0
+    assert info["high_water_objective_adjusted"] is None
+    assert info["incomparable_reasons"] == [
+        "evaluated case set: this launch 2 case(s), ledger entry 1 case(s) "
+        "(missing from ledger: ['b'], extra in ledger: [])"
+    ]
+
+
+def test_the_high_water_skips_an_entry_measured_on_another_search_set(tmp_path):
+    """The entry that outscores the current set's own measurement is not a
+    candidate for the high water; the one that measured this set is."""
+    from harness import ledger as ledger_mod
+
+    _seed_entry(tmp_path, 1, 30, _ONE_PASS)
+    _seed_entry(tmp_path, 2, 27, _records(("a", "b")))
+    entries = list(ledger_mod.read_history(tmp_path))
+    import dataclasses
+
+    view = loop._comparable_config_view(dataclasses.asdict(AppConfig()))
+
+    high_water = loop._historical_high_water(entries, view, search_set_ids=("a", "b"))
+    assert high_water is not None and high_water.iteration == 2
+
+    alone = loop._historical_high_water(entries, view, search_set_ids=("a",))
+    assert alone is not None and alone.iteration == 1
+
+
+def test_a_higher_entry_from_another_search_set_does_not_arm_recovery(tmp_path):
+    """The #339 failure end to end: the higher historical entry measured a
+    different set, so its pass vector cannot govern this campaign's
+    regression pairing. Without comparable history the reference pairing
+    stays in force and re-failing its lucky case is still a regression."""
+    search_ids = ("lucky", "a")
+    fast_ids = ("lucky",)
+    _seed_entry(
+        tmp_path,
+        1,
+        2,
+        [
+            {"id": "lucky", "case_type": "factual_number", "passed": False, "elapsed_seconds": 200.0},
+            {"id": "a", "case_type": "factual_number", "passed": True, "elapsed_seconds": 200.0},
+            {"id": "b", "case_type": "factual_number", "passed": True, "elapsed_seconds": 200.0},
+        ],
+    )
+
+    def evaluate(overrides, case_ids):
+        healthy = bool(overrides)
+        records = [
+            _rec(cid, "factual_number", healthy if cid != "lucky" else not healthy, 200.0)
+            for cid in case_ids
+        ]
+        return ev.EvaluationResult(records=tuple(records), effective_config=dict(overrides))
+
+    report = loop.run_loop(
+        reference=AppConfig(),
+        evaluate=evaluate,
+        proposer=_FixedProposer({"retrieval.top_k_final": 12}),
+        search_set_ids=search_ids,
+        fast_tier_ids=fast_ids,
+        unreachable_ids=(),
+        max_iterations=1,
+        patience=None,
+        ledger_dir=tmp_path,
+        verify_reachability=False,
+    )
+
+    assert report["recovery_mode"]["active"] is False
+    entry = report["iterations"][0]
+    assert entry["verdict"] == "rejected_regression"
+    assert entry["regression_baseline_iteration"] is None
 
 
 def test_run_loop_stamps_the_launch_environment_into_every_entry(tmp_path):
@@ -1195,7 +1407,8 @@ def test_a_refreshed_baseline_takes_over_from_a_higher_aged_one(tmp_path):
     _seed_entry(tmp_path, 1, 30, _ONE_PASS, environment_fingerprint=None)
     _seed_entry(tmp_path, 2, 25, _ONE_PASS, environment_fingerprint=_STACK_TODAY)
     info = loop.describe_ledger_comparability(
-        AppConfig(), list(ledger_mod.read_history(tmp_path)), launch_environment=_STACK_TODAY
+        AppConfig(), list(ledger_mod.read_history(tmp_path)),
+        search_set_ids=("a",), launch_environment=_STACK_TODAY
     )
     assert info["comparable_search_set_states"] == 2
     assert info["high_water_objective_adjusted"] == 25
@@ -1212,7 +1425,8 @@ def test_the_launch_line_says_when_the_high_water_itself_is_unverified(tmp_path)
     _seed_entry(tmp_path, 1, 30, _ONE_PASS, environment_fingerprint=None)
     _seed_entry(tmp_path, 2, 25, _ONE_PASS, environment_fingerprint=None)
     info = loop.describe_ledger_comparability(
-        AppConfig(), list(ledger_mod.read_history(tmp_path)), launch_environment=_STACK_TODAY
+        AppConfig(), list(ledger_mod.read_history(tmp_path)),
+        search_set_ids=("a",), launch_environment=_STACK_TODAY
     )
     assert info["comparable_search_set_states"] == 2
     assert info["high_water_objective_adjusted"] == 30
@@ -1225,7 +1439,8 @@ def test_a_verified_high_water_is_reported_as_verified(tmp_path):
     _seed_entry(tmp_path, 1, 25, _ONE_PASS, environment_fingerprint=None)
     _seed_entry(tmp_path, 2, 30, _ONE_PASS, environment_fingerprint=_STACK_TODAY)
     info = loop.describe_ledger_comparability(
-        AppConfig(), list(ledger_mod.read_history(tmp_path)), launch_environment=_STACK_TODAY
+        AppConfig(), list(ledger_mod.read_history(tmp_path)),
+        search_set_ids=("a",), launch_environment=_STACK_TODAY
     )
     assert info["high_water_objective_adjusted"] == 30
     assert info["high_water_environment_verified"] is True
@@ -1260,7 +1475,9 @@ def _high_water_of(tmp_path, launch_environment):
 
     entries = list(ledger_mod.read_history(tmp_path))
     view = loop._comparable_config_view(dataclasses.asdict(AppConfig()))
-    return loop._historical_high_water(entries, view, launch_environment)
+    return loop._historical_high_water(
+        entries, view, search_set_ids=("a", "b"), launch_environment=launch_environment
+    )
 
 
 def _records(passed_ids, failed_ids=()):
