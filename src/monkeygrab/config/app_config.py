@@ -87,6 +87,40 @@ class AppConfig:
     flags: PipelineFlagsConfig = field(default_factory=PipelineFlagsConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
 
+    def __post_init__(self) -> None:
+        """Reject numeric ranges that would break indexing or fusion.
+
+        Parsing a value is not enough: ``RAG_CHUNK_SIZE=0`` makes the recursive
+        splitter stop advancing, ``RAG_RRF_K<=0`` divides by zero or produces
+        negative fusion weights, and ``chunk_overlap >= chunk_size`` cannot
+        advance either. Messages name the environment variable and the value,
+        mirroring the ``MONKEYGRAB_EMBEDDER_DIM`` check in
+        ``_read_embedding_dimensions``, so an operator can find the export.
+
+        Raises:
+            ValueError: If a numeric parameter is outside its supported range.
+        """
+        chunk_size = self.chunking.chunk_size
+        chunk_overlap = self.chunking.chunk_overlap
+        if chunk_size <= 0:
+            raise ValueError(f"Invalid value for RAG_CHUNK_SIZE: {chunk_size!r}. Must be > 0")
+        if not 0 <= chunk_overlap < chunk_size:
+            raise ValueError(
+                f"Invalid value for RAG_CHUNK_OVERLAP: {chunk_overlap!r}. "
+                f"Must satisfy 0 <= RAG_CHUNK_OVERLAP < RAG_CHUNK_SIZE ({chunk_size!r})"
+            )
+        if self.retrieval.rrf_k <= 0:
+            raise ValueError(
+                f"Invalid value for RAG_RRF_K: {self.retrieval.rrf_k!r}. Must be > 0"
+            )
+        for field_name, env_name in (
+            ("top_k_rerank_candidates", "RAG_TOP_K_RERANK_CANDIDATES"),
+            ("top_k_final", "RAG_TOP_K_FINAL"),
+        ):
+            value = getattr(self.retrieval, field_name)
+            if value <= 0:
+                raise ValueError(f"Invalid value for {env_name}: {value!r}. Must be > 0")
+
     # FROM_ENV
 
     @classmethod
