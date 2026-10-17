@@ -28,8 +28,8 @@ document and ``embed_query`` -- which ``Retrieve`` prefers when an embedder offe
 formats it as a search query. Images are embedded without a prefix.
 
 Failure policy: hard-fail (project-wide). Any connection error, non-200
-response, malformed JSON or wrong vector length raises ``RuntimeError`` naming
-``base_url``; a missing image file raises ``FileNotFoundError``. The only
+response, malformed JSON, wrong vector length or non-finite vector component
+raises ``RuntimeError`` naming ``base_url``; a missing image file raises ``FileNotFoundError``. The only
 retry is the image request's single resend after its marker changed; a second
 failure raises immediately. There are no fallbacks.
 """
@@ -385,7 +385,12 @@ class LlamaServerEmbedder:
         return embedding
 
     def _finalize(self, vector: Any) -> List[float]:
-        """Validate the server's 768-float vector, then truncate and normalize."""
+        """Validate the server's 768-float vector, then truncate and normalize.
+
+        Raises:
+            RuntimeError: If the vector's shape is wrong, a component is not
+                numeric or a component is not finite (NaN/Infinity).
+        """
         if not isinstance(vector, list) or len(vector) != _NATIVE_DIM:
             got = len(vector) if isinstance(vector, list) else type(vector).__name__
             raise RuntimeError(
@@ -395,5 +400,12 @@ class LlamaServerEmbedder:
         if not all(isinstance(component, (int, float)) for component in vector):
             raise RuntimeError(
                 f"{self._base_url}: llama-server returned a non-numeric vector component"
+            )
+        # json.loads accepts the non-standard NaN/Infinity tokens, and a
+        # non-finite component would poison the L2 norm and every downstream
+        # distance in FAISS without ever raising. Reject the whole vector.
+        if not all(math.isfinite(component) for component in vector):
+            raise RuntimeError(
+                f"{self._base_url}: llama-server returned a non-finite vector component"
             )
         return _l2_normalize([float(component) for component in vector[: self._dimensions]])
