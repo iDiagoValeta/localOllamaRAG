@@ -209,6 +209,13 @@ class LlamaServerEmbedder:
                 f"{self._base_url}: llama-server request timed out after "
                 f"{self._timeout_s}s: {exc}"
             ) from exc
+        except OSError as exc:
+            # A TCP reset or broken pipe while reading the body (after urlopen
+            # returned) is an OSError outside the URLError hierarchy, like the
+            # timeout above, which this clause must stay after (issue #358).
+            raise RuntimeError(
+                f"{self._base_url}: llama-server connection failed: {exc!r}"
+            ) from exc
         except http.client.HTTPException as exc:
             # Throughput errors such as IncompleteRead surface from read() after
             # headers are parsed; they are not URLError subclasses either.

@@ -392,6 +392,21 @@ def test_embed_raises_a_runtime_error_when_the_server_times_out(monkeypatch):
     assert "timed out" in str(excinfo.value)
 
 
+def test_embed_raises_a_runtime_error_when_the_connection_resets_mid_read(monkeypatch):
+    class _ResetResponse(_FakeResponse):
+        def read(self):
+            raise ConnectionResetError(104, "Connection reset by peer")
+
+    _install_urlopen(monkeypatch, lambda request: _ResetResponse({}))
+    embedder = LlamaServerEmbedder(_BASE_URL)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        embedder.embed("hola")
+
+    assert _BASE_URL in str(excinfo.value)
+    assert "ConnectionResetError" in str(excinfo.value)
+
+
 def test_embed_raises_a_runtime_error_when_the_response_body_is_incomplete(monkeypatch):
     class _IncompleteBodyResponse(_FakeResponse):
         def read(self):
