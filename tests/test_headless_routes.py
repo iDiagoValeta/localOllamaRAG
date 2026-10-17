@@ -115,6 +115,16 @@ def test_a_json_body_that_is_not_an_object_is_a_json_400(path):
     assert "object" in body["message"]
 
 
+def test_a_body_over_the_limit_is_a_json_413():
+    resp = _client().post(
+        "/stores/cv1/index", data=b"x" * (1024 * 1024 + 1), content_type="application/json"
+    )
+    assert resp.status_code == 413
+    assert resp.mimetype == "application/json"
+    body = resp.get_json()
+    assert body["ok"] is False and body["error"] == "payload_too_large"
+
+
 def test_same_store_id_with_other_paths_is_409():
     client = _client()
     client.post("/stores/cv1/index", json=PATHS)
