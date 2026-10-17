@@ -2,9 +2,11 @@
 
 No GPU, no Ollama, no model downloads: AppConfig (src/monkeygrab/config/) is
 pure stdlib, which is what makes this whole file collectible in the fast CI
-gate.
+gate. Test 5 (issue #340) derives its key set from ``index_recipe`` instead of
+a copied list, so INDEX_TIME_KEYS cannot drift from the real index recipe.
 """
 
+import dataclasses
 import sys
 from pathlib import Path
 
@@ -16,6 +18,7 @@ if str(REPO_ROOT / "src") not in sys.path:
 
 import pytest
 
+from monkeygrab.application.index_fingerprint import index_recipe
 from monkeygrab.config.app_config import AppConfig
 from harness import search_space
 
@@ -116,3 +119,109 @@ def test_expand_overrides_does_not_mutate_its_argument():
     overrides = {"retrieval.weight_semantic_rrf": 0.3}
     search_space.expand_overrides(overrides)
     assert overrides == {"retrieval.weight_semantic_rrf": 0.3}
+
+
+# TEST 5 -- every config key that changes index_recipe is excluded from stage 1.
+
+
+def _perturbed(value):
+    """Return a different value of the same scalar type.
+
+    Every field ``with_overrides`` accepts as a single tunable is a bool, int,
+    float or str; nested dataclasses are whole sub-configs, not tunables. Any
+    other type means the field surface changed and this probe must be extended
+    rather than silently skipping the key.
+
+    Args:
+        value: The current value of a scalar config field.
+
+    Returns:
+        A value guaranteed to differ from ``value``.
+
+    Raises:
+        AssertionError: ``value`` is not a scalar this probe knows how to move.
+    """
+    if isinstance(value, bool):
+        return not value
+    if isinstance(value, int):
+        return value + 1
+    if isinstance(value, float):
+        return value + 0.1
+    if isinstance(value, str):
+        return value + "-probe"
+    raise AssertionError(f"no perturbation defined for {value!r}")
+
+
+def _scalar_config_keys(config):
+    """Every ``section.field`` key holding a scalar, derived from the dataclasses.
+
+    Derived, not declared: a hand-written list here would be the same drift the
+    test exists to catch. Nested dataclass fields (``models.ollama`` and
+    friends) are skipped because a candidate override names a scalar field, and
+    ``with_overrides``'s one-level nesting puts their inner fields out of reach
+    -- see ``tests/eval/run_eval.py``'s ``_UNREACHABLE_CONFIG_OVERRIDE_REASONS``.
+
+    Args:
+        config: Config whose section dataclasses are walked.
+
+    Returns:
+        ``{dotted_key: current_value}`` for every scalar field.
+    """
+    keys = {}
+    for section_field in dataclasses.fields(config):
+        section = getattr(config, section_field.name)
+        for field in dataclasses.fields(section):
+            value = getattr(section, field.name)
+            if dataclasses.is_dataclass(value):
+                continue
+            keys[f"{section_field.name}.{field.name}"] = value
+    return keys
+
+
+def _configs_with_each_flag_flipped(config):
+    """``config`` plus one copy per boolean pipeline flag flipped.
+
+    Some recipe members are conditional on a flag (contextual summaries, figure
+    descriptions), and the default is off for the latter: probing only the
+    default config would miss exactly the key #340 was filed about.
+
+    Args:
+        config: The reference config.
+
+    Returns:
+        A list starting with ``config``, followed by one variant per bool flag.
+    """
+    configs = [config]
+    for flag in dataclasses.fields(config.flags):
+        value = getattr(config.flags, flag.name)
+        if isinstance(value, bool):
+            configs.append(config.with_overrides(**{f"flags.{flag.name}": not value}))
+    return configs
+
+
+def test_every_key_that_changes_index_recipe_is_index_time():
+    """Guard against INDEX_TIME_KEYS drifting from the real index recipe.
+
+    Derived from ``index_recipe``'s behaviour, not from a copied key list:
+    every scalar key on ``AppConfig`` is probed by perturbing it and asking
+    whether the recipe moved, and a conditional member is probed under each
+    flag it might depend on. Any key that moves the recipe must be excluded
+    from stage 1, or ``slow_tier`` prices its reindex as if it were free
+    (issue #340, where ``flags.usar_descripcion_imagen`` was missing).
+    """
+    bases = _configs_with_each_flag_flipped(AppConfig())
+    recipe_moving = set()
+    for key in _scalar_config_keys(AppConfig()):
+        for base in bases:
+            changed = base.with_overrides(**{key: _perturbed(_scalar_config_keys(base)[key])})
+            if index_recipe(base) != index_recipe(changed):
+                recipe_moving.add(key)
+                break
+
+    assert recipe_moving, "the probe moved no key at all -- its derivation is broken, not the space"
+    missing = recipe_moving - set(search_space.INDEX_TIME_KEYS)
+    assert not missing, (
+        f"config key(s) change index_recipe but are not in INDEX_TIME_KEYS: {sorted(missing)}. "
+        "slow_tier would bill a candidate that overrides one as fast tier, though every stored "
+        "chunk must be rebuilt."
+    )
