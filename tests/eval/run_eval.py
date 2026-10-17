@@ -8,7 +8,8 @@ mocks, no LLM judge. It self-provisions everything it needs and fails fast
 with an actionable message the moment a prerequisite is missing:
 
     1. Ollama must be reachable and every model this run needs must already
-       be pulled (section 2).
+       be pulled (section 2), and the embeddinggemma-2 llama-server must
+       answer its /health probe.
     2. The blind-set arXiv papers are downloaded if missing, reusing
        fetch_papers.py (section 3).
     3. Both corpora (dev set under rag/docs/en/, blind set under
@@ -42,6 +43,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
+from urllib.parse import urlsplit
 
 # CONSTANTS
 
@@ -232,6 +234,40 @@ def preflight_ollama(required_models: Iterable[str]) -> None:
     if missing:
         pulls = "\n".join(f"  ollama pull {name}" for name in missing)
         raise EvalSetupError(f"{len(missing)} required Ollama model(s) not installed:\n{pulls}")
+
+
+def preflight_embedder() -> None:
+    """Fail fast if the llama-server embedder is not answering.
+
+    The gate embeds every gold question and every indexed chunk through
+    embeddinggemma-2, so an Ollama-only preflight let a run with the embedder
+    down get all the way into retrieval before failing (issue #297).
+
+    Raises:
+        EvalSetupError: The embedder at ``models.embedding.base_url`` does not
+            answer ``GET /health`` with HTTP 200.
+    """
+    # Deferred for the same reason as in _installed_ollama_models: importing
+    # this module must not require requests, because the fast CI gate installs
+    # no project dependencies.
+    import requests
+
+    # Resolved through AppConfig, like the rest of the gate. Reading
+    # MONKEYGRAB_EMBEDDER_URL here by hand could name a different server from
+    # the one the embedding adapter will actually call.
+    base_url = AppConfig.from_env().models.embedding.base_url.rstrip("/")
+    health_url = f"{base_url}/health"
+    try:
+        response = requests.get(health_url, timeout=5)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        port = urlsplit(base_url).port or 8091
+        raise EvalSetupError(
+            f"Embedder (llama-server) health check failed at {health_url} ({exc}). "
+            "Start it first with `llama-server -m <embeddinggemma-2.gguf> "
+            f"--embedding --port {port}`, or point MONKEYGRAB_EMBEDDER_URL "
+            "at a running server."
+        ) from exc
 
 
 # CORPUS STAGING
@@ -2249,6 +2285,7 @@ def evaluate(
     config_effective: Dict[str, Any] = {"dev": None, "blind": None}
     try:
         preflight_ollama(required_models)
+        preflight_embedder()
 
         # Heavy import (FAISS, sentence-transformers, rank-bm25...) only
         # after the cheap network/model preflight has already passed.
