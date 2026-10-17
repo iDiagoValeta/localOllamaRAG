@@ -200,6 +200,29 @@ def test_missing_optional_ports_disable_their_stage_regardless_of_flags():
     assert result.metrics["sub_queries"] == []
 
 
+def test_missing_reranker_port_does_not_apply_the_reranker_threshold():
+    """An absent optional port disables its stage *and* its filter.
+
+    ``AppConfig()`` leaves ``flags.usar_reranker`` on by default, but with no
+    reranker wired in the stage never runs and fragments keep their fused RRF
+    scores (~``1/(rrf_k+1)``, i.e. ~0.016). Applying the 0.65 reranker
+    threshold to those scores discarded every fragment, so a correctly wired
+    semantic-only pipeline answered from no evidence at all.
+    """
+    hits = [_fragment("a.pdf_pag0_chunk0"), _fragment("b.pdf_pag0_chunk0")]
+    embedder = FakeEmbedder()
+    store = FakeVectorStore(default_hits=hits)
+    config = AppConfig()  # reranker flag on, no reranker port wired in
+
+    result = Retrieve(embedder, store, config).run("short query")
+
+    assert result.metrics["reranked"] is False
+    assert [f.id for f in result.fragments] == [
+        "a.pdf_pag0_chunk0",
+        "b.pdf_pag0_chunk0",
+    ]
+
+
 def test_reranker_runs_and_then_threshold_filters_its_output():
     hits = [_fragment(f"doc{i}.pdf_pag0_chunk0") for i in range(3)]
     embedder = FakeEmbedder()
