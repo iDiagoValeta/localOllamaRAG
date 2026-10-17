@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 
 import rag.chat_pdfs as rag_engine
+from monkeygrab.config import env as config_env
 from rag.engine import settings
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -52,6 +53,10 @@ def data_dir(monkeypatch, tmp_path):
     monkeypatch.delenv("DOCS_FOLDER", raising=False)
     for flag_var in settings.PERSISTED_FLAGS + ("LOGGING_METRICAS", "GUARDAR_DEBUG_RAG"):
         monkeypatch.delenv(flag_var, raising=False)
+    # A MONKEYGRAB_PROFILE applied at import seeds its keys into os.environ and
+    # records them in this set; reset it so the ambient shell (or another test)
+    # cannot make a delenv'd variable look env-pinned (issue #301).
+    monkeypatch.setattr(config_env, "_PROFILE_SEEDED_KEYS", set())
     return tmp_path
 
 
@@ -327,3 +332,41 @@ def test_save_does_not_freeze_a_flag_override_as_a_stored_choice(data_dir, monke
     on_disk = json.loads((Path(data_dir) / "settings.json").read_text(encoding="utf-8"))
     assert "USAR_RERANKER" not in on_disk["flags"]
     assert on_disk["flags"]["USAR_BUSQUEDA_HIBRIDA"] is True
+
+
+def test_a_profile_seeded_role_is_not_an_env_pin(data_dir, monkeypatch):
+    """Issue #301: a MONKEYGRAB_PROFILE seed is a default, not an export.
+
+    ``apply_profile`` fills OLLAMA_*_MODEL into os.environ with setdefault, which
+    the loader used to mistake for an explicit export and so refused to apply
+    (or persist) a role saved in settings.json. A saved role must win over a
+    profile default, exactly like over a module default, and survive a save.
+    """
+    monkeypatch.setenv("OLLAMA_CONTEXTUAL_MODEL", "profile-seeded")
+    monkeypatch.setattr(config_env, "_PROFILE_SEEDED_KEYS", {"OLLAMA_CONTEXTUAL_MODEL"})
+    _save(data_dir, roles={"contextual": "saved-contextual"})
+
+    settings.cargar_ajustes_persistidos()
+
+    assert rag_engine.MODELO_CONTEXTUAL == "saved-contextual"
+
+    settings.guardar_ajustes_persistidos()
+
+    on_disk = json.loads((Path(data_dir) / "settings.json").read_text(encoding="utf-8"))
+    assert on_disk["roles"]["contextual"] == "saved-contextual"
+
+
+def test_a_profile_seeded_flag_is_not_an_env_pin(data_dir, monkeypatch):
+    """Issue #301 for flags: a profile-seeded USAR_* default does not pin the flag."""
+    monkeypatch.setenv("USAR_RERANKER", "false")
+    monkeypatch.setattr(config_env, "_PROFILE_SEEDED_KEYS", {"USAR_RERANKER"})
+    _save(data_dir, flags={"USAR_RERANKER": False})
+
+    settings.cargar_ajustes_persistidos()
+
+    assert rag_engine.USAR_RERANKER is False
+
+    settings.guardar_ajustes_persistidos()
+
+    on_disk = json.loads((Path(data_dir) / "settings.json").read_text(encoding="utf-8"))
+    assert on_disk["flags"]["USAR_RERANKER"] is False

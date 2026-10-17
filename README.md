@@ -188,7 +188,9 @@ supersedes it.
 generator becomes a ~3 GB Q4 model, embeddinggemma-2 runs on the CPU, and the
 BGE reranker and RECOMP synthesis are turned off (the reranker alone peaked at
 2.6 GB of VRAM, and a 2B model's synthesis lost the figures its answer
-needed). An explicitly exported variable always wins over the profile.
+needed). An explicitly exported variable always wins over the profile. The
+profile only seeds defaults, not exports, so a model or flag chosen in the web
+UI and saved to `settings.json` still applies over them.
 
 The profile selects the pieces; it does not install them. Two are needed:
 
