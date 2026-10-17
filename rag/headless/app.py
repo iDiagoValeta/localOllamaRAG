@@ -27,6 +27,22 @@ def _sse_event(event: str, payload: Dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
+def _json_object() -> Dict[str, Any]:
+    """The request's JSON body as a mapping, or a JSON 400 when it is not one.
+
+    ``get_json`` happily returns a list or a string for a valid non-object
+    body; passing that to ``_paths_from`` was an AttributeError and an HTML
+    500 instead of a client error (issue #321). A missing or unparseable body
+    is treated as empty, which the mandatory-path check then rejects.
+    """
+    body = request.get_json(silent=True)
+    if body is None:
+        return {}
+    if not isinstance(body, dict):
+        abort(400, description="request body must be a JSON object")
+    return body
+
+
 def _paths_from(values: Dict[str, Any]) -> Tuple[str, str]:
     """Both paths are mandatory: the service owns no default folder."""
     missing = [name for name in ("docs_folder", "data_dir") if not values.get(name)]
@@ -97,7 +113,7 @@ def create_app(
 
     @app.post("/stores/<store_id>/index")
     def post_index(store_id: str):
-        paths = _resolve(store_id, request.get_json(silent=True) or {})
+        paths = _resolve(store_id, _json_object())
         try:
             with stores.indexing(store_id):
                 result = service.index_store(paths)
@@ -120,7 +136,7 @@ def create_app(
 
     @app.post("/stores/<store_id>/rag")
     def post_rag(store_id: str):
-        body = request.get_json(silent=True) or {}
+        body = _json_object()
         paths = _resolve(store_id, body)
         question = str(body.get("message") or "").strip()
         raw_stream = body.get("stream", True)

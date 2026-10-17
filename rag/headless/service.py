@@ -170,15 +170,23 @@ def index_store(paths: StorePaths) -> Dict[str, Any]:
 
 
 def status_store(paths: StorePaths) -> Dict[str, Any]:
-    """Describe a store without building it: a never-indexed store reads as absent."""
+    """Describe a store as the content it holds: nothing indexed reads as absent."""
     config = config_for(paths)
+    absent = {"exists": False, "documents": [], "chunks_total": 0, "fingerprint": None, "stale": False}
     if not os.path.isdir(config.paths.path_db):
-        return {"exists": False, "documents": [], "chunks_total": 0, "fingerprint": None, "stale": False}
+        return absent
     store = wiring.vector_store(config)
+    # FaissVectorStore.__init__ creates path_db empty, so the directory alone
+    # does not mean an index exists: a /rag before the first /index (or a
+    # failed /index) leaves one behind. Only stored chunks count as indexed
+    # (issue #320).
+    chunks = store.count()
+    if chunks == 0:
+        return absent
     return {
         "exists": True,
         "documents": obtener_documentos_indexados(store),
-        "chunks_total": store.count(),
+        "chunks_total": chunks,
         "fingerprint": store.read_fingerprint(),
         "stale": index_fingerprint_mismatch(store),
     }
