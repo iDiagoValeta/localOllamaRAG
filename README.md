@@ -380,8 +380,10 @@ python tools/setup_environments.py --check    # verify only: is this machine set
 ```
 
 `--check` reports each component separately — both interpreters, CUDA visible
-to the isolated one, the MinerU binary, and which configured Ollama models are
-missing. It never pulls models: that is
+to the isolated one, the MinerU binary, the embedder's `/health`, and which
+configured Ollama models are missing. The embedder and Ollama are prerequisites
+the script does not build, so their absence is a warning rather than a setup
+failure. It never pulls models: that is
 gigabytes over your connection. Teardown is `rm -rf .venv .venv-mineru`.
 
 Copy [`.env.example`](.env.example) to `.env` at the project root; it documents
