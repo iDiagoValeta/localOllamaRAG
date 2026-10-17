@@ -249,6 +249,36 @@ def build_context_for_model(
 # RECOMP TEXT HELPERS
 
 
+# A citation marker stands as its own token: ``[12]`` or ``[3, 7, 9]`` after
+# whitespace/punctuation and before whitespace/punctuation/end. Numeric
+# notation that merely uses brackets must survive: ``x[0]`` is glued to an
+# identifier, ``[0, 1]`` is a two-number range and decimals never match the
+# integer list/number patterns.
+_CITATION_MARKERS = re.compile(
+    r'(?:\s+|(?<=[^\w\s]))'
+    r'\[\s*(?:\d+(?:\s*,\s*\d+){2,}|[1-9]\d*)\s*\]'
+    r'(?=[\s.,;:!?)\]}"»“”]|$)'
+)
+
+
+def strip_citation_markers(texto: str) -> str:
+    """Remove bracketed citation markers from RECOMP evidence text.
+
+    Only brackets that read as citations are removed: a list of three or more
+    numbers, or a single number of at least one, preceded by whitespace or
+    punctuation and followed by whitespace, punctuation or the end of the
+    text. The whitespace before the marker goes with it, so the sentence keeps
+    a single separator instead of a double space.
+
+    Args:
+        texto: Fragment body text.
+
+    Returns:
+        The text without citation markers.
+    """
+    return _CITATION_MARKERS.sub("", texto)
+
+
 def strip_ollama_think_blocks(text: str) -> str:
     """Remove ``<think>...</think>`` wrappers often emitted by Qwen-style Ollama models.
 
