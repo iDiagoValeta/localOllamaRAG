@@ -174,12 +174,15 @@ something is missing:
    a hash of `gold_cases.jsonl` -- so two runs measured under different
    setups are distinguishable from the files alone (issue #222).
 7. Compares the overall pass rate against `baseline_min_pass_rate.txt` and
-   exits non-zero if it dropped -- that comparison is the gate. `--update-baseline`
-   additionally raises the file to `pass_rate - 0.05` (rounded down to the
-   nearest 0.01) *after* the gate check, and only if that is higher than the
-   current value -- the baseline never moves down automatically. It also
-   refuses more than one `--models` entry: the file holds one number,
-   calibrated on the gate's default generator.
+   exits non-zero if it dropped -- that comparison is the gate. The floor is
+   calibrated on a single generator, so a full run with more than one
+   `--models` entry is not compared against it: it prints each model's pass
+   rate and its exit code stays zero. `--update-baseline` additionally raises
+   the file to `pass_rate - 0.05` (rounded down to the nearest 0.01) *after*
+   the gate check, and only if that is higher than the current value -- the
+   baseline never moves down automatically. It also refuses more than one
+   `--models` entry: the file holds one number, calibrated on the gate's
+   default generator.
 
    That default is `run_eval.DEFAULT_MODELS`: `gemma4:e4b` unless `OLLAMA_RAG_MODEL` says
    otherwise -- the product's own default, so a no-argument `python tests/eval/run_eval.py`,

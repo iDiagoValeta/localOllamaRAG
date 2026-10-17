@@ -2534,7 +2534,29 @@ def evaluate(
         # FAILED against 0.77, and a 0-case reachability probe do the same.
         # Only case_ids is None (the CLI) is the gate.
         if case_ids is None:
-            if threshold is None:
+            if len(models) > 1:
+                # baseline_min_pass_rate.txt holds one number measured with one
+                # generator (issue #28). "overall" blends every model's records
+                # with the retrieval-only ones, which belong to no model, so it
+                # is not the statistic the floor describes: report each model
+                # instead of gating a blend no baseline was calibrated on
+                # (issue #298).
+                if threshold is not None:
+                    print(
+                        f"\n[gate] multiple models ({len(models)}) -- not compared "
+                        f"against the {threshold:.2f} floor, which is calibrated "
+                        "on a single generator"
+                    )
+                else:
+                    print("\n[gate] multiple models -- not the single-model gate")
+                for model in models:
+                    rate = _rate([r for r in records if r["model"] == model])
+                    print(
+                        f"        {model}: {rate['passed']}/{rate['total']} "
+                        f"({rate['pass_rate']:.1%})"
+                    )
+                exit_code = 0
+            elif threshold is None:
                 print(
                     "\n[gate] no baseline yet (tests/eval/baseline_min_pass_rate.txt missing) -- not gating this run"
                 )
