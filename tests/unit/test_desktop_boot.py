@@ -145,3 +145,56 @@ def test_the_mineru_cache_is_pinned_under_the_data_dir_without_overriding_an_exp
     desktop._ensure_data_dir()
 
     assert os.environ["MINERU_CACHE_DIR"] == custom
+
+
+# DATA DIRECTORY (#400)
+
+
+def test_a_source_run_without_the_variable_uses_the_engine_data_dir(monkeypatch):
+    """A source run keeps repo-relative paths, exactly as ``rag/chat_pdfs.py`` does.
+
+    Log and port file used to land in the per-user folder while the engine wrote
+    its vector DBs and history under ``rag/``: two data dirs in one run.
+    """
+    monkeypatch.delenv("MONKEYGRAB_DATA_DIR", raising=False)
+    monkeypatch.setattr(desktop.sys, "frozen", False, raising=False)
+
+    assert desktop._data_dir() == os.path.dirname(os.path.dirname(os.path.abspath(desktop.__file__)))
+
+
+def test_a_frozen_run_without_the_variable_uses_the_per_user_dir(monkeypatch):
+    monkeypatch.delenv("MONKEYGRAB_DATA_DIR", raising=False)
+    monkeypatch.setattr(desktop.sys, "frozen", True, raising=False)
+
+    assert desktop._data_dir() == desktop._default_data_dir()
+
+
+def test_an_exported_variable_wins_in_both_modes(tmp_path, monkeypatch):
+    monkeypatch.setenv("MONKEYGRAB_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(desktop.sys, "frozen", True, raising=False)
+    assert desktop._data_dir() == str(tmp_path)
+
+    monkeypatch.setattr(desktop.sys, "frozen", False, raising=False)
+    assert desktop._data_dir() == str(tmp_path)
+
+
+def test_the_log_and_the_port_file_land_where_the_engine_writes(tmp_path, monkeypatch):
+    """One resolution feeds both files: no second, diverging path for either."""
+    monkeypatch.delenv("MONKEYGRAB_DATA_DIR", raising=False)
+    monkeypatch.setattr(desktop.sys, "frozen", False, raising=False)
+    # Point the source-run data root at tmp so the test writes nothing into rag/.
+    monkeypatch.setattr(desktop, "_RAG_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        desktop, "_start_server", lambda port: types.SimpleNamespace(shutdown=lambda: None)
+    )
+
+    def _interrupt(_seconds):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(desktop.time, "sleep", _interrupt)
+
+    desktop._run_headless(4321)
+    log = desktop._log_boot_warning("x")
+
+    assert log == str(tmp_path / "monkeygrab_boot.log")
+    assert (tmp_path / "monkeygrab_server.port").read_text(encoding="utf-8") == "4321"
