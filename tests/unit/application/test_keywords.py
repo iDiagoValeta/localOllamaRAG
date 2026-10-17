@@ -38,6 +38,21 @@ class TestTokenizeBm25:
         token length that would otherwise drop them."""
         assert tokenize_bm25("results for q4 and k1") == ["results", "q4", "k1"]
 
+    def test_decimal_numbers_are_one_token_and_the_comma_is_normalized(self):
+        """Splitting "5.8" into "5" and "8" matches unrelated chunks and loses
+        the number the question asked about. A decimal comma is the same term
+        as a decimal dot, so both normalize to a dot."""
+        assert tokenize_bm25("5.8 80,5 3.1") == ["5.8", "80.5", "3.1"]
+        assert tokenize_bm25("el valor 80,5 y el 3.1") == ["valor", "80.5", "3.1"]
+
+    def test_two_letter_uppercase_acronyms_survive_lowercased(self):
+        """The minimum length applies to the original token: an ALL-CAPS
+        two-letter acronym is a term BM25 should match, while an ordinary
+        lowercase two-letter word is still dropped."""
+        assert tokenize_bm25("What is AI and ML?") == ["ai", "ml"]
+        assert tokenize_bm25("RL") == ["rl"]
+        assert tokenize_bm25("Hi") == []
+
     def test_empty_text_yields_no_tokens(self):
         assert tokenize_bm25("") == []
 
@@ -65,15 +80,33 @@ class TestExtractKeywords:
         assert [k.lower() for k in keywords].count("transformer") == 1
 
     def test_ordering_is_stable_across_processes(self):
-        """Equal-priority keywords must not come out in set-iteration order:
-        Python randomizes string hashes per process, which would make the
-        fallback query -- and therefore retrieval -- differ between runs."""
+        """Equal-priority keywords come out in the order the question wrote
+        them, never in set-iteration order: Python randomizes string hashes
+        per process, which would make the fallback query -- and therefore
+        retrieval -- differ between runs."""
         keywords = extract_keywords("delta gamma alpha kappa")
 
-        assert keywords == ["alpha", "delta", "gamma", "kappa"]
+        assert keywords == ["delta", "gamma", "alpha", "kappa"]
+
+    def test_fallback_keywords_follow_the_question_instead_of_shortest_first(self):
+        """Sorting plain words by length drops the long terms a question is
+        actually about: for this case the six-keyword fallback used to keep
+        "gros" and "humà" while losing "parells" and "cromosoma"."""
+        keywords = extract_keywords(
+            "De quants milions de parells de bases es compon el cromosoma humà més gros?"
+        )
+
+        assert keywords[:6] == ["quants", "milions", "parells", "bases", "compon", "cromosoma"]
 
     def test_question_marks_and_inverted_marks_never_become_keywords(self):
         assert all("?" not in k and not k.startswith("¿") for k in extract_keywords("¿Qué es RAG?"))
+
+    def test_inverted_exclamation_is_stripped_and_stopwords_are_not_technical(self):
+        """"¿Se" and "¡No" looked like technical tokens only because the
+        opening mark shifted the index used to detect an internal capital;
+        stripped and checked against STOPWORDS, they are function words."""
+        assert extract_keywords("¿Se puede usar AI para ML?") == ["AI", "ML", "usar"]
+        assert extract_keywords("¡No uses RL aquí!") == ["RL", "uses"]
 
 
 class TestIsCoherentQuery:
