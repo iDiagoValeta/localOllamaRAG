@@ -18,13 +18,18 @@ Behavior:
     * Closing the window shuts the server down and exits the process.
     * If Ollama is installed but not running, it is started automatically in the
       background at boot (no-op when already running or not installed).
+    * The ``llama-server`` that serves embeddinggemma-2 is probed at boot. When
+      it is down, a clear warning is printed and appended to the boot log; the
+      window still opens, because only indexing and retrieval need it.
 
 Environment:
     * ``MONKEYGRAB_NO_WINDOW=1`` -- run the server only (no GUI); useful for
       testing the frozen bundle and for headless/server use.
     * ``MONKEYGRAB_PORT`` -- bind a fixed port instead of an ephemeral one.
 
-Prerequisite (on every machine): Ollama installed and the desired models pulled.
+Prerequisite (on every machine): Ollama installed and the desired models pulled,
+plus the embeddinggemma-2 ``llama-server`` documented in
+``packaging/README.md``. The embedder adapter never starts that server itself.
 
 Dependencies:
     - pywebview (native window), werkzeug/flask (server), rag.web.app (backend).
@@ -37,6 +42,9 @@ import socket
 import threading
 import time
 import traceback
+import urllib.error
+import urllib.parse
+import urllib.request
 
 
 # IMPORTS AND PATH SETUP
@@ -51,6 +59,10 @@ if not getattr(sys, "frozen", False) and _project_root not in sys.path:
 
 APP_NAME = "MonkeyGrab"
 HOST = "127.0.0.1"
+
+# A dead llama-server must not hold the window back: loopback answers fast, and
+# a boot warning that arrives seconds late is not a boot warning.
+_EMBEDDER_HEALTH_TIMEOUT_SECONDS = 3.0
 
 
 class _NullStream:
@@ -129,6 +141,10 @@ def _data_dir() -> str:
 def _ensure_data_dir() -> str:
     """Pin ``MONKEYGRAB_DATA_DIR`` (defaulting to a per-user path) and create it.
 
+    Also pins ``MINERU_CACHE_DIR`` under that directory unless the user already
+    exported one: MinerU's own fallback is ``<repo_root>/.mineru_cache``, which
+    a packaged install cannot write (issue #343).
+
     Must run before importing the engine, which reads the variable at import time.
     A user-provided ``MONKEYGRAB_DATA_DIR`` is respected as-is; source runs without
     the variable keep repo-relative behavior.
@@ -141,6 +157,10 @@ def _ensure_data_dir() -> str:
         else:
             return ""
     os.makedirs(data_dir, exist_ok=True)
+    # setdefault, not assignment: an explicit export wins, the same precedence
+    # MONKEYGRAB_DATA_DIR itself follows. The packager runs with the bundle in
+    # Program Files, where MinerU's repo-relative fallback is read-only.
+    os.environ.setdefault("MINERU_CACHE_DIR", os.path.join(data_dir, "mineru_cache"))
     return data_dir
 
 
@@ -191,6 +211,82 @@ def _log_boot_error(exc: BaseException) -> str:
         return ""
 
 
+def _log_boot_warning(message: str) -> str:
+    """Append a non-fatal startup warning to the boot log; return its path.
+
+    A windowed build has no console, so stderr alone would lose the message.
+    Appending keeps a warning visible even when it precedes a later fatal error.
+    """
+    try:
+        path = os.path.join(_data_dir(), "monkeygrab_boot.log")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(f"WARNING: {message}\n")
+        return path
+    except Exception:
+        return ""
+
+
+# EMBEDDER HEALTH
+
+def _embedder_warning_message(health_url: str, reason: str) -> str:
+    """One line naming the failing endpoint, why, and how to start llama-server."""
+    port = urllib.parse.urlsplit(health_url).port or 8091
+    return (
+        f"Embedder (llama-server) is not reachable at {health_url}: {reason}. "
+        "Start it with `llama-server -m <embeddinggemma-2.gguf> --embedding "
+        f"--port {port}`, or point MONKEYGRAB_EMBEDDER_URL at a running server. "
+        "MonkeyGrab will open, but indexing and retrieval fail until the "
+        "embedder answers."
+    )
+
+
+def _embedder_warning() -> str:
+    """Probe the llama-server embedder and return a warning when it is down.
+
+    The embedding adapter reaches embeddinggemma-2 over HTTP and never starts
+    the server itself, so a clean machine fails at the first indexing or
+    question with a message far from the missing prerequisite (issue #342).
+
+    Returns:
+        An empty string when ``GET <base_url>/health`` answers 200, otherwise a
+        one-line explanation naming the endpoint and how to start it.
+
+    Raises:
+        Nothing for an unreachable or failing server: a probe failure is the
+        signal, and a malformed configuration surfaces to the caller.
+    """
+    # Deferred so importing this module stays standard-library only, which is
+    # what lets its unit tests run in the dependency-free fast gate.
+    from monkeygrab.config import AppConfig
+
+    # The same AppConfig the embedding adapter resolves, so the check can never
+    # name a different server from the one the pipeline will call.
+    base_url = AppConfig.from_env().models.embedding.base_url.rstrip("/")
+    health_url = f"{base_url}/health"
+    try:
+        with urllib.request.urlopen(  # nosec B310 -- local endpoint from app config
+            health_url, timeout=_EMBEDDER_HEALTH_TIMEOUT_SECONDS
+        ) as response:
+            status = response.status
+    except urllib.error.HTTPError as exc:
+        return _embedder_warning_message(health_url, f"HTTP {exc.code}")
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        return _embedder_warning_message(health_url, str(exc))
+    if status != 200:
+        return _embedder_warning_message(health_url, f"HTTP {status}")
+    return ""
+
+
+def _warn_if_embedder_unreachable() -> None:
+    """Print and persist the embedder warning; no-op when the server answers."""
+    warning = _embedder_warning()
+    if not warning:
+        return
+    print(f"MonkeyGrab: {warning}", file=sys.stderr, flush=True)
+    _log_boot_warning(warning)
+
+
 # WINDOW BOOT
 
 def _boot(window, port: int) -> None:
@@ -206,6 +302,13 @@ def _boot(window, port: int) -> None:
         try:
             from rag.web.app import start_ollama_if_needed
             start_ollama_if_needed()
+        except Exception:
+            pass
+        # The embedder is not autostarted (its process is the user's, per the
+        # design doc), so say once when it is missing. Guarded like the Ollama
+        # block above: a failed probe must never abort the window.
+        try:
+            _warn_if_embedder_unreachable()
         except Exception:
             pass
         _wait_until_ready(port)
