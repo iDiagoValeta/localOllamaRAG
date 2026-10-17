@@ -26,7 +26,6 @@ import subprocess
 import threading
 from collections import Counter
 from typing import Generator, Optional
-from werkzeug.utils import secure_filename
 
 import requests
 from flask import Flask, request, jsonify, Response, stream_with_context, send_from_directory
@@ -119,7 +118,13 @@ def _init_paths_payload() -> dict:
 
 
 def _safe_pdf_basename(filename: str) -> str:
-    """Validate a routed PDF filename while preserving Unicode characters."""
+    """Validate a PDF filename while preserving Unicode characters.
+
+    Shared by the routes that receive a name from the client (DELETE/GET by
+    name) and by the upload routes. ``secure_filename`` cannot be used for the
+    latter: it transliterates or drops every non-ASCII character, so names like
+    ``报告.pdf`` collapse into an unusable stem.
+    """
     normalized = (filename or "").replace("\\", "/")
     basename = os.path.basename(normalized)
     if basename != normalized or basename in ("", ".", ".."):
@@ -1005,12 +1010,19 @@ def api_reindex():
             ), 202
 
         files = request.files.getlist("file") or []
+        uploads = []
         for f in files:
-            if f and f.filename and f.filename.lower().endswith(".pdf"):
-                filename = secure_filename(f.filename)
-                dest = os.path.join(rag_engine.CARPETA_DOCS, filename)
-                os.makedirs(rag_engine.CARPETA_DOCS, exist_ok=True)
-                f.save(dest)
+            # Validate every name before writing anything: an invalid one must
+            # not leave the earlier files of the same request on disk.
+            filename = _safe_pdf_basename(f.filename) if f else ""
+            if not filename:
+                return jsonify({"ok": False, "error": "Nombre de archivo inválido"}), 400
+            uploads.append((f, filename))
+
+        for f, filename in uploads:
+            dest = os.path.join(rag_engine.CARPETA_DOCS, filename)
+            os.makedirs(rag_engine.CARPETA_DOCS, exist_ok=True)
+            f.save(dest)
 
         _reset_db()
         # Reset failure and empty state to allow new indexing
@@ -1038,6 +1050,9 @@ def api_upload():
 
     When add_only=1: add without full re-indexing, using current settings.
     """
+    if _state["indexing"]:
+        return jsonify({"ok": False, "error": "indexing_in_progress"}), 409
+
     add_only = request.args.get("add_only", "").lower() in ("1", "true", "yes")
     files = request.files.getlist("file") or (
         request.files.get("file") and [request.files["file"]] or []
@@ -1045,18 +1060,21 @@ def api_upload():
     if not files:
         return jsonify({"ok": False, "error": "No se envió ningún archivo"}), 400
 
-    saved = []
+    uploads = []
     for f in files:
-        if not f or not f.filename or not f.filename.lower().endswith(".pdf"):
-            continue
-        filename = secure_filename(f.filename)
+        # Same validation as the delete/serve routes: Unicode survives, path
+        # components do not, and anything that is not a PDF is a client error.
+        filename = _safe_pdf_basename(f.filename) if f else ""
+        if not filename:
+            return jsonify({"ok": False, "error": "Nombre de archivo inválido"}), 400
+        uploads.append((f, filename))
+
+    saved = []
+    for f, filename in uploads:
         dest = os.path.join(rag_engine.CARPETA_DOCS, filename)
         os.makedirs(rag_engine.CARPETA_DOCS, exist_ok=True)
         f.save(dest)
         saved.append(filename)
-
-    if not saved:
-        return jsonify({"ok": False, "error": "Ningún PDF válido"}), 400
 
     try:
         coll = _get_collection()
