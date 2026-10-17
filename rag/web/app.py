@@ -268,7 +268,9 @@ def _chat_stream(pregunta: str) -> Generator[str, None, None]:
         stream=True,
         think=False,
         keep_alive=rag_engine.OLLAMA_KEEP_ALIVE,
-        options={"temperature": 0.7, "top_p": 0.9, "num_ctx": 8192},
+        # Capped like the RAG role (#254): an unbounded answer holds Ollama's
+        # only slot for as long as the model keeps writing (issue #371).
+        options={"temperature": 0.7, "top_p": 0.9, "num_ctx": 8192, "num_predict": 4096},
     )
 
     for chunk in stream:
