@@ -209,6 +209,24 @@ def _fail_every_case(monkeypatch):
     monkeypatch.setattr(run_eval, "run_all_cases", _fake)
 
 
+def _pass_by_model(monkeypatch, passing_model):
+    """Records every gold case once per model, green only for ``passing_model``."""
+
+    def _fake(rag, cases, retrieve_dev, retrieve_blind, evidence_dev, evidence_blind,
+              models, **_stacks):
+        return [
+            {
+                "id": c["id"], "paper": c["paper"], "case_type": c["case_type"],
+                "lang": c["lang"], "model": model, "passed": model == passing_model,
+                "reason": "stub", "elapsed_seconds": 0.0,
+            }
+            for model in models
+            for c in cases
+        ]
+
+    monkeypatch.setattr(run_eval, "run_all_cases", _fake)
+
+
 def test_subset_below_the_floor_does_not_fail_the_gate(monkeypatch, capsys, tmp_path):
     """The 0.77 floor is calibrated on 51 cases; an 8/13 fast tier is not it.
 
@@ -245,6 +263,33 @@ def test_full_set_below_the_floor_still_fails_the_gate(monkeypatch, capsys, tmp_
     assert result["pass_rate"] == 0.0
     assert result["exit_code"] == 1
     assert "[gate] FAILED" in capsys.readouterr().out
+
+
+def test_full_set_with_multiple_models_does_not_gate_the_blended_rate(monkeypatch, capsys, tmp_path):
+    """The floor is one number measured with one generator (issue #28).
+
+    A --models sweep blends every model's records -- plus the retrieval-only
+    ones, which belong to no model -- into ``overall``. Comparing that blend
+    against a single-model floor makes the verdict depend on the shape of the
+    sweep rather than on the pipeline; the write side already refuses it, and
+    this is the same hole on the read side (issue #298).
+    """
+    baseline = tmp_path / "baseline_min_pass_rate.txt"
+    baseline.write_text("0.77\n", encoding="utf-8")
+    monkeypatch.setattr(run_eval, "BASELINE_FILE", baseline)
+    _capture_ensure_indexed(monkeypatch, [])
+    _pass_by_model(monkeypatch, passing_model="good")
+
+    result = evaluate(models=["bad", "good"], write_report=False)
+
+    assert result["pass_rate"] == 0.5
+    assert result["exit_code"] == 0
+    out = capsys.readouterr().out
+    assert "[gate] FAILED" not in out
+    assert "[gate] multiple models" in out
+    n = result["num_cases"]
+    assert f"bad: 0/{n}" in out
+    assert f"good: {n}/{n}" in out
 
 
 def test_unknown_case_id_raises_value_error(monkeypatch):
