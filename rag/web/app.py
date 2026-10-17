@@ -74,6 +74,7 @@ _state = {
     "indexing_failed": False,  # True if the last attempt failed permanently
     "indexing_done_empty": False,  # True if indexing completed with 0 chunks (no PDFs)
     "indexing_progress": None,  # {"file": str, "file_index": int, "total_files": int}
+    "indexing_failed_files": [],  # names from the last run that did not land (issue #323)
 }
 _indexing_lock = threading.RLock()
 
@@ -146,6 +147,7 @@ def _invalidate_collection_if_deleted():
         _state["indexing_failed"] = False
         _state["indexing_error"] = None
         _state["indexing_done_empty"] = False
+        _state["indexing_failed_files"] = []
         gc.collect()
 
 
@@ -166,14 +168,24 @@ def _run_indexing_bg():
         def _on_progress(info):
             _state["indexing_progress"] = info
 
+        failed_files = []
+
+        def _on_file_failed(filename, _error):
+            failed_files.append(filename)
+
         total_chunks = rag_engine.indexar_documentos(
             rag_engine.CARPETA_DOCS,
             coll,
             silent=True,
             progress_callback=_on_progress,
+            on_file_failed=_on_file_failed,
         )
         _state["indexing_error"] = None
         _state["indexing_failed"] = False
+        # A partial run is not a failed run: the store holds the files that did
+        # land and retrieval keeps working. But the user has to see which ones
+        # did not, or a lost document looks like a clean index (issue #323).
+        _state["indexing_failed_files"] = failed_files
         if total_chunks == 0:
             _state["indexing_done_empty"] = True
         else:
@@ -181,6 +193,7 @@ def _run_indexing_bg():
     except Exception as e:
         _state["indexing_error"] = str(e)
         _state["indexing_failed"] = True
+        _state["indexing_failed_files"] = []
         # The worker that just failed a whole re-index is holding ~1.7 GiB and
         # nothing is going to use it again. Left alive it makes the *next*
         # attempt fail on memory this failure is holding, blaming a PID with
@@ -462,6 +475,7 @@ def _switch_store_folder(folder: str) -> None:
         _state["indexing_error"] = None
         _state["indexing_done_empty"] = False
         _state["indexing_progress"] = None
+        _state["indexing_failed_files"] = []
     gc.collect()
 
 
@@ -564,6 +578,7 @@ def _api_init_logic():
                 "documents": docs,
                 "document_details": [],
                 "history_count": len(_state["historial_chat"]),
+                "failed_files": list(_state["indexing_failed_files"]),
                 **_init_paths_payload(),
             }, 200
         return {
@@ -587,6 +602,10 @@ def _api_init_logic():
         # a settings change must not silently trigger a MinerU + embedding pass.
         # Reindexing stays the explicit /api/reindex action.
         "fingerprint_stale": rag_engine.index_fingerprint_mismatch(coll),
+        # Files from the last run that did not land. Empty means the index is
+        # a complete index of the folder; non-empty is a warning the caller
+        # must not mistake for success (issue #323).
+        "failed_files": list(_state["indexing_failed_files"]),
         **_init_paths_payload(),
     }, 200
 
@@ -612,6 +631,7 @@ def api_corpus():
         _state["indexing_error"] = None
         _state["indexing_done_empty"] = False
         _state["indexing_progress"] = None
+        _state["indexing_failed_files"] = []
     gc.collect()
     coll = _get_collection()
     total_fragments = coll.count()
@@ -644,6 +664,7 @@ def api_init():
         _state["indexing_failed"] = False
         _state["indexing_error"] = None
         _state["indexing_done_empty"] = False
+        _state["indexing_failed_files"] = []
         gc.collect()
         try:
             resp, status = _api_init_logic()
@@ -1049,6 +1070,9 @@ def api_upload():
     """Upload PDF(s) and index them.
 
     When add_only=1: add without full re-indexing, using current settings.
+    Each uploaded file replaces its previous chunks (same positional ids), and
+    the response lists in ``failed_files`` any file that did not index instead
+    of reporting it as uploaded (issue #323).
     """
     if _state["indexing"]:
         return jsonify({"ok": False, "error": "indexing_in_progress"}), 409
@@ -1079,8 +1103,43 @@ def api_upload():
     try:
         coll = _get_collection()
         if add_only:
-            rag_engine.indexar_documentos(rag_engine.CARPETA_DOCS, coll, solo_archivos=saved)
+            # Chunk ids are positional per source ({source}_pag{p}_chunk{c}),
+            # so re-adding a replaced file without removing the previous chunks
+            # trips FaissVectorStore.add's duplicate-id guard; the per-file
+            # handler swallowed it and retrieval kept citing the old text
+            # (issue #324). Delete this source before re-indexing it.
+            for filename in saved:
+                coll.delete_source(filename)
+
+            failed_files = []
+
+            def _on_file_failed(filename, _error):
+                failed_files.append(filename)
+
+            rag_engine.indexar_documentos(
+                rag_engine.CARPETA_DOCS,
+                coll,
+                solo_archivos=saved,
+                on_file_failed=_on_file_failed,
+            )
+            _state["indexing_failed_files"] = failed_files
             total = coll.count()
+            indexed = [name for name in saved if name not in failed_files]
+            payload = {
+                "ok": not failed_files,
+                "filename": indexed[0] if len(indexed) == 1 else None,
+                "files": indexed,
+                "failed_files": failed_files,
+                "total_fragments": total,
+                "documents": rag_engine.obtener_documentos_indexados(coll),
+                "document_details": _collection_document_details(coll),
+            }
+            if failed_files:
+                payload["error"] = (
+                    f"{len(failed_files)} fichero(s) no se pudieron indexar: "
+                    f"{', '.join(failed_files)}"
+                )
+            return jsonify(payload)
         else:
             _reset_db()
             _state["indexing_failed"] = False
@@ -1098,17 +1157,6 @@ def api_upload():
                     "progress": _state["indexing_progress"],
                 }
             ), 202
-        docs = rag_engine.obtener_documentos_indexados(coll)
-        return jsonify(
-            {
-                "ok": True,
-                "filename": saved[0] if len(saved) == 1 else None,
-                "files": saved,
-                "total_fragments": total,
-                "documents": docs,
-                "document_details": _collection_document_details(coll),
-            }
-        )
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 

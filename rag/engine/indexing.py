@@ -8,7 +8,7 @@ case; what remains here is folder iteration and progress reporting.
 
 import logging
 import os
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from monkeygrab.adapters.extraction.by_suffix_extractor import PdfOnlyImageExtractor
 from monkeygrab.adapters.extraction.mineru_extractor import MineruImageExtractor
@@ -50,6 +50,7 @@ def indexar_documentos(
     solo_archivos: Optional[List[str]] = None,
     silent: bool = False,
     progress_callback=None,
+    on_file_failed: Optional[Callable[[str, Exception], None]] = None,
 ) -> int:
     """Index PDFs and text files from a folder via ``IndexCorpus`` and the configured stack.
 
@@ -63,6 +64,9 @@ def indexar_documentos(
         silent: Suppress all terminal output (for background/web use).
         progress_callback: Called with ``{"file", "file_index",
             "total_files"}`` at the start of each file.
+        on_file_failed: Called with ``(filename, exception)`` once per file
+            that failed. Lets the caller report the partial failure; the run
+            itself still continues with the remaining files.
 
     Returns:
         Total number of chunks successfully indexed.
@@ -72,7 +76,8 @@ def indexar_documentos(
             fingerprint are left exactly as they were, so the stale-index
             warning keeps working and the caller can report the failure
             (issue #192). A run where only *some* files failed returns
-            normally: those failures are logged per file.
+            normally: those failures are logged per file and reported
+            through ``on_file_failed`` (issue #323).
     """
     archivos_pdf = listar_documentos(carpeta)
     if solo_archivos is not None:
@@ -149,6 +154,8 @@ def indexar_documentos(
             fallos += 1
             ultimo_error = e
             logging.error(f"Error processing {archivo}: {e}")
+            if on_file_failed is not None:
+                on_file_failed(archivo, e)
 
     # Only a full-folder run (solo_archivos=None) can vouch for the *entire*
     # store having been produced under `config`'s recipe -- every call site

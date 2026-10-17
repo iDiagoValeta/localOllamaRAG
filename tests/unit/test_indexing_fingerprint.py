@@ -210,7 +210,16 @@ def test_a_run_where_only_some_files_fail_still_writes_the_fingerprint(tmp_path,
     monkeypatch.setattr(indexing, "IndexCorpus", _HalfFailingIndexCorpus)
     store = _FakeStore()
 
-    total = indexing.indexar_documentos(str(tmp_path), store, silent=True)
+    failures = []
+
+    total = indexing.indexar_documentos(
+        str(tmp_path),
+        store,
+        silent=True,
+        on_file_failed=lambda name, exc: failures.append((name, str(exc))),
+    )
 
     assert total == 3
     assert store.read_fingerprint() == compute_index_fingerprint(config)
+    # Issue #323: the partial failure is reported to the caller, not only logged.
+    assert failures == [("bad.pdf", "extraction failed")]
