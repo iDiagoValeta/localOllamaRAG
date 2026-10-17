@@ -12,11 +12,14 @@ Two wire endpoints, both verified against the real server:
 - Text: ``POST {base_url}/v1/embeddings`` body ``{"input": "<text>"}`` ->
   ``{"data": [{"embedding": [...768 floats...]}]}``.
 - Image: first ``GET {base_url}/props`` for the ``media_marker`` string (a
-  random value like ``"<__media_XXXX__>"``, cached after the first read), then
-  ``POST {base_url}/embeddings`` body
+  random value like ``"<__media_XXXX__>"`` that llama.cpp draws per process,
+  cached after the first read), then ``POST {base_url}/embeddings`` body
   ``{"content": [{"prompt_string": <marker>, "multimodal_data": [<base64>]}]}``
   -> a JSON list whose ``[0]["embedding"]`` is a flat list of floats or a list
-  holding one such list. Images take no task prefix.
+  holding one such list. Images take no task prefix. If the image request
+  fails, ``/props`` is read again and, only if it now reports a different
+  marker, the request is retried exactly once: a restarted server rejects the
+  marker of the previous process.
 
 Task prefixes (EmbeddingGemma 2 model card) are applied here rather than by
 the caller, unlike what the ``Embedder`` port describes: the indexing use case
@@ -26,8 +29,9 @@ formats it as a search query. Images are embedded without a prefix.
 
 Failure policy: hard-fail (project-wide). Any connection error, non-200
 response, malformed JSON or wrong vector length raises ``RuntimeError`` naming
-``base_url``; a missing image file raises ``FileNotFoundError``. There are no
-retries and no fallbacks.
+``base_url``; a missing image file raises ``FileNotFoundError``. The only
+retry is the image request's single resend after its marker changed; a second
+failure raises immediately. There are no fallbacks.
 """
 
 import base64
@@ -104,8 +108,9 @@ class LlamaServerEmbedder:
     raw, sub-unit-norm average.
     A blank caption embeds the image alone.
 
-    Failure policy: hard-fail, no retries, no fallbacks. See the module
-    docstring for what each failure raises.
+    Failure policy: hard-fail after at most one resend of the image request
+    when its marker changed, no fallbacks. See the module docstring for what each failure
+    raises.
     """
 
     def __init__(
@@ -289,26 +294,29 @@ class LlamaServerEmbedder:
             FileNotFoundError: If ``image_path`` does not exist.
             RuntimeError: On any connection, HTTP, JSON or vector-shape failure,
                 including a ``/props`` response without a usable ``media_marker``.
+                The request is retried once with a freshly read marker; a second
+                failure propagates.
         """
         if not os.path.isfile(image_path):
             raise FileNotFoundError(
                 f"llama-server embedder: image file not found: {image_path!r}"
             )
 
-        marker = self._media_marker()
         with open(image_path, "rb") as handle:
             encoded = base64.b64encode(handle.read()).decode("ascii")
-        request = self._build_request(
-            f"{self._base_url}/embeddings",
-            method="POST",
-            payload={
-                "content": [
-                    {"prompt_string": marker, "multimodal_data": [encoded]}
-                ]
-            },
-        )
-        parsed = self._read_json(request)
-        image_vector = self._finalize(self._extract_image_embedding(parsed))
+        try:
+            image_vector = self._embed_image_vector(encoded)
+        except RuntimeError:
+            # llama.cpp draws the media marker anew on every process start, so
+            # the cached one is stale after a server restart and the multimodal
+            # endpoint rejects it. Retry only when /props now reports a
+            # different marker: the same marker means the failure was something
+            # else, and re-sending it would just double the hard fail's latency.
+            stale = self._media_marker_cache
+            self._media_marker_cache = None
+            if self._media_marker() == stale:
+                raise
+            image_vector = self._embed_image_vector(encoded)
 
         caption = caption.strip()
         if not caption:
@@ -320,8 +328,26 @@ class LlamaServerEmbedder:
 
     # helpers
 
+    def _embed_image_vector(self, encoded: str) -> List[float]:
+        """Send one multimodal request with the current marker and finalize it."""
+        request = self._build_request(
+            f"{self._base_url}/embeddings",
+            method="POST",
+            payload={
+                "content": [
+                    {"prompt_string": self._media_marker(), "multimodal_data": [encoded]}
+                ]
+            },
+        )
+        parsed = self._read_json(request)
+        return self._finalize(self._extract_image_embedding(parsed))
+
     def _media_marker(self) -> str:
-        """Return the cached image marker from ``/props``, fetching it once."""
+        """Return the cached image marker from ``/props``, fetching it once.
+
+        ``embed_image`` clears the cache before its one retry, which is how a
+        marker from a previous ``llama-server`` process gets replaced.
+        """
         if self._media_marker_cache is not None:
             return self._media_marker_cache
 
