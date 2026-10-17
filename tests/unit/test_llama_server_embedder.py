@@ -10,6 +10,7 @@ assertion cannot mirror the code under test.
 """
 
 import base64
+import http.client
 import io
 import json
 import math
@@ -272,6 +273,36 @@ def test_embed_raises_when_the_server_cannot_be_reached(monkeypatch):
 
     assert _BASE_URL in str(excinfo.value)
     assert "connection refused" in str(excinfo.value)
+
+
+def test_embed_raises_a_runtime_error_when_the_server_times_out(monkeypatch):
+    def responder(request):
+        # A socket timeout surfaces as a bare TimeoutError, not as URLError.
+        raise TimeoutError("timed out")
+
+    _install_urlopen(monkeypatch, responder)
+    embedder = LlamaServerEmbedder(_BASE_URL)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        embedder.embed("hola")
+
+    assert _BASE_URL in str(excinfo.value)
+    assert "timed out" in str(excinfo.value)
+
+
+def test_embed_raises_a_runtime_error_when_the_response_body_is_incomplete(monkeypatch):
+    class _IncompleteBodyResponse(_FakeResponse):
+        def read(self):
+            raise http.client.IncompleteRead(b"partial")
+
+    _install_urlopen(monkeypatch, lambda request: _IncompleteBodyResponse({}))
+    embedder = LlamaServerEmbedder(_BASE_URL)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        embedder.embed("hola")
+
+    assert _BASE_URL in str(excinfo.value)
+    assert "IncompleteRead" in str(excinfo.value)
 
 
 def test_embed_raises_on_a_non_200_response_naming_status_and_body(monkeypatch):
