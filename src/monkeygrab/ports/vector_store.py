@@ -22,6 +22,16 @@ class VectorStore(Protocol):
     metadata. Keeping it out means a plain vector index with a metadata
     sidecar, such as FAISS, can satisfy this port without a query planner.
 
+    One optional capability is deliberately *not* declared as a member: a
+    monotonic ``version`` counter, bumped by ``add``/``delete_source``/
+    ``clear``. ``Bm25LexicalIndex`` reads it with
+    ``getattr(store, "version", 0)`` so a store that exposes it invalidates
+    its cached corpus scan even when an edit keeps ``count()`` unchanged
+    (delete a source, re-add it with different text; #387), while a store --
+    or a test double -- that does not keeps working with count-only
+    invalidation. Declaring it here would make it structurally mandatory for
+    every implementation, which is the one thing this capability must not be.
+
     Every method returns ``Fragment`` with its score fields at their
     defaults. This port stores and fetches; ranking belongs to the retrieval
     use case.

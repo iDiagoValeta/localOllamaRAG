@@ -280,6 +280,14 @@ class FaissVectorStore:
     the ``VectorStore`` port docstring): callers use it for neighbor-context
     expansion, where asking for a chunk past a document's first/last page is
     an expected, not exceptional, outcome.
+
+    Revision counter: ``version`` is a monotonic in-memory counter bumped by
+    every ``add``/``delete_source``/``clear``. It is not persisted and has no
+    meaning across reopenings -- its one consumer, ``Bm25LexicalIndex``, holds
+    this same live instance and uses it to notice a mutation that leaves
+    ``count()`` unchanged (delete a source, re-add it with different text;
+    #387). ``count()`` alone is not enough for that, which is why the counter
+    exists rather than the cache trusting size.
     """
 
     def __init__(self, paths: PathsConfig):
@@ -296,6 +304,18 @@ class FaissVectorStore:
 
         self._index, self._rows = _load_or_init(self._dir)
         self._id_to_pos: Dict[str, int] = {row.chunk_id: i for i, row in enumerate(self._rows)}
+        self._version = 0
+
+    @property
+    def version(self) -> int:
+        """Monotonic revision counter, bumped on every mutating call.
+
+        See the class docstring: not persisted, only meaningful while this
+        instance is alive, and exists so a consumer caching a corpus scan
+        (BM25) can tell an edit apart from a no-op that keeps ``count()``
+        constant.
+        """
+        return self._version
 
     def add(self, chunk: Chunk, embedding: Sequence[float]) -> None:
         if chunk.id in self._id_to_pos:
@@ -328,6 +348,11 @@ class FaissVectorStore:
         position = len(self._rows)
         self._rows.append(row)
         self._id_to_pos[chunk.id] = position
+        # Before _save(): the in-memory rows already changed, and that is what
+        # a consumer of get_page() reads -- even when persistence then fails
+        # (the failure mode test_faiss_store documents leaves the in-memory
+        # state mutated and the next add heals the disk).
+        self._version += 1
         self._save()
 
     def query(self, embedding: Sequence[float], n_results: int) -> List[Fragment]:
@@ -428,6 +453,10 @@ class FaissVectorStore:
             if row.metadata.source != source
         ]
         removed = len(self._rows) - len(positions)
+        # Bumped even when nothing matched: the contract is per call, not per
+        # removed chunk, so a consumer never has to reason about whether this
+        # particular delete was a no-op.
+        self._version += 1
         if removed == 0:
             return 0
 
@@ -448,6 +477,10 @@ class FaissVectorStore:
         self._index = None
         self._rows = []
         self._id_to_pos = {}
+        # Right after the in-memory state is reset, not after the file
+        # removals: a failed removal still leaves this instance empty to
+        # get_page()/count(), so the counter must already reflect that.
+        self._version += 1
         for path in (
             self._index_path,
             self._meta_path,
