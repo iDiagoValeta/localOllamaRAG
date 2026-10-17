@@ -10,6 +10,8 @@ import json
 import logging
 import os
 import re
+import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 from rag.engine.runtime import get_runtime
@@ -48,10 +50,12 @@ def guardar_debug_rag(
     try:
         os.makedirs(cfg.CARPETA_DEBUG_RAG, exist_ok=True)
 
-        import time
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         slug = re.sub(r'[^\w\s]', '', pregunta)[:40].strip().replace(' ', '_')
-        nombre_archivo = f"{timestamp}_{slug}.txt"
+        # Second resolution alone made two queries answered in the same second
+        # overwrite each other, prose dump and JSON sidecar alike (issue #398).
+        sufijo_unico = uuid.uuid4().hex[:8]
+        nombre_archivo = f"{timestamp}_{sufijo_unico}_{slug}.txt"
         ruta = os.path.join(cfg.CARPETA_DEBUG_RAG, nombre_archivo)
 
         with open(ruta, 'w', encoding='utf-8') as f:
