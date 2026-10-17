@@ -2,6 +2,7 @@
 
 import json
 import os
+import threading
 from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 import faiss
@@ -288,6 +289,18 @@ class FaissVectorStore:
     ``count()`` unchanged (delete a source, re-add it with different text;
     #387). ``count()`` alone is not enough for that, which is why the counter
     exists rather than the cache trusting size.
+
+    Thread safety: one instance-level ``threading.RLock`` serializes every
+    read or mutation of ``_index``/``_rows``/``_id_to_pos`` and every write to
+    disk. The web app is threaded and lends one instance to every request
+    thread (``rag/engine/wiring.py``), so ``query`` without it could take
+    candidate positions from the index it searched and then read them out of
+    a row list a concurrent ``delete_source`` had already shortened (#393) --
+    an ``IndexError``, or a fragment from the wrong chunk when the positions
+    still fit. The lock is reentrant because the mutators call ``_save``/
+    ``_rewrite`` while already holding it, and ``_rewrite`` forwards to
+    ``clear`` when nothing survives. It is an in-process lock only: two
+    processes opening the same directory are still unsupported.
     """
 
     def __init__(self, paths: PathsConfig):
@@ -305,6 +318,9 @@ class FaissVectorStore:
         self._index, self._rows = _load_or_init(self._dir)
         self._id_to_pos: Dict[str, int] = {row.chunk_id: i for i, row in enumerate(self._rows)}
         self._version = 0
+        # Created last: the constructor's reads happen before the instance is
+        # shared, and anything that takes the lock can assume the fields exist.
+        self._lock = threading.RLock()
 
     @property
     def version(self) -> int:
@@ -315,95 +331,103 @@ class FaissVectorStore:
         (BM25) can tell an edit apart from a no-op that keeps ``count()``
         constant.
         """
-        return self._version
+        with self._lock:
+            return self._version
 
     def add(self, chunk: Chunk, embedding: Sequence[float]) -> None:
-        if chunk.id in self._id_to_pos:
-            raise ValueError(
-                f"chunk id {chunk.id!r} already exists in the FAISS store at "
-                f"{self._dir!r}; positions are append-only, re-adding would "
-                "desync the id-to-position map"
-            )
+        with self._lock:
+            if chunk.id in self._id_to_pos:
+                raise ValueError(
+                    f"chunk id {chunk.id!r} already exists in the FAISS store at "
+                    f"{self._dir!r}; positions are append-only, re-adding would "
+                    "desync the id-to-position map"
+                )
 
-        vector = np.asarray([list(embedding)], dtype=np.float32)
-        if self._index is None:
-            self._index = faiss.IndexFlatIP(vector.shape[1])
-        elif vector.shape[1] != self._index.d:
-            raise ValueError(
-                f"embedding has dimension {vector.shape[1]}, FAISS index at "
-                f"{self._dir!r} expects {self._index.d}"
-            )
+            vector = np.asarray([list(embedding)], dtype=np.float32)
+            if self._index is None:
+                self._index = faiss.IndexFlatIP(vector.shape[1])
+            elif vector.shape[1] != self._index.d:
+                raise ValueError(
+                    f"embedding has dimension {vector.shape[1]}, FAISS index at "
+                    f"{self._dir!r} expects {self._index.d}"
+                )
 
-        faiss.normalize_L2(vector)
-        # Serialize before mutating the index: if this ever raised, an index
-        # already grown by one with no matching row would be a desync that
-        # _load_or_init's count check rejects forever on the next reopen.
-        row = _Row(
-            chunk_id=chunk.id,
-            doc=chunk.text,
-            metadata=chunk.metadata,
-            line=_serialize_row(chunk.id, chunk.text, chunk.metadata),
-        )
-        self._index.add(vector)
-        position = len(self._rows)
-        self._rows.append(row)
-        self._id_to_pos[chunk.id] = position
-        # Before _save(): the in-memory rows already changed, and that is what
-        # a consumer of get_page() reads -- even when persistence then fails
-        # (the failure mode test_faiss_store documents leaves the in-memory
-        # state mutated and the next add heals the disk).
-        self._version += 1
-        self._save()
+            faiss.normalize_L2(vector)
+            # Serialize before mutating the index: if this ever raised, an index
+            # already grown by one with no matching row would be a desync that
+            # _load_or_init's count check rejects forever on the next reopen.
+            row = _Row(
+                chunk_id=chunk.id,
+                doc=chunk.text,
+                metadata=chunk.metadata,
+                line=_serialize_row(chunk.id, chunk.text, chunk.metadata),
+            )
+            self._index.add(vector)
+            position = len(self._rows)
+            self._rows.append(row)
+            self._id_to_pos[chunk.id] = position
+            # Before _save(): the in-memory rows already changed, and that is what
+            # a consumer of get_page() reads -- even when persistence then fails
+            # (the failure mode test_faiss_store documents leaves the in-memory
+            # state mutated and the next add heals the disk).
+            self._version += 1
+            self._save()
 
     def query(self, embedding: Sequence[float], n_results: int) -> List[Fragment]:
-        if self._index is None or self._index.ntotal == 0:
-            return []
+        with self._lock:
+            if self._index is None or self._index.ntotal == 0:
+                return []
 
-        vector = np.asarray([list(embedding)], dtype=np.float32)
-        if vector.shape[1] != self._index.d:
-            raise ValueError(
-                f"query embedding has dimension {vector.shape[1]}, FAISS index "
-                f"at {self._dir!r} expects {self._index.d}"
-            )
-        faiss.normalize_L2(vector)
+            vector = np.asarray([list(embedding)], dtype=np.float32)
+            if vector.shape[1] != self._index.d:
+                raise ValueError(
+                    f"query embedding has dimension {vector.shape[1]}, FAISS index "
+                    f"at {self._dir!r} expects {self._index.d}"
+                )
+            faiss.normalize_L2(vector)
 
-        # Score every stored vector (k = ntotal) so the tie-break re-sort below
-        # sees the full candidate set -- see the class docstring's determinism
-        # note for why a partial top-k from FAISS would not be safe here.
-        k = self._index.ntotal
-        scores, positions = self._index.search(vector, k)
-        candidates = [
-            (float(scores[0][j]), self._rows[positions[0][j]].chunk_id, int(positions[0][j]))
-            for j in range(k)
-        ]
-        candidates.sort(key=lambda c: (-c[0], c[1]))
+            # Score every stored vector (k = ntotal) so the tie-break re-sort below
+            # sees the full candidate set -- see the class docstring's determinism
+            # note for why a partial top-k from FAISS would not be safe here.
+            k = self._index.ntotal
+            scores, positions = self._index.search(vector, k)
+            candidates = [
+                (float(scores[0][j]), self._rows[positions[0][j]].chunk_id, int(positions[0][j]))
+                for j in range(k)
+            ]
+            candidates.sort(key=lambda c: (-c[0], c[1]))
 
-        fragments = []
-        for score, _chunk_id, position in candidates[:n_results]:
-            row = self._rows[position]
-            # Cosine distance (1 - cosine similarity) on the normalized
-            # vectors this store indexes -- not a literal L2 magnitude like
-            # "Smaller is nearer", matching the Fragment.distancia contract; ordering is
-            # what downstream ranking (RRF, min/max/mean debug stats) uses.
-            fragments.append(Fragment(doc=row.doc, metadata=row.metadata, distancia=1.0 - score))
-        return fragments
+            fragments = []
+            for score, _chunk_id, position in candidates[:n_results]:
+                row = self._rows[position]
+                # Cosine distance (1 - cosine similarity) on the normalized
+                # vectors this store indexes -- not a literal L2 magnitude like
+                # "Smaller is nearer", matching the Fragment.distancia contract; ordering is
+                # what downstream ranking (RRF, min/max/mean debug stats) uses.
+                fragments.append(
+                    Fragment(doc=row.doc, metadata=row.metadata, distancia=1.0 - score)
+                )
+            return fragments
 
     def get_by_ids(self, ids: Sequence[str]) -> List[Fragment]:
-        fragments = []
-        for chunk_id in ids:
-            position = self._id_to_pos.get(chunk_id)
-            if position is None:
-                continue
-            row = self._rows[position]
-            fragments.append(Fragment(doc=row.doc, metadata=row.metadata))
-        return fragments
+        with self._lock:
+            fragments = []
+            for chunk_id in ids:
+                position = self._id_to_pos.get(chunk_id)
+                if position is None:
+                    continue
+                row = self._rows[position]
+                fragments.append(Fragment(doc=row.doc, metadata=row.metadata))
+            return fragments
 
     def get_page(self, limit: Optional[int], offset: int) -> List[Fragment]:
-        rows = self._rows[offset:] if limit is None else self._rows[offset : offset + limit]
-        return [Fragment(doc=row.doc, metadata=row.metadata) for row in rows]
+        with self._lock:
+            rows = self._rows[offset:] if limit is None else self._rows[offset : offset + limit]
+            return [Fragment(doc=row.doc, metadata=row.metadata) for row in rows]
 
     def count(self) -> int:
-        return len(self._rows)
+        with self._lock:
+            return len(self._rows)
 
     def read_fingerprint(self) -> Optional[str]:
         """Return the index recipe fingerprint this store recorded, if any.
@@ -447,48 +471,52 @@ class FaissVectorStore:
             raise RuntimeError(f"failed to persist FAISS store at {self._dir!r}: {e}") from e
 
     def delete_source(self, source: str) -> int:
-        positions = [
-            position
-            for position, row in enumerate(self._rows)
-            if row.metadata.source != source
-        ]
-        removed = len(self._rows) - len(positions)
-        # Bumped even when nothing matched: the contract is per call, not per
-        # removed chunk, so a consumer never has to reason about whether this
-        # particular delete was a no-op.
-        self._version += 1
-        if removed == 0:
-            return 0
+        with self._lock:
+            positions = [
+                position
+                for position, row in enumerate(self._rows)
+                if row.metadata.source != source
+            ]
+            removed = len(self._rows) - len(positions)
+            # Bumped even when nothing matched: the contract is per call, not per
+            # removed chunk, so a consumer never has to reason about whether this
+            # particular delete was a no-op.
+            self._version += 1
+            if removed == 0:
+                return 0
 
-        kept_rows = [self._rows[position] for position in positions]
-        if kept_rows:
-            vectors = np.vstack([self._index.reconstruct(position) for position in positions])
-            index = faiss.IndexFlatIP(vectors.shape[1])
-            index.add(np.asarray(vectors, dtype=np.float32))
-            self._index = index
-        else:
-            self._index = None
-        self._rows = kept_rows
-        self._id_to_pos = {row.chunk_id: i for i, row in enumerate(self._rows)}
-        self._rewrite()
-        return removed
+            kept_rows = [self._rows[position] for position in positions]
+            if kept_rows:
+                vectors = np.vstack(
+                    [self._index.reconstruct(position) for position in positions]
+                )
+                index = faiss.IndexFlatIP(vectors.shape[1])
+                index.add(np.asarray(vectors, dtype=np.float32))
+                self._index = index
+            else:
+                self._index = None
+            self._rows = kept_rows
+            self._id_to_pos = {row.chunk_id: i for i, row in enumerate(self._rows)}
+            self._rewrite()
+            return removed
 
     def clear(self) -> None:
-        self._index = None
-        self._rows = []
-        self._id_to_pos = {}
-        # Right after the in-memory state is reset, not after the file
-        # removals: a failed removal still leaves this instance empty to
-        # get_page()/count(), so the counter must already reflect that.
-        self._version += 1
-        for path in (
-            self._index_path,
-            self._meta_path,
-            self._version_path,
-            self._fingerprint_path,
-        ):
-            if os.path.exists(path):
-                os.remove(path)
+        with self._lock:
+            self._index = None
+            self._rows = []
+            self._id_to_pos = {}
+            # Right after the in-memory state is reset, not after the file
+            # removals: a failed removal still leaves this instance empty to
+            # get_page()/count(), so the counter must already reflect that.
+            self._version += 1
+            for path in (
+                self._index_path,
+                self._meta_path,
+                self._version_path,
+                self._fingerprint_path,
+            ):
+                if os.path.exists(path):
+                    os.remove(path)
 
     def _save(self) -> None:
         """Persist the current state by staging all three files, then replacing.
@@ -525,37 +553,43 @@ class FaissVectorStore:
         crash) can still surface a stale or zero-length file despite every
         ``os.replace`` here being atomic at the filesystem level.
         """
-        try:
-            index_tmp = self._index_path + ".tmp"
-            faiss.write_index(self._index, index_tmp)
+        with self._lock:
+            try:
+                index_tmp = self._index_path + ".tmp"
+                faiss.write_index(self._index, index_tmp)
 
-            meta_tmp = self._meta_path + ".tmp"
-            _write_meta_file(meta_tmp, self._rows)
+                meta_tmp = self._meta_path + ".tmp"
+                _write_meta_file(meta_tmp, self._rows)
 
-            version_tmp = self._version_path + ".tmp"
-            with open(version_tmp, "w", encoding="utf-8") as f:
-                f.write(_FORMAT_VERSION)
+                version_tmp = self._version_path + ".tmp"
+                with open(version_tmp, "w", encoding="utf-8") as f:
+                    f.write(_FORMAT_VERSION)
 
-            os.replace(index_tmp, self._index_path)
-            os.replace(meta_tmp, self._meta_path)
-            os.replace(version_tmp, self._version_path)
-        except OSError as e:
-            raise RuntimeError(f"failed to persist FAISS store at {self._dir!r}: {e}") from e
+                os.replace(index_tmp, self._index_path)
+                os.replace(meta_tmp, self._meta_path)
+                os.replace(version_tmp, self._version_path)
+            except OSError as e:
+                raise RuntimeError(
+                    f"failed to persist FAISS store at {self._dir!r}: {e}"
+                ) from e
 
     def _rewrite(self) -> None:
-        if not self._rows:
-            self.clear()
-            return
-        try:
-            index_tmp = self._index_path + ".tmp"
-            meta_tmp = self._meta_path + ".tmp"
-            version_tmp = self._version_path + ".tmp"
-            faiss.write_index(self._index, index_tmp)
-            _write_meta_file(meta_tmp, self._rows)
-            with open(version_tmp, "w", encoding="utf-8") as f:
-                f.write(_FORMAT_VERSION)
-            os.replace(index_tmp, self._index_path)
-            os.replace(meta_tmp, self._meta_path)
-            os.replace(version_tmp, self._version_path)
-        except OSError as e:
-            raise RuntimeError(f"failed to persist FAISS store at {self._dir!r}: {e}") from e
+        with self._lock:
+            if not self._rows:
+                self.clear()
+                return
+            try:
+                index_tmp = self._index_path + ".tmp"
+                meta_tmp = self._meta_path + ".tmp"
+                version_tmp = self._version_path + ".tmp"
+                faiss.write_index(self._index, index_tmp)
+                _write_meta_file(meta_tmp, self._rows)
+                with open(version_tmp, "w", encoding="utf-8") as f:
+                    f.write(_FORMAT_VERSION)
+                os.replace(index_tmp, self._index_path)
+                os.replace(meta_tmp, self._meta_path)
+                os.replace(version_tmp, self._version_path)
+            except OSError as e:
+                raise RuntimeError(
+                    f"failed to persist FAISS store at {self._dir!r}: {e}"
+                ) from e
