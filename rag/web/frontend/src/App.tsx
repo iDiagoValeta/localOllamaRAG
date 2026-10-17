@@ -143,7 +143,7 @@ async function streamSSE(
   onToken: (token: string) => void,
   onDone: (sources: Citation[] | null) => void,
   onError: (msg: string) => void,
-  fb?: { unknown?: string; queryError?: string; modelError?: string; closed?: string; no_results?: string },
+  fb?: { unknown?: string; queryError?: string; modelError?: string; closed?: string; no_results?: string; question_too_short?: string },
 ) {
   const contentType = response.headers.get('content-type') || '';
 
@@ -379,6 +379,11 @@ export default function App() {
           setActiveStore(initData.active_store || 'en');
           setUserName(initData.user || '');
           setIsInitialized(true);
+          // The control-panel effect below only runs when isInitialized flips
+          // false→true. A reindex starts from an initialized app and sets
+          // isIndexing instead, so this success branch is the one that has to
+          // refresh the store rows out of "not indexed".
+          loadStores();
 
           setMessages([]);
         } else {
@@ -793,7 +798,7 @@ export default function App() {
             )
           );
         },
-        { unknown: T.unknownError, queryError: T.queryError, modelError: T.modelError, closed: T.connClosed, no_results: T.noResults },
+        { unknown: T.unknownError, queryError: T.queryError, modelError: T.modelError, closed: T.connClosed, no_results: T.noResults, question_too_short: T.questionTooShort },
       );
     } catch {
       setMessages(prev =>
@@ -1092,6 +1097,7 @@ export default function App() {
               doc={pdfViewer.doc}
               page={pdfViewer.page}
               onClose={closePdf}
+              strings={T}
             />
           </div>
         )}

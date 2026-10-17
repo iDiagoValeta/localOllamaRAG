@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Eye, FileText, Loader2, X } from '../lib/icons';
+import type { Strings } from '../lib/i18n';
 
-export function PdfPane({ doc, page, onClose }: { doc: string; page: number; onClose: () => void }) {
+export function PdfPane({ doc, page, onClose, strings }: { doc: string; page: number; onClose: () => void; strings: Strings }) {
   const base = `/api/pdf/${encodeURIComponent(doc)}`;
   // toolbar=0 hides the browser's built-in PDF bar (which repeats the file name).
   const src = `${base}#page=${page}&toolbar=0`;
@@ -30,14 +31,14 @@ export function PdfPane({ doc, page, onClose }: { doc: string; page: number; onC
             target="_blank"
             rel="noreferrer"
             className="p-2 rounded-full text-ink-faint hover:text-ink hover:bg-surface transition-all"
-            title="Abrir en el navegador"
+            title={strings.openInBrowser}
           >
             <Eye className="w-5 h-5" />
           </a>
           <button
             onClick={onClose}
             className="p-2 rounded-full text-ink-faint hover:text-ink hover:bg-surface transition-all"
-            title="Cerrar (Esc)"
+            title={strings.closeEsc}
           >
             <X className="w-5 h-5" />
           </button>
