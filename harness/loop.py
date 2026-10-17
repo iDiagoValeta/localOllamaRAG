@@ -60,9 +60,10 @@ full numbers and why they cannot be re-derived from a fresh clone):
     configuration fails, so every recovery candidate was
     ``rejected_regression`` at the fast tier for re-failing exactly that
     case. When the ledger's prior history contains a *comparable* state
-    (same models, chunking and index-time flags -- see
-    ``_comparable_config_view``) with a strictly higher objective than the
-    in-run reference, the loop starts in recovery mode and pairs both
+    (same models and embedder, same chunking and index-time flags, and the
+    same search set -- see ``_comparable_config_view`` and
+    ``is_comparable_search_set_entry``) with a strictly higher objective than
+    the in-run reference, the loop starts in recovery mode and pairs both
     regression checks against that high-water state's per-case pass vector
     instead: losing a case only a degraded reference passed is not losing
     ground anyone ever earned. The ratchet itself still starts at the
@@ -280,22 +281,40 @@ _INDEX_TIME_FLAG_KEYS = (
     "usar_descripcion_imagen",
 )
 _MODEL_ROLE_KEYS = ("rag", "chat", "contextual", "recomp")
+# The embedder is not an installed package -- it runs behind an external
+# llama-server -- so environment.py's pip fingerprint cannot see it. Its URL
+# and Matryoshka width decide the vectors a case is answered from and are
+# compared here instead (issue #338). The timeout is a latency knob, not an
+# identity.
+_EMBEDDING_KEYS = ("base_url", "dimensions")
+
+
+def _embedding_identity(models: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The embedder a config points at, or ``None`` when it does not say."""
+    embedding = models.get("embedding")
+    if not isinstance(embedding, dict):
+        return None
+    return {key: embedding.get(key) for key in _EMBEDDING_KEYS}
 
 
 def _comparable_config_view(effective_config: Dict[str, Any]) -> Dict[str, Any]:
     """Reduce an entry's effective config to what decides per-case outcomes.
 
     Two entries are comparable when this view matches: same models, same
-    chunking, same index-time flags. Everything a proposer searches
-    (retrieval fan-out, fusion weights, reranker threshold) is deliberately
-    excluded -- those differences between historical entries are exactly the
-    evidence recovery mode needs. Test doubles may carry partial configs;
-    missing sections read as ``None`` and compare like-for-like.
+    embedder (URL and width), same chunking, same index-time flags. Everything
+    a proposer searches (retrieval fan-out, fusion weights, reranker threshold)
+    is deliberately excluded -- those differences between historical entries
+    are exactly the evidence recovery mode needs. Test doubles may carry
+    partial configs; missing sections read as ``None`` and compare
+    like-for-like, except the embedder: an absent ``models.embedding`` is
+    unknown rather than off, so ``is_comparable_search_set_entry`` rejects it
+    instead of pairing against a vector space nobody can name.
     """
     models = effective_config.get("models") or {}
     flags = effective_config.get("flags") or {}
     return {
         "models": {key: models.get(key) for key in _MODEL_ROLE_KEYS},
+        "embedding": _embedding_identity(models),
         "chunking": effective_config.get("chunking"),
         # bool(): entries written before an index-time flag existed lack the
         # key entirely; every such flag ships default-off, so absent == off
@@ -306,15 +325,30 @@ def _comparable_config_view(effective_config: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _case_ids_match(
+    case_records: Sequence[Dict[str, Any]], search_set_ids: Sequence[str]
+) -> bool:
+    """Whether an entry's stored case ids are exactly the launch search set."""
+    stored = {record.get("id") for record in case_records}
+    return stored == set(search_set_ids)
+
+
 def is_comparable_search_set_entry(
     entry: ledger_mod.LedgerEntry,
     comparable_view: Dict[str, Any],
+    search_set_ids: Sequence[str],
     launch_environment: Optional[Dict[str, Any]] = None,
 ) -> bool:
     """Whether ``entry`` can serve as a recovery-mode baseline for this view.
 
     Only complete, non-``inconclusive`` search-set evaluations carry the full
     pass vector recovery pairing needs; fast-tier-rejected entries do not.
+
+    The entry must also have measured the SAME search set (issue #339).
+    ``evaluated_case_set == "search_set"`` says it measured *a* complete set;
+    when the set changes size or membership, an older entry's pass count is
+    not a state this campaign can reach, and letting it arm recovery pairs
+    against cases nobody just ran.
 
     An entry measured on a KNOWN-different stack is rejected too (issue #107).
     Configuration equality says the two runs asked the pipeline the same
@@ -330,7 +364,15 @@ def is_comparable_search_set_entry(
     evidence #92 was built on. ``describe_ledger_comparability`` counts those
     entries separately so an operator sees how much of the pairing is
     unverified rather than assuming all of it was checked.
+
+    The embedder (issue #338) is the exception to that tolerance. An entry
+    written before ``models.embedding`` existed cannot name the embedder that
+    produced its vectors, and a different width silently changes every
+    vector in the index. Absence is therefore NOT comparable: treating it as
+    a match is how a Jina CLIP or eg2@512 entry becomes the high water of an
+    eg2@256 campaign.
     """
+    entry_view = _comparable_config_view(entry.effective_config)
     return (
         entry.evaluated_case_set == "search_set"
         and entry.verdict != "inconclusive"
@@ -339,9 +381,28 @@ def is_comparable_search_set_entry(
         # campaign against one is the "loop sobre una medida que miente"
         # failure arriving through the door marked safe.
         and entry.evaluator != ledger_mod.EVALUATOR_DEMO
-        and _comparable_config_view(entry.effective_config) == comparable_view
+        and entry_view["embedding"] is not None
+        and entry_view == comparable_view
+        and _case_ids_match(entry.case_records, search_set_ids)
         and environment_mod.compare(entry.environment_fingerprint, launch_environment)
         != environment_mod.DIFFERS
+    )
+
+
+def _search_set_difference(
+    entry: ledger_mod.LedgerEntry, search_set_ids: Sequence[str]
+) -> Optional[str]:
+    """Why a complete search-set entry measured other cases, or ``None``."""
+    expected = set(search_set_ids)
+    stored = {record.get("id") for record in entry.case_records}
+    if stored == expected:
+        return None
+    missing = sorted(expected - stored)
+    extra = sorted(stored - expected)
+    return (
+        f"evaluated case set: this launch {len(expected)} case(s), "
+        f"ledger entry {len(stored)} case(s) "
+        f"(missing from ledger: {missing!r}, extra in ledger: {extra!r})"
     )
 
 
@@ -355,6 +416,26 @@ def _diff_comparable_views(
         entry_value = entry_view["models"].get(role)
         if launch_value != entry_value:
             diffs.append(f"models.{role}: this launch {launch_value!r}, ledger {entry_value!r}")
+    launch_embedding = launch_view["embedding"]
+    entry_embedding = entry_view["embedding"]
+    if launch_embedding is None or entry_embedding is None:
+        if launch_embedding != entry_embedding:
+            message = (
+                f"models.embedding: this launch {launch_embedding!r}, "
+                f"ledger {entry_embedding!r}"
+            )
+            if entry_embedding is None:
+                message += " (entry records no embedder identity)"
+            diffs.append(message)
+    else:
+        for key in _EMBEDDING_KEYS:
+            launch_value = launch_embedding.get(key)
+            entry_value = entry_embedding.get(key)
+            if launch_value != entry_value:
+                diffs.append(
+                    f"models.embedding.{key}: this launch {launch_value!r}, "
+                    f"ledger {entry_value!r}"
+                )
     if launch_view["chunking"] != entry_view["chunking"]:
         diffs.append(
             f"chunking: this launch {launch_view['chunking']!r}, ledger {entry_view['chunking']!r}"
@@ -370,7 +451,10 @@ def _diff_comparable_views(
 
 
 def describe_ledger_comparability(
-    reference, entries, launch_environment: Optional[Dict[str, Any]] = None
+    reference,
+    entries,
+    search_set_ids: Sequence[str],
+    launch_environment: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """What an operator should know about prior history BEFORE paying evaluations.
 
@@ -401,7 +485,7 @@ def describe_ledger_comparability(
     comparable = [
         e
         for e in entries
-        if is_comparable_search_set_entry(e, comparable_view, launch_environment)
+        if is_comparable_search_set_entry(e, comparable_view, search_set_ids, launch_environment)
     ]
     verified = sum(
         1
@@ -414,7 +498,9 @@ def describe_ledger_comparability(
     # against is among them, which is the fact that decides whether a refresh
     # campaign is due (#107). They differ exactly when the high water is the
     # aged entry -- the situation that opened the issue.
-    high_water = _historical_high_water(entries, comparable_view, launch_environment)
+    high_water = _historical_high_water(
+        entries, comparable_view, search_set_ids, launch_environment
+    )
     info: Dict[str, Any] = {
         "history_entries": len(entries),
         "comparable_search_set_states": len(comparable),
@@ -436,6 +522,13 @@ def describe_ledger_comparability(
         diffs = _diff_comparable_views(
             comparable_view, _comparable_config_view(latest.effective_config)
         )
+        # A fast-tier entry's records are a subset by construction; the
+        # fallback below ("no complete search-set pass vector") is the
+        # accurate reason, not a case-id mismatch (#339).
+        if latest.evaluated_case_set == "search_set":
+            search_difference = _search_set_difference(latest, search_set_ids)
+            if search_difference is not None:
+                diffs.append(search_difference)
         diffs += environment_mod.describe_difference(
             latest.environment_fingerprint, launch_environment
         )
@@ -448,13 +541,16 @@ def describe_ledger_comparability(
 def _historical_high_water(
     entries: Sequence[ledger_mod.LedgerEntry],
     comparable_view: Dict[str, Any],
+    search_set_ids: Sequence[str],
     launch_environment: Optional[Dict[str, Any]] = None,
 ) -> Optional[ledger_mod.LedgerEntry]:
     """The best comparable search-set state in prior ledger history, or ``None``.
 
     Only complete, non-``inconclusive`` search-set evaluations count: a
     fast-tier-rejected entry has no full pass vector, and an inconclusive one
-    may be measuring a dead Ollama rather than quality. Ties resolve to the
+    may be measuring a dead Ollama rather than quality. The entry must also
+    have measured this launch's exact search set (issue #339), or its pass
+    count belongs to a campaign these cases never ran. Ties resolve to the
     latest iteration so repeated measurements of one configuration converge.
     Computed once at loop start from PRIOR history only -- entries written by
     the current run never move the pairing baseline mid-campaign.
@@ -483,7 +579,9 @@ def _historical_high_water(
     comparable = [
         entry
         for entry in entries
-        if is_comparable_search_set_entry(entry, comparable_view, launch_environment)
+        if is_comparable_search_set_entry(
+            entry, comparable_view, search_set_ids, launch_environment
+        )
     ]
     verified = [
         entry
@@ -686,7 +784,9 @@ def run_loop(
     # vector. Frozen here from PRIOR history; this run's own entries never
     # move it mid-campaign.
     comparable_view = _comparable_config_view(dataclasses.asdict(reference))
-    high_water = _historical_high_water(entries_so_far, comparable_view, launch_environment)
+    high_water = _historical_high_water(
+        entries_so_far, comparable_view, search_set_ids, launch_environment
+    )
     if high_water is not None and high_water.objective_adjusted > reference_objective_adjusted:
         recovery_mode = True
         # The high-water entry carries the full search-set pass vector, which
@@ -698,7 +798,9 @@ def run_loop(
         eligible_history_entries = sum(
             1
             for e in entries_so_far
-            if is_comparable_search_set_entry(e, comparable_view, launch_environment)
+            if is_comparable_search_set_entry(
+                e, comparable_view, search_set_ids, launch_environment
+            )
         )
     else:
         recovery_mode = False
