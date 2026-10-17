@@ -14,9 +14,12 @@ Precedence is environment > settings.json > module defaults. A variable exported
 for this run (or read from ``.env``) is an explicit statement about this run and
 outranks a choice saved during an earlier one; everything the environment leaves
 unset falls back to the persisted choice, and only then to the defaults in
-rag/chat_pdfs.py. The override is for this run only: a save never writes an
-env-pinned role (or ``DOCS_FOLDER``) over the stored choice, so unsetting the
-variable restores what the user picked rather than destroying it (issue #79).
+rag/chat_pdfs.py. A variable a ``MONKEYGRAB_PROFILE`` seeded is a default, not an
+export: it is what the operator asked for by picking a profile, so a saved
+choice still applies over it (issue #301). The override is for this run only: a
+save never writes an env-pinned role (or ``DOCS_FOLDER``) over the stored
+choice, so unsetting the variable restores what the user picked rather than
+destroying it (issue #79).
 
 Best-effort by design: a missing, unreadable or corrupt file leaves the defaults
 standing instead of blocking startup, the same contract rag/engine/history.py
@@ -28,6 +31,7 @@ import logging
 import os
 from typing import Any, Optional
 
+from monkeygrab.config.env import is_env_pinned
 from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
@@ -114,7 +118,7 @@ def _roles_a_persistir(on_disk: dict) -> dict:
 
 def _store_a_persistir(on_disk: dict) -> str:
     """Active store, keeping the saved identifier while ``DOCS_FOLDER`` pins this run."""
-    if os.getenv(_DOCS_FOLDER_ENV):
+    if os.getenv(_DOCS_FOLDER_ENV) and is_env_pinned(_DOCS_FOLDER_ENV):
         saved = on_disk.get("active_store")
         if isinstance(saved, str) and saved.strip():
             return saved
@@ -135,7 +139,7 @@ def _flags_a_persistir(on_disk: dict) -> dict:
     saved = on_disk.get("flags")
     saved = saved if isinstance(saved, dict) else {}
     for var in list(flags):
-        if os.getenv(var) is None:
+        if not is_env_pinned(var):
             continue
         previous = saved.get(var)
         if isinstance(previous, bool):
@@ -186,7 +190,7 @@ def _nombre_store_activo() -> str:
 def _fijado_por_entorno(rol: str) -> bool:
     """Whether the environment pins the model for ``rol``."""
     variable = cfg.MODEL_ROLE_ENV_VARS.get(rol, "")
-    return bool(variable and os.getenv(variable))
+    return bool(variable and os.getenv(variable) and is_env_pinned(variable))
 
 
 def _aplicar_roles(roles: Any) -> None:
@@ -211,7 +215,7 @@ def _aplicar_roles(roles: Any) -> None:
 
 def _aplicar_store(nombre: Any) -> None:
     """Apply the saved store unless DOCS_FOLDER pins the corpus for this run."""
-    if not isinstance(nombre, str) or not nombre or os.getenv(_DOCS_FOLDER_ENV):
+    if not isinstance(nombre, str) or not nombre or (os.getenv(_DOCS_FOLDER_ENV) and is_env_pinned(_DOCS_FOLDER_ENV)):
         return
     if nombre == _nombre_store_activo():
         return
@@ -234,5 +238,5 @@ def _aplicar_flags(flags: Any) -> None:
     if not isinstance(flags, dict):
         return
     for var, valor in flags.items():
-        if var in PERSISTED_FLAGS and os.getenv(var) is None:
+        if var in PERSISTED_FLAGS and not is_env_pinned(var):
             setattr(cfg, var, bool(valor))

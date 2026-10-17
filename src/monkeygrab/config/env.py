@@ -168,6 +168,7 @@ PROFILES: Dict[str, Dict[str, str]] = {
         "OLLAMA_CHAT_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
         "OLLAMA_CONTEXTUAL_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
         "OLLAMA_RECOMP_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
+        "OLLAMA_AUX_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
         "OLLAMA_RAG_NUM_CTX": "8192",
         "OLLAMA_RECOMP_NUM_CTX": "4096",
         "OLLAMA_CONTEXTUAL_NUM_CTX": "8192",
@@ -179,6 +180,32 @@ PROFILES: Dict[str, Dict[str, str]] = {
 }
 
 _STANDARD_PROFILE_NAMES = ("", "standard")
+
+# Keys apply_profile seeded into os.environ itself (not an explicit mapping a
+# test passed in). A profile is a bundle of defaults, not a set of exports: a
+# variable seeded here is the default the operator asked for by picking a
+# profile, so settings.py must not mistake it for an explicit choice that
+# outranks (and must not be overwritten by) a saved setting -- issue #301.
+_PROFILE_SEEDED_KEYS: set[str] = set()
+
+
+def is_env_pinned(name: str) -> bool:
+    """Return whether ``name`` is an explicit export rather than a profile default.
+
+    A variable the operator exported, or one read from ``.env``, pins the
+    configuration for this run and outranks a choice saved in ``settings.json``.
+    A variable ``apply_profile`` seeded to fill in a hardware profile's default
+    is not an export: it is the default the profile stands for, so a saved
+    choice still applies over it and is still persisted (issue #301).
+
+    Args:
+        name: Environment variable name.
+
+    Returns:
+        True when ``name`` is set in ``os.environ`` and was not seeded by
+        ``apply_profile``.
+    """
+    return name in os.environ and name not in _PROFILE_SEEDED_KEYS
 
 
 def apply_profile(environ: Optional[MutableMapping[str, str]] = None) -> Optional[str]:
@@ -209,8 +236,13 @@ def apply_profile(environ: Optional[MutableMapping[str, str]] = None) -> Optiona
         raise ValueError(f"Unknown MONKEYGRAB_PROFILE {name!r}. Valid: {valid}")
     # setdefault, not assignment: an explicitly exported variable always wins
     # over the profile, and unsetting it later restores the profile default.
+    # A key seeded into os.environ itself is recorded so is_env_pinned can tell
+    # this default apart from an operator's explicit export (issue #301).
     for key, value in PROFILES[name].items():
-        environ.setdefault(key, value)
+        if key not in environ:
+            environ[key] = value
+            if environ is os.environ:
+                _PROFILE_SEEDED_KEYS.add(key)
     return name
 
 
