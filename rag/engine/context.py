@@ -124,7 +124,9 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
         cuerpo = _texto_fuente_fragmento(f.get("doc", "") or "")
         if cfg.USAR_OPTIMIZACION_CONTEXTO:
             cuerpo = optimizar_texto_contexto(cuerpo)
-            cuerpo = _marcar_fragmento_incompleto(cuerpo)
+        # The truncation marker describes the excerpt, not the cleanup: it
+        # must survive with optimization disabled too (issue #397).
+        cuerpo = _marcar_fragmento_incompleto(cuerpo)
         content = cuerpo.replace("\n", " ").strip()
         content = strip_citation_markers(content)
         if content:
