@@ -217,6 +217,108 @@ def test_embed_image_caches_the_media_marker(monkeypatch, tmp_path):
     assert len(props_paths) == 1
 
 
+def test_embed_image_rereads_the_marker_and_retries_once_after_a_server_restart(
+    monkeypatch, tmp_path
+):
+    image = tmp_path / "figure.png"
+    image.write_bytes(b"image")
+    image_vector = _native(0.3)
+    server = {"marker": "<__media_OLD__>", "posted": []}
+
+    def responder(request):
+        if _path(request) == "/props":
+            return _FakeResponse({"media_marker": server["marker"]})
+        marker = _json_body(request)["content"][0]["prompt_string"]
+        server["posted"].append(marker)
+        if marker != server["marker"]:
+            raise urllib.error.HTTPError(
+                request.full_url, 400, "Bad Request", {}, io.BytesIO(b"media marker mismatch")
+            )
+        return _FakeResponse([{"embedding": image_vector}])
+
+    calls = _install_urlopen(monkeypatch, responder)
+    embedder = LlamaServerEmbedder(_BASE_URL)
+
+    # The first document caches the marker of this server process.
+    embedder.embed_image(str(image))
+    # llama.cpp draws a fresh marker per process: the cached one is now stale.
+    server["marker"] = "<__media_NEW__>"
+
+    result = embedder.embed_image(str(image))
+
+    # Two attempts on the second image: the stale marker, then the fresh one.
+    assert server["posted"] == ["<__media_OLD__>", "<__media_OLD__>", "<__media_NEW__>"]
+    assert [_path(request) for request in calls] == [
+        "/props",
+        "/embeddings",
+        "/embeddings",
+        "/props",
+        "/embeddings",
+    ]
+    assert result == pytest.approx(_unit(image_vector[:512]))
+
+    # The fresh marker is cached again: the next image reuses it.
+    embedder.embed_image(str(image))
+    assert [_path(request) for request in calls][-1] == "/embeddings"
+    assert [_path(request) for request in calls].count("/props") == 2
+
+
+def test_embed_image_hard_fails_when_the_single_retry_also_fails(monkeypatch, tmp_path):
+    image = tmp_path / "figure.png"
+    image.write_bytes(b"image")
+    props_calls = []
+    post_calls = []
+
+    def responder(request):
+        if _path(request) == "/props":
+            props_calls.append(request)
+            return _FakeResponse({"media_marker": f"<__media_{len(props_calls)}__>"})
+        post_calls.append(request)
+        raise urllib.error.HTTPError(
+            request.full_url, 400, "Bad Request", {}, io.BytesIO(b"media marker mismatch")
+        )
+
+    _install_urlopen(monkeypatch, responder)
+    embedder = LlamaServerEmbedder(_BASE_URL)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        embedder.embed_image(str(image))
+
+    assert _BASE_URL in str(excinfo.value)
+    assert "400" in str(excinfo.value)
+    # Exactly one retry: one marker read per attempt, two attempts in total.
+    assert len(props_calls) == 2
+    assert len(post_calls) == 2
+
+
+def test_embed_image_does_not_resend_when_the_marker_did_not_change(monkeypatch, tmp_path):
+    image = tmp_path / "figure.png"
+    image.write_bytes(b"image")
+    props_calls = []
+    post_calls = []
+
+    def responder(request):
+        if _path(request) == "/props":
+            props_calls.append(request)
+            return _FakeResponse({"media_marker": "<__media_same__>"})
+        post_calls.append(request)
+        raise urllib.error.HTTPError(
+            request.full_url, 500, "Server Error", {}, io.BytesIO(b"out of memory")
+        )
+
+    _install_urlopen(monkeypatch, responder)
+    embedder = LlamaServerEmbedder(_BASE_URL)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        embedder.embed_image(str(image))
+
+    assert "500" in str(excinfo.value)
+    # The marker was re-read to rule out a restart, but the same marker means
+    # the failure was something else: no second POST.
+    assert len(props_calls) == 2
+    assert len(post_calls) == 1
+
+
 def test_embed_image_combines_the_caption_as_a_normalized_sum(monkeypatch, tmp_path):
     image = tmp_path / "figure.png"
     image.write_bytes(b"image")
