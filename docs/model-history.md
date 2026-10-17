@@ -222,6 +222,37 @@ during phase 1. Both are placement findings for anyone serving this model
 next to the fixed stack on 8 GB: at least 16384 of context per slot, and about
 4.5 GiB of VRAM left free for jina-clip and the reranker.
 
+## Generators on embeddinggemma-2 (standard profile, 2026-10-17)
+
+The table above was measured on Jina CLIP. These rows are the first full-gate
+runs of the standard profile on `google/embeddinggemma-2@512` (llama-server
+b11669 on the CPU), same 156 cases, 180 s budget, `AUX_MODEL` = `Ling-3.0-tiny`,
+`USAR_DESCRIPCION_IMAGEN=false`. They are not ranked against the Jina rows: the
+embedder changed, and so did the card. During these runs the desktop session
+held about 2.9 GiB of VRAM that the September runs did not have, so
+`gemma4:e4b` loaded about 71% on the CPU instead of fully on the GPU. Its
+answers are comparable; its tokens/s and s/answer are not.
+
+| Model | Answered | Overall | tokens/s | tokens/answer | s/answer | decode s/answer | Budget hit | Infra | Placement | Run |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `qwen3:4b` | 122 / 136 (89.7%) | 140 / 156 (89.7%) | 74.2 | **647** *(of 123)* | 18.68 *(of 123)* | 9.75 | 1 | 0 | GPU | `20261017T170455Z` |
+| `gemma4:e4b` *(default)* | 121 / 136 (89.0%) | 139 / 156 (89.1%) | 38.9 | 27 *(of 124)* | 14.66 *(of 124)* | 0.73 | 0 | 0 | ~71% CPU | `20261017T142753Z` |
+| `gemma4:e4b`, with #307/#310/#311 | 119 / 136 (87.5%) | 137 / 156 (87.8%) | 41.6 | 28 *(of 124)* | 13.38 *(of 124)* | 0.68 | 0 | 0 | ~71% CPU | `20261017T151943Z` |
+| `phi4-mini:3.8b` | 97 / 136 (71.3%) | 115 / 156 (73.7%) | 80.1 | 74 *(of 124)* | 10.57 *(of 124)* | 0.98 | 0 | 0 | GPU | `20261017T170455Z` |
+
+Reading: retrieval is 18/20 in every row (17/20 on Jina). `qwen3:4b` matches
+the default at a quarter of the size, but it reasons before answering: 647
+tokens per answer against 27, so it is slower per answer even fully on the GPU,
+and it hit the budget once. Its +1 over `gemma4:e4b` is inside the 4-11 flips one
+model shows on a rerun. The `gemma4:e4b` pair is the gate for #307, #310 and #311:
+0 cases up, 2 down (`gw-site`, `basquet-naixement`, neither of which the changes
+touch), inside the same noise. `bonsai-2` and `gemma4:12b-it-qat` could not be
+measured: their manifests need an Ollama newer than the installed 0.33.2 (HTTP 412).
+
+Of the 17 failures in `20261017T142753Z`, 9 are correct answers the grader does
+not accept (`\%`, `\,`, `^2` against `²`, unit and range variants; issue #367),
+and 2 come from MinerU dropping `code` blocks (issue #366).
+
 ## Lite profile (4 GB of VRAM)
 
 Issue #292. Measured on the `rag-lite` branch with `MONKEYGRAB_PROFILE=lite`, so these rows differ from the table
@@ -240,6 +271,13 @@ same 180 s budget, `USAR_DESCRIPCION_IMAGEN=false` exported over
 | `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0` | **off** | 112 / 136 (82.4%) | **130 / 156 (83.3%)** | 101.6 | 32 *(of 124)* | 1.17 *(of 124)* | 0.31 | 0 | 0 | GPU | `20261016T003731Z` |
 | `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0` | **off** | 111 / 136 (81.6%) | 129 / 156 (82.7%) | 101.8 | 31 *(of 124)* | 1.15 *(of 124)* | 0.30 | 0 | 0 | GPU | `20261016T004926Z` |
 | `hf.co/unsloth/gemma-4-E2B-it-GGUF:Q6_K` | off | 114 / 136 (83.8%) | 132 / 156 (84.6%) | 85.0 | 27 *(of 124)* | 1.27 *(of 124)* | 0.31 | 0 | 0 | GPU | `20261016T010240Z` |
+
+Re-run on 2026-10-17 (`20261017T132754Z`, with `OLLAMA_AUX_MODEL` set to the
+row's own generator, #302): `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0`, RECOMP
+off, 113 / 136 (83.1%), 131 / 156 (84.0%), 0 budget hits, inside the noise of
+the two rows above. Daimon's Qwen3-VL held 4.3 GiB during that run, so the
+generator loaded about 96% on the CPU and its speed (22.7 tokens/s) is not
+comparable.
 
 The first run carries the stack name `mineru-jina_clip-faiss` in its file
 name although it ran on embeddinggemma-2: the name was hardcoded until
