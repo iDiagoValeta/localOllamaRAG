@@ -81,12 +81,15 @@ searches without a red test.
 > below.
 
 **Index-time keys are excluded and the exclusion is enforced,** not
-remembered: `chunking.*` and `flags.usar_contextual_retrieval`/
-`usar_embeddings_imagen` change what gets stored, forcing a full MinerU +
-embedding reindex per candidate — far more expensive than the ~13 min a
-retrieval/generation-only evaluation now costs, whatever the exact multiple
-turns out to be once block B (#30) measures it. Declaring one is a red test
-(`INDEX_TIME_KEYS`, checked by `_validate_declared_space`).
+remembered: `chunking.*`, `flags.usar_contextual_retrieval`/
+`usar_embeddings_imagen`/`usar_descripcion_imagen` and the conditional recipe
+members `models.contextual`/`models.chat` change what gets stored, forcing a
+full MinerU + embedding reindex per candidate — far more expensive than the
+~13 min a retrieval/generation-only evaluation now costs, whatever the exact
+multiple turns out to be once block B (#30) measures it. Declaring one is a
+red test (`INDEX_TIME_KEYS`, checked by `_validate_declared_space`; a second
+test derives the set from `index_recipe` so the exclusion cannot drift from
+the real recipe, issue #340).
 
 **`weight_semantic_rrf`/`weight_bm25_rrf` are one knob, not two.**
 `src/monkeygrab/application/rrf_fusion.py::fuse_semantic_and_keyword` computes

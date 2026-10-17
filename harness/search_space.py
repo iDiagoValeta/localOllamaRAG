@@ -77,15 +77,28 @@ from monkeygrab.config.app_config import AppConfig  # noqa: E402
 # INDEX-TIME EXCLUSION
 
 # Changing any of these invalidates the stored index (chunk boundaries,
-# contextual-retrieval summaries or embedded images all move), so they are
-# out of stage 1's action space entirely -- not just "not currently tuned".
+# contextual-retrieval summaries, figure descriptions or embedded images all
+# move), so they are out of stage 1's action space entirely -- not just "not
+# currently tuned".
 INDEX_TIME_KEYS: frozenset = frozenset({
     "chunking.chunk_size",
     "chunking.chunk_overlap",
     "chunking.min_chunk_length",
     "chunking.contextual_doc_chars",
+    # Conditional recipe members: index_recipe reads models.contextual only
+    # while usar_contextual_retrieval runs, and models.chat only while
+    # usar_descripcion_imagen runs. A static set cannot carry that condition,
+    # so both are declared conservatively -- over-declaring costs a slow-tier
+    # rebuild, while a missed key lets one measurement mix two indexes.
+    "models.contextual",
+    "models.chat",
     "flags.usar_contextual_retrieval",
     "flags.usar_embeddings_imagen",
+    # index_recipe adds image_description_model when this flips, and
+    # IndexCorpus stores the vision model's description as the figure chunk's
+    # text, so the stored index changes even though the pixel embedding does
+    # not (issue #340).
+    "flags.usar_descripcion_imagen",
 })
 
 # DECLARED TUNABLES
