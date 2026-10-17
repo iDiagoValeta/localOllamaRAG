@@ -32,7 +32,6 @@ built by the caller out of two ports", not a silently degrading adapter.
 """
 
 import dataclasses
-import re
 from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence
 
 from monkeygrab.application.context_assembly import (
@@ -42,6 +41,7 @@ from monkeygrab.application.context_assembly import (
     build_context_for_model,
     normalize_recomp_output,
     optimize_context_text,
+    strip_citation_markers,
     strip_ollama_think_blocks,
 )
 from monkeygrab.application.text_chunking import adjacent_chunk_ids
@@ -346,7 +346,7 @@ class Answer:
                 cuerpo = optimize_context_text(cuerpo)
                 cuerpo = _marcar_fragmento_incompleto(cuerpo)
             content = cuerpo.replace("\n", " ").strip()
-            content = re.sub(r'\s*\[\s*\d+(?:\s*,\s*\d+)*\s*\]', '', content)  # strip citation markers
+            content = strip_citation_markers(content)
             if content:
                 n = len(textos_preparados) + 1
                 textos_preparados.append(f"Fragment {n}:\n{content}")

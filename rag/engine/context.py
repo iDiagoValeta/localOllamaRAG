@@ -7,7 +7,6 @@ are observed without any per-call synchronization.
 """
 
 import logging
-import re
 import requests
 from typing import Any, Dict, List
 
@@ -20,6 +19,7 @@ from monkeygrab.application.context_assembly import (
     build_context_for_model,
     normalize_recomp_output as _normalizar_salida_recomp,
     optimize_context_text,
+    strip_citation_markers,
     strip_ollama_think_blocks as _strip_ollama_think_blocks,
 )
 from monkeygrab.domain.chunk_metadata import ChunkMetadata
@@ -126,7 +126,7 @@ def sintetizar_contexto_recomp(fragmentos: List[Dict[str, Any]], query_usuario: 
             cuerpo = optimizar_texto_contexto(cuerpo)
             cuerpo = _marcar_fragmento_incompleto(cuerpo)
         content = cuerpo.replace("\n", " ").strip()
-        content = re.sub(r'\s*\[\s*\d+(?:\s*,\s*\d+)*\s*\]', '', content)  # strip citation markers [38, 2, 9]
+        content = strip_citation_markers(content)
         if content:
             n = len(textos_preparados) + 1
             textos_preparados.append(f"Fragment {n}:\n{content}")
