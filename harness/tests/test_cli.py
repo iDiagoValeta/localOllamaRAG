@@ -204,6 +204,10 @@ def _seed_search_set_entry(ledger_dir, iteration, objective, *, fingerprint=None
 
     from monkeygrab.config.app_config import AppConfig
 
+    # Issue #339: --status compares the entry's stored ids against the real
+    # search set, so a fixture with one synthetic case is not a search-set
+    # entry any more. Seed the cases the launch will actually measure.
+    search_ids = ev.search_set_case_ids()
     ledger.write_entry(
         ledger.LedgerEntry(
             schema_version=ledger.SCHEMA_VERSION,
@@ -219,9 +223,14 @@ def _seed_search_set_entry(ledger_dir, iteration, objective, *, fingerprint=None
             proposer_fallback_reason=None,
             evaluated_case_set="search_set",
             case_records=[
-                {"id": "a", "case_type": "factual_number", "passed": True, "elapsed_seconds": 1.0}
+                {"id": case_id, "case_type": "factual_number", "passed": True, "elapsed_seconds": 1.0}
+                for case_id in search_ids
             ],
-            summary={"total": 1, "passed": 1, "pass_rate": 1.0},
+            summary={
+                "total": len(search_ids),
+                "passed": len(search_ids),
+                "pass_rate": 1.0,
+            },
             objective_raw=objective,
             objective_adjusted=objective,
             median_latency_answered_s=1.0,
