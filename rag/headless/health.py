@@ -27,6 +27,12 @@ _ROLES = ("rag", "chat", "contextual", "recomp")
 # moment the roles do.
 _PROBE_CACHE_TTL_SECONDS = 60.0
 _probe_cache_lock = threading.Lock()
+# Serializes the computation itself. Without it, every poll that arrived after
+# the TTL expired started its own torch/CUDA subprocess, so a burst (or a slow
+# probe) multiplied the very cost the cache exists to avoid (issue #347). Kept
+# apart from the cache lock so readers of a fresh entry never queue behind a
+# probe in flight.
+_probe_refresh_lock = threading.Lock()
 _probe_cache: Dict[str, Any] = {"key": None, "report": None, "at": 0.0}
 
 # A dead llama-server must not hold Daimon's poll for long: 3 s is generous on
@@ -185,6 +191,16 @@ def probe(
     return HealthReport(True, None, commit, cuda, isolated_env, roles, embedder)
 
 
+def _fresh_report(key: str, ttl: float) -> Optional["HealthReport"]:
+    """The cached report if ``key`` matches and it is within ``ttl``.
+
+    The caller must hold ``_probe_cache_lock``.
+    """
+    if _probe_cache["key"] == key and time.monotonic() - _probe_cache["at"] < ttl:
+        return _probe_cache["report"]
+    return None
+
+
 def cached_probe(
     config: AppConfig,
     *,
@@ -218,25 +234,33 @@ def cached_probe(
     """
     key = json.dumps(_roles(config), sort_keys=True)
     with _probe_cache_lock:
-        if _probe_cache["key"] == key and time.monotonic() - _probe_cache["at"] < ttl:
-            return _with_embedder(_probe_cache["report"], embedder_probe(config))
-    report = probe(
-        config,
-        isolated_python=isolated_python,
-        cuda_probe=cuda_probe,
-        git_commit=git_commit,
-        embedder_probe=embedder_probe,
-    )
-    cached = report
-    if not report.ok and report.embedder and not report.embedder.get("ok"):
-        # The static checks passed and only the embedder was down (it is
-        # probed last, so any earlier failure leaves ``embedder`` empty).
-        # Cache that static success: otherwise the embedder's failure would
-        # be replayed from the cache and a server that came back would stay
-        # a 503 for the rest of the TTL, contradicting the fresh check below.
-        cached = dataclasses.replace(report, ok=True, reason=None, embedder={})
-    with _probe_cache_lock:
-        _probe_cache.update(key=key, report=cached, at=time.monotonic())
+        cached = _fresh_report(key, ttl)
+    if cached is not None:
+        return _with_embedder(cached, embedder_probe(config))
+    with _probe_refresh_lock:
+        # A probe that was already in flight may have refreshed the entry while
+        # this request waited for that lock; reuse it instead of probing again.
+        with _probe_cache_lock:
+            cached = _fresh_report(key, ttl)
+        if cached is not None:
+            return _with_embedder(cached, embedder_probe(config))
+        report = probe(
+            config,
+            isolated_python=isolated_python,
+            cuda_probe=cuda_probe,
+            git_commit=git_commit,
+            embedder_probe=embedder_probe,
+        )
+        cached = report
+        if not report.ok and report.embedder and not report.embedder.get("ok"):
+            # The static checks passed and only the embedder was down (it is
+            # probed last, so any earlier failure leaves ``embedder`` empty).
+            # Cache that static success: otherwise the embedder's failure would
+            # be replayed from the cache and a server that came back would stay
+            # a 503 for the rest of the TTL, contradicting the fresh check below.
+            cached = dataclasses.replace(report, ok=True, reason=None, embedder={})
+        with _probe_cache_lock:
+            _probe_cache.update(key=key, report=cached, at=time.monotonic())
     return report
 
 

@@ -22,6 +22,11 @@ from rag.headless import health as health_module
 from rag.headless import service as service_module
 from rag.headless.service import QuestionTooShort, StoreBusy, StoreConflict, StorePaths, StoreRegistry
 
+# Requests carry two paths and a question; 1 MiB is orders of magnitude above
+# any legitimate body, and capping it keeps a runaway or hostile client from
+# buffering an unbounded payload before a route can reject it (issue #347).
+_MAX_CONTENT_LENGTH = 1024 * 1024
+
 
 def _sse_event(event: str, payload: Dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
@@ -72,6 +77,7 @@ def create_app(
         registry: Store-id registry; one per process by default.
     """
     app = Flask(__name__)
+    app.config["MAX_CONTENT_LENGTH"] = _MAX_CONTENT_LENGTH
     if token is None:
         # Non-breaking notice: Daimon already injects a token, so a set token
         # stays silent; only the no-auth loopback case warns.
@@ -94,6 +100,13 @@ def create_app(
     def _http_error(error):
         return jsonify({"ok": False, "error": "bad_request" if error.code == 400 else "unauthorized",
                         "message": getattr(error, "description", str(error))}), error.code
+
+    @app.errorhandler(413)
+    def _too_large(error):
+        # Flask answers this abort with HTML unless it is mapped, and Daimon
+        # parses every response as JSON (issue #347).
+        return jsonify({"ok": False, "error": "payload_too_large",
+                        "message": f"request body exceeds {_MAX_CONTENT_LENGTH} bytes"}), 413
 
     def _resolve(store_id: str, values: Dict[str, Any]) -> StorePaths:
         docs_folder, data_dir = _paths_from(values)
