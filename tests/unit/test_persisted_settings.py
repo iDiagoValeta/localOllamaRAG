@@ -14,6 +14,7 @@ Imports rag.chat_pdfs, so the dependency-free fast CI gate skips this file
 
 import ast
 import json
+import logging
 import os
 from pathlib import Path
 
@@ -370,3 +371,24 @@ def test_a_profile_seeded_flag_is_not_an_env_pin(data_dir, monkeypatch):
 
     on_disk = json.loads((Path(data_dir) / "settings.json").read_text(encoding="utf-8"))
     assert on_disk["flags"]["USAR_RERANKER"] is False
+
+
+@pytest.mark.parametrize(
+    "inicial, guardado",
+    [(False, "false"), (False, "0"), (True, 0), (True, None)],
+)
+def test_a_non_bool_flag_value_is_ignored_with_a_warning(data_dir, monkeypatch, caplog, inicial, guardado):
+    """Issue #357: bool("false") is True, so a non-bool must not decide a flag.
+
+    ``settings.json`` is hand-editable and older writers stringified values;
+    treating those as truthy turns a deliberate "off" into an "on" with no
+    trace. Only a JSON bool counts; the rest is reported and skipped.
+    """
+    monkeypatch.setattr(rag_engine, "USAR_RERANKER", inicial)
+    _save(data_dir, flags={"USAR_RERANKER": guardado})
+
+    with caplog.at_level(logging.WARNING):
+        settings.cargar_ajustes_persistidos()
+
+    assert rag_engine.USAR_RERANKER is inicial
+    assert "USAR_RERANKER" in caplog.text

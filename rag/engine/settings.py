@@ -234,9 +234,19 @@ def _aplicar_flags(flags: Any) -> None:
     A flag the environment pins for this run keeps its exported value: the
     export describes this run, the file an earlier one (same precedence as
     ``_aplicar_roles``).
+
+    Only a JSON ``true``/``false`` counts. ``bool("false")`` is ``True``, so a
+    quoted or numeric value would flip a flag the file does not actually
+    declare as on; the value is reported and skipped instead (issue #357).
     """
     if not isinstance(flags, dict):
         return
     for var, valor in flags.items():
-        if var in PERSISTED_FLAGS and not is_env_pinned(var):
-            setattr(cfg, var, bool(valor))
+        if var not in PERSISTED_FLAGS or is_env_pinned(var):
+            continue
+        if not isinstance(valor, bool):
+            logging.warning(
+                f"Ignoring saved flag {var}: expected a JSON bool, got {valor!r}"
+            )
+            continue
+        setattr(cfg, var, valor)
