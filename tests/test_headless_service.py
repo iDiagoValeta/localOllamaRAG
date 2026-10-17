@@ -236,6 +236,16 @@ def test_status_store_of_a_store_that_was_never_built(monkeypatch, tmp_path):
     assert status == {"exists": False, "documents": [], "chunks_total": 0, "fingerprint": None, "stale": False}
 
 
+def test_status_store_of_an_empty_index_directory_is_absent(monkeypatch, tmp_path):
+    # FaissVectorStore.__init__ creates path_db on a plain /rag (or after a
+    # failed /index); the directory existing is not evidence of an index.
+    (tmp_path / "data" / "vector_db" / "docs_eg2").mkdir(parents=True)
+    monkeypatch.setattr(service.wiring, "vector_store", lambda config: _Store())
+    monkeypatch.setattr(service, "obtener_documentos_indexados", lambda s: pytest.fail("must not list"))
+    status = service.status_store(StorePaths(str(tmp_path / "docs"), str(tmp_path / "data")))
+    assert status == {"exists": False, "documents": [], "chunks_total": 0, "fingerprint": None, "stale": False}
+
+
 def _stub_pipeline(monkeypatch, *, ranked, finales, tokens):
     monkeypatch.setattr(service.wiring, "vector_store", lambda config: _Store())
     monkeypatch.setattr(service, "realizar_busqueda_hibrida", lambda q, s: (ranked, 0.9, {"m": 1}))
