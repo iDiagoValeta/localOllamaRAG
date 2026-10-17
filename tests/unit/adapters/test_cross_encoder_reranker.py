@@ -5,6 +5,8 @@ download -- so these run in milliseconds.
 """
 
 import sys
+import threading
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -186,6 +188,47 @@ def test_release_before_any_rerank_call_does_not_load_anything(monkeypatch):
     CrossEncoderReranker().release()  # must not raise, must not load the model
 
     assert FakeCrossEncoder.instances == []
+
+
+def test_concurrent_first_reranks_load_the_model_only_once(monkeypatch):
+    """Two threads reaching an unloaded reranker together share one load (#368).
+
+    A second load would allocate a second full copy of the weights, which is
+    the VRAM an 8GB card does not have to spare. The slow factory widens the
+    window between the null check and the assignment, so an unguarded
+    ``_ensure_model`` deterministically loads twice.
+    """
+    _force_cpu(monkeypatch)
+    load_calls = []
+    barrier = threading.Barrier(2)
+
+    def slow_counting_factory(model_name_or_path, device, model_kwargs):
+        load_calls.append(device)
+        time.sleep(0.1)  # keep the loader busy while the other thread arrives
+        return FakeCrossEncoder(model_name_or_path, device, model_kwargs)
+
+    _patch_crossencoder(monkeypatch, factory=slow_counting_factory)
+
+    reranker = CrossEncoderReranker()
+    errors = []
+
+    def worker():
+        try:
+            barrier.wait(timeout=5)
+            reranker.rerank("q", [_fragment("a")], top_k=1)
+        except BaseException as exc:  # re-surfaced below, never swallowed
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert errors == []
+    assert not any(thread.is_alive() for thread in threads)
+    assert load_calls == ["cpu"]
+    assert len(FakeCrossEncoder.instances) == 1
 
 
 if __name__ == "__main__":

@@ -11,8 +11,9 @@ boundary means no product code changes are needed to measure it.
 
 For each sampled gold case it reports wall time per phase:
 
-- retrieval: query decomposition (Ollama), embedding (isolated worker),
-  vector search (FAISS), BM25 (rank_bm25), reranking (torch cross-encoder)
+- retrieval: query decomposition (Ollama), embedding (llama-server; text,
+  query text and images), vector search (FAISS), BM25 (rank_bm25), reranking
+  (torch cross-encoder)
 - generation: RECOMP synthesis (Ollama) and the answer stream (Ollama),
   with Ollama's own reported in-server duration for comparison
 
@@ -51,7 +52,7 @@ GOLD_CASES = ROOT / "tests" / "eval" / "gold_cases.jsonl"
 # exposes that is not listed here passes through untouched.
 _TIMED_METHODS = {
     "decompose": ("generate",),              # query decomposer (ChatModel)
-    "embed": ("embed",),                     # embedding server (Embedder)
+    "embed": ("embed", "embed_query", "embed_image"),  # text, query text, images
     "vector_search": ("query", "get_by_ids"),  # FAISS store (VectorStore)
     "bm25": ("search",),                     # rank_bm25 (LexicalIndex)
     "rerank": ("rerank",),                   # cross-encoder (Reranker)
