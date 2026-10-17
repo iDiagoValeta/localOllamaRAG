@@ -92,8 +92,8 @@ def _capture_run_all_cases(monkeypatch, seen_cases):
 
 @pytest.fixture(autouse=True)
 def _stub_pipeline(monkeypatch):
-    """Fake Ollama preflight, blind-set staging and the post-index paper
-    check.
+    """Fake the Ollama and embedder preflights, blind-set staging and the
+    post-index paper check.
 
     Model roles (set_model_roles_runtime) and pipeline flags
     (set_pipeline_flags) are NOT neutralized -- evaluate()'s own
@@ -105,6 +105,7 @@ def _stub_pipeline(monkeypatch):
     tests/unit/test_app_config_defaults.py, which reads these same globals).
     """
     monkeypatch.setattr(run_eval, "preflight_ollama", lambda *_a, **_kw: None)
+    monkeypatch.setattr(run_eval, "preflight_embedder", lambda *_a, **_kw: None)
     monkeypatch.setattr(run_eval, "stage_blind_papers", lambda cases: {})
     monkeypatch.setattr(run_eval, "verify_all_papers_indexed", lambda *_a, **_kw: None)
     # write_report=True now also builds the "conditions" block (issue #222),
