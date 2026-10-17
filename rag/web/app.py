@@ -1187,10 +1187,17 @@ def api_settings_get():
 def api_settings_post():
     """Update the RAG pipeline flags at runtime."""
     data = request.get_json() or {}
+    # Validate before mutating: a rejected request must leave the session on
+    # the configuration it had. Only a JSON bool counts -- bool("false") is
+    # True, so coercing would turn the flag on while reporting success
+    # (issue #357).
+    for fe_key in _SETTINGS_MAP:
+        if fe_key in data and not isinstance(data[fe_key], bool):
+            return jsonify({"ok": False, "error": "invalid_flag_value", "key": fe_key}), 400
     updated = {}
     for fe_key, engine_var in _SETTINGS_MAP.items():
         if fe_key in data:
-            val = bool(data[fe_key])
+            val = data[fe_key]
             # The reranker is only activated if the dependency is available
             if engine_var == "USAR_RERANKER" and val and not rag_engine.RERANKER_AVAILABLE:
                 updated[fe_key] = False
