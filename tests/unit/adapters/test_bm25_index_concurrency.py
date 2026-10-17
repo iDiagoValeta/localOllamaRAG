@@ -54,6 +54,7 @@ class _MutableStore:
 
     def __init__(self, fragments):
         self._fragments = list(fragments)
+        self.version = 0
 
     def count(self):
         return len(self._fragments)
@@ -63,6 +64,7 @@ class _MutableStore:
 
     def delete_source(self, source):
         self._fragments = [f for f in self._fragments if f.metadata.source != source]
+        self.version += 1
 
 
 def test_a_slower_rebuild_never_overwrites_a_fresher_one_racing_a_delete(monkeypatch):
@@ -136,7 +138,9 @@ def test_a_slower_rebuild_never_overwrites_a_fresher_one_racing_a_delete(monkeyp
     # behind by the bug would make that next call rebuild again and quietly
     # self-heal, hiding exactly the regression under test.
     cache_key, entries, _bm25 = index._index
-    assert cache_key == (2, config.bm25_k1, config.bm25_b), (
+    # The store's version is part of the key now (#387), and the delete that
+    # triggered thread B's rebuild advanced it from 0 to 1.
+    assert cache_key == (2, 1, config.bm25_k1, config.bm25_b), (
         f"stale rebuild overwrote the fresher one: cache_key={cache_key}"
     )
     assert all(f.metadata.source != "doc0.pdf" for f in entries), (

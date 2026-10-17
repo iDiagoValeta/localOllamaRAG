@@ -14,7 +14,7 @@ from monkeygrab.ports.vector_store import VectorStore
 # conformance here is structural (duck typing), the same contract every other
 # adapter in this package satisfies without inheriting its port.
 
-_IndexSnapshot = Tuple[Optional[Tuple[int, float, float]], List[Fragment], Optional[BM25Okapi]]
+_IndexSnapshot = Tuple[Optional[Tuple[int, int, float, float]], List[Fragment], Optional[BM25Okapi]]
 
 
 class Bm25LexicalIndex:
@@ -28,11 +28,15 @@ class Bm25LexicalIndex:
     *port*, not on FAISS specifically.
 
     Scanning and tokenizing a whole corpus is far too expensive to repeat per
-    query, so the built index is cached under a ``(count, k1, b)`` key held on
-    the instance -- not in a module global. Two indexes over two corpora, or
-    two tests, therefore never invalidate each other. The ceiling is that an
-    in-place edit keeping the same chunk count will not refresh the index;
-    reindexing changes the count and does.
+    query, so the built index is cached under a ``(count, version, k1, b)``
+    key held on the instance -- not in a module global. Two indexes over two
+    corpora, or two tests, therefore never invalidate each other.
+    ``version`` is the store's optional revision counter (read with
+    ``getattr(..., "version", 0)``, since it is not part of the
+    ``VectorStore`` port): a store that exposes one lets an edit which keeps
+    the chunk count unchanged -- delete a source, re-add it with different
+    text -- invalidate the cache (#387). Without it the count is all there
+    is, and that edit goes unnoticed.
 
     ``rag/engine/wiring.py`` caches one instance per ``(store, k1, b)`` and
     hands it to every concurrent Flask request thread (``threaded=True``).
@@ -64,9 +68,25 @@ class Bm25LexicalIndex:
         self._index: _IndexSnapshot = (None, [], None)
         self._rebuild_lock = threading.Lock()
 
+    def _cache_key(self) -> Tuple[int, int, float, float]:
+        """Return the snapshot's invalidation key.
+
+        ``getattr`` keeps this adapter working with any ``VectorStore``
+        implementation, including doubles and ports written before the
+        revision counter existed: an absent ``version`` means "count only",
+        the pre-#387 behaviour.
+        """
+        return (
+            self._vector_store.count(),
+            getattr(self._vector_store, "version", 0),
+            self._k1,
+            self._b,
+        )
+
     def _ensure_index(self) -> Tuple[List[Fragment], Optional[BM25Okapi]]:
         """Return the current ``(entries, bm25)`` pair, rebuilding iff the
-        corpus size or the BM25 parameters changed since the last rebuild.
+        corpus size, the store's revision, or the BM25 parameters changed
+        since the last rebuild.
 
         ``rag/engine/wiring.py`` shares one instance across concurrent Flask
         request threads. Rebuilding was previously three unsynchronized
@@ -103,13 +123,13 @@ class Bm25LexicalIndex:
             (``None`` when every chunk tokenized to nothing).
         """
         cache_key, entries, bm25 = self._index
-        key = (self._vector_store.count(), self._k1, self._b)
+        key = self._cache_key()
         if key == cache_key:
             return entries, bm25
 
         with self._rebuild_lock:
             cache_key, entries, bm25 = self._index
-            key = (self._vector_store.count(), self._k1, self._b)
+            key = self._cache_key()
             if key == cache_key:
                 return entries, bm25
 
