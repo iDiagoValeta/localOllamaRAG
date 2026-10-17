@@ -562,11 +562,12 @@ Adoptados por defecto; cualquiera es revisable.
 > suerte hizo que el filtro de regresión del nivel rápido rechazara a todos
 > los candidatos que restauraban el comportamiento sano: recuperar es fallar
 > de nuevo el caso con el que el sabotaje tuvo fortuna. Decisión: cuando el
-> libro de evidencias contiene un estado **comparable** (mismos modelos,
-> troceado y flags de indexado; ver `_comparable_config_view`) con objetivo
-> estrictamente mayor que la referencia actual, el arnés arranca en **modo
-> recuperación** y las dos comprobaciones de regresión se emparejan contra el
-> vector de pases de esa marca de agua histórica en vez de contra la
+> libro de evidencias contiene un estado **comparable** (mismos modelos y
+> embedder, mismo troceado y flags de indexado, y el mismo conjunto de casos;
+> ver `_comparable_config_view` e `is_comparable_search_set_entry`) con
+> objetivo estrictamente mayor que la referencia actual, el arnés arranca en
+> **modo recuperación** y las dos comprobaciones de regresión se emparejan
+> contra el vector de pases de esa marca de agua histórica en vez de contra la
 > referencia degradada. Perder un caso que sólo pasó la referencia degradada
 > no es perder terreno ganado. Dos propiedades quedan fijadas: el ratchet
 > sigue arrancando en el objetivo de la referencia, así que aceptar exige
@@ -640,6 +641,25 @@ Adoptados por defecto; cualquiera es revisable.
 > el ledger necesita es un refresco. Implementación: `harness/environment.py`,
 > `harness/loop.py` (`is_comparable_search_set_entry`,
 > `describe_ledger_comparability`, `_historical_high_water`).
+>
+> **Identidad del embedder y del search set (issues #338 y #339).** La vista
+> comparable conservaba dos huecos. El embedder no es un paquete instalado
+> -- vive detrás de un llama-server externo -- así que `environment.py` no
+> podía fingerprintarlo: `models.embedding` (`base_url` y `dimensions`) entra
+> en `_comparable_config_view`, porque Jina CLIP o eg2@512 responden otra
+> pregunta que eg2@256. Y `evaluated_case_set == "search_set"` sólo afirma que
+> la entrada midió *un* conjunto completo, no *éste*: los ids guardados en
+> `case_records` deben coincidir con el `search_set_ids` del lanzamiento, o una
+> entrada anterior al cambio de casos presta su recuento de pases a una
+> campaña que nunca midió. En ambos casos la ausencia es **incomparable**, no
+> coincidencia: una entrada escrita antes de que existiera `models.embedding`
+> no puede declarar qué vectores midió, y tratarla como igual es exactamente
+> cómo un eg2@512 se convierte en la marca de agua de eg2@256. Es la
+> diferencia deliberada con la huella de pila desconocida: ahí «no saber»
+> conserva la evidencia de #92; aquí afirmar igualdad fabricaría una. La línea
+> de arranque nombra el campo o los ids que difieren. Implementación:
+> `harness/loop.py` (`is_comparable_search_set_entry`,
+> `_comparable_config_view`, `describe_ledger_comparability`).
 - **Terminación:** presupuesto de iteraciones, o parada tras varias iteraciones
   seguidas sin superar el suelo de ruido.
 - **Comparación pareada** sobre los mismos casos, nunca entre tasas de runs

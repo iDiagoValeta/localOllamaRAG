@@ -500,12 +500,14 @@ boundary checks.
 
 The field note above was the design question; this is the decision, now in
 `loop.py`. When the ledger's prior history contains a **comparable** state
-(`_comparable_config_view`: same model roles, chunking and index-time flags;
-retrieval knobs are excluded because they are exactly what candidates vary)
-whose objective strictly exceeds the in-run reference's, the loop starts in
-**recovery mode**: both regression checks pair against that high-water entry's
-per-case pass vector instead of the degraded reference. Losing a case only a
-degraded reference passed is not losing ground anyone earned.
+(`_comparable_config_view`: same model roles, embedder URL and width, chunking
+and index-time flags -- retrieval knobs are excluded because they are exactly
+what candidates vary -- which also measured exactly the current search set,
+see `is_comparable_search_set_entry`) whose objective strictly exceeds the
+in-run reference's, the loop starts in **recovery mode**: both regression
+checks pair against that high-water entry's per-case pass vector instead of
+the degraded reference. Losing a case only a degraded reference passed is not
+losing ground anyone earned.
 
 Fixed alongside:
 
@@ -534,9 +536,9 @@ Fixed alongside:
 
 Recovery mode above pairs against a comparable prior state, and
 `_comparable_config_view` decides comparability from **configuration alone**:
-model roles, chunking, index-time flags. That view is complete for what a
-campaign *asked* the pipeline and silent about whether the pipeline was the
-same one.
+model roles, embedder URL and width, chunking, index-time flags. That view is
+complete for what a campaign *asked* the pipeline and silent about whether the
+pipeline was the same one.
 
 The gap is not hypothetical. During the criterion-5 validation campaign of
 2026-08-23, the restoration candidate was rejected for losing
@@ -573,7 +575,8 @@ configured:
 ### Unknown is not the same as different
 
 `environment.compare` answers `match`, `differs` or `unknown`, and
-`is_comparable_search_set_entry` rejects **only** `differs`.
+`is_comparable_search_set_entry` rejects **only** `differs` as far as the
+stack fingerprint goes.
 
 That is the whole design decision. Every entry written before ledger schema v3
 carries no fingerprint, so treating unknown as different would disarm recovery
@@ -596,6 +599,26 @@ Two consequences follow, and both are reported rather than hidden:
   *that* entry's stack was verified (`high_water_environment_verified`). The
   two answers differ precisely when the aged entry outscores every verified
   one — the situation that opened #107 — and that is when a refresh is due.
+
+### Embedder and search-set identity (issues #338, #339)
+
+Two more ways an entry can *look* comparable without being climbable:
+
+- **The embedder is not a pip package.** It runs behind an external
+  llama-server, so `environment.py` cannot fingerprint it. `models.embedding`
+  (`base_url`, `dimensions`) is part of `_comparable_config_view` instead: Jina
+  CLIP or eg2@512 vectors answer a different question from eg2@256, and an
+  entry measured there must not become this campaign's high water. Entries
+  written before that field existed carry no embedder identity; unlike an
+  unknown stack fingerprint, absence is treated as **not comparable** — the
+  alternative makes a legacy entry silently match every width.
+- **A search set is not *the* search set.** `evaluated_case_set ==
+  "search_set"` says the entry measured *a* complete set. The entry's stored
+  case ids must also equal the launch's current `search_set_ids`: when cases
+  are added or retired, an old pass count is a state these cases never
+  measured, and arming recovery against it asks candidates to restore cases
+  nobody ran. The launch line names the missing/extra ids when that is why
+  history is incomparable.
 
 ### What this does not do
 

@@ -1,10 +1,11 @@
 """environment -- the installed stack an iteration was measured on.
 
 Issue #107. Two ledger entries are treated as comparable when their models,
-chunking and index-time flags match (``loop._comparable_config_view``). That
-view is complete for *configuration* and blind to everything else: MinerU and
-the embedder get upgraded, an upstream fix changes what a page extracts to, the
-corpus is reindexed. The entry from August still declares itself comparable,
+embedder URL and width, chunking, index-time flags and search set match
+(``loop.is_comparable_search_set_entry``). That view is complete for
+*configuration* and blind to what was actually installed: MinerU gets
+upgraded, an upstream fix changes what a page extracts to, the corpus is
+reindexed. The entry from August still declares itself comparable,
 still holds passes the current stack cannot reach, and recovery mode pairs
 against a high water nobody can climb back to -- so every campaign ends
 ``rejected_regression`` on ghost passes, with no bug to fix.

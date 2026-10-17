@@ -284,7 +284,7 @@ def _entries_a_demo_run_must_not_join(ledger_dir: Path) -> int:
     )
 
 
-def _run_status(reference, ledger_dir: Path) -> int:
+def _run_status(reference, ledger_dir: Path, search_set_ids) -> int:
     """Report the ledger without evaluating anything (issue #114).
 
     The launch line was previously reachable only from a real campaign, which
@@ -293,6 +293,10 @@ def _run_status(reference, ledger_dir: Path) -> int:
     that can never match a real ``AppConfig`` -- so it reported 0 comparable
     states whatever the ledger held. An agent deciding whether to launch
     needs the answer before either.
+
+    ``search_set_ids`` is the launch's current search set: comparability now
+    includes having measured exactly those cases (issue #339), so the report
+    cannot be computed without it.
 
     Deliberately reuses ``format_comparability_lines``: what ``--status``
     reports and what a campaign pairs against must not come from two
@@ -327,7 +331,9 @@ def _run_status(reference, ledger_dir: Path) -> int:
     for line in format_ledger_summary(entries):
         print(line)
     for line in format_comparability_lines(
-        loop_mod.describe_ledger_comparability(reference, entries, launch_environment)
+        loop_mod.describe_ledger_comparability(
+            reference, entries, search_set_ids, launch_environment
+        )
     ):
         print(line)
     return 0
@@ -417,13 +423,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
             return 2
 
+    # Issue #339: comparability includes having measured exactly the launch's
+    # search set, so it is needed by --status and by the launch line too.
+    search_set_ids = evaluator_mod.search_set_case_ids()
+
     if args.status:
-        return _run_status(reference, ledger_dir)
+        return _run_status(reference, ledger_dir, search_set_ids)
 
     if args.replay is not None:
         return _run_replay(args.replay, evaluate, ledger_dir)
 
-    search_set_ids = evaluator_mod.search_set_case_ids()
     fast_tier_ids = evaluator_mod.load_fast_tier()
     unreachable_ids = evaluator_mod.load_unreachable_ids()
 
@@ -444,7 +453,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if ledger_dir.exists():
         comparability = loop_mod.describe_ledger_comparability(
-            reference, list(ledger_mod.read_history(ledger_dir)), launch_environment
+            reference, list(ledger_mod.read_history(ledger_dir)),
+            search_set_ids, launch_environment
         )
         for line in format_comparability_lines(comparability):
             print(line)
