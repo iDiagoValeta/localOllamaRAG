@@ -18,7 +18,9 @@ if str(ROOT) not in sys.path:
 
 import pytest
 
-from monkeygrab.config import AppConfig
+from monkeygrab.config import AppConfig, env
+from monkeygrab.config.chunking import ChunkingConfig
+from monkeygrab.config.retrieval import RetrievalConfig
 
 
 def test_with_overrides_returns_new_instance_and_does_not_mutate_original():
@@ -130,6 +132,77 @@ def test_from_env_accepts_valid_env_overrides(monkeypatch):
     cfg = AppConfig.from_env()
 
     assert cfg.chunking.chunk_size == 1234
+
+
+# Range validation. A parsed-but-impossible value must abort at construction:
+# chunk_size <= 0 makes the recursive splitter stop advancing and exhaust memory,
+# and rrf_k <= 0 divides by zero or yields negative fusion weights.
+
+
+@pytest.mark.parametrize("chunk_size", [0, -1])
+def test_app_config_rejects_non_positive_chunk_size(chunk_size):
+    with pytest.raises(ValueError, match=f"RAG_CHUNK_SIZE.*{chunk_size}"):
+        AppConfig(chunking=ChunkingConfig(chunk_size=chunk_size))
+
+
+@pytest.mark.parametrize("chunk_overlap", [-1, 2000, 2001])
+def test_app_config_rejects_chunk_overlap_outside_its_range(chunk_overlap):
+    with pytest.raises(ValueError, match="RAG_CHUNK_OVERLAP"):
+        AppConfig(chunking=ChunkingConfig(chunk_size=2000, chunk_overlap=chunk_overlap))
+
+
+def test_app_config_accepts_the_chunk_overlap_boundaries():
+    zero = AppConfig(chunking=ChunkingConfig(chunk_size=2000, chunk_overlap=0))
+    largest = AppConfig(chunking=ChunkingConfig(chunk_size=2000, chunk_overlap=1999))
+
+    assert zero.chunking.chunk_overlap == 0
+    assert largest.chunking.chunk_overlap == 1999
+
+
+@pytest.mark.parametrize("rrf_k", [0, -1])
+def test_app_config_rejects_non_positive_rrf_k(rrf_k):
+    with pytest.raises(ValueError, match=f"RAG_RRF_K.*{rrf_k}"):
+        AppConfig(retrieval=RetrievalConfig(rrf_k=rrf_k))
+
+
+@pytest.mark.parametrize(
+    "field,env_name",
+    [
+        ("top_k_rerank_candidates", "RAG_TOP_K_RERANK_CANDIDATES"),
+        ("top_k_final", "RAG_TOP_K_FINAL"),
+    ],
+)
+@pytest.mark.parametrize("value", [0, -1])
+def test_app_config_rejects_non_positive_top_k(field, env_name, value):
+    with pytest.raises(ValueError, match=f"{env_name}.*{value}"):
+        AppConfig(retrieval=RetrievalConfig(**{field: value}))
+
+
+def test_from_env_rejects_an_out_of_range_value(monkeypatch):
+    monkeypatch.setenv("RAG_CHUNK_SIZE", "0")
+
+    with pytest.raises(ValueError, match="RAG_CHUNK_SIZE"):
+        AppConfig.from_env()
+
+
+# Empty strings are how shell exports and .env files spell "not configured";
+# abspath("") is the process cwd, which would relocate the vector store, chat
+# history and debug dumps of issue #356 to wherever the process was launched.
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_read_env_str_treats_blank_as_unset(monkeypatch, blank):
+    monkeypatch.setenv("MONKEYGRAB_DATA_DIR", blank)
+
+    assert env.read_env_str("MONKEYGRAB_DATA_DIR", "/fallback") == "/fallback"
+
+
+def test_from_env_treats_empty_data_dir_as_unset(monkeypatch):
+    monkeypatch.setenv("MONKEYGRAB_DATA_DIR", "")
+    cfg = AppConfig.from_env()
+
+    assert cfg.paths.data_dir == cfg.paths.base_dir
+    assert cfg.paths.data_dir != os.getcwd()
 
 
 if __name__ == "__main__":
