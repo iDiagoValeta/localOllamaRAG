@@ -455,6 +455,44 @@ def test_embed_raises_on_an_unexpected_vector_length(monkeypatch):
         embedder.embed("hola")
 
 
+@pytest.mark.parametrize("non_finite", [float("nan"), float("inf")])
+def test_embed_hard_fails_on_a_non_finite_vector_component(monkeypatch, non_finite):
+    vector = _native(0.5)
+    vector[42] = non_finite
+    _install_urlopen(monkeypatch, lambda request: _text_response(vector))
+    embedder = LlamaServerEmbedder(_BASE_URL)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        embedder.embed("hola")
+
+    assert _BASE_URL in str(excinfo.value)
+    assert "finite" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("non_finite", [float("nan"), float("inf")])
+def test_embed_image_hard_fails_on_a_non_finite_vector_component(
+    monkeypatch, tmp_path, non_finite
+):
+    image = tmp_path / "figure.png"
+    image.write_bytes(b"image")
+    vector = _native(0.5)
+    vector[42] = non_finite
+
+    def responder(request):
+        if _path(request) == "/props":
+            return _FakeResponse({"media_marker": "<__media_X__>"})
+        return _FakeResponse([{"embedding": vector}])
+
+    _install_urlopen(monkeypatch, responder)
+    embedder = LlamaServerEmbedder(_BASE_URL)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        embedder.embed_image(str(image))
+
+    assert _BASE_URL in str(excinfo.value)
+    assert "finite" in str(excinfo.value)
+
+
 def test_embed_image_raises_when_props_lacks_a_media_marker(monkeypatch, tmp_path):
     image = tmp_path / "figure.png"
     image.write_bytes(b"image")
