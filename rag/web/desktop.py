@@ -10,7 +10,9 @@ into ``MonkeyGrab.exe``; it is also runnable directly during development:
 Behavior:
     * Writable data (vector DBs, user stores, history, debug dumps) is routed to
       a per-user directory through ``MONKEYGRAB_DATA_DIR`` so a read-only install
-      never tries to write inside the application bundle.
+      never tries to write inside the application bundle. A source run without
+      the variable keeps the engine's repo-relative default (``rag/``), and the
+      boot log and port file follow whichever root the engine resolves.
     * A loading window appears immediately; the heavy engine import and the
       server start happen off the GUI thread, then the window navigates to the UI.
     * Any boot failure is written to ``<data_dir>/monkeygrab_boot.log`` (and shown
@@ -133,9 +135,30 @@ def _default_data_dir() -> str:
     return os.path.join(base, APP_NAME)
 
 
+# rag/chat_pdfs.py derives its data root from its own package directory. A source
+# run without MONKEYGRAB_DATA_DIR has to resolve to that same folder, not to a
+# per-user path the engine never writes to (issue #400).
+_RAG_DIR = os.path.dirname(os.path.dirname(_here))
+
+
 def _data_dir() -> str:
-    """Resolve the active data directory (env override or per-user default)."""
-    return os.environ.get("MONKEYGRAB_DATA_DIR") or _default_data_dir()
+    """Resolve the active data directory exactly as ``rag/chat_pdfs.py`` does.
+
+    The boot log and the server port file must live where the engine keeps its
+    vector DBs, history and debug dumps: a diagnostic filed under a different
+    root is a diagnostic nobody finds. The env override wins in every mode, a
+    frozen build falls back to the per-user directory, and a source run keeps
+    the engine's repo-relative default (``rag/``).
+
+    Returns:
+        Absolute path to the writable data root.
+    """
+    explicit = os.environ.get("MONKEYGRAB_DATA_DIR")
+    if explicit:
+        return os.path.abspath(explicit)
+    if getattr(sys, "frozen", False):
+        return os.path.abspath(_default_data_dir())
+    return _RAG_DIR
 
 
 def _ensure_data_dir() -> str:
@@ -149,13 +172,12 @@ def _ensure_data_dir() -> str:
     A user-provided ``MONKEYGRAB_DATA_DIR`` is respected as-is; source runs without
     the variable keep repo-relative behavior.
     """
-    data_dir = os.environ.get("MONKEYGRAB_DATA_DIR")
-    if not data_dir:
-        if getattr(sys, "frozen", False):
-            data_dir = _default_data_dir()
-            os.environ["MONKEYGRAB_DATA_DIR"] = data_dir
-        else:
+    data_dir = _data_dir()
+    if not os.environ.get("MONKEYGRAB_DATA_DIR"):
+        if not getattr(sys, "frozen", False):
+            # Nothing to pin: the engine derives this same repo-relative path.
             return ""
+        os.environ["MONKEYGRAB_DATA_DIR"] = data_dir
     os.makedirs(data_dir, exist_ok=True)
     # setdefault, not assignment: an explicit export wins, the same precedence
     # MONKEYGRAB_DATA_DIR itself follows. The packager runs with the bundle in
