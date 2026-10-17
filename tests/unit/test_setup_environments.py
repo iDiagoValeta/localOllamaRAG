@@ -16,7 +16,9 @@ dependency-free `architecture` job.
 
 import json
 import sys
+import urllib.error
 from pathlib import Path
+from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -178,13 +180,14 @@ class TestReporting:
             "_check_interpreter",
             lambda venv, label: results.get(label, (True, f"{label}: fine")),
         )
-        for name in ("_check_cuda", "_check_mineru_binary", "_check_ollama"):
+        for name in ("_check_cuda", "_check_mineru_binary", "_check_embedder", "_check_ollama"):
             monkeypatch.setattr(setup, name, lambda name=name: results[name])
 
     def test_everything_present_exits_zero(self, monkeypatch, capsys):
         self._with_checks(monkeypatch, {
             "_check_cuda": (True, "CUDA: a card"),
             "_check_mineru_binary": (True, "MinerU: 3.4.5"),
+            "_check_embedder": (True, "Embedder: reachable at http://embedder.example/health"),
             "_check_ollama": (True, "Ollama: reachable"),
         })
         assert setup.run_checks() == 0
@@ -196,19 +199,108 @@ class TestReporting:
         self._with_checks(monkeypatch, {
             "_check_cuda": (True, "CUDA: a card"),
             "_check_mineru_binary": (True, "MinerU: 3.4.5"),
+            "_check_embedder": (True, "Embedder: reachable at http://embedder.example/health"),
             "_check_ollama": (False, "Ollama: reachable, missing model(s) ... ollama pull x:y"),
         })
         assert setup.run_checks() == 0
         assert "ollama pull x:y" in capsys.readouterr().out
 
+    def test_a_stopped_embedder_is_a_warning_not_a_claim_that_all_is_present(
+        self, monkeypatch, capsys
+    ):
+        """Issue #385: the check said 'All components present' without asking."""
+        self._with_checks(monkeypatch, {
+            "_check_cuda": (True, "CUDA: a card"),
+            "_check_mineru_binary": (True, "MinerU: 3.4.5"),
+            "_check_embedder": (
+                False,
+                "Embedder: llama-server is not reachable at http://embedder.example/health",
+            ),
+            "_check_ollama": (True, "Ollama: reachable"),
+        })
+        assert setup.run_checks() == 0
+        out = capsys.readouterr().out
+        assert "Embedder" in out
+        assert "All components present" not in out
+        assert "warning(s) above" in out
+
     def test_a_genuinely_missing_component_fails_and_exits_one(self, monkeypatch, capsys):
         self._with_checks(monkeypatch, {
             "_check_cuda": (False, "CUDA: not available to .venv-mineru"),
             "_check_mineru_binary": (True, "MinerU: 3.4.5"),
+            "_check_embedder": (True, "Embedder: reachable at http://embedder.example/health"),
             "_check_ollama": (True, "Ollama: reachable"),
         })
         assert setup.run_checks() == 1
         assert "1 component(s) missing" in capsys.readouterr().out
+
+
+class TestEmbedderCheck:
+    """Issue #385: a prerequisite this script does not build still gets checked."""
+
+    def _config(self, monkeypatch, base_url):
+        config = SimpleNamespace(
+            models=SimpleNamespace(embedding=SimpleNamespace(base_url=base_url))
+        )
+        monkeypatch.setattr(setup, "AppConfig", SimpleNamespace(from_env=lambda: config))
+
+    def _record_urlopen(self, monkeypatch, response=None, error=None):
+        calls = []
+
+        def fake_urlopen(url, timeout):
+            calls.append((url, timeout))
+            if error is not None:
+                raise error
+            return response
+
+        monkeypatch.setattr(setup.urllib.request, "urlopen", fake_urlopen)
+        return calls
+
+    def test_the_health_url_comes_from_appconfig_with_a_short_timeout(self, monkeypatch):
+        monkeypatch.setenv("MONKEYGRAB_EMBEDDER_URL", "http://from-env.example:1111")
+        self._config(monkeypatch, "http://from-config.example:2222/")
+
+        class _Response:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        calls = self._record_urlopen(monkeypatch, _Response())
+
+        passed, message = setup._check_embedder()
+
+        assert passed
+        assert calls[0][0] == "http://from-config.example:2222/health"
+        assert calls[0][1] == setup._EMBEDDER_HEALTH_TIMEOUT_SECONDS
+        assert calls[0][1] <= 5
+        assert "http://from-config.example:2222/health" in message
+
+    def test_a_non_200_answer_is_a_failure_naming_the_endpoint(self, monkeypatch):
+        self._config(monkeypatch, "http://embedder.example:9000")
+        error = urllib.error.HTTPError(
+            "http://embedder.example:9000/health", 503, "Service Unavailable", {}, None
+        )
+        self._record_urlopen(monkeypatch, error=error)
+
+        passed, message = setup._check_embedder()
+
+        assert not passed
+        assert "http://embedder.example:9000/health" in message
+        assert "503" in message
+
+    def test_an_unreachable_embedder_says_how_to_start_llama_server(self, monkeypatch):
+        self._config(monkeypatch, "http://embedder.example:9000")
+        self._record_urlopen(monkeypatch, error=urllib.error.URLError("Connection refused"))
+
+        passed, message = setup._check_embedder()
+
+        assert not passed
+        assert "http://embedder.example:9000/health" in message
+        assert "llama-server" in message
 
 
 class TestSurvivingWhatItDiagnoses:
@@ -245,6 +337,7 @@ class TestSurvivingWhatItDiagnoses:
         monkeypatch.setattr(setup, "ISOLATED_VENV", tmp_path)
 
         class _Silent:
+            returncode = 0
             stdout = ""
             stderr = ""
 
@@ -252,3 +345,22 @@ class TestSurvivingWhatItDiagnoses:
         passed, message = setup._check_mineru_binary()
         assert passed
         assert "printed nothing" in message
+
+    def test_a_binary_that_exits_nonzero_is_not_present(self, monkeypatch, tmp_path):
+        """Issue #385: an existing file that cannot run was reported as MinerU."""
+        binary = tmp_path / "bin" / "mineru"
+        binary.parent.mkdir(parents=True)
+        binary.write_text("", encoding="utf-8")
+        monkeypatch.setattr(setup, "ISOLATED_VENV", tmp_path)
+
+        class _Failed:
+            returncode = 2
+            stdout = ""
+            stderr = "ImportError: libcudart.so.12: cannot open shared object file"
+
+        monkeypatch.setattr(setup.subprocess, "run", lambda *a, **k: _Failed())
+        passed, message = setup._check_mineru_binary()
+        assert not passed
+        assert "MinerU" in message
+        assert "2" in message
+        assert "ImportError" in message
