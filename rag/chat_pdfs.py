@@ -55,6 +55,7 @@ except ImportError:
     pass
 
 
+from monkeygrab.config.env import read_env_choice
 from monkeygrab.config.env import read_env_float as _leer_env_float
 from monkeygrab.config.env import read_env_int as _leer_env_int
 from monkeygrab.config.paths import derive_db_paths as _derive_db_paths
@@ -322,7 +323,18 @@ MAX_CONTEXTO_CHARS = _leer_env_int("MAX_CONTEXTO_CHARS", 24000)
 
 # Logging and process environment
 
-LOG_LEVEL = logging.ERROR
+# WARNING by default: documents that failed to index, settings.json flags that
+# were ignored and the headless service's auth warning are all logging.warning
+# calls, and ERROR hid every one of them (issue #398). An exported
+# MONKEYGRAB_LOG_LEVEL wins for this run; an unknown value aborts startup
+# rather than silently falling back.
+LOG_LEVEL = logging.getLevelName(
+    read_env_choice(
+        "MONKEYGRAB_LOG_LEVEL",
+        "WARNING",
+        ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
+    )
+)
 
 logging.basicConfig(level=LOG_LEVEL, format="%(levelname)s: %(message)s")
 
