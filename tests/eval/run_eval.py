@@ -25,6 +25,11 @@ Dependencies: the full multimodal stack (FAISS, MinerU, embeddinggemma-2,
 sentence-transformers and Ollama) plus a running local Ollama
 server and, in practice, a GPU -- the reranker and every model role run on
 CPU otherwise, which is not a supported configuration for this gate.
+
+Configuration follows the product's own precedence: a variable exported in
+the shell wins, then the repo's ``.env`` (loaded here before any ``monkeygrab``
+import, since that package applies ``MONKEYGRAB_PROFILE`` at import time),
+then the code defaults.
 """
 
 from __future__ import annotations
@@ -59,6 +64,19 @@ if str(REPO_ROOT / "src") not in sys.path:
 if str(EVAL_DIR) not in sys.path:
     sys.path.insert(0, str(EVAL_DIR))
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
+# Load the repo's .env before anything under monkeygrab is imported. ``monkeygrab.config``
+# applies MONKEYGRAB_PROFILE's defaults at import time, while the module that loads .env for
+# the product (rag.chat_pdfs) is only imported later, inside evaluate() -- so without this the
+# gate silently measured the code defaults and ignored a profile set in .env (issue #303).
+# Same optional dependency and precedence as rag/chat_pdfs.py: an exported variable always
+# wins over the file, which is why override is False.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(os.path.join(str(REPO_ROOT), ".env"), override=False)
+except ImportError:
+    pass
 
 import grade  # noqa: E402  (tests/eval sibling module)
 from monkeygrab.config import AppConfig  # noqa: E402
