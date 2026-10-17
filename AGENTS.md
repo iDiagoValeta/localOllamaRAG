@@ -175,7 +175,7 @@ presented as pipeline coverage, and vice versa:
   server answers).
 - **Full gate** (`.github/workflows/full-eval.yml`, `workflow_dispatch` only,
   self-hosted GPU runner with Ollama installed): runs the real pipeline —
-  Ollama generation, Jina CLIP embeddings, hybrid BM25+semantic retrieval,
+  Ollama generation, embeddings from the active embedder, hybrid BM25+semantic retrieval,
   BGE reranking — against every case in `tests/eval/gold_cases.jsonl`
   via `tests/eval/run_eval.py`, and fails if the pass rate drops below
   `tests/eval/baseline_min_pass_rate.txt`. This is the gate that must be
