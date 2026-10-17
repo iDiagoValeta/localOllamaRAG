@@ -15,11 +15,12 @@ class Embedder(Protocol):
     embedding is not something the current pipeline does, so it is not
     part of this port.
 
-    Task-prefix handling (``search_query: `` / ``search_document: `` for
-    Nomic-family models, see ``_derivar_prefijos_embedding`` in
-    ``rag/chat_pdfs.py``) stays the caller's job: it prepends the right
-    prefix to ``text`` before calling ``embed``, so this port never needs
-    to know whether the text is a query or a document.
+    Task-prefix handling is each adapter's job: ``embed`` receives raw
+    text, and the adapter applies whatever task prefix its own model
+    requires, optionally through an extra ``embed_query`` method for query
+    text (``Retrieve`` prefers it when the embedder offers one). This port
+    deliberately names no model's prefixes, so a new adapter does not have
+    to inherit another model's conventions.
 
     ``keep_alive`` exists because VRAM residency is an observable part of
     this port's contract, not an adapter implementation detail: on the
@@ -43,7 +44,8 @@ class Embedder(Protocol):
         """Embed ``text`` into a single dense vector.
 
         Args:
-            text: Text to embed, already prefixed by the caller if needed.
+            text: Raw text to embed; the adapter applies its model's
+                prefix.
             keep_alive: Seconds to keep the model loaded after this call,
                 ``0`` to unload it immediately, or ``None`` for the
                 runtime's own default residency policy.
