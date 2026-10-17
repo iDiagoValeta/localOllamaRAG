@@ -51,14 +51,22 @@ class RetrieveResult:
     metrics: Dict[str, Any]
 
 
+# Only a list marker followed by whitespace is numbering. The whitespace is
+# what separates a marker from a digit that belongs to the query itself:
+# "1.5 billion" and "3D convolution" must stay intact.
+_LIST_MARKER_RE = re.compile(r"^(?:\d+[.)]|[-*])\s+")
+
+
 def _parse_subqueries(raw_response: str) -> List[str]:
     """Parse an LLM's raw sub-query response into up to 3 query strings.
 
     Models emit numbering and bullets despite being told not to, and pad
-    with stray fragments; both are normalized away here.
+    with stray fragments; both are normalized away here. Only list markers
+    ("1.", "2)", "-", "*") followed by whitespace are stripped, so a query
+    that starts with a digit keeps it.
     """
     queries = [
-        q.strip().lstrip("0123456789.-) ")
+        _LIST_MARKER_RE.sub("", q.strip())
         for q in raw_response.strip().split("\n")
         if q.strip() and len(q.strip()) > 20
     ]
@@ -210,22 +218,81 @@ def _branch_counts(fused: List[Fragment]) -> Dict[str, int]:
 # fragments above dual-branch competitors without reordering anything else.
 _FILENAME_MENTION_BOOST = 2.0
 
-# Stems shorter than this never trigger the boost on their own: a stem like
-# "a" or "io" is a substring of almost every question. The full filename
+# Stems shorter than this never trigger the boost on their own: a one- or
+# two-letter stem is an ordinary token in most questions. The full filename
 # (extension included) has no such guard -- "io.pdf" is specific enough.
 _FILENAME_STEM_MIN_LEN = 4
+
+
+def _tokenize_name(text: str) -> List[str]:
+    """Split a filename or question into lowercase alphanumeric tokens.
+
+    Separators collapse, so "DAIMON-Overview.pdf" and "DAIMON_Overview"
+    tokenize alike.
+
+    Args:
+        text: Filename or user question.
+
+    Returns:
+        Token sequence; empty when ``text`` holds no alphanumeric run.
+    """
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).split()
+
+
+def _contains_token_sequence(haystack: List[str], needle: List[str]) -> bool:
+    """Report whether ``needle`` appears contiguously in ``haystack``.
+
+    Args:
+        haystack: Tokens of the question.
+        needle: Tokens of the filename or stem being looked for.
+
+    Returns:
+        ``True`` when every token of ``needle`` appears consecutively.
+    """
+    if not needle or len(needle) > len(haystack):
+        return False
+    width = len(needle)
+    return any(haystack[i : i + width] == needle for i in range(len(haystack) - width + 1))
+
+
+def _drop_suffix_names(mentioned: Set[str]) -> Set[str]:
+    """Drop names whose tokens are a proper suffix of another matched name.
+
+    Naming "my-paper.pdf" also makes "paper.pdf" match as a token sequence, but
+    only the longer name is the document the question actually wrote down.
+
+    Args:
+        mentioned: Sources whose name appears in the question.
+
+    Returns:
+        The subset that is not a proper suffix of a longer matched name.
+    """
+    tokens = {source: _tokenize_name(source) for source in mentioned}
+    kept = set()
+    for source, own in tokens.items():
+        superseded = any(
+            len(other) > len(own) and other[-len(own):] == own
+            for name, other in tokens.items()
+            if name != source
+        )
+        if not superseded:
+            kept.add(source)
+    return kept
 
 
 def _mentioned_sources(question: str, sources: Collection[str]) -> Set[str]:
     """Return the fused sources the question names explicitly.
 
-    A source counts as named when the question contains its full filename
-    ("DAIMON-Overview.pdf") or its stem ("DAIMON-Overview", separators
-    normalized), case-insensitively. Single generic words never match: asking
-    for "an overview" does not name "DAIMON-Overview.pdf", but writing the
-    filename does. Deliberately substring-based rather than token-based, so a
-    garbled extraction (a PDF whose own chunks misspell its title) still
-    matches -- the filename is assigned at index time, not extracted.
+    A source counts as named when its full filename ("DAIMON-Overview.pdf") or
+    its stem ("DAIMON-Overview", separators normalized) appears as a complete
+    token sequence in the question, case-insensitively. Matching on token
+    boundaries rather than substrings is what keeps "BERT.pdf" out of "Explain
+    RoBERTa pretraining": a shared fragment of a longer word is not a mention.
+    Single generic words never match either: asking for "an overview" does not
+    name "DAIMON-Overview.pdf", but writing the filename does. The filename is
+    assigned at index time, not extracted, so a PDF whose own chunks misspell
+    its title still matches. When one matched name is a suffix of another
+    ("paper.pdf" inside "my-paper.pdf"), only the longest is kept.
 
     Args:
         question: The original user question.
@@ -234,19 +301,21 @@ def _mentioned_sources(question: str, sources: Collection[str]) -> Set[str]:
     Returns:
         The subset of ``sources`` the question names.
     """
-    lowered = question.lower()
-    normalized_question = re.sub(r"[^a-z0-9]+", " ", lowered)
+    question_tokens = _tokenize_name(question)
     mentioned = set()
     for source in sources:
         name = source.lower()
-        if name and name in lowered:
+        if not name:
+            continue
+        if _contains_token_sequence(question_tokens, _tokenize_name(name)):
             mentioned.add(source)
             continue
         stem = name.rsplit(".", 1)[0] if "." in name else name
-        normalized_stem = re.sub(r"[^a-z0-9]+", " ", stem).strip()
-        if len(stem) >= _FILENAME_STEM_MIN_LEN and normalized_stem and normalized_stem in normalized_question:
+        if len(stem) >= _FILENAME_STEM_MIN_LEN and _contains_token_sequence(
+            question_tokens, _tokenize_name(stem)
+        ):
             mentioned.add(source)
-    return mentioned
+    return _drop_suffix_names(mentioned)
 
 
 def _boost_filename_mentions(question: str, fused: List[Fragment]) -> Set[str]:

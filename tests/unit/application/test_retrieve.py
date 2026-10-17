@@ -18,7 +18,11 @@ if str(ROOT) not in sys.path:
 
 import pytest  # noqa: E402
 
-from monkeygrab.application.retrieve import Retrieve, _parse_subqueries  # noqa: E402
+from monkeygrab.application.retrieve import (  # noqa: E402
+    Retrieve,
+    _mentioned_sources,
+    _parse_subqueries,
+)
 from monkeygrab.config.app_config import AppConfig  # noqa: E402
 from monkeygrab.domain.chunk_metadata import ChunkMetadata  # noqa: E402
 from monkeygrab.domain.fragment import Fragment  # noqa: E402
@@ -49,6 +53,42 @@ def test_parse_subqueries_strips_numbering_drops_short_lines_and_caps_at_three()
 def test_parse_subqueries_returns_nothing_for_an_empty_response():
     assert _parse_subqueries("") == []
     assert _parse_subqueries("   \n  \n") == []
+
+
+def test_parse_subqueries_keeps_leading_digits_that_are_not_list_markers():
+    """Only a list marker ('1.', '2)', '-', '*') followed by a space is
+    numbering; a leading digit that belongs to the query itself must survive.
+    Stripping every leading digit and dot turned "3D convolution..." into
+    "D convolution..." and "1.5 billion..." into "5 billion..."."""
+    raw_response = (
+        "3D convolution networks need a lot of compute to train.\n"
+        "1.5 billion parameter models require substantial training data.\n"
+        "* A bulleted query long enough to survive the length filter.\n"
+    )
+
+    assert _parse_subqueries(raw_response) == [
+        "3D convolution networks need a lot of compute to train.",
+        "1.5 billion parameter models require substantial training data.",
+        "A bulleted query long enough to survive the length filter.",
+    ]
+
+
+def test_mentioned_sources_matches_whole_tokens_not_substrings():
+    """'BERT' inside 'RoBERTa' is a substring, not a token: the question does
+    not name BERT.pdf. Writing the filename still names it."""
+    assert _mentioned_sources("Explain RoBERTa pretraining", {"BERT.pdf"}) == set()
+    assert _mentioned_sources("según DAIMON-Overview.pdf", {"DAIMON-Overview.pdf"}) == {
+        "DAIMON-Overview.pdf"
+    }
+
+
+def test_mentioned_sources_keeps_only_the_longest_of_nested_names():
+    """Both 'my-paper.pdf' and 'paper.pdf' appear as token sequences in the
+    question, but 'paper.pdf' is a suffix of the longer name; only the longest
+    is the document the question actually names."""
+    assert _mentioned_sources(
+        "According to my-paper.pdf, what changed?", {"my-paper.pdf", "paper.pdf"}
+    ) == {"my-paper.pdf"}
 
 
 def _fragment(id_, score_final=0.0):
