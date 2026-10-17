@@ -31,6 +31,9 @@ class _FakeStore:
     def count(self):
         return 0
 
+    def delete_source(self, source):
+        return 0
+
 
 @pytest.fixture
 def docs_folder(tmp_path, monkeypatch):
@@ -55,7 +58,7 @@ def indexed(monkeypatch):
     monkeypatch.setattr(
         web.rag_engine,
         "indexar_documentos",
-        lambda folder, coll, solo_archivos=None: calls.append(list(solo_archivos)) or 0,
+        lambda folder, coll, solo_archivos=None, on_file_failed=None: calls.append(list(solo_archivos)) or 0,
     )
     monkeypatch.setattr(web.rag_engine, "obtener_documentos_indexados", lambda coll: [])
     monkeypatch.setattr(web, "_collection_document_details", lambda coll: [])
