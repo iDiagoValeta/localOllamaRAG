@@ -31,7 +31,7 @@ detail in `AGENTS.md` §9.
 ## 1. Preflight
 
 ```bash
-python tools/setup_environments.py --check   # both interpreters, CUDA, MinerU, model roles
+python tools/setup_environments.py --check   # both interpreters, CUDA, MinerU, embedder, model roles
 ls rag/web/frontend/dist/index.html          # built frontend; app serves a bare page without it
 ```
 

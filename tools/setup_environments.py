@@ -37,11 +37,21 @@ import os
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+# The script runs from a checkout with no installed package, and the embedder
+# endpoint lives in the product's AppConfig (AGENTS.md section 3). Resolving it
+# here keeps this check naming the same server the pipeline will call.
+if str(REPO_ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "src"))
+
+from monkeygrab.config import AppConfig  # noqa: E402
+
 PRODUCT_VENV = REPO_ROOT / ".venv"
 ISOLATED_VENV = REPO_ROOT / ".venv-mineru"
 
@@ -63,6 +73,10 @@ DEFAULT_OLLAMA_MODEL = "gemma4:e4b"
 OK = "  ok   "
 FAIL = " FAIL  "
 WARN = " warn  "
+
+# Same short bound the desktop app and the headless service use: a stopped
+# server must not turn a setup check into a hang.
+_EMBEDDER_HEALTH_TIMEOUT_SECONDS = 3.0
 
 
 def _venv_python(venv: Path) -> Path:
@@ -164,6 +178,11 @@ def _check_mineru_binary() -> Tuple[bool, str]:
             # job is to survive a broken install and describe it.
             lines = (result.stdout or result.stderr or "").strip().splitlines()
             version = lines[-1] if lines else "present, but --version printed nothing"
+            if result.returncode != 0:
+                # A file that exists but cannot run (a missing CUDA library, a
+                # half-built venv) is not an installed MinerU; reporting it as
+                # present is what issue #385 fixed.
+                return False, f"MinerU: {candidate} --version exited {result.returncode} ({version})"
             return True, f"MinerU: {version}"
     return False, f"MinerU: no binary under {ISOLATED_VENV}"
 
@@ -241,6 +260,40 @@ def _check_ollama() -> Tuple[bool, str]:
     return True, f"Ollama: reachable at {base_url}, all {len(wanted)} configured model(s) present"
 
 
+def _embedder_failure(health_url: str, reason: str) -> str:
+    """One line naming the failing endpoint and how to start llama-server."""
+    port = urllib.parse.urlsplit(health_url).port or 8091
+    return (
+        f"Embedder: llama-server is not reachable at {health_url} ({reason}). "
+        f"Start it with `llama-server -m <embeddinggemma-2.gguf> --embedding --port {port}`."
+    )
+
+
+def _check_embedder() -> Tuple[bool, str]:
+    """Ask llama-server's ``/health`` whether the embedder is up (issue #385).
+
+    The embedder is an external prerequisite, like Ollama: this script does not
+    build it. It still has to be checked, because every indexing and retrieval
+    run embeds through it, and "all components present" was a claim made
+    without asking. The URL comes from ``AppConfig`` so this can never name a
+    different server from the one the pipeline calls.
+    """
+    base_url = AppConfig.from_env().models.embedding.base_url.rstrip("/")
+    health_url = f"{base_url}/health"
+    try:
+        with urllib.request.urlopen(  # nosec B310 -- local endpoint from app config
+            health_url, timeout=_EMBEDDER_HEALTH_TIMEOUT_SECONDS
+        ) as response:
+            status = response.status
+    except urllib.error.HTTPError as exc:
+        return False, _embedder_failure(health_url, f"HTTP {exc.code}")
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        return False, _embedder_failure(health_url, str(exc))
+    if status != 200:
+        return False, _embedder_failure(health_url, f"HTTP {status}")
+    return True, f"Embedder: llama-server reachable at {health_url}"
+
+
 def run_checks() -> int:
     """Every precondition, each reported separately. Returns a process exit code."""
     # Labelled explicitly rather than read off __name__: half the entries are
@@ -248,17 +301,22 @@ def run_checks() -> int:
     # pointer that names something real and wrong -- a raising CUDA probe
     # reported as "interpreter check" sends the reader to rebuild a venv that
     # is fine.
+    #
+    # The last field marks a component this script does not build: a missing
+    # embedder or Ollama model needs a command run by hand, not a rebuild, so
+    # it warns instead of failing.
     checks = [
-        (".venv", lambda: _check_interpreter(PRODUCT_VENV, ".venv")),
-        (".venv-mineru", lambda: _check_interpreter(ISOLATED_VENV, ".venv-mineru")),
-        ("CUDA", _check_cuda),
-        ("MinerU", _check_mineru_binary),
-        ("Ollama", _check_ollama),
+        (".venv", lambda: _check_interpreter(PRODUCT_VENV, ".venv"), False),
+        (".venv-mineru", lambda: _check_interpreter(ISOLATED_VENV, ".venv-mineru"), False),
+        ("CUDA", _check_cuda, False),
+        ("MinerU", _check_mineru_binary, False),
+        ("Embedder", _check_embedder, True),
+        ("Ollama", _check_ollama, True),
     ]
     print("\nChecking:")
     failures = 0
     warnings = 0
-    for label, check in checks:
+    for label, check, warns_only in checks:
         try:
             passed, message = check()
         except subprocess.TimeoutExpired:
@@ -269,13 +327,9 @@ def run_checks() -> int:
             # and leave the remaining components unreported -- the state this
             # script exists to describe is exactly the broken one.
             passed, message = False, f"{label}: raised {type(exc).__name__}: {exc}"
-        # Ollama is the one component this script does not build, and a missing
-        # model is a pull away rather than a failed setup, so it warns instead
-        # of failing.
-        not_a_missing_component = "Ollama:" in message
         if passed:
             marker = OK
-        elif not_a_missing_component:
+        elif warns_only:
             marker = WARN
             warnings += 1
         else:
