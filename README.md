@@ -273,7 +273,8 @@ per project):
 Authentication is a bearer token: set `MONKEYGRAB_HEADLESS_TOKEN` and every
 request must carry `Authorization: Bearer <token>`; unset means no auth, on a
 socket that only ever binds `127.0.0.1` (`MONKEYGRAB_HEADLESS_PORT`, default
-`5050`).
+`5050`). Request bodies are capped at 1 MiB; a larger one is rejected before
+parsing with a JSON `413 payload_too_large`.
 
 `/health` reports the checkout's git `HEAD` commit alongside the isolated
 interpreter, CUDA visibility, the embedder's liveness and the per-role
@@ -295,8 +296,10 @@ the model answers. Daimon should therefore treat the first `rag_failed` from
 (isolated interpreter, CUDA, commit, roles) are cached for 60 s
 (`rag/headless/health.py:_PROBE_CACHE_TTL_SECONDS`), keyed by role,
 backend and model, so polling never pays a torch/CUDA subprocess per request
-and a model switch re-probes immediately; the embedder check runs on every
-call, so a server that stops or starts shows up on the next poll.
+and a model switch re-probes immediately; concurrent polls that miss the
+cache wait for the probe already in flight instead of starting another. The
+embedder check runs on every call, so a server that stops or starts shows up
+on the next poll.
 
 `GET /stores/<id>/status` reports `stale:true` when the index fingerprint on
 disk disagrees with the configuration in force

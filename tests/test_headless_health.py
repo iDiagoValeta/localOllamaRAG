@@ -1,5 +1,7 @@
 """The headless health probe says exactly why the full stack cannot run."""
 import sys
+import threading
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -196,6 +198,52 @@ def test_cached_probe_reprobes_when_the_roles_change():
     cached_probe(_config_with_rag("cache-roles-a"), **kwargs)
     cached_probe(_config_with_rag("cache-roles-b"), **kwargs)
     assert calls == ["/p", "/p"]
+
+
+def test_concurrent_stale_probes_share_one_computation():
+    """A stale cache with a probe already running waits for it instead of probing again (issue #347)."""
+    _reset_probe_cache()
+    cuda_calls = []
+    embedder_calls = []
+    started = threading.Event()
+    release = threading.Event()
+
+    def cuda_probe(python):
+        cuda_calls.append(python)
+        started.set()
+        release.wait(timeout=10)
+        return {"available": True, "device": "RTX 4060", "torch": "2.6.0"}
+
+    def embedder_probe(config):
+        embedder_calls.append(config.models.rag)
+        return _embedder_ok(config)
+
+    kwargs = {"isolated_python": lambda: "/p", "cuda_probe": cuda_probe,
+              "git_commit": lambda: "abc", "embedder_probe": embedder_probe}
+    config = _config_with_rag("cache-single-flight-model")
+    reports = []
+    first = threading.Thread(target=lambda: reports.append(cached_probe(config, **kwargs)))
+    first.start()
+    assert started.wait(timeout=2), "the first probe never started"
+    second_started = threading.Event()
+    second = threading.Thread(
+        target=lambda: (second_started.set(), reports.append(cached_probe(config, **kwargs)))
+    )
+    second.start()
+    try:
+        assert second_started.wait(timeout=2), "the second request never started"
+        # Give it time to reach the probe (and, without coalescing, to enter a
+        # second CUDA check) while the first one is still held.
+        time.sleep(0.5)
+        assert cuda_calls == ["/p"]
+    finally:
+        release.set()
+        first.join(timeout=10)
+        second.join(timeout=10)
+    assert [report.ok for report in reports] == [True, True]
+    assert cuda_calls == ["/p"]
+    # The embedder is never cached: both requests still check it.
+    assert len(embedder_calls) == 2
 
 
 def test_cached_probe_caches_a_failure_report_too():
