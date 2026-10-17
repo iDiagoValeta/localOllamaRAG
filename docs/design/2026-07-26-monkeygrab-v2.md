@@ -167,3 +167,47 @@ regresiones y registra mejoras, pero no modifica código ni prompts por sí solo
 - Baseline sin cifra en este documento: el valor vive en
   `tests/eval/baseline_min_pass_rate.txt` (0.77 aquí era deriva, el fichero
   dice 0.82).
+
+## Enmienda 2026-10-17 (issue #292, PR #295, correctiva: el código ya se había movido)
+
+- El embedder de producción es `google/embeddinggemma-2`, servido por un
+  `llama-server` con API OpenAI-compatible (`POST /v1/embeddings`), no Jina
+  CLIP v2. El adapter vive en
+  `src/monkeygrab/adapters/embedding/llama_server_embedder.py`.
+- `MONKEYGRAB_EMBEDDER_URL` fija el endpoint (`http://127.0.0.1:8091` por
+  defecto). `MONKEYGRAB_EMBEDDER_DIM` fija la anchura Matryoshka (768, 512,
+  256 o 128; 512 por defecto) y un valor fuera de esa lista aborta el
+  arranque. La anchura forma parte de la huella del índice: cambiar de
+  anchura invalida el índice existente, porque dos anchuras son dos espacios
+  vectoriales distintos. El adapter trunca el vector nativo de 768
+  componentes y lo normaliza L2.
+- El adapter aplica los prefijos de tarea de embeddinggemma 2: `embed`
+  formatea el texto como documento y `embed_query` como consulta; las
+  imágenes no llevan prefijo y una leyenda se combina con el vector de imagen
+  como suma normalizada. El puerto `Embedder` ya no prescribe prefijos.
+- El adapter no arranca, configura ni para el servidor: su residencia es
+  asunto del proceso `llama-server`. `keep_alive` se acepta por compatibilidad
+  de firma y se ignora. La política de fallo sigue siendo dura: cualquier
+  error de conexión, HTTP, JSON o de forma del vector lanza `RuntimeError`.
+- Qué afirmaciones del cuerpo quedan superadas:
+  - §Composición multimodal, punto 2: Jina CLIP v2 como espacio compartido y
+    los "vectores Matryoshka de 512 dimensiones" fijos. El párrafo de licencia
+    describe los pesos de Jina (CC BY-NC 4.0), no los que se sirven ahora.
+  - §Indexación: Jina CLIP ya no representa las figuras; lo hace
+    embeddinggemma-2, en el mismo espacio que el texto.
+  - §Recuperación y respuesta: las variantes se buscan en el espacio de
+    embeddinggemma-2.
+  - §Arquitectura hexagonal: `monkeygrab.composition` construye MinerU, el
+    cliente del embedder (que apunta al `llama-server`) y FAISS; ya no carga
+    Jina CLIP.
+  - §Aislamiento de dependencias: embeddinggemma-2 no se carga en
+    `.venv-mineru` ni se comunica por un worker persistente con mensajes JSON
+    por línea; es un servidor HTTP externo. MinerU sigue en `.venv-mineru`.
+  - §Política de fallos: donde dice "Jina CLIP", léase el embedder HTTP
+    (embeddinggemma-2); la regla de fallo visible no cambia.
+  - §Decisiones vigentes: "Vectores Jina CLIP truncados a 512 dimensiones"
+    pasa a "vectores embeddinggemma-2 en la anchura Matryoshka configurada".
+- El cambio se decidió por el A/B de recuperación, no por el gate: MRR@10
+  denso 0.741 frente a 0.551 y 0.719 frente a 0.653 en híbrido sobre las
+  mismas preguntas. Filas y artefactos en `docs/model-history.md`
+  (§ Embedder A/B).
