@@ -449,7 +449,7 @@ def test_write_report_includes_the_conditions_block(monkeypatch, tmp_path):
     payload = json.loads(Path(result["report_path"]).read_text(encoding="utf-8"))
     conditions = payload["conditions"]
     assert set(conditions) == {
-        "config", "versions", "hardware", "git_commit", "gold_sha256",
+        "config", "versions", "embedder", "hardware", "git_commit", "gold_sha256",
         "sampling", "seed", "keep_alive_seconds", "generation_budget_seconds",
     }
     assert conditions["seed"] is None
@@ -460,6 +460,23 @@ def test_write_report_includes_the_conditions_block(monkeypatch, tmp_path):
     # the two existing readers never look past them.
     assert payload["run"]["num_cases"] == 1
     assert "results" in payload and "summary" in payload
+
+
+def test_conditions_record_the_embedder_identity_the_preflight_returned(monkeypatch, tmp_path):
+    """Issue #384: evaluate() must thread what preflight_embedder() accepted
+    into the artifact -- recording nothing would make the identity check
+    unverifiable after the fact."""
+    monkeypatch.setattr(run_eval, "RESULTS_DIR", tmp_path)
+    monkeypatch.setattr(
+        run_eval, "preflight_embedder", lambda: "embeddinggemma-2-300m-Q8_0.gguf"
+    )
+    _capture_ensure_indexed(monkeypatch, [])
+    _capture_run_all_cases(monkeypatch, [])
+
+    result = evaluate(models=["m"], case_ids=[_DEV_CASE_ID], write_report=True)
+
+    payload = json.loads(Path(result["report_path"]).read_text(encoding="utf-8"))
+    assert payload["conditions"]["embedder"] == "embeddinggemma-2-300m-Q8_0.gguf"
 
 
 def test_conditions_config_is_the_run_s_own_config_not_a_rebuilt_default(monkeypatch, tmp_path):
