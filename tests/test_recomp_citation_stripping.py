@@ -57,3 +57,23 @@ def test_recomp_facade_strips_citation_markers_but_keeps_numeric_notation(monkey
     assert "Prior work shows" in prompt
     assert "x[0]" in prompt
     assert "[0, 1]" in prompt
+
+
+def test_recomp_facade_marks_truncated_fragments_without_optimization(monkeypatch):
+    """The marker does not depend on ``USAR_OPTIMIZACION_CONTEXTO`` (issue
+    #397 point 3); the legacy facade must match ``Answer``."""
+    captured = {}
+
+    def fake_post(url, json, timeout):
+        captured["payload"] = json
+        return _FakeResponse()
+
+    monkeypatch.setattr(context, "cfg", _FakeConfig())
+    monkeypatch.setattr(context.requests, "post", fake_post)
+
+    context.sintetizar_contexto_recomp(
+        [{"doc": "The list continues with a cut"}], "question?"
+    )
+
+    prompt = captured["payload"]["messages"][1]["content"]
+    assert "[excerpt ends mid-sentence]" in prompt
