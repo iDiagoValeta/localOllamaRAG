@@ -31,6 +31,7 @@ retries and no fallbacks.
 """
 
 import base64
+import http.client
 import json
 import math
 import os
@@ -194,6 +195,21 @@ class LlamaServerEmbedder:
         except urllib.error.URLError as exc:
             raise RuntimeError(
                 f"{self._base_url}: could not reach llama-server: {exc.reason}"
+            ) from exc
+        except TimeoutError as exc:
+            # A per-request socket timeout (socket.timeout is an alias of
+            # TimeoutError) escapes bare from urlopen/read once the connection
+            # is open, outside the URLError hierarchy.
+            raise RuntimeError(
+                f"{self._base_url}: llama-server request timed out after "
+                f"{self._timeout_s}s: {exc}"
+            ) from exc
+        except http.client.HTTPException as exc:
+            # Throughput errors such as IncompleteRead surface from read() after
+            # headers are parsed; they are not URLError subclasses either.
+            raise RuntimeError(
+                f"{self._base_url}: llama-server returned a malformed HTTP "
+                f"response: {exc!r}"
             ) from exc
 
         if status != 200:
