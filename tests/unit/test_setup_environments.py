@@ -156,7 +156,7 @@ class TestSettingsLocationDrift:
 
     def test_the_product_still_derives_its_data_dir_the_way_this_script_assumes(self):
         source = (REPO_ROOT / "rag" / "chat_pdfs.py").read_text(encoding="utf-8")
-        assert 'DATA_DIR = os.path.abspath(os.getenv("MONKEYGRAB_DATA_DIR", BASE_DIR))' in source
+        assert 'DATA_DIR = os.path.abspath(os.getenv("MONKEYGRAB_DATA_DIR") or BASE_DIR)' in source
         assert "BASE_DIR = os.path.dirname(os.path.abspath(__file__))" in source
 
     def test_the_product_still_defaults_every_role_to_the_model_this_script_names(self):

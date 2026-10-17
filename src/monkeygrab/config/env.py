@@ -1,14 +1,11 @@
 """Environment-variable readers for AppConfig.from_env().
 
-Intentional deviation from ``rag/chat_pdfs.py``'s ``_leer_env_int`` /
-``_leer_env_float``: those catch ``ValueError`` and silently fall back to
-the default even when the variable IS SET to something unparseable. This
-project's hard-fail policy (docs/design/2026-07-26-monkeygrab-v2.md,
-"Politica de fallos") says a bad config value must abort startup, not
-silently become a different value nobody asked for. Behavior is identical
-to the original in the common case (variable unset -> default); it only
-diverges when the variable is set to something invalid, which the original
-never had to handle correctly because nobody had set it yet.
+One hard-fail contract for both configuration paths: a variable that IS SET
+to an unparseable value aborts startup instead of silently becoming a
+default nobody asked for (docs/design/2026-07-26-monkeygrab-v2.md, "Politica
+de fallos"). ``rag/chat_pdfs.py`` aliases the int/float readers from here, so
+the web startup path and the core reject the same input identically. An
+unset variable still yields the caller's default.
 """
 
 import os
@@ -121,6 +118,11 @@ def read_env_str(name: str, default: str) -> str:
     readers so every ``AppConfig.from_env`` field reads through one
     consistent ``env.read_env_*`` family instead of raw ``os.getenv``.
 
+    A variable set to an empty or whitespace-only value counts as unset: that
+    is how shell exports and ``.env`` files spell "not configured", and
+    returning it would turn ``MONKEYGRAB_DATA_DIR=`` into the process cwd once
+    ``os.path.abspath`` sees it (issue #356).
+
     Args:
         name: Environment variable name.
         default: Value to use when ``name`` is unset.
@@ -128,7 +130,10 @@ def read_env_str(name: str, default: str) -> str:
     Returns:
         The environment value, or ``default``.
     """
-    return os.getenv(name, default)
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    return raw
 
 
 def read_env_choice(name: str, default: str, choices: tuple[str, ...]) -> str:
