@@ -8,11 +8,24 @@ for path in (ROOT, ROOT / "src"):
         sys.path.insert(0, str(path))
 
 from monkeygrab.config import AppConfig
+from rag.headless import health
 from rag.headless.health import _reset_probe_cache, cached_probe, probe
 
 
 def _cuda_ok(python):
     return {"available": True, "device": "RTX 4060", "torch": "2.6.0"}
+
+
+def _embedder_ok(config):
+    return {"ok": True, "url": f"{config.models.embedding.base_url}/health"}
+
+
+def _embedder_down(config):
+    return {
+        "ok": False,
+        "url": f"{config.models.embedding.base_url}/health",
+        "error": "Connection refused",
+    }
 
 
 def test_ok_when_isolated_env_and_cuda_are_present(monkeypatch):
@@ -22,6 +35,7 @@ def test_ok_when_isolated_env_and_cuda_are_present(monkeypatch):
         isolated_python=lambda: "/repo/.venv-mineru/bin/python",
         cuda_probe=_cuda_ok,
         git_commit=lambda: "abc123",
+        embedder_probe=_embedder_ok,
     )
     assert report.ok is True and report.reason is None
     body = report.to_dict()
@@ -63,6 +77,84 @@ def test_cuda_probe_failure_is_reported_not_swallowed():
     assert "torch failed to import" in report.reason
 
 
+def test_an_unreachable_embedder_is_the_reason():
+    report = probe(
+        AppConfig.from_env(),
+        isolated_python=lambda: "/p",
+        cuda_probe=_cuda_ok,
+        git_commit=lambda: "abc",
+        embedder_probe=_embedder_down,
+    )
+    assert report.ok is False
+    assert "embedder" in report.reason and "Connection refused" in report.reason
+    assert report.embedder["ok"] is False
+
+
+class _FakeResponse:
+    status = 200
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_the_embedder_probe_uses_the_appconfig_url_with_a_bounded_timeout(monkeypatch):
+    monkeypatch.setenv("MONKEYGRAB_EMBEDDER_URL", "http://embedder.example:9000/")
+    calls = []
+
+    def fake_urlopen(url, timeout):
+        calls.append((url, timeout))
+        return _FakeResponse()
+
+    monkeypatch.setattr(health.urllib.request, "urlopen", fake_urlopen)
+    result = health._embedder_probe(AppConfig.from_env())
+    assert result == {"ok": True, "url": "http://embedder.example:9000/health"}
+    assert calls[0][0] == "http://embedder.example:9000/health"
+    assert calls[0][1] <= 5
+
+
+def test_cached_probe_rechecks_the_embedder_even_when_the_static_checks_are_cached():
+    _reset_probe_cache()
+    cuda_calls = []
+    embedder_answers = [
+        {"ok": True, "url": "u"},
+        {"ok": False, "url": "u", "error": "Connection refused"},
+    ]
+    kwargs = {
+        "isolated_python": lambda: "/p",
+        "cuda_probe": _counting_cuda(cuda_calls),
+        "git_commit": lambda: "abc",
+        "embedder_probe": lambda config: embedder_answers.pop(0),
+    }
+    first = cached_probe(_config_with_rag("cache-embedder-model"), **kwargs)
+    second = cached_probe(_config_with_rag("cache-embedder-model"), **kwargs)
+    assert first.ok is True and first.embedder["ok"] is True
+    assert second.ok is False and "embedder" in second.reason
+    assert cuda_calls == ["/p"]
+
+
+def test_cached_probe_lets_a_recovered_embedder_clear_the_reason():
+    _reset_probe_cache()
+    cuda_calls = []
+    embedder_answers = [
+        {"ok": False, "url": "u", "error": "Connection refused"},
+        {"ok": True, "url": "u"},
+    ]
+    kwargs = {
+        "isolated_python": lambda: "/p",
+        "cuda_probe": _counting_cuda(cuda_calls),
+        "git_commit": lambda: "abc",
+        "embedder_probe": lambda config: embedder_answers.pop(0),
+    }
+    first = cached_probe(_config_with_rag("cache-embedder-recovery-model"), **kwargs)
+    second = cached_probe(_config_with_rag("cache-embedder-recovery-model"), **kwargs)
+    assert first.ok is False and "embedder" in first.reason
+    assert second.ok is True and second.reason is None
+    assert cuda_calls == ["/p"]
+
+
 def _counting_cuda(calls, result=None):
     def cuda_probe(python):
         calls.append(python)
@@ -79,7 +171,7 @@ def test_cached_probe_probes_once_within_the_ttl():
     _reset_probe_cache()
     calls = []
     kwargs = {"isolated_python": lambda: "/p", "cuda_probe": _counting_cuda(calls),
-              "git_commit": lambda: "abc"}
+              "git_commit": lambda: "abc", "embedder_probe": _embedder_ok}
     first = cached_probe(_config_with_rag("cache-hit-model"), **kwargs)
     second = cached_probe(_config_with_rag("cache-hit-model"), **kwargs)
     assert first.ok is True and second.ok is True
@@ -90,7 +182,7 @@ def test_cached_probe_reprobes_once_the_ttl_expires():
     _reset_probe_cache()
     calls = []
     kwargs = {"isolated_python": lambda: "/p", "cuda_probe": _counting_cuda(calls),
-              "git_commit": lambda: "abc", "ttl": 0}
+              "git_commit": lambda: "abc", "ttl": 0, "embedder_probe": _embedder_ok}
     cached_probe(_config_with_rag("cache-ttl-model"), **kwargs)
     cached_probe(_config_with_rag("cache-ttl-model"), **kwargs)
     assert calls == ["/p", "/p"]
@@ -100,7 +192,7 @@ def test_cached_probe_reprobes_when_the_roles_change():
     _reset_probe_cache()
     calls = []
     kwargs = {"isolated_python": lambda: "/p", "cuda_probe": _counting_cuda(calls),
-              "git_commit": lambda: "abc"}
+              "git_commit": lambda: "abc", "embedder_probe": _embedder_ok}
     cached_probe(_config_with_rag("cache-roles-a"), **kwargs)
     cached_probe(_config_with_rag("cache-roles-b"), **kwargs)
     assert calls == ["/p", "/p"]
@@ -113,7 +205,7 @@ def test_cached_probe_caches_a_failure_report_too():
     kwargs = {"isolated_python": lambda: "/p",
               "cuda_probe": _counting_cuda(
                   calls, {"available": False, "device": None, "torch": "2.6.0"}),
-              "git_commit": lambda: None}
+              "git_commit": lambda: None, "embedder_probe": _embedder_ok}
     first = cached_probe(config, **kwargs)
     second = cached_probe(config, **kwargs)
     assert first.ok is False and second.ok is False

@@ -105,6 +105,16 @@ def test_index_requires_both_paths():
     assert "data_dir" in resp.get_json()["message"]
 
 
+@pytest.mark.parametrize("path", ["/stores/cv1/index", "/stores/cv1/rag"])
+def test_a_json_body_that_is_not_an_object_is_a_json_400(path):
+    resp = _client().post(path, json=["not", "an", "object"])
+    assert resp.status_code == 400
+    assert resp.mimetype == "application/json"
+    body = resp.get_json()
+    assert body["ok"] is False and body["error"] == "bad_request"
+    assert "object" in body["message"]
+
+
 def test_same_store_id_with_other_paths_is_409():
     client = _client()
     client.post("/stores/cv1/index", json=PATHS)

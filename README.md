@@ -269,8 +269,8 @@ python -m rag.headless      # 127.0.0.1:5050; MONKEYGRAB_HEADLESS_PORT / _TOKEN 
 
 No interface, no fixed stores: `POST /stores/<id>/index` and `POST /stores/<id>/rag`
 take the document folder and the data directory in the request, and `/health`
-says whether the full stack can run here (isolated environment, CUDA). The
-pipeline is the same one the web app and the evaluation gate run.
+says whether the full stack can run here (isolated environment, CUDA, embedder).
+The pipeline is the same one the web app and the evaluation gate run.
 
 Every model role can run on Ollama (default) or on any server speaking the
 OpenAI chat API (`MONKEYGRAB_<ROLE>_BACKEND=openai` plus
@@ -305,22 +305,27 @@ socket that only ever binds `127.0.0.1` (`MONKEYGRAB_HEADLESS_PORT`, default
 `5050`).
 
 `/health` reports the checkout's git `HEAD` commit alongside the isolated
-interpreter, CUDA visibility and the per-role backend/model. Daimon compares
-that commit against the revision it deployed (its `pin_match`): a mismatch
-means the running service is not the version Daimon expects — redeploy or
-re-pin, don't retry the query.
+interpreter, CUDA visibility, the embedder's liveness and the per-role
+backend/model. Daimon compares that commit against the revision it deployed
+(its `pin_match`): a mismatch means the running service is not the version
+Daimon expects — redeploy or re-pin, don't retry the query.
 
-`GET /health` covers the isolated interpreter and CUDA visibility, with the
-commit and the per-role backend/model as labels
-(`rag/headless/health.py:82-117`). What it does not cover is the generator:
-it never contacts the Ollama or OpenAI server, so a healthy `/health` says
-nothing about whether the model answers. Daimon should therefore treat the
-first `rag_failed` from `POST /stores/<id>/rag` as the generator signal
-(see the first-pull comment in `rag/headless/app.py`), not as a reason to
-reindex. The probe result is cached for 60 s
+`GET /health` covers the isolated interpreter, CUDA visibility and the
+embedder, with the commit and the per-role backend/model as labels
+(`rag/headless/health.py`, `probe`). The embedder check is a
+`GET <MONKEYGRAB_EMBEDDER_URL>/health` with a 3 s timeout, using the same
+`AppConfig` URL the pipeline calls, so a stopped `llama-server` answers 503
+with the embedder as the reason instead of an `ok` that only fails at the
+first `/rag`. What it does not cover is the generator: it never contacts the
+Ollama or OpenAI server, so a healthy `/health` says nothing about whether
+the model answers. Daimon should therefore treat the first `rag_failed` from
+`POST /stores/<id>/rag` as the generator signal (see the first-pull comment in
+`rag/headless/app.py`), not as a reason to reindex. The expensive checks
+(isolated interpreter, CUDA, commit, roles) are cached for 60 s
 (`rag/headless/health.py:_PROBE_CACHE_TTL_SECONDS`), keyed by role,
-backend and model, so polling never pays a torch/CUDA subprocess per
-request and a model switch re-probes immediately.
+backend and model, so polling never pays a torch/CUDA subprocess per request
+and a model switch re-probes immediately; the embedder check runs on every
+call, so a server that stops or starts shows up on the next poll.
 
 `GET /stores/<id>/status` reports `stale:true` when the index fingerprint on
 disk disagrees with the configuration in force
