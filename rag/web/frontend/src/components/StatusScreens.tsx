@@ -4,27 +4,19 @@ import type { IndexingProgress } from '../lib/types';
 export function IndexingScreen({
   title,
   hint,
-  error,
-  showRetry,
   progress,
   processingLabel,
   fileUnit,
   fileUnitPlural,
   autoRefreshLabel,
-  retryLabel,
-  onRetry,
 }: {
   title: string;
   hint: string;
-  error?: string | null;
-  showRetry?: boolean;
   progress?: IndexingProgress | null;
   processingLabel: string;
   fileUnit: string;
   fileUnitPlural: string;
   autoRefreshLabel: string;
-  retryLabel: string;
-  onRetry: () => void;
 }) {
   return (
     <div className="flex h-screen items-center justify-center bg-transparent text-ink p-4">
@@ -36,9 +28,6 @@ export function IndexingScreen({
         <p className="text-ink-muted text-sm">
           {hint}
         </p>
-        {error && showRetry && (
-          <p className="text-warning text-sm">{error}</p>
-        )}
         {progress ? (
           <div className="space-y-1">
             <p className="text-ink text-sm font-medium">
@@ -58,14 +47,6 @@ export function IndexingScreen({
           <p className="text-ink-faint text-xs">
             {autoRefreshLabel}
           </p>
-        )}
-        {showRetry && (
-          <button
-            className="px-6 py-2 bg-field text-ink border border-edge hover:border-divider hover:bg-surface-raised font-semibold transition-colors rounded-lg"
-            onClick={onRetry}
-          >
-            {retryLabel}
-          </button>
         )}
       </div>
     </div>
