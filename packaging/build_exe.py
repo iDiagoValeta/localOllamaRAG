@@ -1,8 +1,9 @@
 """Build the MonkeyGrab desktop app (.exe) with PyInstaller.
 
-Orchestrates the full freeze: (1) ensure the React UI is built, (2) generate the
-window/app icon from the logo, (3) run PyInstaller against ``MonkeyGrab.spec``.
-Output: ``dist/MonkeyGrab/MonkeyGrab.exe`` (one-folder bundle; multi-GB).
+Orchestrates the full freeze: (1) verify the built-in corpora are complete,
+(2) ensure the React UI is built, (3) generate the window/app icon from the
+logo, (4) run PyInstaller against ``MonkeyGrab.spec``. Output:
+``dist/MonkeyGrab/MonkeyGrab.exe`` (one-folder bundle; multi-GB).
 
 Usage (from the repository root):
     pip install pyinstaller pywebview          # build-time deps
@@ -33,6 +34,7 @@ FRONTEND = os.path.join(PROJ, "rag", "web", "frontend")
 DIST_UI = os.path.join(FRONTEND, "dist")
 ICON = os.path.join(HERE, "MonkeyGrab.ico")
 LOGO = os.path.join(FRONTEND, "public", "logo.png")
+FETCH_CORPUS = os.path.join(PROJ, "tools", "fetch_corpus.py")
 
 
 def _parse_args() -> argparse.Namespace:
@@ -40,6 +42,31 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--skip-frontend", action="store_true", help="Reuse the existing React build in dist/.")
     p.add_argument("--dist", default=os.path.join(PROJ, "dist"), help="Output directory for the bundle.")
     return p.parse_args()
+
+
+# CORPUS CHECK
+
+def check_corpus() -> None:
+    """Abort the build unless every document in the corpus manifest is present.
+
+    The bundle ships ``rag/docs``'s built-in corpora, but the PDFs are
+    gitignored and only the manifest is versioned (``AGENTS.md`` section 8), so
+    a fresh clone packages an app that cannot answer anything. The fetcher
+    already knows which documents are required and exits 1 when any is
+    missing; delegating the verdict keeps a second copy of that list from
+    drifting.
+
+    Raises:
+        RuntimeError: A document is missing, or the checker could not run.
+    """
+    cmd = [sys.executable, FETCH_CORPUS, "--check"]
+    print(">> " + " ".join(cmd))
+    completed = subprocess.run(cmd, cwd=PROJ)
+    if completed.returncode != 0:
+        raise RuntimeError(
+            "corpus check failed: the bundle would ship without some PDFs. "
+            "Run `python tools/fetch_corpus.py` to fetch them, then rebuild."
+        )
 
 
 # FRONTEND BUILD
@@ -107,6 +134,7 @@ def run_pyinstaller(dist_dir: str) -> None:
 
 def main() -> None:
     args = _parse_args()
+    check_corpus()
     if not args.skip_frontend:
         build_frontend()
     if not os.path.isdir(DIST_UI):
