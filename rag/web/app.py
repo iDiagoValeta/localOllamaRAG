@@ -479,13 +479,34 @@ def _switch_store_folder(folder: str) -> None:
     gc.collect()
 
 
-def _ollama_error_payload(exc: Exception) -> dict:
-    """Friendly JSON error for an Ollama/generation failure (avoids a raw 500 page)."""
+def _pipeline_error_payload(exc: Exception) -> dict:
+    """Return a stable error code plus a human fallback for a pipeline failure.
+
+    The web UI translates on ``error`` (issue #379), so the code is the
+    contract and ``message`` is only what an API client without i18n shows.
+
+    Embedding runs on llama-server, a different process from Ollama. Checking
+    it first is what keeps an embedder outage from being reported as "Ollama
+    is down" -- the adapter names its server in the error, and the UI then
+    points the user at the process that actually failed.
+
+    Args:
+        exc: Exception raised by retrieval, embedding or generation.
+
+    Returns:
+        JSON-ready payload with ``ok``, ``error`` and ``message``.
+    """
     text = str(exc).lower()
+    if "llama-server" in text:
+        return {
+            "ok": False,
+            "error": "embedder_unavailable",
+            "message": "No se pudo conectar con el embedder (llama-server). Comprueba que está en ejecución.",
+        }
     if isinstance(exc, ConnectionError) or "ollama" in text or "connect" in text:
         return {
             "ok": False,
-            "error": "ollama_unavailable",
+            "error": "model_unavailable",
             "message": "No se pudo conectar con Ollama. Comprueba que está en ejecución (pestaña Modelos).",
         }
     return {
@@ -696,7 +717,7 @@ def api_chat():
                 rag_engine.guardar_historial(_state["historial_chat"])
                 yield _sse_event("done", {"done": True})
             except Exception as e:
-                yield _sse_event("error", {"error": str(e)})
+                yield _sse_event("error", _pipeline_error_payload(e))
 
         return Response(
             stream_with_context(generate()),
@@ -755,7 +776,7 @@ def api_rag():
         mensaje_usuario = rag_engine._preparar_mensaje_usuario_rag(pregunta, fragmentos_finales)
     except Exception as e:
         # Retrieval / context prep failed (commonly Ollama down for embeddings).
-        return jsonify(_ollama_error_payload(e)), 200
+        return jsonify(_pipeline_error_payload(e)), 200
 
     if stream:
 
@@ -788,7 +809,7 @@ def api_rag():
                         )
                     except Exception:
                         pass
-                yield _sse_event("error", {"error": str(e)})
+                yield _sse_event("error", _pipeline_error_payload(e))
 
         return Response(
             stream_with_context(generate()),
@@ -965,28 +986,62 @@ def api_study():
     (another model may not) and is not the server failing. The quiz raises
     rather than returning questions whose answer key could not be verified,
     so an empty panel here means "not safe to grade", never "nothing found".
+
+    Validation failures carry a stable ``error`` code plus a human
+    ``message`` (issue #379): the UI translates the code, so these never
+    reach the user as English text inside a Spanish or Valencian template.
     """
     data = request.get_json(silent=True) or {}
     kind = str(data.get("kind") or "summary").strip().lower()
     if kind not in _STUDY_KINDS:
-        return jsonify({"ok": False, "error": f"kind must be one of {', '.join(_STUDY_KINDS)}"}), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "invalid_kind",
+                "message": f"kind must be one of {', '.join(_STUDY_KINDS)}",
+            }
+        ), 400
 
     documento = str(data.get("document") or "").strip()
     if not documento:
-        return jsonify({"ok": False, "error": "document is required"}), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "document_required",
+                "message": "document is required",
+            }
+        ), 400
 
     idioma = data.get("language") or None
     if idioma is not None:
         idioma = str(idioma).strip() or None
     if idioma is not None and idioma not in _STUDY_LANGUAGES:
-        return jsonify({"ok": False, "error": f"language must be one of {', '.join(_STUDY_LANGUAGES)}"}), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "invalid_language",
+                "message": f"language must be one of {', '.join(_STUDY_LANGUAGES)}",
+            }
+        ), 400
     coll = _get_collection()
     if documento not in rag_engine.obtener_documentos_indexados(coll):
-        return jsonify({"ok": False, "error": f"{documento} is not indexed"}), 404
+        return jsonify(
+            {
+                "ok": False,
+                "error": "document_not_indexed",
+                "message": f"{documento} is not indexed",
+            }
+        ), 404
 
     fragmentos = rag_engine.fragmentos_de_documento(documento)
     if not fragmentos:
-        return jsonify({"ok": False, "error": f"{documento} has no indexed fragments"}), 409
+        return jsonify(
+            {
+                "ok": False,
+                "error": "document_without_fragments",
+                "message": f"{documento} has no indexed fragments",
+            }
+        ), 409
 
     try:
         if kind == "summary":
