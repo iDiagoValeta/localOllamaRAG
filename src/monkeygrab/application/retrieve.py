@@ -117,13 +117,21 @@ def _relevance_score(fragment: Fragment) -> float:
 
 
 def _filter_by_reranker_threshold(
-    fragments: List[Fragment], usar_reranker: bool, threshold: float
+    fragments: List[Fragment], rerank_ran: bool, threshold: float
 ) -> List[Fragment]:
     """Apply the single reranker relevance threshold.
 
+    Args:
+        fragments: Candidates to filter.
+        rerank_ran: Whether the rerank stage actually ran, which is not the
+            same as ``flags.usar_reranker``: the flag can be on with no
+            ``Reranker`` port wired in (see ``Retrieve``), and fragments then
+            keep RRF scores far below this threshold.
+        threshold: Inclusive minimum relevance score.
+
     Moved from ``rag.engine.generation._filtrar_por_umbral_reranker``.
     """
-    if not usar_reranker:
+    if not rerank_ran:
         return list(fragments)
     return [f for f in fragments if _relevance_score(f) >= threshold]
 
@@ -388,7 +396,11 @@ class Retrieve:
             rerank_seconds = time.perf_counter() - started
             reranked = True
 
-        filtered = _filter_by_reranker_threshold(fused, flags.usar_reranker, config.reranking.score_threshold)
+        # Gate the filter on whether the rerank stage actually ran, not on the
+        # flag: a missing reranker port disables the stage (see class
+        # docstring), and the RRF scores it leaves behind sit well below the
+        # reranker-calibrated threshold.
+        filtered = _filter_by_reranker_threshold(fused, reranked, config.reranking.score_threshold)
         # Matches preparar_fragmentos_para_generacion's `fragmentos_base =
         # list(candidatos[:cfg.TOP_K_FINAL])`: applied after the threshold
         # filter regardless of whether reranking already truncated to
