@@ -4,6 +4,7 @@ import contextlib
 import dataclasses
 import io
 import os
+import threading
 from typing import List, Optional, Sequence, Tuple
 
 from sentence_transformers import CrossEncoder
@@ -52,6 +53,8 @@ class CrossEncoderReranker:
 
     The model is fixed to ``BAAI/bge-reranker-v2-m3`` and loaded on the first
     ``rerank()`` call. Construction never touches a GPU or downloads weights.
+    Concurrent first calls share one load, so two threads cannot each allocate
+    a full copy of the weights.
 
     Device selection honours the ``RERANKER_DEVICE`` environment variable;
     the optional ``device`` constructor argument takes precedence over it,
@@ -71,6 +74,9 @@ class CrossEncoderReranker:
         self._device_override = device
         self._model: Optional[CrossEncoder] = None
         self._loaded_device: Optional[str] = None
+        # Guards weight loading only. Scores are inferred after the model is
+        # published, so they never take this lock.
+        self._model_lock = threading.Lock()
 
     def _resolve_device(self) -> Tuple[str, bool]:
         """Return the selected device and whether it was explicitly forced."""
@@ -85,16 +91,22 @@ class CrossEncoderReranker:
         if self._model is not None:
             return self._model
 
-        device, _forced = self._resolve_device()
-        try:
-            self._model = self._load(device)
-            self._loaded_device = device
-            return self._model
-        except Exception as exc:
-            raise RuntimeError(
-                f"Cross-Encoder {self._model_name!r} failed to load on "
-                f"{device!r}: {exc}"
-            ) from exc
+        # Double-checked lock: the fast path above stays lock-free once loaded,
+        # while concurrent first calls queue here and share a single load.
+        with self._model_lock:
+            if self._model is not None:
+                return self._model
+
+            device, _forced = self._resolve_device()
+            try:
+                self._model = self._load(device)
+                self._loaded_device = device
+                return self._model
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Cross-Encoder {self._model_name!r} failed to load on "
+                    f"{device!r}: {exc}"
+                ) from exc
 
     def release(self) -> None:
         """Drop the loaded model and return its GPU memory.
