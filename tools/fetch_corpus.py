@@ -67,8 +67,13 @@ RATE_LIMIT_ATTEMPTS = 5
 RATE_LIMIT_BACKOFF_S = 20.0
 
 # A truncated download or an HTML error page saved under a .pdf name must not
-# pass as cached on the next run -- the same guard fetch_papers.py applies.
+# pass as cached on the next run -- the same guard fetch_papers.py applies. A
+# cut-off file keeps the header and can still clear the byte floor, so the
+# trailer is the part that proves the download finished; readers tolerate a
+# little trailing newline, hence the window rather than a suffix match.
 PDF_MAGIC = b"%PDF"
+PDF_EOF_MARKER = b"%%EOF"
+PDF_TRAILER_WINDOW_BYTES = 1024
 MIN_PLAUSIBLE_PDF_BYTES = 10_000
 
 
@@ -92,12 +97,20 @@ def _wiki_filename(title: str) -> str:
 
 
 def _is_valid_pdf(path: str) -> bool:
-    """Whether ``path`` looks like a complete PDF rather than a stub."""
+    """Whether ``path`` looks like a complete PDF rather than a stub.
+
+    Issue #386: the size floor and header alone accepted a download cut off
+    mid-file, which ``packaging/build_exe.py`` then froze into the bundle.
+    """
     try:
-        if os.path.getsize(path) < MIN_PLAUSIBLE_PDF_BYTES:
+        size = os.path.getsize(path)
+        if size < MIN_PLAUSIBLE_PDF_BYTES:
             return False
         with open(path, "rb") as handle:
-            return handle.read(len(PDF_MAGIC)) == PDF_MAGIC
+            if handle.read(len(PDF_MAGIC)) != PDF_MAGIC:
+                return False
+            handle.seek(max(0, size - PDF_TRAILER_WINDOW_BYTES))
+            return PDF_EOF_MARKER in handle.read()
     except OSError:
         return False
 
