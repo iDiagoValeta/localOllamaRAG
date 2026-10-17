@@ -143,18 +143,36 @@ async function streamSSE(
   onToken: (token: string) => void,
   onDone: (sources: Citation[] | null) => void,
   onError: (msg: string) => void,
-  fb?: { unknown?: string; queryError?: string; modelError?: string; closed?: string; no_results?: string; question_too_short?: string },
+  fb?: {
+    unknown?: string;
+    queryError?: string;
+    modelError?: string;
+    closed?: string;
+    no_results?: string;
+    question_too_short?: string;
+    model_unavailable?: string;
+    embedder_unavailable?: string;
+  },
 ) {
   const contentType = response.headers.get('content-type') || '';
+
+  // The backend's stable codes are the translatable part; `message` is its
+  // Spanish fallback for clients that do not know the code (issue #379).
+  const localized = (code: unknown, fallback: string) => {
+    const mapped = typeof code === 'string' ? fb?.[code as keyof typeof fb] : undefined;
+    return typeof mapped === 'string' ? mapped : fallback;
+  };
 
   // If the response is NOT a stream (error responses come as JSON)
   if (!contentType.includes('event-stream')) {
     const data = await response.json().catch(() => ({ message: fb?.unknown ?? 'Error desconocido' }));
-    if (!data.ok && data.message) {
-      const mapped = data.error && fb?.[data.error as keyof typeof fb];
-      onError(typeof mapped === 'string' ? mapped : data.message);
-    } else if (!data.ok && data.error) {
-      onError(typeof data.error === 'string' ? data.error : (fb?.queryError ?? 'Error en la consulta'));
+    if (!data.ok) {
+      const raw = typeof data.message === 'string'
+        ? data.message
+        : typeof data.error === 'string'
+          ? data.error
+          : fb?.unknown ?? 'Error desconocido';
+      onError(localized(data.error, raw));
     } else {
       onDone(null);
     }
@@ -188,7 +206,8 @@ async function streamSSE(
       const data = JSON.parse(dataLines.join('\n'));
       if (event === 'error' || data.error) {
         finished = true;
-        onError(data.message || data.error || fb?.modelError || 'Error en la respuesta del modelo');
+        const raw = data.message || data.error || fb?.modelError || 'Error en la respuesta del modelo';
+        onError(localized(data.error, raw));
         return;
       }
       if (event === 'token' || data.token) onToken(data.token || '');
@@ -386,13 +405,21 @@ export default function App() {
           loadStores();
 
           setMessages([]);
-        } else {
-          // ok: false = indexando o error previo → siempre pantalla de indexación (nunca "Error de conexión")
+        } else if (initData.indexing) {
+          // A run is still alive: keep the blocking screen and poll.
           setInitError(null);
+          setIndexingError(null);
           setIsIndexing(true);
-          setIndexingError(initData.error || null);
           if (initData.progress) setIndexingProgress(initData.progress);
           setTimeout(() => { if (!cancelled) init(); }, 2000);
+        } else {
+          // Permanent failure (issue #379). /api/init answers ok: false
+          // without `indexing` only when the last run failed on every file,
+          // and _ensure_indexed refuses to restart it -- polling from here
+          // is the infinite spinner, so report the message and stop.
+          setIsIndexing(false);
+          setIndexingProgress(null);
+          setIndexingError(initData.error || T.indexingFailed);
         }
 
         try {
@@ -707,6 +734,17 @@ export default function App() {
       const langName = lang === 'en' ? 'English' : lang === 'ca' ? 'Valencià' : 'Castellano';
       const { status, body } = await api.study(studyKind, doc, langName);
       const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+      // The route's validation failures carry a stable code; translate it
+      // instead of dropping its English `message` into a Spanish template.
+      const studyErrors: Record<string, string> = {
+        invalid_kind: T.studyInvalidKind,
+        document_required: T.studyDocumentRequired,
+        invalid_language: T.studyInvalidLanguage,
+        document_not_indexed: T.studyNotIndexed,
+        document_without_fragments: T.studyNoFragments,
+      };
+      const detail = studyErrors[String(body.error)]
+        ?? String(body.message ?? body.error ?? status);
       setMessages(prev => prev.map(m => m.id !== assistantId ? m : (
         status === 200 && body.ok
           ? { ...m, isStreaming: false, artifact: body.artifact as StudyArtifact,
@@ -716,7 +754,7 @@ export default function App() {
           // the two need different advice.
           : { ...m, isStreaming: false, isError: true,
               content: status === 422 ? T.studyMalformed
-                                      : fill(T.studyFailed, { error: String(body.error ?? status) }) }
+                                      : fill(T.studyFailed, { error: detail }) }
       )));
     } catch (e) {
       setMessages(prev => prev.map(m => m.id !== assistantId ? m
@@ -782,7 +820,13 @@ export default function App() {
                     ...m,
                     isStreaming: false,
                     citations: sources || undefined,
-                    metrics: mode === 'rag' ? { searchTime: `${elapsed}s`, chunks: sources?.reduce((acc, s) => acc + s.pages.length, 0) || 0 } : undefined,
+                    metrics: mode === 'rag' ? {
+                      searchTime: `${elapsed}s`,
+                      // One chip per document, so the badge counts documents
+                      // too: a single two-page PDF used to read "2 fuentes"
+                      // next to its one chip (#377).
+                      chunks: sources?.length || 0,
+                    } : undefined,
                   }
                 : m
             )
@@ -798,7 +842,11 @@ export default function App() {
             )
           );
         },
-        { unknown: T.unknownError, queryError: T.queryError, modelError: T.modelError, closed: T.connClosed, no_results: T.noResults, question_too_short: T.questionTooShort },
+        {
+          unknown: T.unknownError, queryError: T.queryError, modelError: T.modelError,
+          closed: T.connClosed, no_results: T.noResults, question_too_short: T.questionTooShort,
+          model_unavailable: T.modelUnavailable, embedder_unavailable: T.embedderUnavailable,
+        },
       );
     } catch {
       setMessages(prev =>
@@ -846,6 +894,7 @@ export default function App() {
   const handleRetry = useCallback(async () => {
     setInitError(null);
     setIsIndexing(true);
+    setIndexingError(null);
     try {
       const result = await api.init();
       if (result.ok) {
@@ -859,35 +908,62 @@ export default function App() {
         setIsInitialized(true);
         setIsIndexing(false);
       } else if (result.indexing) {
-        setIndexingError(result.error || null);
         setIndexingProgress(result.progress || null);
         setRetryTrigger(t => t + 1);
       } else {
-        setInitError(result.error || T.retryError);
         setIsIndexing(false);
+        setIndexingError(result.error || T.indexingFailed);
       }
     } catch {
-      setInitError(T.noServer);
       setIsIndexing(false);
+      setInitError(T.noServer);
     }
   }, [lang]);
 
-  // ---- Indexing screen (cuando ok: false desde API, nunca "Error de conexión") ----
+  // Retrying a failed index must start a new run: /api/init keeps reporting
+  // the failure because _ensure_indexed refuses to restart after one, so only
+  // /api/reindex clears the state and launches the worker (issue #379).
+  const handleRetryIndexing = useCallback(async () => {
+    setIsIndexing(true);
+    setIndexingError(null);
+    try {
+      const result = await api.reindex();
+      if (result.ok && result.indexing) {
+        setIndexingProgress(result.progress || null);
+        setRetryTrigger(t => t + 1);
+      } else {
+        setIsIndexing(false);
+        setIndexingError(result.error || T.indexingFailed);
+      }
+    } catch {
+      setIsIndexing(false);
+      setIndexingError(T.noServer);
+    }
+  }, [lang]);
+
+  // ---- Indexing screen (only a live run reaches here) ----
   if (isIndexing) {
-    const showRetry = indexingError && /falló|fallido|failed|refused|no se pudo/i.test(indexingError);
     return (
       <IndexingScreen
         title={T.indexingTitle}
         hint={T.indexingHint}
-        error={indexingError}
-        showRetry={Boolean(showRetry)}
         progress={indexingProgress}
         processingLabel={T.processing}
         fileUnit={T.fileUnit}
         fileUnitPlural={T.fileUnitPlural}
         autoRefreshLabel={T.autoRefresh}
+      />
+    );
+  }
+
+  // ---- Indexing failed permanently ----
+  if (indexingError) {
+    return (
+      <ConnectionErrorScreen
+        title={T.indexingFailed}
+        error={indexingError}
         retryLabel={T.retry}
-        onRetry={handleRetry}
+        onRetry={handleRetryIndexing}
       />
     );
   }

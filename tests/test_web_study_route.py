@@ -149,5 +149,46 @@ class TestTheFourWaysThisFails:
         assert response.json["ok"] is False
 
 
+class TestValidationCodes:
+    """Validation failures carry stable codes, not English prose (issue #379).
+
+    The UI translates the code; ``message`` is only the fallback for a client
+    that does not know it. These are the five validations the route performs
+    before spending any model work.
+    """
+
+    @pytest.mark.parametrize(
+        "body, status, code",
+        [
+            ({"kind": "haiku"}, 400, "invalid_kind"),
+            ({"kind": "summary"}, 400, "document_required"),
+            (
+                {"kind": "summary", "document": "paper.pdf", "language": "Klingon"},
+                400,
+                "invalid_language",
+            ),
+            (
+                {"kind": "summary", "document": "no-existe.pdf"},
+                404,
+                "document_not_indexed",
+            ),
+        ],
+    )
+    def test_each_validation_names_itself(self, client, stub, body, status, code):
+        response = client.post("/api/study", json=body)
+
+        assert response.status_code == status
+        assert response.json["error"] == code
+        assert response.json["message"]
+
+    def test_a_document_with_no_fragments_has_its_own_code(self, client, stub):
+        stub["fragments"] = []
+        response = _post(client)
+
+        assert response.status_code == 409
+        assert response.json["error"] == "document_without_fragments"
+        assert response.json["message"]
+
+
 def test_the_route_is_registered():
     assert "/api/study" in {str(rule) for rule in web.app.url_map.iter_rules()}
