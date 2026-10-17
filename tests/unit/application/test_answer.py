@@ -159,6 +159,28 @@ def test_recomp_synthesis_used_when_output_is_well_formed():
     assert "Facts relevant" in rag_model.stream_calls[0]["prompt"]
 
 
+def test_recomp_prompt_strips_citation_markers_but_keeps_numeric_notation():
+    """The RECOMP evidence is cleaned of citation markers (issue #311) without
+    eating brackets that are part of the technical notation."""
+    fragments = [_fragment(
+        "a.pdf_pag0_chunk0",
+        doc="As shown in [12]. Prior work [3, 7, 9] shows x[0] and [0, 1].",
+    )]
+    rag_model = FakeChatModel()
+    recomp_model = FakeChatModel(response="## Facts relevant to the question\n- A grounded fact.")
+    config = _config(**{"flags.expandir_contexto": False, "flags.usar_optimizacion_contexto": False})
+
+    Answer(FakeVectorStore(), rag_model, config, recomp_chat_model=recomp_model).run(
+        "question?", fragments
+    )
+
+    prompt = recomp_model.generate_calls[0]["prompt"]
+    assert "As shown in." in prompt
+    assert "Prior work shows" in prompt
+    assert "x[0]" in prompt
+    assert "[0, 1]" in prompt
+
+
 def test_recomp_falls_back_to_raw_context_when_output_missing_header():
     fragments = [_fragment("a.pdf_pag0_chunk0", doc="Evidence about the topic.")]
     rag_model = FakeChatModel()
