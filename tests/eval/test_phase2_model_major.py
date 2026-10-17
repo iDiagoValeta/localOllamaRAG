@@ -88,6 +88,10 @@ def harness(monkeypatch):
     monkeypatch.setattr(run_eval, "_release_gpu_models", lambda *_a, **_kw: None)
     monkeypatch.setattr(run_eval, "_release_ollama_models", lambda *_a, **_kw: None)
     monkeypatch.setattr(run_eval.time, "perf_counter", lambda: 0.0)
+    # Each record also carries a wall-clock start (_utc_now_iso, issue #234);
+    # left live, the reference run and the real one straddle a second boundary
+    # now and then and the record comparison fails for no reason.
+    monkeypatch.setattr(run_eval, "_utc_now_iso", lambda: "2026-01-01T00:00:00Z")
     log = []
     rag = _FakeRag(log)
     return log, rag
