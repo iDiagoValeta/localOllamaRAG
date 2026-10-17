@@ -223,10 +223,15 @@ placeholder — and nothing answerable.
 
 ## Running it
 
-Requires [Python 3.10+](https://www.python.org/downloads/) and
-[Ollama](https://ollama.com/download) running locally, with at least a generator
-model pulled. Drop PDFs into `rag/docs/en/` — the index builds itself on first
-run.
+Requires [Python 3.10+](https://www.python.org/downloads/),
+[Ollama](https://ollama.com/download) running locally with at least a generator
+model pulled, and the
+[`embeddinggemma-2`](https://huggingface.co/google/embeddinggemma-2) embedder
+behind a local `llama-server` — start it with
+`llama-server -m embeddinggemma-2.gguf --embedding --port 8091` from
+[llama.cpp](https://github.com/ggml-org/llama.cpp), the default address of
+`MONKEYGRAB_EMBEDDER_URL`. Drop PDFs into `rag/docs/en/` — the index builds
+itself on first run.
 
 ```bash
 python rag/web/app.py      # web UI at http://localhost:5000
@@ -303,8 +308,8 @@ on the next poll.
 
 `GET /stores/<id>/status` reports `stale:true` when the index fingerprint on
 disk disagrees with the configuration in force
-(`rag/headless/service.py:status_store`, via the fingerprint mismatch checked
-at `rag/headless/service.py:172`). It means the indexed chunks were built
+(`rag/headless/service.py:status_store`, which calls
+`index_fingerprint_mismatch`). It means the indexed chunks were built
 under different chunking or embedding settings, not that documents are
 missing. `POST /stores/<id>/index` does not repair this:
 `rag/headless/service.py:index_store` only indexes pending file names.
