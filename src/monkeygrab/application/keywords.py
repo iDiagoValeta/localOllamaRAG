@@ -27,7 +27,7 @@ GENERIC_TERMS_BLACKLIST = {
 }
 
 
-_KEYWORD_STRIP_CHARS = '\u00bf?.,;:()[]{}"\'-'
+_KEYWORD_STRIP_CHARS = '\u00bf\u00a1?.,;:()[]{}"\'!-'
 
 _ACRONYM_RE = re.compile(r'\b[A-Z\u00c1\u00c9\u00cd\u00d3\u00da\u00d1]{2,}\b')
 
@@ -52,8 +52,9 @@ def extract_keywords(text: str) -> List[str]:
 
     Feeds the fallback semantic query variant used when no LLM sub-queries
     are available, and the debug metrics. Ordering is most-specific first --
-    acronyms and technical tokens ahead of plain words, shorter ahead of
-    longer -- so a caller can simply take the leading keywords.
+    acronyms and technical tokens ahead of plain words -- and, within each
+    group, the order the query wrote them, so a caller that takes the leading
+    keywords does not discard the long terms the question is about.
 
     Args:
         text: Input text, typically a user query.
@@ -61,44 +62,44 @@ def extract_keywords(text: str) -> List[str]:
     Returns:
         Keywords, most specific first, deduplicated case-insensitively.
     """
-    keywords = set()
-
-    # Acronyms (ALL-CAPS tokens) are high-signal; preserve their casing.
-    keywords.update(_ACRONYM_RE.findall(text))
-
     palabras = text.split()
 
-    # Technical tokens: internal capitals (CamelCase), digits, or hyphens.
-    terminos_tecnicos = [
-        clean
-        for palabra in palabras
-        if len((clean := palabra.strip(_KEYWORD_STRIP_CHARS))) > 1
-        and (any(c.isupper() for c in palabra[1:])
-             or any(c.isdigit() for c in palabra)
-             or '-' in palabra)
-    ]
-    keywords.update(terminos_tecnicos)
-    keywords.update(t.lower() for t in terminos_tecnicos)
+    # Acronyms (ALL-CAPS tokens) are high-signal; preserve their casing.
+    tecnicos: List[str] = _ACRONYM_RE.findall(text)
 
-    # Plain content words.
+    # Technical tokens: internal capitals (CamelCase), digits, or hyphens.
+    # The test runs on the stripped token: on the raw word, a leading "¿" or
+    # "¡" shifts the slice that looks for an internal capital, which turns a
+    # function word such as "Se" or "No" into a false technical candidate.
+    for palabra in palabras:
+        clean = palabra.strip(_KEYWORD_STRIP_CHARS)
+        if len(clean) < 2:
+            continue
+        if not (
+            any(c.isupper() for c in clean[1:])
+            or any(c.isdigit() for c in clean)
+            or '-' in clean
+        ):
+            continue
+        # Technical-looking or not, a stopword carries no retrieval signal.
+        if clean.lower() in STOPWORDS:
+            continue
+        tecnicos.append(clean)
+        tecnicos.append(clean.lower())
+
+    # Plain content words, in the order the query wrote them.
+    palabras_planas: List[str] = []
     for palabra in palabras:
         clean = palabra.strip(_KEYWORD_STRIP_CHARS)
         if len(clean) > 3 and clean.lower() not in STOPWORDS:
-            keywords.add(clean.lower())
+            palabras_planas.append(clean.lower())
 
     def _usable(kw: str) -> bool:
         return (len(kw) <= 50 and '?' not in kw
                 and not kw.startswith('\u00bf')
                 and kw.lower() not in GENERIC_TERMS_BLACKLIST)
 
-    # The trailing `x` breaks ties alphabetically. Without it, equal-priority
-    # keywords come out in set-iteration order, which Python derives from
-    # randomized string hashes -- the joined fallback query, and therefore
-    # what retrieval returns, would differ between runs of the same question.
-    candidatas = sorted(
-        (k for k in keywords if _usable(k)),
-        key=lambda x: (0 if (x.isupper() or any(c.isupper() for c in x[1:]) or '-' in x) else 1, len(x), x),
-    )
+    candidatas = [k for k in tecnicos + palabras_planas if _usable(k)]
 
     seen, resultado = set(), []
     for kw in candidatas:

@@ -172,13 +172,14 @@ def test_semantic_only_search_when_hybrid_and_reranker_disabled():
     store = FakeVectorStore(default_hits=hits)
     config = _config(**{"flags.usar_busqueda_hibrida": False, "flags.usar_reranker": False})
 
-    result = Retrieve(embedder, store, config).run("short query")
+    result = Retrieve(embedder, store, config).run("Short query")
 
     assert [f.id for f in result.fragments] == ["a.pdf_pag0_chunk0", "b.pdf_pag0_chunk0"]
     assert result.metrics["reranked"] is False
-    # The question plus the keyword-derived fallback variant; no decomposition,
-    # since the question is below the length threshold.
-    assert result.metrics["query_variants"] == ["short query", "query short"]
+    # The question plus the keyword-derived fallback variant (lowercased, so
+    # it differs from the question's capital); no decomposition, since the
+    # question is below the length threshold.
+    assert result.metrics["query_variants"] == ["Short query", "short query"]
     assert store.query_calls == 2
 
 

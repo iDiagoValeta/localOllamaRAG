@@ -52,16 +52,19 @@ STOPWORDS = {
     'tercer', 'tercera', 'un', 'dos', 'tres', 'quins', 'quines', 'quin', 'quina',
 }
 
-_BM25_TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
+_BM25_TOKEN_RE = re.compile(r"\d+(?:[.,]\d+)+|[^\W_]+", re.UNICODE)
 
 
 def tokenize_bm25(text: str) -> List[str]:
     """Tokenize text for BM25 scoring.
 
-    Lowercases, splits on non-alphanumeric boundaries, and drops stopwords
-    and tokens shorter than three characters unless they contain a digit, so
-    identifiers and metrics such as "q4" survive. The corpus and the query
-    must go through this same function or BM25 term matching breaks.
+    Lowercases, normalizes decimal commas to dots, splits on non-alphanumeric
+    boundaries, and drops stopwords and tokens shorter than three characters
+    unless they contain a digit or were ALL-CAPS in the original text, so
+    identifiers, metrics and two-letter acronyms such as "q4", "AI" or "ML"
+    survive. A decimal number ("5.8", "80,5") is one term rather than the two
+    integers its separator would otherwise leave behind. The corpus and the
+    query must go through this same function or BM25 term matching breaks.
 
     Args:
         text: Raw text to tokenize.
@@ -70,10 +73,13 @@ def tokenize_bm25(text: str) -> List[str]:
         Normalized tokens, in order of appearance.
     """
     tokens = []
-    for token in _BM25_TOKEN_RE.findall(text.lower()):
+    for raw in _BM25_TOKEN_RE.findall(text):
+        token = raw.lower().replace(',', '.')
         if token in STOPWORDS:
             continue
-        if len(token) < 3 and not any(c.isdigit() for c in token):
+        # Casing is what separates an acronym from an ordinary short word;
+        # after lowercasing the two are indistinguishable.
+        if len(token) < 3 and not any(c.isdigit() for c in token) and not raw.isupper():
             continue
         tokens.append(token)
     return tokens
