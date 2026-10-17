@@ -128,7 +128,12 @@ def optimize_context_text(texto: str) -> str:
         '', texto, flags=re.MULTILINE
     )
 
-    texto = re.sub(r'\*{0,2}Solución:?\*{0,2}\s*La\s+\d+\s*', '', texto)
+    # Anchored to a whole line: unanchored, it mutilated any sentence that
+    # happened to contain the answer-key phrase (issue #397).
+    texto = re.sub(
+        r'^[ \t]*\*{0,2}Solución:?\*{0,2}[ \t]*La[ \t]+\d+[ \t]*\*{0,2}[ \t]*$',
+        '', texto, flags=re.MULTILINE
+    )
 
     texto = re.sub(r'\*\*(.+?)\*\*', r'\1', texto)
 
@@ -140,12 +145,15 @@ def optimize_context_text(texto: str) -> str:
 
     texto = re.sub(r'^\s+$', '', texto, flags=re.MULTILINE)
 
-    # SURPRISE (see test_optimizar_does_not_strip_standalone_page_number_
-    # followed_by_more_text): this only strips a page number that is the
-    # LAST line of the text. A page number sandwiched between two paragraphs
-    # gets glued onto the next paragraph by _reunir_parrafos above before
-    # this regex ever sees it standalone, and survives. Reproduced as-is.
-    texto = re.sub(r'(?m)^\s*\d{1,3}\s*$', '', texto)   # standalone PDF page numbers
+    # Only a numeric line separated from the preceding block by a blank line
+    # and sitting at the very end of the fragment is treated as a PDF page
+    # number. Anywhere else -- a table cell, a lone figure, a fragment that is
+    # just a number -- a bare 1-3 digit line is data, and stripping it was
+    # silently deleting evidence (issue #397). The trailing case is also the
+    # only one that can still be a standalone line after _reunir_parrafos
+    # glues a sandwiched number to the next paragraph (see
+    # test_optimizar_does_not_strip_standalone_page_number_followed_by_more_text).
+    texto = re.sub(r'\n[ \t]*\n[ \t]*\d{1,3}[ \t]*\s*\Z', '\n', texto)
 
     texto = re.sub(r'\n{3,}', '\n\n', texto)
 
@@ -155,15 +163,26 @@ def optimize_context_text(texto: str) -> str:
 # FRAGMENT FORMATTING
 
 
+_CLOSING_PUNCTUATION = frozenset('.?!")]')
+# A trailing digit only proves the fragment is complete when it is the
+# fractional part of a decimal number ("3.14"). A bare count ("42") or an
+# enumerated item is routinely cut by the chunk boundary, so it gets marked
+# (issue #397). Colon is not closing either: "the following:" introduces text
+# the fragment may have lost.
+_DECIMAL_END = re.compile(r'\d\.\d+\Z')
+
+
 def _marcar_fragmento_incompleto(texto: str) -> str:
     """Append ``[excerpt ends mid-sentence]`` if text lacks closing punctuation."""
     stripped = texto.rstrip()
     if not stripped:
         return texto
-    _CLOSING = frozenset('.?!:")]')
-    if stripped[-1] not in _CLOSING and not stripped[-1].isdigit():
-        return texto + '\n[excerpt ends mid-sentence]'
-    return texto
+    last = stripped[-1]
+    if last in _CLOSING_PUNCTUATION:
+        return texto
+    if last.isdigit() and _DECIMAL_END.search(stripped):
+        return texto
+    return texto + '\n[excerpt ends mid-sentence]'
 
 
 def _texto_fuente_fragmento(doc: str) -> str:

@@ -344,7 +344,9 @@ class Answer:
             cuerpo = _texto_fuente_fragmento(f.doc or "")
             if flags.usar_optimizacion_contexto:
                 cuerpo = optimize_context_text(cuerpo)
-                cuerpo = _marcar_fragmento_incompleto(cuerpo)
+            # The truncation marker describes the excerpt, not the cleanup:
+            # it must survive with optimization disabled too (issue #397).
+            cuerpo = _marcar_fragmento_incompleto(cuerpo)
             content = cuerpo.replace("\n", " ").strip()
             content = strip_citation_markers(content)
             if content:
