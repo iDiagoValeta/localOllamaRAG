@@ -61,6 +61,8 @@ except ImportError:
 # same variables from the process environment -- seeding once, here, is what
 # keeps the two from disagreeing about which defaults are in force.
 from monkeygrab.config import env as _config_env  # noqa: F401
+from monkeygrab.config.env import read_env_float as _leer_env_float
+from monkeygrab.config.env import read_env_int as _leer_env_int
 from monkeygrab.config.paths import derive_db_paths as _derive_db_paths
 
 
@@ -91,50 +93,22 @@ if hasattr(sys.stderr, "reconfigure"):
         pass
 
 # Environment readers
-
-
-def _leer_env_int(nombre_variable: str, default: int) -> int:
-    """Parse an integer environment variable with a safe fallback.
-
-    Args:
-        nombre_variable: Environment variable name to inspect.
-        default: Fallback value when the variable is undefined or invalid.
-
-    Returns:
-        Parsed integer value, or ``default``.
-    """
-    try:
-        return int(os.getenv(nombre_variable, str(default)))
-    except (TypeError, ValueError):
-        return default
-
-
-def _leer_env_float(nombre_variable: str, default: float) -> float:
-    """Parse a float environment variable with a safe fallback.
-
-    Args:
-        nombre_variable: Environment variable name to inspect.
-        default: Fallback value when the variable is undefined or invalid.
-
-    Returns:
-        Parsed float value, or ``default``.
-    """
-    try:
-        return float(os.getenv(nombre_variable, str(default)))
-    except (TypeError, ValueError):
-        return default
+#
+# ``_leer_env_int``/``_leer_env_float`` are aliased to monkeygrab.config.env
+# above instead of reimplemented: one contract means a set-but-unparseable
+# value aborts here at startup and in the core alike (issue #355).
 
 
 def _leer_env_bool(nombre_variable: str, default: bool) -> bool:
     """Parse a boolean environment variable, honouring an explicit export.
 
     Accepts ``true``/``false``, ``1``/``0``, ``yes``/``no``, ``y``/``n`` and
-    ``on``/``off`` (case-insensitive, surrounding whitespace ignored). Unlike
-    ``_leer_env_int``/``_leer_env_float`` above, a set-but-unparseable value
+    ``on``/``off`` (case-insensitive, surrounding whitespace ignored). Like
+    ``_leer_env_int``/``_leer_env_float`` above (and
+    ``monkeygrab.config.env.read_env_bool``), a set-but-unparseable value
     raises instead of silently falling back: the pipeline must run under the
     configuration the operator declared, not a default nobody asked for
-    (hard-fail policy; mirrors ``monkeygrab.config.env.read_env_bool`` so
-    both paths agree on invalid input too).
+    (hard-fail policy).
 
     Args:
         nombre_variable: Environment variable name to inspect.
@@ -273,7 +247,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # identical to before), but the packaged desktop app points it at a per-user
 # location via ``MONKEYGRAB_DATA_DIR`` (e.g. ``%LOCALAPPDATA%/MonkeyGrab``) so the
 # vector DBs, history and debug dumps live outside the read-only application bundle.
-DATA_DIR = os.path.abspath(os.getenv("MONKEYGRAB_DATA_DIR", BASE_DIR))
+# An empty value counts as unset: abspath("") would otherwise resolve to the cwd.
+DATA_DIR = os.path.abspath(os.getenv("MONKEYGRAB_DATA_DIR") or BASE_DIR)
 
 CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "en"))
 
