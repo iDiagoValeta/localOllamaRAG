@@ -128,7 +128,7 @@ python tests/eval/fetch_papers.py 1512.03385         # fetch one paper by id
 Single, self-sufficient command -- no manual indexing, no machine-specific paths:
 
 ```bash
-python tests/eval/run_eval.py                                 # default: gemma4:e2b
+python tests/eval/run_eval.py                                 # default: gemma4:e4b
 python tests/eval/run_eval.py --models gemma4:e2b gemma4:e4b   # different generator model set
 python tests/eval/run_eval.py --update-baseline                # also raise the baseline if green
 ```
