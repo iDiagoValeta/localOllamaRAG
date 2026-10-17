@@ -32,6 +32,12 @@ Reuse an existing React build with `--skip-frontend`. Output lands in
 `dist/MonkeyGrab/MonkeyGrab.exe` (a one-folder bundle — distribute the whole
 `MonkeyGrab/` folder, or zip it / wrap it in an installer such as Inno Setup).
 
+Before anything is built, the script runs `python tools/fetch_corpus.py --check`
+and aborts if any PDF the manifest requires is missing: the bundle ships the
+built-in corpora, so packaging a fresh clone without fetching them would produce
+an app that cannot answer. Run `python tools/fetch_corpus.py` first (see
+[`AGENTS.md`](../AGENTS.md) section 8).
+
 Direct PyInstaller invocation (equivalent):
 
 ```bash
