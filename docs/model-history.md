@@ -279,6 +279,16 @@ the two rows above. Daimon's Qwen3-VL held 4.3 GiB during that run, so the
 generator loaded about 96% on the CPU and its speed (22.7 tokens/s) is not
 comparable.
 
+`qwen3:4b` on the same profile (`20261017T181325Z`, every role and
+`OLLAMA_AUX_MODEL` set to it, RECOMP off): 125 / 136 (91.9%), **144 / 156
+(92.3%)**, 0 budget hits, 0 infra, fully on the GPU at 59.2 tokens/s. That is
++13 cases over the Q4_0 default, well outside the 4-11 flips one model shows
+on a rerun. The cost is latency: it reasons before answering, 922 tokens per
+answer and 16.98 s per answer against about 1.2 s for Q4_0. Its peak VRAM was
+not sampled in this run, so whether it fits the 4 GB budget next to the
+embedder is still to be measured before it could become the profile default
+(issue #411).
+
 The first run carries the stack name `mineru-jina_clip-faiss` in its file
 name although it ran on embeddinggemma-2: the name was hardcoded until
 `e671d80`. Its `conditions` block records `"embedder": "gemma2"` and the
