@@ -38,6 +38,7 @@ logged, matching the image port's per-file failure carve-out --
 see SECTION 4 for why that is not a contradiction of the above.
 """
 
+import functools
 import hashlib
 import json
 import logging
@@ -142,8 +143,36 @@ def _resolve_runnable_bin(configured: str) -> Optional[str]:
     return shutil.which(configured)
 
 
+@functools.lru_cache(maxsize=None)
+def _mineru_version(resolved_bin: str, bin_mtime_ns: int) -> str:
+    """``mineru --version`` for this binary, once per process and install.
+
+    The binary's path alone does not identify the extraction: upgrading
+    MinerU in place keeps the path, and a cache keyed on it replays output
+    the new version never produced (issue #325). ``bin_mtime_ns`` is part of
+    the memo key because pip rewrites the entry script on every reinstall.
+
+    Raises:
+        RuntimeError: The binary cannot report its version; it would not
+            extract anything either.
+    """
+    try:
+        proc = subprocess.run(
+            [resolved_bin, "--version"], capture_output=True, text=True, timeout=120, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(f"Could not ask MinerU for its version ({resolved_bin!r}): {exc}") from exc
+    version = (proc.stdout or "").strip()
+    if proc.returncode != 0 or not version:
+        raise RuntimeError(
+            f"MinerU --version failed (exit code {proc.returncode}) for {resolved_bin!r}: "
+            f"{_failure_cause(proc.stderr or proc.stdout or '')}"
+        )
+    return version.splitlines()[-1]
+
+
 def _cache_key(pdf_path: Path, mineru_bin: str) -> str:
-    """Cache key for one (PDF, MinerU binary, parsing-logic version) triple.
+    """Cache key for one (PDF, MinerU install, parsing-logic version) triple.
 
     Includes the PDF's size and mtime rather than hashing its bytes -- MinerU
     extraction is expensive enough (seconds to minutes) that the cost of a
@@ -151,7 +180,8 @@ def _cache_key(pdf_path: Path, mineru_bin: str) -> str:
     compared to hashing every PDF's full content on every indexing run.
     """
     stat = pdf_path.stat()
-    raw = f"{pdf_path.resolve()}|{stat.st_size}|{stat.st_mtime_ns}|{mineru_bin}|{_CACHE_VERSION}"
+    version = _mineru_version(mineru_bin, os.stat(mineru_bin).st_mtime_ns)
+    raw = f"{pdf_path.resolve()}|{stat.st_size}|{stat.st_mtime_ns}|{mineru_bin}|{version}|{_CACHE_VERSION}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -250,7 +280,7 @@ def _run_mineru(
         mineru_bin: Configured MinerU binary -- a path or a bare command to
             resolve on PATH.
         cache_dir: Root directory extraction output is cached under, one
-            subdirectory per (PDF, binary, parsing-version) triple.
+            subdirectory per (PDF, MinerU install, parsing-version) triple.
         model_source: Value for the ``MINERU_MODEL_SOURCE`` env var the CLI
             reads (``"local"`` uses the already-downloaded HuggingFace cache
             and never attempts a download).

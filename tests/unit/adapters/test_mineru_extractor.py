@@ -47,6 +47,14 @@ class _FakeCompleted:
         self.stdout = stdout
         self.stderr = stderr
 
+# Captured before the autouse fixture below replaces it in every test.
+_REAL_MINERU_VERSION = module._mineru_version.__wrapped__
+
+
+@pytest.fixture(autouse=True)
+def _known_mineru_version(monkeypatch):
+    """The fake binaries here cannot answer ``--version``; the cache key needs one."""
+    monkeypatch.setattr(module, "_mineru_version", lambda resolved_bin, mtime_ns: "mineru, version 0.0.0")
 
 def _dest_from_cmd(cmd):
     """Extract the ``-o`` argument MinerU would have written into."""
@@ -586,3 +594,28 @@ def test_images_are_read_from_the_directory_that_was_found(monkeypatch, tmp_path
     images = extractor.extract(str(pdf))
     assert list(images) == [0]
     assert images[0][0].caption == "Figure 1: a caption"
+
+
+def test_upgrading_mineru_in_place_misses_the_cache(monkeypatch, tmp_path):
+    # Same binary path, new version: the old extraction must not be replayed (#325).
+    pdf = _make_pdf(tmp_path)
+    bin_path = _make_bin(tmp_path)
+    before = module._cache_key(pdf, str(bin_path))
+    monkeypatch.setattr(module, "_mineru_version", lambda resolved_bin, mtime_ns: "mineru, version 9.9.9")
+    assert module._cache_key(pdf, str(bin_path)) != before
+
+
+def test_mineru_version_reads_the_cli_and_fails_loudly(monkeypatch):
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return _FakeCompleted(returncode=0, stdout="mineru, version 3.4.5\n")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    assert _REAL_MINERU_VERSION("/x/mineru", 1) == "mineru, version 3.4.5"
+    assert calls == [["/x/mineru", "--version"]]
+
+    monkeypatch.setattr(module.subprocess, "run", lambda cmd, **kw: _FakeCompleted(returncode=1, stderr="ImportError: torch"))
+    with pytest.raises(RuntimeError, match="ImportError: torch"):
+        _REAL_MINERU_VERSION("/x/mineru", 1)

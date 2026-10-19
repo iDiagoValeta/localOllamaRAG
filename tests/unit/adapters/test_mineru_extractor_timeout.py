@@ -47,6 +47,8 @@ def test_mineru_timeout_expired_raises_runtime_error(monkeypatch, tmp_path):
         raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs.get("timeout"))
 
     monkeypatch.setattr(module.subprocess, "run", fake_run)
+    # The fake binary cannot answer --version; the timeout under test is the extraction's.
+    monkeypatch.setattr(module, "_mineru_version", lambda resolved_bin, mtime_ns: "mineru, version 0.0.0")
     extractor = MineruExtractor(
         mineru_bin=str(bin_path), cache_dir=str(tmp_path / "cache"), timeout_seconds=123,
     )
