@@ -239,6 +239,14 @@ answers are comparable; its tokens/s and s/answer are not.
 | `gemma4:e4b` *(default)* | 121 / 136 (89.0%) | 139 / 156 (89.1%) | 38.9 | 27 *(of 124)* | 14.66 *(of 124)* | 0.73 | 0 | 0 | ~71% CPU | `20261017T142753Z` |
 | `gemma4:e4b`, with #307/#310/#311 | 119 / 136 (87.5%) | 137 / 156 (87.8%) | 41.6 | 28 *(of 124)* | 13.38 *(of 124)* | 0.68 | 0 | 0 | ~71% CPU | `20261017T151943Z` |
 | `phi4-mini:3.8b` | 97 / 136 (71.3%) | 115 / 156 (73.7%) | 80.1 | 74 *(of 124)* | 10.57 *(of 124)* | 0.98 | 0 | 0 | GPU | `20261017T170455Z` |
+| `gemma4:e4b`, main at #439 (2026-10-19) | 121 / 136 (89.0%) | 139 / 156 (89.1%) | 60.6 | 28 *(of 124)* | 10.16 *(of 124)* | 0.46 | 0 | 0 | GPU | `20261019T233547Z` |
+
+The `20261019T233547Z` row is `main` after #416-#439 (headless, web and chat
+fixes; the indexed text is unchanged, so the existing index was reused): the
+same 139 as the default row, now fully on the GPU with nothing else resident,
+which is where its 60.6 tokens/s comes from. Sampled every 0.5 s with
+`nvidia-smi`, the Ollama runner peaked at 4726 MiB and the whole card at
+5886 MiB, with the embedder on the CPU.
 
 Reading: retrieval is 18/20 in every row (17/20 on Jina). `qwen3:4b` matches
 the default at a quarter of the size, but it reasons before answering: 647
