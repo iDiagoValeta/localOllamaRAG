@@ -616,6 +616,11 @@ export default function App() {
         return;
       }
       setStores(res.stores || []);
+      // Citations carry only a document name and /api/pdf resolves it in the
+      // active store, so after a switch they would open the wrong file or 404
+      // (issue #405). The conversation belongs to the store it was asked of.
+      setMessages([]);
+      setPdfViewer(null);
       if (res.indexing) {
         setIndexingError(null);
         setIndexingProgress(null);
