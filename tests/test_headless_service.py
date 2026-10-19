@@ -6,6 +6,7 @@ were handed so the test can assert the store and folder were the request's,
 not the process defaults.
 """
 import dataclasses
+import os
 import sys
 from pathlib import Path
 
@@ -63,7 +64,18 @@ def test_config_for_derives_the_faiss_path_inside_data_dir(monkeypatch, tmp_path
     config = service.config_for(StorePaths(str(tmp_path / "docs"), str(tmp_path / "data")))
     assert config.paths.docs_folder == str(tmp_path / "docs")
     assert config.paths.data_dir == str(tmp_path / "data")
-    assert config.paths.path_db == str(tmp_path / "data" / "vector_db" / "docs_eg2")
+    store_dir = os.path.basename(config.paths.path_db)
+    assert os.path.dirname(config.paths.path_db) == str(tmp_path / "data" / "vector_db")
+    assert store_dir.endswith("_docs_eg2")
+
+
+def test_config_for_gives_same_named_folders_separate_stores(tmp_path):
+    data = str(tmp_path / "data")
+    first = service.config_for(StorePaths(str(tmp_path / "a" / "docs"), data))
+    second = service.config_for(StorePaths(str(tmp_path / "b" / "docs"), data))
+    again = service.config_for(StorePaths(str(tmp_path / "a" / "docs"), data))
+    assert first.paths.path_db != second.paths.path_db
+    assert first.paths.path_db == again.paths.path_db
 
 
 def test_index_store_indexes_only_pending_documents(monkeypatch, tmp_path):
@@ -226,8 +238,9 @@ def test_status_store_reports_documents_chunks_and_staleness(monkeypatch, tmp_pa
     monkeypatch.setattr(service.wiring, "vector_store", lambda config: store)
     monkeypatch.setattr(service, "obtener_documentos_indexados", lambda s: list(s.docs))
     monkeypatch.setattr(service, "index_fingerprint_mismatch", lambda s: True)
-    (tmp_path / "data" / "vector_db" / "docs_eg2").mkdir(parents=True)
-    status = service.status_store(StorePaths(str(tmp_path / "docs"), str(tmp_path / "data")))
+    paths = StorePaths(str(tmp_path / "docs"), str(tmp_path / "data"))
+    os.makedirs(service.config_for(paths).paths.path_db)
+    status = service.status_store(paths)
     assert status == {
         "exists": True, "documents": ["a.pdf", "b.md"], "chunks_total": 6,
         "fingerprint": "fp1", "stale": True,
