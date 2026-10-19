@@ -18,6 +18,16 @@ from monkeygrab.domain.fragment import Fragment
 # adapter in this package satisfies without inheriting its port.
 
 
+
+def _width_mismatch(what: str, got: int, store_dir: str, expected: int) -> ValueError:
+    # The store path does not encode the embedding width, so changing it
+    # reopens an index built at the old one (issue #299); say how to get out.
+    return ValueError(
+        f"{what} has dimension {got}, FAISS index at {store_dir!r} expects {expected}. "
+        f"The index was built at another embedding width: reindex this store, or set "
+        f"MONKEYGRAB_EMBEDDER_DIM back to {expected}."
+    )
+
 class _Row(NamedTuple):
     """One stored chunk: id, doc text, metadata, plus its pre-serialized
     ``meta.jsonl`` line (including the trailing newline).
@@ -347,10 +357,7 @@ class FaissVectorStore:
             if self._index is None:
                 self._index = faiss.IndexFlatIP(vector.shape[1])
             elif vector.shape[1] != self._index.d:
-                raise ValueError(
-                    f"embedding has dimension {vector.shape[1]}, FAISS index at "
-                    f"{self._dir!r} expects {self._index.d}"
-                )
+                raise _width_mismatch("embedding", vector.shape[1], self._dir, self._index.d)
 
             faiss.normalize_L2(vector)
             # Serialize before mutating the index: if this ever raised, an index
@@ -380,10 +387,7 @@ class FaissVectorStore:
 
             vector = np.asarray([list(embedding)], dtype=np.float32)
             if vector.shape[1] != self._index.d:
-                raise ValueError(
-                    f"query embedding has dimension {vector.shape[1]}, FAISS index "
-                    f"at {self._dir!r} expects {self._index.d}"
-                )
+                raise _width_mismatch("query embedding", vector.shape[1], self._dir, self._index.d)
             faiss.normalize_L2(vector)
 
             # Score every stored vector (k = ntotal) so the tie-break re-sort below
