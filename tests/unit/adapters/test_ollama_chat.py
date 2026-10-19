@@ -249,6 +249,81 @@ def test_stream_posts_to_the_configured_base_url(monkeypatch):
     assert calls == ["http://gpu-box:11434/api/generate"]
 
 
+def test_stream_with_history_posts_to_api_chat_and_reads_message_content(monkeypatch):
+    """Chat mode needs its earlier turns as real messages, which only
+    /api/chat accepts; /api/generate takes one flattened prompt."""
+    calls = []
+    import json as jsonlib
+
+    lines = [
+        jsonlib.dumps({"message": {"role": "assistant", "content": "Ho"}}).encode(),
+        jsonlib.dumps({"message": {"role": "assistant", "content": "la"}}).encode(),
+        jsonlib.dumps({"message": {"role": "assistant", "content": ""}, "done": True}).encode(),
+    ]
+
+    def fake_post(url, json, stream, timeout):
+        calls.append({"url": url, "json": json})
+        return _FakeStreamResponse(lines)
+
+    monkeypatch.setattr(module.requests, "post", fake_post)
+    history = [
+        {"role": "user", "content": "antes"},
+        {"role": "assistant", "content": "respuesta"},
+    ]
+
+    chunks = list(
+        OllamaChatModel("chat-model", num_ctx=8192, keep_alive=5).stream(
+            "nueva", system="sys", history=history
+        )
+    )
+
+    assert [c.text for c in chunks] == ["Ho", "la", ""]
+    assert calls[0]["url"] == "http://localhost:11434/api/chat"
+    assert calls[0]["json"] == {
+        "model": "chat-model",
+        "messages": [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "antes"},
+            {"role": "assistant", "content": "respuesta"},
+            {"role": "user", "content": "nueva"},
+        ],
+        "stream": True,
+        "think": False,
+        "options": {"num_ctx": 8192},
+        "keep_alive": 5,
+    }
+
+
+def test_stream_without_history_keeps_the_unchanged_api_generate_payload(monkeypatch):
+    """The RAG path and the evaluation gate depend on this exact shape."""
+    calls = []
+    import json as jsonlib
+
+    def fake_post(url, json, stream, timeout):
+        calls.append({"url": url, "json": json})
+        return _FakeStreamResponse([jsonlib.dumps({"response": "", "done": True}).encode()])
+
+    monkeypatch.setattr(module.requests, "post", fake_post)
+    model = OllamaChatModel("m", num_ctx=100, keep_alive=5, options={"temperature": 0.2})
+
+    list(model.stream("prompt", system="sys"))
+    list(model.stream("otro prompt"))
+
+    assert calls[0]["url"] == "http://localhost:11434/api/generate"
+    assert calls[0]["json"] == {
+        "model": "m",
+        "prompt": "prompt",
+        "stream": True,
+        "think": False,
+        "options": {"temperature": 0.2, "num_ctx": 100},
+        "keep_alive": 5,
+        "system": "sys",
+    }
+    # Without a system prompt the key must stay absent, not become None.
+    assert "system" not in calls[1]["json"]
+    assert calls[1]["json"]["prompt"] == "otro prompt"
+
+
 def test_stream_yields_a_generation_chunk_per_line_including_the_empty_done_line(monkeypatch):
     """Unlike the pre-migration adapter (which filtered out any line with an
     empty "response", silently dropping the done=True stats line), every

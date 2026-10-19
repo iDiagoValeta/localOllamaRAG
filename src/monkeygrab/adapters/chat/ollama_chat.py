@@ -71,8 +71,9 @@ class OllamaChatModel:
 
     ``generate`` goes through the ``ollama`` client, which covers both real
     shapes: a one-turn prompt, and a system plus user message with optional
-    image bytes. ``stream`` instead talks to ``/api/generate`` over raw HTTP,
-    because it needs line-by-line JSON and a retry policy limited to 5xx --
+    image bytes. ``stream`` instead talks to ``/api/generate`` (or
+    ``/api/chat`` when earlier turns are supplied) over raw HTTP, because it
+    needs line-by-line JSON and a retry policy limited to 5xx --
     neither of which the client exposes. Both are bound to ``base_url``, so
     the two paths cannot end up talking to different servers, and both are
     bound to ``request_timeout``, so neither can block past its deadline.
@@ -208,12 +209,28 @@ class OllamaChatModel:
 
         return response["message"]["content"]
 
-    def stream(self, prompt: str, *, system: Optional[str] = None) -> Iterator[GenerationChunk]:
-        """Stream a response from ``/api/generate`` over raw HTTP.
+    def stream(
+        self,
+        prompt: str,
+        *,
+        system: Optional[str] = None,
+        history: Sequence[Mapping[str, str]] = (),
+    ) -> Iterator[GenerationChunk]:
+        """Stream a response from ``/api/generate`` or ``/api/chat``.
+
+        With no ``history`` this posts the original one-turn shape to
+        ``/api/generate``, byte for byte: the RAG pipeline and the evaluation
+        gate are built on it. With ``history`` it posts those earlier turns as
+        separate messages to ``/api/chat``, because ``/api/generate`` only
+        accepts one flattened prompt and would turn a multi-turn conversation
+        into quoted text.
 
         Args:
             prompt: User/task prompt.
             system: Optional system prompt.
+            history: Earlier conversational turns, oldest first, each a
+                mapping with ``"role"`` and ``"content"``; sent as separate
+                messages between ``system`` and ``prompt``.
 
         Yields:
             One ``GenerationChunk`` per parsed response line, exactly as
@@ -230,21 +247,36 @@ class OllamaChatModel:
                 mid-stream -- raised from inside the ``with`` so the
                 connection is closed on the way out.
         """
-        payload: Dict[str, Any] = {
-            "model": self._model,
-            "prompt": prompt,
-            "stream": True,
-            "think": False,
-            "options": self._options(),
-            "keep_alive": self._keep_alive,
-        }
-        if system:
-            payload["system"] = system
+        use_chat_api = bool(history)
+        if use_chat_api:
+            messages = [dict(message) for message in history]
+            if system:
+                messages.insert(0, {"role": "system", "content": system})
+            messages.append({"role": "user", "content": prompt})
+            payload: Dict[str, Any] = {
+                "model": self._model,
+                "messages": messages,
+                "stream": True,
+                "think": False,
+                "options": self._options(),
+                "keep_alive": self._keep_alive,
+            }
+            url = f"{self._base_url}/api/chat"
+        else:
+            payload = {
+                "model": self._model,
+                "prompt": prompt,
+                "stream": True,
+                "think": False,
+                "options": self._options(),
+                "keep_alive": self._keep_alive,
+            }
+            if system:
+                payload["system"] = system
+            url = f"{self._base_url}/api/generate"
 
         if self._model_unloader is not None:
             self._model_unloader.unload_all_except(self._model)
-
-        url = f"{self._base_url}/api/generate"
 
         for attempt in range(self._generate_retries):
             deadline = (
@@ -276,7 +308,11 @@ class OllamaChatModel:
                                 self._model, data.get("done_reason"),
                             )
                         yield GenerationChunk(
-                            text=data.get("response", ""),
+                            text=(
+                                data.get("message", {}).get("content", "")
+                                if use_chat_api
+                                else data.get("response", "")
+                            ),
                             done=done,
                             model=data.get("model"),
                             done_reason=data.get("done_reason"),
