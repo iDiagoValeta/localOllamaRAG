@@ -115,7 +115,7 @@ def config_for(paths: StorePaths) -> AppConfig:
 
 
 def index_store(paths: StorePaths) -> Dict[str, Any]:
-    """Index every document in ``docs_folder`` that the store does not hold yet.
+    """Bring the store in line with ``docs_folder``: index what is new, drop what is gone.
 
     A store with nothing in it gets a full run (which also writes the index
     fingerprint); a store with documents gets only the pending file names,
@@ -135,7 +135,16 @@ def index_store(paths: StorePaths) -> Dict[str, Any]:
     store = wiring.vector_store(config)
     try:
         present = set(obtener_documentos_indexados(store))
+        # listar_documentos creates a missing folder, so a mistyped path would
+        # read as "every document was deleted" and empty the store; only a
+        # folder that already existed is evidence of removal.
+        folder_existed = os.path.isdir(paths.docs_folder)
         available = listar_documentos(paths.docs_folder)
+        # A deleted or renamed file would otherwise stay cited forever (#408).
+        removed = sorted(present - set(available)) if folder_existed else []
+        for name in removed:
+            store.delete_source(name)
+        present -= set(removed)
         pending = [name for name in available if name not in present]
         chunks = 0
         failed: list = []
@@ -163,6 +172,7 @@ def index_store(paths: StorePaths) -> Dict[str, Any]:
     return {
         "documents_indexed": len(pending) - len(failed),
         "documents_skipped": len(available) - len(pending),
+        "documents_removed": len(removed),
         "chunks_indexed": chunks,
         "fingerprint": store.read_fingerprint(),
         "seconds": round(time.perf_counter() - started, 3),

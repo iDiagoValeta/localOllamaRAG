@@ -33,6 +33,10 @@ class _Store:
     def read_fingerprint(self):
         return self.fingerprint
 
+    def delete_source(self, source):
+        self.docs.remove(source)
+        return 3
+
 
 def test_registry_binds_a_store_id_to_its_paths_once(tmp_path):
     registry = StoreRegistry()
@@ -297,3 +301,26 @@ def test_per_request_config_matches_process_config_except_paths(tmp_path):
     for section in ("models", "chunking", "retrieval", "reranking", "context", "flags"):
         assert a_dict[section] == b_dict[section]
     assert a_dict["paths"] != b_dict["paths"]
+
+
+def test_index_store_drops_documents_no_longer_in_the_folder(monkeypatch, tmp_path):
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "a.pdf").write_bytes(b"x")
+    store = _Store(docs=["a.pdf", "gone.pdf"])
+    monkeypatch.setattr(service.wiring, "vector_store", lambda config: store)
+    monkeypatch.setattr(service, "obtener_documentos_indexados", lambda s: list(s.docs))
+    monkeypatch.setattr(service, "indexar_documentos", lambda *a, **k: pytest.fail("must not index"))
+    result = service.index_store(StorePaths(str(docs), str(tmp_path / "data")))
+    assert store.docs == ["a.pdf"]
+    assert result["documents_removed"] == 1
+
+
+def test_index_store_never_prunes_through_a_missing_folder(monkeypatch, tmp_path):
+    store = _Store(docs=["a.pdf"])
+    monkeypatch.setattr(service.wiring, "vector_store", lambda config: store)
+    monkeypatch.setattr(service, "obtener_documentos_indexados", lambda s: list(s.docs))
+    monkeypatch.setattr(service, "indexar_documentos", lambda *a, **k: pytest.fail("must not index"))
+    result = service.index_store(StorePaths(str(tmp_path / "typo"), str(tmp_path / "data")))
+    assert store.docs == ["a.pdf"]
+    assert result["documents_removed"] == 0
