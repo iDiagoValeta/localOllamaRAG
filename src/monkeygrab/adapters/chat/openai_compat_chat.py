@@ -78,7 +78,11 @@ class OpenAICompatChatModel:
         return headers
 
     def _messages(
-        self, prompt: str, system: Optional[str], images: Sequence[bytes]
+        self,
+        prompt: str,
+        system: Optional[str],
+        images: Sequence[bytes],
+        history: Sequence[Mapping[str, str]] = (),
     ) -> List[Dict[str, Any]]:
         content: Any = prompt
         if images:
@@ -86,9 +90,12 @@ class OpenAICompatChatModel:
                 {"type": "image_url", "image_url": {"url": _image_data_uri(image)}}
                 for image in images
             ]
-        messages: List[Dict[str, Any]] = [{"role": "user", "content": content}]
+        messages: List[Dict[str, Any]] = []
         if system:
-            messages.insert(0, {"role": "system", "content": system})
+            messages.append({"role": "system", "content": system})
+        # Copied so the caller's history is not aliased into the payload.
+        messages.extend(dict(message) for message in history)
+        messages.append({"role": "user", "content": content})
         return messages
 
     def _payload(self, messages: List[Dict[str, Any]], *, stream: bool) -> Dict[str, Any]:
@@ -144,12 +151,21 @@ class OpenAICompatChatModel:
                 f"OpenAI-compatible generate failed for model {self._model!r}: {exc}"
             ) from exc
 
-    def stream(self, prompt: str, *, system: Optional[str] = None) -> Iterator[GenerationChunk]:
+    def stream(
+        self,
+        prompt: str,
+        *,
+        system: Optional[str] = None,
+        history: Sequence[Mapping[str, str]] = (),
+    ) -> Iterator[GenerationChunk]:
         """Stream a response as ``GenerationChunk`` items.
 
         Args:
             prompt: User/task prompt.
             system: Optional system prompt.
+            history: Earlier conversational turns, oldest first, each a
+                mapping with ``"role"`` and ``"content"``; sent as separate
+                messages between ``system`` and ``prompt``.
 
         Yields:
             One chunk per content delta, then exactly one ``done=True`` chunk
@@ -160,7 +176,7 @@ class OpenAICompatChatModel:
             RuntimeError: On any HTTP failure or a connection that breaks
                 mid-stream.
         """
-        payload = self._payload(self._messages(prompt, system, ()), stream=True)
+        payload = self._payload(self._messages(prompt, system, (), history), stream=True)
         payload["stream_options"] = {"include_usage": True}
         served: Optional[str] = None
         done_reason: Optional[str] = None

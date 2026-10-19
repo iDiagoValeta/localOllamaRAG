@@ -41,6 +41,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 import rag.chat_pdfs as rag_engine
+from rag.engine import wiring
 from monkeygrab.config.models import EMBEDDING_DISPLAY_NAME
 
 _web_dir = os.path.dirname(os.path.abspath(__file__))
@@ -306,10 +307,13 @@ def _reset_db():
 def _chat_stream(pregunta: str) -> Generator[str, None, None]:
     """Generate tokens from chat mode via streaming.
 
-    Bypasses OllamaChatModel (which would apply the same deadline) because
-    this path predates it and still talks to ollama_client_for directly; see
-    issue #237. The client is built with OLLAMA_REQUEST_TIMEOUT baked in, so
-    a wedged server raises instead of blocking the Flask worker forever --
+    Goes through the ``chat`` role's ``ChatModel``, so
+    ``MONKEYGRAB_CHAT_BACKEND=openai`` applies here exactly as it does to the
+    other roles instead of always talking to Ollama (issue #371). Earlier
+    turns travel as ``history`` messages rather than being flattened into the
+    prompt, which is what keeps the conversation multi-turn. The adapter is
+    built with the configured request timeout and generation deadline, so a
+    wedged server raises instead of blocking the Flask worker forever --
     api_chat's generate() already turns any exception from this generator
     into an SSE `error` event.
 
@@ -319,28 +323,27 @@ def _chat_stream(pregunta: str) -> Generator[str, None, None]:
     Yields:
         Token strings as they are produced by the model.
     """
-    from monkeygrab.adapters.chat.ollama_chat import ollama_client_for
-
-    messages = [{"role": "system", "content": rag_engine.SYSTEM_PROMPT_CHAT}]
-    mensajes_recientes = _state["historial_chat"][-(rag_engine.MAX_HISTORIAL_MENSAJES) :]
-    messages.extend(mensajes_recientes)
-    messages.append({"role": "user", "content": pregunta})
-
-    stream = ollama_client_for(OLLAMA_BASE_URL, timeout=rag_engine.OLLAMA_REQUEST_TIMEOUT).chat(
-        model=rag_engine.MODELO_CHAT,
-        messages=messages,
-        stream=True,
-        think=False,
-        keep_alive=rag_engine.OLLAMA_KEEP_ALIVE,
-        # Capped like the RAG role (#254): an unbounded answer holds Ollama's
-        # only slot for as long as the model keeps writing (issue #371).
-        options={"temperature": 0.7, "top_p": 0.9, "num_ctx": 8192, "num_predict": 4096},
+    config = wiring.app_config_from_runtime()
+    ollama = config.models.ollama
+    model = wiring.chat_model_for_role(
+        config,
+        "chat",
+        # Capped like the RAG role (#254): an unbounded answer holds the
+        # model's only slot for as long as it keeps writing (issue #371).
+        options={"temperature": 0.7, "top_p": 0.9, "num_predict": 4096},
+        num_ctx=8192,
+        keep_alive=ollama.keep_alive,
+        generation_deadline=ollama.generation_deadline,
     )
+    mensajes_recientes = _state["historial_chat"][-(rag_engine.MAX_HISTORIAL_MENSAJES) :]
 
-    for chunk in stream:
-        content = chunk.get("message", {}).get("content", "") or chunk.get("content", "")
-        if content:
-            yield content
+    for chunk in model.stream(
+        pregunta,
+        system=rag_engine.SYSTEM_PROMPT_CHAT,
+        history=mensajes_recientes,
+    ):
+        if chunk.text:
+            yield chunk.text
 
 
 from rag.engine.sources import format_sources

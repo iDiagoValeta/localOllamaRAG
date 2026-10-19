@@ -151,6 +151,24 @@ def test_stream_yields_deltas_then_one_done_chunk_with_usage(monkeypatch):
     assert calls[0]["stream"] is True
 
 
+def test_stream_places_history_between_the_system_prompt_and_the_new_prompt(monkeypatch):
+    """Chat mode is multi-turn: earlier turns must reach the server as their
+    own messages, not be flattened into the new prompt."""
+    calls = []
+    _stub_post(monkeypatch, calls, _Response(lines=[]))
+    history = [
+        {"role": "user", "content": "hola"},
+        {"role": "assistant", "content": "¿qué tal?"},
+    ]
+    list(_model().stream("nueva pregunta", system="sys", history=history))
+    assert calls[0]["json"]["messages"] == [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "hola"},
+        {"role": "assistant", "content": "¿qué tal?"},
+        {"role": "user", "content": "nueva pregunta"},
+    ]
+
+
 def test_stream_logs_early_stop_and_reports_it(monkeypatch, caplog):
     lines = [
         _sse({"choices": [{"delta": {"content": "x"}, "finish_reason": None}]}),
