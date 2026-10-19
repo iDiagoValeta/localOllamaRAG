@@ -489,7 +489,7 @@ def test_failing_describer_degrades_to_caption_and_counts_the_failure():
     ).run("x.pdf", "x.pdf")
 
     texts = [chunk.text for chunk, _emb in store.added]
-    assert texts == ["Fig. 3", "[figure] page=0 idx=1"]
+    assert texts == ["Fig. 3", "[figure] page=1 idx=1"]
     assert result.metrics["image_description_failures"] == 2
 
 

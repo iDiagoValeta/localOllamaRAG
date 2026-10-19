@@ -619,3 +619,14 @@ def test_mineru_version_reads_the_cli_and_fails_loudly(monkeypatch):
     monkeypatch.setattr(module.subprocess, "run", lambda cmd, **kw: _FakeCompleted(returncode=1, stderr="ImportError: torch"))
     with pytest.raises(RuntimeError, match="ImportError: torch"):
         _REAL_MINERU_VERSION("/x/mineru", 1)
+
+
+def test_code_blocks_are_rendered_not_dropped():
+    # Adam's default hyperparameters live in an algorithm block (issue #366).
+    block = {
+        "type": "code", "sub_type": "algorithm",
+        "code_caption": ["Algorithm 1: Adam"],
+        "code_body": "Require: alpha = 0.001, beta_2 = 0.999",
+        "code_footnote": [],
+    }
+    assert module._render_block_text(block) == "Algorithm 1: Adam\nRequire: alpha = 0.001, beta_2 = 0.999"

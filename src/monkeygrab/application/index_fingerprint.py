@@ -44,19 +44,14 @@ _EXTRACTOR_ID = "mineru"
 #
 # Serialized by omission at version 1: version 1 is defined as "the recipe
 # exactly as it existed before recipe_version was introduced", so the key is
-# left out of the dict entirely while this constant is 1 -- adding it costs
-# zero reindexing on its own. The key starts appearing only once a human
-# bumps this past 1, which is also the point every existing index legitimately
-# needs rebuilding. See
-# tests/unit/application/test_index_fingerprint.py::test_recipe_version_is_omitted_at_v1
-# and ::test_recipe_version_bump_actually_changes_the_recipe_and_the_fingerprint
-# for proof the mechanism itself is live, not just its state at v1.
+# left out of the dict entirely while this constant is 1. It has been bumped
+# since, so every recipe now carries it. See
+# tests/unit/application/test_index_fingerprint.py::test_recipe_version_bump_actually_changes_the_recipe_and_the_fingerprint
+# for proof the mechanism is live.
 #
-# When you bump this: test_recipe_version_is_omitted_at_v1 will fail -- DELETE
-# it, its only job is the v1 omission. ::test_default_app_config_fingerprint_is_pinned
-# pins the default config's current fingerprint and DOES need its hash
-# updated, not deleted.
-_RECIPE_VERSION = 1
+# When you bump this: ::test_default_app_config_fingerprint_is_pinned pins the
+# default config's fingerprint and needs its hash updated, not deleted.
+_RECIPE_VERSION = 2  # 2: code blocks indexed (#366), 1-based figure placeholder (#375)
 
 _FINGERPRINT_CHARS = 16
 

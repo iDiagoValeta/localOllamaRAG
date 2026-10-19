@@ -341,7 +341,9 @@ class IndexCorpus:
                 if description and caption:
                     text = f"{description}\n\n{caption}"
                 else:
-                    text = description or caption or f"[figure] page={page_num} idx={img_idx}"
+                    # 1-based like every page the user sees (sources, PDF
+                    # viewer); page_num is MinerU's 0-based index (issue #375).
+                    text = description or caption or f"[figure] page={page_num + 1} idx={img_idx}"
                 metadata = ChunkMetadata(
                     source=filename,
                     page=page_num,
