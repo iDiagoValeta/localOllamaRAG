@@ -8,6 +8,7 @@ The headless never loads ``settings.json`` nor mutates those globals, so the
 environment is the whole configuration of a headless process.
 """
 import contextlib
+import hashlib
 import os
 import threading
 import time
@@ -107,11 +108,20 @@ def config_for(paths: StorePaths) -> AppConfig:
     Starts from ``wiring.app_config_from_runtime()`` (environment plus the
     live ``rag.chat_pdfs`` globals) rather than a bare ``AppConfig.from_env()``,
     so the store opens under the same models, flags and chunking the engine
-    entry points themselves read (issue #262). Only the two path fields differ.
+    entry points themselves read (issue #262). Only the path fields differ.
     """
-    return wiring.app_config_from_runtime().with_overrides(
+    config = wiring.app_config_from_runtime().with_overrides(
         **{"paths.docs_folder": paths.docs_folder, "paths.data_dir": paths.data_dir}
     )
+    # derive_db_paths names the store after the folder's basename, so /a/docs
+    # and /b/docs under one data_dir would share an index (issue #409). The
+    # web app has three fixed folders and never collides; callers of the
+    # headless pick arbitrary ones, so the full path goes into the name.
+    folder_key = hashlib.sha256(paths.docs_folder.encode("utf-8")).hexdigest()[:12]
+    derived = config.paths.path_db
+    return config.with_overrides(**{
+        "paths.path_db": os.path.join(os.path.dirname(derived), f"{folder_key}_{os.path.basename(derived)}"),
+    })
 
 
 def index_store(paths: StorePaths) -> Dict[str, Any]:
