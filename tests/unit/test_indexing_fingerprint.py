@@ -189,6 +189,24 @@ def test_run_where_every_file_fails_raises_so_the_ui_can_report_it(tmp_path, mon
         indexing.indexar_documentos(str(tmp_path), _FakeStore(), silent=True)
 
 
+def test_total_failure_reports_only_the_first_line_of_the_last_error(tmp_path, monkeypatch):
+    # An extractor error carries kilobytes of subprocess output after its
+    # first line; the web shows this message to the user (issue #420).
+    class _VerboseFailure(_FailingIndexCorpus):
+        def run(self, *_a, **_kw):
+            raise RuntimeError("MinerU CLI failed: torch.OutOfMemoryError: CUDA\n" + "tensor([...])\n" * 200)
+
+    (tmp_path / "a.pdf").write_bytes(b"%PDF-1.4")
+    config = _config()
+    _wire_fakes(monkeypatch, config)
+    monkeypatch.setattr(indexing, "IndexCorpus", _VerboseFailure)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        indexing.indexar_documentos(str(tmp_path), _FakeStore(), silent=True)
+    assert "\n" not in str(excinfo.value)
+    assert str(excinfo.value).endswith("Last error: MinerU CLI failed: torch.OutOfMemoryError: CUDA")
+
+
 def test_a_run_where_only_some_files_fail_still_writes_the_fingerprint(tmp_path, monkeypatch):
     # Deliberately unchanged by issue #192: every chunk that did land went
     # through this config, so the recipe claim holds. Only a run that stored

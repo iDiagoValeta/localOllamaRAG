@@ -189,7 +189,9 @@ def indexar_documentos(
         raise RuntimeError(
             f"Indexing failed on all {fallos} file(s) in {carpeta}; "
             f"the store and its fingerprint were left untouched. "
-            f"Last error: {ultimo_error}"
+            # The first line only: an extractor error can carry kilobytes of
+            # subprocess output, already logged per file above (issue #420).
+            f"Last error: {(str(ultimo_error).splitlines() or [repr(ultimo_error)])[0]}"
         )
 
     if solo_archivos is None:
