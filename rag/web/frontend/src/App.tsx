@@ -685,6 +685,10 @@ export default function App() {
       return aStarts - bStarts || a.localeCompare(b);
     });
   }, [mode, input, documents]);
+  // The list can shrink without input changing (store switch, a PDF removed),
+  // which leaves the stored index past its end; Tab would then set input to
+  // undefined (issue #407). Read it clamped instead of resetting on every change.
+  const activeSuggestion = Math.min(suggestionIndex, Math.max(documentSuggestions.length - 1, 0));
 
   /** The document a typed message names, or null.
    *
@@ -1411,12 +1415,12 @@ export default function App() {
                     onMouseDown={(e) => { e.preventDefault(); acceptSuggestion(doc); }}
                     onMouseEnter={() => setSuggestionIndex(i)}
                     className={`w-full flex items-center gap-2.5 px-4 py-2 text-left text-sm transition-colors ${
-                      i === suggestionIndex
+                      i === activeSuggestion
                         ? 'bg-surface-raised text-ink'
                         : 'text-ink-muted hover:text-ink'
                     }`}
                   >
-                    <FileText className={`w-4 h-4 shrink-0 ${i === suggestionIndex ? 'text-ink' : 'text-ink-faint'}`} />
+                    <FileText className={`w-4 h-4 shrink-0 ${i === activeSuggestion ? 'text-ink' : 'text-ink-faint'}`} />
                     <span className="truncate">{doc}</span>
                   </button>
                 ))}
@@ -1439,7 +1443,8 @@ export default function App() {
                   if (suggesting && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
                     e.preventDefault();
                     setSuggestionIndex(i => {
-                      const next = e.key === 'ArrowDown' ? i + 1 : i - 1;
+                      const current = Math.min(i, documentSuggestions.length - 1);
+                      const next = e.key === 'ArrowDown' ? current + 1 : current - 1;
                       return (next + documentSuggestions.length) % documentSuggestions.length;
                     });
                     return;
@@ -1448,7 +1453,7 @@ export default function App() {
                   // half-typed name never becomes a request by reflex.
                   if (suggesting && e.key === 'Tab') {
                     e.preventDefault();
-                    acceptSuggestion(documentSuggestions[suggestionIndex]);
+                    acceptSuggestion(documentSuggestions[activeSuggestion]);
                     return;
                   }
                   if (e.key === 'Enter' && !e.shiftKey) {
