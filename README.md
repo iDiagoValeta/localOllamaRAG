@@ -246,6 +246,9 @@ python -m rag.headless      # 127.0.0.1:5050; MONKEYGRAB_HEADLESS_PORT / _TOKEN 
 No interface, no fixed stores: `POST /stores/<id>/index` and `POST /stores/<id>/rag`
 take the document folder and the data directory in the request, and `/health`
 says whether the full stack can run here (isolated environment, CUDA, embedder).
+An `/index` call syncs the store with the folder: new files are indexed and
+files no longer there are dropped (`documents_removed`); a folder that does not
+exist prunes nothing.
 The pipeline is the same one the web app and the evaluation gate run.
 
 Every model role can run on Ollama (default) or on any server speaking the
