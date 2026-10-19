@@ -256,8 +256,11 @@ the answer text instead of the separate `thinking` field: asked for a bare
 product it wrote 400 tokens of working before the number, against `391` alone
 with `think: true` (checked 2026-10-20, issue #411). The tokens per answer above
 are that reasoning; a user would read it, and the grader could accept a figure
-that appears only in it. The runs did not keep answer texts, so it cannot be
-audited after the fact.
+that appears only in it. The gate keeps the answer text of failed cases only:
+all 10 stored `qwen3:4b` answers in `20261017T170455Z` open with that reasoning
+("We are given a context..."), and the lite run kept none. Passing answers are
+not stored, so whether any passed on a figure found only in the reasoning
+cannot be audited after the fact.
 
 Of the 17 failures in `20261017T142753Z`, 9 are correct answers the grader does
 not accept (`\%`, `\,`, `^2` against `²`, unit and range variants; issue #367),
