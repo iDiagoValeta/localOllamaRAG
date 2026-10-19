@@ -53,7 +53,13 @@ def _paths_from(values: Dict[str, Any]) -> Tuple[str, str]:
     missing = [name for name in ("docs_folder", "data_dir") if not values.get(name)]
     if missing:
         abort(400, description=f"missing {', '.join(missing)}")
-    return str(values["docs_folder"]), str(values["data_dir"])
+    # A JSON number or list would otherwise go through str() and become a
+    # path relative to the cwd (issue #410).
+    invalid = [name for name in ("docs_folder", "data_dir")
+               if not isinstance(values[name], str) or not values[name].strip()]
+    if invalid:
+        abort(400, description=f"{', '.join(invalid)} must be a non-empty string")
+    return values["docs_folder"], values["data_dir"]
 
 
 def create_app(
