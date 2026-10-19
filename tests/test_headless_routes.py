@@ -105,6 +105,13 @@ def test_index_requires_both_paths():
     assert "data_dir" in resp.get_json()["message"]
 
 
+@pytest.mark.parametrize("bad", [7, ["/d"], {"p": "/d"}, True, "   "])
+def test_index_rejects_paths_that_are_not_non_empty_strings(bad):
+    resp = _client().post("/stores/cv1/index", json={"docs_folder": bad, "data_dir": "/x"})
+    assert resp.status_code == 400
+    assert "docs_folder" in resp.get_json()["message"]
+
+
 @pytest.mark.parametrize("path", ["/stores/cv1/index", "/stores/cv1/rag"])
 def test_a_json_body_that_is_not_an_object_is_a_json_400(path):
     resp = _client().post(path, json=["not", "an", "object"])
