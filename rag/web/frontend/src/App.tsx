@@ -440,7 +440,20 @@ export default function App() {
           // refresh the store rows out of "not indexed".
           loadStores();
 
-          setMessages([]);
+          // The backend reloads historial_chat.json on every init and builds
+          // the next prompt from it; paint those turns or the model answers
+          // with context the user cannot see (issue #403).
+          setMessages(
+            Array.isArray(initData.history)
+              ? initData.history
+                  .map((entry: { role: 'user' | 'assistant'; content: string }, i: number) => ({
+                    id: `hist-${i}`,
+                    role: entry.role,
+                    content: entry.content,
+                    mode: 'chat' as const,
+                  }))
+              : []
+          );
         } else if (initData.indexing) {
           // A run is still alive: keep the blocking screen and poll.
           setInitError(null);
