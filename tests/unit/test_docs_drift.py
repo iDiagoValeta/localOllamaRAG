@@ -41,6 +41,7 @@ not install.
 
 import ast
 import re
+import subprocess
 from pathlib import Path
 from typing import Dict, Set
 
@@ -471,10 +472,20 @@ _NOT_REPO_MARKDOWN = frozenset(
 
 
 def _repository_markdown():
+    # Asks git rather than walking the tree: a checkout holds drafts and tool
+    # output that .gitignore keeps out of the repo, and checking their links
+    # made the local suite fail on files nobody ships. Untracked files that are
+    # not ignored still count, so a new page is checked before its commit.
+    listed = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.md"],
+        cwd=ROOT, capture_output=True, text=True, check=True,
+    ).stdout.split("\0")
     return sorted(
-        path
-        for path in ROOT.rglob("*.md")
-        if not _NOT_REPO_MARKDOWN.intersection(path.relative_to(ROOT).parts)
+        ROOT / name
+        for name in listed
+        if name
+        and (ROOT / name).is_file()
+        and not _NOT_REPO_MARKDOWN.intersection(Path(name).parts)
     )
 
 
