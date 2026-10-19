@@ -33,6 +33,7 @@ export {
   Sun,
   Moon,
   BookOpenText as BookOpen,
+  Stop as Square,
 } from '@phosphor-icons/react';
 
 // Ollama llama mark (simple-icons, CC0).
