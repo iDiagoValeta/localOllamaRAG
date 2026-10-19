@@ -868,6 +868,11 @@ def api_rag():
 
         def generate():
             raw = ""
+            # Sources go first: they are known before generation starts, and
+            # a failure mid-answer would otherwise lose them with the 'done'
+            # event that used to be their only carrier (issue #376). 'done'
+            # still repeats them for clients that read only that event.
+            yield _sse_event("sources", {"sources": sources})
             try:
                 for token in rag_engine.generar_tokens_respuesta(mensaje_usuario):
                     raw += token
