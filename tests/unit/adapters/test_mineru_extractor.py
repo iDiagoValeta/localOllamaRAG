@@ -244,6 +244,25 @@ def test_nonzero_exit_code_raises_with_the_cli_stderr(monkeypatch, tmp_path):
     assert "model cache not found" in str(excinfo.value)
 
 
+def test_nonzero_exit_leads_with_the_final_exception_line(monkeypatch, tmp_path):
+    pdf = _make_pdf(tmp_path)
+    bin_path = _make_bin(tmp_path)
+    stderr = (
+        "Traceback (most recent call last):\n"
+        "  File \"linear.py\", line 125, in forward\n"
+        "    tensor([[ 2.1074, -2.0547, ...]])\n" * 50
+        + "torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 378.00 MiB.\n"
+        "INFO: Application shutdown complete.\n"
+    )
+    monkeypatch.setattr(module.subprocess, "run", lambda cmd, **kw: _FakeCompleted(returncode=1, stderr=stderr))
+    extractor = MineruExtractor(mineru_bin=str(bin_path), cache_dir=str(tmp_path / "cache"))
+
+    with pytest.raises(RuntimeError) as excinfo:
+        extractor.extract(str(pdf))
+    first_line = str(excinfo.value).splitlines()[0]
+    assert first_line.endswith("torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 378.00 MiB.")
+
+
 def test_no_output_directory_raises(monkeypatch, tmp_path):
     pdf = _make_pdf(tmp_path)
     bin_path = _make_bin(tmp_path)
