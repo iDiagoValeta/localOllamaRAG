@@ -394,6 +394,20 @@ feature present: an index built by an older version has no recorded recipe to
 compare against and is never flagged, however much its actual recipe may have
 drifted.
 
+**What stays on disk.** Nothing leaves the machine, but two things accumulate
+in the data directory (`MONKEYGRAB_DATA_DIR`; the repository's `rag/` in a
+checkout) without rotation or a size limit:
+
+- `debug_rag/`: one dump per RAG query with the question, the full context
+  sent to the model and its answer. On by default; `GUARDAR_DEBUG_RAG=False`
+  turns it off. Delete the folder to clear it.
+- `historial_chat.json`: every chat-mode turn, reused as context for the next
+  answer. The UI's clear-conversation button empties it; there is no switch to
+  stop writing it.
+
+Both hold your documents' text and your questions in plain files, so treat the
+data directory like the documents themselves (issue #399).
+
 </details>
 
 ### Interfaces
