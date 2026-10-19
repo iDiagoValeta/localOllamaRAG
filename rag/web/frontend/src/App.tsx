@@ -163,6 +163,7 @@ async function streamSSE(
   },
   controller?: AbortController,
   onStall?: () => void,
+  onSources?: (sources: Citation[]) => void,
 ) {
   const contentType = response.headers.get('content-type') || '';
 
@@ -218,6 +219,10 @@ async function streamSSE(
         finished = true;
         const raw = data.message || data.error || fb?.modelError || 'Error en la respuesta del modelo';
         onError(localized(data.error, raw));
+        return;
+      }
+      if (event === 'sources') {
+        onSources?.(data.sources || []);
         return;
       }
       if (event === 'token' || data.token) onToken(data.token || '');
@@ -922,6 +927,15 @@ export default function App() {
               m.id === assistantId
                 ? { ...m, content: T.streamStalled, isStreaming: false, isError: true }
                 : m
+            )
+          );
+        },
+        // Shown before the first token, so a failed answer still says which
+        // documents it was drawing on (issue #376).
+        (sources) => {
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === assistantId ? { ...m, citations: sources } : m
             )
           );
         },
