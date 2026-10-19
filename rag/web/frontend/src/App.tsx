@@ -508,7 +508,9 @@ export default function App() {
   // Hands off to the full-screen blocking indexing UI (no chat system messages);
   // the init poller refreshes the document list + fragment count on completion.
   const handleReindex = useCallback(async () => {
-    if (isReindexing) return;
+    // The indexing screen replaces the chat and drops the answer in flight
+    // (issue #404); the button is disabled too, this guards any other caller.
+    if (isReindexing || isLoading) return;
     setIsReindexing(true);
     setSettingsError(null);
     const fileList = [...pendingReindexFiles];
@@ -532,7 +534,7 @@ export default function App() {
       setIsReindexing(false);
       if (reindexFileInputRef.current) reindexFileInputRef.current.value = '';
     }
-  }, [isReindexing, pendingReindexFiles, lang]);
+  }, [isReindexing, isLoading, pendingReindexFiles, lang]);
 
   // ---- Delete document ----
   const handleDeleteDoc = useCallback(async (docName: string) => {
@@ -1272,6 +1274,7 @@ export default function App() {
             toggleSetting={toggleSetting}
             settingsError={settingsError}
             isReindexing={isReindexing}
+            isAnswering={isLoading}
             indexingProgress={indexingProgress}
             pendingReindexFiles={pendingReindexFiles}
             setPendingReindexFiles={setPendingReindexFiles}

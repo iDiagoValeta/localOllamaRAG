@@ -37,6 +37,9 @@ export interface SettingsOverlayProps {
   toggleSetting: (key: keyof PipelineSettings) => void;
   settingsError: string | null;
   isReindexing: boolean;
+  // A reindex swaps the chat for the indexing screen, which would discard an
+  // answer still streaming (issue #404).
+  isAnswering: boolean;
   indexingProgress: IndexingProgress | null;
   pendingReindexFiles: File[];
   setPendingReindexFiles: React.Dispatch<React.SetStateAction<File[]>>;
@@ -63,6 +66,7 @@ export function SettingsOverlay({
   toggleSetting,
   settingsError,
   isReindexing,
+  isAnswering,
   indexingProgress,
   pendingReindexFiles,
   setPendingReindexFiles,
@@ -217,7 +221,7 @@ export function SettingsOverlay({
               <button
                 className="flex flex-1 flex-col items-center justify-center gap-1 border border-dashed border-edge px-4 py-3 text-sm text-ink-muted transition-all hover:border-divider hover:bg-field hover:text-ink disabled:opacity-50 group rounded-xl"
                 onClick={() => reindexFileInputRef.current?.click()}
-                disabled={isReindexing}
+                disabled={isReindexing || isAnswering}
               >
                 <FileUp className="h-5 w-5 group-hover:text-ink" />
                 <span className="font-medium">
@@ -237,7 +241,7 @@ export function SettingsOverlay({
             <button
               className="flex items-center justify-center gap-2 bg-field border border-edge text-ink px-6 py-3 text-sm font-semibold hover:bg-surface hover:border-divider disabled:opacity-50 sm:min-w-[10rem] rounded-xl transition-all"
               onClick={handleReindex}
-              disabled={isReindexing}
+              disabled={isReindexing || isAnswering}
             >
               {isReindexing ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
               {strings.reindexBtn}
