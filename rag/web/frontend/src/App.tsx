@@ -4,7 +4,7 @@ import {
   Search, Layers, Menu, X,
   RefreshCw, Loader2, AlertCircle, CheckCircle2, Trash2,
   Copy, Check, Eye,
-  Sun, Moon, BookOpen
+  Sun, Moon, BookOpen, Square
 } from './lib/icons';
 import { getStoredTheme, setTheme, type Theme } from './lib/theme';
 import { motion, AnimatePresence } from 'motion/react';
@@ -57,18 +57,20 @@ const api = {
       body: JSON.stringify({ mode }),
     }).then(r => r.json()),
 
-  chat: (message: string) =>
+  chat: (message: string, signal?: AbortSignal) =>
     fetch(`${API_BASE}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message, stream: true }),
+      signal,
     }),
 
-  rag: (message: string) =>
+  rag: (message: string, signal?: AbortSignal) =>
     fetch(`${API_BASE}/rag`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message, stream: true }),
+      signal,
     }),
 
   clear: () =>
@@ -138,6 +140,12 @@ const api = {
 // SSE Stream Parser
 // =============================================================================
 
+// The backend sends no keepalive comments while it retrieves, reranks and
+// loads the model, so the timeout measures silence rather than total time:
+// it restarts after every chunk and only fires when the stream stops
+// delivering anything at all (issue #406).
+const STREAM_INACTIVITY_TIMEOUT_MS = 180_000;
+
 async function streamSSE(
   response: Response,
   onToken: (token: string) => void,
@@ -153,6 +161,8 @@ async function streamSSE(
     model_unavailable?: string;
     embedder_unavailable?: string;
   },
+  controller?: AbortController,
+  onStall?: () => void,
 ) {
   const contentType = response.headers.get('content-type') || '';
 
@@ -220,20 +230,42 @@ async function streamSSE(
     }
   };
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
+  // Restarted after every chunk, so a slow first token does not trip it while
+  // the backend is still retrieving.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const armTimer = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      onStall?.();
+      controller?.abort();
+    }, STREAM_INACTIVITY_TIMEOUT_MS);
+  };
 
-    buffer += decoder.decode(value, { stream: true });
-    const blocks = buffer.split(/\r?\n\r?\n/);
-    buffer = blocks.pop() || '';
+  try {
+    armTimer();
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      armTimer();
 
-    for (const block of blocks) processBlock(block);
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split(/\r?\n\r?\n/);
+      buffer = blocks.pop() || '';
+
+      for (const block of blocks) processBlock(block);
+    }
+
+    buffer += decoder.decode();
+    if (buffer.trim()) processBlock(buffer);
+    if (!finished) onError(fb?.closed ?? 'La conexión se cerró antes de completar la respuesta.');
+  } catch (err) {
+    // A user stop or the inactivity timeout aborts the read; the caller has
+    // already reported that, and the generic "connection closed" would be a
+    // second, wrong diagnosis.
+    if (!controller?.signal.aborted) throw err;
+  } finally {
+    clearTimeout(timer);
   }
-
-  buffer += decoder.decode();
-  if (buffer.trim()) processBlock(buffer);
-  if (!finished) onError(fb?.closed ?? 'La conexión se cerró antes de completar la respuesta.');
 }
 
 // =============================================================================
@@ -310,6 +342,10 @@ export default function App() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const reindexFileInputRef = useRef<HTMLInputElement>(null);
+  // One request at a time: a user stop and the inactivity timeout both end the
+  // stream through this controller.
+  const requestControllerRef = useRef<AbortController | null>(null);
+  const activeAssistantRef = useRef<string | null>(null);
   const [retryTrigger, setRetryTrigger] = useState(0);
   const [indexingError, setIndexingError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -797,10 +833,16 @@ export default function App() {
     setInput('');
     setIsLoading(true);
 
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    activeAssistantRef.current = assistantId;
+
     const startTime = performance.now();
 
     try {
-      const response = mode === 'rag' ? await api.rag(text) : await api.chat(text);
+      const response = mode === 'rag'
+        ? await api.rag(text, controller.signal)
+        : await api.chat(text, controller.signal);
 
       await streamSSE(
         response,
@@ -851,19 +893,49 @@ export default function App() {
           closed: T.connClosed, no_results: T.noResults, question_too_short: T.questionTooShort,
           model_unavailable: T.modelUnavailable, embedder_unavailable: T.embedderUnavailable,
         },
+        controller,
+        // Inactivity timeout, not a connection error: the stream went silent
+        // while the socket stayed open.
+        () => {
+          setMessages(prev =>
+            prev.map(m =>
+              m.id === assistantId
+                ? { ...m, content: T.streamStalled, isStreaming: false, isError: true }
+                : m
+            )
+          );
+        },
       );
     } catch {
-      setMessages(prev =>
-        prev.map(m =>
-          m.id === assistantId
-            ? { ...m, content: T.connClosed, isStreaming: false, isError: true }
-            : m
-        )
-      );
+      // A stop or a stall already updated the bubble; overwriting it here
+      // would replace the partial text with a connection error.
+      if (!controller.signal.aborted) {
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === assistantId
+              ? { ...m, content: T.connClosed, isStreaming: false, isError: true }
+              : m
+          )
+        );
+      }
     } finally {
+      if (requestControllerRef.current === controller) requestControllerRef.current = null;
+      if (activeAssistantRef.current === assistantId) activeAssistantRef.current = null;
       setIsLoading(false);
     }
   }, [input, mode, isLoading, lang, sendStudy]);
+
+  // Keep whatever was already streamed: the user chose to stop, so the text
+  // they have is the result, not a failure to report.
+  const handleStop = useCallback(() => {
+    requestControllerRef.current?.abort();
+    setMessages(prev =>
+      prev.map(m =>
+        m.id === activeAssistantRef.current ? { ...m, isStreaming: false } : m
+      )
+    );
+    setIsLoading(false);
+  }, []);
 
   // ---- Copy message ----
   const handleCopyMessage = useCallback(async (msg: Message) => {
@@ -1498,17 +1570,23 @@ export default function App() {
                     {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 ml-0.5" />}
                   </button>
                 </div>
+              ) : isLoading ? (
+                <button
+                  type="button"
+                  onClick={handleStop}
+                  aria-label={T.stopGenerating}
+                  title={T.stopGenerating}
+                  className="p-3.5 bg-ink text-surface hover:opacity-90 active:scale-95 transition-all flex-shrink-0 rounded-2xl focus:outline-none focus-visible:ring-1 focus-visible:ring-divider"
+                >
+                  <Square className="w-5 h-5" />
+                </button>
               ) : (
                 <button
                   onClick={handleSend}
-                  disabled={!input.trim() || isLoading}
+                  disabled={!input.trim()}
                   className="p-3.5 bg-ink text-surface hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:bg-surface-raised disabled:text-ink-faint transition-all flex-shrink-0 rounded-2xl focus:outline-none focus-visible:ring-1 focus-visible:ring-divider"
                 >
-                  {isLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Send className="w-5 h-5 ml-0.5" />
-                  )}
+                  <Send className="w-5 h-5 ml-0.5" />
                 </button>
               )}
             </div>
