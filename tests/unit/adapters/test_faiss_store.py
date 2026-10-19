@@ -275,6 +275,17 @@ def test_query_hard_fails_on_dimension_mismatch(tmp_path):
         store.query(_unit([1.0, 0.0]), n_results=1)
 
 
+def test_a_dimension_mismatch_says_how_to_recover(tmp_path):
+    # The store path does not encode the embedding width (issue #299), so a
+    # changed MONKEYGRAB_EMBEDDER_DIM reopens the old index; the error is
+    # the only place the user learns what to do about it.
+    store = FaissVectorStore(_paths(tmp_path))
+    store.add(_chunk("u.pdf", 0, 0), _unit([1.0, 0.0, 0.0]))
+
+    with pytest.raises(ValueError, match="MONKEYGRAB_EMBEDDER_DIM back to 3"):
+        store.query(_unit([1.0, 0.0]), n_results=1)
+
+
 def test_add_hard_fails_on_duplicate_chunk_id(tmp_path):
     store = FaissVectorStore(_paths(tmp_path))
     chunk = _chunk("dup.pdf", 0, 0)
