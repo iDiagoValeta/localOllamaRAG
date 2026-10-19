@@ -344,9 +344,11 @@ disk disagrees with the configuration in force
 `index_fingerprint_mismatch`). It means the indexed chunks were built
 under different chunking or embedding settings, not that documents are
 missing. `POST /stores/<id>/index` does not repair this:
-`rag/headless/service.py:index_store` only indexes pending file names.
-Recovery is: delete `vector_db/<collection>` under that store's `data_dir`
-(the `path_db` derived from its `docs_folder` and `data_dir`) and re-run
+`rag/headless/service.py:index_store` only indexes new file names and drops
+removed ones. Recovery is: delete the store's directory under
+`<data_dir>/vector_db/` (named `<hash>_<folder>_eg2`, the hash taken from the
+absolute `docs_folder`, so two folders with the same name never share an
+index) and re-run
 `POST /stores/<id>/index` for a full run.
 
 <details>
