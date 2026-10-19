@@ -107,6 +107,28 @@ def _infer_corpus_preset() -> str | None:
     return base if base in _CORPUS_PRESET_IDS else None
 
 
+def _init_history_payload(historial: list) -> list[dict]:
+    """Copy the persisted chat turns the UI can paint.
+
+    Entries in ``historial_chat.json`` are not guaranteed to be chat turns, and
+    the frontend only knows ``user``/``assistant``; anything else is dropped
+    rather than sent to a bubble that cannot render it.
+
+    Args:
+        historial: Raw entries loaded from the persisted history.
+
+    Returns:
+        A list of fresh ``{"role", "content"}`` dicts.
+    """
+    return [
+        {"role": entry["role"], "content": entry["content"]}
+        for entry in historial
+        if isinstance(entry, dict)
+        and entry.get("role") in ("user", "assistant")
+        and isinstance(entry.get("content"), str)
+    ]
+
+
 def _init_paths_payload() -> dict:
     """Paths and local identity exposed to the web UI (corpus selection + greeting)."""
     try:
@@ -646,6 +668,7 @@ def _api_init_logic():
                 "total_fragments": 0,
                 "documents": docs,
                 "document_details": [],
+                "history": _init_history_payload(_state["historial_chat"]),
                 "history_count": len(_state["historial_chat"]),
                 "failed_files": list(_state["indexing_failed_files"]),
                 **_init_paths_payload(),
@@ -666,6 +689,7 @@ def _api_init_logic():
         "total_fragments": coll.count(),
         "documents": docs,
         "document_details": _collection_document_details(coll),
+        "history": _init_history_payload(_state["historial_chat"]),
         "history_count": len(_state["historial_chat"]),
         # Detection only -- a mismatch is never auto-reindexed here (issue #36):
         # a settings change must not silently trigger a MinerU + embedding pass.
