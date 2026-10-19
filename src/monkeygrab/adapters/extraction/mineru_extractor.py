@@ -42,6 +42,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -312,13 +313,33 @@ def _run_mineru(
         raise RuntimeError(f"Failed to launch MinerU CLI ({resolved_bin!r}): {exc}") from exc
 
     if proc.returncode != 0:
+        output = proc.stderr or proc.stdout
         raise RuntimeError(
-            f"MinerU CLI failed (exit code {proc.returncode}) for {pdf_path.name}:\n"
-            f"{(proc.stderr or proc.stdout)[-4000:]}"
+            f"MinerU CLI failed (exit code {proc.returncode}) for {pdf_path.name}: "
+            f"{_failure_cause(output)}\n{output[-4000:]}"
         )
 
     return _validate_output(dest, pdf_path.stem)
 
+
+
+_EXCEPTION_LINE = re.compile(r"[A-Za-z_][\w.]*(?:Error|Exception): .*")
+
+
+def _failure_cause(output: str) -> str:
+    """The last ``SomeError: message`` in MinerU's output, else its last line.
+
+    MinerU logs through loguru, whose tracebacks print every local (tensors
+    included), so the exception that explains the failure sits at the end of
+    thousands of characters. The first line of the raised error is what the
+    web shows the user (issue #420); it has to be the cause.
+    """
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    for line in reversed(lines):
+        match = _EXCEPTION_LINE.search(line)
+        if match:
+            return match.group(0)
+    return lines[-1] if lines else "no output"
 
 # CONTENT-LIST PARSING
 
