@@ -30,9 +30,11 @@ CHAT_BACKENDS = ("ollama", "openai")
 
 
 # Matryoshka widths embeddinggemma-2 can be truncated to. An index built at one
-# width is a different vector space from another, so the width is part of both
-# the store path and the index fingerprint; an unsupported value must abort
-# rather than silently change the geometry.
+# width is a different vector space from another, so the width is part of the
+# index fingerprint (a changed width reads as stale); it is not part of the store
+# path, so the same directory is reopened and a query against it fails with the
+# FAISS store's dimension error until the store is reindexed (issue #299). An
+# unsupported value must abort rather than silently change the geometry.
 EMBEDDING_DIMENSIONS = (768, 512, 256, 128)
 
 
