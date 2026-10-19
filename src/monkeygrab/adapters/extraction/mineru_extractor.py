@@ -410,6 +410,17 @@ def _render_block_text(block: Dict[str, Any]) -> str:
     if block_type == "list":
         return "\n".join(block.get("list_items") or [])
 
+    if block_type == "code":
+        # Algorithms and pseudocode: MinerU puts them in code_body, not
+        # "text", so the fallback below dropped them. Adam's default
+        # hyperparameters live in its Algorithm 1 block (issue #366).
+        parts = [
+            " ".join(block.get("code_caption") or []).strip(),
+            block.get("code_body", ""),
+            " ".join(block.get("code_footnote") or []).strip(),
+        ]
+        return "\n".join(part for part in parts if part)
+
     if block_type in ("image", "chart"):
         caption_key = "image_caption" if block_type == "image" else "chart_caption"
         return " ".join(block.get(caption_key) or []).strip()
