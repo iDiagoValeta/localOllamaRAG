@@ -71,12 +71,25 @@ class ChatModel(Protocol):
         """
         ...
 
-    def stream(self, prompt: str, *, system: Optional[str] = None) -> Iterator[GenerationChunk]:
+    def stream(
+        self,
+        prompt: str,
+        *,
+        system: Optional[str] = None,
+        history: Sequence[Mapping[str, str]] = (),
+    ) -> Iterator[GenerationChunk]:
         """Generate a response, yielding chunks as it is produced.
 
         Args:
             prompt: User/task prompt.
             system: Optional system prompt.
+            history: Earlier conversational turns, oldest first, each a
+                mapping with ``"role"`` (``"user"`` or ``"assistant"``) and
+                ``"content"``. They are sent between ``system`` and
+                ``prompt`` as separate messages, which is what keeps a
+                multi-turn chat multi-turn: flattening them into ``prompt``
+                would turn every turn into quoted text. Empty means a
+                one-turn request.
 
         Yields:
             One ``GenerationChunk`` per produced piece; concatenating every
