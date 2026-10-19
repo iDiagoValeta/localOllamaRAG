@@ -249,6 +249,16 @@ model shows on a rerun. The `gemma4:e4b` pair is the gate for #307, #310 and #31
 touch), inside the same noise. `bonsai-2` and `gemma4:12b-it-qat` could not be
 measured: their manifests need an Ollama newer than the installed 0.33.2 (HTTP 412).
 
+Both `qwen3:4b` rows (this table and the lite one below) are not a fair score
+for the model as shipped. Ollama's `qwen3:4b` (digest `359d7dd4bcda`) only
+reasons, and the adapter sends `think: false`, so the reasoning lands inside
+the answer text instead of the separate `thinking` field: asked for a bare
+product it wrote 400 tokens of working before the number, against `391` alone
+with `think: true` (checked 2026-10-20, issue #411). The tokens per answer above
+are that reasoning; a user would read it, and the grader could accept a figure
+that appears only in it. The runs did not keep answer texts, so it cannot be
+audited after the fact.
+
 Of the 17 failures in `20261017T142753Z`, 9 are correct answers the grader does
 not accept (`\%`, `\,`, `^2` against `²`, unit and range variants; issue #367),
 and 2 come from MinerU dropping `code` blocks (issue #366).
