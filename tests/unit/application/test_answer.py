@@ -301,3 +301,29 @@ def test_generation_metrics_omit_tokens_per_second_without_eval_count_and_durati
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+def test_first_chunk_of_a_page_pulls_the_previous_page_tail_not_its_head():
+    # Issue #397 point 2: the contiguous text of chunk 0 is the previous
+    # page's LAST chunk; chunks 0-2 of a 7-chunk page are far from it.
+    anchor = _fragment("a.pdf_pag2_chunk0", total_in_page=4)
+    prev_head = _fragment("a.pdf_pag1_chunk0", total_in_page=7)
+    prev_tail = _fragment("a.pdf_pag1_chunk6", total_in_page=7)
+    store = FakeVectorStore(by_id={prev_head.id: prev_head, prev_tail.id: prev_tail})
+
+    expanded, _ = _expand_with_neighbors([anchor], store, n_top_for_expansion=1)
+
+    assert prev_tail.id in {f.id for f in expanded}
+    assert prev_head.id not in {f.id for f in expanded}
+
+
+def test_first_chunk_after_a_page_with_no_chunks_skips_the_previous_side():
+    anchor = _fragment("a.pdf_pag2_chunk0", total_in_page=4)
+    store = FakeVectorStore(by_id={})
+
+    expanded, n_added = _expand_with_neighbors([anchor], store, n_top_for_expansion=1)
+
+    assert n_added == 0
+    # The probe for the previous page's count is the only previous-page id asked for.
+    assert ["a.pdf_pag1_chunk0"] in store.get_by_ids_calls
+    assert all("_pag1_" not in i for call in store.get_by_ids_calls if call != ["a.pdf_pag1_chunk0"] for i in call)
