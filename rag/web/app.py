@@ -24,6 +24,7 @@ import shutil
 import getpass
 import subprocess
 import threading
+from urllib.parse import urlsplit
 from collections import Counter
 from typing import Generator, Optional
 
@@ -66,6 +67,47 @@ CORS(
     app,
     resources={r"/api/*": {"origins": [o.strip() for o in _cors_origins.split(",") if o.strip()]}},
 )
+
+# Host and Origin guard (issue #346). The API has no authentication, so what
+# keeps a web page from driving it is the browser: DNS rebinding makes a
+# hostile page's requests arrive with its own hostname in Host, and a
+# cross-site form POST (multipart, no CORS preflight) always carries a foreign
+# Origin. Loopback names are allowed by default; a server bound to another
+# address names it in MONKEYGRAB_ALLOWED_HOSTS (comma separated hostnames,
+# no port) or MONKEYGRAB_HOST.
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def _allowed_hostnames() -> frozenset:
+    extra = os.getenv("MONKEYGRAB_ALLOWED_HOSTS", "")
+    names = {h.strip().lower() for h in extra.split(",") if h.strip()}
+    bound = os.getenv("MONKEYGRAB_HOST", "").strip().lower()
+    if bound and bound != "0.0.0.0":
+        names.add(bound)
+    return _LOOPBACK_HOSTS | names
+
+
+def _hostname_of(netloc: str) -> str:
+    """Return the lowercase hostname of a ``host[:port]`` string, brackets kept for IPv6."""
+    netloc = netloc.strip().lower()
+    if netloc.startswith("["):
+        return netloc.split("]", 1)[0] + "]"
+    return netloc.rsplit(":", 1)[0] if netloc.count(":") == 1 else netloc
+
+
+@app.before_request
+def _reject_foreign_host_or_origin():
+    allowed = _allowed_hostnames()
+    if _hostname_of(request.host) not in allowed:
+        return jsonify({"ok": False, "error": "host_not_allowed"}), 403
+    origin = request.headers.get("Origin")
+    if origin and request.method not in _SAFE_METHODS:
+        # "null" (sandboxed iframes, file://) has no host and is rejected too.
+        if _hostname_of(urlsplit(origin).netloc) not in allowed:
+            return jsonify({"ok": False, "error": "origin_not_allowed"}), 403
+    return None
+
 
 _state = {
     "mode": "chat",
