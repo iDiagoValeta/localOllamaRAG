@@ -997,20 +997,28 @@ def api_delete_doc(filename):
     filename = _safe_pdf_basename(filename)
     if not filename:
         return jsonify({"ok": False, "error": "Nombre de archivo inválido"}), 400
-    # Resolve the folder and the store once, under the same lock: a store
-    # switch in between used to delete the chunks from one store and the PDF
-    # from another (issue #394).
-    with _indexing_lock:
-        filepath = os.path.join(os.path.abspath(rag_engine.CARPETA_DOCS), filename)
-        try:
-            coll = _get_collection()
-            coll.delete_source(filename)
-            if os.path.isfile(filepath):
-                os.remove(filepath)
-            docs = rag_engine.obtener_documentos_indexados(coll)
-            return jsonify({"ok": True, "documents": docs, "total_fragments": coll.count()})
-        except Exception as e:
-            return jsonify({"ok": False, "error": str(e)}), 500
+    # The background indexer adds chunks outside _indexing_lock, so the lock
+    # alone let a delete land mid-run and the indexer re-add the document it
+    # removed (issue #453). Claim the turn like every other index mutation.
+    if not _try_begin_indexing():
+        return jsonify({"ok": False, "error": "indexing_in_progress"}), 409
+    try:
+        # Resolve the folder and the store once, under the same lock: a store
+        # switch in between used to delete the chunks from one store and the
+        # PDF from another (issue #394).
+        with _indexing_lock:
+            filepath = os.path.join(os.path.abspath(rag_engine.CARPETA_DOCS), filename)
+            try:
+                coll = _get_collection()
+                coll.delete_source(filename)
+                if os.path.isfile(filepath):
+                    os.remove(filepath)
+                docs = rag_engine.obtener_documentos_indexados(coll)
+                return jsonify({"ok": True, "documents": docs, "total_fragments": coll.count()})
+            except Exception as e:
+                return jsonify({"ok": False, "error": str(e)}), 500
+    finally:
+        _release_indexing()
 
 
 @app.route("/api/pdf/<path:filename>", methods=["GET"])
