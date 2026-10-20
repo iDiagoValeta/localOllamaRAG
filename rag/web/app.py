@@ -924,7 +924,12 @@ def api_rag():
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
-    respuesta = rag_engine._generar_respuesta_stream(mensaje_usuario)
+    try:
+        respuesta = rag_engine._generar_respuesta_stream(mensaje_usuario)
+    except Exception as e:
+        # Same JSON contract as a retrieval failure above (#379); unwrapped,
+        # Flask answered 500 with an HTML page (issue #460).
+        return jsonify(_pipeline_error_payload(e)), 200
     rag_engine.guardar_debug_rag(
         pregunta,
         mensaje_usuario,
