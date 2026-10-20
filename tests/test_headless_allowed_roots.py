@@ -5,7 +5,6 @@ MONKEYGRAB_HEADLESS_ALLOWED_ROOTS set, docs_folder and data_dir must resolve
 (symlinks followed) under one of those roots; unset, nothing changes, so
 Daimon's existing calls keep working.
 """
-import os
 import sys
 from pathlib import Path
 
