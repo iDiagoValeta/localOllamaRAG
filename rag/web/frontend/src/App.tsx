@@ -347,6 +347,7 @@ export default function App() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const reindexFileInputRef = useRef<HTMLInputElement>(null);
+  const historyHydratedRef = useRef(false);
   // One request at a time: a user stop and the inactivity timeout both end the
   // stream through this controller.
   const requestControllerRef = useRef<AbortController | null>(null);
@@ -447,18 +448,24 @@ export default function App() {
 
           // The backend reloads historial_chat.json on every init and builds
           // the next prompt from it; paint those turns or the model answers
-          // with context the user cannot see (issue #403).
-          setMessages(
-            Array.isArray(initData.history)
-              ? initData.history
-                  .map((entry: { role: 'user' | 'assistant'; content: string }, i: number) => ({
-                    id: `hist-${i}`,
-                    role: entry.role,
-                    content: entry.content,
-                    mode: 'chat' as const,
-                  }))
-              : []
-          );
+          // with context the user cannot see (issue #403). Only on the page's
+          // first init: init runs again after a reindex or a store switch,
+          // and repainting there wiped the visible RAG answers and brought
+          // back turns a store switch had cleared (issue #473).
+          if (!historyHydratedRef.current) {
+            historyHydratedRef.current = true;
+            setMessages(
+              Array.isArray(initData.history)
+                ? initData.history
+                    .map((entry: { role: 'user' | 'assistant'; content: string }, i: number) => ({
+                      id: `hist-${i}`,
+                      role: entry.role,
+                      content: entry.content,
+                      mode: 'chat' as const,
+                    }))
+                : []
+            );
+          }
         } else if (initData.indexing) {
           // A run is still alive: keep the blocking screen and poll.
           setInitError(null);
