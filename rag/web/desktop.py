@@ -39,6 +39,7 @@ Dependencies:
 
 
 import os
+import shutil
 import sys
 import socket
 import threading
@@ -124,6 +125,12 @@ LOADING_HTML = """
 
 # DATA DIRECTORY
 
+# Mirrors rag/engine/settings.STORE_IDS. Importing that module would pull the
+# engine (and its ML stack) in at module scope, which this entry point and its
+# dependency-free unit tests deliberately avoid.
+_STORE_IDS = ("en", "es", "ca")
+
+
 def _default_data_dir() -> str:
     """Per-user writable data directory for vector DBs, stores, history and debug."""
     if os.name == "nt":
@@ -161,12 +168,40 @@ def _data_dir() -> str:
     return _RAG_DIR
 
 
+def _ensure_docs_root(data_dir: str) -> None:
+    """Pin the docs root under ``data_dir`` and seed it from the bundle once.
+
+    The bundled ``rag/docs`` sits inside the install folder (Program Files),
+    where upload, reindex and document deletion all fail with PermissionError.
+    ``setdefault`` keeps an explicit export winning, the same precedence
+    ``MONKEYGRAB_DATA_DIR`` follows.
+
+    A store is copied only when its destination folder is entirely absent.
+    Re-seeding must never overwrite an edited PDF nor merge back one the user
+    deleted on purpose, so an existing folder is left untouched.
+    """
+    docs_root = os.path.join(data_dir, "docs")
+    os.environ.setdefault("MONKEYGRAB_DOCS_ROOT", docs_root)
+    source_root = os.path.join(_RAG_DIR, "docs")
+    os.makedirs(docs_root, exist_ok=True)
+    for store in _STORE_IDS:
+        source = os.path.join(source_root, store)
+        destination = os.path.join(docs_root, store)
+        if os.path.isdir(source) and not os.path.exists(destination):
+            shutil.copytree(source, destination)
+    manifest_source = os.path.join(source_root, "corpus_manifest.json")
+    manifest_destination = os.path.join(docs_root, "corpus_manifest.json")
+    if os.path.isfile(manifest_source) and not os.path.exists(manifest_destination):
+        shutil.copy2(manifest_source, manifest_destination)
+
+
 def _ensure_data_dir() -> str:
     """Pin ``MONKEYGRAB_DATA_DIR`` (defaulting to a per-user path) and create it.
 
     Also pins ``MINERU_CACHE_DIR`` under that directory unless the user already
     exported one: MinerU's own fallback is ``<repo_root>/.mineru_cache``, which
-    a packaged install cannot write (issue #343).
+    a packaged install cannot write (issue #343). A frozen build additionally
+    pins ``MONKEYGRAB_DOCS_ROOT`` and seeds it from the bundled corpora (#344).
 
     Must run before importing the engine, which reads the variable at import time.
     A user-provided ``MONKEYGRAB_DATA_DIR`` is respected as-is; source runs without
@@ -183,6 +218,8 @@ def _ensure_data_dir() -> str:
     # MONKEYGRAB_DATA_DIR itself follows. The packager runs with the bundle in
     # Program Files, where MinerU's repo-relative fallback is read-only.
     os.environ.setdefault("MINERU_CACHE_DIR", os.path.join(data_dir, "mineru_cache"))
+    if getattr(sys, "frozen", False):
+        _ensure_docs_root(data_dir)
     return data_dir
 
 

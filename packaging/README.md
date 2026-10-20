@@ -57,7 +57,10 @@ Routing writable data to `MONKEYGRAB_DATA_DIR` keeps the install read-only-safe;
 in source/dev runs the variable is unset and everything stays repo-relative.
 The desktop also pins `MINERU_CACHE_DIR` under that directory (never overriding
 an explicit export), because MinerU's own fallback would otherwise write
-`.mineru_cache` inside the read-only install folder.
+`.mineru_cache` inside the read-only install folder. The three document stores
+are seeded on first start from the bundled corpora into
+`<MONKEYGRAB_DATA_DIR>\docs` (via `MONKEYGRAB_DOCS_ROOT`), and an existing
+store is never overwritten or merged, so uploads and deletions survive upgrades.
 
 ## Target prerequisites
 
