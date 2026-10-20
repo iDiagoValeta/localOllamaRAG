@@ -285,6 +285,9 @@ request must carry `Authorization: Bearer <token>`; unset means no auth, on a
 socket that only ever binds `127.0.0.1` (`MONKEYGRAB_HEADLESS_PORT`, default
 `5050`). Request bodies are capped at 1 MiB; a larger one is rejected before
 parsing with a JSON `413 payload_too_large`.
+`MONKEYGRAB_HEADLESS_ALLOWED_ROOTS` (folders separated like `PATH`) limits
+where `docs_folder` and `data_dir` may point, symlinks resolved; anything
+outside gets `403 path_not_allowed`. Unset, any path is accepted.
 
 `/health` reports the checkout's git `HEAD` commit alongside the isolated
 interpreter, CUDA visibility, the embedder's liveness and the per-role
