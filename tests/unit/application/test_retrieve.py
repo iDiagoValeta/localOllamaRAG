@@ -383,3 +383,23 @@ def test_a_generic_word_matching_part_of_a_filename_boosts_nothing():
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+def test_a_named_document_survives_the_reranker_threshold():
+    # The fusion-time boost is overwritten by the reranker's own score, so a
+    # named document scoring under the threshold vanished from the answer
+    # (issue #312). Its fragments are exempt from the cut, in reranker order.
+    hits = [_fragment(f"doc{i}.pdf_pag0_chunk0") for i in range(3)]
+    reranker = FakeReranker()
+    config = _config(**{
+        "flags.usar_busqueda_hibrida": False,
+        "reranking.score_threshold": 0.85,
+    })
+
+    result = Retrieve(FakeEmbedder(), FakeVectorStore(default_hits=hits), config, reranker=reranker).run(
+        "What does doc0.pdf say about it?"
+    )
+
+    ids = [f.id for f in result.fragments]
+    assert "doc0.pdf_pag0_chunk0" in ids
+    assert [round(f.score_reranker, 2) for f in result.fragments] == [1.0, 0.9, 0.8]
