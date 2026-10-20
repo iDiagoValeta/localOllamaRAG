@@ -76,7 +76,7 @@ def _embedding_id(config: AppConfig) -> str:
     return f"google/embeddinggemma-2@{config.models.embedding.dimensions}"
 
 
-def index_recipe(config: AppConfig) -> Dict[str, Any]:
+def index_recipe(config: AppConfig, extractor_version: Optional[str] = None) -> Dict[str, Any]:
     """Return the configuration that decides an index's stored content.
 
     Only what changes stored chunks belongs here. Retrieval fan-out, fusion
@@ -86,6 +86,13 @@ def index_recipe(config: AppConfig) -> Dict[str, Any]:
 
     Args:
         config: The configuration an index was, or would be, built under.
+        extractor_version: The installed extractor's own version string, when
+            the caller can read it. Upgrading MinerU in place changes the
+            chunks a reindex would store without moving any config value
+            (issue #426). The application layer cannot ask the binary itself
+            (dependency rule), so the wiring layer passes it in; ``None``
+            leaves the key out, which keeps callers that never knew the
+            version (the eval gate) on the fingerprint they always had.
 
     Returns:
         A JSON-serializable dict describing that recipe.
@@ -101,6 +108,8 @@ def index_recipe(config: AppConfig) -> Dict[str, Any]:
     }
     if _RECIPE_VERSION != 1:
         recipe["recipe_version"] = _RECIPE_VERSION
+    if extractor_version:
+        recipe["extractor_version"] = extractor_version
     # The contextual model, its context window and its document sample only
     # reach stored text when that stage actually runs. Including them
     # unconditionally would make an index built with the stage OFF depend on
@@ -117,17 +126,18 @@ def index_recipe(config: AppConfig) -> Dict[str, Any]:
     return recipe
 
 
-def compute_index_fingerprint(config: AppConfig) -> str:
-    """Return a short stable digest of ``index_recipe(config)``.
+def compute_index_fingerprint(config: AppConfig, extractor_version: Optional[str] = None) -> str:
+    """Return a short stable digest of ``index_recipe(config, extractor_version)``.
 
     Args:
         config: The configuration an index was, or would be, built under.
+        extractor_version: See ``index_recipe``.
 
     Returns:
         16 hex characters -- short enough to read in a log line, wide enough
         that a collision between two real recipes is not a practical concern.
     """
-    canonical = json.dumps(index_recipe(config), sort_keys=True, separators=(",", ":"))
+    canonical = json.dumps(index_recipe(config, extractor_version), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:_FINGERPRINT_CHARS]
 
 

@@ -171,6 +171,23 @@ def _mineru_version(resolved_bin: str, bin_mtime_ns: int) -> str:
     return version.splitlines()[-1]
 
 
+def installed_version(mineru_bin: Optional[str] = None) -> str:
+    """Version string of the configured MinerU install, for the index fingerprint (issue #426).
+
+    Args:
+        mineru_bin: Binary to ask; defaults to the same resolution the
+            extractor uses (``MINERU_BIN``, then the isolated venv).
+
+    Raises:
+        RuntimeError: MinerU cannot be found or cannot report its version.
+    """
+    configured = mineru_bin if mineru_bin is not None else _default_mineru_bin()
+    resolved = _resolve_runnable_bin(configured)
+    if resolved is None:
+        raise RuntimeError(f"MinerU CLI not found (looked for {configured!r} on disk and on PATH)")
+    return _mineru_version(resolved, os.stat(resolved).st_mtime_ns)
+
+
 def _cache_key(pdf_path: Path, mineru_bin: str) -> str:
     """Cache key for one (PDF, MinerU install, parsing-logic version) triple.
 

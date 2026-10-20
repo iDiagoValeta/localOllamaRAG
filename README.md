@@ -313,8 +313,8 @@ on the next poll.
 disk disagrees with the configuration in force
 (`rag/headless/service.py:status_store`, which calls
 `index_fingerprint_mismatch`). It means the indexed chunks were built
-under different chunking or embedding settings, not that documents are
-missing. `POST /stores/<id>/index` does not repair this:
+under different chunking or embedding settings, or by another MinerU
+version (issue #426), not that documents are missing. `POST /stores/<id>/index` does not repair this:
 `rag/headless/service.py:index_store` only indexes new file names and drops
 removed ones. Recovery is: delete the store's directory under
 `<data_dir>/vector_db/` (named `<hash>_<folder>_eg2`, the hash taken from the

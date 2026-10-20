@@ -12,6 +12,7 @@ from typing import Callable, List, Optional
 
 from monkeygrab.adapters.extraction.by_suffix_extractor import PdfOnlyImageExtractor
 from monkeygrab.adapters.extraction.mineru_extractor import MineruImageExtractor
+from monkeygrab.adapters.extraction.mineru_extractor import installed_version as mineru_installed_version
 from monkeygrab.adapters.extraction.text_extractor import TEXT_SUFFIXES
 from monkeygrab.application.index_corpus import IndexCorpus
 from monkeygrab.application.index_fingerprint import compute_index_fingerprint, fingerprint_is_stale
@@ -195,9 +196,26 @@ def indexar_documentos(
         )
 
     if solo_archivos is None:
-        collection.write_fingerprint(compute_index_fingerprint(config))
+        collection.write_fingerprint(compute_index_fingerprint(config, _extractor_version()))
 
     return total_chunks
+
+
+def _extractor_version() -> Optional[str]:
+    """MinerU's version for the fingerprint, or ``None`` when it is not installed.
+
+    Upgrading MinerU in place changes what a reindex would store (issue #426),
+    so the version is part of the fingerprint whenever it can be read. A
+    machine without MinerU -- a text-only headless corpus, a query-only
+    install -- cannot read it; it then writes and checks the fingerprint
+    without the version, consistently, instead of failing a stage that never
+    ran MinerU. Indexing a PDF still hard-fails on a missing MinerU in the
+    adapter itself, so this is not a silent fallback of the extraction.
+    """
+    try:
+        return mineru_installed_version()
+    except RuntimeError:
+        return None
 
 
 def index_fingerprint_mismatch(collection: VectorStore) -> bool:
@@ -226,7 +244,7 @@ def index_fingerprint_mismatch(collection: VectorStore) -> bool:
     """
     try:
         config = wiring.app_config_from_runtime()
-        expected = compute_index_fingerprint(config)
+        expected = compute_index_fingerprint(config, _extractor_version())
         return fingerprint_is_stale(collection.read_fingerprint(), expected)
     except Exception:
         return False

@@ -46,7 +46,9 @@ web app calls it to warn when a stored index no longer matches the active
 config, and leave reindexing to the user rather than triggering it — an hour
 of MinerU + embedding must never start silently. A store with no recorded
 fingerprint (every index built before this feature existed) reads as unknown,
-not stale.
+not stale. The wiring adds the installed MinerU version to the recipe when it
+can read it (issue #426); without MinerU both the write and the check leave it
+out, so a query-only machine does not read every store as stale.
 
 Each entry point under `rag/engine/` is wiring plus conversion between the
 domain entities the core speaks and the dicts the interfaces consume. None of
