@@ -329,6 +329,9 @@ export default function App() {
   const [storeError, setStoreError] = useState<string | null>(null);
   const [ollamaStatus, setOllamaStatus] = useState<{ running: boolean; version: string | null }>({ running: true, version: null });
   const [ollamaStarting, setOllamaStarting] = useState(false);
+  // Why a start attempt left the server stopped. Kept apart from modelError
+  // because it belongs to the Ollama row, not to the role selectors below it.
+  const [ollamaError, setOllamaError] = useState<string | null>(null);
   const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
   const [modelRoles, setModelRoles] = useState<ModelRoles | null>(null);
   const [savingRole, setSavingRole] = useState<ModelRole | null>(null);
@@ -619,6 +622,9 @@ export default function App() {
     if (st?.ok) {
       setOllamaStatus({ running: st.running, version: st.version });
       if (st.running) {
+        // A status check that finds the server up retires any stale start
+        // failure: the condition the message described no longer holds.
+        setOllamaError(null);
         const m = await api.ollamaModels().catch(() => null);
         if (m?.ok) setOllamaModels(m.models || []);
       } else {
@@ -696,19 +702,28 @@ export default function App() {
   const handleStartOllama = useCallback(async () => {
     if (ollamaStarting) return;
     setOllamaStarting(true);
+    // A retry supersedes the failure of the attempt before it.
+    setOllamaError(null);
     try {
       const res = await api.startOllama();
       setOllamaStatus({ running: !!res.running, version: res.version || null });
       if (res.running) {
         const m = await api.ollamaModels().catch(() => null);
         if (m?.ok) setOllamaModels(m.models || []);
+      } else {
+        // api.startOllama parses the body regardless of the HTTP status, so
+        // the 404 that says the binary is missing arrives with its own code
+        // and can name the cause instead of a generic failure.
+        setOllamaError(res.error === 'ollama_not_found' ? T.ollamaNotFound : T.ollamaStartFailed);
       }
     } catch {
-      /* keep stopped */
+      // Transport failure: without this the row would keep saying "stopped"
+      // as if nothing had been attempted.
+      setOllamaError(T.ollamaStartFailed);
     } finally {
       setOllamaStarting(false);
     }
-  }, [ollamaStarting]);
+  }, [ollamaStarting, lang]);
 
   // ---- Load control panel (stores / model roles / Ollama) once ready ----
   // The backend auto-starts Ollama at boot; if it is still down when the UI
@@ -1306,6 +1321,7 @@ export default function App() {
             onClose={() => setMainPanel(null)}
             ollamaStatus={ollamaStatus}
             ollamaStarting={ollamaStarting}
+            ollamaError={ollamaError}
             refreshOllama={refreshOllama}
             handleStartOllama={handleStartOllama}
             ollamaModels={ollamaModels}
