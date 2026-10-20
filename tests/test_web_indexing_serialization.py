@@ -266,6 +266,26 @@ def test_delete_doc_deletes_the_chunks_while_holding_the_lock(client, tmp_path, 
     assert not pdf.exists()
 
 
+
+def test_delete_doc_is_refused_while_an_index_run_holds_the_turn(client, tmp_path, monkeypatch):
+    """The background indexer adds chunks outside the lock (issue #453)."""
+    folder = tmp_path / "docs"
+    folder.mkdir()
+    pdf = folder / "paper.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr(web.rag_engine, "CARPETA_DOCS", str(folder))
+    store = _FakeStore(documents=["paper.pdf"])
+    deleted = []
+    store.delete_source = deleted.append
+    monkeypatch.setattr(web, "_get_collection", lambda: store)
+    monkeypatch.setitem(web._state, "indexing", True)
+
+    response = client.delete("/api/docs/paper.pdf")
+
+    assert response.status_code == 409
+    assert response.get_json()["error"] == "indexing_in_progress"
+    assert deleted == [] and pdf.exists()
+
 def test_clear_bumps_the_history_generation(client, history):
     before = web._state["history_generation"]
 
