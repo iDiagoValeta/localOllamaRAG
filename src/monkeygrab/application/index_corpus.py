@@ -209,6 +209,39 @@ class IndexCorpus:
         self._config = config
 
     def run(self, pdf_path: str, filename: str) -> IndexCorpusResult:
+        """Index one PDF file, all or nothing.
+
+        Chunks are written as they are produced, so a failure halfway (an
+        embedder error on page 5 of 10) used to leave pages 1-4 stored under
+        this source; every caller decides "indexed" by source presence, so the
+        rest of the document was never retried (issue #465). What this call
+        wrote is removed before the error propagates. Nothing is removed when
+        it failed before writing: an earlier version of the document, if any,
+        is the caller's to replace.
+
+        Args:
+            pdf_path: See ``_run``.
+            filename: See ``_run``.
+
+        Returns:
+            ``IndexCorpusResult`` with the total chunks indexed.
+
+        Raises:
+            Exception: Whatever extraction, embedding or the store raised.
+        """
+        self._written = 0
+        try:
+            return self._run(pdf_path, filename)
+        except Exception:
+            if self._written:
+                self._vector_store.delete_source(filename)
+            raise
+
+    def _add(self, chunk: Chunk, embedding: Sequence[float]) -> None:
+        self._vector_store.add(chunk, embedding)
+        self._written += 1
+
+    def _run(self, pdf_path: str, filename: str) -> IndexCorpusResult:
         """Index one PDF file.
 
         Args:
@@ -269,7 +302,7 @@ class IndexCorpus:
                 chunk = Chunk(text=final_text, metadata=metadata)
 
                 embedding = self._embedder.embed(final_text)
-                self._vector_store.add(chunk, embedding)
+                self._add(chunk, embedding)
                 total_chunks += 1
 
         total_image_chunks = 0
@@ -351,7 +384,7 @@ class IndexCorpus:
                     image_width=image.width,
                     image_height=image.height,
                 )
-                self._vector_store.add(Chunk(text=text, metadata=metadata), embedding)
+                self._add(Chunk(text=text, metadata=metadata), embedding)
                 n_indexed += 1
 
         return n_indexed, n_failed
