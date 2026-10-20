@@ -492,7 +492,15 @@ def _content_list_to_images(
         if not rel_path or page_idx is None:
             continue
 
-        image_path = auto_dir / rel_path
+        image_path = (auto_dir / rel_path).resolve()
+        # img_path comes from a JSON file on disk: an absolute or ../ path
+        # would read any file on the machine into the index. MinerU never
+        # writes one, so one here means the output is not MinerU's (issue #470).
+        if not image_path.is_relative_to(auto_dir.resolve()):
+            raise RuntimeError(
+                f"MinerU figure path {rel_path!r} escapes the output directory {auto_dir}; "
+                "the extraction cache is corrupt or was not written by MinerU"
+            )
         try:
             image_bytes = image_path.read_bytes()
             from io import BytesIO
