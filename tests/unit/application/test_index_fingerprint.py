@@ -106,43 +106,30 @@ def test_description_model_only_counts_when_the_stage_runs():
     assert compute_index_fingerprint(off) != compute_index_fingerprint(on)
 
 
-def test_recipe_version_is_omitted_at_v1():
-    """recipe_version must not appear in the recipe while it is 1.
-
-    Version 1 is defined as the recipe before recipe_version existed, so the
-    key stays out of the dict until a human bumps it.
-    """
-    config = AppConfig().with_overrides(**{"flags.usar_contextual_retrieval": False})
-    assert "recipe_version" not in index_recipe(config)
-
-
 def test_recipe_version_bump_actually_changes_the_recipe_and_the_fingerprint(monkeypatch):
-    """Exercises the mechanism itself, not just its at-rest state at v1.
+    """Exercises the mechanism itself, not just the constant's current value.
 
-    test_recipe_version_is_omitted_at_v1 above
-    only proves the key is absent while _RECIPE_VERSION == 1 -- equally true
-    of a tree where the two lines
+    Bumps _RECIPE_VERSION past whatever it is now and checks the key follows
+    and the fingerprint actually moves, so a later refactor that "simplifies"
+    the two lines
         if _RECIPE_VERSION != 1:
             recipe["recipe_version"] = _RECIPE_VERSION
-    were deleted entirely, or never written. Deleting them leaves the full
-    suite green, since nothing else in this module bumps the constant. This
-    test bumps it and checks the key actually appears and the fingerprint
-    actually moves, so a later refactor that "simplifies" those two lines
     away fails here instead of shipping silently.
     """
     config = AppConfig()
-    v1_fingerprint = compute_index_fingerprint(config)
+    current_fingerprint = compute_index_fingerprint(config)
+    bumped = index_fingerprint._RECIPE_VERSION + 1
 
-    monkeypatch.setattr(index_fingerprint, "_RECIPE_VERSION", 2)
+    monkeypatch.setattr(index_fingerprint, "_RECIPE_VERSION", bumped)
 
-    assert index_recipe(config)["recipe_version"] == 2
-    assert compute_index_fingerprint(config) != v1_fingerprint
+    assert index_recipe(config)["recipe_version"] == bumped
+    assert compute_index_fingerprint(config) != current_fingerprint
 
 
 def test_default_app_config_fingerprint_is_pinned():
     """Pins the branch every product user actually takes -- contextual ON.
 
-    test_recipe_version_is_omitted_at_v1 above only exercises the contextual-OFF path, which is the eval gate's own
+    The other pins here exercise the contextual-OFF path, which is the eval gate's own
     config, not the product default: usar_contextual_retrieval defaults to
     True, so a stray field added inside
     `if config.flags.usar_contextual_retrieval:` would move every real
@@ -154,8 +141,12 @@ def test_default_app_config_fingerprint_is_pinned():
     Value computed on this branch after the default embedder became
     embeddinggemma-2 (issue #292):
         compute_index_fingerprint(AppConfig()) == "41c129b913131f7d"
+
+    and after _RECIPE_VERSION became 2 (code blocks indexed, #366; 1-based
+    figure placeholder, #375):
+        compute_index_fingerprint(AppConfig()) == "2d135aadd64b8c13"
     """
-    assert compute_index_fingerprint(AppConfig()) == "41c129b913131f7d"
+    assert compute_index_fingerprint(AppConfig()) == "2d135aadd64b8c13"
 
 
 def test_fingerprint_is_short_hex():
