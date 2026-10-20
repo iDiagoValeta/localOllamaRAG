@@ -719,7 +719,9 @@ def api_corpus():
     if preset not in _CORPUS_PRESET_IDS:
         _release_indexing()
         return jsonify({"ok": False, "error": "invalid_preset"}), 400
-    abs_path = os.path.join(_project_root, "rag", "docs", preset)
+    # _DOCS_ROOT, not the source tree: the packaged app moves the stores to a
+    # writable copy, and /api/stores already resolves them there (issue #450).
+    abs_path = os.path.join(_DOCS_ROOT, preset)
     if not os.path.isdir(abs_path):
         _release_indexing()
         return jsonify({"ok": False, "error": "missing_docs_folder", "path": abs_path}), 400
