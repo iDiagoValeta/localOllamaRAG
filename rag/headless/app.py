@@ -8,6 +8,7 @@ without a token is unsupported.
 import hmac
 import json
 import logging
+import os
 from typing import Any, Callable, Dict, Iterator, Optional, Tuple
 
 from flask import Flask, Response, abort, jsonify, request, stream_with_context
@@ -62,12 +63,26 @@ def _paths_from(values: Dict[str, Any]) -> Tuple[str, str]:
     return values["docs_folder"], values["data_dir"]
 
 
+def _allowed_roots_from_env() -> Optional[Tuple[str, ...]]:
+    """``MONKEYGRAB_HEADLESS_ALLOWED_ROOTS`` as real paths, or ``None`` when unset."""
+    raw = os.getenv("MONKEYGRAB_HEADLESS_ALLOWED_ROOTS", "")
+    roots = tuple(os.path.realpath(part) for part in raw.split(os.pathsep) if part.strip())
+    return roots or None
+
+
+def _inside(path: str, roots: Tuple[str, ...]) -> bool:
+    # realpath, so a symlink inside a root cannot point the indexer outside it.
+    real = os.path.realpath(path)
+    return any(os.path.commonpath([real, root]) == root for root in roots)
+
+
 def create_app(
     *,
     service: Any = service_module,
     health: Callable[[AppConfig], health_module.HealthReport] = health_module.cached_probe,
     token: Optional[str] = None,
     registry: Optional[StoreRegistry] = None,
+    allowed_roots: Optional[Tuple[str, ...]] = None,
 ) -> Flask:
     """Build the Flask app.
 
@@ -81,6 +96,10 @@ def create_app(
             token the app serves loopback only; exposing the port beyond
             loopback without a token is unsupported.
         registry: Store-id registry; one per process by default.
+        allowed_roots: Folders ``docs_folder`` and ``data_dir`` must live
+            under, or ``None`` to accept any path (the default, so Daimon's
+            calls keep working). Read from ``MONKEYGRAB_HEADLESS_ALLOWED_ROOTS``
+            when not given (issue #346).
     """
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = _MAX_CONTENT_LENGTH
@@ -89,6 +108,7 @@ def create_app(
         # stays silent; only the no-auth loopback case warns.
         logging.warning("running without auth on loopback; exposing beyond loopback unsupported")
     stores = registry or StoreRegistry()
+    roots = allowed_roots if allowed_roots is not None else _allowed_roots_from_env()
 
     @app.before_request
     def _require_token():
@@ -116,10 +136,19 @@ def create_app(
 
     def _resolve(store_id: str, values: Dict[str, Any]) -> StorePaths:
         docs_folder, data_dir = _paths_from(values)
+        if roots:
+            outside = [name for name, value in (("docs_folder", docs_folder), ("data_dir", data_dir))
+                       if not _inside(value, roots)]
+            if outside:
+                abort(403, description=f"{', '.join(outside)} outside MONKEYGRAB_HEADLESS_ALLOWED_ROOTS")
         try:
             return stores.resolve(store_id, docs_folder, data_dir)
         except StoreConflict as exc:
             abort(409, description=str(exc))
+
+    @app.errorhandler(403)
+    def _forbidden(error):
+        return jsonify({"ok": False, "error": "path_not_allowed", "message": error.description}), 403
 
     @app.errorhandler(409)
     def _conflict(error):
