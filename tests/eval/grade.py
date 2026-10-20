@@ -96,8 +96,17 @@ _WHITESPACE_RE = re.compile(r"\s+")
 
 # Dot as thousands separator ("3.000 anys"): only read that way in the third
 # candidate of grade_answer, never in _normalize, because "1.366" is a
-# decimal in English and a thousand in Catalan (issue #367).
-_DOT_THOUSANDS_RE = re.compile(r"(?<=\d)\.(?=\d{3}(?:\D|$))")
+# decimal in English and a thousand in Catalan (issue #367). Only a
+# well-formed grouping qualifies -- one to three leading digits not starting
+# with 0, then whole 3-digit groups -- so "0.144", "1.5" and "3.0005" stay
+# decimals: reading "0.144" as groups would let the literal "144" match a
+# value 1000 times smaller.
+_DOT_THOUSANDS_RE = re.compile(r"(?<![\d.,])[1-9]\d{0,2}(?:\.\d{3})+(?![\d.])")
+
+# Space as thousands separator ("100 000", including the space a LaTeX thin
+# space becomes in _strip_markup), collapsed after the dot reading so an
+# answer written "3.000" meets a literal spelled "3 000" on equal terms.
+_THOUSANDS_SPACE_RE = re.compile(r"(?<=\d) (?=\d{3}(?!\d))")
 
 # LaTeX superscript 2/3 against the Unicode one a PDF carries: "m^2" is "m²".
 # Not before another digit, so "10^20" is not turned into "10²0".
@@ -158,27 +167,31 @@ def _normalize(text: str) -> str:
     return s
 
 
-def _normalize_dot_thousands(text: str, separator: str) -> str:
+def _normalize_dot_thousands(text: str) -> str:
     """Canonicalize an answer reading "." as thousands and "," as the decimal point.
 
-    The Spanish/Catalan convention ("3.000 anys", "47,1 %"). Extra readings
-    beside ``_normalize`` and ``_normalize_decimal_comma``, tried only on the
-    answer, for the same reason the decimal-comma one is: the string alone
-    cannot tell which convention it follows (issue #367). The dot becomes
-    ``separator`` -- "" for a literal written "3000", " " for one written
-    "3 000" -- so neither spelling of the gold literal needs a rule of its own,
-    and the two original readings stay exactly as they were.
+    The Spanish/Catalan convention ("3.000 anys", "47,1 %"). An extra
+    reading beside ``_normalize`` and ``_normalize_decimal_comma``, tried
+    only on the answer, for the same reason the decimal-comma one is: the
+    string alone cannot tell which convention it follows (issue #367).
+
+    One reading, not two. Collapsing the dot to nothing ("3000") and
+    collapsing spaces of thousands on the literal side ("3 000" -> "3000")
+    is enough to meet every spelling of the gold literal; emitting a second
+    reading with a space where the dot was turned "0.144" into "0 144",
+    where a literal "144" matched as a free token -- a decimal accepted as a
+    value 1000 times larger (H1 of the #492 review).
 
     Args:
         text: Raw text (a generated answer).
-        separator: What replaces a thousands dot.
 
     Returns:
         Normalized text, safe to compare or search with token matching.
     """
     s = _strip_markup(text)
-    s = _DOT_THOUSANDS_RE.sub(separator, s)
+    s = _DOT_THOUSANDS_RE.sub(lambda match: match.group(0).replace(".", ""), s)
     s = _DECIMAL_COMMA_RE.sub(".", s)
+    s = _THOUSANDS_SPACE_RE.sub("", s)
     s = _WHITESPACE_RE.sub(" ", s).strip()
     return s
 
@@ -287,12 +300,15 @@ def _contains_token(haystack: str, needle: str) -> bool:
             + _NUMERIC_SUFFIX_ALTERNATION
             + r")(?!\w)|\b(?!\.\d))"
         )
-    else:
-        # Lookarounds rather than \b: identical next to a word character, but
-        # \b can never anchor after a trailing "%" ("70%"), so such a literal
-        # used to match nothing at all (issue #367).
-        pattern = r"(?<!\w)" + escaped + r"(?!\w)"
-    return re.search(pattern, haystack) is not None
+        return re.search(pattern, haystack) is not None
+    # Acceptance is the union of two boundaries, so nothing the grader
+    # used to accept stops being accepted. The lookaround is needed
+    # because \b can never anchor after a trailing "%" ("70%"), so such a
+    # literal used to match nothing at all (issue #367); the old \b form
+    # stays because \b does sit between a trailing "%" and a letter, so
+    # "67%de" counted as "67%" before and must keep counting.
+    patterns = (r"(?<!\w)" + escaped + r"(?!\w)", r"\b" + escaped + r"\b")
+    return any(re.search(pattern, haystack) for pattern in patterns)
 
 
 # GRADERS
@@ -322,15 +338,20 @@ def grade_answer(answer: str, case: Dict[str, Any]) -> Dict[str, Any]:
     # matched if it is found in either.
     haystack_thousands = _normalize(answer)
     haystack_decimal = _normalize_decimal_comma(answer)
-    haystacks = (
-        haystack_thousands,
-        haystack_decimal,
-        _normalize_dot_thousands(answer, ""),
-        _normalize_dot_thousands(answer, " "),
-    )
+    # A third reading for Spanish/Catalan thousands dots. Its literal is
+    # collapsed with the same space rule first, so "3 000 anys" is looked up
+    # as "3000 anys" and neither spelling needs a rule of its own.
+    haystack_dot_thousands = _normalize_dot_thousands(answer)
 
     def _present(literal: str) -> bool:
-        return any(_contains_token(haystack, literal) for haystack in haystacks)
+        if (
+            _contains_token(haystack_thousands, literal)
+            or _contains_token(haystack_decimal, literal)
+        ):
+            return True
+        return _contains_token(
+            haystack_dot_thousands, _THOUSANDS_SPACE_RE.sub("", literal)
+        )
 
     # required_all demands every literal be present, which buys precision
     # without dictating phrasing. Requiring one exact sentence rejected correct

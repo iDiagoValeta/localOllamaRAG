@@ -544,7 +544,22 @@ def test_typesetting_variants_of_a_correct_answer_pass(case_id, answer, accepted
         ("the ratio was 28.4", "28"),
         ("del 47,15%", "47,1%"),
         ("unos 3.0005 anys", "3 000 anys"),
+        # A short decimal must never be read as a thousands-grouped integer:
+        # its digits are 1000 times smaller than the grouped literal's.
+        ("0.144", "144"),
+        ("1.512", "512"),
+        ("24.144", "144"),
+        ("1.110", "110"),
     ],
 )
 def test_typesetting_rules_do_not_accept_a_different_value(answer, literal):
     assert not grade_answer(answer, {"accepted_answers": [literal]})["pass"]
+
+
+def test_a_literal_ending_in_a_non_word_character_keeps_matching_glued_text():
+    """Monotonicity: a match the old ``\\b...\\b`` pattern accepted must stay
+    accepted. ``\\b`` sits between ``%`` and a letter, so "67%de" used to
+    count as "67%"; replacing the boundary wholesale with lookarounds made it
+    stop, silently shrinking the set of answers a correct one may take.
+    """
+    assert grade_answer("67%de", {"accepted_answers": ["67%"]})["pass"]
