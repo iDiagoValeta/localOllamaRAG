@@ -44,7 +44,7 @@ what a flag does — this is exactly the loop's job.
 ```
 RUNBOOK.md           How to run a campaign: procedure, decision points, verdicts
 search_space.py      Declared tunables, index-time exclusions, feasibility, reachability gate metadata
-fast_tier.txt         Fixed 26-case regression filter (never declares an improvement)
+fast_tier.txt         Fixed 20-case regression filter (never declares an improvement)
 slow_tier.py          Index-time tier (#102): batching by index recipe, cost in fast-tier units
 unreachable_cases.txt Cases excluded from the maximised scalar — starts empty, evidence-backed
 ledger.py              Append-only evidence ledger (JSON per iteration + index.jsonl)
@@ -183,21 +183,21 @@ fake evaluator that raises on a declared key makes startup fail loudly
   search-set subset) -- never from a proposer, which can only emit config
   overrides. Proven, not assumed: `harness/tests/test_evaluator.py` asserts
   the blind set is disjoint from both the search set and the fast tier.
-- **Fast tier** (26 fixed ids, `fast_tier.txt`) -- regression filter only, it
-  **never declares an improvement**. Re-derived on 2026-09-12 from the
-  search-set reference run with the product's generator by one rule (issue
-  #247): every case that run failed (17), plus the first passing case in
-  `gold_cases.jsonl` order for every `case_type` and every `source` the
-  failures left uncovered (9). It spans all seven case types and all three
-  stores, and `harness/tests/test_evaluator.py` asserts both, so the next
-  corpus expansion cannot strand a store here again as #213 did. Cost, from
-  that run's own per-case timings: about 7 min against ~30 min for a full
-  search-set run, no case near the generation budget. Its job is rejecting
-  a bad candidate before it can contaminate the ratchet, not the minutes it
-  happens to save. The failures are here so the filter has signal on both
-  sides: a candidate that fixes one shows a gain the tier does not act on,
-  a candidate that breaks a passing one is rejected before the ratchet sees
-  it.
+- **Fast tier** (20 fixed ids, `fast_tier.txt`) -- regression filter only, it
+  **never declares an improvement**. Re-derived on 2026-10-20 from the
+  search-set reference run of the embeddinggemma-2 stack with the product's
+  generator by one rule (issue #247): every case that run failed (16), plus
+  the first passing case in `gold_cases.jsonl` order for every `case_type`
+  and every `source` the failures left uncovered (4). It spans all seven case
+  types and all three stores, and `harness/tests/test_evaluator.py` asserts
+  both, so the next corpus expansion cannot strand a store here again as
+  #213 did. Cost, from the per-case timings of the full gate on the same
+  code (`20261019T233547Z`): about 5 min against ~40 min for every case, no
+  case near the generation budget. Its job is rejecting a bad candidate
+  before it can contaminate the ratchet, not the minutes it happens to save.
+  The failures are here so the filter has signal on both sides: a candidate
+  that fixes one shows a gain the tier does not act on, a candidate that
+  breaks a passing one is rejected before the ratchet sees it.
 
 ## Objective, constraint, noise floor
 
@@ -215,11 +215,10 @@ differ the text says so.
 **Objective:** `objective_adjusted` = passing cases on the search set, minus
 cases listed in `unreachable_cases.txt` (excluded from both numerator and
 denominator, not just discounted). `unreachable_cases.txt` starts **empty**
-and stays that way as of 2026-09-12: the reference run on the current
-123-case search set with the product's generator (`20260912T034029Z`,
-`gemma4:e4b`, 106/123) fails 17 cases -- 11 `factual_number`, 3
-`factual_concept`, 2 `figure_retrieval`, 1 `study_outline` -- and every one
-of them is a retrieval or generation outcome the declared search space can
+and stays that way as of 2026-10-20: the reference run on the current
+123-case search set with the product's generator (`gemma4:e4b`, 107/123,
+embeddinggemma-2 stack, `harness/calibration/2026-10-20-eg2.json`) fails 16
+cases, and every one of them is a retrieval or generation outcome the declared search space can
 move, not a case no configuration could reach. Their ids are the first
 block of `fast_tier.txt`. `objective_raw` (unreachable cases included) is tracked
 alongside so the exclusion mechanism is auditable before it is ever
@@ -264,52 +263,51 @@ counts toward `--patience`) and raises `evaluator.InconclusiveEvaluationError`
 before the loop even starts if the **reference** measurement itself carries
 one — no ratchet baseline can be trusted in that case.
 
-**Noise floor: 2 cases.** Measured 2026-09-12 on the search set this loop
-evaluates and with the generator it runs (`gemma4:e4b`): two `evaluate()`
-calls of the identical configuration, `conditions` equal field for field,
-`20260912T034029Z` (106/123) and `20260912T043930Z` (106/123);
-`compare_runs.py` over the pair: 1 flipped to PASS, 1 flipped to FAIL, 121
-unchanged, both study artifacts over the attention paper. A candidate two
-cases up on the ratchet is rejected as `rejected_no_gain`
-(`loop.NOISE_FLOOR_CASES`); three is the smallest accepted gain. The same
-pair with `Ling-3.0-tiny`, the gate's default until #254
-(`20260912T003549Z` 107/123, `20260912T013552Z` 104/123), moved three
-cases, all to FAIL. This replaces the 2026-07-29 figure of zero flips,
-which was measured on the 51-case set that preceded #213 and re-verified
-on the 32-case search set of the time; the current 156-case set flips on
-sampling alone (`docs/model-history.md`, "How to read", item 1), and so
-does this subset of it (issue #243).
+**Noise floor: 3 cases.** Measured 2026-10-20 on the search set this loop
+evaluates, with the generator it runs (`gemma4:e4b`) on the
+embeddinggemma-2 stack (issue #341): two `evaluate()` calls of the identical
+configuration, 107/123 and 110/123, flipped 4 cases to PASS and 1 to FAIL,
+3 net. A candidate three cases up on the ratchet is rejected as
+`rejected_no_gain` (`loop.NOISE_FLOOR_CASES`); four is the smallest accepted
+gain. `evaluate()` writes no gate artifact, so the per-case results of all
+three calibration runs are versioned in
+`harness/calibration/2026-10-20-eg2.json`. On the Jina CLIP stack
+(2026-09-12, issue #243) the same measurement moved 1 and 1, a floor of 2;
+the 156-case set flips on sampling alone (`docs/model-history.md`, "How to
+read", item 1), and so does this subset of it.
 
 ## Resolution warning
 
-Measured 2026-09-12 on the current 123-case search set with the product's
-generator, `gemma4:e4b`, in the same three runs as the noise floor above
-(issue #243), replacing figures measured on the 32-case set that preceded
-#213:
+Measured 2026-10-20 on the current 123-case search set with the product's
+generator, `gemma4:e4b`, on the embeddinggemma-2 stack, in the same three runs
+as the noise floor above (issue #341):
 
-- **Available failures: 17 of 123** (`20260912T034029Z`, 106/123). The old
-  figure was "at most 5" on 27/32.
-- **Net flips under the known-catastrophic sabotage: 6.** The criterion-2
+- **Available failures: 16 of 123** (first reference, 107/123). 17 on Jina
+  CLIP.
+- **Net flips under the known-catastrophic sabotage: 7.** The criterion-2
   sabotage, `retrieval.top_k_final=1` passed through `evaluate()`'s
-  `config_overrides` (`20260912T040928Z`, 100/123), flipped 2 cases to PASS
-  and 8 to FAIL against the first reference, 3 and 9 against the second: 6
-  net both times. The old figure was 3 net on the 32-case set.
+  `config_overrides` (100/123), flipped 3 cases to PASS and 10 to FAIL
+  against the first reference (7 net), 1 and 11 against the second (10
+  net); the smaller figure is the one kept. 6 on Jina CLIP.
 - **Demonstrability threshold: ~6 net flips**, the design doc's (§3) fixed
   methodological constant, unchanged.
 
-So a catastrophic single-field change now sits exactly at the threshold:
-detectable, but only just. With `Ling-3.0-tiny` the same sabotage moved 10
-net against 16 available failures (`20260912T010521Z` against
-`20260912T003549Z`); the shipped generator absorbs more of a retrieval
-collapse, which is a fact about the product, not a defect of the set. What
-the set still cannot do is demonstrate a *small* improvement. With a noise
-floor of 2, an accepted candidate is at least 3 cases up on the ratchet, and
-3 to 5 is above the floor but below the threshold -- a candidate for
-confirmation, not a demonstrated result. All of this is in
+So a catastrophic single-field change clears the threshold, but only just.
+What the set still cannot do is demonstrate a *small* improvement. With a
+noise floor of 3, an accepted candidate is at least 4 cases up on the
+ratchet, and 4 or 5 is above the floor but below the threshold -- a
+candidate for confirmation, not a demonstrated result. All of this is in
 `harness/loop.py`'s `RESOLUTION_WARNING` dict
 (`SEARCH_SET_AVAILABLE_FAILURES`, `SEARCH_SET_NET_FLIPS_UNDER_KNOWN_SABOTAGE`,
 `noise_floor_cases`) and attached verbatim, via `message`, to every real
 campaign's report.
+
+> [!NOTE]
+> The 2026-10-20 calibration called `evaluator.real_evaluate()` three times on
+> `main` at `0be0a58` (embeddinggemma-2 at width 512 behind llama-server
+> b11669 on the CPU, `USAR_DESCRIPCION_IMAGEN=false`, about 30 minutes each,
+> no infrastructure errors). `real_evaluate()` writes no gate artifact, so its
+> per-case verdicts are the versioned `harness/calibration/2026-10-20-eg2.json`.
 
 > [!NOTE]
 > The 2026-09-12 artifacts (`tests/eval/runs/20260912T034029Z_...json`,

@@ -1,14 +1,14 @@
 # Fast tier -- regression filter only (never declares an improvement).
-# Fixed, versioned subset of the search set: 26 cases, re-derived on
-# 2026-09-12 from the search-set reference run
-# tests/eval/runs/20260912T034029Z_mineru-jina_clip-faiss.json (gemma4:e4b,
-# the product's generator since #254; 106/123, issue #243) by one rule, so
-# it can be re-derived again the same way after the next corpus or
-# generator change (issue #247):
+# Fixed, versioned subset of the search set: 20 cases, re-derived on
+# 2026-10-20 from the first search-set reference run of the embeddinggemma-2
+# stack (gemma4:e4b, 107/123, issue #341; per-case results in
+# harness/calibration/2026-10-20-eg2.json) by the same rule as before, so it
+# can be re-derived again the same way after the next corpus, generator or
+# stack change (issue #247):
 #
-#   every case that run failed (17), plus the first passing case in
+#   every case that run failed (16), plus the first passing case in
 #   gold_cases.jsonl order for every case_type and every source that the
-#   failures alone did not cover (9).
+#   failures alone did not cover (4).
 #
 # Spans every case_type (7) and every source (corpus, corpus_es, corpus_ca)
 # of the search set; harness/tests/test_evaluator.py asserts both, so the
@@ -16,22 +16,21 @@
 #
 # Its job is not to save minutes -- it is to reject a bad candidate without
 # contaminating the ratchet, before paying for the full search set. Cost,
-# from that run's own per-case elapsed_seconds (retrieval plus generation):
-# ~400 s, about 7 min against ~30 min for the whole search set, with no
-# case near the 180 s generation budget (the rag role is capped at 4,096
-# tokens since #254, and the #249 deadline bounds the rest).
+# from the per-case elapsed_seconds of the full gate on the same code
+# (20261019T233547Z): ~320 s, against ~2450 s for every case, with no case
+# above 21 s (the 180 s generation budget is far away).
 #
 # The failing cases are here so the filter has signal on both sides: a
 # candidate that fixes one shows a gain the tier does not act on, a candidate
 # that breaks a passing one is rejected before the ratchet sees it. The
-# two figure failures cost ~9 s each and are the retrieval-side signal.
+# figure failure is the retrieval-side signal.
 
-# -- failed in the reference run (17) --
+# -- failed in the reference run (16) --
 dpo-no-sampling
+gw-final-mass
 higgs-diphoton-figure
 planck-h0-tension
-planck-contours-figure
-att-study-outline-ca
+adam-beta2
 adam-stepsize
 supernovae-lab
 antarctica-freshwater
@@ -40,18 +39,12 @@ tabla-sintetizados
 machupicchu-restaurado
 acueducto-altura
 mediterrania-grecs
-basquet-naixement
 catala-llengua-habitual
 solar-constant
 solar-superficie
 
-# -- passing coverage: one per case_type / source not covered above (9) --
-dpo-acronym
-att-bleu-ende
-att-arch-figure
-att-study-outline
-att-study-quiz
-att-study-summary
+# -- passing coverage: one per case_type / source not covered above (4) --
 att-bleu-table
-gaudi-montserrat
-pitagoras-pruebas
+att-study-outline
+att-study-summary
+att-study-quiz
