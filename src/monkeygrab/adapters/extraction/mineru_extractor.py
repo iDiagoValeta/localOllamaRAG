@@ -92,6 +92,14 @@ _CACHE_VERSION = "v1"
 # `type` field), not tied to any one document's layout.
 _DISCARDED_BLOCK_TYPES = frozenset({"page_number", "footer", "page_footnote", "aside_text"})
 
+# The version probe runs synchronously inside HTTP requests (the control
+# panel's /api/init and /stores/<id>/status), so it cannot borrow the
+# extraction timeout: a hung `mineru --version` -- broken venv, model
+# download, antivirus -- would block the request for minutes on the first
+# call after each process start. Interpreter startup on a healthy install
+# takes a few seconds; twenty leaves ample headroom.
+_VERSION_PROBE_TIMEOUT_SECONDS = 20
+
 
 # CLI INVOCATION + CACHE
 
@@ -158,7 +166,11 @@ def _mineru_version(resolved_bin: str, bin_mtime_ns: int) -> str:
     """
     try:
         proc = subprocess.run(
-            [resolved_bin, "--version"], capture_output=True, text=True, timeout=120, check=False,
+            [resolved_bin, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=_VERSION_PROBE_TIMEOUT_SECONDS,
+            check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise RuntimeError(f"Could not ask MinerU for its version ({resolved_bin!r}): {exc}") from exc
@@ -185,7 +197,16 @@ def installed_version(mineru_bin: Optional[str] = None) -> str:
     resolved = _resolve_runnable_bin(configured)
     if resolved is None:
         raise RuntimeError(f"MinerU CLI not found (looked for {configured!r} on disk and on PATH)")
-    return _mineru_version(resolved, os.stat(resolved).st_mtime_ns)
+    # The binary can vanish between resolving it and reading its mtime (an
+    # in-place reinstall, a half-written venv, an antivirus on Windows). The
+    # stat must fail as RuntimeError like the rest of this function: callers
+    # such as rag.engine.indexing._extractor_version only catch that, and a
+    # stray OSError there would abort indexing after all chunks were embedded.
+    try:
+        bin_mtime_ns = os.stat(resolved).st_mtime_ns
+    except OSError as exc:
+        raise RuntimeError(f"MinerU binary became unreadable ({resolved!r}): {exc}") from exc
+    return _mineru_version(resolved, bin_mtime_ns)
 
 
 def _cache_key(pdf_path: Path, mineru_bin: str) -> str:

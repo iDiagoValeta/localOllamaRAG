@@ -25,6 +25,17 @@ from monkeygrab.config.app_config import AppConfig
 import rag.chat_pdfs  # noqa: E402,F401
 from rag.engine import indexing, wiring  # noqa: E402
 
+# Pinned so every comparison below is machine-independent. Both the write path
+# and the check call the installer probe, so leaving the real value in made
+# these tests pass on CI (no MinerU) and fail on any machine that has it
+# (issue #426) -- and hid the chunk_size test's actual cause.
+_EXTRACTOR_VERSION = "mineru, version 9.9.9"
+
+
+@pytest.fixture(autouse=True)
+def _fixed_extractor_version(monkeypatch):
+    monkeypatch.setattr(indexing, "mineru_installed_version", lambda: _EXTRACTOR_VERSION)
+
 
 class _FakeStore:
     """Minimal VectorStore double: only the fingerprint sidecar matters here."""
@@ -72,7 +83,7 @@ def test_full_index_writes_the_fingerprint(tmp_path, monkeypatch):
 
     indexing.indexar_documentos(str(tmp_path), store, silent=True)
 
-    assert store.read_fingerprint() == compute_index_fingerprint(config)
+    assert store.read_fingerprint() == compute_index_fingerprint(config, _EXTRACTOR_VERSION)
 
 
 def test_partial_add_does_not_touch_the_fingerprint(tmp_path, monkeypatch):
@@ -106,7 +117,7 @@ def test_mismatch_detected_when_stored_fingerprint_disagrees(monkeypatch):
     stored_under = _config()
     now_in_force = _config(**{"chunking.chunk_size": 999})
     monkeypatch.setattr(wiring, "app_config_from_runtime", lambda: now_in_force)
-    store = _FakeStore(fingerprint=compute_index_fingerprint(stored_under))
+    store = _FakeStore(fingerprint=compute_index_fingerprint(stored_under, _EXTRACTOR_VERSION))
 
     assert indexing.index_fingerprint_mismatch(store) is True
 
@@ -114,7 +125,7 @@ def test_mismatch_detected_when_stored_fingerprint_disagrees(monkeypatch):
 def test_no_mismatch_when_stored_fingerprint_matches(monkeypatch):
     config = _config()
     monkeypatch.setattr(wiring, "app_config_from_runtime", lambda: config)
-    store = _FakeStore(fingerprint=compute_index_fingerprint(config))
+    store = _FakeStore(fingerprint=compute_index_fingerprint(config, _EXTRACTOR_VERSION))
 
     assert indexing.index_fingerprint_mismatch(store) is False
 
@@ -238,6 +249,6 @@ def test_a_run_where_only_some_files_fail_still_writes_the_fingerprint(tmp_path,
     )
 
     assert total == 3
-    assert store.read_fingerprint() == compute_index_fingerprint(config)
+    assert store.read_fingerprint() == compute_index_fingerprint(config, _EXTRACTOR_VERSION)
     # Issue #323: the partial failure is reported to the caller, not only logged.
     assert failures == [("bad.pdf", "extraction failed")]
