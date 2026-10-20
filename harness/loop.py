@@ -110,54 +110,39 @@ from harness import search_space
 
 # NOISE FLOOR
 
-# Measured 2026-09-12 on the search set this harness actually evaluates
-# (the 123 non-arXiv cases, evaluator.search_set_case_ids()) with the
-# generator it actually runs (run_eval.DEFAULT_MODELS, gemma4:e4b, the
-# product's own since #254): two evaluate() calls of the identical
-# configuration, identical `conditions` block field for field, 30 min each --
-# tests/eval/runs/20260912T034029Z_mineru-jina_clip-faiss.json (106/123) and
-# tests/eval/runs/20260912T043930Z_mineru-jina_clip-faiss.json (106/123), both
-# local and gitignored (see harness/README.md). compare_runs.py over the
-# pair: 1 flipped to PASS, 1 flipped to FAIL, 121 unchanged -- both study
-# artifacts over the attention paper. Two cases is what resampling the same
-# configuration moves, so a candidate two up on the reference has shown
-# nothing (issue #243). The same pair for Ling-3.0-tiny, the gate's default
-# until #254, moved three (20260912T003549Z / 20260912T013552Z).
+# Measured 2026-10-20 on the search set (123 cases) with the product's
+# generator, gemma4:e4b, on the embeddinggemma-2 stack (issue #341): two
+# evaluate() calls of the identical configuration, 107/123 and 110/123,
+# flipped 4 to PASS and 1 to FAIL -- 3 net. A candidate three up on the
+# reference has shown nothing; four is the smallest accepted gain. Per-case
+# results: harness/calibration/2026-10-20-eg2.json (evaluate() writes no gate
+# artifact). The 2026-09-12 figure, 2, was measured on the Jina CLIP stack.
 #
-# This replaces the 2026-07-29 figure of zero flips, measured on the 51-case
-# gold set that preceded #213 and re-verified then on the 32-case search set;
-# the 156-case set flips on sampling alone (docs/model-history.md, "How to
-# read", item 1) and so does this subset of it. If tests/eval/grade.py's
-# scoring rules, the gold set or the default generator change, this floor
-# must be remeasured -- it is specific to that grader, that set and that
-# generator, not a law of the pipeline.
-NOISE_FLOOR_CASES = 2
+# If tests/eval/grade.py's scoring rules, the gold set, the default generator
+# or the retrieval stack change, this floor must be remeasured -- it is
+# specific to them, not a law of the pipeline.
+NOISE_FLOOR_CASES = 3
 
 # The latency constraint's multiplier (design doc section 5).
 LATENCY_CEILING_MULTIPLIER = 1.20
 
 # RESOLUTION LIMIT (see module docstring point 2)
 
-# Both from the same 2026-09-12 runs as the noise floor. Available failures:
-# the first reference run failed 17 of 123 (11 factual_number, 3
-# factual_concept, 2 figure_retrieval, 1 study_outline). Sensitivity: the
-# criterion-2 sabotage, retrieval.top_k_final=1 through evaluate()'s
-# config_overrides (tests/eval/runs/20260912T040928Z_mineru-jina_clip-faiss.json,
-# 100/123), flipped 2 to PASS and 8 to FAIL against that reference -- 6 net
-# -- and 3 to PASS, 9 to FAIL against the second, 6 net again. Against the
-# 32-case set the same sabotage moved 3 net flips; on today's set it sits
-# exactly at the ~6-flip demonstrability threshold, so a catastrophic
-# single-field change is detectable but only just. What the set cannot do
-# is show a *small* one: a gain of three to five cases clears the noise
-# floor but not the threshold. (With Ling-3.0-tiny the same sabotage moved
-# 10 net against 16 available failures: the shipped generator absorbs more
-# of a retrieval collapse.)
-SEARCH_SET_AVAILABLE_FAILURES = 17
+# Both from the same 2026-10-20 runs as the noise floor. Available failures:
+# the first reference run failed 16 of 123. Sensitivity: the criterion-2
+# sabotage, retrieval.top_k_final=1 through evaluate()'s config_overrides
+# (100/123), flipped 3 to PASS and 10 to FAIL against that reference -- 7
+# net -- and 1 to PASS, 11 to FAIL against the second, 10 net. The smaller
+# figure is kept: a catastrophic single-field change clears the ~6-flip
+# demonstrability threshold, but only just. What the set cannot do is show
+# a *small* one: a gain of four or five cases clears the noise floor but
+# not the threshold. (On Jina CLIP, 2026-09-12: 17 failures, 6 net.)
+SEARCH_SET_AVAILABLE_FAILURES = 16
 DEMONSTRABILITY_FLIP_THRESHOLD = 6
-SEARCH_SET_NET_FLIPS_UNDER_KNOWN_SABOTAGE = 6
+SEARCH_SET_NET_FLIPS_UNDER_KNOWN_SABOTAGE = 7
 SEARCH_SET_SABOTAGE_DESCRIPTION = (
-    "retrieval.top_k_final=1 (single fragment retrieved; criterion 2, 2026-09-12, "
-    "run 20260912T040928Z against reference 20260912T034029Z, gemma4:e4b)"
+    "retrieval.top_k_final=1 (single fragment retrieved; criterion 2, 2026-10-20, "
+    "embeddinggemma-2 stack, gemma4:e4b; harness/calibration/2026-10-20-eg2.json)"
 )
 
 RESOLUTION_WARNING: Dict[str, Any] = {
@@ -166,16 +151,20 @@ RESOLUTION_WARNING: Dict[str, Any] = {
     "net_flips_under_known_sabotage": SEARCH_SET_NET_FLIPS_UNDER_KNOWN_SABOTAGE,
     "noise_floor_cases": NOISE_FLOOR_CASES,
     "sabotage_description": SEARCH_SET_SABOTAGE_DESCRIPTION,
+    # Built from the constants above so a re-measurement cannot leave stale
+    # figures in the one sentence every campaign report carries.
     "message": (
-        "The search set can win at most 17 cases (2026-09-12 reference, 106/123, "
-        "gemma4:e4b). Resampling the same configuration moves 2 of them, so an "
-        "accepted improvement is at least 3 cases up on the ratchet; the ~6-flip "
-        "threshold design doc section 3 sets for a demonstrable paired difference "
-        "is exactly what a known-catastrophic single-field sabotage "
-        "(retrieval.top_k_final=1) moves, 6 net. An accepted gain of 3 to 5 cases "
-        "is therefore a candidate for confirmation, not a demonstrated result; 6 "
-        "or more is at the threshold -- see "
-        "docs/design/2026-07-28-loop-automejorable.md section 3 and issue #243."
+        f"The search set can win at most {SEARCH_SET_AVAILABLE_FAILURES} cases "
+        "(2026-10-20 reference, 107/123, gemma4:e4b, embeddinggemma-2). Resampling "
+        f"the same configuration moves {NOISE_FLOOR_CASES} net, so an accepted "
+        f"improvement is at least {NOISE_FLOOR_CASES + 1} cases up on the ratchet; "
+        f"the ~{DEMONSTRABILITY_FLIP_THRESHOLD}-flip threshold design doc section 3 "
+        "sets for a demonstrable paired difference is about what a "
+        "known-catastrophic single-field sabotage (retrieval.top_k_final=1) moves, "
+        f"{SEARCH_SET_NET_FLIPS_UNDER_KNOWN_SABOTAGE} net. An accepted gain below "
+        f"{DEMONSTRABILITY_FLIP_THRESHOLD} cases is therefore a candidate for "
+        "confirmation, not a demonstrated result -- see "
+        "docs/design/2026-07-28-loop-automejorable.md section 3 and issues #243, #341."
     ),
 }
 
