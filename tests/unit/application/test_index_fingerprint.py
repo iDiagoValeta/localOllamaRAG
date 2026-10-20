@@ -190,3 +190,15 @@ def test_missing_fingerprint_is_unknown_not_stale():
     # the product would warn every single existing user at their next launch
     # for a config they never touched.
     assert fingerprint_is_stale(None, "any-recipe") is False
+
+
+def test_extractor_version_changes_the_fingerprint():
+    # Upgrading MinerU in place must read as stale (issue #426).
+    config = AppConfig()
+    assert compute_index_fingerprint(config, "3.4.5") != compute_index_fingerprint(config, "3.5.0")
+
+
+def test_unknown_extractor_version_keeps_the_fingerprint_callers_always_had():
+    config = AppConfig()
+    assert compute_index_fingerprint(config, None) == compute_index_fingerprint(config)
+    assert "extractor_version" not in index_recipe(config)
