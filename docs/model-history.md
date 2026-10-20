@@ -19,6 +19,16 @@ reading, not because a reader can open them.
 
 ## How to read the current table
 
+**Grader change on 2026-10-21 (issue #367).** From that date `grade.py`
+accepts typesetting variants of a correct answer (`\%`, LaTeX thin space,
+dot as thousands separator, `^2` against `²`, a literal ending in `%`). On
+the 2026-10-17 eg2 run that flips 9 rejected-but-correct answers into passes,
+and the two mechanisms behind it are not the same: 7 come from the grader's
+normalization, 2 from two gold cases that gained a phrasing variant
+(`tabla-sintetizados`, `acueducto-altura`) -- a change to the gold set, not
+to the grader. Every row dated before it was graded without these rules:
+compare it with a later row only after adding those cases back, or re-run it.
+
 Four qualifications, all of them measured rather than assumed. Skipping them
 turns this log into a ranking, which it is not.
 
