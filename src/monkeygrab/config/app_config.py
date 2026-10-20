@@ -237,7 +237,8 @@ class AppConfig:
 
         base_dir = RAG_BASE_DIR
         data_dir = os.path.abspath(env.read_env_str("MONKEYGRAB_DATA_DIR", base_dir))
-        docs_folder = env.read_env_str("DOCS_FOLDER", os.path.join(base_dir, "docs", "en"))
+        docs_root = env.read_env_docs_root(os.path.join(base_dir, "docs"))
+        docs_folder = env.read_env_str("DOCS_FOLDER", os.path.join(docs_root, "en"))
         path_db, collection_name = derive_db_paths(docs_folder, data_dir)
 
         paths = PathsConfig(

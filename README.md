@@ -425,7 +425,10 @@ drifted.
 
 **What stays on disk.** Nothing leaves the machine, but two things accumulate
 in the data directory (`MONKEYGRAB_DATA_DIR`; the repository's `rag/` in a
-checkout) without rotation or a size limit:
+checkout) without rotation or a size limit. In the packaged desktop app the
+three document stores also live there, under `docs/`: the bundled corpora are
+copied on first start and then belong to the user, so uploads and deletions
+never touch the read-only install.
 
 - `debug_rag/`: one dump per RAG query with the question, the full context
   sent to the model and its answer. On by default; `GUARDAR_DEBUG_RAG=False`
