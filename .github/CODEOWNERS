@@ -1,5 +1,7 @@
-# Review is requested automatically; branch protection on main and develop
-# requires it for the protected zones of AGENTS.md rules 5, 6 and 9.
+# Review is requested automatically for the protected zones of AGENTS.md rules
+# 5, 6 and 9. Branch protection does not make it mandatory (a one-owner repo
+# would lock itself out); flip require_code_owner_reviews when a second
+# maintainer joins.
 *                                   @iDiagoValeta
 /requirements*.txt                  @iDiagoValeta
 /rag/requirements*.txt              @iDiagoValeta
