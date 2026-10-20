@@ -26,12 +26,16 @@ has. Persisted state is a convenience, never a source of truth for the pipeline.
 import json
 import logging
 import os
+import threading
 from typing import Any, Optional
 
 from monkeygrab.config.env import read_env_docs_root
+from rag.engine.atomic import escribir_json_atomico
 from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
+
+_guardado_lock = threading.Lock()
 
 # The three fixed language stores, each bound to rag/docs/<id>/. Lives here
 # rather than in the web app so the store identity has a single home.
@@ -150,16 +154,19 @@ def _flags_a_persistir(on_disk: dict) -> dict:
 def guardar_ajustes_persistidos() -> None:
     """Write the active model roles, store and pipeline flags to the settings file."""
     try:
-        on_disk = _leer_ajustes()
-        data = {
-            "roles": _roles_a_persistir(on_disk),
-            "active_store": _store_a_persistir(on_disk),
-            "flags": _flags_a_persistir(on_disk),
-        }
-        ruta = ruta_ajustes()
-        os.makedirs(os.path.dirname(ruta), exist_ok=True)
-        with open(ruta, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        # Read-modify-write: two saves from different request threads (Flask
+        # runs threaded) would interleave and one could drop the other's
+        # change. The atomic write keeps the file whole either way (#452).
+        with _guardado_lock:
+            on_disk = _leer_ajustes()
+            data = {
+                "roles": _roles_a_persistir(on_disk),
+                "active_store": _store_a_persistir(on_disk),
+                "flags": _flags_a_persistir(on_disk),
+            }
+            ruta = ruta_ajustes()
+            os.makedirs(os.path.dirname(ruta), exist_ok=True)
+            escribir_json_atomico(ruta, data)
     except Exception as e:
         logging.warning(f"Error saving settings: {e}")
 
