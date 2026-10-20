@@ -407,15 +407,19 @@ def _ollama_version() -> Optional[str]:
     return None
 
 
-def _ollama_capabilities(name: str) -> list:
-    """Best-effort capability list (``embedding``/``vision``/...) for a model."""
+def _ollama_capabilities(name: str) -> list | None:
+    """Capability list (``embedding``/``vision``/...) for a model, ``None`` if unknown.
+
+    ``None`` rather than ``[]`` on failure, so the caller can tell "Ollama said
+    none" from "Ollama did not answer" and not cache the second (issue #459).
+    """
     try:
         r = requests.post(f"{OLLAMA_BASE_URL}/api/show", json={"model": name}, timeout=5)
         if r.ok:
             return r.json().get("capabilities") or []
     except requests.RequestException:
         pass
-    return []
+    return None
 
 
 def _ollama_models() -> list:
@@ -436,7 +440,9 @@ def _ollama_models() -> list:
         caps = _model_caps_cache.get(digest)
         if caps is None:
             caps = _ollama_capabilities(name)
-            _model_caps_cache[digest] = caps
+            if caps is not None:
+                _model_caps_cache[digest] = caps
+            caps = caps or []
         models.append(
             {
                 "name": name,
