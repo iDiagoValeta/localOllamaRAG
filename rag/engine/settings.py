@@ -32,6 +32,7 @@ import os
 from typing import Any, Optional
 
 from monkeygrab.config.env import is_env_pinned
+from monkeygrab.config.env import read_env_docs_root
 from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
@@ -77,7 +78,8 @@ def resolver_carpeta_store(nombre: str) -> Optional[str]:
     """
     if nombre not in STORE_IDS:
         return None
-    carpeta = os.path.join(cfg.BASE_DIR, "docs", nombre)
+    docs_root = read_env_docs_root(os.path.join(cfg.BASE_DIR, "docs"))
+    carpeta = os.path.join(docs_root, nombre)
     return carpeta if os.path.isdir(carpeta) else None
 
 

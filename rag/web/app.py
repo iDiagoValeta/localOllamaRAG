@@ -42,6 +42,7 @@ if _project_root not in sys.path:
 
 import rag.chat_pdfs as rag_engine
 from rag.engine import wiring
+from monkeygrab.config.env import read_env_docs_root
 from monkeygrab.config.models import EMBEDDING_DISPLAY_NAME
 
 _web_dir = os.path.dirname(os.path.abspath(__file__))
@@ -88,7 +89,9 @@ _CORPUS_PRESET_IDS = frozenset(rag_engine.STORE_IDS)
 # versioned docs folder under rag/docs/. There are no user-created stores and no
 # hide/restore concept — the three always exist (possibly empty). English is the
 # default. Their vector DBs live under DATA_DIR/vector_db/ (user-writable).
-_DOCS_ROOT = os.path.join(_project_root, "rag", "docs")
+# The packaged app pins this to a writable per-user copy before importing the
+# backend; a source run keeps the repo-relative bundle-versioned folder (#344).
+_DOCS_ROOT = read_env_docs_root(os.path.join(_project_root, "rag", "docs"))
 _BUILTIN_STORES = {
     "en": "English",
     "es": "Castellano",

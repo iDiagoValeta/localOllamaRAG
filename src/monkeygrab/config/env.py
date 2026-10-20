@@ -136,6 +136,27 @@ def read_env_str(name: str, default: str) -> str:
     return raw
 
 
+def read_env_docs_root(default: str) -> str:
+    """Resolve the root that holds the three language stores.
+
+    The packaged desktop app points this at a per-user folder, because the
+    bundle's own ``rag/docs`` sits inside the read-only install: upload,
+    reindex and document deletion all write there (issue #344).
+
+    An empty or whitespace-only value counts as unset, the same contract
+    ``read_env_str`` documents -- otherwise ``MONKEYGRAB_DOCS_ROOT=`` would
+    resolve to the process cwd.
+
+    Args:
+        default: Root to use when the variable is unset, normally
+            ``<rag dir>/docs``.
+
+    Returns:
+        The absolute docs root.
+    """
+    return os.path.abspath(read_env_str("MONKEYGRAB_DOCS_ROOT", default))
+
+
 def read_env_choice(name: str, default: str, choices: tuple[str, ...]) -> str:
     """Read a string environment variable constrained to a fixed set of values.
 

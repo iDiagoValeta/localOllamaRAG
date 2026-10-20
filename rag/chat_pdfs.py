@@ -62,6 +62,7 @@ except ImportError:
 # keeps the two from disagreeing about which defaults are in force.
 from monkeygrab.config import env as _config_env  # noqa: F401
 from monkeygrab.config.env import read_env_choice
+from monkeygrab.config.env import read_env_docs_root
 from monkeygrab.config.env import read_env_float as _leer_env_float
 from monkeygrab.config.env import read_env_int as _leer_env_int
 from monkeygrab.config.paths import derive_db_paths as _derive_db_paths
@@ -251,7 +252,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # An empty value counts as unset: abspath("") would otherwise resolve to the cwd.
 DATA_DIR = os.path.abspath(os.getenv("MONKEYGRAB_DATA_DIR") or BASE_DIR)
 
-CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(BASE_DIR, "docs", "en"))
+# Root the three language stores live under. Source runs keep ``rag/docs``; the
+# packaged app points it at a writable copy via ``MONKEYGRAB_DOCS_ROOT`` (#344).
+_DOCS_ROOT = read_env_docs_root(os.path.join(BASE_DIR, "docs"))
+
+CARPETA_DOCS = os.getenv("DOCS_FOLDER", os.path.join(_DOCS_ROOT, "en"))
 
 
 def _derivar_paths_db(carpeta: str) -> tuple[str, str]:
