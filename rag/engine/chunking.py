@@ -62,6 +62,15 @@ def expandir_con_chunks_adyacentes(
 ) -> List[str]:
     """Build IDs for neighboring chunks (same-page and cross-page) for context expansion.
 
+    Note:
+        This wrapper never passes a ``previous_page_total``, so for the first
+        chunk of a page it no longer asks for anything on the previous page
+        (it used to request that page's chunks 0-2 unconditionally, which on
+        long pages was text far from the anchor -- issue #397).
+        ``monkeygrab.application.answer.Answer`` is what looks up the previous
+        page's chunk count and passes it to ``adjacent_chunk_ids``; only that
+        path fetches the contiguous tail.
+
     Args:
         chunk_id: Identifier of the anchor chunk.
         metadata: Metadata dict with ``source``, ``page``, ``chunk``,

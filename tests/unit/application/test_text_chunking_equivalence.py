@@ -161,7 +161,26 @@ def test_first_chunk_of_page_neighbor_ids_match_original():
     ours = adjacent_chunk_ids(meta, n_neighbors=1)
     theirs = rag.expandir_con_chunks_adyacentes("paperA.pdf_pag2_chunk0", meta_dict, n_vecinos=1)
 
-    assert ours == theirs
+    # The wrapper cannot supply a previous-page count, so both sides stay
+    # in lockstep only for that no-count case. Pinned literally too: the
+    # wrapper delegates here, so an equality assert alone compares the
+    # function with itself and cannot catch a regression on the cross-page
+    # branch.
+    assert ours == theirs == ["paperA.pdf_pag2_chunk1"]
+
+    # With the count, the previous side is the contiguous tail of page 1 --
+    # its LAST chunk, not its head -- and it comes first in the returned
+    # list (backward neighbors are appended before forward ones).
+    assert adjacent_chunk_ids(meta, n_neighbors=1, previous_page_total=6) == [
+        "paperA.pdf_pag1_chunk5",
+        "paperA.pdf_pag2_chunk1",
+    ]
+    assert adjacent_chunk_ids(meta, n_neighbors=2, previous_page_total=6) == [
+        "paperA.pdf_pag1_chunk4",
+        "paperA.pdf_pag1_chunk5",
+        "paperA.pdf_pag2_chunk1",
+        "paperA.pdf_pag2_chunk2",
+    ]
 
 
 def test_last_chunk_of_page_neighbor_ids_match_original():

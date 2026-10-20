@@ -136,8 +136,8 @@ def _previous_page_total(frag: Fragment, vector_store: VectorStore) -> Optional[
     Only asked for the first chunk of a page, whose contiguous neighbours are
     the previous page's last chunks (issue #397). Every chunk of a page
     carries the page's count, so one lookup by id is enough; a page that
-    produced no chunk 0 (dropped as too short) answers None and the
-    expansion skips that side.
+    produced no chunks (dropped as too short) answers None and the expansion
+    skips that side.
     """
     meta = frag.metadata
     if meta.chunk != 0 or meta.page <= 0:
