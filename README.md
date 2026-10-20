@@ -404,8 +404,8 @@ copied on first start and then belong to the user, so uploads and deletions
 never touch the read-only install.
 
 - `debug_rag/`: one dump per RAG query with the question, the full context
-  sent to the model and its answer. On by default; `GUARDAR_DEBUG_RAG=False`
-  turns it off. Delete the folder to clear it.
+  sent to the model and its answer. Off by default since it keeps your
+  documents' text and questions in plain files; `GUARDAR_DEBUG_RAG=True` turns it on. Delete the folder to clear it.
 - `historial_chat.json`: every chat-mode turn, reused as context for the next
   answer. The UI's clear-conversation button empties it; there is no switch to
   stop writing it.

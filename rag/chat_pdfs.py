@@ -185,7 +185,7 @@ USAR_EMBEDDINGS_IMAGEN = _leer_env_bool("USAR_EMBEDDINGS_IMAGEN", True)
 # Index-time; requires a vision-capable OLLAMA_CHAT_MODEL and a fresh index.
 USAR_DESCRIPCION_IMAGEN = _leer_env_bool("USAR_DESCRIPCION_IMAGEN", False)
 LOGGING_METRICAS = _leer_env_bool("LOGGING_METRICAS", True)
-GUARDAR_DEBUG_RAG = _leer_env_bool("GUARDAR_DEBUG_RAG", True)
+GUARDAR_DEBUG_RAG = _leer_env_bool("GUARDAR_DEBUG_RAG", False)
 
 # Runtime toggles are inference-time only; indexing flags require a fresh index.
 PIPELINE_RUNTIME_FLAGS = (
