@@ -94,6 +94,15 @@ _DECIMAL_COMMA_RE = re.compile(r"(?<=\d),(?=\d)")
 
 _WHITESPACE_RE = re.compile(r"\s+")
 
+# Dot as thousands separator ("3.000 anys"): only read that way in the third
+# candidate of grade_answer, never in _normalize, because "1.366" is a
+# decimal in English and a thousand in Catalan (issue #367).
+_DOT_THOUSANDS_RE = re.compile(r"(?<=\d)\.(?=\d{3}(?:\D|$))")
+
+# LaTeX superscript 2/3 against the Unicode one a PDF carries: "m^2" is "m²".
+# Not before another digit, so "10^20" is not turned into "10²0".
+_SUPERSCRIPT_RE = re.compile(r"\^([23])(?!\d)")
+
 
 def _strip_markup(text: str) -> str:
     """Lowercase and strip the Markdown/LaTeX markup shared by both normalizations.
@@ -110,10 +119,14 @@ def _strip_markup(text: str) -> str:
     s = text or ""
     s = _MARKDOWN_EMPHASIS_RE.sub("", s)
     s = s.replace("$", "")  # LaTeX math delimiters
+    # Escaped percent and thin space are typesetting: "70\\%" is "70%",
+    # "100\\,000" is "100 000" (issue #367).
+    s = s.replace("\\%", "%").replace("\\,", " ")
     s = _LATEX_SIZING_RE.sub("", s)
     # Before the braces go, or the command name is left glued to its content.
     s = _LATEX_TEXT_STYLE_RE.sub("", s)
     s = s.replace("{", "").replace("}", "")  # LaTeX grouping braces, e.g. 10^{-4}
+    s = _SUPERSCRIPT_RE.sub(lambda m: "²" if m.group(1) == "2" else "³", s)
     # Multiplication reaches us three ways for the same value: the Unicode sign
     # from a PDF, the LaTeX command from a model writing math, and a plain "x"
     # from a model writing prose. A patch size of 16x16 is the same answer in
@@ -141,6 +154,31 @@ def _normalize(text: str) -> str:
     """
     s = _strip_markup(text)
     s = _THOUSANDS_SEPARATOR_RE.sub("", s)
+    s = _WHITESPACE_RE.sub(" ", s).strip()
+    return s
+
+
+def _normalize_dot_thousands(text: str, separator: str) -> str:
+    """Canonicalize an answer reading "." as thousands and "," as the decimal point.
+
+    The Spanish/Catalan convention ("3.000 anys", "47,1 %"). Extra readings
+    beside ``_normalize`` and ``_normalize_decimal_comma``, tried only on the
+    answer, for the same reason the decimal-comma one is: the string alone
+    cannot tell which convention it follows (issue #367). The dot becomes
+    ``separator`` -- "" for a literal written "3000", " " for one written
+    "3 000" -- so neither spelling of the gold literal needs a rule of its own,
+    and the two original readings stay exactly as they were.
+
+    Args:
+        text: Raw text (a generated answer).
+        separator: What replaces a thousands dot.
+
+    Returns:
+        Normalized text, safe to compare or search with token matching.
+    """
+    s = _strip_markup(text)
+    s = _DOT_THOUSANDS_RE.sub(separator, s)
+    s = _DECIMAL_COMMA_RE.sub(".", s)
     s = _WHITESPACE_RE.sub(" ", s).strip()
     return s
 
@@ -250,7 +288,10 @@ def _contains_token(haystack: str, needle: str) -> bool:
             + r")(?!\w)|\b(?!\.\d))"
         )
     else:
-        pattern = r"\b" + escaped + r"\b"
+        # Lookarounds rather than \b: identical next to a word character, but
+        # \b can never anchor after a trailing "%" ("70%"), so such a literal
+        # used to match nothing at all (issue #367).
+        pattern = r"(?<!\w)" + escaped + r"(?!\w)"
     return re.search(pattern, haystack) is not None
 
 
@@ -281,12 +322,15 @@ def grade_answer(answer: str, case: Dict[str, Any]) -> Dict[str, Any]:
     # matched if it is found in either.
     haystack_thousands = _normalize(answer)
     haystack_decimal = _normalize_decimal_comma(answer)
+    haystacks = (
+        haystack_thousands,
+        haystack_decimal,
+        _normalize_dot_thousands(answer, ""),
+        _normalize_dot_thousands(answer, " "),
+    )
 
     def _present(literal: str) -> bool:
-        return (
-            _contains_token(haystack_thousands, literal)
-            or _contains_token(haystack_decimal, literal)
-        )
+        return any(_contains_token(haystack, literal) for haystack in haystacks)
 
     # required_all demands every literal be present, which buys precision
     # without dictating phrasing. Requiring one exact sentence rejected correct

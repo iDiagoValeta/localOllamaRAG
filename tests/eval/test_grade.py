@@ -9,6 +9,8 @@ rather than at eval-run time.
 
 import json
 import sys
+
+import pytest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -510,3 +512,39 @@ def test_an_unrelated_backslash_command_is_left_alone():
     # braced content to unwrap; stripping command names wholesale would
     # silently rewrite what the answer says.
     assert "\\pm" in _normalize("0.5 \\pm 0.1") or "±" in _normalize("0.5 \\pm 0.1")
+
+
+# Issue #367: correct answers the grader rejected, verbatim from the gate run
+# 20261017T142753Z (tests/eval/runs/, local). Each failed on typesetting
+# only: an escaped percent, a LaTeX thin space, a dot as thousands
+# separator, "^2" against "²", or a literal ending in "%" that \b could
+# never anchor after.
+_ISSUE_367_ANSWERS = [
+    ('antarctica-freshwater', "About $70\\%$ of the world's freshwater reserves is frozen in Antarctica.", ['70%']),
+    ('machupicchu-restaurado', 'Para 1976, el $30 \\%$ de Machu Picchu había sido restaurado.', ['30 %']),
+    ('catala-llengua-habitual', "A les Illes Balears, el percentatge de població que tenia el català com a llengua habitual l'any 2014 era del $47,1\\%$.", ['47,1%']),
+    ('fotosintesis-carbono', 'Los organismos fotosintéticos fijan alrededor de $100\\,000$ millones de toneladas de carbono como materia orgánica cada año.', ['100 000 millones']),
+    ('mediterrania-grecs', "Els grecs sobrepassaven els límits del Mediterrani per l'estret de Gibraltar fa aproximadament 3.000 anys.", ['3 000 anys']),
+    ('solar-constant', 'El valor mitjà que té la constant solar és de $1,366 \\text{ W/m}^2$.', ['1.366 W/m²']),
+    ('solar-superficie', 'En condicions acceptables de radiació, la potència és aproximadament $1.000 \\text{ W/m}^2$ a la superfície terrestre (aquest valor es denomina irradiància).', ['1.000 W/m²']),
+]
+
+
+@pytest.mark.parametrize(("case_id", "answer", "accepted"), _ISSUE_367_ANSWERS)
+def test_typesetting_variants_of_a_correct_answer_pass(case_id, answer, accepted):
+    assert grade_answer(answer, {"accepted_answers": accepted})["pass"], case_id
+
+
+@pytest.mark.parametrize(
+    ("answer", "literal"),
+    [
+        ("About 170% of the total", "70%"),
+        ("a power of 10^20 joules", "10²"),
+        ("values 1 2 3", "123"),
+        ("the ratio was 28.4", "28"),
+        ("del 47,15%", "47,1%"),
+        ("unos 3.0005 anys", "3 000 anys"),
+    ],
+)
+def test_typesetting_rules_do_not_accept_a_different_value(answer, literal):
+    assert not grade_answer(answer, {"accepted_answers": [literal]})["pass"]
