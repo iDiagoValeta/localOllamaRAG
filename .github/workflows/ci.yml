@@ -13,7 +13,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop, "release/**", "hotfix/**"]
   workflow_dispatch:
 
 concurrency:
