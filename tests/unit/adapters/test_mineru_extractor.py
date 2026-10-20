@@ -619,3 +619,25 @@ def test_mineru_version_reads_the_cli_and_fails_loudly(monkeypatch):
     monkeypatch.setattr(module.subprocess, "run", lambda cmd, **kw: _FakeCompleted(returncode=1, stderr="ImportError: torch"))
     with pytest.raises(RuntimeError, match="ImportError: torch"):
         _REAL_MINERU_VERSION("/x/mineru", 1)
+
+
+@pytest.mark.parametrize("img_path", ["../../secret.png", "/etc/hostname"])
+def test_a_figure_path_outside_the_output_directory_aborts(tmp_path, img_path):
+    # img_path is read from a JSON file on disk; following it out of the
+    # output directory would index an arbitrary local file (issue #470).
+    auto = tmp_path / "out" / "auto"
+    auto.mkdir(parents=True)
+    (tmp_path / "secret.png").write_bytes(_TINY_PNG)
+    blocks = [{"type": "image", "page_idx": 0, "img_path": img_path}]
+
+    with pytest.raises(RuntimeError, match="escapes the output directory"):
+        module._content_list_to_images(blocks, auto)
+
+
+def test_a_figure_inside_the_output_directory_is_still_read(tmp_path):
+    auto = tmp_path / "auto"
+    (auto / "images").mkdir(parents=True)
+    (auto / "images" / "fig.png").write_bytes(_TINY_PNG)
+    blocks = [{"type": "image", "page_idx": 0, "img_path": "images/fig.png"}]
+
+    assert len(module._content_list_to_images(blocks, auto)[0]) == 1
