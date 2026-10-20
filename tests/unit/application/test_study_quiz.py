@@ -160,6 +160,13 @@ class TestAnAnswerKeyItRefusesToTrust:
         quiz = study.quiz([_fragment()], AppConfig.from_env())
         assert [q.prompt for q in quiz.questions] == ["Good one"]
 
+    def test_a_null_option_is_blank_not_the_word_none(self):
+        study = Study(
+            _FakeChatModel('[{"prompt": "Q", "options": [null, "A", "B"], "correct_index": 2}]')
+        )
+        question = study.quiz([_fragment()], AppConfig.from_env()).questions[0]
+        assert list(question.options) == ["A", "B"] and question.options[question.correct_index] == "B"
+
     def test_a_negative_key_is_not_read_as_a_python_index(self):
         # -1 is a legal Python index and would silently select the last
         # option. From the model it means nothing of the sort.

@@ -121,6 +121,13 @@ class TestWhatItRefusesToGuess:
             study.summarize([_fragment()], AppConfig())
         assert "dict" in str(exc.value)
 
+    def test_null_fields_are_empty_not_the_word_none(self):
+        # str(None) is the truthy "None": a null section used to ship with
+        # "None" as its heading and body (issue #468).
+        study = Study(_FakeChatModel('[{"heading": null, "body": null}, {"heading": "Real", "body": "Text."}]'))
+        sections = study.summarize([_fragment()], AppConfig()).sections
+        assert [(s.heading, s.body) for s in sections] == [("Real", "Text.")]
+
     def test_an_array_of_empty_sections_raises(self):
         study = Study(_FakeChatModel('[{"heading": "", "body": ""}, {}]'))
         with pytest.raises(MalformedSummaryError):
