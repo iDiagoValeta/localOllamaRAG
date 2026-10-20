@@ -501,9 +501,14 @@ def _store_pdf_count(folder: str) -> int:
 
 def _store_entry(name: str, label: str, folder: str) -> dict:
     """Build the JSON descriptor for one vector store."""
-    path_db, _ = rag_engine._derivar_paths_db(folder)
+    path_db, collection_name = rag_engine._derivar_paths_db(folder)
     active = os.path.abspath(folder) == os.path.abspath(rag_engine.CARPETA_DOCS)
-    indexed = os.path.isdir(path_db) and bool(os.listdir(path_db))
+    # Opening a store creates its directory empty, so a store selected once,
+    # or one whose indexing failed, used to read as indexed (issue #451).
+    # Stored rows are what count, as the headless decided in #320; the file
+    # is read rather than the store opened, which would create the directory.
+    meta = os.path.join(path_db, collection_name, "meta.jsonl")
+    indexed = os.path.isfile(meta) and os.path.getsize(meta) > 0
     entry = {
         "name": name,
         "label": label,
