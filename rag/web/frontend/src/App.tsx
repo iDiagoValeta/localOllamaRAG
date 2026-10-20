@@ -160,6 +160,7 @@ async function streamSSE(
     question_too_short?: string;
     model_unavailable?: string;
     embedder_unavailable?: string;
+    generation_error?: string;
   },
   controller?: AbortController,
   onStall?: () => void,
@@ -924,6 +925,9 @@ export default function App() {
           unknown: T.unknownError, queryError: T.queryError, modelError: T.modelError,
           closed: T.connClosed, no_results: T.noResults, question_too_short: T.questionTooShort,
           model_unavailable: T.modelUnavailable, embedder_unavailable: T.embedderUnavailable,
+          // _pipeline_error_payload's default code; unmapped, the UI showed the
+          // backend's Spanish fallback in every language (issue #475).
+          generation_error: T.modelError,
         },
         controller,
         // Inactivity timeout, not a connection error: the stream went silent
