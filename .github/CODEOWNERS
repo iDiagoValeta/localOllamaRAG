@@ -1,0 +1,10 @@
+# Review is requested automatically; branch protection on main and develop
+# requires it for the protected zones of AGENTS.md rules 5, 6 and 9.
+*                                   @iDiagoValeta
+/requirements*.txt                  @iDiagoValeta
+/rag/requirements*.txt              @iDiagoValeta
+/rag/web/requirements*.txt          @iDiagoValeta
+/tests/eval/                        @iDiagoValeta
+/tests/characterization/            @iDiagoValeta
+/.github/                           @iDiagoValeta
+/AGENTS.md                          @iDiagoValeta

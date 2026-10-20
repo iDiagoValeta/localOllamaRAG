@@ -23,7 +23,8 @@ trusts the eye.
 Both directions are checked, because the drift ran both ways:
 
 1. Every label the documentation names is declared in ``.github/labels.json``.
-2. Every ``kind: type`` label declared there is named by the documentation.
+2. Every declared label that is part of the standard (any ``kind`` but
+   ``github-default``) is named by the documentation.
 
 ## Scope boundary
 
@@ -73,7 +74,7 @@ _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 # GitHub issue-template frontmatter: `labels: eval, loop` on one line.
 _FRONTMATTER_LABELS = re.compile(r"^labels:\s*(.+)$", re.MULTILINE)
 
-_VALID_KINDS = ("type", "modifier", "github-default")
+_VALID_KINDS = ("type", "modifier", "area", "priority", "github-default")
 _HEX_COLOR = re.compile(r"^[0-9a-f]{6}$")
 
 
@@ -145,20 +146,20 @@ def test_every_label_an_issue_template_assigns_is_declared():
     )
 
 
-def test_every_type_label_is_named_by_the_standard():
+def test_every_standard_label_is_named_by_the_standard():
     """Direction 2: `performance` and `research` carried issues while unmentioned.
 
-    Only ``kind: type`` labels are required in the prose. Modifiers stack on a
-    type and need no separate mention; ``github-default`` entries are
-    inventory, kept so this file is a complete list of what exists, not part
-    of the standard.
+    Every kind but ``github-default`` is required in the prose: type, modifier,
+    area and priority labels are all part of the standard. ``github-default``
+    entries are inventory, kept so this file is a complete list of what
+    exists, and nothing is expected to use them.
     """
     declared = _declared()
-    expected = {name for name, entry in declared.items() if entry["kind"] == "type"}
+    expected = {name for name, entry in declared.items() if entry["kind"] != "github-default"}
     missing = sorted(expected - _labels_named_in_contributing())
     assert not missing, (
-        f"labels declared as `type` but not named in CONTRIBUTING.md's label "
-        f"block: {missing}. A type label nobody documents is one nobody applies."
+        f"labels declared as part of the standard but not named in CONTRIBUTING.md's "
+        f"label block: {missing}. A label nobody documents is one nobody applies."
     )
 
 
