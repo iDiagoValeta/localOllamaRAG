@@ -232,7 +232,7 @@ class AppConfig:
             usar_embeddings_imagen=env.read_env_bool("USAR_EMBEDDINGS_IMAGEN", True),
             usar_descripcion_imagen=env.read_env_bool("USAR_DESCRIPCION_IMAGEN", False),
             logging_metricas=env.read_env_bool("LOGGING_METRICAS", True),
-            guardar_debug_rag=env.read_env_bool("GUARDAR_DEBUG_RAG", True),
+            guardar_debug_rag=env.read_env_bool("GUARDAR_DEBUG_RAG", False),
         )
 
         base_dir = RAG_BASE_DIR
