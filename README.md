@@ -228,9 +228,11 @@ Requires [Python 3.10+](https://www.python.org/downloads/),
 model pulled, and the
 [`embeddinggemma-2`](https://huggingface.co/google/embeddinggemma-2) embedder
 behind a local `llama-server` — start it with
-`llama-server -m embeddinggemma-2.gguf --embedding --port 8091` from
+`llama-server -m embeddinggemma-2.gguf --embedding --port 8091 -b 2048 -ub 2048` from
 [llama.cpp](https://github.com/ggml-org/llama.cpp), the default address of
-`MONKEYGRAB_EMBEDDER_URL`. Drop PDFs into `rag/docs/en/` — the index builds
+`MONKEYGRAB_EMBEDDER_URL`. The batch flags matter: with the default 512-token
+physical batch a longer chunk is rejected with HTTP 500 and indexing stops
+(issue #487). Drop PDFs into `rag/docs/en/` — the index builds
 itself on first run.
 
 ```bash
