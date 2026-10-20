@@ -4,6 +4,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+Reindexing required: #366 and #426 change what an index stores, so every existing store reads stale until it is reindexed.
+
+### Security
+
+- Web API rejects Host and Origin outside loopback, and the headless service can confine `docs_folder` and `data_dir` to the roots in `MONKEYGRAB_HEADLESS_ALLOWED_ROOTS`, failing closed (#346).
+
+### Changed
+
+- RAG answers follow the language of the question, not the language of the context (#378).
+- RAG debug dumps are off by default, keeping question and context text out of the debug directory (#399).
+- Study context budget reserves the generator's real output, 4096 tokens, leaving about 34k characters of document at a 16k context (#373).
+- Grader accepts typesetting variants of a correct answer (`\%`, `\,`, `^2`, thousands separators); gate figures recorded before 2026-10-21 are not comparable, see `docs/model-history.md` (#367).
+
+### Fixed
+
+- Settings panel reports why Ollama failed to start instead of staying on "stopped" (#474).
+- Closed sidebar leaves the tab order and its buttons have accessible names (#476).
+- Algorithm and code blocks are indexed instead of dropped, and figure placeholders use 1-based page numbers; every store must be reindexed (#366, #375).
+- The MinerU version is part of the index fingerprint, so every existing store reads stale once (#426).
+- README llama-server command raises the physical batch to 2048, which stops 500s on long chunks during indexing (#487).
+
 ### Added
 
 - Gitflow: `develop` default branch, `release/` and `hotfix/` branches, protected `main` and `develop`, `Branch policy` check (#479).
