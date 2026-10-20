@@ -292,6 +292,13 @@ same 180 s budget, `USAR_DESCRIPCION_IMAGEN=false` exported over
 | `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0` | **off** | 112 / 136 (82.4%) | **130 / 156 (83.3%)** | 101.6 | 32 *(of 124)* | 1.17 *(of 124)* | 0.31 | 0 | 0 | GPU | `20261016T003731Z` |
 | `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0` | **off** | 111 / 136 (81.6%) | 129 / 156 (82.7%) | 101.8 | 31 *(of 124)* | 1.15 *(of 124)* | 0.30 | 0 | 0 | GPU | `20261016T004926Z` |
 | `hf.co/unsloth/gemma-4-E2B-it-GGUF:Q6_K` | off | 114 / 136 (83.8%) | 132 / 156 (84.6%) | 85.0 | 27 *(of 124)* | 1.27 *(of 124)* | 0.31 | 0 | 0 | GPU | `20261016T010240Z` |
+| `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0`, rag-lite at #448 (2026-10-20) | off | 114 / 136 (83.8%) | 132 / 156 (84.6%) | 103.6 | 30 *(of 124)* | 1.12 *(of 124)* | 0.29 | 0 | 0 | GPU | `20261020T040541Z` |
+
+The `20261020T040541Z` row is the profile default on `rag-lite` after the
+2026-10-20 syncs (#423-#448), on the same stored index: 132, one up on the
+2026-10-17 re-run below and inside the noise. Sampled every 0.5 s with
+`nvidia-smi`, its Ollama runner peaked at **2602 MiB**, the same figure as the
+first runs, with the embedder on the CPU and the reranker off.
 
 Re-run on 2026-10-17 (`20261017T132754Z`, with `OLLAMA_AUX_MODEL` set to the
 row's own generator, #302): `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0`, RECOMP
