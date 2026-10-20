@@ -325,7 +325,7 @@ def _parse_sections(raw: str) -> List[Dict[str, Any]]:
         element
         for element in decoded
         if isinstance(element, dict)
-        and (str(element.get("heading", "")).strip() or str(element.get("body", "")).strip())
+        and (_as_text(element.get("heading")) or _as_text(element.get("body")))
     ]
     if not usable:
         raise MalformedSummaryError(
@@ -333,6 +333,15 @@ def _parse_sections(raw: str) -> List[Dict[str, Any]]:
         )
     return usable[:_MAX_SECTIONS]
 
+
+
+def _as_text(value: Any) -> str:
+    """A model-supplied field as stripped text, with JSON ``null`` as empty.
+
+    ``str(None)`` is the truthy ``"None"``, which the usable-element filters
+    then kept and published (issue #468).
+    """
+    return "" if value is None else str(value).strip()
 
 def _usable_question(element: Any) -> Optional[Dict[str, Any]]:
     """The question's fields if it is safe to grade against, else ``None``.
@@ -351,14 +360,14 @@ def _usable_question(element: Any) -> Optional[Dict[str, Any]]:
     if not isinstance(element, dict):
         return None
 
-    prompt = str(element.get("prompt", "")).strip()
+    prompt = _as_text(element.get("prompt"))
     if not prompt:
         return None
 
     raw_options = element.get("options")
     if not isinstance(raw_options, list):
         return None
-    cleaned = [str(option).strip() for option in raw_options]
+    cleaned = [_as_text(option) for option in raw_options]
     options = [option for option in cleaned if option]
     if not _MIN_OPTIONS <= len(options) <= _MAX_OPTIONS:
         return None
@@ -457,8 +466,8 @@ class Study:
         pages = _pages_of(fragments)
         sections = tuple(
             SummarySection(
-                heading=str(element.get("heading", "")).strip(),
-                body=str(element.get("body", "")).strip(),
+                heading=_as_text(element.get("heading")),
+                body=_as_text(element.get("body")),
                 source_pages=pages,
             )
             for element in _parse_sections(raw)
@@ -640,7 +649,7 @@ def _build_outline_nodes(elements: Any, depth: int, budget: List[int]) -> Tuple[
             break
         if not isinstance(element, dict):
             continue
-        title = str(element.get("title", "")).strip()
+        title = _as_text(element.get("title"))
         if not title:
             # A node with no title is not a heading. Its children, if any, are
             # dropped with it: re-parenting them would invent a structure the
