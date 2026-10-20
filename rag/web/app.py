@@ -83,7 +83,7 @@ def _allowed_hostnames() -> frozenset:
     extra = os.getenv("MONKEYGRAB_ALLOWED_HOSTS", "")
     names = {h.strip().lower() for h in extra.split(",") if h.strip()}
     bound = os.getenv("MONKEYGRAB_HOST", "").strip().lower()
-    if bound and bound != "0.0.0.0":
+    if bound and bound != "0.0.0.0":  # nosec B104 - compared, not bound: a wildcard is no hostname
         names.add(bound)
     return _LOOPBACK_HOSTS | names
 
