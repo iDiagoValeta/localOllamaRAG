@@ -495,3 +495,53 @@ def test_failing_describer_degrades_to_caption_and_counts_the_failure():
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+class _RollbackStore(FakeVectorStore):
+    def __init__(self):
+        super().__init__()
+        self.deleted = []
+
+    def delete_source(self, source):
+        self.deleted.append(source)
+        return len(self.added)
+
+
+class _EmbedderFailingOnCall(FakeEmbedder):
+    def __init__(self, fail_on):
+        super().__init__()
+        self._fail_on = fail_on
+
+    def embed(self, text):
+        if len(self.calls) + 1 == self._fail_on:
+            raise RuntimeError("llama-server returned 500")
+        return super().embed(text)
+
+
+def test_a_failure_halfway_removes_what_the_document_already_wrote():
+    # Pages 1-4 stored under the source made every caller count the document
+    # as indexed, so pages 5-10 were never retried (issue #465).
+    pages = [ExtractedPage(page=i, text=f"Page {i} " + "word " * 10) for i in range(3)]
+    store = _RollbackStore()
+
+    with pytest.raises(RuntimeError, match="500"):
+        IndexCorpus(FakeExtractor(pages), _EmbedderFailingOnCall(fail_on=2), store, _small_config()).run(
+            "x.pdf", "paper.pdf"
+        )
+
+    assert len(store.added) == 1
+    assert store.deleted == ["paper.pdf"]
+
+
+def test_a_failure_before_any_write_removes_nothing():
+    # An earlier version of the document, if any, is the caller's to replace.
+    class _BrokenExtractor:
+        def extract(self, pdf_path):
+            raise RuntimeError("MinerU CLI failed")
+
+    store = _RollbackStore()
+
+    with pytest.raises(RuntimeError, match="MinerU"):
+        IndexCorpus(_BrokenExtractor(), FakeEmbedder(), store, _small_config()).run("x.pdf", "paper.pdf")
+
+    assert store.deleted == []
