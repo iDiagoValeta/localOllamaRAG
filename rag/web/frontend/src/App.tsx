@@ -1152,6 +1152,11 @@ export default function App() {
 
       {/* Sidebar */}
       <motion.aside
+        id="app-sidebar"
+        // Closing only slides or shrinks the panel; without inert Tab still
+        // walks its invisible controls and a screen reader still reads them (#476).
+        inert={!isSidebarOpen}
+        aria-hidden={!isSidebarOpen}
         className={`fixed md:relative z-50 h-[calc(100vh-16px)] md:h-full w-[320px] glass-panel rounded-3xl flex flex-col transition-transform duration-300 ease-in-out shadow-2xl ${isSidebarOpen ? 'translate-x-2 md:translate-x-0' : '-translate-x-[120%] md:translate-x-0 md:w-0 md:opacity-0 md:overflow-hidden md:ml-[-16px]'}`}
       >
         {/* Sidebar Header */}
@@ -1160,7 +1165,7 @@ export default function App() {
             <img src="/logo.png" alt="MonkeyGrab" className="w-9 h-9 object-cover flex-shrink-0" />
             <h1 className="flex font-extrabold text-lg tracking-tight"><ShimmerText text="MonkeyGrab" /></h1>
           </div>
-          <button className="md:hidden text-ink-faint hover:text-ink transition-colors bg-field p-2 rounded-full" onClick={() => setIsSidebarOpen(false)}>
+          <button aria-label={T.closeSidebar} className="md:hidden text-ink-faint hover:text-ink transition-colors bg-field p-2 rounded-full" onClick={() => setIsSidebarOpen(false)}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -1351,6 +1356,9 @@ export default function App() {
           <div className="flex items-center gap-3 min-w-0">
             <button
               className="p-2.5 text-ink-muted hover:text-ink bg-field hover:bg-surface border border-edge rounded-lg transition-colors flex-shrink-0 focus:outline-none focus-visible:ring-1 focus-visible:ring-divider"
+              aria-label={isSidebarOpen ? T.closeSidebar : T.openSidebar}
+              aria-expanded={isSidebarOpen}
+              aria-controls="app-sidebar"
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             >
               <Menu className="w-5 h-5" />
