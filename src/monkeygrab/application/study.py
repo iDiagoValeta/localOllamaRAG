@@ -358,7 +358,8 @@ def _usable_question(element: Any) -> Optional[Dict[str, Any]]:
     raw_options = element.get("options")
     if not isinstance(raw_options, list):
         return None
-    options = [str(option).strip() for option in raw_options if str(option).strip()]
+    cleaned = [str(option).strip() for option in raw_options]
+    options = [option for option in cleaned if option]
     if not _MIN_OPTIONS <= len(options) <= _MAX_OPTIONS:
         return None
     # Duplicates make the key ambiguous rather than wrong: a reader who picks
@@ -372,8 +373,12 @@ def _usable_question(element: Any) -> Optional[Dict[str, Any]]:
         return None
     # Not `-len <= index < len`: a negative index is legal in Python and would
     # quietly select from the end, but from a model it means nothing at all.
-    if not 0 <= index < len(options):
+    # The model's index points into its own list, blanks included: checked
+    # and shifted against that list, or a dropped blank before the key moves
+    # it onto the wrong option (issue #464). A key on a blank means nothing.
+    if not 0 <= index < len(cleaned) or not cleaned[index]:
         return None
+    index -= sum(1 for option in cleaned[:index] if not option)
 
     return {"prompt": prompt, "options": options, "correct_index": index}
 

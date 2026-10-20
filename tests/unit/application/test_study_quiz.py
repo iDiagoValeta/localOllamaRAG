@@ -139,6 +139,27 @@ class TestAnAnswerKeyItRefusesToTrust:
         quiz = study.quiz([_fragment()], AppConfig.from_env())
         assert [q.prompt for q in quiz.questions] == ["Good one"]
 
+    def test_a_blank_option_before_the_key_does_not_shift_it(self):
+        # Filtering the blank and then reading the key against the shorter
+        # list published "Lyon" as the answer the model gave as "Paris" (#464).
+        study = Study(
+            _FakeChatModel(
+                '[{"prompt": "Capital of France?", "options": ["", "Paris", "Lyon"], "correct_index": 1}]'
+            )
+        )
+        question = study.quiz([_fragment()], AppConfig.from_env()).questions[0]
+        assert question.options[question.correct_index] == "Paris"
+
+    def test_a_key_on_a_blank_option_drops_the_question(self):
+        study = Study(
+            _FakeChatModel(
+                '[{"prompt": "Blank key", "options": ["", "A", "B"], "correct_index": 0},'
+                ' {"prompt": "Good one", "options": ["A", "B"], "correct_index": 1}]'
+            )
+        )
+        quiz = study.quiz([_fragment()], AppConfig.from_env())
+        assert [q.prompt for q in quiz.questions] == ["Good one"]
+
     def test_a_negative_key_is_not_read_as_a_python_index(self):
         # -1 is a legal Python index and would silently select the last
         # option. From the model it means nothing of the sort.
