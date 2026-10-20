@@ -9,9 +9,9 @@ are observed without any per-call synchronization.
 import json
 import logging
 import os
-import tempfile
 from typing import Dict, List
 
+from rag.engine.atomic import escribir_json_atomico
 from rag.engine.runtime import get_runtime
 
 cfg = get_runtime()
@@ -50,33 +50,10 @@ def guardar_historial(historial: List[Dict[str, str]]) -> None:
     Args:
         historial: Full list of message dicts to save.
     """
-    tmp_path = None
     try:
-        historial_recortado = historial[-cfg.MAX_HISTORIAL_MENSAJES:]
-        target_dir = os.path.dirname(cfg.HISTORIAL_PATH) or "."
-        fd, tmp_path = tempfile.mkstemp(
-            dir=target_dir,
-            prefix=f"{os.path.basename(cfg.HISTORIAL_PATH)}.",
-            suffix=".tmp",
-        )
-        with os.fdopen(fd, 'w', encoding='utf-8') as f:
-            json.dump(historial_recortado, f, ensure_ascii=False, indent=2)
-            # Surface deferred write errors (disk full) before replacing the
-            # last good copy; os.replace alone would happily swap in a file
-            # whose data never reached the disk.
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp_path, cfg.HISTORIAL_PATH)
-        tmp_path = None
+        escribir_json_atomico(cfg.HISTORIAL_PATH, historial[-cfg.MAX_HISTORIAL_MENSAJES:])
     except Exception as e:
         logging.warning(f"Error saving history: {e}")
-    finally:
-        if tmp_path is not None:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-
 
 def limpiar_historial(historial: List[Dict[str, str]]) -> None:
     """Clear history in-place and persist the empty state.
