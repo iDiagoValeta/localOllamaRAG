@@ -181,8 +181,12 @@ def read_env_choice(name: str, default: str, choices: tuple[str, ...]) -> str:
 # Hardware profiles seed the environment with the exports one machine class
 # needs, so the operator sets a single MONKEYGRAB_PROFILE instead of a wall of
 # variables. "lite" targets a 4 GB GPU (issue #292, measured on an RTX 4060):
-# the Gemma-4-E2B Q4_0 generator peaks at 2602 MiB over a full gate run and
-# embeddinggemma-2 runs on the CPU at 0 MiB. The BGE reranker stays off: it
+# the qwen3:4b-instruct-2507-q4_K_M generator peaks at 3354 MiB per process
+# over a full gate run (2026-10-21) and embeddinggemma-2 runs on the CPU at
+# 0 MiB. It replaces the Gemma-4-E2B Q4_0 generator on 141/156 against 132/156
+# on the same grader; the plain qwen3:4b was rejected because its reasoning
+# leaked into the answer text (issue #411). Only the RAG role was measured, so
+# the other roles stay on Gemma-4-E2B Q4_0. The BGE reranker stays off: it
 # peaked at 2640 MiB on the GPU for 200 candidates, and took ~70 s for 40 on
 # the CPU. RECOMP is off too: with a 2B generator the synthesis step dropped
 # the very figures the answer needed, and skipping it raised the gate from
@@ -190,7 +194,7 @@ def read_env_choice(name: str, default: str, choices: tuple[str, ...]) -> str:
 PROFILES: Dict[str, Dict[str, str]] = {
     "lite": {
         "MONKEYGRAB_EMBEDDER_DIM": "512",
-        "OLLAMA_RAG_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
+        "OLLAMA_RAG_MODEL": "qwen3:4b-instruct-2507-q4_K_M",
         "OLLAMA_CHAT_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
         "OLLAMA_CONTEXTUAL_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
         "OLLAMA_RECOMP_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",

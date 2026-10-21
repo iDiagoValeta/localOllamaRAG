@@ -281,7 +281,8 @@ above in more than the generator, and are not ranked against it: the embedder
 is `google/embeddinggemma-2@512` served by llama.cpp b11669 on the CPU, the
 reranker is off, `OLLAMA_RAG_NUM_CTX` is 8192, `MAX_CONTEXTO_CHARS` is 16000,
 and `AUX_MODEL` (`OLLAMA_AUX_MODEL`) is the row's own generator rather than
-`Ling-3.0-tiny`, because a 4 GB card has room for one model. Same 156 cases,
+`Ling-3.0-tiny` in the rows through 2026-10-20, because a 4 GB card has room
+for one model. Same 156 cases,
 same 180 s budget, `USAR_DESCRIPCION_IMAGEN=false` exported over
 `settings.json` like every row above. Rows produced by
 `tools/diagnostics/model_history_row.py`.
@@ -293,10 +294,21 @@ same 180 s budget, `USAR_DESCRIPCION_IMAGEN=false` exported over
 | `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0` | **off** | 111 / 136 (81.6%) | 129 / 156 (82.7%) | 101.8 | 31 *(of 124)* | 1.15 *(of 124)* | 0.30 | 0 | 0 | GPU | `20261016T004926Z` |
 | `hf.co/unsloth/gemma-4-E2B-it-GGUF:Q6_K` | off | 114 / 136 (83.8%) | 132 / 156 (84.6%) | 85.0 | 27 *(of 124)* | 1.27 *(of 124)* | 0.31 | 0 | 0 | GPU | `20261016T010240Z` |
 | `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0`, rag-lite at #448 (2026-10-20) | off | 114 / 136 (83.8%) | 132 / 156 (84.6%) | 103.6 | 30 *(of 124)* | 1.12 *(of 124)* | 0.29 | 0 | 0 | GPU | `20261020T040541Z` |
+| `qwen3:4b-instruct-2507-q4_K_M` | off | 123 / 136 (90.4%) | 141 / 156 (90.4%) | 63.8 | 136 *(of 124)* | 3.69 *(of 124)* | 2.08 | 0 | 0 | GPU | `20261021T022603Z` |
 
-The `20261020T040541Z` row is the profile default on `rag-lite` after the
-2026-10-20 syncs (#423-#448), on the same stored index: 132, one up on the
-2026-10-17 re-run below and inside the noise. Sampled every 0.5 s with
+The `20261021T022603Z` row is the profile default since 2026-10-21: only
+`OLLAMA_RAG_MODEL` moved to Qwen3, while chat, contextual, RECOMP and AUX stay
+on `gemma-4-E2B Q4_0`. It peaked at **3354 MiB** per process over the full
+gate, and its answers carried no reasoning text; the plain `qwen3:4b` leaked
+its reasoning into the response (issue #411). Under develop's #492 grader the
+same run also scores **144/156** (3 correct answers this grader rejects). The
+previous default was not regraded with that grader because its artifact is not
+on this machine.
+
+The `20261020T040541Z` row was the profile default on `rag-lite` after the
+2026-10-20 syncs (#423-#448), until the Qwen3 row replaced it, on the same
+stored index: 132, one up on the 2026-10-17 re-run below and inside the noise.
+Sampled every 0.5 s with
 `nvidia-smi`, its Ollama runner peaked at **2602 MiB**, the same figure as the
 first runs, with the embedder on the CPU and the reranker off.
 

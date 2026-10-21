@@ -161,11 +161,13 @@ def test_apply_profile_records_only_the_keys_it_seeds(monkeypatch):
                 os.environ.pop(key, None)
 
 
-def test_lite_profile_assigns_the_aux_model_to_the_rag_model():
-    """Issue #302: the lite AUX model is the row's own generator, not Ling-3.0-tiny.
+def test_lite_profile_assigns_the_aux_model_to_the_small_generator():
+    """Issue #302: the lite AUX model is the small generator, not Ling-3.0-tiny.
 
     ``tests/eval/run_eval.py`` reads ``OLLAMA_AUX_MODEL`` with a default of
     Ling-3.0-tiny, which a 4 GB GPU cannot hold. The lite profile must pin it to
-    the same small generator as the other roles, matching docs/model-history.md.
+    the same small generator as the other non-RAG roles, matching
+    docs/model-history.md. Issue #411 moved only the RAG role to Qwen3, so the
+    AUX model follows the chat role rather than the generator.
     """
-    assert PROFILES["lite"]["OLLAMA_AUX_MODEL"] == PROFILES["lite"]["OLLAMA_RAG_MODEL"]
+    assert PROFILES["lite"]["OLLAMA_AUX_MODEL"] == PROFILES["lite"]["OLLAMA_CHAT_MODEL"]
