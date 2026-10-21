@@ -250,6 +250,18 @@ answers are comparable; its tokens/s and s/answer are not.
 | `gemma4:e4b`, with #307/#310/#311 | 119 / 136 (87.5%) | 137 / 156 (87.8%) | 41.6 | 28 *(of 124)* | 13.38 *(of 124)* | 0.68 | 0 | 0 | ~71% CPU | `20261017T151943Z` |
 | `phi4-mini:3.8b` | 97 / 136 (71.3%) | 115 / 156 (73.7%) | 80.1 | 74 *(of 124)* | 10.57 *(of 124)* | 0.98 | 0 | 0 | GPU | `20261017T170455Z` |
 | `gemma4:e4b`, main at #439 (2026-10-19) | 121 / 136 (89.0%) | 139 / 156 (89.1%) | 60.6 | 28 *(of 124)* | 10.16 *(of 124)* | 0.46 | 0 | 0 | GPU | `20261019T233547Z` |
+| `gemma4:e4b`, with #482/#485/#486 (2026-10-20), graded before #492 | 122 / 136 (89.7%), 131 / 136 (96.3%) with the #492 grader | 140 / 156 (89.7%), 149 / 156 (95.5%) with the #492 grader | 37.6 | 29 *(of 124)* | 14.66 *(of 124)* | 0.79 | 0 | 0 | ~72% CPU (varies) | `20261020T230552Z` |
+| `gemma4:e4b`, with #482/#485/#486 plus #492/#493 (2026-10-21), graded by #492 | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 38.2 | 27 *(of 124)* | 13.89 *(of 124)* | 0.71 | 0 | 0 | ~72% CPU | `20261021T000639Z` |
+
+The `20261021T000639Z` row is the gate for #493, and it reads one case below
+the `20261020T230552Z` row once both are graded by #492: 148 against 149, the
+lost case being `llama-training-days`. With #493, RECOMP no longer overflows on
+that case and its summary omits the figure the answer needs. RECOMP still
+overflows its context on 6 of 124 cases with #493 and on 13 of 124 without it,
+falling back to raw context unrecorded (issue #497). Both runs placed the
+generator ~72% on the CPU because the embedder's llama-server had been started
+with GPU offload (1.6 GB) on this 8 GB card: speed columns are not comparable
+with the 2026-10-19 row, answers are.
 
 The `20261019T233547Z` row is `main` after #416-#439 (headless, web and chat
 fixes; the indexed text is unchanged, so the existing index was reused): the
