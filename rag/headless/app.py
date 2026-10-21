@@ -8,6 +8,7 @@ without a token is unsupported.
 import hmac
 import json
 import logging
+import os
 from typing import Any, Callable, Dict, Iterator, Optional, Tuple
 
 from flask import Flask, Response, abort, jsonify, request, stream_with_context
@@ -59,7 +60,41 @@ def _paths_from(values: Dict[str, Any]) -> Tuple[str, str]:
                if not isinstance(values[name], str) or not values[name].strip()]
     if invalid:
         abort(400, description=f"{', '.join(invalid)} must be a non-empty string")
+    # A NUL makes realpath raise ValueError deep inside the allowlist check,
+    # which Flask turns into an HTML 500. Reject it here, before any disk
+    # access, as the JSON client error it is (issue #490 review, M1).
+    nul = [name for name in ("docs_folder", "data_dir") if "\x00" in values[name]]
+    if nul:
+        abort(400, description=f"{', '.join(nul)} must not contain NUL bytes")
     return values["docs_folder"], values["data_dir"]
+
+
+def _allowed_roots_from_env() -> Optional[Tuple[str, ...]]:
+    """``MONKEYGRAB_HEADLESS_ALLOWED_ROOTS`` as written, or ``None`` when unset.
+
+    ``None`` means "no restriction" for an unset or empty variable. A variable
+    that is set but names no folder (only separators or spaces) returns ``()``:
+    an empty allowlist refuses everything, because a launcher that computes it
+    and gets it wrong must fail closed instead of silently disabling the check
+    (issue #490 review, M2).
+    """
+    raw = os.getenv("MONKEYGRAB_HEADLESS_ALLOWED_ROOTS")
+    if raw is None or raw == "":
+        return None
+    return tuple(part for part in raw.split(os.pathsep) if part.strip())
+
+
+def _inside(path: str, roots: Tuple[str, ...]) -> bool:
+    # realpath, so a symlink inside a root cannot point the indexer outside it.
+    # normcase on both sides so Windows' case-insensitive paths still match
+    # (issue #490 review, B2).
+    try:
+        real = os.path.normcase(os.path.realpath(path))
+        return any(os.path.commonpath([real, root]) == root for root in roots)
+    except (ValueError, OSError):
+        # commonpath rejects mixed absolute/relative paths and different
+        # Windows drives; a path it cannot place is outside, not a 500.
+        return False
 
 
 def create_app(
@@ -68,6 +103,7 @@ def create_app(
     health: Callable[[AppConfig], health_module.HealthReport] = health_module.cached_probe,
     token: Optional[str] = None,
     registry: Optional[StoreRegistry] = None,
+    allowed_roots: Optional[Tuple[str, ...]] = None,
 ) -> Flask:
     """Build the Flask app.
 
@@ -81,6 +117,10 @@ def create_app(
             token the app serves loopback only; exposing the port beyond
             loopback without a token is unsupported.
         registry: Store-id registry; one per process by default.
+        allowed_roots: Folders ``docs_folder`` and ``data_dir`` must live
+            under, or ``None`` to accept any path (the default, so Daimon's
+            calls keep working). An empty tuple refuses every path. Read from
+            ``MONKEYGRAB_HEADLESS_ALLOWED_ROOTS`` when not given (issue #346).
     """
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = _MAX_CONTENT_LENGTH
@@ -89,6 +129,22 @@ def create_app(
         # stays silent; only the no-auth loopback case warns.
         logging.warning("running without auth on loopback; exposing beyond loopback unsupported")
     stores = registry or StoreRegistry()
+    from_env = allowed_roots is None
+    raw_roots = _allowed_roots_from_env() if from_env else allowed_roots
+    if from_env and raw_roots == ():
+        # Fail closed, but say so: an operator with a typo would otherwise see
+        # every request refused with no hint that the variable is the cause.
+        logging.warning(
+            "MONKEYGRAB_HEADLESS_ALLOWED_ROOTS names no folder; every docs_folder and "
+            "data_dir will be refused. Unset it (or set it empty) to disable the allowlist.")
+    # Normalise once, here: the comparison runs per request, and a relative or
+    # ``~`` root would otherwise never match (issue #490 review, M1/B1). A blank
+    # entry is dropped rather than expanded to the cwd, which would widen the
+    # allowlist by accident.
+    roots: Optional[Tuple[str, ...]] = None
+    if raw_roots is not None:
+        roots = tuple(os.path.normcase(os.path.realpath(os.path.expanduser(root)))
+                      for root in raw_roots if root.strip())
 
     @app.before_request
     def _require_token():
@@ -116,10 +172,19 @@ def create_app(
 
     def _resolve(store_id: str, values: Dict[str, Any]) -> StorePaths:
         docs_folder, data_dir = _paths_from(values)
+        if roots is not None:
+            outside = [name for name, value in (("docs_folder", docs_folder), ("data_dir", data_dir))
+                       if not _inside(value, roots)]
+            if outside:
+                abort(403, description=f"{', '.join(outside)} outside MONKEYGRAB_HEADLESS_ALLOWED_ROOTS")
         try:
             return stores.resolve(store_id, docs_folder, data_dir)
         except StoreConflict as exc:
             abort(409, description=str(exc))
+
+    @app.errorhandler(403)
+    def _forbidden(error):
+        return jsonify({"ok": False, "error": "path_not_allowed", "message": error.description}), 403
 
     @app.errorhandler(409)
     def _conflict(error):

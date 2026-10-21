@@ -2,6 +2,8 @@
 Keep the order: summary first in product/system terms, then the issue link,
 then how this was verified. Details and conventions: CONTRIBUTING.md.
 -->
+<!-- Base branch: `develop` for topic branches. Releases and hotfixes use
+?template=release.md / ?template=hotfix.md and target `main`. -->
 ## Summary
 
 - What changed, in product or system terms first; symbols as backup.
@@ -9,6 +11,9 @@ then how this was verified. Details and conventions: CONTRIBUTING.md.
 ## Issue
 
 Fixes #
+
+Labels on this PR (they feed the release notes): one type, plus `needs-gate`
+if retrieval or generation changed.
 
 ## Test plan
 

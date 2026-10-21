@@ -641,3 +641,14 @@ def test_a_figure_inside_the_output_directory_is_still_read(tmp_path):
     blocks = [{"type": "image", "page_idx": 0, "img_path": "images/fig.png"}]
 
     assert len(module._content_list_to_images(blocks, auto)[0]) == 1
+
+
+def test_code_blocks_are_rendered_not_dropped():
+    # Adam's default hyperparameters live in an algorithm block (issue #366).
+    block = {
+        "type": "code", "sub_type": "algorithm",
+        "code_caption": ["Algorithm 1: Adam"],
+        "code_body": "Require: alpha = 0.001, beta_2 = 0.999",
+        "code_footnote": [],
+    }
+    assert module._render_block_text(block) == "Algorithm 1: Adam\nRequire: alpha = 0.001, beta_2 = 0.999"

@@ -54,7 +54,7 @@ _FLAG_MAP = [
     ("USAR_EMBEDDINGS_IMAGEN", "usar_embeddings_imagen", True),
     ("USAR_DESCRIPCION_IMAGEN", "usar_descripcion_imagen", False),
     ("LOGGING_METRICAS", "logging_metricas", True),
-    ("GUARDAR_DEBUG_RAG", "guardar_debug_rag", True),
+    ("GUARDAR_DEBUG_RAG", "guardar_debug_rag", False),
 ]
 
 _FLAG_VARS = [var for var, _, _ in _FLAG_MAP]
@@ -164,9 +164,9 @@ def test_chat_pdfs_globals_agree_with_from_env_on_explicit_export():
     )
     values = _run_subprocess(script, {"USAR_RERANKER": "False"})
     assert values["USAR_RERANKER"] is False
-    for var in names:
+    for var, _, default in _FLAG_MAP:
         if var != "USAR_RERANKER":
-            assert values[var] is (var != "USAR_DESCRIPCION_IMAGEN")
+            assert values[var] is default
 
 
 def test_chat_pdfs_globals_keep_defaults_when_env_unset():

@@ -21,7 +21,7 @@ pins it.
 
 import re
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from monkeygrab.domain.chunk_metadata import ChunkMetadata
 
@@ -202,7 +202,9 @@ def split_markdown_into_chunks(
     return chunks_finales
 
 
-def adjacent_chunk_ids(metadata: ChunkMetadata, n_neighbors: int = 1) -> List[str]:
+def adjacent_chunk_ids(
+    metadata: ChunkMetadata, n_neighbors: int = 1, previous_page_total: Optional[int] = None
+) -> List[str]:
     """Build IDs for neighboring chunks (same-page and cross-page) for context expansion.
 
     Literal port of ``rag.engine.chunking.expandir_con_chunks_adyacentes``.
@@ -213,6 +215,10 @@ def adjacent_chunk_ids(metadata: ChunkMetadata, n_neighbors: int = 1) -> List[st
     Args:
         metadata: Position/format of the anchor chunk.
         n_neighbors: How many neighbors to include on each side.
+        previous_page_total: How many chunks the previous page holds, when
+            the caller knows it. Needed to reach the chunks contiguous with
+            the first chunk of a page: they are the previous page's LAST
+            ones, and their ids depend on that count (issue #397).
 
     Returns:
         List of neighboring chunk IDs.
@@ -228,8 +234,13 @@ def adjacent_chunk_ids(metadata: ChunkMetadata, n_neighbors: int = 1) -> List[st
         if chunk_num - i >= 0:
             ids_adyacentes.append(f"{archivo}_pag{pagina}_chunk{chunk_num - i}")
 
-    if chunk_num == 0 and pagina > 0:
-        for last_c in range(3):
+    # Used to request chunks 0-2 of the previous page whatever its length:
+    # on any page longer than three chunks that is text far from the anchor,
+    # while the contiguous tail was never fetched (issue #397). Without the
+    # count the tail cannot be named, so nothing is guessed.
+    if chunk_num == 0 and pagina > 0 and previous_page_total:
+        first_tail = max(0, previous_page_total - n_neighbors)
+        for last_c in range(first_tail, previous_page_total):
             ids_adyacentes.append(f"{archivo}_pag{pagina - 1}_chunk{last_c}")
 
     if total_in_page is not None:
