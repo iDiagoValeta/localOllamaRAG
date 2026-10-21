@@ -33,7 +33,22 @@ an isolated `.venv-mineru/` interpreter; see the root `README.md`.
 
 ## Workflow
 
-1. Branch off `main`. Naming and scope rules: [Branches](docs/standards/branches.md).
+Gitflow, with `develop` as the default branch so `Fixes #N` closes issues when
+a PR merges. Names, merge strategy and the release procedure:
+[Branches](docs/standards/branches.md) and [Releases](docs/standards/releases.md).
+
+| Branch | Role | Receives | Merge style |
+|---|---|---|---|
+| `main` | What was released; every commit is a tag candidate | only `release/*` and `hotfix/*` | merge commit, then tag |
+| `develop` | Integration, default branch | topic branches | squash |
+| `<type>/issue-<n>-<slug>` | One concern, off `develop` | nothing | deleted after merge |
+| `release/vX.Y.Z` | Stabilisation of a release, off `develop` | `fix/` and `docs/` only | merge commit into `main`, back-merge into `develop` |
+| `hotfix/vX.Y.Z` | Urgent fix to a release, off `main` | the fix | merge commit into `main`, back-merge into `develop` |
+| `rag-lite` | Long-lived 4 GB variant, not on the release line | its own topic branches | squash |
+
+1. Branch off `develop`. `tools/check_branch_policy.py` runs as a required
+   check on every PR and rejects a wrong head/base pair (a topic branch aimed
+   at `main`, a branch name that is not `<type>/issue-<n>-<slug>`).
 2. One concern per branch. If your working tree mixes two concerns, commit
    and PR them separately — review and revert both depend on it.
 3. Every change carries its own tests and its own doc updates in the same PR
@@ -47,7 +62,10 @@ an isolated `.venv-mineru/` interpreter; see the root `README.md`.
    ruff check .
    ```
 
-5. CI green, squash-merge, delete the branch. Message shape: [Commits](docs/standards/commits.md).
+5. CI green, squash-merge into `develop`, delete the branch. Message shape: [Commits](docs/standards/commits.md).
+6. A change to retrieval or generation also needs the full gate green. Label
+   the issue and the PR `needs-gate`; the gate runs on the self-hosted GPU
+   runner against the topic branch before the squash.
 
 ### PR standard
 
@@ -71,7 +89,7 @@ An issue exists to be closable with evidence:
   taste. Cite local artifacts explicitly as local (`tests/eval/runs/` is
   gitignored — cited, not shipped).
 - **One type label minimum.** Pick the one that says what the issue *is*;
-  stack a modifier only if it adds something.
+  stack modifiers, areas and a priority only where they add something.
 
   <!-- labels:begin -->
   <!-- Declared in .github/labels.json; both lists are checked against it by
@@ -90,8 +108,39 @@ An issue exists to be closable with evidence:
   | `documentation` | The docs are wrong, missing or contradict the code. |
   | `cleanup` | Removing dead weight; no behaviour change intended. |
 
-  Modifier: `wontfix`, applied when closing with the reasoning, never instead
-  of it.
+  Modifiers stack on a type. Add them only when they say something the type
+  does not:
+
+  | Modifier | Use it when |
+  |---|---|
+  | `security` | Hardening, or a vulnerability already disclosed privately (see SECURITY.md). |
+  | `needs-gate` | The change touches retrieval or generation; the full eval gate must be green before merge. |
+  | `needs-decision` | It waits on an owner decision (a protected zone, a design choice). Say which in the issue. |
+  | `blocked` | It cannot move until something external happens; the issue says what. |
+  | `wontfix` | Applied when closing with the reasoning, never instead of it. |
+
+  Area labels say where the work lives; zero or more per issue. They come from
+  the prefixes the history already uses in commit and issue subjects (Web:,
+  Frontend:, Headless:, Indexación:, ...).
+
+  | Area | Covers |
+  |---|---|
+  | `area:core` | src/monkeygrab domain, ports, application and config. |
+  | `area:adapters` | src/monkeygrab/adapters: MinerU, embedder, FAISS, Ollama, BM25, BGE. |
+  | `area:indexing` | Corpus indexing, chunking, the index fingerprint. |
+  | `area:retrieval` | Hybrid search, reranking, context assembly. |
+  | `area:generation` | Prompts, RECOMP, streaming, citations. |
+  | `area:web` | The Flask backend and its API. |
+  | `area:frontend` | The React frontend in rag/web/frontend. |
+  | `area:headless` | The headless HTTP service for other apps. |
+  | `area:desktop` | The pywebview desktop app and its packaging. |
+  | `area:study` | Study mode: quizzes and study sheets. |
+  | `area:ci` | Workflows, tooling, repository configuration. |
+
+  Priority, at most one, set by whoever triages: `priority:high` (data loss,
+  wrong answers or a broken gate, do first), `priority:medium` (planned, no
+  deadline), `priority:low` (when adjacent work is open). An issue with no
+  priority label has not been triaged.
   <!-- labels:end -->
 
   `eval` and `loop` are not synonyms. `eval` is the measurement — cases,
@@ -116,9 +165,11 @@ Three checks, because a written convention drifted for months once already
 | `tests/unit/test_contribution_standard_drift.py` | This document and the issue templates name only declared labels, and every type label is documented here | fast gate, `architecture` job |
 | `.github/workflows/labels.yml` | `.github/labels.json` matches the labels GitHub actually holds | on changes to that file, and on demand |
 | `.github/ISSUE_TEMPLATE/`, `blank_issues_enabled: false` | Every new issue starts from a template | GitHub itself |
+| `tools/check_branch_policy.py` via `branch-policy.yml` | The head/base pair of every PR follows the gitflow table above | every PR, required check |
 
 Adding a label is therefore three edits and no ambiguity: create it on
-GitHub, declare it in `.github/labels.json`, name it in the table above.
+GitHub, declare it in `.github/labels.json`, name it in the tables above.
+Release notes group merged PRs by these labels (`.github/release.yml`).
 
 ## Protected zones (owner agreement required)
 

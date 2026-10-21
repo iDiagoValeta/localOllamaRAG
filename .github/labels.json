@@ -9,6 +9,8 @@
     "  type            -- an issue carries exactly one; this is the 'one label",
     "                     minimum' in CONTRIBUTING.md.",
     "  modifier        -- optional, stacks on a type label.",
+    "  area            -- where in the code the issue lives; zero or more.",
+    "  priority        -- at most one of high / medium / low.",
     "  github-default  -- shipped by GitHub when the repository was created and",
     "                     kept only so this file is a complete inventory. Not part",
     "                     of the standard; nothing here is expected to use them.",
@@ -102,6 +104,114 @@
       "color": "d876e3",
       "description": "Further information is requested",
       "kind": "github-default"
+    },
+    {
+      "name": "security",
+      "color": "b60205",
+      "description": "Hardening or a vulnerability; suspected leaks go through SECURITY.md",
+      "kind": "modifier"
+    },
+    {
+      "name": "blocked",
+      "color": "6e7681",
+      "description": "Cannot move until something external happens; the issue says what",
+      "kind": "modifier"
+    },
+    {
+      "name": "needs-gate",
+      "color": "fbca04",
+      "description": "Touches retrieval or generation: the full eval gate must be green before merge",
+      "kind": "modifier"
+    },
+    {
+      "name": "needs-decision",
+      "color": "d93f0b",
+      "description": "Waits on an owner decision (protected zone or a design choice)",
+      "kind": "modifier"
+    },
+    {
+      "name": "area:core",
+      "color": "c5def5",
+      "description": "src/monkeygrab domain, ports, application and config",
+      "kind": "area"
+    },
+    {
+      "name": "area:adapters",
+      "color": "c5def5",
+      "description": "src/monkeygrab adapters: MinerU, embedder, FAISS, Ollama, BM25, BGE",
+      "kind": "area"
+    },
+    {
+      "name": "area:indexing",
+      "color": "c5def5",
+      "description": "Corpus indexing, chunking and the index fingerprint",
+      "kind": "area"
+    },
+    {
+      "name": "area:retrieval",
+      "color": "c5def5",
+      "description": "Hybrid search, reranking and context assembly",
+      "kind": "area"
+    },
+    {
+      "name": "area:generation",
+      "color": "c5def5",
+      "description": "Prompts, RECOMP, streaming and citations",
+      "kind": "area"
+    },
+    {
+      "name": "area:web",
+      "color": "c5def5",
+      "description": "Flask backend and its API",
+      "kind": "area"
+    },
+    {
+      "name": "area:frontend",
+      "color": "c5def5",
+      "description": "React frontend in rag/web/frontend",
+      "kind": "area"
+    },
+    {
+      "name": "area:headless",
+      "color": "c5def5",
+      "description": "Headless HTTP service for other apps",
+      "kind": "area"
+    },
+    {
+      "name": "area:desktop",
+      "color": "c5def5",
+      "description": "pywebview desktop app and its packaging",
+      "kind": "area"
+    },
+    {
+      "name": "area:study",
+      "color": "c5def5",
+      "description": "Study mode: quizzes and study sheets",
+      "kind": "area"
+    },
+    {
+      "name": "area:ci",
+      "color": "c5def5",
+      "description": "Workflows, tooling and repository configuration",
+      "kind": "area"
+    },
+    {
+      "name": "priority:high",
+      "color": "b60205",
+      "description": "Do before anything else; data loss, wrong answers or a broken gate",
+      "kind": "priority"
+    },
+    {
+      "name": "priority:medium",
+      "color": "fbca04",
+      "description": "Planned work with no deadline pressure",
+      "kind": "priority"
+    },
+    {
+      "name": "priority:low",
+      "color": "c2e0c6",
+      "description": "Worth doing when adjacent work is open",
+      "kind": "priority"
     }
   ]
 }

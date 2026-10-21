@@ -22,6 +22,9 @@ export interface SettingsOverlayProps {
   // Ollama server status
   ollamaStatus: { running: boolean };
   ollamaStarting: boolean;
+  // Why the last start attempt failed, if it did. Null while the server is
+  // simply stopped and nothing has been tried since.
+  ollamaError: string | null;
   refreshOllama: () => void;
   handleStartOllama: () => void;
 
@@ -55,6 +58,7 @@ export function SettingsOverlay({
   onClose,
   ollamaStatus,
   ollamaStarting,
+  ollamaError,
   refreshOllama,
   handleStartOllama,
   ollamaModels,
@@ -116,6 +120,9 @@ export function SettingsOverlay({
             </button>
           )}
         </div>
+        {ollamaError && (
+          <div className="mt-2 border border-danger/20 bg-danger/10 px-3 py-2 text-xs text-danger rounded-lg">{ollamaError}</div>
+        )}
       </div>
 
       {modelError && (

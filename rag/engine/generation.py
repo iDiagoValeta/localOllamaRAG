@@ -86,12 +86,23 @@ def preparar_fragmentos_para_generacion(
     return fragmentos_finales, metricas
 
 
-def _preparar_mensaje_usuario_rag(pregunta: str, fragmentos: List[Dict[str, Any]]) -> str:
+def _preparar_mensaje_usuario_rag(
+    pregunta: str,
+    fragmentos: List[Dict[str, Any]],
+    *,
+    metricas_out: Optional[Dict[str, Any]] = None,
+) -> str:
     """Build the user message sent to the generator: question plus context.
 
     Args:
         pregunta: User question.
         fragmentos: Evidence from ``preparar_fragmentos_para_generacion``.
+        metricas_out: When given, receives whether RECOMP synthesis was used
+            (``recomp_used``) and whether it failed and fell back to the raw
+            context (``recomp_error``). The use case already reports both;
+            without this out-parameter they were dropped between it and the
+            evaluation gate, which is the only place that can count fallbacks
+            (issue #497).
 
     Returns:
         The complete user message.
@@ -100,7 +111,13 @@ def _preparar_mensaje_usuario_rag(pregunta: str, fragmentos: List[Dict[str, Any]
     use_case = wiring.answer(_NO_COLLECTION, config)
 
     fragments = [wiring.fragment_from_dict(f) for f in fragmentos]
-    mensaje, _metrics = use_case.build_user_message(pregunta, fragments)
+    mensaje, metrics = use_case.build_user_message(pregunta, fragments)
+    if metricas_out is not None:
+        # Both keys always land: "not used" and "not an error" are real
+        # observations, and an absent key would be indistinguishable from a
+        # caller that never ran the context stage.
+        metricas_out["recomp_used"] = metrics.get("recomp_used", False)
+        metricas_out["recomp_error"] = metrics.get("recomp_error", False)
     return mensaje
 
 
@@ -221,12 +238,24 @@ def generar_respuesta_silenciosa(
             wall-clock budget, and without the marker a cut could not say
             which of the two it cut (issue #234).
 
+            Message preparation also writes ``recomp_used`` and
+            ``recomp_error`` here (issue #497), so the artifact can count the
+            cases where RECOMP overflowed and the raw context was used
+            instead. ``recomp_error`` is always present, ``False`` when the
+            synthesis did not fail.
+
     Returns:
         Complete response text.
     """
     if stats is not None:
         stats["stage"] = "context"
-    mensaje_usuario = cfg._preparar_mensaje_usuario_rag(pregunta, fragmentos)
+        # Keyword, and only when there is a dict to fill: existing callers
+        # and test doubles of this function take two positional arguments.
+        mensaje_usuario = cfg._preparar_mensaje_usuario_rag(
+            pregunta, fragmentos, metricas_out=stats
+        )
+    else:
+        mensaje_usuario = cfg._preparar_mensaje_usuario_rag(pregunta, fragmentos)
     if stats is not None:
         stats["stage"] = "generator"
     return cfg._generar_respuesta_stream(mensaje_usuario, stats=stats)

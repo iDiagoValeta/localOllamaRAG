@@ -1,0 +1,48 @@
+# Changelog
+
+Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow tags. The measured detail for each release (gate figures, migration notes) lives in its GitHub release; this file is the index.
+
+## [Unreleased]
+
+Reindexing required: #366 and #426 change what an index stores, so every existing store reads stale until it is reindexed.
+
+### Security
+
+- Web API rejects Host and Origin outside loopback, and the headless service can confine `docs_folder` and `data_dir` to the roots in `MONKEYGRAB_HEADLESS_ALLOWED_ROOTS`, failing closed (#346).
+
+### Changed
+
+- RAG answers follow the language of the question, not the language of the context (#378).
+- RAG debug dumps are off by default, keeping question and context text out of the debug directory (#399).
+- Study context budget reserves the generator's real output, 4096 tokens, leaving about 34k characters of document at a 16k context (#373).
+- Grader accepts typesetting variants of a correct answer (`\%`, `\,`, `^2`, thousands separators); gate figures recorded before 2026-10-21 are not comparable, see `docs/model-history.md` (#367).
+
+### Fixed
+
+- Settings panel reports why Ollama failed to start instead of staying on "stopped" (#474).
+- Closed sidebar leaves the tab order and its buttons have accessible names (#476).
+- Algorithm and code blocks are indexed instead of dropped, and figure placeholders use 1-based page numbers; every store must be reindexed (#366, #375).
+- The MinerU version is part of the index fingerprint, so every existing store reads stale once (#426).
+- README llama-server command raises the physical batch to 2048, which stops 500s on long chunks during indexing (#487).
+
+### Added
+
+- Gitflow: `develop` default branch, `release/` and `hotfix/` branches, protected `main` and `develop`, `Branch policy` check (#479).
+- Area, priority and status labels; documentation and release issue and PR templates; `CODEOWNERS` (#479).
+
+## [4.0.1] - 2026-10-20
+
+Bug-fix release on 4.0.0; no change to retrieval or generation on the normal path. Desktop stores in the per-user data directory (#344), atomic `settings.json` (#452), indexing without partial documents (#465), study-mode fixes (#464, #468). [Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.0.1).
+
+## [4.0.0] - 2026-10-20
+
+embeddinggemma-2 served by llama.cpp replaces Jina CLIP v2 (every 3.x index must be rebuilt), headless service, OpenAI-compatible backend per model role, 4 GB profile on `rag-lite`. [Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.0.0).
+
+## [3.0.0] - 2026-09-12
+
+[Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v3.0.0).
+
+[Unreleased]: https://github.com/iDiagoValeta/localOllamaRAG/compare/v4.0.1...develop
+[4.0.1]: https://github.com/iDiagoValeta/localOllamaRAG/compare/v4.0.0...v4.0.1
+[4.0.0]: https://github.com/iDiagoValeta/localOllamaRAG/compare/v3.0.0...v4.0.0
+[3.0.0]: https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v3.0.0

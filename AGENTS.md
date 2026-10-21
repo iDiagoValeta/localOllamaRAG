@@ -26,8 +26,10 @@ been deleted.
 
 ## 1. Behavior rules
 
-1. **Autonomous delivery.** Branch, PR, CI, squash-merge and post-merge
-   verification run without asking. Stop for explicit approval only where the
+1. **Autonomous delivery.** Branch off `develop` (gitflow, `docs/standards/branches.md`),
+   PR into `develop`, CI, squash-merge and post-merge verification run without
+   asking. `main` takes only `release/` and `hotfix/` branches, by merge commit;
+   cutting one is a release decision, so it waits for the owner. Stop for explicit approval only where the
    global protocol says to — production data or migrations, destructive
    operations, auth/PII/secrets, irreversible external integrations, anything
    without trivial rollback — or where a rule below demands agreement
@@ -229,6 +231,7 @@ Items 1–5 of §6 apply here too. What differs:
 # Setup (both interpreters; --check verifies without installing)
 python tools/setup_environments.py             # .venv + .venv-mineru, then check
 python tools/fetch_corpus.py                   # the three corpora from rag/docs/corpus_manifest.json (--check: report only)
+python tools/check_branch_policy.py <head> <base>  # is this PR's head/base pair allowed by gitflow
 
 # Web
 python rag/web/app.py                          # http://localhost:5000 (ES/EN/VAL UI + corpus selector via POST /api/corpus)
