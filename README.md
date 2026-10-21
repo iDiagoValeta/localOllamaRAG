@@ -194,9 +194,12 @@ UI and saved to `settings.json` still applies over them.
 
 The profile selects the pieces; it does not install them. Two are needed:
 
-1. The generator, pulled through Ollama:
+1. The models, pulled through Ollama. The RAG generator is the instruct build
+   of Qwen3 4B; the chat, contextual, RECOMP and auxiliary roles stay on
+   Gemma-4-E2B:
 
    ```bash
+   ollama pull qwen3:4b-instruct-2507-q4_K_M
    ollama pull hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0
    ```
 
@@ -216,8 +219,8 @@ Measured on the gold set (RTX 4060 Laptop): **130/156 and 129/156** over two
 runs, against the 0.82 floor, with the generator's process peaking at
 **2602 MiB** of VRAM and the embedding server at 0 MiB, ~1.2 s per answer.
 The Q6_K build of the same model (`hf.co/unsloth/gemma-4-E2B-it-GGUF:Q6_K`)
-scored 132/156 at 3340 MiB -- inside the noise, so Q4_0 stays the default.
-Runs and conditions are in
+scored 132/156 at 3340 MiB. The current default, the Qwen3 instruct build
+above, scored 141/156 at 3354 MiB on 2026-10-21. Runs and conditions are in
 [`docs/model-history.md`](docs/model-history.md#lite-profile-4-gb-of-vram).
 
 ---
