@@ -329,6 +329,9 @@ export default function App() {
   const [storeError, setStoreError] = useState<string | null>(null);
   const [ollamaStatus, setOllamaStatus] = useState<{ running: boolean; version: string | null }>({ running: true, version: null });
   const [ollamaStarting, setOllamaStarting] = useState(false);
+  // Why a start attempt left the server stopped. Kept apart from modelError
+  // because it belongs to the Ollama row, not to the role selectors below it.
+  const [ollamaError, setOllamaError] = useState<string | null>(null);
   const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
   const [modelRoles, setModelRoles] = useState<ModelRoles | null>(null);
   const [savingRole, setSavingRole] = useState<ModelRole | null>(null);
@@ -619,6 +622,9 @@ export default function App() {
     if (st?.ok) {
       setOllamaStatus({ running: st.running, version: st.version });
       if (st.running) {
+        // A status check that finds the server up retires any stale start
+        // failure: the condition the message described no longer holds.
+        setOllamaError(null);
         const m = await api.ollamaModels().catch(() => null);
         if (m?.ok) setOllamaModels(m.models || []);
       } else {
@@ -696,19 +702,28 @@ export default function App() {
   const handleStartOllama = useCallback(async () => {
     if (ollamaStarting) return;
     setOllamaStarting(true);
+    // A retry supersedes the failure of the attempt before it.
+    setOllamaError(null);
     try {
       const res = await api.startOllama();
       setOllamaStatus({ running: !!res.running, version: res.version || null });
       if (res.running) {
         const m = await api.ollamaModels().catch(() => null);
         if (m?.ok) setOllamaModels(m.models || []);
+      } else {
+        // api.startOllama parses the body regardless of the HTTP status, so
+        // the 404 that says the binary is missing arrives with its own code
+        // and can name the cause instead of a generic failure.
+        setOllamaError(res.error === 'ollama_not_found' ? T.ollamaNotFound : T.ollamaStartFailed);
       }
     } catch {
-      /* keep stopped */
+      // Transport failure: without this the row would keep saying "stopped"
+      // as if nothing had been attempted.
+      setOllamaError(T.ollamaStartFailed);
     } finally {
       setOllamaStarting(false);
     }
-  }, [ollamaStarting]);
+  }, [ollamaStarting, lang]);
 
   // ---- Load control panel (stores / model roles / Ollama) once ready ----
   // The backend auto-starts Ollama at boot; if it is still down when the UI
@@ -1137,6 +1152,11 @@ export default function App() {
 
       {/* Sidebar */}
       <motion.aside
+        id="app-sidebar"
+        // Closing only slides or shrinks the panel; without inert Tab still
+        // walks its invisible controls and a screen reader still reads them (#476).
+        inert={!isSidebarOpen}
+        aria-hidden={!isSidebarOpen}
         className={`fixed md:relative z-50 h-[calc(100vh-16px)] md:h-full w-[320px] glass-panel rounded-3xl flex flex-col transition-transform duration-300 ease-in-out shadow-2xl ${isSidebarOpen ? 'translate-x-2 md:translate-x-0' : '-translate-x-[120%] md:translate-x-0 md:w-0 md:opacity-0 md:overflow-hidden md:ml-[-16px]'}`}
       >
         {/* Sidebar Header */}
@@ -1145,7 +1165,7 @@ export default function App() {
             <img src="/logo.png" alt="MonkeyGrab" className="w-9 h-9 object-cover flex-shrink-0" />
             <h1 className="flex font-extrabold text-lg tracking-tight"><ShimmerText text="MonkeyGrab" /></h1>
           </div>
-          <button className="md:hidden text-ink-faint hover:text-ink transition-colors bg-field p-2 rounded-full" onClick={() => setIsSidebarOpen(false)}>
+          <button aria-label={T.closeSidebar} className="md:hidden text-ink-faint hover:text-ink transition-colors bg-field p-2 rounded-full" onClick={() => setIsSidebarOpen(false)}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -1306,6 +1326,7 @@ export default function App() {
             onClose={() => setMainPanel(null)}
             ollamaStatus={ollamaStatus}
             ollamaStarting={ollamaStarting}
+            ollamaError={ollamaError}
             refreshOllama={refreshOllama}
             handleStartOllama={handleStartOllama}
             ollamaModels={ollamaModels}
@@ -1335,6 +1356,9 @@ export default function App() {
           <div className="flex items-center gap-3 min-w-0">
             <button
               className="p-2.5 text-ink-muted hover:text-ink bg-field hover:bg-surface border border-edge rounded-lg transition-colors flex-shrink-0 focus:outline-none focus-visible:ring-1 focus-visible:ring-divider"
+              aria-label={isSidebarOpen ? T.closeSidebar : T.openSidebar}
+              aria-expanded={isSidebarOpen}
+              aria-controls="app-sidebar"
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             >
               <Menu className="w-5 h-5" />

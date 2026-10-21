@@ -805,6 +805,26 @@ def _decoding_metrics(stats: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _recomp_metrics(stats: Dict[str, Any]) -> Dict[str, Any]:
+    """Copy the RECOMP keys ``stats`` already holds, if any.
+
+    Used where the record must not invent a value: a budget cut can land
+    before message preparation ever ran, and in that case there is no
+    observation to write. The normal generation record below always carries
+    both keys because ``generar_respuesta_silenciosa`` always writes them.
+    """
+    return {
+        key: stats[key]
+        for key in ("recomp_used", "recomp_error")
+        if key in stats
+    }
+
+
+def _recomp_log_flag(stats: Dict[str, Any]) -> str:
+    """Log marker for a case where RECOMP failed and raw context was used."""
+    return " [RECOMP-FALLBACK]" if stats.get("recomp_error") else ""
+
+
 def _utc_now_iso() -> str:
     """Wall-clock start of a record, so a window in a run is visible.
 
@@ -1185,9 +1205,16 @@ def _run_factual_case_for_model(
             "reason": str(exc),
             "elapsed_seconds": round(retrieval_elapsed + gen_elapsed, 2),
             "started_at": started_at,
+            # Only what the context stage already reported: a cut during
+            # message preparation leaves nothing to state about RECOMP.
+            **_recomp_metrics(gen_stats),
             **_placement(model),
         }
-        print(f"  [BUDGET] {case['id']} / {model} ({gen_elapsed:.1f}s) -- {exc}", flush=True)
+        print(
+            f"  [BUDGET]{_recomp_log_flag(gen_stats)} {case['id']} / {model} "
+            f"({gen_elapsed:.1f}s) -- {exc}",
+            flush=True,
+        )
         return record
     except Exception as exc:
         # A dead or overloaded Ollama must not be reported as a quality
@@ -1226,6 +1253,11 @@ def _run_factual_case_for_model(
         # that number mostly compares how busy the card was.
         "generation_seconds": round(gen_elapsed, 2),
         "started_at": started_at,
+        # Always present: the silent path writes both while preparing the
+        # message, so False here means "observed as not used", not "unknown"
+        # (issue #497).
+        "recomp_used": gen_stats.get("recomp_used", False),
+        "recomp_error": gen_stats.get("recomp_error", False),
         **_decoding_metrics(gen_stats),
         **_placement(model),
     }
@@ -1234,7 +1266,8 @@ def _run_factual_case_for_model(
         record["retrieved"] = _fragment_diag(fragments)
     status = "PASS" if result["pass"] else "FAIL"
     print(
-        f"  [{status}] {case['id']} / {model} ({gen_elapsed:.1f}s) -- {result['reason']}",
+        f"  [{status}]{_recomp_log_flag(gen_stats)} {case['id']} / {model} "
+        f"({gen_elapsed:.1f}s) -- {result['reason']}",
         flush=True,
     )
     return record
@@ -1693,6 +1726,11 @@ def build_summary(records: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         "by_case_type_and_model": _bucket_stats(
             records, lambda r: f"{r['case_type']} / {r['model'] or 'n/a (retrieval)'}"
         ),
+        # Issue #497: how often RECOMP was bypassed, and why. Counted over
+        # answered records only -- retrieval-only cases never reach the
+        # context stage, so they are not "unused" by choice or by failure.
+        "recomp_fallbacks": sum(1 for r in answered if r.get("recomp_error") is True),
+        "recomp_unused": sum(1 for r in answered if r.get("recomp_used") is False),
     }
 
 

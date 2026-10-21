@@ -216,3 +216,106 @@ def test_the_gates_own_endpoint_follows_ollama_base_url(monkeypatch):
     finally:
         monkeypatch.delenv("OLLAMA_BASE_URL")
         importlib.reload(run_eval)
+
+
+# recomp_used / recomp_error (issue #497)
+
+
+class _FakeRagRecompFallback(_FakeRag):
+    """RECOMP overflowed and the use case answered from the raw context."""
+
+    def generar_respuesta_silenciosa(self, question, fragments, stats=None):
+        if stats is not None:
+            stats.update({
+                "stage": "generator",
+                "recomp_used": False,
+                "recomp_error": True,
+                "eval_count": 4,
+                "eval_duration": 40_000_000,
+            })
+        return "42"
+
+
+class _FakeRagRecompUsed(_FakeRag):
+    def generar_respuesta_silenciosa(self, question, fragments, stats=None):
+        if stats is not None:
+            stats.update({
+                "stage": "generator",
+                "recomp_used": True,
+                "recomp_error": False,
+                "eval_count": 4,
+                "eval_duration": 40_000_000,
+            })
+        return "42"
+
+
+class _FakeRagStuckAfterRecompFallback(_FakeRag):
+    """The fallback happened, then the generator outran the budget."""
+
+    def generar_respuesta_silenciosa(self, question, fragments, stats=None):
+        if stats is not None:
+            stats.update({
+                "stage": "generator",
+                "recomp_used": False,
+                "recomp_error": True,
+            })
+        time.sleep(1)
+        raise AssertionError("must have been abandoned by the budget")
+
+
+def test_a_factual_record_says_recomp_fell_back_to_raw_context(no_placement):
+    record = run_eval._run_factual_case_for_model(
+        _FakeRagRecompFallback(), _case(), [_fragment()], "m", 0.0
+    )
+    assert record["recomp_used"] is False
+    assert record["recomp_error"] is True
+
+
+def test_a_factual_record_says_recomp_was_used(no_placement):
+    record = run_eval._run_factual_case_for_model(
+        _FakeRagRecompUsed(), _case(), [_fragment()], "m", 0.0
+    )
+    assert record["recomp_used"] is True
+    assert record["recomp_error"] is False
+
+
+def test_a_budget_cut_keeps_the_recomp_metrics_already_collected(monkeypatch, no_placement):
+    monkeypatch.setattr(run_eval, "GENERATION_BUDGET_SECONDS", 0.05)
+    record = run_eval._run_factual_case_for_model(
+        _FakeRagStuckAfterRecompFallback(), _case(), [_fragment()], "m", 0.0
+    )
+    assert record["budget_exceeded"] is True
+    assert record["recomp_used"] is False
+    assert record["recomp_error"] is True
+
+
+def test_the_case_line_flags_a_recomp_fallback(no_placement, capsys):
+    run_eval._run_factual_case_for_model(
+        _FakeRagRecompFallback(), _case(), [_fragment()], "m", 0.0
+    )
+    assert "[RECOMP-FALLBACK]" in capsys.readouterr().out
+
+
+def test_the_case_line_does_not_flag_a_used_recomp(no_placement, capsys):
+    run_eval._run_factual_case_for_model(
+        _FakeRagRecompUsed(), _case(), [_fragment()], "m", 0.0
+    )
+    assert "[RECOMP-FALLBACK]" not in capsys.readouterr().out
+
+
+def test_the_summary_counts_recomp_fallbacks_and_unused_cases():
+    records = [
+        {**_case(), "model": "m", "passed": True,
+         "recomp_used": False, "recomp_error": True},
+        {**_case(), "id": "c2", "model": "m", "passed": True,
+         "recomp_used": True, "recomp_error": False},
+        {**_case(), "id": "c3", "model": "m", "passed": False,
+         "recomp_used": False, "recomp_error": False},
+        # Retrieval-only records never ran RECOMP; they must not inflate
+        # "unused", which is about synthesis being skipped or failing.
+        {"id": "r1", "paper": "p", "case_type": "figure_retrieval",
+         "lang": "en", "model": None, "passed": True},
+    ]
+    summary = run_eval.build_summary(records)
+    assert summary["recomp_fallbacks"] == 1
+    assert summary["recomp_unused"] == 2

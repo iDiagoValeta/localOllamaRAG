@@ -228,9 +228,11 @@ Requires [Python 3.10+](https://www.python.org/downloads/),
 model pulled, and the
 [`embeddinggemma-2`](https://huggingface.co/google/embeddinggemma-2) embedder
 behind a local `llama-server` — start it with
-`llama-server -m embeddinggemma-2.gguf --embedding --port 8091` from
+`llama-server -m embeddinggemma-2.gguf --embedding --port 8091 -b 2048 -ub 2048` from
 [llama.cpp](https://github.com/ggml-org/llama.cpp), the default address of
-`MONKEYGRAB_EMBEDDER_URL`. Drop PDFs into `rag/docs/en/` — the index builds
+`MONKEYGRAB_EMBEDDER_URL`. The batch flags matter: with the default 512-token
+physical batch a longer chunk is rejected with HTTP 500 and indexing stops
+(issue #487). Drop PDFs into `rag/docs/en/` — the index builds
 itself on first run.
 
 ```bash
@@ -283,6 +285,11 @@ request must carry `Authorization: Bearer <token>`; unset means no auth, on a
 socket that only ever binds `127.0.0.1` (`MONKEYGRAB_HEADLESS_PORT`, default
 `5050`). Request bodies are capped at 1 MiB; a larger one is rejected before
 parsing with a JSON `413 payload_too_large`.
+`MONKEYGRAB_HEADLESS_ALLOWED_ROOTS` (folders separated like `PATH`) limits
+where `docs_folder` and `data_dir` may point; symlinks are resolved and `~` is
+expanded, and anything outside gets `403 path_not_allowed`. Unset or empty, any
+path is accepted. Set to only separators or spaces, it refuses every path and
+logs a warning at startup instead of silently disabling the check.
 
 `/health` reports the checkout's git `HEAD` commit alongside the isolated
 interpreter, CUDA visibility, the embedder's liveness and the per-role
@@ -313,8 +320,8 @@ on the next poll.
 disk disagrees with the configuration in force
 (`rag/headless/service.py:status_store`, which calls
 `index_fingerprint_mismatch`). It means the indexed chunks were built
-under different chunking or embedding settings, not that documents are
-missing. `POST /stores/<id>/index` does not repair this:
+under different chunking or embedding settings, or by another MinerU
+version (issue #426), not that documents are missing. `POST /stores/<id>/index` does not repair this:
 `rag/headless/service.py:index_store` only indexes new file names and drops
 removed ones. Recovery is: delete the store's directory under
 `<data_dir>/vector_db/` (named `<hash>_<folder>_eg2`, the hash taken from the
@@ -402,8 +409,8 @@ copied on first start and then belong to the user, so uploads and deletions
 never touch the read-only install.
 
 - `debug_rag/`: one dump per RAG query with the question, the full context
-  sent to the model and its answer. On by default; `GUARDAR_DEBUG_RAG=False`
-  turns it off. Delete the folder to clear it.
+  sent to the model and its answer. Off by default since it keeps your
+  documents' text and questions in plain files; `GUARDAR_DEBUG_RAG=True` turns it on. Delete the folder to clear it.
 - `historial_chat.json`: every chat-mode turn, reused as context for the next
   answer. The UI's clear-conversation button empties it; there is no switch to
   stop writing it.

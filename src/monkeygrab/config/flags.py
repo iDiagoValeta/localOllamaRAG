@@ -58,4 +58,4 @@ class PipelineFlagsConfig:
     usar_embeddings_imagen: bool = True
     usar_descripcion_imagen: bool = False
     logging_metricas: bool = True
-    guardar_debug_rag: bool = True
+    guardar_debug_rag: bool = False

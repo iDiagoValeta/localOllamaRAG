@@ -246,6 +246,16 @@ def _single_document(fragments: Sequence[Fragment]) -> str:
     return next(iter(sources)) if len(sources) == 1 else ""
 
 
+# Tokens of num_ctx kept for the answer and the prompt around the document.
+# The output share must cover the generator's num_predict cap (4096,
+# RAG_SAMPLING_OPTIONS in rag/engine/wiring.py): reserving less lets a full
+# document plus a long answer exceed num_ctx, and Ollama then truncates the
+# input or the output (issue #373). tests/test_study_output_reserve.py ties
+# the two numbers together, because the core cannot import the wiring layer.
+_OUTPUT_RESERVE_TOKENS = 4096
+_PROMPT_RESERVE_TOKENS = 1024
+
+
 def _calculate_context_char_budget(config: AppConfig) -> int:
     """Derive a safe character budget for document context from config.models.ollama.rag_num_ctx.
 
@@ -254,7 +264,7 @@ def _calculate_context_char_budget(config: AppConfig) -> int:
     text and dense mathematical notations.
     """
     num_ctx = config.models.ollama.rag_num_ctx
-    available_tokens = max(1000, num_ctx - 2048)
+    available_tokens = max(1000, num_ctx - _OUTPUT_RESERVE_TOKENS - _PROMPT_RESERVE_TOKENS)
     return int(available_tokens * 3.0)
 
 

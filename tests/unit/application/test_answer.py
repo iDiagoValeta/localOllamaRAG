@@ -299,5 +299,69 @@ def test_generation_metrics_omit_tokens_per_second_without_eval_count_and_durati
     assert "tokens_per_second" not in result.metrics["generation"]
 
 
+
+
+def test_first_chunk_of_a_page_pulls_the_previous_page_tail_not_its_head():
+    # Issue #397 point 2: the contiguous text of chunk 0 is the previous
+    # page's LAST chunk; chunks 0-2 of a 7-chunk page are far from it.
+    anchor = _fragment("a.pdf_pag2_chunk0", total_in_page=4)
+    prev_head = _fragment("a.pdf_pag1_chunk0", total_in_page=7)
+    prev_tail = _fragment("a.pdf_pag1_chunk6", total_in_page=7)
+    store = FakeVectorStore(by_id={prev_head.id: prev_head, prev_tail.id: prev_tail})
+
+    expanded, _ = _expand_with_neighbors([anchor], store, n_top_for_expansion=1)
+
+    assert prev_tail.id in {f.id for f in expanded}
+    assert prev_head.id not in {f.id for f in expanded}
+    # Exactly two lookups: the count probe (page 1's chunk 0, which reports
+    # the page's 7 chunks) and the tail it enables. Anything else here means
+    # the probe or the tail request changed shape.
+    assert store.get_by_ids_calls == [
+        ["a.pdf_pag1_chunk0"],
+        ["a.pdf_pag1_chunk6", "a.pdf_pag2_chunk1"],
+    ]
+
+
+def test_first_chunk_after_a_page_with_no_chunks_skips_the_previous_side():
+    anchor = _fragment("a.pdf_pag2_chunk0", total_in_page=4)
+    store = FakeVectorStore(by_id={})
+
+    expanded, n_added = _expand_with_neighbors([anchor], store, n_top_for_expansion=1)
+
+    assert n_added == 0
+    # Exactly two lookups: the probe for the previous page's count (empty,
+    # because that page produced no chunks) and the same-page neighbors asked
+    # for once the count is unknown. Counting them pins both that the probe
+    # happens once and that it is not retried after coming back empty.
+    assert store.get_by_ids_calls == [
+        ["a.pdf_pag1_chunk0"],
+        ["a.pdf_pag2_chunk1"],
+    ]
+
+
+def test_page_zero_anchor_never_probes_a_previous_page():
+    # Page 0 has no previous page. Without the `page <= 0` guard the probe
+    # would build the nonsense id `_pag-1_chunk0` and pay a lookup for it, so
+    # the single recorded call is what proves the guard is still there.
+    anchor = _fragment("a.pdf_pag0_chunk0", total_in_page=4)
+    store = FakeVectorStore(by_id={})
+
+    _expand_with_neighbors([anchor], store, n_top_for_expansion=1)
+
+    assert store.get_by_ids_calls == [["a.pdf_pag0_chunk1"]]
+
+
+def test_mid_page_anchor_does_not_probe_the_previous_page():
+    # Only chunk 0 needs the previous page's count: its contiguous neighbor
+    # is that page's tail, while any other chunk already has its backward
+    # neighbor in-page. Two neighbor ids in one call is the whole cost.
+    anchor = _fragment("a.pdf_pag2_chunk1", total_in_page=4)
+    store = FakeVectorStore(by_id={})
+
+    _expand_with_neighbors([anchor], store, n_top_for_expansion=1)
+
+    assert store.get_by_ids_calls == [["a.pdf_pag2_chunk0", "a.pdf_pag2_chunk2"]]
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))

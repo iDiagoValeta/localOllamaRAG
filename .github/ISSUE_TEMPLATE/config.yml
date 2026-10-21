@@ -1,1 +1,5 @@
 blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability or a leaked secret
+    url: https://github.com/iDiagoValeta/localOllamaRAG/security/advisories/new
+    about: Private reporting only. Rotate any leaked secret first (SECURITY.md).

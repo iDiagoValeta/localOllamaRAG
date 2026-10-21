@@ -2,8 +2,9 @@
 
 ## Supported versions
 
-Security fixes land on `main`. There are no maintained release branches, so
-update to the latest `main` before reporting.
+Security fixes land on `develop` and ship in the next release; a fix severe
+enough to not wait goes out as a `hotfix/` on `main`. Only the latest tagged
+release is maintained, so update to it before reporting.
 
 ## Reporting a vulnerability
 

@@ -92,6 +92,14 @@ _CACHE_VERSION = "v1"
 # `type` field), not tied to any one document's layout.
 _DISCARDED_BLOCK_TYPES = frozenset({"page_number", "footer", "page_footnote", "aside_text"})
 
+# The version probe runs synchronously inside HTTP requests (the control
+# panel's /api/init and /stores/<id>/status), so it cannot borrow the
+# extraction timeout: a hung `mineru --version` -- broken venv, model
+# download, antivirus -- would block the request for minutes on the first
+# call after each process start. Interpreter startup on a healthy install
+# takes a few seconds; twenty leaves ample headroom.
+_VERSION_PROBE_TIMEOUT_SECONDS = 20
+
 
 # CLI INVOCATION + CACHE
 
@@ -158,7 +166,11 @@ def _mineru_version(resolved_bin: str, bin_mtime_ns: int) -> str:
     """
     try:
         proc = subprocess.run(
-            [resolved_bin, "--version"], capture_output=True, text=True, timeout=120, check=False,
+            [resolved_bin, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=_VERSION_PROBE_TIMEOUT_SECONDS,
+            check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise RuntimeError(f"Could not ask MinerU for its version ({resolved_bin!r}): {exc}") from exc
@@ -169,6 +181,32 @@ def _mineru_version(resolved_bin: str, bin_mtime_ns: int) -> str:
             f"{_failure_cause(proc.stderr or proc.stdout or '')}"
         )
     return version.splitlines()[-1]
+
+
+def installed_version(mineru_bin: Optional[str] = None) -> str:
+    """Version string of the configured MinerU install, for the index fingerprint (issue #426).
+
+    Args:
+        mineru_bin: Binary to ask; defaults to the same resolution the
+            extractor uses (``MINERU_BIN``, then the isolated venv).
+
+    Raises:
+        RuntimeError: MinerU cannot be found or cannot report its version.
+    """
+    configured = mineru_bin if mineru_bin is not None else _default_mineru_bin()
+    resolved = _resolve_runnable_bin(configured)
+    if resolved is None:
+        raise RuntimeError(f"MinerU CLI not found (looked for {configured!r} on disk and on PATH)")
+    # The binary can vanish between resolving it and reading its mtime (an
+    # in-place reinstall, a half-written venv, an antivirus on Windows). The
+    # stat must fail as RuntimeError like the rest of this function: callers
+    # such as rag.engine.indexing._extractor_version only catch that, and a
+    # stray OSError there would abort indexing after all chunks were embedded.
+    try:
+        bin_mtime_ns = os.stat(resolved).st_mtime_ns
+    except OSError as exc:
+        raise RuntimeError(f"MinerU binary became unreadable ({resolved!r}): {exc}") from exc
+    return _mineru_version(resolved, bin_mtime_ns)
 
 
 def _cache_key(pdf_path: Path, mineru_bin: str) -> str:
@@ -409,6 +447,17 @@ def _render_block_text(block: Dict[str, Any]) -> str:
 
     if block_type == "list":
         return "\n".join(block.get("list_items") or [])
+
+    if block_type == "code":
+        # Algorithms and pseudocode: MinerU puts them in code_body, not
+        # "text", so the fallback below dropped them. Adam's default
+        # hyperparameters live in its Algorithm 1 block (issue #366).
+        parts = [
+            " ".join(block.get("code_caption") or []).strip(),
+            block.get("code_body", ""),
+            " ".join(block.get("code_footnote") or []).strip(),
+        ]
+        return "\n".join(part for part in parts if part)
 
     if block_type in ("image", "chart"):
         caption_key = "image_caption" if block_type == "image" else "chart_caption"

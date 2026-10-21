@@ -21,7 +21,7 @@ on:
       - .github/labels.json
       - .github/workflows/labels.yml
   push:
-    branches: [main]
+    branches: [main, develop, "release/**", "hotfix/**"]
     paths:
       - .github/labels.json
       - .github/workflows/labels.yml
