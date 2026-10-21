@@ -11,9 +11,11 @@
     "  modifier        -- optional, stacks on a type label.",
     "  area            -- where in the code the issue lives; zero or more.",
     "  priority        -- at most one of high / medium / low.",
-    "  github-default  -- shipped by GitHub when the repository was created and",
-    "                     kept only so this file is a complete inventory. Not part",
-    "                     of the standard; nothing here is expected to use them.",
+    "  github-default  -- shipped by GitHub when the repository was created, or",
+    "                     applied by automation that creates labels on its own",
+    "                     (Dependabot). Kept only so this file is a complete",
+    "                     inventory. Not part of the standard; nothing here is",
+    "                     expected to use them.",
     "",
     "Colours are hex without the leading '#', matching `gh label list --json color`.",
     "tests/unit/test_contribution_standard_drift.py checks the documentation",
@@ -212,6 +214,24 @@
       "color": "c2e0c6",
       "description": "Worth doing when adjacent work is open",
       "kind": "priority"
+    },
+    {
+      "name": "dependencies",
+      "color": "0366d6",
+      "description": "Pull requests that update a dependency file",
+      "kind": "github-default"
+    },
+    {
+      "name": "javascript",
+      "color": "168700",
+      "description": "Pull requests that update javascript code",
+      "kind": "github-default"
+    },
+    {
+      "name": "github_actions",
+      "color": "000000",
+      "description": "Pull requests that update GitHub Actions code",
+      "kind": "github-default"
     }
   ]
 }
