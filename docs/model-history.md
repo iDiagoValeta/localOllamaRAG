@@ -317,6 +317,7 @@ same 180 s budget, `USAR_DESCRIPCION_IMAGEN=false` exported over
 | `hf.co/unsloth/gemma-4-E2B-it-GGUF:Q6_K` | off | 114 / 136 (83.8%) | 132 / 156 (84.6%) | 85.0 | 27 *(of 124)* | 1.27 *(of 124)* | 0.31 | 0 | 0 | GPU | `20261016T010240Z` |
 | `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0`, rag-lite at #448 (2026-10-20) | off | 114 / 136 (83.8%) | 132 / 156 (84.6%) | 103.6 | 30 *(of 124)* | 1.12 *(of 124)* | 0.29 | 0 | 0 | GPU | `20261020T040541Z` |
 | `qwen3:4b-instruct-2507-q4_K_M` | off | 123 / 136 (90.4%) | 141 / 156 (90.4%) | 63.8 | 136 *(of 124)* | 3.69 *(of 124)* | 2.08 | 0 | 0 | GPU | `20261021T022603Z` |
+| `qwen3:4b-instruct-2507-q4_K_M`, rag-lite synced with develop (#501, 2026-10-21), graded by #492 | off | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 64.2 | 142 *(of 124)* | 3.76 *(of 124)* | 2.18 | 0 | 0 | GPU | `20261021T154355Z` |
 
 The `20261021T022603Z` row is the profile default since 2026-10-21: only
 `OLLAMA_RAG_MODEL` moved to Qwen3, while chat, contextual, RECOMP and AUX stay
@@ -326,6 +327,11 @@ its reasoning into the response (issue #411). Under develop's #492 grader the
 same run also scores **144/156** (3 correct answers this grader rejects). The
 previous default was not regraded with that grader because its artifact is not
 on this machine.
+
+The `20261021T154355Z` row is the same default after #501 brought rag-lite up
+to date with develop, on an index rebuilt from scratch (#366 and #426 change
+what it stores): 148/156 against the 144/156 the `20261021T022603Z` run scores
+under the same grader. It also peaked at **3354 MiB** per process.
 
 The `20261020T040541Z` row was the profile default on `rag-lite` after the
 2026-10-20 syncs (#423-#448), until the Qwen3 row replaced it, on the same
