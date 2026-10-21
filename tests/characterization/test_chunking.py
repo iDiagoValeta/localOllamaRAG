@@ -165,22 +165,22 @@ def test_expand_neighbors_mid_page_returns_prev_and_next_chunk_ids():
     assert ids == ["paperA.pdf_pag2_chunk2", "paperA.pdf_pag2_chunk4"]
 
 
-def test_expand_neighbors_first_chunk_of_page_pulls_last_three_of_previous_page():
-    """When ``chunk == 0`` and this isn't page 0, the function assumes (does
-    not verify) the previous page had at least 3 chunks and always requests
-    chunk indices 0, 1, 2 of the previous page -- plus the normal next-chunk
-    lookup for the current page since ``total_chunks_in_page`` is known here.
+def test_expand_neighbors_first_chunk_of_page_without_previous_count_skips_previous_page():
+    """Changed with the owner's agreement on 2026-10-21 (issue #397, point 2).
+
+    This used to pin the known bug: chunk 0 of a page requested chunks 0, 1
+    and 2 of the previous page whatever its length, which on a long page is
+    text far from the anchor, while the contiguous tail was never fetched.
+    The tail's ids depend on the previous page's chunk count, which this
+    legacy entry point does not have, so it now requests nothing there.
+    ``Answer`` reads the count from the store and asks for the real tail
+    (tests/unit/application/test_answer_previous_page_tail.py).
     """
     metadata = {"source": "paperA.pdf", "page": 2, "chunk": 0, "total_chunks_in_page": 6}
 
     ids = rag.expandir_con_chunks_adyacentes("paperA.pdf_pag2_chunk0", metadata, n_vecinos=1)
 
-    assert ids == [
-        "paperA.pdf_pag1_chunk0",
-        "paperA.pdf_pag1_chunk1",
-        "paperA.pdf_pag1_chunk2",
-        "paperA.pdf_pag2_chunk1",
-    ]
+    assert ids == ["paperA.pdf_pag2_chunk1"]
 
 
 def test_expand_neighbors_last_chunk_of_page_pulls_first_two_of_next_page():

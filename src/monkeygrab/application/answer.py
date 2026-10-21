@@ -114,7 +114,10 @@ def _expand_with_neighbors(
     for frag in expanded[:n_top_for_expansion]:
         if not _is_expandable(frag):
             continue
-        neighbor_ids = adjacent_chunk_ids(frag.metadata, n_neighbors=1)
+        neighbor_ids = adjacent_chunk_ids(
+            frag.metadata, n_neighbors=1,
+            previous_page_total=_previous_page_total(frag, vector_store),
+        )
         if not neighbor_ids:
             continue
         for neighbor in vector_store.get_by_ids(neighbor_ids):
@@ -125,6 +128,22 @@ def _expand_with_neighbors(
     if additions:
         expanded.extend(additions)
     return expanded, len(additions)
+
+
+def _previous_page_total(frag: Fragment, vector_store: VectorStore) -> Optional[int]:
+    """Chunk count of the page before ``frag``'s, read from that page's chunk 0.
+
+    Only asked for the first chunk of a page, whose contiguous neighbours are
+    the previous page's last chunks (issue #397). Every chunk of a page
+    carries the page's count, so one lookup by id is enough; a page that
+    produced no chunks (dropped as too short) answers None and the expansion
+    skips that side.
+    """
+    meta = frag.metadata
+    if meta.chunk != 0 or meta.page <= 0:
+        return None
+    probe = vector_store.get_by_ids([f"{meta.source}_pag{meta.page - 1}_chunk0"])
+    return probe[0].metadata.total_chunks_in_page if probe else None
 
 
 def _limit_by_char_budget(
