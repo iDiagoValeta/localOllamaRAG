@@ -245,11 +245,6 @@ def search_set_case_ids() -> Tuple[str, ...]:
     return tuple(c["id"] for c in _gold_cases() if c["source"] != "arxiv")
 
 
-def blind_set_case_ids() -> Tuple[str, ...]:
-    """Case ids with ``source == "arxiv"`` -- never requested by the harness."""
-    return tuple(c["id"] for c in _gold_cases() if c["source"] == "arxiv")
-
-
 def _read_id_list(path: Path) -> List[str]:
     """Parse a harness case-id file: one id per non-comment, non-blank line.
 
