@@ -6,8 +6,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ### Changed
 
+- The lint job fails on a `noqa` directive that silences nothing and on commented-out code (#524).
+- The frontend's CI fails on unused locals, parameters, exports and dependencies, and the ones it found are gone (#525).
+- `CLAUDE.md` is the one line `@AGENTS.md`, and `.agents/skills` points Codex at the same runbooks; the pointer files under `.claude/` and `.codex/` are gone (#528).
 - The fast gate fails on Python code that only tests reach; the dead code it found is gone (#526).
 - The fast gate fails if `rag/engine` imports the web or headless layers, a module imports a private name from another top-level package (`monkeygrab`, `rag`, `harness`, `tools`), an adapter is built outside the composition root, or a new import cycle appears (#527).
+
+### Fixed
+
+- The frontend type-check sees React's types; before, every React import and JSX element was typed `any`, so it verified almost nothing in the components. It now runs on TypeScript 7 (#532).
 
 ## [4.1.0] - 2026-10-21
 
