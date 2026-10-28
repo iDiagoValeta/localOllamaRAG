@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import run_eval  # noqa: E402
+import run_eval
 
 
 def test_main_forwards_parsed_models_and_update_baseline(monkeypatch):

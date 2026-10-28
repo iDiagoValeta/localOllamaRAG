@@ -151,7 +151,7 @@ def _download(url: str, dest: str) -> Tuple[bool, str]:
             return False, "response was not a usable PDF"
         os.replace(tmp, dest)
         return True, f"{os.path.getsize(dest):,} bytes"
-    except Exception as exc:  # noqa: BLE001 -- reported per document, never fatal
+    except Exception as exc:  # reported per document, never fatal
         if os.path.exists(tmp):
             os.remove(tmp)
         return False, str(exc)
@@ -177,7 +177,7 @@ def _current_revid(lang: str, title: str) -> Optional[int]:
         pages = response.json()["query"]["pages"]
         page = next(iter(pages.values()))
         return int(page["revisions"][0]["revid"])
-    except Exception:  # noqa: BLE001 -- a drift check must never end the run
+    except Exception:  # a drift check must never end the run
         return None
 
 

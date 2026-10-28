@@ -15,16 +15,16 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import rag.chat_pdfs as rag  # noqa: E402
-import rag.engine.context as context  # noqa: E402
+import rag.chat_pdfs as rag
+import rag.engine.context as context
 
-from monkeygrab.application import context_assembly  # noqa: E402
-from monkeygrab.application.context_assembly import (  # noqa: E402
+from monkeygrab.application import context_assembly
+from monkeygrab.application.context_assembly import (
     build_context_for_model,
     optimize_context_text,
 )
-from monkeygrab.domain.chunk_metadata import ChunkMetadata  # noqa: E402
-from monkeygrab.domain.fragment import Fragment  # noqa: E402
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
+from monkeygrab.domain.fragment import Fragment
 
 CONTEXTUAL_SEP = "\\n\\n"
 

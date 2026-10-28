@@ -12,9 +12,9 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pytest  # noqa: E402
+import pytest
 
-from monkeygrab.application.context_assembly import strip_citation_markers  # noqa: E402
+from monkeygrab.application.context_assembly import strip_citation_markers
 
 
 @pytest.mark.parametrize(

@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import rag.chat_pdfs  # noqa: E402,F401  (breaks the context <-> chat_pdfs import cycle)
-import rag.engine.context as context  # noqa: E402
+import rag.chat_pdfs  # noqa: F401  (breaks the context <-> chat_pdfs import cycle)
+import rag.engine.context as context
 
 
 class _FakeResponse:

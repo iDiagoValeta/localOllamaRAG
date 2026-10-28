@@ -18,8 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import rag.chat_pdfs  # noqa: E402,F401  (the facade must load before its engine modules)
-from rag.engine import generation  # noqa: E402
+import rag.chat_pdfs  # noqa: F401  (the facade must load before its engine modules)
+from rag.engine import generation
 
 
 def test_the_silent_path_marks_context_then_generator(monkeypatch):

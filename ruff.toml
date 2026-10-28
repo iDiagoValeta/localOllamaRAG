@@ -1,10 +1,15 @@
 # Lint configuration.
 #
-# The rule set is deliberately narrow: pyflakes (F) and syntax/runtime errors
-# (E9) catch things that are actually broken — undefined names, dead imports,
-# unreachable code — while style opinions stay out of the way. A linter that
+# The rule set is deliberately narrow: pyflakes (F) and the syntax/runtime
+# checks in E9 catch things that are actually broken, such as undefined names
+# and dead imports, while style opinions stay out of the way. A linter that
 # reports hundreds of cosmetic findings on an existing codebase gets muted, and
-# a muted linter catches nothing.
+# a muted linter catches nothing. Unreachable code is not among those checks;
+# tests/unit/test_no_unreachable_code.py owns that. RUF100 and ERA001 earn
+# their place on top of that core: RUF100 rejects a `noqa` that silences
+# nothing, because such a directive lies about the code it sits on and teaches
+# readers to skim past the ones that matter, and ERA001 keeps commented-out
+# code out of the source, where history already lives in git.
 
 target-version = "py310"
 line-length = 100
@@ -12,11 +17,10 @@ line-length = 100
 exclude = [
     ".venv-mineru",
     "rag/web/frontend",
-    "rag/experiments",
 ]
 
 [lint]
-select = ["F", "E9"]
+select = ["F", "E9", "RUF100", "ERA001"]
 
 [lint.per-file-ignores]
 # Re-exporting is the whole point of a facade: rag/chat_pdfs.py exists so that

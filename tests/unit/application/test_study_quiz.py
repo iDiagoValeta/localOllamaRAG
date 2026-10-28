@@ -24,14 +24,14 @@ for path in (str(ROOT), str(ROOT / "src")):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from monkeygrab.application.study import (  # noqa: E402
+from monkeygrab.application.study import (
     MalformedQuizError,
     Study,
     quiz_to_dict,
 )
-from monkeygrab.config.app_config import AppConfig  # noqa: E402
-from monkeygrab.domain.chunk_metadata import ChunkMetadata  # noqa: E402
-from monkeygrab.domain.fragment import Fragment  # noqa: E402
+from monkeygrab.config.app_config import AppConfig
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
+from monkeygrab.domain.fragment import Fragment
 
 
 class _FakeChatModel:

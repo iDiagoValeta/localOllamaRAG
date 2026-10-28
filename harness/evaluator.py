@@ -407,7 +407,7 @@ def _run_eval_module():
     """
     if str(EVAL_DIR) not in sys.path:
         sys.path.insert(0, str(EVAL_DIR))
-    import run_eval  # noqa: E402
+    import run_eval
 
     return run_eval
 

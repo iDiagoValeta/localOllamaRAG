@@ -1229,7 +1229,7 @@ def api_study():
         return jsonify({"ok": False, "kind": "malformed", "error": str(exc)[:400]}), 422
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)[:400]}), 500
 
     return jsonify({"ok": True, "kind": kind, "artifact": artifact})

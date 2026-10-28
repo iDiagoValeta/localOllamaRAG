@@ -22,16 +22,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import pytest  # noqa: E402
+import pytest
 
-import run_eval  # noqa: E402
-from run_eval import (  # noqa: E402
+import run_eval
+from run_eval import (
     _EVAL_GENERATION_KEEP_ALIVE_SECONDS,
     _generation_keep_alive,
     _release_ollama_models,
 )
 
-from monkeygrab.config.app_config import AppConfig  # noqa: E402
+from monkeygrab.config.app_config import AppConfig
 
 
 @pytest.fixture(autouse=True)
