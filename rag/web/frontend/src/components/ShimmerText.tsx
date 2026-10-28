@@ -15,5 +15,3 @@ export function ShimmerText({ text }: { text: string }) {
     </>
   );
 }
-
-export default ShimmerText;

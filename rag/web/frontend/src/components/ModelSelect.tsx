@@ -72,5 +72,3 @@ export function ModelSelect({
     </div>
   );
 }
-
-export default ModelSelect;

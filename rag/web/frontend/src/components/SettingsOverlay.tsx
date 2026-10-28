@@ -284,5 +284,3 @@ export function SettingsOverlay({
     </div>
   );
 }
-
-export default SettingsOverlay;
