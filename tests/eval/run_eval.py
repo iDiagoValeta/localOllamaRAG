@@ -2241,10 +2241,11 @@ def evaluate(
         models: Ollama generator models to evaluate.
         case_ids: ``gold_cases.jsonl`` ``"id"`` values to run. ``None`` runs
             every case (the CLI's behavior) and is the only mode compared
-            against the 51-case floor in ``baseline_min_pass_rate.txt``. A
+            against the floor in ``baseline_min_pass_rate.txt``, which is
+            measured on the full gold set. A
             non-empty subset still reports ``pass_rate`` and can raise that
             file when ``update_baseline`` is True, but never prints FAILED
-            against 0.77 or sets ``exit_code=1`` for that reason -- the
+            against the floor or sets ``exit_code=1`` for that reason -- the
             first real harness run (issue #71) saw a healthy 8/13 fast tier
             do exactly that. An empty sequence is the harness reachability
             probe: ``validate_config_overrides`` still runs, then this
@@ -2327,9 +2328,9 @@ def evaluate(
 
     # An empty case_ids tuple is the harness reachability probe: it exists to
     # trip validate_config_overrides, not to run the pipeline. Falling through
-    # would still preflight Ollama, print 0/0, compare that against the 51-case
-    # floor (0.00 < 0.77) and write a junk report -- measured 2026-08-13 on
-    # the first real harness run (issue #71).
+    # would still preflight Ollama, print 0/0, compare that against the floor
+    # on the full gold set (0.00 against that day's 0.77) and write a junk
+    # report -- measured 2026-08-13 on the first real harness run (issue #71).
     if case_ids is not None and not cases:
         probe_backends = AppConfig.from_env().models
         return {
@@ -2631,8 +2632,8 @@ def evaluate(
         print("        Not compared against the baseline: this run measured nothing.")
         exit_code = 1
     else:
-        # The floor in baseline_min_pass_rate.txt is for the unfiltered 51-case
-        # gold set. A subset's pass rate is a different statistic -- the first
+        # The floor in baseline_min_pass_rate.txt is for the unfiltered gold
+        # set. A subset's pass rate is a different statistic -- the first
         # real harness run (issue #71) saw a healthy 8/13 fast tier print
         # FAILED against 0.77, and a 0-case reachability probe do the same.
         # Only case_ids is None (the CLI) is the gate.

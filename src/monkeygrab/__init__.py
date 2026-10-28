@@ -1,7 +1,10 @@
-"""MonkeyGrab v2 -- clean-architecture core (domain/ports/config).
+"""MonkeyGrab's hexagonal core: domain, ports, application use cases, config.
 
-This package is additive: it does not replace ``rag/`` yet. See
-``docs/design/2026-07-26-monkeygrab-v2.md`` for the target architecture and
-phase plan. ``rag/chat_pdfs.py`` stays the runtime entry point until a later
-phase wraps it behind these interfaces.
+The pipeline runs through it. Indexing, retrieval and generation each build
+their adapters through ``monkeygrab.composition`` and ``rag/engine/wiring.py``
+and call a use case here (``IndexCorpus``, ``Retrieve``, ``Answer``), which is
+also what the evaluation gate constructs. ``rag/chat_pdfs.py`` remains the
+public facade the web layer and tests import, and it delegates to this package.
+
+See ``docs/design/2026-07-26-monkeygrab-v2.md`` for the architecture.
 """
