@@ -206,7 +206,8 @@ def test_every_key_that_changes_index_recipe_is_index_time():
     every scalar key on ``AppConfig`` is probed by perturbing it and asking
     whether the recipe moved, and a conditional member is probed under each
     flag it might depend on. Any key that moves the recipe must be excluded
-    from stage 1, or ``slow_tier`` prices its reindex as if it were free
+    from stage 1, or a candidate that overrides it is priced like a
+    retrieval-only one though its reindex is not free
     (issue #340, where ``flags.usar_descripcion_imagen`` was missing).
     """
     bases = _configs_with_each_flag_flipped(AppConfig())
@@ -222,6 +223,6 @@ def test_every_key_that_changes_index_recipe_is_index_time():
     missing = recipe_moving - set(search_space.INDEX_TIME_KEYS)
     assert not missing, (
         f"config key(s) change index_recipe but are not in INDEX_TIME_KEYS: {sorted(missing)}. "
-        "slow_tier would bill a candidate that overrides one as fast tier, though every stored "
-        "chunk must be rebuilt."
+        "A candidate that overrides one would look like a fast-tier candidate, though every "
+        "stored chunk must be rebuilt."
     )

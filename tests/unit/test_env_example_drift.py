@@ -70,8 +70,6 @@ variable, handled below by name rather than by carving out their directory.
 Out of scope, each named explicitly in ``_CODE_READS_NOT_DOCUMENTED`` below
 with its own reason -- never by skipping a directory or file wholesale:
 
-- ``RUN_OLLAMA_INTEGRATION`` -- gates one opt-in integration test
-  (``tests/test_nothink.py``); not a product configuration knob.
 - ``OLLAMA_GEMMA4_TEST_MODEL`` -- overrides the model used by a manual
   diagnostics script (``tools/diagnostics/ollama_aux_nothink.py``); never
   read by the shipped product.
@@ -126,7 +124,6 @@ _EXCLUDED_DIR_NAMES = {
 # See the module docstring's "Scope boundary" section for why each of these
 # is read by the code but does not belong in .env.example.
 _CODE_READS_NOT_DOCUMENTED = {
-    "RUN_OLLAMA_INTEGRATION",
     "OLLAMA_GEMMA4_TEST_MODEL",
     "OLLAMA_AUX_MODEL",
     "EVAL_GENERATION_BUDGET_SECONDS",

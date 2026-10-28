@@ -85,7 +85,8 @@ class TestTheHappyPath:
     def test_the_key_points_at_the_option_it_named(self):
         study = Study(_FakeChatModel(_TWO_QUESTIONS))
         quiz = study.quiz([_fragment()], AppConfig.from_env())
-        assert quiz.questions[0].correct_option == "Documents"
+        question = quiz.questions[0]
+        assert question.options[question.correct_index] == "Documents"
 
     def test_each_question_carries_the_pages_the_evidence_came_from(self):
         study = Study(_FakeChatModel(_TWO_QUESTIONS))
@@ -262,7 +263,7 @@ class TestSourceAttribution:
 class TestEmptyInput:
     def test_no_fragments_gives_an_empty_quiz_without_calling_the_model(self):
         quiz = Study(_ExplodingChatModel()).quiz([], AppConfig.from_env())
-        assert quiz.is_empty
+        assert quiz.questions == ()
         assert quiz.source_document == ""
 
 

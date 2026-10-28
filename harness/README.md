@@ -45,7 +45,6 @@ what a flag does — this is exactly the loop's job.
 RUNBOOK.md           How to run a campaign: procedure, decision points, verdicts
 search_space.py      Declared tunables, index-time exclusions, feasibility, reachability gate metadata
 fast_tier.txt         Fixed 20-case regression filter (never declares an improvement)
-slow_tier.py          Index-time tier (#102): batching by index recipe, cost in fast-tier units
 unreachable_cases.txt Cases excluded from the maximised scalar — starts empty, evidence-backed
 ledger.py              Append-only evidence ledger (JSON per iteration + index.jsonl)
 environment.py          The installed stack an iteration measured on (#107)
@@ -176,10 +175,10 @@ fake evaluator that raises on a declared key makes startup fail loudly
   number if the file has grown since.
 - **Blind set** (33 `source: arxiv` cases, also counted directly from
   `gold_cases.jsonl`) -- never requested.
-  Structurally unreachable: `evaluator.search_set_case_ids()`/
-  `blind_set_case_ids()` both filter `gold_cases.jsonl` by `source`, and
-  every case-id list `loop.py` ever hands an evaluator comes from one of
-  those two functions or `load_fast_tier()` (itself validated as a
+  Structurally unreachable: the blind set is the complement of
+  `evaluator.search_set_case_ids()`, which filters `gold_cases.jsonl` by
+  `source`, and every case-id list `loop.py` ever hands an evaluator comes
+  from that function or `load_fast_tier()` (itself validated as a
   search-set subset) -- never from a proposer, which can only emit config
   overrides. Proven, not assumed: `harness/tests/test_evaluator.py` asserts
   the blind set is disjoint from both the search set and the fast tier.

@@ -30,6 +30,7 @@ from monkeygrab.domain.chunk_metadata import ChunkMetadata
 from monkeygrab.domain.extracted_page import ExtractedPage
 from monkeygrab.ports.chat_model import ChatModel
 from monkeygrab.ports.embedder import Embedder
+from monkeygrab.ports.image_embedder import ImageEmbedder
 from monkeygrab.ports.image_extractor import ImageExtractor
 from monkeygrab.ports.pdf_extractor import PdfExtractor
 from monkeygrab.ports.vector_store import VectorStore
@@ -347,7 +348,10 @@ class IndexCorpus:
         images_by_page = self._image_extractor.extract(pdf_path)
         n_indexed = 0
         n_failed = 0
-        embed_image = self._embedder.embed_image
+        # The configured embedder serves both modalities in one vector space,
+        # so the image half of its contract is the ImageEmbedder port.
+        image_embedder: ImageEmbedder = self._embedder
+        embed_image = image_embedder.embed_image
         describe = self._config.flags.usar_descripcion_imagen and self._image_describer is not None
 
         for page_num, page_images in images_by_page.items():

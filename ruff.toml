@@ -26,4 +26,3 @@ select = ["F", "E9", "RUF100", "ERA001"]
 # Re-exporting is the whole point of a facade: rag/chat_pdfs.py exists so that
 # the CLI, the web layer and the tests can import the engine from one place.
 "rag/chat_pdfs.py" = ["F401"]
-"**/__init__.py" = ["F401"]

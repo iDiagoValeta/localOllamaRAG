@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Changed
+
+- The fast gate fails on Python code that only tests reach; the dead code it found is gone (#526).
+
 ## [4.1.0] - 2026-10-21
 
 [Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.1.0).
