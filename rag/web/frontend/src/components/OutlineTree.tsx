@@ -30,5 +30,3 @@ export function OutlineTree({ nodes, depth = 0 }: { nodes: OutlineNode[]; depth?
     </ul>
   );
 }
-
-export default OutlineTree;
