@@ -107,7 +107,7 @@ _VERSION_PROBE_TIMEOUT_SECONDS = 20
 def _default_mineru_bin() -> str:
     """Resolve the configured MinerU binary: ``MINERU_BIN`` env var, else the
     project's isolated venv, probing both layouts the same way
-    ``composition._isolated_python`` probes both ``python.exe`` and
+    ``composition.isolated_python`` probes both ``python.exe`` and
     ``python`` -- whichever of the two conventional paths actually exists
     wins, so ``MINERU_BIN`` is only needed as an override, not as a
     non-Windows requirement.

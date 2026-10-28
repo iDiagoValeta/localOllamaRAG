@@ -459,14 +459,12 @@ def ensure_indexed(
     Raises:
         EvalSetupError: A required PDF is still missing after indexing.
     """
-    from monkeygrab.adapters.extraction.by_suffix_extractor import PdfOnlyImageExtractor
-    from monkeygrab.adapters.extraction.mineru_extractor import MineruImageExtractor
     from monkeygrab.adapters.lexical.bm25_index import Bm25LexicalIndex
     from monkeygrab.adapters.reranking.cross_encoder_reranker import CrossEncoderReranker
     from monkeygrab.application.index_corpus import IndexCorpus
     from monkeygrab.application.index_fingerprint import compute_index_fingerprint
     from monkeygrab.application.retrieve import Retrieve
-    from monkeygrab.composition import build_stack
+    from monkeygrab.composition import build_image_extractor, build_stack
     from rag.engine import wiring
 
     required = set(required_pdfs)
@@ -504,7 +502,7 @@ def ensure_indexed(
             # product does.
             image_extractor = None
             if config.flags.usar_embeddings_imagen:
-                image_extractor = PdfOnlyImageExtractor(MineruImageExtractor())
+                image_extractor = build_image_extractor(config)
             contextual_model = None
             if config.flags.usar_contextual_retrieval:
                 ollama = config.models.ollama

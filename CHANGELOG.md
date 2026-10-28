@@ -7,6 +7,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Changed
 
 - The fast gate fails on Python code that only tests reach; the dead code it found is gone (#526).
+- The fast gate fails if `rag/engine` imports the web or headless layers, a module imports a private name from another top-level package (`monkeygrab`, `rag`, `harness`, `tools`), an adapter is built outside the composition root, or a new import cycle appears (#527).
 
 ## [4.1.0] - 2026-10-21
 

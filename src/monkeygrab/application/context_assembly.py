@@ -17,7 +17,7 @@ from typing import Any, Dict, Sequence, Tuple
 from monkeygrab.domain.fragment import Fragment
 
 
-def _es_continuacion_parrafo(linea_previa: str, linea_actual: str) -> bool:
+def es_continuacion_parrafo(linea_previa: str, linea_actual: str) -> bool:
     """Heuristic to detect whether the current line continues a paragraph.
 
     Avoids false paragraph breaks caused by PDF extraction double-spacing.
@@ -56,7 +56,7 @@ def _es_continuacion_parrafo(linea_previa: str, linea_actual: str) -> bool:
     return False
 
 
-def _reunir_parrafos(texto: str) -> str:
+def reunir_parrafos(texto: str) -> str:
     """Re-join lines split by PDF extraction using look-ahead for continuations."""
     lines = texto.split('\n')
     result = []
@@ -72,7 +72,7 @@ def _reunir_parrafos(texto: str) -> str:
                 while j < len(lines) and not lines[j].strip():
                     j += 1
 
-                if j < len(lines) and _es_continuacion_parrafo(buffer, lines[j].strip()):
+                if j < len(lines) and es_continuacion_parrafo(buffer, lines[j].strip()):
                     buffer += ' ' + lines[j].strip()
                     i = j + 1
                     continue
@@ -89,7 +89,7 @@ def _reunir_parrafos(texto: str) -> str:
 
         if not buffer:
             buffer = stripped
-        elif _es_continuacion_parrafo(buffer, stripped):
+        elif es_continuacion_parrafo(buffer, stripped):
             buffer += ' ' + stripped
         else:
             result.append(buffer)
@@ -141,7 +141,7 @@ def optimize_context_text(texto: str) -> str:
 
     texto = re.sub(r'[ \t]+$', '', texto, flags=re.MULTILINE)
 
-    texto = _reunir_parrafos(texto)
+    texto = reunir_parrafos(texto)
 
     texto = re.sub(r'^\s+$', '', texto, flags=re.MULTILINE)
 
@@ -150,7 +150,7 @@ def optimize_context_text(texto: str) -> str:
     # number. Anywhere else -- a table cell, a lone figure, a fragment that is
     # just a number -- a bare 1-3 digit line is data, and stripping it was
     # silently deleting evidence (issue #397). The trailing case is also the
-    # only one that can still be a standalone line after _reunir_parrafos
+    # only one that can still be a standalone line after reunir_parrafos
     # glues a sandwiched number to the next paragraph (see
     # test_optimizar_does_not_strip_standalone_page_number_followed_by_more_text).
     texto = re.sub(r'\n[ \t]*\n[ \t]*\d{1,3}[ \t]*\s*\Z', '\n', texto)
@@ -172,7 +172,7 @@ _CLOSING_PUNCTUATION = frozenset('.?!")]')
 _DECIMAL_END = re.compile(r'\d\.\d+\Z')
 
 
-def _marcar_fragmento_incompleto(texto: str) -> str:
+def marcar_fragmento_incompleto(texto: str) -> str:
     """Append ``[excerpt ends mid-sentence]`` if text lacks closing punctuation."""
     stripped = texto.rstrip()
     if not stripped:
@@ -185,7 +185,7 @@ def _marcar_fragmento_incompleto(texto: str) -> str:
     return texto + '\n[excerpt ends mid-sentence]'
 
 
-def _texto_fuente_fragmento(doc: str) -> str:
+def texto_fuente_fragmento(doc: str) -> str:
     """Return chunk body without the contextual-retrieval summary prefix.
 
     Indexed chunks store ``<summary>\\n\\n<body>`` using the *literal* 4-char
@@ -252,10 +252,10 @@ def build_context_for_model(
 
         if '\\n\\n' in texto:
             ctx_summary, raw_content = texto.split('\\n\\n', 1)
-            raw_content = _marcar_fragmento_incompleto(raw_content.strip())
+            raw_content = marcar_fragmento_incompleto(raw_content.strip())
             texto = f"[Fragment Context]\n{ctx_summary.strip()}\n\n[Source Text]\n{raw_content}"
         else:
-            texto = _marcar_fragmento_incompleto(texto.strip())
+            texto = marcar_fragmento_incompleto(texto.strip())
 
         fragmentos_formateados.append(f"--- [Fragment {i}] ---\n{texto}")
 
