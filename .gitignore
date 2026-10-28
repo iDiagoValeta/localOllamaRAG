@@ -114,11 +114,11 @@ media/
 
 # Agent instructions are versioned at the root so any clone (or CI runner)
 # picks them up; the copies and session state that agent tools drop in nested
-# directories are not. Only the root ones count: CLAUDE.md and .agents/skills are
-# symlinks to AGENTS.md and .claude/skills, so a clone reads one contract and
-# one set of runbooks. A second copy is what drifted for months after the
-# layer it described was deleted. The rules stay last: a later rule would
-# otherwise re-ignore the files.
+# directories are not. Only the root ones count: CLAUDE.md is the one line
+# `@AGENTS.md` and .agents/skills is a symlink to .claude/skills, so a clone
+# reads one contract and one set of runbooks. A second copy is what drifted
+# for months after the layer it described was deleted. The rules stay last: a
+# later rule would otherwise re-ignore the files.
 AGENTS.md
 CLAUDE.md
 !/AGENTS.md
