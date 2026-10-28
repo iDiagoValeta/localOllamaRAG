@@ -17,12 +17,13 @@ Contribution workflow (branches, PRs, issues): `CONTRIBUTING.md`.
 
 This file is the operating contract for **any** agent working here, human or
 not. It lives at the repo root because that is where every agent tool looks
-first, and it is the only copy: `CLAUDE.md` is a symlink to it, so Claude Code
-reads this text, and Codex reads it directly. The runbooks follow the same
-rule: they live in `.claude/skills/` and `.agents/skills` is a symlink to that
-directory, which is where Codex scans. Never replace a symlink with a copy: a
-duplicate of this contract once drifted for months describing a research
-layer, fine-tuned models and evaluation hooks that had already been deleted.
+first, and it is the only copy: `CLAUDE.md` holds the single line
+`@AGENTS.md`, which Claude Code resolves as an import, and Codex reads this
+file directly. The runbooks follow the same rule: they live in
+`.claude/skills/` and `.agents/skills` is a symlink to that directory, which is
+where Codex scans. Never turn either into a copy: a duplicate of this contract
+once drifted for months describing a research layer, fine-tuned models and
+evaluation hooks that had already been deleted.
 
 ---
 
@@ -223,7 +224,7 @@ Items 1–5 of §6 apply here too. What differs:
 
 - **`rag/docs/`** — the *identity* of every corpus document is versioned in `rag/docs/corpus_manifest.json` (arXiv id, or Wikipedia title plus the revision it was verified at); the PDFs themselves are fetched by `python tools/fetch_corpus.py` and ignored (`rag/docs/*/*.pdf`, since #213). The 16 documents committed before the fetcher existed stay tracked, because an ignore rule never applies to a file git already tracks — so a fresh clone holds 6 of 17 `en`, 5 of 17 `es` and 5 of 17 `ca` documents until the fetcher runs, and the gate refuses to run on that (`papers referenced by gold cases but not indexed`). `rag/vector_db/` fully ignored. Local scratch results under `pipeline/output/` are ignored.
 - **`.claude/`** — skills are versioned (`skills/`) so a clone or CI runner picks them up; everything else there, `settings.local.json` included, stays local. The contract itself is at the root, not in here.
-- **Symlinks** — `CLAUDE.md` and `.agents/skills` are symlinks. A Windows clone needs `git config core.symlinks true` (and Developer Mode) before checkout; without it git writes each link as a one-line text file and Claude Code starts with no contract, silently.
+- **Symlinks** — `.agents/skills` is a symlink. A Windows clone needs `git config core.symlinks true` (and Developer Mode) before checkout; without it git writes the link as a one-line text file and Codex finds no runbooks. `CLAUDE.md` is a plain one-line import on purpose, so the contract reaches Claude Code on every platform.
 
 ---
 
