@@ -8,4 +8,4 @@
 | `tests/test_*.py` loose | Engine and web wiring that needs real deps | fast `engine` job |
 | `harness/tests/` | Config search with fake evaluators | fast `architecture` job |
 
-New behavior needs a test that exercises it. Fast check without GPU: `pytest tests/unit tests/eval harness/tests --ignore=tests/unit/adapters`.
+New behavior needs a test that exercises it. Fast check without GPU: `pytest tests/unit tests/eval harness/tests`.

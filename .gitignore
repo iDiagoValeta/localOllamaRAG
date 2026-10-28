@@ -111,14 +111,20 @@ media/
 
 .codex/*
 .cursor/
+
+# Agent instructions are versioned at the root so any clone (or CI runner)
+# picks them up; the copies and session state that agent tools drop in nested
+# directories are not. Only the root ones count: CLAUDE.md and .agents/skills are
+# symlinks to AGENTS.md and .claude/skills, so a clone reads one contract and
+# one set of runbooks. A second copy is what drifted for months after the
+# layer it described was deleted. The rules stay last: a later rule would
+# otherwise re-ignore the files.
 AGENTS.md
-# Assistant instructions for this project are versioned so any clone (or CI
-# runner) picks them up; local session state and scratch files are not. Skills
-# are instructions too: a runbook only pays off if the next clone has it. This
-# block stays last: a later rule would otherwise re-ignore the files.
 CLAUDE.md
+!/AGENTS.md
+!/CLAUDE.md
+.agents/*
+!/.agents/skills
 .claude/*
-!.codex/AGENTS.md
-!.claude/CLAUDE.md
 !.claude/skills/
 **/.claude/settings.local.json
