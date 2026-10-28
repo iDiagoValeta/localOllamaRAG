@@ -73,6 +73,12 @@ in `rag/chat_pdfs.py` and the immutable `AppConfig` this package takes. It
 also caches the two components too expensive to rebuild per query: the
 Cross-Encoder weights and the tokenized BM25 corpus.
 
+The fixed multimodal stack is built by `composition.py` from that `AppConfig`
+(`build_extractor`, `build_image_extractor`, `build_vector_store`,
+`build_embedder`, `build_stack`). `wiring.py` derives the config and builds the
+rest: a chat model per role, and the reranker and BM25 index it caches between
+queries.
+
 ## Adapters whose dependencies collide with the product's
 
 A dependency that does not fit the product's pinned stack runs outside it

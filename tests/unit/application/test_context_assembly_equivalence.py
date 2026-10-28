@@ -40,10 +40,10 @@ def _as_dict(frag):
 def test_legacy_context_facade_reuses_application_helpers():
     """The engine facade must not keep a second implementation of pure helpers."""
     aliases = {
-        "_es_continuacion_parrafo": "_es_continuacion_parrafo",
-        "_reunir_parrafos": "_reunir_parrafos",
-        "_marcar_fragmento_incompleto": "_marcar_fragmento_incompleto",
-        "_texto_fuente_fragmento": "_texto_fuente_fragmento",
+        "_es_continuacion_parrafo": "es_continuacion_parrafo",
+        "_reunir_parrafos": "reunir_parrafos",
+        "_marcar_fragmento_incompleto": "marcar_fragmento_incompleto",
+        "_texto_fuente_fragmento": "texto_fuente_fragmento",
         "_strip_ollama_think_blocks": "strip_ollama_think_blocks",
         "_normalizar_salida_recomp": "normalize_recomp_output",
     }

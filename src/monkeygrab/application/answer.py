@@ -36,8 +36,8 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Sequence
 
 from monkeygrab.application.context_assembly import (
     RECOMP_FACTS_HEADER,
-    _marcar_fragmento_incompleto,
-    _texto_fuente_fragmento,
+    marcar_fragmento_incompleto,
+    texto_fuente_fragmento,
     build_context_for_model,
     normalize_recomp_output,
     optimize_context_text,
@@ -360,12 +360,12 @@ class Answer:
         """
         textos_preparados = []
         for f in fragments:
-            cuerpo = _texto_fuente_fragmento(f.doc or "")
+            cuerpo = texto_fuente_fragmento(f.doc or "")
             if flags.usar_optimizacion_contexto:
                 cuerpo = optimize_context_text(cuerpo)
             # The truncation marker describes the excerpt, not the cleanup:
             # it must survive with optimization disabled too (issue #397).
-            cuerpo = _marcar_fragmento_incompleto(cuerpo)
+            cuerpo = marcar_fragmento_incompleto(cuerpo)
             content = cuerpo.replace("\n", " ").strip()
             content = strip_citation_markers(content)
             if content:

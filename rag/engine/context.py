@@ -11,16 +11,16 @@ import requests
 from typing import Any, Dict, List
 
 from monkeygrab.application.context_assembly import (
-    _es_continuacion_parrafo as _es_continuacion_parrafo,
-    _marcar_fragmento_incompleto as _marcar_fragmento_incompleto,
-    _reunir_parrafos as _reunir_parrafos,
-    _texto_fuente_fragmento as _texto_fuente_fragmento,
     RECOMP_FACTS_HEADER as _RECOMP_FACTS_HEADER,
     build_context_for_model,
+    es_continuacion_parrafo as _es_continuacion_parrafo,  # noqa: F401 -- re-exported by rag.chat_pdfs
+    marcar_fragmento_incompleto as _marcar_fragmento_incompleto,
     normalize_recomp_output as _normalizar_salida_recomp,
     optimize_context_text,
+    reunir_parrafos as _reunir_parrafos,  # noqa: F401 -- re-exported by rag.chat_pdfs
     strip_citation_markers,
     strip_ollama_think_blocks as _strip_ollama_think_blocks,
+    texto_fuente_fragmento as _texto_fuente_fragmento,
 )
 from monkeygrab.domain.chunk_metadata import ChunkMetadata
 from monkeygrab.domain.fragment import Fragment

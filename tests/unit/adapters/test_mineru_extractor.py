@@ -184,7 +184,7 @@ def test_default_mineru_bin_reads_the_mineru_bin_env_var(monkeypatch, tmp_path):
 
 
 def test_default_mineru_bin_falls_back_to_the_windows_venv_layout(monkeypatch, tmp_path):
-    """Windows layout is probed first, mirroring composition._isolated_python."""
+    """Windows layout is probed first, mirroring composition.isolated_python."""
     monkeypatch.delenv("MINERU_BIN", raising=False)
     monkeypatch.setattr(module, "_PROJECT_ROOT", str(tmp_path))
     windows_bin = tmp_path / ".venv-mineru" / "Scripts" / "mineru.exe"
