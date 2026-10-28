@@ -18,13 +18,13 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pytest  # noqa: E402
+import pytest
 
-from monkeygrab.application.answer import Answer, _expand_with_neighbors, _is_expandable  # noqa: E402
-from monkeygrab.config.app_config import AppConfig  # noqa: E402
-from monkeygrab.domain.chunk_metadata import ChunkMetadata  # noqa: E402
-from monkeygrab.domain.fragment import Fragment  # noqa: E402
-from monkeygrab.domain.generation_chunk import GenerationChunk  # noqa: E402
+from monkeygrab.application.answer import Answer, _expand_with_neighbors, _is_expandable
+from monkeygrab.config.app_config import AppConfig
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
+from monkeygrab.domain.fragment import Fragment
+from monkeygrab.domain.generation_chunk import GenerationChunk
 
 
 def _fragment(id_, doc="body text", fmt=None, total_in_page=None, score_final=0.0):

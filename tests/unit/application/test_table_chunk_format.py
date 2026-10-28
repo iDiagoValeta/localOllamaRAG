@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from monkeygrab.application.index_corpus import _text_chunk_format  # noqa: E402
+from monkeygrab.application.index_corpus import _text_chunk_format
 
 
 def test_html_table_is_marked_as_a_table():

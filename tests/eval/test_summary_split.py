@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from run_eval import build_summary  # noqa: E402
+from run_eval import build_summary
 
 
 def _record(case_type, passed, model=None):

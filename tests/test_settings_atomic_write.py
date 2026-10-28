@@ -12,8 +12,8 @@ for path in (ROOT, ROOT / "src"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-import rag.chat_pdfs  # noqa: F401,E402 -- builds the runtime the settings module reads
-from rag.engine import atomic, settings  # noqa: E402
+import rag.chat_pdfs  # noqa: F401 -- builds the runtime the settings module reads
+from rag.engine import atomic, settings
 
 
 def test_a_failed_save_keeps_the_previous_settings(monkeypatch, tmp_path):

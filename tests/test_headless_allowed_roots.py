@@ -18,8 +18,8 @@ for path in (ROOT, ROOT / "src"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from tests.test_headless_routes import _health, _service  # noqa: E402
-from rag.headless.app import create_app  # noqa: E402
+from tests.test_headless_routes import _health, _service
+from rag.headless.app import create_app
 
 
 def _client(roots):

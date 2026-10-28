@@ -222,7 +222,7 @@ class LlmProposer:
             )
             response.raise_for_status()
             return response.json().get("response", "")
-        except Exception as exc:  # noqa: BLE001 -- any failure here must degrade to fallback, never crash the run
+        except Exception as exc:  # any failure here must degrade to fallback, never crash the run
             raise OllamaUnreachableError(str(exc)) from exc
 
     @staticmethod

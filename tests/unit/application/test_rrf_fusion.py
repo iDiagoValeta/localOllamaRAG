@@ -17,11 +17,11 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pytest  # noqa: E402
+import pytest
 
-from monkeygrab.application.rrf_fusion import fuse_semantic_and_keyword  # noqa: E402
-from monkeygrab.domain.chunk_metadata import ChunkMetadata  # noqa: E402
-from monkeygrab.domain.fragment import Fragment  # noqa: E402
+from monkeygrab.application.rrf_fusion import fuse_semantic_and_keyword
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
+from monkeygrab.domain.fragment import Fragment
 
 RRF_K = 60
 W_SEMANTIC = 0.55

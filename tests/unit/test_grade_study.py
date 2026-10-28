@@ -23,7 +23,7 @@ for path in (str(ROOT), str(ROOT / "tests" / "eval")):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from tests.eval.grade import grade_study  # noqa: E402
+from tests.eval.grade import grade_study
 
 
 def _section(heading="H", body="Body."):

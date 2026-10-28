@@ -16,16 +16,16 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pytest  # noqa: E402
+import pytest
 
-from monkeygrab.application.retrieve import (  # noqa: E402
+from monkeygrab.application.retrieve import (
     Retrieve,
     _mentioned_sources,
     _parse_subqueries,
 )
-from monkeygrab.config.app_config import AppConfig  # noqa: E402
-from monkeygrab.domain.chunk_metadata import ChunkMetadata  # noqa: E402
-from monkeygrab.domain.fragment import Fragment  # noqa: E402
+from monkeygrab.config.app_config import AppConfig
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
+from monkeygrab.domain.fragment import Fragment
 
 
 def test_parse_subqueries_strips_numbering_drops_short_lines_and_caps_at_three():

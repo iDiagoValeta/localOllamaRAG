@@ -35,9 +35,9 @@ for path in (ROOT, ROOT / "src"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from monkeygrab.config.app_config import AppConfig  # noqa: E402
-from harness import cli  # noqa: E402
-from harness import ledger as ledger_mod  # noqa: E402
+from monkeygrab.config.app_config import AppConfig
+from harness import cli
+from harness import ledger as ledger_mod
 
 
 def _entry(iteration: int, evaluator):

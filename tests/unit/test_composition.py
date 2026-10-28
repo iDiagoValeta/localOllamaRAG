@@ -28,14 +28,14 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pytest  # noqa: E402
+import pytest
 
-from monkeygrab import composition  # noqa: E402
-from monkeygrab.config.app_config import AppConfig  # noqa: E402
-from monkeygrab.config.models import EmbeddingRuntimeConfig  # noqa: E402
-from monkeygrab.ports.embedder import Embedder  # noqa: E402
-from monkeygrab.ports.pdf_extractor import PdfExtractor  # noqa: E402
-from monkeygrab.ports.vector_store import VectorStore  # noqa: E402
+from monkeygrab import composition
+from monkeygrab.config.app_config import AppConfig
+from monkeygrab.config.models import EmbeddingRuntimeConfig
+from monkeygrab.ports.embedder import Embedder
+from monkeygrab.ports.pdf_extractor import PdfExtractor
+from monkeygrab.ports.vector_store import VectorStore
 
 
 def _install_stub_module(monkeypatch, name, **attrs):

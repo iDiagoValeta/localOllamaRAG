@@ -63,9 +63,9 @@ if str(EVAL_DIR) not in sys.path:
     sys.path.insert(0, str(EVAL_DIR))
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
-import grade  # noqa: E402  (tests/eval sibling module)
-from monkeygrab.config import AppConfig  # noqa: E402
-from monkeygrab.config.env import read_env_ollama_base_url  # noqa: E402
+import grade  # tests/eval sibling module
+from monkeygrab.config import AppConfig
+from monkeygrab.config.env import read_env_ollama_base_url
 
 GOLD_FILE = EVAL_DIR / "gold_cases.jsonl"
 BASELINE_FILE = EVAL_DIR / "baseline_min_pass_rate.txt"
@@ -864,7 +864,7 @@ def _placement(model: str) -> Dict[str, Any]:
         for entry in response.json().get("models", []):
             if model in (entry.get("name"), entry.get("model")) and entry.get("size"):
                 return {"vram_fraction": round(entry.get("size_vram", 0) / entry["size"], 3)}
-    except Exception:  # noqa: BLE001 - best-effort, see docstring
+    except Exception:
         pass
     return {}
 
@@ -902,7 +902,7 @@ def _run_with_budget(fn, *, budget_seconds: float) -> Any:
     def _target() -> None:
         try:
             box["result"] = fn()
-        except BaseException as exc:  # noqa: BLE001 - forwarded to the caller's thread
+        except BaseException as exc:
             box["exc"] = exc
 
     # Not cancelled on timeout -- Python cannot interrupt a blocking socket
@@ -1316,7 +1316,7 @@ def _release_ollama_models(model_names: Iterable[str]) -> None:
                 json={"model": name, "keep_alive": 0},
                 timeout=30,
             )
-        except Exception as exc:  # noqa: BLE001 - best-effort, see docstring
+        except Exception as exc:
             print(f"[phase] failed to release {name!r}: {exc}", flush=True)
 
 
@@ -1391,7 +1391,7 @@ def _release_gpu_models(*retrievers) -> None:
             if callable(hook):
                 try:
                     hook()
-                except Exception as exc:  # noqa: BLE001 - shutdown must not mask results
+                except Exception as exc:  # shutdown must not mask results
                     print(f"[phase] {attribute}.{method}() failed, continuing: {exc}", flush=True)
 
 
@@ -1815,7 +1815,7 @@ def _ollama_server_version() -> Optional[str]:
         response = requests.get(f"{OLLAMA_BASE_URL}/api/version", timeout=5)
         response.raise_for_status()
         return response.json().get("version")
-    except Exception:  # noqa: BLE001 - best-effort, see docstring
+    except Exception:
         return None
 
 
@@ -1837,7 +1837,7 @@ def _gpu_info() -> Dict[str, Optional[Any]]:
                     "name": props.name,
                     "vram_total_mib": round(props.total_memory / 2**20),
                 }
-        except Exception:  # noqa: BLE001 - best-effort, see docstring
+        except Exception:
             pass
         return {"name": None, "vram_total_mib": None}
 
@@ -1850,7 +1850,7 @@ def _gpu_info() -> Dict[str, Optional[Any]]:
         ).stdout.strip().splitlines()[0]
         name, vram = (part.strip() for part in output.split(","))
         return {"name": name, "vram_total_mib": int(vram)}
-    except Exception:  # noqa: BLE001 - best-effort, see docstring
+    except Exception:
         return {"name": None, "vram_total_mib": None}
 
 
@@ -1871,12 +1871,12 @@ def _git_info() -> Dict[str, Optional[Any]]:
 
     try:
         commit_hash = _git(["rev-parse", "--short", "HEAD"])
-    except Exception:  # noqa: BLE001 - best-effort, see docstring
+    except Exception:
         return {"hash": None, "dirty": None}
 
     try:
         dirty: Optional[bool] = bool(_git(["status", "--porcelain"]))
-    except Exception:  # noqa: BLE001 - best-effort, see docstring
+    except Exception:
         dirty = None
 
     return {"hash": commit_hash, "dirty": dirty}

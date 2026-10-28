@@ -17,13 +17,13 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import rag.chat_pdfs as rag  # noqa: E402
+import rag.chat_pdfs as rag
 
-from monkeygrab.application.text_chunking import (  # noqa: E402
+from monkeygrab.application.text_chunking import (
     adjacent_chunk_ids,
     split_markdown_into_chunks,
 )
-from monkeygrab.domain.chunk_metadata import ChunkMetadata  # noqa: E402
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
 
 MIN_CHUNK_LENGTH = 150  # matches rag.chat_pdfs's default (RAG_MIN_CHUNK_LENGTH unset)
 
