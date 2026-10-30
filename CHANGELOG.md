@@ -16,6 +16,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 - The frontend type-check sees React's types; before, every React import and JSX element was typed `any`, so it verified almost nothing in the components. It now runs on TypeScript 7 (#532).
 
+### Security
+
+- The frontend build no longer pulls `source-map-js` 1.2.1, inside a high event-loop denial-of-service advisory; 1.2.2 is the only copy left (#540).
+
 ## [4.1.0] - 2026-10-21
 
 [Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.1.0).
