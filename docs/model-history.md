@@ -253,6 +253,53 @@ answers are comparable; its tokens/s and s/answer are not.
 | `gemma4:e4b`, with #482/#485/#486 (2026-10-20), graded before #492 | 122 / 136 (89.7%), 131 / 136 (96.3%) with the #492 grader | 140 / 156 (89.7%), 149 / 156 (95.5%) with the #492 grader | 37.6 | 29 *(of 124)* | 14.66 *(of 124)* | 0.79 | 0 | 0 | ~72% CPU (varies) | `20261020T230552Z` |
 | `gemma4:e4b`, with #482/#485/#486 plus #492/#493 (2026-10-21), graded by #492 | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 38.2 | 27 *(of 124)* | 13.89 *(of 124)* | 0.71 | 0 | 0 | ~72% CPU | `20261021T000639Z` |
 | `gemma4:e4b`, release v4.1.0 on a rebuilt index (2026-10-21), graded by #492 | 129 / 136 (94.9%) | 147 / 156 (94.2%) | 59.0 | 28 *(of 124)* | 10.62 *(of 124)* | 0.48 | 0 | 0 | GPU | `20261021T192157Z` |
+| `gemma4:e4b`, v4.2.0 (`977f796`, 2026-10-31), RECOMP on | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 56.7 | 28 *(of 124)* | 9.48 *(of 124)* | 0.49 | 0 | 0 | GPU | `20261031T114027Z` |
+| `gemma4:e4b`, same commit and index, `USAR_RECOMP_SYNTHESIS=false` | 126 / 136 (92.6%) | 144 / 156 (92.3%) | 57.3 | 36 *(of 124)* | 2.32 *(of 124)* | 0.63 | 0 | 0 | GPU | `20261031T122733Z` |
+
+The two 2026-10-31 rows are issue #548: same commit, same stored index, run
+back to back, differing only in RECOMP. Without it an answer takes 2.32 s
+instead of 9.48 s: the synthesis call, not decoding, was three quarters of the
+wait. The score moves by 4 cases (`compare_runs.py`: 4 up, 8 down, 144
+unchanged), inside the five-case noise of one run but in the unfavourable
+direction, and all 8 lost cases are `factual_number`. One run each, so this
+says RECOMP costs 7 s per answer and buys somewhere between nothing and about
+eight cases; it does not settle which. Part of the RECOMP-off run overlapped a
+CPU-heavy build in a container on the same machine (generation stayed on the
+GPU throughout).
+
+What these two rows measure is the gate's RECOMP, not the product's: the gate
+runs the `chat`, `contextual` and `recomp` roles on `AUX_MODEL`
+(Ling-3.0-tiny, recorded in each artifact's `conditions.config`), while the
+product runs all four roles on `gemma4:e4b`. So the 7 s is Ling's synthesis
+plus loading it next to the generator; a product answer pays for a
+`gemma4:e4b` synthesis instead (the probe below).
+
+`tools/diagnostics/phase_timings.py --eval-dev-set` split the same commit by
+port on 8 cases (6 reaching the generator), with the product's role
+configuration (every role on `gemma4:e4b`), run right after the gate with the
+embedder's `--mmproj` offloaded to the GPU (1.2 GB):
+
+| Phase | RECOMP on | RECOMP off |
+|---|---|---|
+| query decomposition (5 calls) | 44.5 s | 44.0 s |
+| reranking (8 calls) | 25.8 s | 27.5 s |
+| RECOMP synthesis (6 calls) | 87.3 s | n/a |
+| answer generation (6 calls) | 52.8 s | 59.6 s |
+| embedding, FAISS, BM25 | 0.8 s | 0.6 s |
+| Python glue | 0.02 s | 0.02 s |
+
+Two readings hold and one does not. Query decomposition costs about 9 s per
+question for a few short sub-queries: the decomposer runs with `keep_alive=0`
+(`rag/engine/wiring.py`, issue #164) on the same `gemma4:e4b` the answer uses,
+so each question unloads and reloads the generator (the gate's ~7 s per case
+in retrieval is the same pattern on Ling, also unloaded after every call).
+RECOMP on `gemma4:e4b` took about 14.6 s per answer here, under the contention
+described below. Python glue is nil, so rewriting the orchestration buys
+nothing. The generation figures, though, are not the gate's:
+the probe keeps the reranker resident next to the generator, PyTorch reported
+an out-of-memory retry while loading it, and answers took 9-13 s against the
+gate's 2.3 s, so the probe measured a card under contention, which is the
+product's own interleaving but not a clean timing.
 
 The `20261021T000639Z` row is the gate for #493, and it reads one case below
 the `20261020T230552Z` row once both are graded by #492: 148 against 149, the
