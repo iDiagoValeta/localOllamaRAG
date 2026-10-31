@@ -207,3 +207,4 @@ def test_an_unreachable_embedder_is_a_setup_error_that_says_how_to_start_it(monk
     assert "http://embedder.example:9000" in message
     assert "llama-server" in message
     assert "--embedding" in message
+    assert "-b 2048 -ub 2048" in message
