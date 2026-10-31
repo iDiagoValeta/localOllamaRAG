@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-10-31
+
+[Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.2.0).
+
+No change to retrieval or generation, and no reindex needed. The web routes `POST /api/corpus` and `POST /api/upload` are gone; the UI never called them and the headless service is unchanged.
+
 ### Changed
 
 - The lint job fails on a `noqa` directive that silences nothing and on commented-out code (#524).
