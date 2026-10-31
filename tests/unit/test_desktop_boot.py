@@ -73,6 +73,7 @@ def test_a_dead_embedder_yields_an_actionable_message(monkeypatch):
     assert "http://embedder.example:9000/health" in message
     assert "llama-server" in message
     assert "--embedding" in message
+    assert "-b 2048 -ub 2048" in message
     assert "MONKEYGRAB_EMBEDDER_URL" in message
 
 

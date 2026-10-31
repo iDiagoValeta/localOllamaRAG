@@ -294,7 +294,7 @@ def _embedder_warning_message(health_url: str, reason: str) -> str:
     return (
         f"Embedder (llama-server) is not reachable at {health_url}: {reason}. "
         "Start it with `llama-server -m <embeddinggemma-2.gguf> --embedding "
-        f"--port {port}`, or point MONKEYGRAB_EMBEDDER_URL at a running server. "
+        f"--port {port} -b 2048 -ub 2048`, or point MONKEYGRAB_EMBEDDER_URL at a running server. "
         "MonkeyGrab will open, but indexing and retrieval fail until the "
         "embedder answers."
     )

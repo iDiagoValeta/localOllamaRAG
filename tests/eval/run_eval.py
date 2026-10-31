@@ -314,7 +314,7 @@ def preflight_embedder() -> str:
         raise EvalSetupError(
             f"Embedder (llama-server) health check failed at {health_url} ({exc}). "
             "Start it first with `llama-server -m <embeddinggemma-2.gguf> "
-            f"--embedding --port {port}`, or point MONKEYGRAB_EMBEDDER_URL "
+            f"--embedding --port {port} -b 2048 -ub 2048`, or point MONKEYGRAB_EMBEDDER_URL "
             "at a running server."
         ) from exc
 
@@ -331,7 +331,7 @@ def preflight_embedder() -> str:
             f"Embedder (llama-server) /props check failed at {props_url} ({exc}). "
             "The gate needs it to verify the served model; start it with "
             "`llama-server -m <embeddinggemma-2.gguf> --embedding "
-            f"--port {port}`, or point MONKEYGRAB_EMBEDDER_URL at a running server."
+            f"--port {port} -b 2048 -ub 2048`, or point MONKEYGRAB_EMBEDDER_URL at a running server."
         ) from exc
 
     identity = _embedder_identity(props)
@@ -341,7 +341,7 @@ def preflight_embedder() -> str:
             f"Embedder (llama-server) at {base_url} is not serving "
             f"embeddinggemma-2: /props reports {_describe_served_model(props)}. "
             "Start it with `llama-server -m <embeddinggemma-2.gguf> --embedding "
-            f"--port {port}`, or point MONKEYGRAB_EMBEDDER_URL at the right server."
+            f"--port {port} -b 2048 -ub 2048`, or point MONKEYGRAB_EMBEDDER_URL at the right server."
         )
     return identity
 
