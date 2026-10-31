@@ -193,6 +193,25 @@ def test_an_indexer_that_breaks_midway_reports_what_did_not_land(client, monkeyp
     assert response.json["documents"] == ["landed.pdf"]
 
 
+def test_an_unreadable_store_after_a_failure_leaves_documents_out(client, monkeypatch):
+    """Unknown is not empty: a [] would make the UI blank a store that has files."""
+    store = _FakeStore({"report.pdf": 5})
+    _wire(monkeypatch, store)
+    monkeypatch.setattr(web.rag_engine, "indexar_documentos", lambda *a, **k: 1 / 0)
+
+    def _unreadable(_coll):
+        raise RuntimeError("store unreadable")
+
+    monkeypatch.setattr(web.rag_engine, "obtener_documentos_indexados", _unreadable)
+
+    response = _upload(client, "report.pdf")
+
+    assert response.status_code == 500
+    assert response.json["code"] == "upload_failed"
+    assert "documents" not in response.json
+    assert response.json["failed_files"] == ["report.pdf"]
+
+
 def test_a_run_merges_into_the_earlier_failed_files_warning(client, monkeypatch):
     monkeypatch.setitem(web._state, "indexing_failed_files", ["old.pdf", "retried.pdf"])
     _wire(monkeypatch, _FakeStore(), failed=["bad.pdf"])

@@ -42,13 +42,14 @@ const API_BASE = '/api';
 // `error` prose is Spanish for clients without i18n, so it is only the
 // fallback for a code not listed here (issue #555). A Map, so a code named
 // like an Object.prototype member cannot resolve to something inherited.
+// upload_failed and no_file are deliberately absent: their only text is the
+// server's own, which handleAddDocs puts inside addPdfsError (a template with
+// {error}; mapping the code here would fill it twice).
 const ERROR_CODE_KEYS = new Map<string, keyof Strings>([
   ['invalid_filename', 'errInvalidFilename'],
   ['indexing_in_progress', 'corpusConflict'],
   ['invalid_flag_value', 'settingsSaveError'],
   ['indexing_failed', 'indexingFailed'],
-  ['upload_failed', 'addPdfsError'],
-  ['no_file', 'addPdfsError'],
 ]);
 
 function apiErrorText(

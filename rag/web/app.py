@@ -1236,12 +1236,19 @@ def api_add_docs():
         # From the first delete on the store has changed whatever happened
         # next, so every answer below carries its current state: the UI would
         # otherwise keep listing a replaced document whose chunks are gone.
-        documents = rag_engine.obtener_documentos_indexados(coll)
+        try:
+            documents = rag_engine.obtener_documentos_indexados(coll)
+        except Exception:
+            # Unknown is not empty: the answer leaves `documents` out so the UI
+            # keeps the list it has instead of blanking a store that has files.
+            documents = None
         if failure is not None:
             # An indexer that raised (every file failed, or something broke
             # mid-run) cannot name the files it lost: what is not in the store
-            # is what did not land.
-            failed_files = [name for name in saved if name not in documents]
+            # is what did not land, and with the store unreadable, all of them.
+            failed_files = [
+                name for name in saved if documents is None or name not in documents
+            ]
         landed = [name for name in saved if name not in failed_files]
         # Merge into the earlier warning instead of replacing it: files from a
         # previous run that are still missing stay reported (issue #323).
@@ -1254,8 +1261,9 @@ def api_add_docs():
             "files": landed,
             "failed_files": failed_files,
             "total_fragments": coll.count(),
-            "documents": documents,
         }
+        if documents is not None:
+            payload["documents"] = documents
         if failure is not None:
             payload["code"] = "upload_failed"
             payload["error"] = str(failure)
