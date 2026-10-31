@@ -58,6 +58,7 @@ def _stub_urlopen(monkeypatch, *, status=200, error=None, props=_VISION):
 
 def test_the_health_probe_uses_the_appconfig_embedder_url(monkeypatch):
     monkeypatch.setenv("MONKEYGRAB_EMBEDDER_URL", "http://embedder.example:9000/")
+    monkeypatch.setenv("USAR_EMBEDDINGS_IMAGEN", "1")
     calls = _stub_urlopen(monkeypatch, status=200)
 
     assert desktop._embedder_warning() == ""

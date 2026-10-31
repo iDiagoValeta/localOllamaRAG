@@ -17,9 +17,10 @@ machine does not need the product's Python environment.
 > **The embedder is not bundled either.** Text and images are embedded by
 > `google/embeddinggemma-2` served by a local `llama-server` (see
 > [Target prerequisites](#target-prerequisites)). The app never starts that
-> process; at launch it probes `<MONKEYGRAB_EMBEDDER_URL>/health` and logs a
-> warning when the server is down, so the missing prerequisite is visible before
-> the first indexing run or question.
+> process; at launch it probes `<MONKEYGRAB_EMBEDDER_URL>/health` (and, while
+> image embeddings are on, `/props` for vision support, i.e. `--mmproj`) and logs
+> a warning when the server is down or cannot embed images, so the missing
+> prerequisite is visible before the first indexing run or question.
 
 ## Build
 
