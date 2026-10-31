@@ -407,7 +407,10 @@ def _python_strings(source: str) -> str:
 def _is_frontend_test(path: Path) -> bool:
     """``*.test.ts(x)``, ``*.spec.ts(x)`` and anything under ``__tests__``."""
     infixes = path.name.split(".")[1:-1]
-    return "__tests__" in path.parts or "test" in infixes or "spec" in infixes
+    # Relative to src/: a checkout under a directory called __tests__ must not
+    # turn every frontend file into a test.
+    relative = path.relative_to(_FRONTEND_SRC).parts
+    return "__tests__" in relative or "test" in infixes or "spec" in infixes
 
 
 def _frontend_files() -> List[Path]:
@@ -425,6 +428,22 @@ def _all_frontend_code() -> str:
     )
 
 
+def _api_members(code: str) -> List[str]:
+    """Member names of the frontend's ``api`` object; raises when it cannot parse any."""
+    body = re.search(r"(?ms)^(?:export )?const api(?:: [\w<>\[\], ]+)? = \{\n(.*?)^\};", code)
+    if not body:
+        # Silence here would turn the whole check into a pass; a renamed or
+        # reshaped object has to be noticed and this pattern updated.
+        raise AssertionError("no `const api = {...}` object found in the frontend sources")
+    members = re.findall(r"(?m)^  (\w+):", body.group(1))
+    if not members:
+        raise AssertionError(
+            "the `api` object was found but no member matched (expected two-space "
+            "indented `name:` keys); update the pattern instead of passing on nothing"
+        )
+    return members
+
+
 def _uncalled_api_members(code: str) -> List[str]:
     """Members of the frontend's ``const api = {...}`` that no ``api.<name>`` reaches.
 
@@ -432,12 +451,7 @@ def _uncalled_api_members(code: str) -> List[str]:
     "requested" long after the UI stopped calling it (issue #557). knip does
     not flag unused object members, hence this check.
     """
-    body = re.search(r"(?ms)^(?:export )?const api(?:: [\w<>\[\], ]+)? = \{\n(.*?)^\};", code)
-    if not body:
-        # Silence here would turn the whole check into a pass; a renamed or
-        # reshaped object has to be noticed and this pattern updated.
-        raise AssertionError("no `const api = {...}` object found in the frontend sources")
-    members = re.findall(r"(?m)^  (\w+):", body.group(1))
+    members = _api_members(code)
     return [name for name in members if not re.search(rf"\bapi\.{name}\b", code)]
 
 
@@ -577,6 +591,7 @@ def test_the_route_consumers_are_not_accidentally_empty():
 def test_every_api_member_of_the_frontend_is_called():
     code = _all_frontend_code()
     uncalled = _uncalled_api_members(code)
+    assert "init" in _api_members(code)  # the parse is alive, not vacuously empty
     assert not uncalled, (
         "Members of the `api` object in App.tsx that no `api.<name>` call reaches:\n"
         + "\n".join(f"  api.{name}" for name in uncalled)
@@ -784,6 +799,22 @@ def test_a_missing_api_object_fails_instead_of_passing():
         _uncalled_api_members("const client = {\n  init: () => 1,\n};\n")
 
 
+def test_an_api_object_whose_members_do_not_parse_fails_instead_of_passing():
+    """Four-space indentation, quoted keys and method shorthand all parse to
+    nothing; that has to be an error, not an empty list of findings."""
+    for body in ("    stats: () => 1,\n", '  "stats": () => 1,\n', "  stats() { return 1; },\n"):
+        with pytest.raises(AssertionError):
+            _uncalled_api_members(f"const api = {{\n{body}}};\n")
+
+
+def test_a_parent_directory_named_tests_does_not_empty_the_consumers(tmp_path, monkeypatch):
+    src = tmp_path / "__tests__" / "checkout" / "src"
+    src.mkdir(parents=True)
+    (src / "App.tsx").write_text("fetch('/api/x');\n")
+    monkeypatch.setattr(sys.modules[__name__], "_FRONTEND_SRC", src)
+    assert _frontend_files() == [src / "App.tsx"]
+
+
 def test_frontend_test_files_are_not_consumers():
     """A route or member reached only from a test is dead, as in the Python gate."""
     root = _FRONTEND_SRC
@@ -809,12 +840,12 @@ def test_a_route_reached_only_by_a_frontend_test_is_reported(tmp_path, monkeypat
         "    fetch(`${API_BASE}/stats`),\n};\n"
     )
     (tmp_path / "App.test.tsx").write_text("api.stats();\n")
-    (tmp_path / "__tests__" / "b.ts").write_text("fetch('/api/stats');\n")
+    (tmp_path / "__tests__" / "b.ts").write_text("fetch('/api/other');\n")
     monkeypatch.setattr(sys.modules[__name__], "_FRONTEND_SRC", tmp_path)
     code = _all_frontend_code()
     assert _uncalled_api_members(code) == ["stats"]
     assert _unrequested_routes(["/api/other"], code) == ["/api/other"]
-    assert "api.stats();" not in code and "fetch('/api/stats')" not in code
+    assert "api.stats();" not in code
 
 
 def test_method_shortcut_decorators_register_routes_too():
