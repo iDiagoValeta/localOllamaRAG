@@ -485,15 +485,17 @@ executable; without it, indexing and retrieval fail visibly. See
 
 ## Development
 
-Two CI gates, deliberately not one. The **fast gate**
+Two gates, deliberately not one. The **fast gate**
 ([`ci.yml`](.github/workflows/ci.yml)) runs on every pull request: lint, the
 architecture dependency rules, the unit suite against test doubles, and the
-frontend build — no GPU, no models, no network. The **full gate**
-([`full-eval.yml`](.github/workflows/full-eval.yml)) is launched manually on a
-self-hosted GPU runner and executes the real pipeline
-against a corpus of hand-verified gold cases and fails if the pass rate drops
-below the recorded baseline. It is required before merging anything that touches
-retrieval or generation, because the fast gate never exercises a real model.
+frontend build, with no GPU, no models and no network. The **full gate** executes the
+real pipeline against a corpus of hand-verified gold cases and fails if the pass
+rate drops below the recorded baseline. It runs locally on a GPU machine with
+Ollama, not in CI: no hosted runner has a GPU, and no self-hosted runner is
+registered for this repository, so [`full-eval.yml`](.github/workflows/full-eval.yml)
+cannot run. It is required before merging anything that touches retrieval or
+generation, and before each release, because the fast gate never exercises a
+real model. Whoever merges or releases puts the run id in the PR.
 
 ```bash
 pytest                                              # full suite, no GPU required
