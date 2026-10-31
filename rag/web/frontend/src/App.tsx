@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from
 import {
   Send, FileText, Database, Ollama,
   Search, Layers, Menu, X,
-  RefreshCw, Loader2, AlertCircle, CheckCircle2, Trash2,
+  Loader2, AlertCircle, CheckCircle2, Trash2,
   Copy, Check, Eye,
   Sun, Moon, BookOpen, Square
 } from './lib/icons';
@@ -303,7 +303,6 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<'docs' | 'models' | 'settings'>('docs');
   const [documents, setDocuments] = useState<string[]>([]);
-  const [totalFragments, setTotalFragments] = useState(0);
   // True when the active store's recorded index fingerprint disagrees with
   // the configuration in force (issue #36). Detection only -- the backend
   // never reindexes automatically on this; the user re-indexes explicitly.
@@ -439,7 +438,6 @@ export default function App() {
           setIndexingProgress(null);
           setMode(initData.mode || 'rag');
           setDocuments(initData.documents || []);
-          setTotalFragments(initData.total_fragments || 0);
           setFingerprintStale(initData.fingerprint_stale || false);
           setActiveStore(initData.active_store || 'en');
           setUserName(initData.user || '');
@@ -552,7 +550,6 @@ export default function App() {
         setIsIndexing(true);
         setRetryTrigger(t => t + 1);
       } else if (result.ok) {
-        setTotalFragments(result.total_fragments || 0);
         setDocuments(result.documents || []);
       } else {
         setSettingsError(fill(T.reindexError, { error: result.error }));
@@ -574,7 +571,6 @@ export default function App() {
       const result = await api.deleteDoc(docName);
       if (result.ok) {
         setDocuments(result.documents || []);
-        if (typeof result.total_fragments === 'number') setTotalFragments(result.total_fragments);
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'system',
@@ -661,7 +657,6 @@ export default function App() {
         return;
       }
       setDocuments(res.documents || []);
-      setTotalFragments(res.total_fragments || 0);
       setFingerprintStale(res.fingerprint_stale || false);
     } catch {
       setActiveStore(prev);
@@ -1036,7 +1031,6 @@ export default function App() {
       if (result.ok) {
         setMode(result.mode || 'rag');
         setDocuments(result.documents || []);
-        setTotalFragments(result.total_fragments || 0);
         setFingerprintStale(result.fingerprint_stale || false);
         setActiveStore(result.active_store || 'en');
         setIndexingError(null);

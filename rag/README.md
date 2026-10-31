@@ -27,7 +27,9 @@ required ports and run `IndexCorpus`, `Retrieve` and `Answer` from
 [`src/monkeygrab/`](../src/monkeygrab/README.md).
 [`engine/wiring.py`](engine/wiring.py) is the single bridge between this
 package's mutable runtime configuration and the immutable `AppConfig` the core
-expects. MinerU, embeddinggemma-2 and FAISS are built by the composition root.
+expects. That config is what the composition root
+([`monkeygrab/composition.py`](../src/monkeygrab/composition.py)) uses to build
+the fixed stack: MinerU, the image extractor, embeddinggemma-2 and FAISS.
 
 The consequence worth knowing: the web app, desktop wrapper and evaluation
 gate execute the same indexing, retrieval and generation implementations.

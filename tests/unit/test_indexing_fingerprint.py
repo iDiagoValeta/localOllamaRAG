@@ -22,8 +22,8 @@ from monkeygrab.config.app_config import AppConfig
 # partially initialized module. Every real caller already goes through
 # rag.chat_pdfs first (rag/web/app.py, rag/cli/app.py), so this mirrors that,
 # not a workaround for a bug this change introduced.
-import rag.chat_pdfs  # noqa: E402,F401
-from rag.engine import indexing, wiring  # noqa: E402
+import rag.chat_pdfs  # noqa: F401
+from rag.engine import indexing, wiring
 
 # Pinned so every comparison below is machine-independent. Both the write path
 # and the check call the installer probe, so leaving the real value in made

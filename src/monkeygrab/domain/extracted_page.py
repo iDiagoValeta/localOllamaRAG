@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ExtractedPage:
-    """Raw per-page text, the input to ``dividir_en_chunks``.
+    """Raw per-page text, the input to ``split_markdown_into_chunks``.
 
     Page numbering is normalized to zero-based before constructing this
     domain entity.

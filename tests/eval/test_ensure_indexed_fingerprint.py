@@ -19,11 +19,11 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import pytest  # noqa: E402
+import pytest
 
-import run_eval  # noqa: E402  (tests/eval sibling module; sets up sys.path for monkeygrab)
-from monkeygrab.adapters.lexical.bm25_index import Bm25LexicalIndex  # noqa: E402,F401
-from monkeygrab.config.app_config import AppConfig  # noqa: E402
+import run_eval  # tests/eval sibling module; sets up sys.path for monkeygrab
+from monkeygrab.adapters.lexical.bm25_index import Bm25LexicalIndex  # noqa: F401
+from monkeygrab.config.app_config import AppConfig
 
 
 class _FakeStore:

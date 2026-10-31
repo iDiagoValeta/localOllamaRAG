@@ -9,17 +9,8 @@ The import boundary is enforced by
 ``tests/unit/test_architecture_boundaries.py``: application code may depend on
 the standard library, domain, ports and config, never on concrete adapters.
 Every use case returns a result dataclass containing its output and metrics.
+
+No names are re-exported here: import each use case or helper from its own
+module (``monkeygrab.application.answer`` and so on), so the package surface
+matches the files a reader can see.
 """
-
-from monkeygrab.application.answer import Answer, AnswerResult
-from monkeygrab.application.index_corpus import IndexCorpus, IndexCorpusResult
-from monkeygrab.application.retrieve import Retrieve, RetrieveResult
-
-__all__ = [
-    "Answer",
-    "AnswerResult",
-    "IndexCorpus",
-    "IndexCorpusResult",
-    "Retrieve",
-    "RetrieveResult",
-]

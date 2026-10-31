@@ -87,7 +87,7 @@ def _wiring_with_env(monkeypatch, base_url=None, host=None):
     # rag.chat_pdfs first: it is the facade every entry point imports, and
     # rag.engine.wiring imports back into it, so importing wiring on its own
     # lands in a half-initialized module.
-    import rag.chat_pdfs  # noqa: F401
+    import rag.chat_pdfs
     import rag.engine.wiring as wiring
 
     for var in set(rag.chat_pdfs.MODEL_ROLE_VARS.values()) | {"MODELO_DESC"}:

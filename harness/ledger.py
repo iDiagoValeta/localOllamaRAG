@@ -47,15 +47,6 @@ _ENTRY_FILENAME_RE = re.compile(r"^\d{4}_.*\.json$")
 EVALUATOR_DEMO = "demo"
 EVALUATOR_REAL = "real"
 
-VERDICTS = (
-    "accepted",
-    "rejected_regression",
-    "rejected_latency",
-    "rejected_no_gain",
-    "inconclusive",
-)
-
-
 @dataclasses.dataclass(frozen=True)
 class LedgerEntry:
     """One iteration's full evidence record (issue #31 spec section 5.3).
@@ -106,7 +97,8 @@ class LedgerEntry:
             doc section 5) -- recorded per entry rather than assumed constant,
             so a later change to the ceiling does not retroactively change
             what an old entry's ``rejected_latency`` verdict meant.
-        verdict: One of ``VERDICTS``.
+        verdict: ``accepted``, ``rejected_regression``, ``rejected_latency``,
+            ``rejected_no_gain`` or ``inconclusive`` (``loop`` decides which).
         reason: Human-readable explanation (which cases regressed, which
             bucket breached the ceiling and by how much, or the gain over the
             ratchet).

@@ -252,6 +252,7 @@ answers are comparable; its tokens/s and s/answer are not.
 | `gemma4:e4b`, main at #439 (2026-10-19) | 121 / 136 (89.0%) | 139 / 156 (89.1%) | 60.6 | 28 *(of 124)* | 10.16 *(of 124)* | 0.46 | 0 | 0 | GPU | `20261019T233547Z` |
 | `gemma4:e4b`, with #482/#485/#486 (2026-10-20), graded before #492 | 122 / 136 (89.7%), 131 / 136 (96.3%) with the #492 grader | 140 / 156 (89.7%), 149 / 156 (95.5%) with the #492 grader | 37.6 | 29 *(of 124)* | 14.66 *(of 124)* | 0.79 | 0 | 0 | ~72% CPU (varies) | `20261020T230552Z` |
 | `gemma4:e4b`, with #482/#485/#486 plus #492/#493 (2026-10-21), graded by #492 | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 38.2 | 27 *(of 124)* | 13.89 *(of 124)* | 0.71 | 0 | 0 | ~72% CPU | `20261021T000639Z` |
+| `gemma4:e4b`, release v4.1.0 on a rebuilt index (2026-10-21), graded by #492 | 129 / 136 (94.9%) | 147 / 156 (94.2%) | 59.0 | 28 *(of 124)* | 10.62 *(of 124)* | 0.48 | 0 | 0 | GPU | `20261021T192157Z` |
 
 The `20261021T000639Z` row is the gate for #493, and it reads one case below
 the `20261020T230552Z` row once both are graded by #492: 148 against 149, the
@@ -262,6 +263,15 @@ falling back to raw context unrecorded (issue #497). Both runs placed the
 generator ~72% on the CPU because the embedder's llama-server had been started
 with GPU offload (1.6 GB) on this 8 GB card: speed columns are not comparable
 with the 2026-10-19 row, answers are.
+
+The `20261021T192157Z` row is release v4.1.0, whose code differs from the
+`20261021T000639Z` row only by #500 (gate instrumentation), measured on an
+index rebuilt from scratch because #426 puts the MinerU version in the
+fingerprint. It reads one case below: `gw-final-mass` passed 3 of 8 re-runs,
+generation noise; `att-study-outline-ca` failed 8 of 8, and 3 of 3 with #500
+reverted, so it follows the rebuilt index, not the code. `ricci-study-summary-es`
+went the other way. RECOMP fell back to raw context on 6 cases (#497). The
+embedder ran on the CPU this time, so the generator stayed on the GPU.
 
 The `20261019T233547Z` row is `main` after #416-#439 (headless, web and chat
 fixes; the indexed text is unchanged, so the existing index was reused): the

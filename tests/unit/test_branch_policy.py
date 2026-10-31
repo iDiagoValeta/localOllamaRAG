@@ -24,6 +24,12 @@ from tools.check_branch_policy import check, main
         ("fix/issue-5-x", "release/v4.1.0"),
         ("feat/issue-9-lite", "rag-lite"),
         ("develop", "rag-lite"),
+        # Dependabot branches are generated, not authored: the shape it writes
+        # is the exception, so its PRs reach develop without a rename.
+        ("dependabot/npm_and_yarn/rag/web/frontend/vite-6.4.4", "develop"),
+        ("dependabot/npm_and_yarn/rag/web/frontend/katex-0.18.2", "develop"),
+        ("dependabot/pip/rag/uv-0.9.1", "develop"),
+        ("dependabot/github_actions/actions/checkout-5", "develop"),
     ],
 )
 def test_allowed_pairs(head, base):
@@ -42,6 +48,13 @@ def test_allowed_pairs(head, base):
         ("feat/issue-12-Mayusculas", "develop"),
         ("feat/issue-12-x", "release/v4.1.0"),
         ("feat/issue-12-x", "otra-rama"),
+        # The dependabot exception stops at develop: a dependency bump is not a
+        # release, and it only covers branch names the bot actually generates.
+        ("dependabot/npm_and_yarn/rag/web/frontend/vite-6.4.4", "main"),
+        ("dependabot/npm_and_yarn/rag/web/frontend/vite-6.4.4", "rag-lite"),
+        ("dependabot/npm_and_yarn/rag/web/frontend/vite", "develop"),
+        ("dependabot/mi_gestor/rag/web/frontend/vite-6.4.4", "develop"),
+        ("dependabot/issue-12-a-mano", "develop"),
     ],
 )
 def test_rejected_pairs(head, base):

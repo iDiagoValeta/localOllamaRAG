@@ -19,12 +19,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import rag.chat_pdfs  # noqa: E402,F401  (the facade must load before its engine modules)
-from rag.engine import generation  # noqa: E402
+import rag.chat_pdfs  # noqa: F401  (the facade must load before its engine modules)
+from rag.engine import generation
 
-from monkeygrab.application.answer import Answer  # noqa: E402
-from monkeygrab.config.app_config import AppConfig  # noqa: E402
-from monkeygrab.domain.generation_chunk import GenerationChunk  # noqa: E402
+from monkeygrab.application.answer import Answer
+from monkeygrab.config.app_config import AppConfig
+from monkeygrab.domain.generation_chunk import GenerationChunk
 
 _FRAGMENTS = [
     {"doc": "evidence text " * 10, "metadata": {"source": "p.pdf", "page": 1, "chunk": 0}}

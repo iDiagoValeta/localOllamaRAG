@@ -1,0 +1,29 @@
+version: 2
+
+# What the bot touches: the frontend's npm tree and the Actions pinned by SHA in
+# .github/workflows. The Python requirements are pinned on purpose (AGENTS.md
+# section 1 rule 5), so there is no pip ecosystem here: bumping them is a
+# decision with a measurement behind it, not a weekly PR.
+updates:
+  - package-ecosystem: npm
+    directory: /rag/web/frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # Patch and minor bumps travel together so the review is one CI run, not
+    # five. Majors stay on their own: they are the ones that need reading.
+    groups:
+      frontend-menor:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]

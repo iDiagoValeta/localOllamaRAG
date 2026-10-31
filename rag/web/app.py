@@ -762,56 +762,6 @@ def _api_init_logic():
     }, 200
 
 
-@app.route("/api/corpus", methods=["POST"])
-def api_corpus():
-    """Switch the PDF corpus folder and its derived FAISS path."""
-    if not _try_begin_indexing():
-        return jsonify({"ok": False, "error": "indexing_in_progress"}), 409
-    data = request.get_json() or {}
-    preset = (data.get("preset") or "").strip().lower()
-    if preset not in _CORPUS_PRESET_IDS:
-        _release_indexing()
-        return jsonify({"ok": False, "error": "invalid_preset"}), 400
-    # _DOCS_ROOT, not the source tree: the packaged app moves the stores to a
-    # writable copy, and /api/stores already resolves them there (issue #450).
-    abs_path = os.path.join(_DOCS_ROOT, preset)
-    if not os.path.isdir(abs_path):
-        _release_indexing()
-        return jsonify({"ok": False, "error": "missing_docs_folder", "path": abs_path}), 400
-    try:
-        with _indexing_lock:
-            rag_engine.set_docs_folder_runtime(abs_path)
-            _state["collection"] = None
-            rag_engine.reset_vector_store_cache()
-            _state["indexing_failed"] = False
-            _state["indexing_error"] = None
-            _state["indexing_done_empty"] = False
-            _state["indexing_progress"] = None
-            _state["indexing_failed_files"] = []
-        gc.collect()
-        coll = _get_collection()
-        total_fragments = coll.count()
-    except Exception:
-        _release_indexing()
-        raise
-    if total_fragments == 0:
-        _hand_over_indexing()
-    else:
-        _release_indexing()
-    docs = rag_engine.obtener_documentos_indexados(coll) if total_fragments > 0 else []
-    return jsonify(
-        {
-            "ok": True,
-            "preset": preset,
-            "indexing": _state["indexing"],
-            "total_fragments": total_fragments,
-            "documents": docs,
-            "document_details": _collection_document_details(coll) if total_fragments > 0 else [],
-            **_init_paths_payload(),
-        }
-    )
-
-
 @app.route("/api/init", methods=["GET"])
 def api_init():
     """Initialize the system and return its status."""
@@ -1229,7 +1179,7 @@ def api_study():
         return jsonify({"ok": False, "kind": "malformed", "error": str(exc)[:400]}), 422
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)[:400]}), 500
 
     return jsonify({"ok": True, "kind": kind, "artifact": artifact})
@@ -1292,128 +1242,6 @@ def api_reindex():
     ), 202
 
 
-def _index_uploaded_files(folder: str, coll, saved: list) -> dict:
-    """Index only the uploaded sources inside the store already open.
-
-    Args:
-        folder: Docs folder resolved before the upload started.
-        coll: Vector store bound to that folder.
-        saved: Filenames already written into ``folder``.
-
-    Returns:
-        JSON-ready payload listing the indexed and failed files.
-    """
-    # Chunk ids are positional per source ({source}_pag{p}_chunk{c}), so
-    # re-adding a replaced file without removing the previous chunks trips
-    # FaissVectorStore.add's duplicate-id guard; the per-file handler swallowed
-    # it and retrieval kept citing the old text (issue #324).
-    for filename in saved:
-        coll.delete_source(filename)
-
-    failed_files = []
-
-    def _on_file_failed(filename, _error):
-        failed_files.append(filename)
-
-    rag_engine.indexar_documentos(
-        folder,
-        coll,
-        solo_archivos=saved,
-        on_file_failed=_on_file_failed,
-    )
-    _state["indexing_failed_files"] = failed_files
-    indexed = [name for name in saved if name not in failed_files]
-    payload = {
-        "ok": not failed_files,
-        "filename": indexed[0] if len(indexed) == 1 else None,
-        "files": indexed,
-        "failed_files": failed_files,
-        "total_fragments": coll.count(),
-        "documents": rag_engine.obtener_documentos_indexados(coll),
-        "document_details": _collection_document_details(coll),
-    }
-    if failed_files:
-        payload["error"] = (
-            f"{len(failed_files)} fichero(s) no se pudieron indexar: "
-            f"{', '.join(failed_files)}"
-        )
-    return payload
-
-
-@app.route("/api/upload", methods=["POST"])
-def api_upload():
-    """Upload PDF(s) and index them.
-
-    When add_only=1: add without full re-indexing, using current settings.
-    Each uploaded file replaces its previous chunks (same positional ids), and
-    the response lists in ``failed_files`` any file that did not index instead
-    of reporting it as uploaded (issue #323).
-    """
-    add_only = request.args.get("add_only", "").lower() in ("1", "true", "yes")
-
-    # The slot and the lock cover the whole request: add_only indexes
-    # synchronously and must not see the docs folder or the store swapped
-    # under it, and the full-reindex branch starts a background run that needs
-    # the same guarantee (issue #394).
-    with _indexing_lock:
-        if not _try_begin_indexing():
-            return jsonify({"ok": False, "error": "indexing_in_progress"}), 409
-
-        handed_over = False
-        try:
-            files = request.files.getlist("file") or (
-                request.files.get("file") and [request.files["file"]] or []
-            )
-            if not files:
-                return jsonify({"ok": False, "error": "No se envió ningún archivo"}), 400
-
-            uploads = []
-            for f in files:
-                # Same validation as the delete/serve routes: Unicode survives,
-                # path components do not, and anything that is not a PDF is a
-                # client error.
-                filename = _safe_pdf_basename(f.filename) if f else ""
-                if not filename:
-                    return jsonify({"ok": False, "error": "Nombre de archivo inválido"}), 400
-                uploads.append((f, filename))
-
-            # Resolve the folder once: reading it per file is how a store
-            # switch used to save a PDF into one store and index another.
-            folder = os.path.abspath(rag_engine.CARPETA_DOCS)
-            saved = []
-            for f, filename in uploads:
-                os.makedirs(folder, exist_ok=True)
-                f.save(os.path.join(folder, filename))
-                saved.append(filename)
-
-            coll = _get_collection()
-            if add_only:
-                return jsonify(_index_uploaded_files(folder, coll, saved))
-
-            _reset_db()
-            _state["indexing_failed"] = False
-            _state["indexing_error"] = None
-            _state["indexing_done_empty"] = False
-            _hand_over_indexing()
-            handed_over = True
-            return jsonify(
-                {
-                    "ok": True,
-                    "indexing": True,
-                    "message": "PDF guardado. Re-indexación iniciada.",
-                    "files": saved,
-                    "total_fragments": 0,
-                    "documents": [],
-                    "progress": _state["indexing_progress"],
-                }
-            ), 202
-        except Exception as e:
-            return jsonify({"ok": False, "error": str(e)}), 500
-        finally:
-            if not handed_over:
-                _release_indexing()
-
-
 _SETTINGS_MAP = {
     "contextualRetrieval": "USAR_CONTEXTUAL_RETRIEVAL",
     "queryDecomposition": "USAR_LLM_QUERY_DECOMPOSITION",
@@ -1451,10 +1279,6 @@ def api_settings_post():
     for fe_key, engine_var in _SETTINGS_MAP.items():
         if fe_key in data:
             val = data[fe_key]
-            # The reranker is only activated if the dependency is available
-            if engine_var == "USAR_RERANKER" and val and not rag_engine.RERANKER_AVAILABLE:
-                updated[fe_key] = False
-                continue
             setattr(rag_engine, engine_var, val)
             updated[fe_key] = val
             # Turned off: no query will call reranker() again until this is

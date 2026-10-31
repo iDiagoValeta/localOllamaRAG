@@ -22,15 +22,15 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pytest  # noqa: E402
+import pytest
 
-from monkeygrab.adapters.extraction import mineru_extractor as module  # noqa: E402
-from monkeygrab.adapters.extraction.mineru_extractor import (  # noqa: E402
+from monkeygrab.adapters.extraction import mineru_extractor as module
+from monkeygrab.adapters.extraction.mineru_extractor import (
     MineruExtractor,
     MineruImageExtractor,
 )
-from monkeygrab.domain.extracted_image import ExtractedImage  # noqa: E402
-from monkeygrab.domain.extracted_page import ExtractedPage  # noqa: E402
+from monkeygrab.domain.extracted_image import ExtractedImage
+from monkeygrab.domain.extracted_page import ExtractedPage
 
 # A minimal-but-valid 1x1 transparent PNG, small enough to inline. Used as a
 # stand-in for a MinerU-cropped figure -- Pillow can read real
@@ -184,7 +184,7 @@ def test_default_mineru_bin_reads_the_mineru_bin_env_var(monkeypatch, tmp_path):
 
 
 def test_default_mineru_bin_falls_back_to_the_windows_venv_layout(monkeypatch, tmp_path):
-    """Windows layout is probed first, mirroring composition._isolated_python."""
+    """Windows layout is probed first, mirroring composition.isolated_python."""
     monkeypatch.delenv("MINERU_BIN", raising=False)
     monkeypatch.setattr(module, "_PROJECT_ROOT", str(tmp_path))
     windows_bin = tmp_path / ".venv-mineru" / "Scripts" / "mineru.exe"

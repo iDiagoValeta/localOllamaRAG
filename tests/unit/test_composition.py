@@ -4,7 +4,7 @@
 into the ``Stack`` the use cases run on. The builders themselves must stay
 cheap to call in the fast gate: no GPU, no model download, no Ollama server.
 Every test here therefore runs against doubles -- stub adapter modules in
-``sys.modules`` or a patched ``_isolated_python`` -- and asserts wiring, not
+``sys.modules`` or a patched ``isolated_python`` -- and asserts wiring, not
 behavior of the adapters themselves.
 
 Covered:
@@ -14,7 +14,9 @@ Covered:
 - Each builder forwards the right config value to the right adapter
   (``config.paths`` to the FAISS store, the isolated interpreter to the
   llama-server embedder, both inner extractors to the suffix router).
-- ``_isolated_python`` raises ``FileNotFoundError`` with an actionable
+- ``build_image_extractor`` wraps MinerU's image extractor in the PDF-only
+  router used by the indexing path.
+- ``isolated_python`` raises ``FileNotFoundError`` with an actionable
   message naming both conventional ``.venv-mineru`` layouts when neither
   exists, and returns the existing candidate otherwise.
 """
@@ -28,14 +30,15 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pytest  # noqa: E402
+import pytest
 
-from monkeygrab import composition  # noqa: E402
-from monkeygrab.config.app_config import AppConfig  # noqa: E402
-from monkeygrab.config.models import EmbeddingRuntimeConfig  # noqa: E402
-from monkeygrab.ports.embedder import Embedder  # noqa: E402
-from monkeygrab.ports.pdf_extractor import PdfExtractor  # noqa: E402
-from monkeygrab.ports.vector_store import VectorStore  # noqa: E402
+from monkeygrab import composition
+from monkeygrab.config.app_config import AppConfig
+from monkeygrab.config.models import EmbeddingRuntimeConfig
+from monkeygrab.ports.embedder import Embedder
+from monkeygrab.ports.image_extractor import ImageExtractor
+from monkeygrab.ports.pdf_extractor import PdfExtractor
+from monkeygrab.ports.vector_store import VectorStore
 
 
 def _install_stub_module(monkeypatch, name, **attrs):
@@ -64,6 +67,7 @@ def test_stack_and_builders_use_concrete_port_types():
         "embedder": Embedder,
     }
     assert get_type_hints(composition.build_extractor)["return"] is PdfExtractor
+    assert get_type_hints(composition.build_image_extractor)["return"] is ImageExtractor
     assert get_type_hints(composition.build_vector_store)["return"] is VectorStore
     assert get_type_hints(composition.build_embedder)["return"] is Embedder
 
@@ -149,6 +153,34 @@ def test_build_extractor_routes_pdfs_and_text_files(monkeypatch):
     assert captured["text"] is text_instance
 
 
+def test_build_image_extractor_wraps_mineru_images(monkeypatch):
+    """The image path keeps MinerU behind the PDF-only router."""
+    captured = {}
+
+    class _FakeMineru:
+        pass
+
+    class _FakePdfOnly:
+        def __init__(self, inner):
+            captured["inner"] = inner
+
+    _install_stub_module(
+        monkeypatch,
+        "monkeygrab.adapters.extraction.by_suffix_extractor",
+        PdfOnlyImageExtractor=_FakePdfOnly,
+    )
+    _install_stub_module(
+        monkeypatch,
+        "monkeygrab.adapters.extraction.mineru_extractor",
+        MineruImageExtractor=_FakeMineru,
+    )
+
+    result = composition.build_image_extractor(AppConfig())
+
+    assert isinstance(result, _FakePdfOnly)
+    assert isinstance(captured["inner"], _FakeMineru)
+
+
 def test_build_vector_store_receives_config_paths(monkeypatch):
     """The FAISS store is built from ``config.paths``, nothing else."""
     captured = {}
@@ -198,10 +230,10 @@ def test_isolated_python_raises_actionable_error_when_venv_is_missing(monkeypatc
     monkeypatch.setattr(Path, "is_file", lambda self: False)
 
     with pytest.raises(FileNotFoundError, match=r"\.venv-mineru"):
-        composition._isolated_python()
+        composition.isolated_python()
 
     try:
-        composition._isolated_python()
+        composition.isolated_python()
     except FileNotFoundError as exc:
         message = str(exc)
     else:  # pragma: no cover - the assert above already failed
@@ -217,7 +249,7 @@ def test_isolated_python_prefers_the_first_existing_candidate(monkeypatch):
     posix = str(root / ".venv-mineru" / "bin" / "python")
 
     monkeypatch.setattr(Path, "is_file", lambda self: True)
-    assert composition._isolated_python() == windows
+    assert composition.isolated_python() == windows
 
     monkeypatch.setattr(Path, "is_file", lambda self: str(self) == posix)
-    assert composition._isolated_python() == posix
+    assert composition.isolated_python() == posix

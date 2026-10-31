@@ -22,12 +22,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from monkeygrab.application.study import (  # noqa: E402
+from monkeygrab.application.study import (
     MalformedOutlineError,
     MalformedQuizError,
     MalformedSummaryError,
 )
-from rag.web import app as web  # noqa: E402
+from rag.web import app as web
 
 
 @pytest.fixture

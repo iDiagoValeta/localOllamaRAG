@@ -20,10 +20,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import pytest  # noqa: E402
+import pytest
 
-import run_eval  # noqa: E402
-from run_eval import (  # noqa: E402
+import run_eval
+from run_eval import (
     GenerationBudgetExceeded,
     _run_with_budget,
     run_factual_case,

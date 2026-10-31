@@ -1,0 +1,43 @@
+name: Dependabot auto-merge
+
+# The bot opens the PR and writes the bump; merging it is ours. This asks GitHub
+# to merge it once the required checks of the base branch are green, never
+# before, and the repository deletes the head branch on merge.
+#
+# What may merge unattended: patches, minors and the Actions updates. Majors do
+# not: they change an API, which is a release decision, so they stay open for a
+# human. The policy lives in the one condition below, not in the bot.
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    name: Auto-merge
+    # Dependabot's own PRs, in this repository: a fork cannot borrow the
+    # trigger, and the token stays scoped to the branch the bot owns.
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]'
+      && github.repository == 'iDiagoValeta/localOllamaRAG'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read the update metadata
+        id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+
+      - name: Enable auto-merge
+        # An empty update-type is a metadata the action could not parse: no
+        # merge, because nothing here knows what the bump is.
+        if: >-
+          steps.meta.outputs.update-type != ''
+          && (steps.meta.outputs.package-ecosystem == 'github_actions'
+          || steps.meta.outputs.update-type == 'version-update:semver-patch'
+          || steps.meta.outputs.update-type == 'version-update:semver-minor')
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --squash --delete-branch "$PR_URL"

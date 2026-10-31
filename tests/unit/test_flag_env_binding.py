@@ -38,8 +38,8 @@ if str(ROOT) not in sys.path:
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
-from monkeygrab.config import AppConfig, PipelineFlagsConfig  # noqa: E402
-from monkeygrab.config import env  # noqa: E402
+from monkeygrab.config import AppConfig, env
+from monkeygrab.config.flags import PipelineFlagsConfig
 
 # (Flag env var, PipelineFlagsConfig field, historical default). One line per
 # bound flag, so an added or dropped binding is a visible diff.

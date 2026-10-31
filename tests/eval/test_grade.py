@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from grade import _contains_token, _normalize, grade_answer, grade_retrieval  # noqa: E402
+from grade import _contains_token, _normalize, grade_answer, grade_retrieval
 
 GOLD_FILE = ROOT / "gold_cases.jsonl"
 

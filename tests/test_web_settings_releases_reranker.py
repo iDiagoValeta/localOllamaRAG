@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from rag.web import app as web_app  # noqa: E402
+from rag.web import app as web_app
 
 
 class _FakeStore:
@@ -34,7 +34,6 @@ def _wire_common(monkeypatch):
     monkeypatch.setattr(web_app.rag_engine, "guardar_ajustes_persistidos", lambda: None)
     monkeypatch.setattr(web_app.rag_engine, "index_fingerprint_mismatch", lambda coll: False)
     monkeypatch.setattr(web_app, "_get_collection", lambda: _FakeStore())
-    monkeypatch.setattr(web_app.rag_engine, "RERANKER_AVAILABLE", True)
     monkeypatch.setattr(web_app.rag_engine, "USAR_RERANKER", True)
     return released
 

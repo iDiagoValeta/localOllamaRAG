@@ -337,14 +337,9 @@ measurement's actual resolution.
   to 5 cases reads as **a candidate for confirmation, not a demonstrated
   result**; 6 or more is at the threshold. `harness/loop.py` carries these
   numbers into every report's `resolution_warning`.
-- **Index-time knobs are still not searched, but the tier is now costed.**
-  Chunking and the index-time flags force a full reindex, which no budget
-  survives inside a search loop. Declaring one in `SEARCH_SPACE` is still a red
-  test. What `harness/slow_tier.py` adds (#102) is the accounting: candidates
-  are batched by the index they need — two that differ only in a retrieval knob
-  share one rebuild — and a campaign is priced in fast-tier evaluations, the
-  unit the patience budget is already spent in. It measures nothing itself; the
-  reindex and evaluation seconds come from a real run. Whether such a candidate
+- **Index-time knobs are still not searched.** Chunking and the index-time
+  flags force a full reindex, which no budget survives inside a search loop.
+  Declaring one in `SEARCH_SPACE` is still a red test. Whether such a candidate
   can pay off at all is still block B's question (#30) -- #213 grew the search
   set and the resolution warning above is now measured against it, but no
   index-time candidate has been run through it, so the answer still isn't in.

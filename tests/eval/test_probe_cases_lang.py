@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from run_probe_lang import _SOURCE_PDFS, PROBE_CASES_FILE  # noqa: E402
+from run_probe_lang import _SOURCE_PDFS, PROBE_CASES_FILE
 
 _VALID_CASE_TYPES = {"factual_number", "factual_concept", "figure_retrieval", "table_retrieval"}
 _VALID_LANGS = {"es", "ca"}

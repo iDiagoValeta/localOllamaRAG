@@ -13,10 +13,10 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pytest  # noqa: E402
+import pytest
 
-from monkeygrab.adapters.extraction import mineru_extractor as module  # noqa: E402
-from monkeygrab.adapters.extraction.mineru_extractor import MineruExtractor  # noqa: E402
+from monkeygrab.adapters.extraction import mineru_extractor as module
+from monkeygrab.adapters.extraction.mineru_extractor import MineruExtractor
 
 
 def _make_pdf(tmp_path: Path, name="paper.pdf") -> Path:

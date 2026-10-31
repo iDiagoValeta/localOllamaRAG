@@ -19,14 +19,7 @@ from monkeygrab.domain.fragment import Fragment
 from rag.engine.settings import PERSISTED_FLAGS, STORE_IDS
 from rag.engine.wiring import fragment_to_dict
 from rag.web import app as web_app
-from rag.web.app import _BUILTIN_STORES, _SETTINGS_MAP, _format_sources, app
-
-
-def test_upload_route_is_preserved_for_api_compatibility():
-    routes = {str(rule) for rule in app.url_map.iter_rules()}
-
-    assert "/api/upload" in routes
-    assert "/api/reindex" in routes
+from rag.web.app import _BUILTIN_STORES, _SETTINGS_MAP, _format_sources
 
 
 def _fragment(page, score_reranker=None, score_final=0.0):

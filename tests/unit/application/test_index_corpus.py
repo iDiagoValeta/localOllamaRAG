@@ -15,12 +15,12 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pytest  # noqa: E402
+import pytest
 
-from monkeygrab.application.index_corpus import IndexCorpus, detect_document_language  # noqa: E402
-from monkeygrab.config.app_config import AppConfig  # noqa: E402
-from monkeygrab.domain.extracted_image import ExtractedImage  # noqa: E402
-from monkeygrab.domain.extracted_page import ExtractedPage  # noqa: E402
+from monkeygrab.application.index_corpus import IndexCorpus, detect_document_language
+from monkeygrab.config.app_config import AppConfig
+from monkeygrab.domain.extracted_image import ExtractedImage
+from monkeygrab.domain.extracted_page import ExtractedPage
 
 
 @pytest.mark.parametrize(

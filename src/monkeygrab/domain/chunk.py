@@ -10,9 +10,8 @@ class Chunk:
     """One indexing-time unit: the text handed to the embedder and stored.
 
     Combines two things that are split across two source modules today:
-    the chunking output of ``rag.engine.chunking.dividir_en_chunks``
-    (``{"text": ..., "header": ...}``) and the positional metadata
-    ``rag.engine.indexing.indexar_documentos`` attaches before calling
+    the chunking output of ``split_markdown_into_chunks`` (``TextChunk``)
+    and the positional metadata ``rag.engine.indexing.indexar_documentos`` attaches before calling
     ``collection.add`` (``source``, ``page``, ``chunk`` index,
     ``total_chunks_in_page``, ``format``, ``section_header``). Indexing
     already renames chunking's ``header`` key to ``section_header`` when it
