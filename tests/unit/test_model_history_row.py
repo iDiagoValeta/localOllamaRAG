@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools.diagnostics.model_history_row import format_rows, main, summarise  # noqa: E402
+from tools.diagnostics.model_history_row import format_rows, main, summarise
 
 
 def _record(

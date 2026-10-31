@@ -91,5 +91,3 @@ export function StudyArtifactView({
     </div>
   );
 }
-
-export default StudyArtifactView;

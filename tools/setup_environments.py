@@ -50,7 +50,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from monkeygrab.config import AppConfig  # noqa: E402
+from monkeygrab.config import AppConfig
 
 PRODUCT_VENV = REPO_ROOT / ".venv"
 ISOLATED_VENV = REPO_ROOT / ".venv-mineru"
@@ -321,7 +321,7 @@ def run_checks() -> int:
             passed, message = check()
         except subprocess.TimeoutExpired:
             passed, message = False, f"{label}: timed out"
-        except Exception as exc:  # noqa: BLE001 -- a diagnostic must outlive what it diagnoses
+        except Exception as exc:  # a diagnostic must outlive what it diagnoses
             # Every check shells out to something that may be half-installed.
             # One raising must report that check as failed, not abort the run
             # and leave the remaining components unreported -- the state this

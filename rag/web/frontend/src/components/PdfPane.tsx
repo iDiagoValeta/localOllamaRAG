@@ -61,5 +61,3 @@ export function PdfPane({ doc, page, onClose, strings }: { doc: string; page: nu
     </div>
   );
 }
-
-export default PdfPane;

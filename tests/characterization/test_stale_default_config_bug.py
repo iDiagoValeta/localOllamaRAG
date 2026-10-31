@@ -3,10 +3,12 @@
 Several engine functions used to capture pipeline configuration in Python
 default argument values evaluated at module-import time. Runtime changes to
 ``rag.chat_pdfs`` then affected parameters read in function bodies but not
-parameters bound in signatures. ``dividir_en_chunks`` now resolves omitted
-chunking values from the live runtime module; the tests below keep that
-contract explicit and document the older stale-default locations that were
-already migrated.
+parameters bound in signatures. Every one of those locations has since moved
+to the core, where config is a required argument supplied per run from
+``AppConfig``; the tests below keep that contract explicit, one per former
+location. The chunking pair used to go through ``rag.dividir_en_chunks``, a
+wrapper removed as dead code (issue #537); they now check the chunker the
+product calls.
 """
 
 import inspect
@@ -17,26 +19,20 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import rag.chat_pdfs as rag
+from monkeygrab.application.text_chunking import split_markdown_into_chunks
 
 
-def test_hot_changing_chunk_size_and_overlap_affect_omitted_arguments(monkeypatch):
-    """Omitted chunking parameters are resolved from live runtime config.
+def test_chunk_size_and_overlap_have_no_default_to_go_stale():
+    """Formerly import-time ``cfg.CHUNK_SIZE``/``cfg.CHUNK_OVERLAP`` defaults.
 
-    A hot change to both values must produce the same result as passing those
-    values explicitly. This catches the old import-time ``cfg.CHUNK_SIZE`` and
-    ``cfg.CHUNK_OVERLAP`` defaults without loading a second implementation.
+    ``IndexCorpus`` passes both from ``AppConfig`` on every run, and the
+    chunker requires them, so there is no default left to freeze. Checked at
+    the signature level, like the reranker below.
     """
-    monkeypatch.setattr(rag, "CHUNK_SIZE", 80)
-    monkeypatch.setattr(rag, "CHUNK_OVERLAP", 10)
-    monkeypatch.setattr(rag, "MIN_CHUNK_LENGTH", 10)
+    params = inspect.signature(split_markdown_into_chunks).parameters
 
-    texto = "word " * 100
-    from_runtime = rag.dividir_en_chunks(texto)
-    explicit = rag.dividir_en_chunks(texto, chunk_size=80, overlap=10)
-
-    assert from_runtime == explicit
-    assert len(from_runtime) > 1
+    assert params["chunk_size"].default is inspect.Parameter.empty
+    assert params["overlap"].default is inspect.Parameter.empty
 
 
 def test_keyword_result_limit_now_follows_a_config_change():
@@ -89,20 +85,15 @@ def test_final_top_k_is_no_longer_frozen_into_a_signature_default():
     assert top_k.default is inspect.Parameter.empty
 
 
-def test_contrast_min_chunk_length_is_read_live_inside_the_function_body(monkeypatch):
-    """Contrast case: ``MIN_CHUNK_LENGTH`` is read as ``cfg.MIN_CHUNK_LENGTH``
-    INSIDE ``dividir_en_chunks``'s body (not bound as a default argument), so
-    a hot change to it IS honored immediately -- proving the defect above is
-    specifically about default-argument binding, not about ``cfg`` being
-    unobservable in general.
+def test_contrast_min_chunk_length_takes_effect_on_the_next_call():
+    """Contrast case: the value a caller passes is the value that applies,
+    call by call -- proving the defect above was about default-argument
+    binding, not about a changed setting being unobservable in general.
     """
     texto = "Body text of a single short paragraph that is not empty at all."  # 65 chars
 
-    monkeypatch.setattr(rag, "MIN_CHUNK_LENGTH", 10)
-    assert rag.dividir_en_chunks(texto, chunk_size=2000, overlap=0) != []
-
-    monkeypatch.setattr(rag, "MIN_CHUNK_LENGTH", 1000)
-    assert rag.dividir_en_chunks(texto, chunk_size=2000, overlap=0) == []
+    assert split_markdown_into_chunks(texto, 2000, 0, 10) != []
+    assert split_markdown_into_chunks(texto, 2000, 0, 1000) == []
 
 
 if __name__ == "__main__":

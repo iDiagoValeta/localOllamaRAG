@@ -11,11 +11,11 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pytest  # noqa: E402
+import pytest
 
-from monkeygrab.adapters.chat import ollama_model_unloader as module  # noqa: E402
-from monkeygrab.adapters.chat.ollama_model_unloader import OllamaModelUnloader  # noqa: E402
-from monkeygrab.config.models import ModelsConfig  # noqa: E402
+from monkeygrab.adapters.chat import ollama_model_unloader as module
+from monkeygrab.adapters.chat.ollama_model_unloader import OllamaModelUnloader
+from monkeygrab.config.models import ModelsConfig
 
 
 def _models(**overrides):

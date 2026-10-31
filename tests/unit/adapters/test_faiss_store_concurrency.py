@@ -88,7 +88,7 @@ def test_query_never_reads_rows_from_a_different_state_than_its_search(tmp_path)
     def _run_query():
         try:
             query_results.append(store.query([0.0, 1.0], n_results=3))
-        except BaseException as e:  # noqa: BLE001 - the race is what is under test
+        except BaseException as e:  # the race is what is under test
             query_errors.append(e)
 
     query_thread = threading.Thread(target=_run_query)

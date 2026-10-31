@@ -196,7 +196,7 @@ class _FakeRequestsModule:
         self._raises = raises
         self.calls = []
 
-    def post(self, url, json, timeout):  # noqa: A002 -- matches requests.post's real signature
+    def post(self, url, json, timeout):  # matches requests.post's real signature
         self.calls.append({"url": url, "json": json, "timeout": timeout})
         if self._raises is not None:
             raise self._raises

@@ -63,9 +63,9 @@ if str(EVAL_DIR) not in sys.path:
     sys.path.insert(0, str(EVAL_DIR))
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
-import grade  # noqa: E402  (tests/eval sibling module)
-from monkeygrab.config import AppConfig  # noqa: E402
-from monkeygrab.config.env import read_env_ollama_base_url  # noqa: E402
+import grade  # tests/eval sibling module
+from monkeygrab.config import AppConfig
+from monkeygrab.config.env import read_env_ollama_base_url
 
 GOLD_FILE = EVAL_DIR / "gold_cases.jsonl"
 BASELINE_FILE = EVAL_DIR / "baseline_min_pass_rate.txt"
@@ -459,14 +459,12 @@ def ensure_indexed(
     Raises:
         EvalSetupError: A required PDF is still missing after indexing.
     """
-    from monkeygrab.adapters.extraction.by_suffix_extractor import PdfOnlyImageExtractor
-    from monkeygrab.adapters.extraction.mineru_extractor import MineruImageExtractor
     from monkeygrab.adapters.lexical.bm25_index import Bm25LexicalIndex
     from monkeygrab.adapters.reranking.cross_encoder_reranker import CrossEncoderReranker
     from monkeygrab.application.index_corpus import IndexCorpus
     from monkeygrab.application.index_fingerprint import compute_index_fingerprint
     from monkeygrab.application.retrieve import Retrieve
-    from monkeygrab.composition import build_stack
+    from monkeygrab.composition import build_image_extractor, build_stack
     from rag.engine import wiring
 
     required = set(required_pdfs)
@@ -504,7 +502,7 @@ def ensure_indexed(
             # product does.
             image_extractor = None
             if config.flags.usar_embeddings_imagen:
-                image_extractor = PdfOnlyImageExtractor(MineruImageExtractor())
+                image_extractor = build_image_extractor(config)
             contextual_model = None
             if config.flags.usar_contextual_retrieval:
                 ollama = config.models.ollama
@@ -790,7 +788,7 @@ def _decoding_metrics(stats: Dict[str, Any]) -> Dict[str, Any]:
     the one shape that cannot be summed by accident.
 
     tokens_per_second is derived here rather than left to each reader: the
-    same division already lives in generation.generar_respuesta for the debug
+    same division already lives in monkeygrab.application.answer for the debug
     dump, and two copies of one formula is how the two ends up disagreeing.
     """
     eval_count = stats.get("eval_count")
@@ -864,7 +862,7 @@ def _placement(model: str) -> Dict[str, Any]:
         for entry in response.json().get("models", []):
             if model in (entry.get("name"), entry.get("model")) and entry.get("size"):
                 return {"vram_fraction": round(entry.get("size_vram", 0) / entry["size"], 3)}
-    except Exception:  # noqa: BLE001 - best-effort, see docstring
+    except Exception:
         pass
     return {}
 
@@ -902,7 +900,7 @@ def _run_with_budget(fn, *, budget_seconds: float) -> Any:
     def _target() -> None:
         try:
             box["result"] = fn()
-        except BaseException as exc:  # noqa: BLE001 - forwarded to the caller's thread
+        except BaseException as exc:
             box["exc"] = exc
 
     # Not cancelled on timeout -- Python cannot interrupt a blocking socket
@@ -1316,7 +1314,7 @@ def _release_ollama_models(model_names: Iterable[str]) -> None:
                 json={"model": name, "keep_alive": 0},
                 timeout=30,
             )
-        except Exception as exc:  # noqa: BLE001 - best-effort, see docstring
+        except Exception as exc:
             print(f"[phase] failed to release {name!r}: {exc}", flush=True)
 
 
@@ -1391,7 +1389,7 @@ def _release_gpu_models(*retrievers) -> None:
             if callable(hook):
                 try:
                     hook()
-                except Exception as exc:  # noqa: BLE001 - shutdown must not mask results
+                except Exception as exc:  # shutdown must not mask results
                     print(f"[phase] {attribute}.{method}() failed, continuing: {exc}", flush=True)
 
 
@@ -1815,7 +1813,7 @@ def _ollama_server_version() -> Optional[str]:
         response = requests.get(f"{OLLAMA_BASE_URL}/api/version", timeout=5)
         response.raise_for_status()
         return response.json().get("version")
-    except Exception:  # noqa: BLE001 - best-effort, see docstring
+    except Exception:
         return None
 
 
@@ -1837,7 +1835,7 @@ def _gpu_info() -> Dict[str, Optional[Any]]:
                     "name": props.name,
                     "vram_total_mib": round(props.total_memory / 2**20),
                 }
-        except Exception:  # noqa: BLE001 - best-effort, see docstring
+        except Exception:
             pass
         return {"name": None, "vram_total_mib": None}
 
@@ -1850,7 +1848,7 @@ def _gpu_info() -> Dict[str, Optional[Any]]:
         ).stdout.strip().splitlines()[0]
         name, vram = (part.strip() for part in output.split(","))
         return {"name": name, "vram_total_mib": int(vram)}
-    except Exception:  # noqa: BLE001 - best-effort, see docstring
+    except Exception:
         return {"name": None, "vram_total_mib": None}
 
 
@@ -1871,12 +1869,12 @@ def _git_info() -> Dict[str, Optional[Any]]:
 
     try:
         commit_hash = _git(["rev-parse", "--short", "HEAD"])
-    except Exception:  # noqa: BLE001 - best-effort, see docstring
+    except Exception:
         return {"hash": None, "dirty": None}
 
     try:
         dirty: Optional[bool] = bool(_git(["status", "--porcelain"]))
-    except Exception:  # noqa: BLE001 - best-effort, see docstring
+    except Exception:
         dirty = None
 
     return {"hash": commit_hash, "dirty": dirty}
@@ -2241,10 +2239,11 @@ def evaluate(
         models: Ollama generator models to evaluate.
         case_ids: ``gold_cases.jsonl`` ``"id"`` values to run. ``None`` runs
             every case (the CLI's behavior) and is the only mode compared
-            against the 51-case floor in ``baseline_min_pass_rate.txt``. A
+            against the floor in ``baseline_min_pass_rate.txt``, which is
+            measured on the full gold set. A
             non-empty subset still reports ``pass_rate`` and can raise that
             file when ``update_baseline`` is True, but never prints FAILED
-            against 0.77 or sets ``exit_code=1`` for that reason -- the
+            against the floor or sets ``exit_code=1`` for that reason -- the
             first real harness run (issue #71) saw a healthy 8/13 fast tier
             do exactly that. An empty sequence is the harness reachability
             probe: ``validate_config_overrides`` still runs, then this
@@ -2327,9 +2326,9 @@ def evaluate(
 
     # An empty case_ids tuple is the harness reachability probe: it exists to
     # trip validate_config_overrides, not to run the pipeline. Falling through
-    # would still preflight Ollama, print 0/0, compare that against the 51-case
-    # floor (0.00 < 0.77) and write a junk report -- measured 2026-08-13 on
-    # the first real harness run (issue #71).
+    # would still preflight Ollama, print 0/0, compare that against the floor
+    # on the full gold set (0.00 against that day's 0.77) and write a junk
+    # report -- measured 2026-08-13 on the first real harness run (issue #71).
     if case_ids is not None and not cases:
         probe_backends = AppConfig.from_env().models
         return {
@@ -2631,8 +2630,8 @@ def evaluate(
         print("        Not compared against the baseline: this run measured nothing.")
         exit_code = 1
     else:
-        # The floor in baseline_min_pass_rate.txt is for the unfiltered 51-case
-        # gold set. A subset's pass rate is a different statistic -- the first
+        # The floor in baseline_min_pass_rate.txt is for the unfiltered gold
+        # set. A subset's pass rate is a different statistic -- the first
         # real harness run (issue #71) saw a healthy 8/13 fast tier print
         # FAILED against 0.77, and a 0-case reachability probe do the same.
         # Only case_ids is None (the CLI) is the gate.

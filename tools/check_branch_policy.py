@@ -17,6 +17,20 @@ _TOPIC = re.compile(r"^(feat|fix|cleanup|probe|docs)/issue-\d+-[a-z0-9][a-z0-9-]
 _RELEASE = re.compile(r"^release/v\d+\.\d+\.\d+$")
 _HOTFIX = re.compile(r"^hotfix/v\d+\.\d+\.\d+$")
 
+# Dependabot names its own branches after the ecosystem, the manifest's
+# directory and the bump, e.g. dependabot/npm_and_yarn/rag/web/frontend/vite-6.4.4.
+# Renaming them is not an option (the bot owns the branch and recreates it), so
+# the shape it generates is the exception. The ecosystem is an allowlist and the
+# bump always carries its version: a hand-made branch cannot borrow the prefix
+# and skip the naming rules.
+_DEPENDABOT = re.compile(
+    r"^dependabot/"
+    r"(npm_and_yarn|pip|uv|bun|github_actions|docker|docker_compose|cargo|gomod|"
+    r"composer|bundler|maven|gradle|pub|nuget|mix|hex|elm|swift|terraform|"
+    r"devcontainers)"
+    r"/[a-z0-9][a-z0-9._/-]*-[a-z0-9][a-z0-9._-]*$"
+)
+
 # rag-lite is a long-lived variant (AGENTS.md section 3), not part of the
 # release line: it diverged from main and receives its own topic branches.
 _VARIANT_BASES = ("rag-lite",)
@@ -43,6 +57,8 @@ def check(head: str, base: str) -> str | None:
         if _TOPIC.match(head) or _RELEASE.match(head) or _HOTFIX.match(head):
             return None
         if head == "main":
+            return None
+        if _DEPENDABOT.match(head):
             return None
         return (
             f"'{head}' is not a valid branch name for develop: use "

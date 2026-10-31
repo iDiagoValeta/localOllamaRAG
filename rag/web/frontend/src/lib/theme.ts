@@ -14,7 +14,7 @@ export function getStoredTheme(): Theme {
   }
 }
 
-export function applyTheme(theme: Theme): void {
+function applyTheme(theme: Theme): void {
   document.documentElement.setAttribute('data-theme', theme);
 }
 

@@ -14,7 +14,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
-from monkeygrab.composition import _isolated_python
+from monkeygrab.composition import isolated_python as _isolated_python_default
 from monkeygrab.config.app_config import AppConfig
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -148,7 +148,7 @@ def _roles(config: AppConfig) -> Dict[str, Dict[str, str]]:
 def probe(
     config: AppConfig,
     *,
-    isolated_python: Callable[[], str] = _isolated_python,
+    isolated_python: Callable[[], str] = _isolated_python_default,
     cuda_probe: Callable[[str], Dict[str, Any]] = _cuda_probe,
     git_commit: Callable[[], Optional[str]] = _git_commit,
     embedder_probe: Callable[[AppConfig], Dict[str, Any]] = _embedder_probe,
@@ -205,7 +205,7 @@ def cached_probe(
     config: AppConfig,
     *,
     ttl: float = _PROBE_CACHE_TTL_SECONDS,
-    isolated_python: Callable[[], str] = _isolated_python,
+    isolated_python: Callable[[], str] = _isolated_python_default,
     cuda_probe: Callable[[str], Dict[str, Any]] = _cuda_probe,
     git_commit: Callable[[], Optional[str]] = _git_commit,
     embedder_probe: Callable[[AppConfig], Dict[str, Any]] = _embedder_probe,

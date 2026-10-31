@@ -27,9 +27,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import rag.chat_pdfs  # noqa: E402,F401  (see module docstring)
-import run_eval  # noqa: E402
-from monkeygrab.application.study import (  # noqa: E402
+import rag.chat_pdfs  # noqa: F401  (see module docstring)
+import run_eval
+from monkeygrab.application.study import (
     DocumentSummary,
     MalformedSummaryError,
     Study,

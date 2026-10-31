@@ -108,7 +108,7 @@ def _module_level_names(py_file: Path) -> Set[str]:
     -- including ones bound inside a top-level try/except.
 
     Imported symbols count because rag/chat_pdfs.py's public API is a
-    re-export block (``from rag.engine.generation import generar_respuesta``,
+    re-export block (``from rag.engine.generation import generar_tokens_respuesta``,
     etc.) -- a name bound by import is exactly as reachable from a caller
     doing ``import rag.chat_pdfs as rag_engine`` as one defined locally.
     """

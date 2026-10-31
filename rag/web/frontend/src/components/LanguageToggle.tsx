@@ -24,5 +24,3 @@ export function LanguageToggle({ lang, setLang }: { lang: Lang; setLang: (lang: 
     </div>
   );
 }
-
-export default LanguageToggle;

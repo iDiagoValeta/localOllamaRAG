@@ -10,23 +10,15 @@ import logging
 import os
 from typing import Callable, List, Optional
 
-from monkeygrab.adapters.extraction.by_suffix_extractor import PdfOnlyImageExtractor
-from monkeygrab.adapters.extraction.mineru_extractor import MineruImageExtractor
 from monkeygrab.adapters.extraction.mineru_extractor import installed_version as mineru_installed_version
 from monkeygrab.adapters.extraction.text_extractor import TEXT_SUFFIXES
 from monkeygrab.application.index_corpus import IndexCorpus
 from monkeygrab.application.index_fingerprint import compute_index_fingerprint, fingerprint_is_stale
-from monkeygrab.composition import build_extractor
-from monkeygrab.config.app_config import AppConfig
+from monkeygrab.composition import build_extractor, build_image_extractor
 from monkeygrab.ports.vector_store import VectorStore
 from rag.engine import wiring
 
 SUPPORTED_DOCUMENT_SUFFIXES = (".pdf",) + TEXT_SUFFIXES
-
-
-def _build_image_extractor(config: AppConfig):
-    del config
-    return PdfOnlyImageExtractor(MineruImageExtractor())
 
 
 def listar_documentos(carpeta: str) -> List[str]:
@@ -107,7 +99,7 @@ def indexar_documentos(
 
     image_extractor = None
     if config.flags.usar_embeddings_imagen:
-        image_extractor = _build_image_extractor(config)
+        image_extractor = build_image_extractor(config)
 
     image_describer = None
     if config.flags.usar_descripcion_imagen:

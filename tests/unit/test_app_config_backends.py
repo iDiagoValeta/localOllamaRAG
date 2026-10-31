@@ -11,8 +11,8 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from monkeygrab.config import AppConfig  # noqa: E402
-from monkeygrab.config.models import CHAT_BACKENDS, OpenAICompatRuntimeConfig  # noqa: E402
+from monkeygrab.config import AppConfig
+from monkeygrab.config.models import CHAT_BACKENDS, OpenAICompatRuntimeConfig
 
 _ROLE_VARS = (
     "MONKEYGRAB_RAG_BACKEND",
