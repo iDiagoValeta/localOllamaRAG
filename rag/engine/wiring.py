@@ -316,6 +316,18 @@ def _close_quietly(instance) -> None:
         logging.warning("Failed to close the previous embedder", exc_info=True)
 
 
+def release_ollama_models(config: AppConfig) -> None:
+    """Ask Ollama to unload every configured role, best-effort.
+
+    Indexing calls it before each file's extraction (issue #582): the
+    contextual model, the image describer and a generator left over from the
+    last query all stay resident for ``keep_alive``, and MinerU loading its
+    own models next to one of them and the embedder ran out of an 8 GB card.
+    """
+    ollama = config.models.ollama
+    OllamaModelUnloader(config.models, base_url=ollama.base_url).unload_all_except(None)
+
+
 def release_embedder() -> None:
     """Close the cached embedder and empty the slot.
 
