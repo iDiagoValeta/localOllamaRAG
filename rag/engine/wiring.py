@@ -15,6 +15,7 @@ BM25 corpus would otherwise be rebuilt on every question.
 """
 
 import logging
+import os
 import threading
 from typing import Any, Dict, Optional
 
@@ -405,7 +406,9 @@ def query_decomposer(config: AppConfig) -> ChatModel:
         config, "chat",
         options=QUERY_DECOMPOSER_SAMPLING_OPTIONS,
         num_ctx=ollama.query_num_ctx,
-        keep_alive=0,
+        # Probe for #571 (not for merge): MONKEYGRAB_PROBE_DECOMPOSER_RESIDENT=1
+        # keeps the decomposer's model loaded so the generator is not reloaded.
+        keep_alive=(ollama.keep_alive if os.getenv("MONKEYGRAB_PROBE_DECOMPOSER_RESIDENT") == "1" else 0),
         generation_deadline=ollama.generation_deadline,
     )
 
