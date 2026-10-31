@@ -24,7 +24,8 @@ for arg in "$@"; do
       cat <<'USAGE'
 Usage: tools/install.sh [--check] [--with-corpus]
   (no option)    install everything, idempotently; records what it creates for uninstall.sh
-  --check        report prerequisites and pending steps, change nothing
+  --check        report prerequisites and pending steps; downloads and installs nothing
+                 (if the GGUFs are already there it briefly starts llama-server to probe it)
   --with-corpus  also fetch the three PDF corpora (slow, optional)
 USAGE
       exit 0 ;;

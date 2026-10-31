@@ -4,14 +4,17 @@ two decisions that can hurt someone must hold (issue #559).
 The scripts themselves are exercised end to end in a clean container (they
 download gigabytes and need a GPU, so they cannot run in CI). What a unit test
 can pin without side effects: every script is syntactically valid bash, the
-entry points are executable, and ``uninstall.sh`` refuses a manifest entry
-that would aim ``rm -rf`` at the filesystem root or the home directory, and
-reads the llama.cpp build number from both ``--version`` spellings.
+entry points are executable, ``uninstall.sh`` refuses a manifest entry that
+would aim ``rm -rf`` outside what install creates, and the llama-server
+capability probe reports the observed reason, stops the server it started
+(also on INT/TERM) and leaves no temp log behind, using a fake server script.
 """
 
 import os
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -220,6 +223,9 @@ import http.server, json, os, sys
 mode = os.environ["FAKE_MODE"]
 if mode == "crash":
     sys.exit(3)
+if mode == "unknown-arch":
+    print("llama_model_load: error: unknown model architecture: 'gemma-embedding2'", file=sys.stderr)
+    sys.exit(1)
 args = sys.argv
 port = int(args[args.index("--port") + 1])
 assert "--mmproj" in args and "--embedding" in args and "-ub" in args
@@ -260,21 +266,90 @@ def test_probe_passes_when_the_server_loads_with_vision_and_is_stopped_after(tmp
 
 
 @pytest.mark.parametrize(
-    "mode, reason",
+    "mode, reason, advises_upgrade",
     [
-        ("no-vision", "reports no vision support"),
-        ("crash", "exited during startup"),
-        ("never-healthy", "did not answer within 3s"),
+        ("no-vision", "reports no vision support", False),
+        ("crash", "exited during startup", False),
+        ("unknown-arch", "exited during startup", True),
+        ("never-healthy", "did not answer within 3s", False),
     ],
 )
-def test_probe_fails_with_an_actionable_message(tmp_path, mode, reason):
+def test_probe_reports_the_observed_reason_and_upgrades_only_when_the_log_says_so(
+    tmp_path, mode, reason, advises_upgrade
+):
     result = _probe(tmp_path, mode)
     assert result.returncode == 1
     assert reason in result.stderr
-    assert "gemma-embedding2" in result.stderr and "b11669" in result.stderr
-    if mode != "crash":
+    assert ("use a newer build" in result.stderr) is advises_upgrade
+    if mode == "unknown-arch":
+        assert "unknown model architecture" in result.stderr, "log tail must be shown"
+    if mode in ("no-vision", "never-healthy"):
         with pytest.raises(ProcessLookupError):
             os.kill(int((tmp_path / "pid").read_text()), 0)
+
+
+@pytest.mark.parametrize("value", ["abc", "0", "-5", "1.5"])
+def test_probe_rejects_a_bad_timeout_before_starting_anything(tmp_path, value):
+    fake = tmp_path / "llama-server"
+    fake.write_text("#!/usr/bin/env bash\ntouch started\n", encoding="utf-8")
+    fake.chmod(0o755)
+    env = _env(tmp_path)
+    env.update(LLAMA_SERVER_BIN=str(fake), LLAMA_PROBE_TIMEOUT=value)
+    result = subprocess.run(
+        ["bash", "-c", f"cd '{tmp_path}'; . '{TOOLS / '_common.sh'}'; llama_probe m p"],
+        capture_output=True, text=True, env=env,
+    )
+    assert result.returncode == 1
+    assert "LLAMA_PROBE_TIMEOUT" in result.stderr
+    assert not (tmp_path / "started").exists()
+
+
+def test_probe_restores_the_callers_traps(tmp_path):
+    fake = tmp_path / "llama-server"
+    fake.write_text(_FAKE_SERVER, encoding="utf-8")
+    fake.chmod(0o755)
+    env = _env(tmp_path)
+    env.update(LLAMA_SERVER_BIN=str(fake), FAKE_MODE="ok", FAKE_PIDFILE=str(tmp_path / "pid"))
+    result = subprocess.run(
+        ["bash", "-c", f"trap 'echo caller-exit-trap' EXIT; . '{TOOLS / '_common.sh'}'; llama_probe m p; trap -p EXIT"],
+        capture_output=True, text=True, env=env, timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "trap -- 'echo caller-exit-trap' EXIT" in result.stdout
+    assert result.stdout.rstrip().endswith("caller-exit-trap")
+
+
+@pytest.mark.parametrize("sig", [signal.SIGTERM, signal.SIGINT])
+def test_a_signal_during_the_probe_leaves_no_orphan_and_no_temp_log(tmp_path, sig):
+    fake = tmp_path / "llama-server"
+    fake.write_text(_FAKE_SERVER, encoding="utf-8")
+    fake.chmod(0o755)
+    scratch = tmp_path / "tmp"
+    scratch.mkdir()
+    env = _env(tmp_path)
+    env.update(
+        LLAMA_SERVER_BIN=str(fake), FAKE_MODE="never-healthy", LLAMA_PROBE_TIMEOUT="60",
+        FAKE_PIDFILE=str(tmp_path / "pid"), TMPDIR=str(scratch),
+    )
+    script = subprocess.Popen(
+        ["bash", "-c", f". '{TOOLS / '_common.sh'}'; llama_probe m p"],
+        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    try:
+        for _ in range(100):
+            if (tmp_path / "pid").exists() and (tmp_path / "pid").read_text():
+                break
+            time.sleep(0.1)
+        server_pid = int((tmp_path / "pid").read_text())
+        os.kill(server_pid, 0)  # alive mid-probe
+        script.send_signal(sig)
+        assert script.wait(timeout=30) in (128 + sig, -sig)
+    finally:
+        if script.poll() is None:
+            script.kill()
+    with pytest.raises(ProcessLookupError):
+        os.kill(server_pid, 0)
+    assert list(scratch.iterdir()) == [], "the temp log must be removed"
 
 
 def test_check_reports_the_probe_pending_until_the_ggufs_exist(tmp_path):

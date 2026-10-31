@@ -51,22 +51,65 @@ llama_build() {
   printf '%s\n' "$out" | sed -n -E 's/.*build ([0-9]+).*/\1/p; s/^version: ([0-9]+) .*/\1/p' | head -n 1
 }
 
+# State of the probe in flight, global so the signal trap can reach it.
+_PROBE_PID=""
+_PROBE_LOG=""
+
+# Stops the probe's llama-server (TERM, then KILL after a short grace) and
+# removes its temp log. Idempotent: it runs from the INT/TERM handlers and
+# again from EXIT.
+_probe_cleanup() {
+  if [ -n "$_PROBE_PID" ]; then
+    if kill -0 "$_PROBE_PID" 2>/dev/null; then
+      kill "$_PROBE_PID" 2>/dev/null || true
+      local i
+      for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+        kill -0 "$_PROBE_PID" 2>/dev/null || break
+        sleep 0.1
+      done
+      kill -9 "$_PROBE_PID" 2>/dev/null || true
+    fi
+    wait "$_PROBE_PID" 2>/dev/null || true
+  fi
+  if [ -n "$_PROBE_LOG" ]; then rm -f -- "$_PROBE_LOG"; fi
+  _PROBE_PID=""
+  _PROBE_LOG=""
+}
+
 # Capability probe: start the llama-server on a free local port with the real
-# model and projector, wait (bounded) for /health, require /props to report
-# vision, then stop it. This is what "new enough for embeddinggemma-2" means in
-# practice; the version number cannot say it. Returns 0 when it loads, 1 with
-# an actionable message on stderr when it does not.
+# model and projector, wait (bounded by wall clock) for /health, require
+# /props to report vision, then stop it. This is what "can serve
+# embeddinggemma-2" means in practice; the version number cannot say it.
+# Returns 0 when it loads, 1 with the observed reason on stderr when it does
+# not. Ctrl+C or TERM during the probe stops the server it started.
 llama_probe() {
   local model="$1" mmproj="$2" timeout="${LLAMA_PROBE_TIMEOUT:-120}"
-  local port log pid reason="" waited=0 props
+  local port pid reason="" props deadline previous_traps
+  if ! [[ "$timeout" =~ ^[0-9]+$ ]] || [ "$timeout" -eq 0 ]; then
+    printf 'error: LLAMA_PROBE_TIMEOUT must be a positive number of seconds, got "%s"\n' "$timeout" >&2
+    return 1
+  fi
   port="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
-  log="$(mktemp)"
-  "$LLAMA_SERVER" -m "$model" --mmproj "$mmproj" --embedding --port "$port" -b 2048 -ub 2048 >"$log" 2>&1 &
+  previous_traps="$(trap -p EXIT INT TERM)"
+  # Before the server starts, so a signal in the gap cannot orphan it.
+  _PROBE_LOG="$(mktemp)"
+  trap '_probe_cleanup' EXIT
+  trap '_probe_cleanup; exit 130' INT
+  trap '_probe_cleanup; exit 143' TERM
+  # A non-interactive shell starts async children with SIGINT ignored, which
+  # is why the handlers above kill it by pid instead of relying on Ctrl+C.
+  "$LLAMA_SERVER" -m "$model" --mmproj "$mmproj" --embedding --port "$port" -b 2048 -ub 2048 >"$_PROBE_LOG" 2>&1 &
   pid=$!
-  until curl -fsS --max-time 2 "http://127.0.0.1:$port/health" >/dev/null 2>&1; do
+  _PROBE_PID=$pid
+  deadline=$(( $(date +%s) + timeout ))
+  while :; do
     if ! kill -0 "$pid" 2>/dev/null; then reason="it exited during startup"; break; fi
-    waited=$((waited + 1))
-    if [ "$waited" -ge "$timeout" ]; then reason="/health did not answer within ${timeout}s"; break; fi
+    if curl -fsS --max-time 2 "http://127.0.0.1:$port/health" >/dev/null 2>&1; then
+      # Our process must still be alive, or something else owns that port now.
+      kill -0 "$pid" 2>/dev/null || reason="it exited while another listener answered /health on port $port"
+      break
+    fi
+    if [ "$(date +%s)" -ge "$deadline" ]; then reason="/health did not answer within ${timeout}s"; break; fi
     sleep 1
   done
   if [ -z "$reason" ]; then
@@ -76,18 +119,25 @@ llama_probe() {
       reason="/props reports no vision support, so the projector (--mmproj) did not load"
     fi
   fi
-  kill "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
   if [ -n "$reason" ]; then
     {
       printf 'error: %s cannot serve embeddinggemma-2: %s.\n' "$LLAMA_SERVER" "$reason"
-      printf 'It needs a llama.cpp build that knows architecture gemma-embedding2 (b%s does, b10751 does not).\n' "$KNOWN_GOOD_LLAMA_BUILD"
-      printf 'Last lines of its output:\n'; tail -n 15 "$log" | sed 's/^/  /'
+      # An upgrade is only advice when the log says the architecture is unknown;
+      # otherwise it would send someone to rebuild a binary that is fine.
+      if grep -qi 'unknown model architecture' "$_PROBE_LOG"; then
+        printf 'This llama.cpp does not know architecture gemma-embedding2: use a newer build (b%s does, b10751 does not).\n' "$KNOWN_GOOD_LLAMA_BUILD"
+      elif [[ "$reason" == */props\ reports* ]]; then
+        printf 'Check that %s is the projector for the model and that this llama-server supports --mmproj.\n' "$(basename "$mmproj")"
+      elif [[ "$reason" == /health* ]]; then
+        printf 'It may just be slow to load (CPU, cold disk cache): raise LLAMA_PROBE_TIMEOUT (seconds) and re-run.\n'
+      fi
+      printf 'Last lines of its output:\n'; tail -n 15 "$_PROBE_LOG" | sed 's/^/  /'
     } >&2
-    rm -f -- "$log"
-    return 1
   fi
-  rm -f -- "$log"
+  _probe_cleanup
+  trap - EXIT INT TERM
+  if [ -n "$previous_traps" ]; then eval "$previous_traps"; fi
+  [ -z "$reason" ]
 }
 
 # Host and port of an endpoint URL. A URL without an explicit port gets the
