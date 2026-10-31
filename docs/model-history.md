@@ -267,8 +267,16 @@ eight cases; it does not settle which. Part of the RECOMP-off run overlapped a
 CPU-heavy build in a container on the same machine (generation stayed on the
 GPU throughout).
 
+What these two rows measure is the gate's RECOMP, not the product's: the gate
+runs the `chat`, `contextual` and `recomp` roles on `AUX_MODEL`
+(Ling-3.0-tiny, recorded in each artifact's `conditions.config`), while the
+product runs all four roles on `gemma4:e4b`. So the 7 s is Ling's synthesis
+plus loading it next to the generator; a product answer pays for a
+`gemma4:e4b` synthesis instead (the probe below).
+
 `tools/diagnostics/phase_timings.py --eval-dev-set` split the same commit by
-port on 8 cases (6 reaching the generator), run right after the gate with the
+port on 8 cases (6 reaching the generator), with the product's role
+configuration (every role on `gemma4:e4b`), run right after the gate with the
 embedder's `--mmproj` offloaded to the GPU (1.2 GB):
 
 | Phase | RECOMP on | RECOMP off |
@@ -283,8 +291,11 @@ embedder's `--mmproj` offloaded to the GPU (1.2 GB):
 Two readings hold and one does not. Query decomposition costs about 9 s per
 question for a few short sub-queries: the decomposer runs with `keep_alive=0`
 (`rag/engine/wiring.py`, issue #164) on the same `gemma4:e4b` the answer uses,
-so each question unloads and reloads the generator; that matches the ~7 s per
-case the gate's retrieval phase shows. Python glue is nil, so rewriting the
+so each question unloads and reloads the generator (the gate's ~7 s per case
+in retrieval is the same pattern on Ling, also unloaded after every call).
+RECOMP on `gemma4:e4b` took about 14.6 s per answer here, under the contention
+described below. Python glue is nil,
+so rewriting the
 orchestration buys nothing. The generation figures, though, are not the gate's:
 the probe keeps the reranker resident next to the generator, PyTorch reported
 an out-of-memory retry while loading it, and answers took 9-13 s against the
