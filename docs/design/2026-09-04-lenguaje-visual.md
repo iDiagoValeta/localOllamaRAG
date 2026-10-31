@@ -143,7 +143,7 @@ que la superficie plana no se lea como papel en blanco.
 
 - **El logo del mono y su naranja.** Es la única marca propia y sobrevive
   intacta; no se repinta con los tokens.
-- **La librería de iconos.** Se conservan lucide y phosphor. Lo que se unifica
+- **La librería de iconos.** Se conserva phosphor, servida desde `src/lib/icons.tsx`. Lo que se unifica
   es su uso: tamaño pequeño, `ink-faint` en reposo.
 - **Layout, endpoints y comportamiento.** Este documento describe cómo se ve la
   aplicación, no qué hace.

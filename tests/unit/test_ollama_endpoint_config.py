@@ -18,10 +18,10 @@ for path in (ROOT, ROOT / "src"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-import pytest  # noqa: E402
+import pytest
 
-from monkeygrab.config import AppConfig  # noqa: E402
-from monkeygrab.config.env import (  # noqa: E402
+from monkeygrab.config import AppConfig
+from monkeygrab.config.env import (
     DEFAULT_OLLAMA_BASE_URL,
     read_env_ollama_base_url,
 )

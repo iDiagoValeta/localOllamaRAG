@@ -18,17 +18,17 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pytest  # noqa: E402
+import pytest
 
-from monkeygrab.application.answer import Answer  # noqa: E402
-from monkeygrab.application.context_assembly import (  # noqa: E402
+from monkeygrab.application.answer import Answer
+from monkeygrab.application.context_assembly import (
     build_context_for_model,
     optimize_context_text,
 )
-from monkeygrab.config.app_config import AppConfig  # noqa: E402
-from monkeygrab.domain.chunk_metadata import ChunkMetadata  # noqa: E402
-from monkeygrab.domain.fragment import Fragment  # noqa: E402
-from monkeygrab.domain.generation_chunk import GenerationChunk  # noqa: E402
+from monkeygrab.config.app_config import AppConfig
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
+from monkeygrab.domain.fragment import Fragment
+from monkeygrab.domain.generation_chunk import GenerationChunk
 
 MARKER = "[excerpt ends mid-sentence]"
 

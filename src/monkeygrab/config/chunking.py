@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ChunkingConfig:
-    """Parameters ``rag.engine.chunking.dividir_en_chunks`` reads.
+    """Parameters ``split_markdown_into_chunks`` takes.
 
     Attributes:
         chunk_size: Maximum character length per text chunk (``RAG_CHUNK_SIZE``).

@@ -55,7 +55,7 @@ if str(REPO_ROOT / "src") not in sys.path:
 if str(EVAL_DIR) not in sys.path:
     sys.path.insert(0, str(EVAL_DIR))
 
-import run_eval  # noqa: E402  (tests/eval sibling module -- reused, never modified)
+import run_eval  # tests/eval sibling module, reused, never modified
 
 PROBE_CASES_FILE = EVAL_DIR / "probe_cases_lang.jsonl"
 
@@ -187,7 +187,7 @@ def run_probe(models: Sequence[str] = DEFAULT_MODELS, write_report: bool = True)
                     retrieved = [run_eval._fragment_to_dict(f) for f in result.fragments]
                     selected, _metrics = evidence.select_evidence(result.fragments)
                     fragments = [run_eval._fragment_to_dict(f) for f in selected]
-                except Exception as exc:  # noqa: BLE001 -- a bad case must not abort the whole probe
+                except Exception as exc:  # a bad case must not abort the whole probe
                     records.append({
                         "id": case["id"], "paper": case["paper"], "case_type": case["case_type"],
                         "lang": case["lang"], "model": None, "passed": False,

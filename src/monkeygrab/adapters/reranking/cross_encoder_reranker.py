@@ -132,7 +132,7 @@ class CrossEncoderReranker:
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-        except Exception:  # noqa: BLE001 - best-effort cleanup
+        except Exception:
             pass
 
     def rerank(self, query: str, fragments: Sequence[Fragment], top_k: int) -> List[Fragment]:

@@ -3,7 +3,7 @@
 Each adapter takes its configuration by constructor -- ``AppConfig`` or the
 specific sub-config it needs -- and never reads ``rag.chat_pdfs`` globals or
 calls ``get_runtime()`` (enforced by
-``tests/unit/adapters/test_adapters_do_not_import_rag_chat_pdfs.py``). This is
+``tests/unit/adapters/test_adapters_do_not_import_rag.py``). This is
 what makes an adapter swappable by rewiring dependency injection instead of
 by changing import order, the exact problem
 docs/design/2026-07-26-monkeygrab-v2.md section 1 names in ``rag/chat_pdfs.py``

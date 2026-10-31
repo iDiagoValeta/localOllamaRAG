@@ -101,13 +101,13 @@ _DISCARDED_BLOCK_TYPES = frozenset({"page_number", "footer", "page_footnote", "a
 _VERSION_PROBE_TIMEOUT_SECONDS = 20
 
 
-# CLI INVOCATION + CACHE
+# MinerU CLI invocation and cache
 
 
 def _default_mineru_bin() -> str:
     """Resolve the configured MinerU binary: ``MINERU_BIN`` env var, else the
     project's isolated venv, probing both layouts the same way
-    ``composition._isolated_python`` probes both ``python.exe`` and
+    ``composition.isolated_python`` probes both ``python.exe`` and
     ``python`` -- whichever of the two conventional paths actually exists
     wins, so ``MINERU_BIN`` is only needed as an override, not as a
     non-Windows requirement.
@@ -409,7 +409,7 @@ def _failure_cause(output: str) -> str:
             return match.group(0)
     return lines[-1] if lines else "no output"
 
-# CONTENT-LIST PARSING
+# Content-list parsing
 
 
 def _render_block_text(block: Dict[str, Any]) -> str:
@@ -571,7 +571,7 @@ def _content_list_to_images(
     return images_by_page
 
 
-# MINERUEXTRACTOR (PdfExtractor)
+# MinerU text extraction (PdfExtractor port)
 
 
 class MineruExtractor:
@@ -628,7 +628,7 @@ class MineruExtractor:
         return _content_list_to_pages(blocks)
 
 
-# MINERUIMAGEEXTRACTOR (ImageExtractor)
+# MinerU figure extraction (ImageExtractor port)
 
 
 class MineruImageExtractor:

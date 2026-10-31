@@ -20,19 +20,26 @@ from harness import evaluator as ev
 
 # TEST 5 -- no arxiv-sourced case id can reach the objective function.
 
+# The blind set is a property of the case file, not a product operation: the
+# harness only ever needs the search set, and this expression is what
+# pins "arxiv cases are the complement". Local on purpose -- a module-level
+# helper would be one more product symbol kept alive by its own test.
+def _blind_set_case_ids():
+    return tuple(c["id"] for c in ev._gold_cases() if c["source"] == "arxiv")
+
 
 def test_blind_set_is_disjoint_from_the_search_set():
-    assert set(ev.blind_set_case_ids()).isdisjoint(ev.search_set_case_ids())
+    assert set(_blind_set_case_ids()).isdisjoint(ev.search_set_case_ids())
 
 
 def test_blind_set_is_disjoint_from_the_fast_tier():
-    assert set(ev.blind_set_case_ids()).isdisjoint(ev.load_fast_tier())
+    assert set(_blind_set_case_ids()).isdisjoint(ev.load_fast_tier())
 
 
 def test_search_set_and_blind_set_partition_all_gold_cases():
     all_ids = {c["id"] for c in ev._gold_cases()}
-    assert set(ev.search_set_case_ids()) | set(ev.blind_set_case_ids()) == all_ids
-    assert set(ev.search_set_case_ids()).isdisjoint(ev.blind_set_case_ids())
+    assert set(ev.search_set_case_ids()) | set(_blind_set_case_ids()) == all_ids
+    assert set(ev.search_set_case_ids()).isdisjoint(_blind_set_case_ids())
 
 
 def test_every_gold_case_source_is_known():

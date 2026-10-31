@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from rag.web import app as web  # noqa: E402
+from rag.web import app as web
 
 
 @pytest.fixture

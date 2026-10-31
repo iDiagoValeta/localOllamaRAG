@@ -19,12 +19,12 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import pytest  # noqa: E402
+import pytest
 
-import rag.chat_pdfs  # noqa: E402,F401  (see module docstring)
-import run_eval  # noqa: E402
-from monkeygrab.config.app_config import AppConfig  # noqa: E402
-from run_eval import evaluate  # noqa: E402
+import rag.chat_pdfs
+import run_eval
+from monkeygrab.config.app_config import AppConfig
+from run_eval import evaluate
 
 
 def _iter_appconfig_dotted_fields(obj=None, prefix=""):

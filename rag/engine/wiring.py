@@ -2,9 +2,11 @@
 
 ``rag.chat_pdfs`` owns configuration as module-level globals that the web
 control panel and the CLI mutate in place. The core under ``src/monkeygrab``
-takes an immutable ``AppConfig`` instead. This module is the single place
-where the former is turned into the latter, and the single place that builds
-the port adapters the use cases need.
+takes an immutable ``AppConfig`` instead. This module turns the former into
+the latter. The fixed stack (MinerU, embeddinggemma-2, FAISS and the image
+extractor) is built from that config by ``monkeygrab.composition``; what this
+module builds itself are the adapters whose choice is configurable at runtime
+(the per-role chat models) and the ones expensive enough to cache.
 
 Building an ``AppConfig`` is cheap and happens per call, so a model or flag
 changed at runtime takes effect on the next query with no restart. What is

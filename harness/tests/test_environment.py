@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from harness import environment  # noqa: E402
+from harness import environment
 
 
 def _make_site_packages(tmp_path: Path, name: str, packages: dict) -> Path:

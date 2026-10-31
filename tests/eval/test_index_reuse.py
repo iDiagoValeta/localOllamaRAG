@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from run_eval import should_rebuild  # noqa: E402
+from run_eval import should_rebuild
 
 
 def test_matching_fingerprint_reuses():

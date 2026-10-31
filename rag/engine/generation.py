@@ -10,9 +10,6 @@ cited sources before the first token arrives, which it cannot do if preparing
 the evidence and generating from it are the same call.
 """
 
-import contextlib
-import io
-import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from rag.engine import wiring
@@ -168,45 +165,6 @@ def _generar_respuesta_stream(mensaje_usuario: str, on_token=None, stats: Option
     return respuesta_completa
 
 
-def generar_respuesta(
-    pregunta: str,
-    fragmentos: List[Dict[str, Any]],
-    metricas: Optional[Dict[str, Any]] = None,
-    on_token=None,
-) -> str:
-    """Generate a RAG response and optionally stream tokens through a callback.
-
-    Builds context from fragments, streams the response, optionally emits
-    visible tokens through ``on_token``, and saves a debug dump.
-
-    Args:
-        pregunta: User question.
-        fragmentos: Retrieved context fragments.
-        metricas: Pipeline metrics for debug logging.
-        on_token: Optional callable receiving each streamed token.
-
-    Returns:
-        Complete response text.
-    """
-    mensaje_usuario = cfg._preparar_mensaje_usuario_rag(pregunta, fragmentos)
-    gen_stats: Dict[str, Any] = {}
-    inicio = time.time()
-    respuesta_completa = cfg._generar_respuesta_stream(
-        mensaje_usuario, on_token=on_token, stats=gen_stats
-    )
-    if metricas is not None:
-        fase_gen = dict(gen_stats)
-        fase_gen["wall_time_s"] = time.time() - inicio
-        fase_gen["respuesta_chars"] = len(respuesta_completa)
-        eval_count = gen_stats.get("eval_count")
-        eval_duration = gen_stats.get("eval_duration")
-        if eval_count and eval_duration:
-            fase_gen["tokens_por_segundo"] = eval_count / (eval_duration / 1e9)
-        metricas = {**metricas, "fase_generacion": fase_gen}
-    cfg.guardar_debug_rag(pregunta, mensaje_usuario, respuesta_completa, fragmentos, metricas=metricas)
-    return respuesta_completa
-
-
 def generar_respuesta_silenciosa(
     pregunta: str,
     fragmentos: List[Dict[str, Any]],
@@ -259,33 +217,3 @@ def generar_respuesta_silenciosa(
     if stats is not None:
         stats["stage"] = "generator"
     return cfg._generar_respuesta_stream(mensaje_usuario, stats=stats)
-
-
-def evaluar_pregunta_rag(
-    pregunta: str,
-    collection: VectorStore
-) -> Tuple[str, List[str]]:
-    """Run the full RAG pipeline silently, for automated evaluation.
-
-    Args:
-        pregunta: The evaluation question.
-        collection: FAISS store to search.
-
-    Returns:
-        Tuple of (response text, the context strings it was given).
-    """
-    if len(pregunta.strip()) < cfg.MIN_LONGITUD_PREGUNTA_RAG:
-        return ("", [])
-    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-        fragmentos_ranked, _, _ = cfg.realizar_busqueda_hibrida(pregunta, collection)
-        if not fragmentos_ranked:
-            return ("", [])
-        fragmentos_finales, _ = cfg.preparar_fragmentos_para_generacion(
-            fragmentos_ranked,
-            collection,
-        )
-        if not fragmentos_finales:
-            return ("", [])
-        respuesta = cfg.generar_respuesta_silenciosa(pregunta, fragmentos_finales)
-        contexts = [f['doc'] for f in fragmentos_finales]
-        return (respuesta, contexts)

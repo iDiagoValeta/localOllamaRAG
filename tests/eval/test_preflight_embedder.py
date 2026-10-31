@@ -24,9 +24,9 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import pytest  # noqa: E402
+import pytest
 
-import run_eval  # noqa: E402
+import run_eval
 
 # What a correctly started llama-server reports: the GGUF it loaded.
 _EMBEDDINGGEMMA_PATH = "/models/embeddinggemma-2-300m-Q8_0.gguf"

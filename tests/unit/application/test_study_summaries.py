@@ -19,15 +19,15 @@ for path in (str(ROOT), str(ROOT / "src")):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from monkeygrab.application.study import (  # noqa: E402
+from monkeygrab.application.study import (
     MalformedOutlineError,
     MalformedSummaryError,
     Study,
     summary_to_dict,
 )
-from monkeygrab.config.app_config import AppConfig  # noqa: E402
-from monkeygrab.domain.chunk_metadata import ChunkMetadata  # noqa: E402
-from monkeygrab.domain.fragment import Fragment  # noqa: E402
+from monkeygrab.config.app_config import AppConfig
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
+from monkeygrab.domain.fragment import Fragment
 
 
 class _FakeChatModel:
@@ -181,7 +181,6 @@ class TestEmptyInput:
         """Nothing to summarise is not a failure, and paying a generation call
         to be told so is waste."""
         summary = Study(_ExplodingChatModel()).summarize([], AppConfig())
-        assert summary.is_empty
         assert summary.sections == ()
 
 
@@ -253,7 +252,7 @@ class TestOutline:
 
     def test_empty_input_does_not_call_the_generator(self):
         outline = Study(_ExplodingChatModel()).outline([], AppConfig())
-        assert outline.is_empty
+        assert outline.nodes == ()
 
     def test_the_language_request_reaches_the_prompt(self):
         model = _FakeChatModel(self._NESTED)

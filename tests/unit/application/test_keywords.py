@@ -14,9 +14,9 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pytest  # noqa: E402
+import pytest
 
-from monkeygrab.application.keywords import (  # noqa: E402
+from monkeygrab.application.keywords import (
     extract_keywords,
     is_coherent_query,
     tokenize_bm25,

@@ -28,8 +28,8 @@ for path in (ROOT, ROOT / "src"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-import rag.chat_pdfs  # noqa: E402,F401  (owns the runtime history is bound to)
-from rag.engine import history  # noqa: E402
+import rag.chat_pdfs  # noqa: F401  (owns the runtime history is bound to)
+from rag.engine import history
 
 _PREVIOUS = [{"role": "user", "content": "pregunta previa"}]
 

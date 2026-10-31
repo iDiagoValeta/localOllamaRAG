@@ -23,7 +23,7 @@ if str(ROOT) not in sys.path:
 
 import pytest
 
-from rag.web import app as web_app  # noqa: E402
+from rag.web import app as web_app
 
 
 @pytest.fixture

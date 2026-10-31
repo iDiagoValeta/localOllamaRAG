@@ -20,9 +20,9 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import rag.chat_pdfs  # noqa: E402,F401
-from monkeygrab.config.app_config import AppConfig  # noqa: E402
-from rag.engine import wiring  # noqa: E402
+import rag.chat_pdfs  # noqa: F401
+from monkeygrab.config.app_config import AppConfig
+from rag.engine import wiring
 
 # The 99th percentile of answer length across the 2026-09-11 campaign
 # (3,167 answers; medians 27-335 tokens). The cap sits nearly twice above it

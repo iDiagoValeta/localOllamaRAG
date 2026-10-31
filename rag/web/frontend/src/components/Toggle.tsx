@@ -17,5 +17,3 @@ export function Toggle({ label, checked, onChange, desc }: { label: string; chec
     </button>
   );
 }
-
-export default Toggle;

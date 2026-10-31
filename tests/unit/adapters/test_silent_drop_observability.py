@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from monkeygrab.adapters.extraction.mineru_extractor import _content_list_to_pages  # noqa: E402
+from monkeygrab.adapters.extraction.mineru_extractor import _content_list_to_pages
 
 
 def test_blocks_without_page_idx_are_skipped_but_counted_and_logged(caplog):

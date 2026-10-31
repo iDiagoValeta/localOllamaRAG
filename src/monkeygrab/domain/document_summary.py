@@ -48,10 +48,6 @@ class DocumentSummary:
     sections: Tuple[SummarySection, ...]
     source_document: str = ""
 
-    @property
-    def is_empty(self) -> bool:
-        return not self.sections
-
 
 @dataclasses.dataclass(frozen=True)
 class OutlineNode:
@@ -88,10 +84,6 @@ class DocumentOutline:
     nodes: Tuple[OutlineNode, ...]
     source_document: str = ""
 
-    @property
-    def is_empty(self) -> bool:
-        return not self.nodes
-
 
 @dataclasses.dataclass(frozen=True)
 class QuizQuestion:
@@ -113,11 +105,6 @@ class QuizQuestion:
     correct_index: int
     source_pages: Tuple[int, ...] = ()
 
-    @property
-    def correct_option(self) -> str:
-        """The text of the correct choice."""
-        return self.options[self.correct_index]
-
 
 @dataclasses.dataclass(frozen=True)
 class Quiz:
@@ -131,7 +118,3 @@ class Quiz:
 
     questions: Tuple[QuizQuestion, ...]
     source_document: str = ""
-
-    @property
-    def is_empty(self) -> bool:
-        return not self.questions
