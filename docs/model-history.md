@@ -255,6 +255,10 @@ answers are comparable; its tokens/s and s/answer are not.
 | `gemma4:e4b`, release v4.1.0 on a rebuilt index (2026-10-21), graded by #492 | 129 / 136 (94.9%) | 147 / 156 (94.2%) | 59.0 | 28 *(of 124)* | 10.62 *(of 124)* | 0.48 | 0 | 0 | GPU | `20261021T192157Z` |
 | `gemma4:e4b`, v4.2.0 (`977f796`, 2026-10-31), RECOMP on | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 56.7 | 28 *(of 124)* | 9.48 *(of 124)* | 0.49 | 0 | 0 | GPU | `20261031T114027Z` |
 | `gemma4:e4b`, same commit and index, `USAR_RECOMP_SYNTHESIS=false` | 126 / 136 (92.6%) | 144 / 156 (92.3%) | 57.3 | 36 *(of 124)* | 2.32 *(of 124)* | 0.63 | 0 | 0 | GPU | `20261031T122733Z` |
+| `gemma4:e4b`, `82f1c0f`, every role on `gemma4:e4b`, RECOMP on | 127 / 136 (93.4%) | 145 / 156 (92.9%) | 61.9 | 28 *(of 124)* | 10.89 *(of 124)* | 0.46 | 0 | 0 | GPU | `20261031T141025Z` |
+| `gemma4:e4b`, same, RECOMP off | 126 / 136 (92.6%) | 144 / 156 (92.3%) | 58.6 | 36 *(of 124)* | 2.33 *(of 124)* | 0.61 | 0 | 0 | GPU | `20261031T144105Z` |
+| `gemma4:e4b`, same, RECOMP on (repeat) | 126 / 136 (92.6%) | 143 / 156 (91.7%) | 61.9 | 28 *(of 124)* | 11.00 *(of 124)* | 0.46 | 0 | 0 | GPU | `20261031T152957Z` |
+| `gemma4:e4b`, same, RECOMP off (repeat) | 125 / 136 (91.9%) | 143 / 156 (91.7%) | 58.7 | 36 *(of 124)* | 2.29 *(of 124)* | 0.61 | 0 | 0 | GPU | `20261031T160037Z` |
 
 The two 2026-10-31 rows are issue #548: same commit, same stored index, run
 back to back, differing only in RECOMP. Without it an answer takes 2.32 s
@@ -273,6 +277,25 @@ runs the `chat`, `contextual` and `recomp` roles on `AUX_MODEL`
 product runs all four roles on `gemma4:e4b`. So the 7 s is Ling's synthesis
 plus loading it next to the generator; a product answer pays for a
 `gemma4:e4b` synthesis instead (the probe below).
+
+The four `82f1c0f` rows are issue #571: the same gate with
+`OLLAMA_AUX_MODEL=gemma4:e4b`, so every role runs on `gemma4:e4b` as in the
+product (recorded in each artifact's `conditions.config`), alternating RECOMP
+on and off twice, back to back on the same index. With the product's
+synthesizer RECOMP buys nothing measurable: 145 and 143 with it, 144 and 143
+without, while an answer takes 10.9-11.0 s instead of 2.3 s. The repeats agree
+on which cases move: without RECOMP, `distillation-temperature`,
+`everest-deaths`, `llama-65b-dimension` and `vit-imagenet-top1` pass in both
+pairs and `gw-snr`, `higgs-mass`, `llama-65b-hellaswag`, `supernovae-lab` and
+`vgg-batch-size` fail in both, so RECOMP trades one set of cases for another
+of the same size rather than adding any. Between two runs of the same
+configuration 3 to 6 cases flip, which bounds the noise.
+
+A fifth run kept the decomposer resident (the configured `keep_alive`, 120 s,
+instead of 0, on the unmerged branch `probe/issue-571-resident-decomposer`) with the reranker moved to the CPU to make room for it. It was
+stopped after 61 cases: retrieval took a median 132 s per case against 10.7 s
+for the same 61 cases with the reranker on the GPU, so moving the reranker off
+the card costs far more than the decomposer reload it saves.
 
 `tools/diagnostics/phase_timings.py --eval-dev-set` split the same commit by
 port on 8 cases (6 reaching the generator), with the product's role
