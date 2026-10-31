@@ -70,6 +70,20 @@ class TestInit:
         assert response.status_code == 500
         assert response.json["code"] == "indexing_failed"
         assert response.json["error"] == "all files failed"
+        assert response.json["detail"] == "all files failed"
+
+    def test_a_failed_run_with_no_message_has_no_detail(self, client, monkeypatch):
+        # The UI shows its own translated line when there is no detail, so the
+        # Spanish fallback in `error` must not be mistaken for one.
+        monkeypatch.setattr(web, "_invalidate_collection_if_deleted", lambda: None)
+        monkeypatch.setitem(web._state, "indexing_failed", True)
+        monkeypatch.setitem(web._state, "indexing_error", "")
+
+        response = client.get("/api/init")
+
+        assert response.json["code"] == "indexing_failed"
+        assert response.json["error"] == "La indexación falló"
+        assert response.json["detail"] is None
 
     def test_a_run_in_progress_is_indexing_in_progress(self, client, monkeypatch):
         monkeypatch.setattr(web, "_invalidate_collection_if_deleted", lambda: None)

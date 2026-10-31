@@ -704,6 +704,10 @@ def _api_init_logic():
             "ok": False,
             "code": "indexing_failed",
             "error": _state["indexing_error"] or "La indexación falló",
+            # The raw exception text, absent when the run left none: it lets
+            # the UI show the cause and otherwise use its own translated line
+            # instead of the Spanish fallback above.
+            "detail": _state["indexing_error"] or None,
         }, 500
 
     _ensure_indexed()

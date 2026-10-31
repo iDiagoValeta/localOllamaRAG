@@ -46,13 +46,17 @@ const ERROR_CODE_KEYS = new Map<string, keyof Strings>([
   ['invalid_filename', 'errInvalidFilename'],
   ['indexing_in_progress', 'corpusConflict'],
   ['invalid_flag_value', 'settingsSaveError'],
+  ['indexing_failed', 'indexingFailed'],
 ]);
 
 function apiErrorText(
   strings: Strings,
-  body: { code?: unknown; error?: unknown } | null | undefined,
+  body: { code?: unknown; error?: unknown; detail?: unknown } | null | undefined,
   fallback: string,
 ): string {
+  // `detail` is raw exception text: untranslatable, but it says what went
+  // wrong, which the generic line for the same code does not.
+  if (typeof body?.detail === 'string' && body.detail) return body.detail;
   const code = typeof body?.code === 'string' ? body.code : body?.error;
   const key = typeof code === 'string' ? ERROR_CODE_KEYS.get(code) : undefined;
   if (key) return strings[key];
@@ -501,7 +505,7 @@ export default function App() {
           // is the infinite spinner, so report the message and stop.
           setIsIndexing(false);
           setIndexingProgress(null);
-          setIndexingError(initData.error || T.indexingFailed);
+          setIndexingError(apiErrorText(T, initData, T.indexingFailed));
         }
 
         try {
@@ -1061,7 +1065,7 @@ export default function App() {
         setRetryTrigger(t => t + 1);
       } else {
         setIsIndexing(false);
-        setIndexingError(result.error || T.indexingFailed);
+        setIndexingError(apiErrorText(T, result, T.indexingFailed));
       }
     } catch {
       setIsIndexing(false);

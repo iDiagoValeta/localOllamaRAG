@@ -95,15 +95,18 @@ export function SettingsOverlay({
     return () => opener?.focus();
   }, []);
 
-  // Tab wraps at the panel's ends instead of walking out into the sidebar and
-  // chat. Scoped to focus already inside the panel, so a click on the sidebar
-  // tabs (which switch panels) still behaves normally.
+  // Not aria-modal: the sidebar stays usable beside the panel. Tab wraps at
+  // the panel's ends instead of walking out into the sidebar and chat, but
+  // only while focus is already inside, so a click on the sidebar tabs (which
+  // switch panels) still behaves normally.
   const keepTabInside = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'Tab') return;
     const panel = e.currentTarget;
-    const focusable = panel.querySelectorAll<HTMLElement>(
+    // Unrendered elements (display:none) match the selector but cannot take
+    // focus, so a hidden one at either end would turn the wrap into a no-op.
+    const focusable = Array.from(panel.querySelectorAll<HTMLElement>(
       'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    );
+    )).filter(el => el.getClientRects().length > 0);
     if (!focusable.length) { e.preventDefault(); return; }
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
@@ -295,7 +298,6 @@ export function SettingsOverlay({
     <div
       ref={panelRef}
       role="dialog"
-      aria-modal="true"
       aria-labelledby="settings-dialog-title"
       tabIndex={-1}
       onKeyDown={keepTabInside}
