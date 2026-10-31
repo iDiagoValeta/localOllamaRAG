@@ -6,6 +6,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ### Fixed
 
+- Adding PDFs from the UI indexes only the new files (`POST /api/docs`) instead of clearing the store and re-embedding every document; a file with the name of an indexed document replaces it. `POST /api/reindex` no longer takes files and stays the full rebuild (#554).
 - The documented embedder command loads the multimodal projector (`--mmproj`), and the setup check, the desktop boot and the evaluation gate's preflight fail when image embeddings are on and `/props` reports no vision support; without it a fresh install failed on the first PDF with a figure (#565).
 
 ## [4.2.0] - 2026-10-31

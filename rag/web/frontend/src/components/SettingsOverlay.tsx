@@ -44,8 +44,7 @@ export interface SettingsOverlayProps {
   // answer still streaming (issue #404).
   isAnswering: boolean;
   indexingProgress: IndexingProgress | null;
-  pendingReindexFiles: File[];
-  setPendingReindexFiles: React.Dispatch<React.SetStateAction<File[]>>;
+  isAddingDocs: boolean;
   reindexFileInputRef: React.RefObject<HTMLInputElement | null>;
   handleReindex: () => void;
 
@@ -72,8 +71,7 @@ export function SettingsOverlay({
   isReindexing,
   isAnswering,
   indexingProgress,
-  pendingReindexFiles,
-  setPendingReindexFiles,
+  isAddingDocs,
   reindexFileInputRef,
   handleReindex,
   strings,
@@ -204,7 +202,7 @@ export function SettingsOverlay({
 
   const renderPipelinePanel = () => (
     <div className="mx-auto w-full max-w-4xl space-y-4">
-      {(settingsError || isReindexing) && (
+      {(settingsError || isReindexing || isAddingDocs) && (
         <div className={`border px-3 py-2 text-xs rounded-xl ${settingsError ? 'border-danger/20 bg-danger/10 text-danger' : 'border-edge bg-surface-raised text-ink'}`}>
           {settingsError ? (
             <span>{settingsError}</span>
@@ -222,7 +220,7 @@ export function SettingsOverlay({
               </div>
             </div>
           ) : (
-            <span>{strings.reindexingStatus}</span>
+            <span>{isAddingDocs ? strings.addingPdfsStatus : strings.reindexingStatus}</span>
           )}
         </div>
       )}
@@ -263,27 +261,16 @@ export function SettingsOverlay({
               <button
                 className="flex flex-1 flex-col items-center justify-center gap-1 border border-dashed border-edge px-4 py-3 text-sm text-ink-muted transition-all hover:border-divider hover:bg-field hover:text-ink disabled:opacity-50 group rounded-xl"
                 onClick={() => reindexFileInputRef.current?.click()}
-                disabled={isReindexing || isAnswering}
+                disabled={isReindexing || isAddingDocs || isAnswering}
               >
-                <FileUp className="h-5 w-5 group-hover:text-ink" />
-                <span className="font-medium">
-                  {pendingReindexFiles.length ? `${pendingReindexFiles.length} PDF(s)` : strings.addPdfs}
-                </span>
+                {isAddingDocs ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileUp className="h-5 w-5 group-hover:text-ink" />}
+                <span className="font-medium">{strings.addPdfs}</span>
               </button>
-              {pendingReindexFiles.length > 0 && (
-                <button
-                  className="px-3 text-ink-muted transition-all hover:bg-danger/10 hover:text-danger rounded-xl"
-                  onClick={() => { setPendingReindexFiles([]); if (reindexFileInputRef.current) reindexFileInputRef.current.value = ''; }}
-                  title={strings.remove}
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              )}
             </div>
             <button
               className="flex items-center justify-center gap-2 bg-field border border-edge text-ink px-6 py-3 text-sm font-semibold hover:bg-surface hover:border-divider disabled:opacity-50 sm:min-w-[10rem] rounded-xl transition-all"
               onClick={handleReindex}
-              disabled={isReindexing || isAnswering}
+              disabled={isReindexing || isAddingDocs || isAnswering}
             >
               {isReindexing ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
               {strings.reindexBtn}

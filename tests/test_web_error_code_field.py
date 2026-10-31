@@ -122,9 +122,9 @@ class TestFilenames:
         assert response.json["code"] == "invalid_filename"
         assert response.json["error"] == "Archivo inválido"
 
-    def test_reindex_with_an_invalid_upload_name(self, client):
+    def test_upload_with_an_invalid_name(self, client):
         response = client.post(
-            "/api/reindex", data={"file": (io.BytesIO(b"x"), "notes.txt")}
+            "/api/docs", data={"file": (io.BytesIO(b"x"), "notes.txt")}
         )
 
         assert response.status_code == 400
@@ -149,6 +149,33 @@ class TestOperationFailures:
 
         assert response.status_code == 500
         assert response.json["code"] == "reindex_failed"
+        assert response.json["error"] == "boom"
+
+    def test_an_upload_without_files(self, client):
+        response = client.post("/api/docs", data={}, content_type="multipart/form-data")
+
+        assert response.status_code == 400
+        assert response.json["code"] == "no_file"
+
+    def test_an_upload_while_indexing_runs(self, client, monkeypatch):
+        monkeypatch.setitem(web._state, "indexing", True)
+
+        response = client.post(
+            "/api/docs", data={"file": (io.BytesIO(b"x"), "a.pdf")}, content_type="multipart/form-data"
+        )
+
+        assert response.status_code == 409
+        assert response.json["code"] == "indexing_in_progress"
+
+    def test_an_upload_that_raises_is_upload_failed(self, client, monkeypatch):
+        monkeypatch.setattr(web, "_get_collection", _boom)
+
+        response = client.post(
+            "/api/docs", data={"file": (io.BytesIO(b"x"), "a.pdf")}, content_type="multipart/form-data"
+        )
+
+        assert response.status_code == 500
+        assert response.json["code"] == "upload_failed"
         assert response.json["error"] == "boom"
 
     def test_ollama_start_that_raises(self, client, monkeypatch):

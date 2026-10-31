@@ -1128,9 +1128,11 @@ def api_study():
 
 @app.route("/api/reindex", methods=["POST"])
 def api_reindex():
-    """Re-index everything with the current pipeline settings.
+    """Clear the store and re-index every document with the current pipeline settings.
 
-    Accepts optional PDF files to add before re-indexing.
+    This is the explicit full rebuild (a pipeline setting changed, or a failed
+    run is being retried). Adding documents goes through ``POST /api/docs``,
+    which leaves what is already indexed alone.
     """
     if not _try_begin_indexing():
         # Same answer as before #394: a reindex already running is the
@@ -1145,22 +1147,6 @@ def api_reindex():
         ), 202
 
     try:
-        files = request.files.getlist("file") or []
-        uploads = []
-        for f in files:
-            # Validate every name before writing anything: an invalid one must
-            # not leave the earlier files of the same request on disk.
-            filename = _safe_pdf_basename(f.filename) if f else ""
-            if not filename:
-                _release_indexing()
-                return jsonify({"ok": False, "code": "invalid_filename", "error": "Nombre de archivo inválido"}), 400
-            uploads.append((f, filename))
-
-        folder = os.path.abspath(rag_engine.CARPETA_DOCS)
-        for f, filename in uploads:
-            os.makedirs(folder, exist_ok=True)
-            f.save(os.path.join(folder, filename))
-
         _reset_db()
         # Reset failure and empty state to allow new indexing
         _state["indexing_failed"] = False
@@ -1181,6 +1167,116 @@ def api_reindex():
             "progress": _state["indexing_progress"],
         }
     ), 202
+
+
+@app.route("/api/docs", methods=["POST"])
+def api_add_docs():
+    """Save the uploaded PDFs and index only them, leaving the store as it is.
+
+    A file whose name is already indexed replaces that document: the PDF on
+    disk is overwritten, so keeping the old chunks would leave the store
+    answering from text the folder no longer holds. Indexing is synchronous;
+    the response lists the files that did not land in ``failed_files`` rather
+    than reporting them as added (issue #323).
+    """
+    # The slot, not the lock, serializes this against every other index
+    # mutation and any store switch; holding the lock for the whole embedding
+    # pass would stall every request that needs the collection.
+    if not _try_begin_indexing():
+        return jsonify(
+            {"ok": False, "code": "indexing_in_progress", "error": "indexing_in_progress"}
+        ), 409
+    try:
+        files = request.files.getlist("file") or []
+        if not files:
+            return jsonify(
+                {"ok": False, "code": "no_file", "error": "No se envió ningún archivo"}
+            ), 400
+        uploads = []
+        for f in files:
+            # Validate every name before writing anything: an invalid one must
+            # not leave the earlier files of the same request on disk.
+            filename = _safe_pdf_basename(f.filename) if f else ""
+            if not filename:
+                return jsonify(
+                    {"ok": False, "code": "invalid_filename", "error": "Nombre de archivo inválido"}
+                ), 400
+            uploads.append((f, filename))
+
+        # Resolve the folder and the store once: reading them per file is how a
+        # store switch used to save a PDF into one store and index another.
+        with _indexing_lock:
+            folder = os.path.abspath(rag_engine.CARPETA_DOCS)
+            coll = _get_collection()
+        os.makedirs(folder, exist_ok=True)
+        saved = []
+        for f, filename in uploads:
+            f.save(os.path.join(folder, filename))
+            if filename not in saved:
+                saved.append(filename)
+
+        failed_files = []
+
+        def _on_file_failed(filename, _error):
+            failed_files.append(filename)
+
+        failure = None
+        try:
+            # Chunk ids are positional ({source}_pag{p}_chunk{c}), so re-adding
+            # a replaced file without removing its old chunks trips the store's
+            # duplicate-id guard (issue #324).
+            for filename in saved:
+                coll.delete_source(filename)
+            rag_engine.indexar_documentos(
+                folder, coll, solo_archivos=saved, silent=True, on_file_failed=_on_file_failed
+            )
+        except Exception as e:
+            failure = e
+
+        # From the first delete on the store has changed whatever happened
+        # next, so every answer below carries its current state: the UI would
+        # otherwise keep listing a replaced document whose chunks are gone.
+        try:
+            documents = rag_engine.obtener_documentos_indexados(coll)
+        except Exception:
+            # Unknown is not empty: the answer leaves `documents` out so the UI
+            # keeps the list it has instead of blanking a store that has files.
+            documents = None
+        if failure is not None:
+            # An indexer that raised (every file failed, or something broke
+            # mid-run) cannot name the files it lost: what is not in the store
+            # is what did not land, and with the store unreadable, all of them.
+            failed_files = [
+                name for name in saved if documents is None or name not in documents
+            ]
+        landed = [name for name in saved if name not in failed_files]
+        # Merge into the earlier warning instead of replacing it: files from a
+        # previous run that are still missing stay reported (issue #323).
+        previous = [n for n in _state["indexing_failed_files"] if n not in landed]
+        _state["indexing_failed_files"] = previous + [n for n in failed_files if n not in previous]
+        if coll.count() > 0:
+            _state["indexing_done_empty"] = False
+        payload = {
+            "ok": not failed_files and failure is None,
+            "files": landed,
+            "failed_files": failed_files,
+            "total_fragments": coll.count(),
+        }
+        if documents is not None:
+            payload["documents"] = documents
+        if failure is not None:
+            payload["code"] = "upload_failed"
+            payload["error"] = str(failure)
+        elif failed_files:
+            payload["code"] = "upload_index_failed"
+            payload["error"] = (
+                f"{len(failed_files)} fichero(s) no se pudieron indexar: {', '.join(failed_files)}"
+            )
+        return jsonify(payload), (500 if "code" in payload else 200)
+    except Exception as e:
+        return jsonify({"ok": False, "code": "upload_failed", "error": str(e)}), 500
+    finally:
+        _release_indexing()
 
 
 _SETTINGS_MAP = {
