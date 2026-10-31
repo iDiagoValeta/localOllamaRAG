@@ -402,9 +402,35 @@ class TestSurvivingWhatItDiagnoses:
             stderr = ""
 
         monkeypatch.setattr(setup.subprocess, "run", lambda *a, **k: _Silent())
+        monkeypatch.setattr(setup, "_isolated_mineru_version", lambda: setup.MINERU_VERSION)
         passed, message = setup._check_mineru_binary()
         assert passed
         assert "printed nothing" in message
+
+    def _runnable_binary(self, monkeypatch, tmp_path, version):
+        """A real executable that reports ``version``, so the check runs unstubbed."""
+        binary = tmp_path / "bin" / "mineru"
+        binary.parent.mkdir(parents=True)
+        binary.write_text(f"#!/bin/sh\necho 'mineru, version {version}'\n", encoding="utf-8")
+        binary.chmod(0o755)
+        monkeypatch.setattr(setup, "ISOLATED_VENV", tmp_path)
+
+    def test_the_pinned_mineru_version_passes(self, monkeypatch, tmp_path):
+        self._runnable_binary(monkeypatch, tmp_path, setup.MINERU_VERSION)
+        monkeypatch.setattr(setup, "_isolated_mineru_version", lambda: setup.MINERU_VERSION)
+        passed, message = setup._check_mineru_binary()
+        assert passed
+        assert setup.MINERU_VERSION in message
+
+    def test_another_mineru_version_fails_with_the_rebuild_command(self, monkeypatch, tmp_path):
+        """Issue #573: a fresh install that resolved MinerU 4.1.3 must say how to fix it."""
+        self._runnable_binary(monkeypatch, tmp_path, "4.1.3")
+        monkeypatch.setattr(setup, "_isolated_mineru_version", lambda: "4.1.3")
+        passed, message = setup._check_mineru_binary()
+        assert not passed
+        assert "4.1.3" in message
+        assert setup.MINERU_VERSION in message
+        assert "rm -rf .venv-mineru && python tools/setup_environments.py" in message
 
     def test_a_binary_that_exits_nonzero_is_not_present(self, monkeypatch, tmp_path):
         """Issue #385: an existing file that cannot run was reported as MinerU."""
