@@ -79,7 +79,9 @@ Tests are not consumers, as everywhere else in this file. Paths outside
 ``/api/`` (the page, the bundle, the logos) are requested by the browser
 itself, not by a string in the frontend, so they are not checked. The match
 is by path only, not by HTTP method: ``GET`` and ``POST`` on one path are kept
-alive by either caller.
+alive by either caller. The ``api`` object in ``App.tsx`` is where those strings
+live, so a member of it that no ``api.<name>`` call reaches is reported too:
+its URL would otherwise vouch for a route nobody requests.
 
 Modules get the same treatment: a product module no consumer imports is dead
 unless it is an entry point (``__init__.py``, ``__main__.py``, a
@@ -346,8 +348,12 @@ _FRONTEND_SRC = _REPO_ROOT / "rag" / "web" / "frontend" / "src"
 _HEADLESS = _REPO_ROOT / "rag" / "headless"
 
 
+_ROUTE_DECORATORS = frozenset({"route", "get", "post", "put", "delete", "patch"})
+
+
 def _api_routes(source: str) -> List[str]:
-    """Every ``/api/...`` path registered with ``@<app>.route("...")``."""
+    """Every ``/api/...`` path registered with ``@<app>.route("...")`` or the
+    method shortcuts ``@<app>.get/post/put/delete/patch("...")``."""
     routes = []
     for node in ast.walk(ast.parse(source)):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -356,7 +362,7 @@ def _api_routes(source: str) -> List[str]:
             if (
                 isinstance(decorator, ast.Call)
                 and isinstance(decorator.func, ast.Attribute)
-                and decorator.func.attr == "route"
+                and decorator.func.attr in _ROUTE_DECORATORS
                 and decorator.args
                 and isinstance(decorator.args[0], ast.Constant)
                 and isinstance(decorator.args[0].value, str)
@@ -398,13 +404,29 @@ def _python_strings(source: str) -> str:
     )
 
 
-def _route_consumer_text() -> str:
-    """The code the web routes can be requested from: frontend plus headless."""
-    parts = [
+def _all_frontend_code() -> str:
+    return "\n".join(
         _frontend_code(path.read_text(encoding="utf-8"))
         for path in sorted(_FRONTEND_SRC.rglob("*"))
         if path.suffix in {".ts", ".tsx"}
-    ]
+    )
+
+
+def _uncalled_api_members(code: str) -> List[str]:
+    """Members of the frontend's ``const api = {...}`` that no ``api.<name>`` reaches.
+
+    A declared member carries a URL string, so left alone it keeps a route
+    "requested" long after the UI stopped calling it (issue #557). knip does
+    not flag unused object members, hence this check.
+    """
+    body = re.search(r"(?ms)^const api = \{\n(.*?)^\};", code)
+    members = re.findall(r"(?m)^  (\w+):", body.group(1)) if body else []
+    return [name for name in members if not re.search(rf"\bapi\.{name}\b", code)]
+
+
+def _route_consumer_text() -> str:
+    """The code the web routes can be requested from: frontend plus headless."""
+    parts = [_all_frontend_code()]
     parts += [
         _python_strings(path.read_text(encoding="utf-8"))
         for path in sorted(_HEADLESS.glob("*.py"))
@@ -533,6 +555,17 @@ def test_the_route_consumers_are_not_accidentally_empty():
     """Guards the guard: no routes or no consumer text would make the next test vacuous."""
     assert len(_api_routes(_WEB_APP.read_text(encoding="utf-8"))) > 10
     assert "/api/init" in _route_consumer_text()
+
+
+def test_every_api_member_of_the_frontend_is_called():
+    code = _all_frontend_code()
+    assert "init" in re.findall(r"(?m)^  (\w+):", code), "the api object was not found"
+    uncalled = _uncalled_api_members(code)
+    assert not uncalled, (
+        "Members of the `api` object in App.tsx that no `api.<name>` call reaches:\n"
+        + "\n".join(f"  api.{name}" for name in uncalled)
+        + "\nDelete the member: its URL would keep a dead route looking requested."
+    )
 
 
 def test_no_web_route_is_requested_by_nothing():
@@ -700,6 +733,41 @@ def test_a_route_nothing_requests_is_reported():
     )
     assert _api_routes(app) == ["/api/used", "/api/gone", "/api/docs/<path:name>"]
     assert _unrequested_routes(_api_routes(app), frontend) == ["/api/gone"]
+
+
+def test_an_api_member_nothing_calls_is_reported():
+    """``stats`` is declared and never called; ``init`` is called, and a comment
+    mentioning ``api.stats`` does not count as a call."""
+    code = _frontend_code(
+        "const API_BASE = '/api';\n"
+        "const api = {\n"
+        "  init: () =>\n"
+        "    fetch(`${API_BASE}/init`),\n"
+        "\n"
+        "  stats: () =>\n"
+        "    fetch(`${API_BASE}/stats`),\n"
+        "};\n"
+        "// api.stats used to be shown here\n"
+        "await api.init();\n"
+    )
+    assert _uncalled_api_members(code) == ["stats"]
+
+
+def test_method_shortcut_decorators_register_routes_too():
+    """``@app.get("/api/x")`` is a route like ``@app.route``; a bare ``@cache``
+    or a non-/api path is not one."""
+    app = (
+        '@app.get("/api/a")\n'
+        "def a(): ...\n"
+        '@bp.post("/api/b")\n'
+        "def b(): ...\n"
+        '@app.delete("/page")\n'
+        "def c(): ...\n"
+        "@cache\n"
+        "def d(): ...\n"
+    )
+    assert _api_routes(app) == ["/api/a", "/api/b"]
+    assert _unrequested_routes(_api_routes(app), "fetch('/api/a')") == ["/api/b"]
 
 
 def test_a_fixed_route_is_not_kept_alive_by_its_parameterised_sibling():
