@@ -67,6 +67,20 @@ construction, and shrinking the list is a separate change:
   whitelisted "just in case" is how the check stops meaning anything, so the
   staleness test fails when an entry stops corresponding to a real finding.
 
+## Flask routes
+
+The registrar exemption above stops a handler from being reported as a
+*symbol*, and with it stops anyone noticing that no client asks for the route
+(issue #557: ``GET /api/stats``, ``/api/docs`` and ``/api/topics`` survived
+that way). Routes get their own check: every ``/api/...`` route of
+``rag/web/app.py`` must be requested by a string in the frontend sources
+(``rag/web/frontend/src``) or in the headless service (``rag/headless``).
+Tests are not consumers, as everywhere else in this file. Paths outside
+``/api/`` (the page, the bundle, the logos) are requested by the browser
+itself, not by a string in the frontend, so they are not checked. The match
+is by path only, not by HTTP method: ``GET`` and ``POST`` on one path are kept
+alive by either caller.
+
 Modules get the same treatment: a product module no consumer imports is dead
 unless it is an entry point (``__init__.py``, ``__main__.py``, a
 ``if __name__ == "__main__"`` block, or a path named by a workflow, a
@@ -84,6 +98,7 @@ that today's tree happens to be clean.
 import ast
 import io
 import os
+import re
 import sys
 import tokenize
 from pathlib import Path
@@ -326,6 +341,96 @@ def _facade_reexports(source: str) -> Set[str]:
     return imported - used
 
 
+_WEB_APP = _REPO_ROOT / "rag" / "web" / "app.py"
+_FRONTEND_SRC = _REPO_ROOT / "rag" / "web" / "frontend" / "src"
+_HEADLESS = _REPO_ROOT / "rag" / "headless"
+
+
+def _api_routes(source: str) -> List[str]:
+    """Every ``/api/...`` path registered with ``@<app>.route("...")``."""
+    routes = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for decorator in node.decorator_list:
+            if (
+                isinstance(decorator, ast.Call)
+                and isinstance(decorator.func, ast.Attribute)
+                and decorator.func.attr == "route"
+                and decorator.args
+                and isinstance(decorator.args[0], ast.Constant)
+                and isinstance(decorator.args[0].value, str)
+                and decorator.args[0].value.startswith("/api/")
+            ):
+                routes.append(decorator.args[0].value)
+    return routes
+
+
+def _frontend_code(source: str) -> str:
+    """A TypeScript source with comments removed and ``${API_BASE}`` resolved.
+
+    The frontend writes ``fetch(`${API_BASE}/init`)``, so the path a route is
+    matched against only exists once the constant is substituted. Comments are
+    dropped for the reason ``tokenize`` drops them above: ``// /api/init
+    answers ok: false`` discusses a route, it does not request it.
+    """
+    source = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+    source = re.sub(r"(?m)(^|\s)//.*$", r"\1", source)
+    base = re.search(r"const\s+API_BASE\s*=\s*['\"]([^'\"]*)['\"]", source)
+    return source.replace("${API_BASE}", base.group(1)) if base else source
+
+
+def _python_strings(source: str) -> str:
+    """The string literals of a Python source, docstrings excluded."""
+    tree = ast.parse(source)
+    docstrings = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            first = node.body[0] if node.body else None
+            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
+                docstrings.add(id(first.value))
+    return "\n".join(
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and id(node) not in docstrings
+    )
+
+
+def _route_consumer_text() -> str:
+    """The code the web routes can be requested from: frontend plus headless."""
+    parts = [
+        _frontend_code(path.read_text(encoding="utf-8"))
+        for path in sorted(_FRONTEND_SRC.rglob("*"))
+        if path.suffix in {".ts", ".tsx"}
+    ]
+    parts += [
+        _python_strings(path.read_text(encoding="utf-8"))
+        for path in sorted(_HEADLESS.glob("*.py"))
+    ]
+    return "\n".join(parts)
+
+
+def _unrequested_routes(routes: Iterable[str], consumer_text: str) -> List[str]:
+    """Routes whose path no string in ``consumer_text`` requests.
+
+    A parameterised route (``/api/docs/<path:filename>``) is requested by any
+    string that starts with its static part, because the frontend appends the
+    value (``/api/docs/${encodeURIComponent(name)}``). A fixed route is
+    requested by its exact path: ``/api/docs`` must not be rescued by the
+    ``/api/docs/...`` URL of its parameterised sibling, so the character after
+    it cannot continue the path.
+    """
+    unrequested = []
+    for route in routes:
+        static, parameterised, _ = route.partition("<")
+        tail = "" if parameterised else r"(?![\w/-])"
+        if not re.search(re.escape(static) + tail, consumer_text):
+            unrequested.append(route)
+    return unrequested
+
+
 def _entry_point_mentions() -> Tuple[str, str]:
     """Names that make a module an entry point: (README+workflows, specs).
 
@@ -421,6 +526,24 @@ def test_no_product_symbol_is_referenced_only_by_its_own_definition(analysis):
         )
         + "\nDelete it, or add \"path:symbol\" to _WHITELIST at the top of "
         "tests/unit/test_no_dead_code.py with the reason it must stay."
+    )
+
+
+def test_the_route_consumers_are_not_accidentally_empty():
+    """Guards the guard: no routes or no consumer text would make the next test vacuous."""
+    assert len(_api_routes(_WEB_APP.read_text(encoding="utf-8"))) > 10
+    assert "/api/init" in _route_consumer_text()
+
+
+def test_no_web_route_is_requested_by_nothing():
+    unrequested = _unrequested_routes(
+        _api_routes(_WEB_APP.read_text(encoding="utf-8")), _route_consumer_text()
+    )
+    assert not unrequested, (
+        "Routes of rag/web/app.py that neither the frontend nor the headless service "
+        "request (tests do not count as consumers):\n"
+        + "\n".join(f"  {route}" for route in unrequested)
+        + "\nDelete the route, or make the caller request it."
     )
 
 
@@ -554,3 +677,37 @@ def test_a_name_only_the_facade_reexports_is_reported():
     )
     found = _unused_symbols(ast.parse(product), used)
     assert [name for name, _ in found] == ["evaluar"], found
+
+
+def test_a_route_nothing_requests_is_reported():
+    """Only ``/api/gone``: ``/api/used`` is built through ``API_BASE``, the
+    parameterised route by its static prefix, and the page is not an API route."""
+    app = (
+        '@app.route("/")\n'
+        "def index(): ...\n"
+        '@app.route("/api/used", methods=["GET"])\n'
+        "def used(): ...\n"
+        '@app.route("/api/gone", methods=["GET"])\n'
+        "def gone(): ...\n"
+        '@app.route("/api/docs/<path:name>", methods=["DELETE"])\n'
+        "def delete(name): ...\n"
+    )
+    frontend = _frontend_code(
+        "const API_BASE = '/api';\n"
+        "// /api/gone is only discussed here\n"
+        "fetch(`${API_BASE}/used`);\n"
+        "fetch(`${API_BASE}/docs/${encodeURIComponent(name)}`);\n"
+    )
+    assert _api_routes(app) == ["/api/used", "/api/gone", "/api/docs/<path:name>"]
+    assert _unrequested_routes(_api_routes(app), frontend) == ["/api/gone"]
+
+
+def test_a_fixed_route_is_not_kept_alive_by_its_parameterised_sibling():
+    """``/api/docs`` and ``/api/docs/<name>`` are different URLs; a client of the
+    second says nothing about the first, and a headless string counts like the
+    frontend's while its docstring does not."""
+    frontend = "fetch('/api/docs/' + name);"
+    assert _unrequested_routes(["/api/docs"], frontend) == ["/api/docs"]
+    assert _unrequested_routes(["/api/docs"], "fetch('/api/docs?x=1');") == []
+    headless = _python_strings('"""Mentions /api/old."""\nURL = "/api/new"\n')
+    assert _unrequested_routes(["/api/old", "/api/new"], headless) == ["/api/old"]
