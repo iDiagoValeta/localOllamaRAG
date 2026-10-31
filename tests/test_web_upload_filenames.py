@@ -1,10 +1,10 @@
-"""Reindex keeps the client's filename, within the same rules as DELETE/GET.
+"""Upload keeps the client's filename, within the same rules as DELETE/GET.
 
 Issues #308 and #309. ``werkzeug.utils.secure_filename`` transliterates or drops
 everything outside ASCII, so ``documentación.pdf`` arrived as
 ``documentacion.pdf`` and ``报告.pdf`` lost its stem entirely. Uploads now go
 through ``_safe_pdf_basename``, the validator the delete/serve routes already
-used: Unicode survives, path components do not. ``/api/reindex`` is the one
+used: Unicode survives, path components do not. ``POST /api/docs`` is the
 route the UI adds PDFs through.
 
 Doubles the engine: what is under test is the name that reaches disk and the
@@ -43,65 +43,67 @@ def _pdf(filename):
     return {"file": (io.BytesIO(b"%PDF-1.4\n"), filename)}
 
 
+class _Store:
+    """Vector-store double: the name tests never look at its contents."""
+
+    def delete_source(self, _source):
+        return 0
+
+    def count(self):
+        return 0
+
+
 @pytest.fixture
-def no_reindex(monkeypatch):
-    """Record whether a re-index would have started."""
+def no_index(monkeypatch):
+    """Record whether an indexing pass would have started."""
     started = []
-    monkeypatch.setattr(web, "_reset_db", lambda: started.append(1))
-    monkeypatch.setattr(web, "_ensure_indexed", lambda: started.append(1))
+    monkeypatch.setattr(web, "_get_collection", lambda: _Store())
+    monkeypatch.setattr(
+        web.rag_engine, "indexar_documentos", lambda *a, **k: started.append(1) or 0
+    )
+    monkeypatch.setattr(web.rag_engine, "obtener_documentos_indexados", lambda _coll: [])
     return started
 
 
-def _reindex(client, data):
-    return client.post("/api/reindex", data=data, content_type="multipart/form-data")
+def _upload(client, data):
+    return client.post("/api/docs", data=data, content_type="multipart/form-data")
 
 
-def test_reindex_keeps_a_non_latin_name(client, docs_folder, monkeypatch):
-    monkeypatch.setattr(web, "_reset_db", lambda: None)
-    monkeypatch.setattr(web, "_ensure_indexed", lambda: None)
+def test_upload_keeps_a_non_latin_name(client, docs_folder, no_index):
+    response = _upload(client, _pdf("报告.pdf"))
 
-    response = client.post(
-        "/api/reindex", data=_pdf("报告.pdf"), content_type="multipart/form-data"
-    )
-
-    assert response.status_code == 202
+    assert response.status_code == 200
     assert (docs_folder / "报告.pdf").is_file()
 
 
-def test_reindex_rejects_path_components(client, docs_folder, monkeypatch):
-    reset = []
-    monkeypatch.setattr(web, "_reset_db", lambda: reset.append(1))
-    monkeypatch.setattr(web, "_ensure_indexed", lambda: reset.append(1))
-
-    response = client.post(
-        "/api/reindex", data=_pdf("../x.pdf"), content_type="multipart/form-data"
-    )
+def test_upload_rejects_path_components(client, docs_folder, no_index):
+    response = _upload(client, _pdf("../x.pdf"))
 
     assert response.status_code == 400
     assert response.json["error"] == "Nombre de archivo inválido"
-    assert reset == [], "an invalid name must not start a re-index"
+    assert no_index == [], "an invalid name must not start indexing"
 
 
-def test_reindex_keeps_a_latin_accented_name(client, docs_folder, no_reindex):
-    response = _reindex(client, _pdf("documentación.pdf"))
+def test_upload_keeps_a_latin_accented_name(client, docs_folder, no_index):
+    response = _upload(client, _pdf("documentación.pdf"))
 
-    assert response.status_code == 202
+    assert response.status_code == 200
     assert (docs_folder / "documentación.pdf").is_file()
 
 
-def test_reindex_rejects_a_file_that_is_not_a_pdf(client, docs_folder, no_reindex):
-    response = _reindex(client, _pdf("notes.txt"))
+def test_upload_rejects_a_file_that_is_not_a_pdf(client, docs_folder, no_index):
+    response = _upload(client, _pdf("notes.txt"))
 
     assert response.status_code == 400
     assert response.json["error"] == "Nombre de archivo inválido"
     assert not docs_folder.exists() or list(docs_folder.iterdir()) == []
-    assert no_reindex == []
+    assert no_index == []
 
 
-def test_reindex_validates_every_name_before_writing_any(client, docs_folder, no_reindex):
+def test_upload_validates_every_name_before_writing_any(client, docs_folder, no_index):
     # Saving the valid half first would leave a file behind for a request the
     # server rejected as a whole.
-    response = _reindex(
+    response = _upload(
         client,
         {"file": [
             (io.BytesIO(b"%PDF-1.4\n"), "valid.pdf"),
@@ -111,4 +113,4 @@ def test_reindex_validates_every_name_before_writing_any(client, docs_folder, no
 
     assert response.status_code == 400
     assert not docs_folder.exists() or list(docs_folder.iterdir()) == []
-    assert no_reindex == []
+    assert no_index == []

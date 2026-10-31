@@ -122,10 +122,15 @@ const api = {
       body: JSON.stringify(roles),
     }).then(r => r.json()),
 
-  reindex: (files?: File[]) => {
+  reindex: () =>
+    fetch(`${API_BASE}/reindex`, { method: 'POST' }).then(r => r.json()),
+
+  // Adds documents without touching what is already indexed; the call returns
+  // once they are indexed, so no polling follows it.
+  addDocs: (files: File[]) => {
     const form = new FormData();
-    files?.forEach(f => form.append('file', f));
-    return fetch(`${API_BASE}/reindex`, { method: 'POST', body: form }).then(r => r.json());
+    files.forEach(f => form.append('file', f));
+    return fetch(`${API_BASE}/docs`, { method: 'POST', body: form }).then(r => r.json());
   },
 
   getSettings: () =>
@@ -336,7 +341,7 @@ export default function App() {
   const [initError, setInitError] = useState<string | null>(null);
   const [isReindexing, setIsReindexing] = useState(false);
   const [deletingDoc, setDeletingDoc] = useState<string | null>(null);
-  const [pendingReindexFiles, setPendingReindexFiles] = useState<File[]>([]);
+  const [isAddingDocs, setIsAddingDocs] = useState(false);
   const [theme, setThemeState] = useState<Theme>(getStoredTheme);
   const toggleTheme = useCallback(() => {
     setThemeState(prev => {
@@ -563,10 +568,8 @@ export default function App() {
     if (isReindexing || isLoading) return;
     setIsReindexing(true);
     setSettingsError(null);
-    const fileList = [...pendingReindexFiles];
-    setPendingReindexFiles([]);
     try {
-      const result = await api.reindex(fileList.length ? fileList : undefined);
+      const result = await api.reindex();
       if (result.ok && result.indexing) {
         setIndexingError(null);
         setIndexingProgress(result.progress || null);
@@ -581,9 +584,33 @@ export default function App() {
       setSettingsError(T.reindexConnError);
     } finally {
       setIsReindexing(false);
+    }
+  }, [isReindexing, isLoading, lang]);
+
+  // ---- Add documents (indexes only the new files) ----
+  const handleAddDocs = useCallback(async (files: File[]) => {
+    if (isAddingDocs || isReindexing || isLoading || !files.length) return;
+    setIsAddingDocs(true);
+    setSettingsError(null);
+    try {
+      const result = await api.addDocs(files);
+      // A partial failure still changed the store: refresh the list either way.
+      if (Array.isArray(result.documents)) setDocuments(result.documents);
+      if (!result.ok) {
+        const failed: string[] = Array.isArray(result.failed_files) ? result.failed_files : [];
+        setSettingsError(
+          failed.length
+            ? fill(T.addPdfsFailed, { files: failed.join(', ') })
+            : fill(T.reindexError, { error: apiErrorText(T, result, T.unknownError) }),
+        );
+      }
+    } catch {
+      setSettingsError(T.reindexConnError);
+    } finally {
+      setIsAddingDocs(false);
       if (reindexFileInputRef.current) reindexFileInputRef.current.value = '';
     }
-  }, [isReindexing, isLoading, pendingReindexFiles, lang]);
+  }, [isAddingDocs, isReindexing, isLoading, lang]);
 
   // ---- Delete document ----
   const handleDeleteDoc = useCallback(async (docName: string) => {
@@ -1164,7 +1191,7 @@ export default function App() {
         accept=".pdf"
         multiple
         className="hidden"
-        onChange={(e) => { const f = e.target.files; if (f?.length) setPendingReindexFiles(Array.from(f)); }}
+        onChange={(e) => { const f = e.target.files; if (f?.length) handleAddDocs(Array.from(f)); }}
       />
 
       {/* Sidebar */}
@@ -1357,8 +1384,7 @@ export default function App() {
             isReindexing={isReindexing}
             isAnswering={isLoading}
             indexingProgress={indexingProgress}
-            pendingReindexFiles={pendingReindexFiles}
-            setPendingReindexFiles={setPendingReindexFiles}
+            isAddingDocs={isAddingDocs}
             reindexFileInputRef={reindexFileInputRef}
             handleReindex={handleReindex}
             strings={T}
