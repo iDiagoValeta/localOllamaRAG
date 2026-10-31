@@ -376,6 +376,43 @@ Of the 17 failures in `20261017T142753Z`, 9 are correct answers the grader does
 not accept (`\%`, `\,`, `^2` against `²`, unit and range variants; issue #367),
 and 2 come from MinerU dropping `code` blocks (issue #366).
 
+## Generators on Ollama 0.40.13 (issue #549, 2026-10-31)
+
+One gate invocation on `82f1c0f` against Ollama 0.40.13, run in the
+`ollama/ollama:0.40.13` container because the host's 0.33.2 cannot load the
+newer candidates and upgrading it needs root. Same index, 180 s budget,
+`AUX_MODEL` = `Ling-3.0-tiny`, RECOMP on (the default when it ran, before
+#571 turned it off), embeddinggemma-2 on the GPU with `--mmproj`. Retrieval is
+shared, so every model answered from the same evidence.
+
+| Model | Answered | Overall | tokens/s | tokens/answer | s/answer | decode s/answer | Budget hit | Infra | Placement | Run |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `gemma4:e4b` *(default)* | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 134.9 | 28 *(of 124)* | 8.75 *(of 124)* | 0.20 | 0 | 0 | GPU | `20261031T204122Z` |
+| `nemotron-3.5-bolt:e4b` | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 94.2 | 25 *(of 124)* | 13.20 *(of 124)* | 0.24 | 0 | 0 | GPU | `20261031T204122Z` |
+| `qwen3.5:9b` | 127 / 136 (93.4%) | 145 / 156 (92.9%) | 18.8 | 55 *(of 124)* | 12.57 *(of 124)* | 2.96 | 0 | 0 | ~41% CPU (varies) | `20261031T204122Z` |
+| `qwen3.5:4b` | 126 / 136 (92.6%) | 144 / 156 (92.3%) | 71.1 | 65 *(of 124)* | 8.46 *(of 124)* | 0.94 | 0 | 0 | GPU | `20261031T204122Z` |
+
+The runtime is the gain, not a new generator. `gemma4:e4b` scores what it
+scored on 0.33.2 under the same configuration (`20261031T114027Z`, 148/156;
+two cases up, `llama-65b-hellaswag` and `att-study-outline-ca`, two down,
+`dpo-no-sampling` and `gw-final-mass`, inside the noise measured for #571)
+and decodes at 134.9 tokens/s against 56.7. s/answer barely moves (8.75
+against 9.48) because RECOMP's Ling call dominates it; with RECOMP off the
+generator's share is most of the wait, so the faster decode is what an answer
+now feels.
+
+`nemotron-3.5-bolt:e4b`, NVIDIA's post-training of the default, ties it on
+answers (it trades `dpo-no-sampling` for `gaudi-dieta`) and is slower on every
+speed column, so it does not replace it. Both `qwen3.5` sizes score below the
+default and answer at twice its length; the 9B does not fit beside the
+reranker and spills to the CPU. None earned a place, and all three were
+deleted after the run.
+
+Not measured: the `qwen3.5` `-mtp` variants (multi-token prediction changes
+speed, not answers, and neither size is competitive on answers), and
+`bonsai-2:4b`, whose download failed twice with a TLS certificate error from
+the registry's storage host.
+
 ## Lite profile (4 GB of VRAM)
 
 Issue #292. Measured on the `rag-lite` branch with `MONKEYGRAB_PROFILE=lite`, so these rows differ from the table
