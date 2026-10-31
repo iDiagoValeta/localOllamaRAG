@@ -1215,36 +1215,56 @@ def api_add_docs():
             if filename not in saved:
                 saved.append(filename)
 
-        # Chunk ids are positional ({source}_pag{p}_chunk{c}), so re-adding a
-        # replaced file without removing its old chunks trips the store's
-        # duplicate-id guard (issue #324).
-        for filename in saved:
-            coll.delete_source(filename)
-
         failed_files = []
 
         def _on_file_failed(filename, _error):
             failed_files.append(filename)
 
-        rag_engine.indexar_documentos(
-            folder, coll, solo_archivos=saved, silent=True, on_file_failed=_on_file_failed
-        )
-        _state["indexing_failed_files"] = failed_files
+        failure = None
+        try:
+            # Chunk ids are positional ({source}_pag{p}_chunk{c}), so re-adding
+            # a replaced file without removing its old chunks trips the store's
+            # duplicate-id guard (issue #324).
+            for filename in saved:
+                coll.delete_source(filename)
+            rag_engine.indexar_documentos(
+                folder, coll, solo_archivos=saved, silent=True, on_file_failed=_on_file_failed
+            )
+        except Exception as e:
+            failure = e
+
+        # From the first delete on the store has changed whatever happened
+        # next, so every answer below carries its current state: the UI would
+        # otherwise keep listing a replaced document whose chunks are gone.
+        documents = rag_engine.obtener_documentos_indexados(coll)
+        if failure is not None:
+            # An indexer that raised (every file failed, or something broke
+            # mid-run) cannot name the files it lost: what is not in the store
+            # is what did not land.
+            failed_files = [name for name in saved if name not in documents]
+        landed = [name for name in saved if name not in failed_files]
+        # Merge into the earlier warning instead of replacing it: files from a
+        # previous run that are still missing stay reported (issue #323).
+        previous = [n for n in _state["indexing_failed_files"] if n not in landed]
+        _state["indexing_failed_files"] = previous + [n for n in failed_files if n not in previous]
         if coll.count() > 0:
             _state["indexing_done_empty"] = False
         payload = {
-            "ok": not failed_files,
-            "files": [name for name in saved if name not in failed_files],
+            "ok": not failed_files and failure is None,
+            "files": landed,
             "failed_files": failed_files,
             "total_fragments": coll.count(),
-            "documents": rag_engine.obtener_documentos_indexados(coll),
+            "documents": documents,
         }
-        if failed_files:
+        if failure is not None:
+            payload["code"] = "upload_failed"
+            payload["error"] = str(failure)
+        elif failed_files:
             payload["code"] = "upload_index_failed"
             payload["error"] = (
                 f"{len(failed_files)} fichero(s) no se pudieron indexar: {', '.join(failed_files)}"
             )
-        return jsonify(payload), (500 if failed_files else 200)
+        return jsonify(payload), (500 if "code" in payload else 200)
     except Exception as e:
         return jsonify({"ok": False, "code": "upload_failed", "error": str(e)}), 500
     finally:

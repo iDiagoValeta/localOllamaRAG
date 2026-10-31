@@ -150,6 +150,70 @@ def test_a_file_that_did_not_index_is_reported_not_listed_as_added(client, monke
     assert web._state["indexing_failed_files"] == ["bad.pdf"]
 
 
+def test_an_indexer_that_fails_every_file_still_reports_the_store_it_left(client, monkeypatch):
+    """The replaced document's chunks are gone, so the answer must not list it."""
+    store = _FakeStore({"report.pdf": 5, "other.pdf": 3})
+    _wire(monkeypatch, store, failed=["report.pdf"])
+
+    def _all_fail(folder, coll, solo_archivos=None, silent=False, **kwargs):
+        for name in solo_archivos:
+            kwargs["on_file_failed"](name, RuntimeError("extraction failed"))
+        raise RuntimeError("Indexing failed on all 1 file(s)")
+
+    monkeypatch.setattr(web.rag_engine, "indexar_documentos", _all_fail)
+
+    response = _upload(client, "report.pdf")
+
+    assert response.status_code == 500
+    assert response.json["ok"] is False
+    assert response.json["code"] == "upload_failed"
+    assert response.json["failed_files"] == ["report.pdf"]
+    assert response.json["documents"] == ["other.pdf"]
+    assert response.json["total_fragments"] == 3
+    assert web._state["indexing_failed_files"] == ["report.pdf"]
+    assert web._state["indexing"] is False
+
+
+def test_an_indexer_that_breaks_midway_reports_what_did_not_land(client, monkeypatch):
+    store = _FakeStore({"report.pdf": 5})
+    _wire(monkeypatch, store)
+
+    def _breaks(folder, coll, solo_archivos=None, silent=False, **kwargs):
+        coll.chunks["landed.pdf"] = 3
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(web.rag_engine, "indexar_documentos", _breaks)
+
+    response = _upload(client, "report.pdf", "landed.pdf")
+
+    assert response.status_code == 500
+    assert response.json["code"] == "upload_failed"
+    assert response.json["failed_files"] == ["report.pdf"]
+    assert response.json["files"] == ["landed.pdf"]
+    assert response.json["documents"] == ["landed.pdf"]
+
+
+def test_a_run_merges_into_the_earlier_failed_files_warning(client, monkeypatch):
+    monkeypatch.setitem(web._state, "indexing_failed_files", ["old.pdf", "retried.pdf"])
+    _wire(monkeypatch, _FakeStore(), failed=["bad.pdf"])
+
+    response = _upload(client, "retried.pdf", "bad.pdf")
+
+    assert response.status_code == 500
+    # old.pdf is still missing and stays reported; retried.pdf landed now.
+    assert web._state["indexing_failed_files"] == ["old.pdf", "bad.pdf"]
+
+
+def test_a_clean_upload_keeps_the_warning_about_other_files(client, monkeypatch):
+    monkeypatch.setitem(web._state, "indexing_failed_files", ["old.pdf"])
+    _wire(monkeypatch, _FakeStore())
+
+    response = _upload(client, "fresh.pdf")
+
+    assert response.status_code == 200
+    assert web._state["indexing_failed_files"] == ["old.pdf"]
+
+
 def test_the_first_upload_into_an_empty_store_clears_the_empty_marker(client, monkeypatch):
     monkeypatch.setitem(web._state, "indexing_done_empty", True)
     _wire(monkeypatch, _FakeStore())

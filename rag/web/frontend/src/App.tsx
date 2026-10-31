@@ -47,6 +47,8 @@ const ERROR_CODE_KEYS = new Map<string, keyof Strings>([
   ['indexing_in_progress', 'corpusConflict'],
   ['invalid_flag_value', 'settingsSaveError'],
   ['indexing_failed', 'indexingFailed'],
+  ['upload_failed', 'addPdfsError'],
+  ['no_file', 'addPdfsError'],
 ]);
 
 function apiErrorText(
@@ -589,7 +591,12 @@ export default function App() {
 
   // ---- Add documents (indexes only the new files) ----
   const handleAddDocs = useCallback(async (files: File[]) => {
-    if (isAddingDocs || isReindexing || isLoading || !files.length) return;
+    if (isAddingDocs || isReindexing || isLoading || !files.length) {
+      // The picker keeps the chosen files otherwise, and picking the same ones
+      // again would fire no change event.
+      if (reindexFileInputRef.current) reindexFileInputRef.current.value = '';
+      return;
+    }
     setIsAddingDocs(true);
     setSettingsError(null);
     try {
@@ -601,11 +608,11 @@ export default function App() {
         setSettingsError(
           failed.length
             ? fill(T.addPdfsFailed, { files: failed.join(', ') })
-            : fill(T.reindexError, { error: apiErrorText(T, result, T.unknownError) }),
+            : fill(T.addPdfsError, { error: apiErrorText(T, result, T.unknownError) }),
         );
       }
     } catch {
-      setSettingsError(T.reindexConnError);
+      setSettingsError(T.addPdfsConnError);
     } finally {
       setIsAddingDocs(false);
       if (reindexFileInputRef.current) reindexFileInputRef.current.value = '';
