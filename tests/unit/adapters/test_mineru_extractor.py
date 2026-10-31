@@ -271,6 +271,27 @@ def test_nonzero_exit_leads_with_the_final_exception_line(monkeypatch, tmp_path)
     assert first_line.endswith("torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 378.00 MiB.")
 
 
+def test_a_rich_error_box_puts_its_inner_message_on_the_first_line(monkeypatch, tmp_path):
+    """Issue #573: the CLI's usage error is a Rich box, whose last line is only a border."""
+    pdf = _make_pdf(tmp_path)
+    bin_path = _make_bin(tmp_path)
+    stderr = (
+        "Usage: mineru [OPTIONS] COMMAND [ARGS]...\n"
+        "Try 'mineru --help' for help.\n"
+        "╭─ Error ───────────────────────────────────────╮\n"
+        "│ No such option: -p                            │\n"
+        "╰───────────────────────────────────────────────╯\n"
+    )
+    monkeypatch.setattr(module.subprocess, "run", lambda cmd, **kw: _FakeCompleted(returncode=2, stderr=stderr))
+    extractor = MineruExtractor(mineru_bin=str(bin_path), cache_dir=str(tmp_path / "cache"))
+
+    with pytest.raises(RuntimeError) as excinfo:
+        extractor.extract(str(pdf))
+    first_line = str(excinfo.value).splitlines()[0]
+    assert "No such option: -p" in first_line
+    assert "Usage: mineru" in first_line
+
+
 def test_no_output_directory_raises(monkeypatch, tmp_path):
     pdf = _make_pdf(tmp_path)
     bin_path = _make_bin(tmp_path)

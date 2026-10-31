@@ -62,6 +62,11 @@ TORCH_PIN = "torch==2.6.0"
 TORCHVISION_PIN = "torchvision==0.21.0"
 TORCH_INDEX = "https://download.pytorch.org/whl/cu124"
 
+# Pinned because every gate row in docs/model-history.md was measured on 3.4.5,
+# the version is part of the index fingerprint (#426), and 4.x dropped the `-p`
+# option the adapter passes (#573): an unpinned install breaks every indexing run.
+MINERU_PIN = "mineru[core]==3.4.5"
+
 OLLAMA_ROLE_VARS = {
     "rag": "OLLAMA_RAG_MODEL",
     "chat": "OLLAMA_CHAT_MODEL",
@@ -128,7 +133,7 @@ def build_isolated_venv() -> None:
         [python, "-m", "pip", "install", TORCH_PIN, TORCHVISION_PIN, "--index-url", TORCH_INDEX],
         label="installing CUDA torch",
     )
-    _run([python, "-m", "pip", "install", "mineru[core]"], label="installing MinerU")
+    _run([python, "-m", "pip", "install", MINERU_PIN], label="installing MinerU")
 
 
 def _check_interpreter(venv: Path, label: str) -> Tuple[bool, str]:
