@@ -22,7 +22,7 @@ import type {
   StudyKind,
   VectorStore,
 } from './lib/types';
-import { fill, normalizeLang, STRINGS } from './lib/i18n';
+import { fill, normalizeLang, STRINGS, type Strings } from './lib/i18n';
 import { MarkdownContent } from './components/Markdown';
 import { StudyArtifactView } from './components/StudyArtifactView';
 import { ShimmerText } from './components/ShimmerText';
@@ -36,6 +36,32 @@ import { SettingsOverlay } from './components/SettingsOverlay';
 // =============================================================================
 
 const API_BASE = '/api';
+
+// Failure codes the UI says in the user's language. A route's `code` (or, for
+// the older routes, an `error` that is already a code) is the contract; the
+// `error` prose is Spanish for clients without i18n, so it is only the
+// fallback for a code not listed here (issue #555). A Map, so a code named
+// like an Object.prototype member cannot resolve to something inherited.
+const ERROR_CODE_KEYS = new Map<string, keyof Strings>([
+  ['invalid_filename', 'errInvalidFilename'],
+  ['indexing_in_progress', 'corpusConflict'],
+  ['invalid_flag_value', 'settingsSaveError'],
+  ['indexing_failed', 'indexingFailed'],
+]);
+
+function apiErrorText(
+  strings: Strings,
+  body: { code?: unknown; error?: unknown; detail?: unknown } | null | undefined,
+  fallback: string,
+): string {
+  // `detail` is raw exception text: untranslatable, but it says what went
+  // wrong, which the generic line for the same code does not.
+  if (typeof body?.detail === 'string' && body.detail) return body.detail;
+  const code = typeof body?.code === 'string' ? body.code : body?.error;
+  const key = typeof code === 'string' ? ERROR_CODE_KEYS.get(code) : undefined;
+  if (key) return strings[key];
+  return typeof body?.error === 'string' && body.error ? body.error : fallback;
+}
 
 const api = {
   init: () =>
@@ -281,6 +307,12 @@ export default function App() {
   }, []);
   const T = STRINGS[lang];
 
+  // The page language drives how a screen reader pronounces the text; the
+  // static index.html says "en" whatever the UI shows (issue #555).
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
+
   const [mode, setMode] = useState<Mode>('rag');
   const [input, setInput] = useState('');
   // Study mode. The artifact kind is a control (three fixed choices); the
@@ -473,7 +505,7 @@ export default function App() {
           // is the infinite spinner, so report the message and stop.
           setIsIndexing(false);
           setIndexingProgress(null);
-          setIndexingError(initData.error || T.indexingFailed);
+          setIndexingError(apiErrorText(T, initData, T.indexingFailed));
         }
 
         try {
@@ -518,7 +550,7 @@ export default function App() {
       setFingerprintStale(result.fingerprint_stale || false);
     } else {
       setSettings(prev => ({ ...prev, [key]: previousVal }));
-      setSettingsError(result?.error || T.settingsSaveError);
+      setSettingsError(apiErrorText(T, result, T.settingsSaveError));
     }
   }, [settings, lang]);
 
@@ -543,7 +575,7 @@ export default function App() {
       } else if (result.ok) {
         setDocuments(result.documents || []);
       } else {
-        setSettingsError(fill(T.reindexError, { error: result.error }));
+        setSettingsError(fill(T.reindexError, { error: apiErrorText(T, result, T.unknownError) }));
       }
     } catch {
       setSettingsError(T.reindexConnError);
@@ -572,7 +604,7 @@ export default function App() {
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'system',
-          content: fill(T.deleteError, { error: result.error }),
+          content: fill(T.deleteError, { error: apiErrorText(T, result, T.unknownError) }),
           mode,
           isError: true,
         }]);
@@ -1033,7 +1065,7 @@ export default function App() {
         setRetryTrigger(t => t + 1);
       } else {
         setIsIndexing(false);
-        setIndexingError(result.error || T.indexingFailed);
+        setIndexingError(apiErrorText(T, result, T.indexingFailed));
       }
     } catch {
       setIsIndexing(false);
@@ -1054,7 +1086,7 @@ export default function App() {
         setRetryTrigger(t => t + 1);
       } else {
         setIsIndexing(false);
-        setIndexingError(result.error || T.indexingFailed);
+        setIndexingError(apiErrorText(T, result, T.indexingFailed));
       }
     } catch {
       setIsIndexing(false);

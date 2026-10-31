@@ -700,7 +700,15 @@ def _api_init_logic():
 
     # If permanently failed, report error without restarting the loop
     if _state["indexing_failed"]:
-        return {"ok": False, "error": _state["indexing_error"] or "La indexación falló"}, 500
+        return {
+            "ok": False,
+            "code": "indexing_failed",
+            "error": _state["indexing_error"] or "La indexación falló",
+            # The raw exception text, absent when the run left none: it lets
+            # the UI show the cause and otherwise use its own translated line
+            # instead of the Spanish fallback above.
+            "detail": _state["indexing_error"] or None,
+        }, 500
 
     _ensure_indexed()
 
@@ -708,6 +716,7 @@ def _api_init_logic():
         resp = {
             "ok": False,
             "indexing": True,
+            "code": "indexing_in_progress",
             "error": "Indexando documentos, por favor espera...",
         }
         if _state["indexing_progress"]:
@@ -734,6 +743,7 @@ def _api_init_logic():
         return {
             "ok": False,
             "indexing": True,
+            "code": "indexing_in_progress",
             "error": "Iniciando indexación de documentos...",
             **_init_paths_payload(),
         }, 202
@@ -780,7 +790,7 @@ def api_init():
             resp, status = _api_init_logic()
             return jsonify(resp), status
         except Exception as e2:
-            return jsonify({"ok": False, "error": str(e2)}), 500
+            return jsonify({"ok": False, "code": "init_failed", "error": str(e2)}), 500
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -791,7 +801,7 @@ def api_chat():
     stream = data.get("stream", True)
 
     if not pregunta:
-        return jsonify({"ok": False, "error": "Mensaje vacío"}), 400
+        return jsonify({"ok": False, "code": "empty_message", "error": "Mensaje vacío"}), 400
 
     if stream:
 
@@ -818,7 +828,7 @@ def api_chat():
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
-    return jsonify({"ok": False, "error": "Usar stream=true"}), 400
+    return jsonify({"ok": False, "code": "stream_required", "error": "Usar stream=true"}), 400
 
 
 @app.route("/api/rag", methods=["POST"])
@@ -943,7 +953,7 @@ def api_mode():
     data = request.get_json() or {}
     mode = (data.get("mode") or "chat").lower()
     if mode not in ("chat", "rag"):
-        return jsonify({"ok": False, "error": "Modo inválido"}), 400
+        return jsonify({"ok": False, "code": "invalid_mode", "error": "Modo inválido"}), 400
     _state["mode"] = mode
     return jsonify({"ok": True, "mode": mode})
 
@@ -966,7 +976,7 @@ def api_delete_doc(filename):
     """
     filename = _safe_pdf_basename(filename)
     if not filename:
-        return jsonify({"ok": False, "error": "Nombre de archivo inválido"}), 400
+        return jsonify({"ok": False, "code": "invalid_filename", "error": "Nombre de archivo inválido"}), 400
     # The background indexer adds chunks outside _indexing_lock, so the lock
     # alone let a delete land mid-run and the indexer re-add the document it
     # removed (issue #453). Claim the turn like every other index mutation.
@@ -986,7 +996,7 @@ def api_delete_doc(filename):
                 docs = rag_engine.obtener_documentos_indexados(coll)
                 return jsonify({"ok": True, "documents": docs, "total_fragments": coll.count()})
             except Exception as e:
-                return jsonify({"ok": False, "error": str(e)}), 500
+                return jsonify({"ok": False, "code": "delete_failed", "error": str(e)}), 500
     finally:
         _release_indexing()
 
@@ -1000,7 +1010,7 @@ def api_serve_pdf(filename):
     """
     filename = _safe_pdf_basename(filename)
     if not filename:
-        return jsonify({"ok": False, "error": "Archivo inválido"}), 400
+        return jsonify({"ok": False, "code": "invalid_filename", "error": "Archivo inválido"}), 400
     docs_folder = os.path.abspath(rag_engine.CARPETA_DOCS)
     return send_from_directory(docs_folder, filename, mimetype="application/pdf")
 
@@ -1107,11 +1117,11 @@ def api_study():
         rag_engine.MalformedOutlineError,
         rag_engine.MalformedQuizError,
     ) as exc:
-        return jsonify({"ok": False, "kind": "malformed", "error": str(exc)[:400]}), 422
+        return jsonify({"ok": False, "kind": "malformed", "code": "study_malformed", "error": str(exc)[:400]}), 422
     except ValueError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify({"ok": False, "code": "study_invalid_request", "error": str(exc)}), 400
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)[:400]}), 500
+        return jsonify({"ok": False, "code": "study_failed", "error": str(exc)[:400]}), 500
 
     return jsonify({"ok": True, "kind": kind, "artifact": artifact})
 
@@ -1143,7 +1153,7 @@ def api_reindex():
             filename = _safe_pdf_basename(f.filename) if f else ""
             if not filename:
                 _release_indexing()
-                return jsonify({"ok": False, "error": "Nombre de archivo inválido"}), 400
+                return jsonify({"ok": False, "code": "invalid_filename", "error": "Nombre de archivo inválido"}), 400
             uploads.append((f, filename))
 
         folder = os.path.abspath(rag_engine.CARPETA_DOCS)
@@ -1158,7 +1168,7 @@ def api_reindex():
         _state["indexing_done_empty"] = False
     except Exception as e:
         _release_indexing()
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "code": "reindex_failed", "error": str(e)}), 500
 
     _hand_over_indexing()
     return jsonify(
@@ -1252,7 +1262,7 @@ def api_ollama_start():
     try:
         version = _start_ollama_process()
     except Exception as e:
-        return jsonify({"ok": False, "running": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "running": False, "code": "ollama_start_failed", "error": str(e)}), 500
     return jsonify({"ok": version is not None, "running": version is not None, "version": version})
 
 
@@ -1264,7 +1274,7 @@ def api_ollama_models():
     try:
         return jsonify({"ok": True, "models": _ollama_models()})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e), "models": []}), 500
+        return jsonify({"ok": False, "code": "ollama_models_failed", "error": str(e), "models": []}), 500
 
 
 @app.route("/api/models", methods=["GET"])
@@ -1290,7 +1300,7 @@ def api_models_post():
     try:
         roles = rag_engine.set_model_roles_runtime(overrides)
     except ValueError as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": False, "code": "invalid_model_roles", "error": str(e)}), 400
 
     rag_engine.guardar_ajustes_persistidos()
     # The contextual role only enters index_recipe while contextual retrieval
