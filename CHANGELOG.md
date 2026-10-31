@@ -15,6 +15,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Removed
 
 - Public surface nothing in the product called: `POST /api/corpus` and `POST /api/upload` (the UI uses `/api/stores/select` and `/api/reindex`), `generar_respuesta`, `evaluar_pregunta_rag`, the legacy `rag/engine/context.py` and `rag/engine/chunking.py` wrappers with the second RECOMP implementation, the always-true `*_AVAILABLE` constants and the harness's unread `VERDICTS`. The dead-code gate no longer exempts the facade's re-exports, so a name only `rag/chat_pdfs.py` re-exports fails it (#537).
+- Ten UI strings no component read, in all three languages; the fast gate now fails on an `i18n.ts` key nothing reads (#538).
 
 ### Fixed
 

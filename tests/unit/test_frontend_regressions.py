@@ -1,4 +1,4 @@
-"""Regression checks for two frontend-only defects (#327 and #328).
+"""Regression checks for frontend-only defects (#327, #328 and #538).
 
 Neither defect reaches the Python suite through runtime behavior: the
 frontend's checks are ``tsc --noEmit`` and a Vite build, so a store row left
@@ -50,6 +50,37 @@ def test_every_i18n_key_exists_in_all_three_languages() -> None:
     """A key added to one table only would render blank in the other two."""
     keys = _locale_keys()
     assert keys["es"] == keys["en"] == keys["ca"]
+
+
+def _referenced_keys(keys: set[str], sources: list[str]) -> set[str]:
+    """Keys a component reads: ``strings.key``/``T.key`` or a quoted ``'key'``.
+
+    The quoted form covers a key chosen at runtime from a literal; nothing in
+    ``src/`` indexes the table with a computed expression, so these two shapes
+    are every way a key is reached.
+    """
+    code = "\n".join(sources)
+    return {key for key in keys if re.search(rf"\.{key}\b|['\"`]{key}['\"`]", code)}
+
+
+def test_every_i18n_key_is_read_by_some_component() -> None:
+    """A key nothing reads is copy translated three times for no screen (#538).
+
+    knip cannot see these: they are object keys, not exports.
+    """
+    sources = [
+        _read(path) for path in sorted(FRONTEND.rglob("*.ts*")) if path != I18N
+    ]
+    keys = _locale_keys()["es"]
+    unread = sorted(keys - _referenced_keys(keys, sources))
+    assert not unread, f"i18n.ts keys no component reads: {unread}"
+
+
+def test_the_key_reference_check_tells_a_read_key_from_an_unread_one() -> None:
+    """Guards the guard: a mention as part of a longer name is not a read."""
+    sources = ["<p>{T.studyHint}</p>", "const fb = { code: 'retryError' };", "x.studyPagesShort"]
+    keys = {"studyHint", "retryError", "studyPages", "youLabel"}
+    assert _referenced_keys(keys, sources) == {"studyHint", "retryError"}
 
 
 def test_question_too_short_error_is_translated() -> None:
