@@ -24,10 +24,11 @@ EMBEDDER_SHA256="2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b0913
 MMPROJ_FILE="mmproj-embeddinggemma-2-Q8_0.gguf"
 MMPROJ_SHA256="c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f"
 
-# The lowest llama.cpp build known to load architecture gemma-embedding2
-# (b11669 does, b10751 does not). The real threshold lies somewhere between;
-# this is the version that has been seen working, not a guess at the edge.
-MIN_LLAMA_BUILD=11669
+# llama.cpp builds known to load architecture gemma-embedding2 (b11669 does,
+# b10751 does not). Informational only: the number --version prints is the
+# commit count of the clone, so a shallow `git clone --depth 1 --branch b11669`
+# reports "build 1". Whether a binary works is decided by llama_probe.
+KNOWN_GOOD_LLAMA_BUILD=11669
 LLAMA_SERVER="${LLAMA_SERVER_BIN:-llama-server}"
 
 say() { printf '%s\n' "$*"; }
@@ -48,6 +49,45 @@ llama_build() {
   local out
   out="$("$LLAMA_SERVER" --version 2>&1)" || return 0
   printf '%s\n' "$out" | sed -n -E 's/.*build ([0-9]+).*/\1/p; s/^version: ([0-9]+) .*/\1/p' | head -n 1
+}
+
+# Capability probe: start the llama-server on a free local port with the real
+# model and projector, wait (bounded) for /health, require /props to report
+# vision, then stop it. This is what "new enough for embeddinggemma-2" means in
+# practice; the version number cannot say it. Returns 0 when it loads, 1 with
+# an actionable message on stderr when it does not.
+llama_probe() {
+  local model="$1" mmproj="$2" timeout="${LLAMA_PROBE_TIMEOUT:-120}"
+  local port log pid reason="" waited=0 props
+  port="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
+  log="$(mktemp)"
+  "$LLAMA_SERVER" -m "$model" --mmproj "$mmproj" --embedding --port "$port" -b 2048 -ub 2048 >"$log" 2>&1 &
+  pid=$!
+  until curl -fsS --max-time 2 "http://127.0.0.1:$port/health" >/dev/null 2>&1; do
+    if ! kill -0 "$pid" 2>/dev/null; then reason="it exited during startup"; break; fi
+    waited=$((waited + 1))
+    if [ "$waited" -ge "$timeout" ]; then reason="/health did not answer within ${timeout}s"; break; fi
+    sleep 1
+  done
+  if [ -z "$reason" ]; then
+    if ! props="$(curl -fsS --max-time 5 "http://127.0.0.1:$port/props" 2>/dev/null)"; then
+      reason="/props did not answer"
+    elif ! python3 -c 'import json, sys; sys.exit(0 if json.load(sys.stdin).get("modalities", {}).get("vision") is True else 1)' <<<"$props"; then
+      reason="/props reports no vision support, so the projector (--mmproj) did not load"
+    fi
+  fi
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  if [ -n "$reason" ]; then
+    {
+      printf 'error: %s cannot serve embeddinggemma-2: %s.\n' "$LLAMA_SERVER" "$reason"
+      printf 'It needs a llama.cpp build that knows architecture gemma-embedding2 (b%s does, b10751 does not).\n' "$KNOWN_GOOD_LLAMA_BUILD"
+      printf 'Last lines of its output:\n'; tail -n 15 "$log" | sed 's/^/  /'
+    } >&2
+    rm -f -- "$log"
+    return 1
+  fi
+  rm -f -- "$log"
 }
 
 # Host and port of an endpoint URL. A URL without an explicit port gets the

@@ -64,7 +64,7 @@ else
     *) die "embedder at $embedder_url is not reachable and is not a local address, so this script will not start one." ;;
   esac
   command -v "$LLAMA_SERVER" >/dev/null 2>&1 \
-    || die "$LLAMA_SERVER not found on PATH (llama.cpp build >= $MIN_LLAMA_BUILD, or set LLAMA_SERVER_BIN)."
+    || die "$LLAMA_SERVER not found on PATH (llama.cpp that loads gemma-embedding2, b$KNOWN_GOOD_LLAMA_BUILD does; or set LLAMA_SERVER_BIN)."
   for f in "$EMBEDDER_FILE" "$MMPROJ_FILE"; do
     [ -f "$MODELS_DIR/$f" ] || die "$MODELS_DIR/$f missing. Run tools/install.sh first."
   done

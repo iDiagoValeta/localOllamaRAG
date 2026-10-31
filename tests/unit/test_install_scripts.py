@@ -169,3 +169,118 @@ def test_help_prints_a_usage_block(script):
     )
     assert result.returncode == 0
     assert result.stdout.startswith("Usage: tools/"), result.stdout
+
+
+def test_claims_under_symlinked_dirs_can_be_uninstalled(tmp_path):
+    """With ~/.local (or any parent) symlinked, what install claims must still
+    pass uninstall's resolved allow-list, or uninstall can never finish."""
+    real_models, real_state = tmp_path / "real_models", tmp_path / "real_state"
+    real_models.mkdir()
+    real_state.mkdir()
+    (tmp_path / "link_models").symlink_to(real_models)
+    (tmp_path / "link_state").symlink_to(real_state)
+    env = _env(tmp_path)
+    env["MONKEYGRAB_MODELS_DIR"] = str(tmp_path / "link_models")
+    env["MONKEYGRAB_STATE_DIR"] = str(tmp_path / "link_state")
+
+    claim = subprocess.run(
+        ["bash", "-c", f"""set -euo pipefail
+. '{TOOLS / '_common.sh'}'
+eval "$(sed -n '/^claim_path()/,/^}}/p' '{TOOLS / 'install.sh'}')"
+manifest_add repo "$REPO_ROOT"
+claim_path "$MODELS_DIR/fake.gguf"
+claim_path "$STATE_DIR/llama-server.log"
+"""],
+        capture_output=True, text=True, env=env,
+    )
+    assert claim.returncode == 0, claim.stderr
+    (real_models / "fake.gguf").write_text("x", encoding="utf-8")
+    (real_state / "llama-server.log").write_text("x", encoding="utf-8")
+    manifest = (real_state / "install-manifest.tsv").read_text(encoding="utf-8")
+    assert f"path\t{real_models}/fake.gguf\n" in manifest, manifest
+
+    plan = subprocess.run(
+        [str(TOOLS / "uninstall.sh"), "--dry-run"], capture_output=True, text=True, env=env
+    )
+    assert plan.returncode == 0, plan.stderr
+    assert "REFUSED" not in plan.stdout, plan.stdout
+    assert (real_models / "fake.gguf").exists()
+
+    done = subprocess.run(
+        [str(TOOLS / "uninstall.sh"), "--yes"], capture_output=True, text=True, env=env
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not (real_models / "fake.gguf").exists()
+    assert not (real_state / "llama-server.log").exists()
+    assert not (real_state / "install-manifest.tsv").exists()
+
+
+_FAKE_SERVER = """#!/usr/bin/env python3
+import http.server, json, os, sys
+mode = os.environ["FAKE_MODE"]
+if mode == "crash":
+    sys.exit(3)
+args = sys.argv
+port = int(args[args.index("--port") + 1])
+assert "--mmproj" in args and "--embedding" in args and "-ub" in args
+open(os.environ["FAKE_PIDFILE"], "w").write(str(os.getpid()))
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if mode == "never-healthy":
+            self.send_response(503); self.end_headers(); return
+        body = b"{}" if self.path == "/health" else json.dumps(
+            {"modalities": {"vision": mode == "ok"}}).encode()
+        self.send_response(200); self.end_headers(); self.wfile.write(body)
+    def log_message(self, *a): pass
+http.server.HTTPServer(("127.0.0.1", port), H).serve_forever()
+"""
+
+
+def _probe(tmp_path, mode):
+    fake = tmp_path / "llama-server"
+    fake.write_text(_FAKE_SERVER, encoding="utf-8")
+    fake.chmod(0o755)
+    env = _env(tmp_path)
+    env.update(
+        LLAMA_SERVER_BIN=str(fake), FAKE_MODE=mode, LLAMA_PROBE_TIMEOUT="3",
+        FAKE_PIDFILE=str(tmp_path / "pid"),
+    )
+    return subprocess.run(
+        ["bash", "-c", f". '{TOOLS / '_common.sh'}'; llama_probe m.gguf p.gguf"],
+        capture_output=True, text=True, env=env, timeout=60,
+    )
+
+
+def test_probe_passes_when_the_server_loads_with_vision_and_is_stopped_after(tmp_path):
+    result = _probe(tmp_path, "ok")
+    assert result.returncode == 0, result.stderr
+    pid = int((tmp_path / "pid").read_text())
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
+
+
+@pytest.mark.parametrize(
+    "mode, reason",
+    [
+        ("no-vision", "reports no vision support"),
+        ("crash", "exited during startup"),
+        ("never-healthy", "did not answer within 3s"),
+    ],
+)
+def test_probe_fails_with_an_actionable_message(tmp_path, mode, reason):
+    result = _probe(tmp_path, mode)
+    assert result.returncode == 1
+    assert reason in result.stderr
+    assert "gemma-embedding2" in result.stderr and "b11669" in result.stderr
+    if mode != "crash":
+        with pytest.raises(ProcessLookupError):
+            os.kill(int((tmp_path / "pid").read_text()), 0)
+
+
+def test_check_reports_the_probe_pending_until_the_ggufs_exist(tmp_path):
+    result = subprocess.run(
+        [str(TOOLS / "install.sh"), "--check"],
+        capture_output=True, text=True, env=_env(tmp_path),
+    )
+    assert "probe llama-server with the downloaded model (pending" in result.stdout
+    assert "too old" not in result.stdout

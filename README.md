@@ -257,9 +257,11 @@ sh ollama_install.sh
 # Ollama's server must be answering before install.sh runs. With systemd it is
 # already a service; without it (a container) start it yourself and wait for it:
 nohup ollama serve > ollama.log 2>&1 &
-until ollama list > /dev/null 2>&1; do sleep 1; done
+for _ in $(seq 60); do ollama list > /dev/null 2>&1 && break; sleep 1; done
+ollama list > /dev/null 2>&1 || { cat ollama.log; echo "ollama serve did not come up" >&2; exit 1; }
 
-# llama.cpp: install.sh needs build b11669 or newer (b10751 cannot load embeddinggemma-2).
+# llama.cpp: install.sh loads embeddinggemma-2 in it to check (b11669 works, b10751 does not).
+# A shallow clone's --version says "build 1"; that number is not what is checked.
 # Add -DGGML_CUDA=ON to run the embedder on the GPU (needs the CUDA toolkit); the CPU build works.
 git clone --depth 1 --branch b11669 https://github.com/ggml-org/llama.cpp
 cmake -S llama.cpp -B llama.cpp/build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CURL=OFF -DCMAKE_BUILD_TYPE=Release

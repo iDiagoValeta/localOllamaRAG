@@ -82,18 +82,14 @@ check_prerequisites() {
     missing "Ollama server reachable (start it: ollama serve)"
   fi
 
+  local build
+  command -v "$LLAMA_SERVER" >/dev/null 2>&1 && build="$(llama_build)"
+  # Present is all that is checked here; whether it can load embeddinggemma-2
+  # is decided by llama_probe once the GGUFs are on disk.
   if command -v "$LLAMA_SERVER" >/dev/null 2>&1; then
-    local build
-    build="$(llama_build)"
-    if [ -z "$build" ]; then
-      missing "llama-server build number unreadable (\`$LLAMA_SERVER --version\`); need build >= $MIN_LLAMA_BUILD"
-    elif [ "$build" -lt "$MIN_LLAMA_BUILD" ]; then
-      missing "llama-server build $build is too old for embeddinggemma-2; need build >= $MIN_LLAMA_BUILD"
-    else
-      found "llama-server build $build"
-    fi
+    found "llama-server (build ${build:-unknown}, informational; capability is probed with the real model)"
   else
-    missing "llama-server on PATH (llama.cpp build >= $MIN_LLAMA_BUILD, or set LLAMA_SERVER_BIN)"
+    missing "llama-server on PATH (llama.cpp that loads gemma-embedding2, b$KNOWN_GOOD_LLAMA_BUILD does; or set LLAMA_SERVER_BIN)"
   fi
 }
 
@@ -113,8 +109,11 @@ claim_manifest() {
 # Records a path before creating it, and only when it does not exist yet, so a
 # half-finished install is still fully removable and a pre-existing path is
 # never claimed.
+# The manifest holds resolved paths, because uninstall.sh compares them with the
+# resolved roots: with ~/.local symlinked, an unresolved entry would be refused
+# and uninstall could never finish.
 claim_path() {
-  if [ ! -e "$1" ]; then manifest_add path "$1"; fi
+  if [ ! -e "$1" ]; then manifest_add path "$(real_path "$1")"; fi
 }
 
 pull_models() {
@@ -193,6 +192,16 @@ if [ "$CHECK_ONLY" -eq 1 ]; then
   fi
   [ -f "$MODELS_DIR/$EMBEDDER_FILE" ] || say "  download $EMBEDDER_FILE into $MODELS_DIR"
   [ -f "$MODELS_DIR/$MMPROJ_FILE" ] || say "  download $MMPROJ_FILE into $MODELS_DIR"
+  if [ -f "$MODELS_DIR/$EMBEDDER_FILE" ] && [ -f "$MODELS_DIR/$MMPROJ_FILE" ]; then
+    if command -v "$LLAMA_SERVER" >/dev/null 2>&1; then
+      say "  probe llama-server with the downloaded model:"
+      llama_probe "$MODELS_DIR/$EMBEDDER_FILE" "$MODELS_DIR/$MMPROJ_FILE" \
+        && say "    ok: llama-server loads embeddinggemma-2 with vision" \
+        || MISSING+=("llama-server cannot serve embeddinggemma-2 (see above)")
+    fi
+  else
+    say "  probe llama-server with the downloaded model (pending: needs the GGUFs above)"
+  fi
   [ -x "$REPO_ROOT/.venv/bin/python" ] || say "  build .venv"
   [ -x "$REPO_ROOT/.venv-mineru/bin/python" ] || say "  build .venv-mineru"
   [ -f "$FRONTEND_DIR/dist/index.html" ] || say "  build the frontend"
@@ -209,13 +218,19 @@ say ""
 claim_manifest
 claim_runtime_state
 
-pull_models
-
 # A directory created here is recorded so uninstall can remove it once empty.
-if [ ! -d "$MODELS_DIR" ]; then manifest_add dir "$MODELS_DIR"; fi
+if [ ! -d "$MODELS_DIR" ]; then manifest_add dir "$(real_path "$MODELS_DIR")"; fi
 mkdir -p "$MODELS_DIR"
 download_embedder_file "$EMBEDDER_FILE" "$EMBEDDER_SHA256"
 download_embedder_file "$MMPROJ_FILE" "$MMPROJ_SHA256"
+
+# Before the multi-GB steps: a llama-server too old for this model should stop
+# the install here, not after torch and the generator are downloaded.
+say "Probing llama-server with the downloaded model"
+llama_probe "$MODELS_DIR/$EMBEDDER_FILE" "$MODELS_DIR/$MMPROJ_FILE" \
+  || die "llama-server cannot serve embeddinggemma-2; install a newer llama.cpp (the downloaded files stay for the re-run)"
+
+pull_models
 
 claim_path "$REPO_ROOT/.venv"
 claim_path "$REPO_ROOT/.venv-mineru"
