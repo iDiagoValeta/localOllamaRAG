@@ -346,7 +346,7 @@ def test_stream_yields_a_generation_chunk_per_line_including_the_empty_done_line
 
 def test_stream_final_chunk_carries_the_full_generation_metadata(monkeypatch):
     """The debug dump (guardar_debug_rag) and the tokens-per-second derivation
-    in generar_respuesta both read these fields off the done chunk -- losing
+    in Answer both read these fields off the done chunk -- losing
     any of them here is exactly the bug this port change fixes."""
     import json as jsonlib
 
