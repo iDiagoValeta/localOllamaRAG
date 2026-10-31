@@ -1,3 +1,14 @@
+# NO RUNNER IS REGISTERED FOR THIS REPOSITORY. The job below targets
+# [self-hosted, gpu], so dispatching this workflow queues forever (run
+# 35258757452 sat 1h45m and was cancelled). The full gate is run locally
+# instead, before every release and before merging a retrieval or generation
+# change, on a GPU machine with Ollama and the embedder:
+#
+#   python tests/eval/run_eval.py --models <model...>
+#
+# See tests/eval/README.md. This file stays so the definition exists if a runner
+# is ever registered (issue #551).
+
 name: Full eval gate
 
 # Full gate: runs the REAL pipeline (Ollama generation, embeddinggemma-2 embeddings, hybrid

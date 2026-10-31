@@ -179,13 +179,15 @@ presented as pipeline coverage, and vice versa:
   the full `pytest` suite with real dependencies but a doubled/absent Ollama
   server (`engine` job — Ollama-dependent tests skip themselves when no
   server answers).
-- **Full gate** (`.github/workflows/full-eval.yml`, `workflow_dispatch` only,
-  self-hosted GPU runner with Ollama installed): runs the real pipeline —
+- **Full gate** (run locally, not in CI: `python tests/eval/run_eval.py --models <model...>`
+  on a GPU machine with Ollama and the embedder; `.github/workflows/full-eval.yml` has no
+  runner registered and cannot run): runs the real pipeline:
   Ollama generation, embeddings from the active embedder, hybrid BM25+semantic retrieval,
   BGE reranking — against every case in `tests/eval/gold_cases.jsonl`
   via `tests/eval/run_eval.py`, and fails if the pass rate drops below
-  `tests/eval/baseline_min_pass_rate.txt`. This is the gate that must be
-  green, together with the fast gate, before merging any change to retrieval
+  `tests/eval/baseline_min_pass_rate.txt`. Whoever merges a retrieval or generation
+  change, or cuts a release, runs it, and the run id goes in the PR. This is the gate
+  that must be green, together with the fast gate, before merging any change to retrieval
   or generation (design doc §7.2/7.3) — the fast gate alone never exercises
   the real model or retrieval path.
 

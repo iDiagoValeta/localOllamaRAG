@@ -22,6 +22,6 @@ if retrieval or generation changed.
 - [ ] Frontend rebuilt if `rag/web/frontend/src` changed
 - [ ] Docs updated in this same change (`README.md`, architecture READMEs,
       design docs) per `docs/README.md`
-- [ ] Full gate (`full-eval.yml`) run if retrieval or generation changed
+- [ ] Full gate run locally (`python tests/eval/run_eval.py`) if retrieval or generation changed; run id ______
 - [ ] No protected-zone edits without prior agreement
       (`requirements*.txt`, flag defaults, `tests/eval/`, `tests/characterization/`)
