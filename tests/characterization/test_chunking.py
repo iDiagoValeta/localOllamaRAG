@@ -1,12 +1,14 @@
-"""Characterization tests for rag/engine/chunking.py -- pre-migration snapshot.
+"""Characterization tests for chunking and neighbor expansion.
 
-These tests document what ``dividir_en_chunks`` and
-``expandir_con_chunks_adyacentes`` DO today, not what they should do. They
-exist so the hexagonal-architecture migration (see
-docs/design/2026-07-26-monkeygrab-v2.md, phase F1) can move this logic
-without silently changing chunk boundaries, headers or neighbor-expansion
-IDs. Do not edit these assertions during the migration: if one fails, the
-migrated code changed behavior.
+These tests document what the product's chunker
+(``monkeygrab.application.text_chunking``) DOES today, not what it should do.
+They were written against the pre-migration ``rag/engine/chunking.py`` so the
+hexagonal-architecture migration (docs/design/2026-07-26-monkeygrab-v2.md,
+phase F1) could move this logic without silently changing chunk boundaries,
+headers or neighbor-expansion IDs. That module was a dict wrapper nothing in
+the product called once the migration ended, and it was removed (issue #537);
+the two adapters below keep its call shape, so no assertion changed. If one
+fails, the chunker changed behavior.
 
 Chunking is a pure function of its arguments (no I/O, no Ollama), so every
 test here calls ``dividir_en_chunks`` with explicit ``chunk_size``/``overlap``
@@ -22,7 +24,28 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import rag.chat_pdfs as rag
+from monkeygrab.application.text_chunking import (
+    adjacent_chunk_ids,
+    split_markdown_into_chunks,
+)
+from monkeygrab.domain.chunk_metadata import ChunkMetadata
+
+MIN_CHUNK_LENGTH = 150  # the product default (RAG_MIN_CHUNK_LENGTH unset)
+
+
+def dividir_en_chunks(texto, chunk_size, overlap):
+    chunks = split_markdown_into_chunks(texto, chunk_size, overlap, MIN_CHUNK_LENGTH)
+    return [{"text": c.text, "header": c.header} for c in chunks]
+
+
+def expandir_con_chunks_adyacentes(chunk_id, metadata, n_vecinos):
+    meta = ChunkMetadata(
+        source=metadata["source"],
+        page=metadata["page"],
+        chunk=metadata.get("chunk", 0),
+        total_chunks_in_page=metadata.get("total_chunks_in_page"),
+    )
+    return adjacent_chunk_ids(meta, n_neighbors=n_vecinos)
 
 
 def test_splits_on_paragraph_boundary_when_content_exceeds_chunk_size():
@@ -43,7 +66,7 @@ def test_splits_on_paragraph_boundary_when_content_exceeds_chunk_size():
           "than the minimum chunk length threshold required here.")
     texto = f"{p1}\n\n{p2}\n\n{p3}"
 
-    chunks = rag.dividir_en_chunks(texto, chunk_size=300, overlap=0)
+    chunks = dividir_en_chunks(texto, chunk_size=300, overlap=0)
 
     assert [c["text"] for c in chunks] == [p1, p2, p3]
     assert all(c["header"] == "" for c in chunks)
@@ -68,7 +91,7 @@ def test_overlap_prepends_trailing_words_of_previous_chunk():
           "than the minimum chunk length threshold required here.")
     texto = f"{p1}\n\n{p2}\n\n{p3}"
 
-    chunks = rag.dividir_en_chunks(texto, chunk_size=300, overlap=50)
+    chunks = dividir_en_chunks(texto, chunk_size=300, overlap=50)
 
     assert chunks[0]["text"] == p1  # first chunk has no predecessor: no overlap
     assert chunks[1]["text"] == "one hundred fifty characters total length here. " + p2
@@ -90,7 +113,7 @@ def test_markdown_header_is_captured_and_prefixed_to_its_chunks():
         "own header prefix counted against it."
     )
 
-    chunks = rag.dividir_en_chunks(texto, chunk_size=500, overlap=0)
+    chunks = dividir_en_chunks(texto, chunk_size=500, overlap=0)
 
     assert [c["header"] for c in chunks] == ["# Introduction", "## Methods"]
     assert chunks[0]["text"].startswith("# Introduction\n")
@@ -112,7 +135,7 @@ def test_bold_pseudo_header_is_not_recognized_as_a_header():
         "chunking en este momento concreto."
     )
 
-    chunks = rag.dividir_en_chunks(texto, chunk_size=400, overlap=0)
+    chunks = dividir_en_chunks(texto, chunk_size=400, overlap=0)
 
     assert len(chunks) == 1
     assert chunks[0]["header"] == ""
@@ -143,7 +166,7 @@ def test_pieces_below_min_chunk_length_are_dropped_and_whole_section_falls_back_
     # chunk_size=200 leaves ~189 chars for content after the header prefix;
     # the recursive split (on ", ") yields two ~90-130 char pieces, both
     # under MIN_CHUNK_LENGTH (150) once you add the header back.
-    chunks = rag.dividir_en_chunks(texto, chunk_size=200, overlap=0)
+    chunks = dividir_en_chunks(texto, chunk_size=200, overlap=0)
 
     assert len(chunks) == 1
     assert chunks[0]["header"] == ""
@@ -153,14 +176,14 @@ def test_pieces_below_min_chunk_length_are_dropped_and_whole_section_falls_back_
 
 
 def test_empty_and_whitespace_only_input_produce_no_chunks():
-    assert rag.dividir_en_chunks("", chunk_size=300, overlap=50) == []
-    assert rag.dividir_en_chunks("   \n  ", chunk_size=300, overlap=50) == []
+    assert dividir_en_chunks("", chunk_size=300, overlap=50) == []
+    assert dividir_en_chunks("   \n  ", chunk_size=300, overlap=50) == []
 
 
 def test_expand_neighbors_mid_page_returns_prev_and_next_chunk_ids():
     metadata = {"source": "paperA.pdf", "page": 2, "chunk": 3, "total_chunks_in_page": 6}
 
-    ids = rag.expandir_con_chunks_adyacentes("paperA.pdf_pag2_chunk3", metadata, n_vecinos=1)
+    ids = expandir_con_chunks_adyacentes("paperA.pdf_pag2_chunk3", metadata, n_vecinos=1)
 
     assert ids == ["paperA.pdf_pag2_chunk2", "paperA.pdf_pag2_chunk4"]
 
@@ -172,13 +195,14 @@ def test_expand_neighbors_first_chunk_of_page_without_previous_count_skips_previ
     and 2 of the previous page whatever its length, which on a long page is
     text far from the anchor, while the contiguous tail was never fetched.
     The tail's ids depend on the previous page's chunk count, which this
-    legacy entry point does not have, so it now requests nothing there.
+    adapter does not pass, so it now requests nothing there.
     ``Answer`` reads the count from the store and asks for the real tail
-    (tests/unit/application/test_answer_previous_page_tail.py).
+    (tests/unit/application/test_answer.py,
+    ``test_first_chunk_of_a_page_pulls_the_previous_page_tail_not_its_head``).
     """
     metadata = {"source": "paperA.pdf", "page": 2, "chunk": 0, "total_chunks_in_page": 6}
 
-    ids = rag.expandir_con_chunks_adyacentes("paperA.pdf_pag2_chunk0", metadata, n_vecinos=1)
+    ids = expandir_con_chunks_adyacentes("paperA.pdf_pag2_chunk0", metadata, n_vecinos=1)
 
     assert ids == ["paperA.pdf_pag2_chunk1"]
 
@@ -186,7 +210,7 @@ def test_expand_neighbors_first_chunk_of_page_without_previous_count_skips_previ
 def test_expand_neighbors_last_chunk_of_page_pulls_first_two_of_next_page():
     metadata = {"source": "paperA.pdf", "page": 2, "chunk": 5, "total_chunks_in_page": 6}
 
-    ids = rag.expandir_con_chunks_adyacentes("paperA.pdf_pag2_chunk5", metadata, n_vecinos=1)
+    ids = expandir_con_chunks_adyacentes("paperA.pdf_pag2_chunk5", metadata, n_vecinos=1)
 
     assert ids == [
         "paperA.pdf_pag2_chunk4",
@@ -202,7 +226,7 @@ def test_expand_neighbors_without_total_chunks_in_page_only_guesses_next_page_ch
     """
     metadata = {"source": "paperA.pdf", "page": 1, "chunk": 2}
 
-    ids = rag.expandir_con_chunks_adyacentes("paperA.pdf_pag1_chunk2", metadata, n_vecinos=1)
+    ids = expandir_con_chunks_adyacentes("paperA.pdf_pag1_chunk2", metadata, n_vecinos=1)
 
     assert ids == ["paperA.pdf_pag1_chunk1", "paperA.pdf_pag2_chunk0"]
 
@@ -211,7 +235,7 @@ def test_expand_neighbors_page_zero_chunk_zero_has_no_previous_page_fallback():
     """Page 0 is never treated as having a "previous page" even at chunk 0."""
     metadata = {"source": "paperA.pdf", "page": 0, "chunk": 0, "total_chunks_in_page": 4}
 
-    ids = rag.expandir_con_chunks_adyacentes("paperA.pdf_pag0_chunk0", metadata, n_vecinos=1)
+    ids = expandir_con_chunks_adyacentes("paperA.pdf_pag0_chunk0", metadata, n_vecinos=1)
 
     assert ids == ["paperA.pdf_pag0_chunk1"]
 

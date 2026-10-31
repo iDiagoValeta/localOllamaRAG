@@ -16,7 +16,7 @@ class GenerationChunk:
     generation-metadata fields ``generar_tokens_respuesta`` copies into its
     debug-dump stats dict (``_GEN_STATS_KEYS`` in
     ``rag/engine/generation.py``) and the ``eval_count``/``eval_duration``
-    pair ``generar_respuesta`` divides to derive tokens-per-second -- on any
+    pair ``Answer`` divides to derive tokens-per-second -- on any
     earlier line they are ``None``, exactly as they are simply absent from
     Ollama's own intermediate JSON lines.
 

@@ -58,10 +58,11 @@ construction, and shrinking the list is a separate change:
   both shapes. A bare ``@property`` is not attribute access and not a
   registrar, and ``QuizQuestion.correct_option`` was exactly a dead
   ``@property``.
-- The names re-exported by ``rag/chat_pdfs.py`` are its public API (AGENTS.md
-  section 1 rule 7); the facade exists so callers can reach them from one
-  place, and a grep for the name in the product will not find them because
-  that is the point of a facade.
+- None for ``rag/chat_pdfs.py``'s re-exports. The facade's own import line
+  is not a use: a name only the facade re-exports, with no consumer reaching
+  it through ``rag_engine.<name>`` or an import, is dead like any other. This
+  used to be a blanket exemption, and it hid two whole legacy modules and
+  four functions (issue #537).
 - ``_WHITELIST`` below is deliberately tiny and every entry says why. A symbol
   whitelisted "just in case" is how the check stops meaning anything, so the
   staleness test fails when an entry stops corresponding to a real finding.
@@ -288,15 +289,11 @@ def _is_dunder(name: str) -> bool:
     return name.startswith("__") and name.endswith("__")
 
 
-def _unused_symbols(
-    tree: ast.AST,
-    used_names: Set[str],
-    reexports: Set[str],
-) -> List[Tuple[str, int]]:
+def _unused_symbols(tree: ast.AST, used_names: Set[str]) -> List[Tuple[str, int]]:
     """Symbols whose name is never used as code outside its own declaration."""
     unused = []
     for name, line, decorators in _declared_symbols(tree):
-        if _is_dunder(name) or name in reexports or any(_is_registrar(d) for d in decorators):
+        if _is_dunder(name) or any(_is_registrar(d) for d in decorators):
             continue
         if name in used_names:
             continue
@@ -304,15 +301,17 @@ def _unused_symbols(
     return unused
 
 
-def _chat_pdfs_reexports() -> Set[str]:
-    """Names ``rag/chat_pdfs.py`` imports and never uses itself: its facade.
+_FACADE = _REPO_ROOT / "rag" / "chat_pdfs.py"
+
+
+def _facade_reexports(source: str) -> Set[str]:
+    """Names the facade imports and never uses itself.
 
     Importing a name and not referencing it anywhere in the module is exactly
     what a re-export looks like. A name the module also calls is an ordinary
-    internal import and stays subject to the check.
+    internal import, and its use there counts.
     """
-    path = _REPO_ROOT / "rag" / "chat_pdfs.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    tree = ast.parse(source)
     imported: Set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -356,10 +355,14 @@ def _is_entry_point(path: Path, source: str, mentions: Tuple[str, str]) -> bool:
 def _product_analysis():
     """Scan the consumer sources once and return the raw findings and the trees."""
     sources = []
+    facade_source = ""
     import_targets: Set[str] = set()
     for path in _consumer_files():
         text = path.read_text(encoding="utf-8")
-        sources.append(text)
+        if path == _FACADE:
+            facade_source = text
+        else:
+            sources.append(text)
         import_targets |= _import_targets(path, ast.parse(text, filename=str(path)))
 
     product_trees = {}
@@ -370,12 +373,15 @@ def _product_analysis():
         product_trees[label] = tree
         declared_names.update(name for name, _, _ in _declared_symbols(tree))
 
-    used_names = _used_names(sources, names=declared_names)
-    reexports = _chat_pdfs_reexports()
+    # The facade's re-export lines name every symbol they re-export, so they
+    # are left out: only a caller beyond the facade keeps such a name alive.
+    used_names = _used_names(sources, names=declared_names) | (
+        _used_names([facade_source], names=declared_names) - _facade_reexports(facade_source)
+    )
 
     dead_symbols = []
     for label, tree in product_trees.items():
-        for name, line in _unused_symbols(tree, used_names, reexports):
+        for name, line in _unused_symbols(tree, used_names):
             dead_symbols.append((label, name, line))
 
     mentions = _entry_point_mentions()
@@ -480,11 +486,7 @@ _SYNTHETIC_CONSUMER = "from mod import live\n\nThing().used()\n"
 def test_the_check_catches_a_function_and_a_method_nothing_references():
     """Only ``dead`` and ``forgotten``; the rest have a caller or are exempt."""
     used = _used_names([_SYNTHETIC_PRODUCT, _SYNTHETIC_CONSUMER])
-    found = _unused_symbols(
-        ast.parse(_SYNTHETIC_PRODUCT),
-        used,
-        reexports={"live"},
-    )
+    found = _unused_symbols(ast.parse(_SYNTHETIC_PRODUCT), used)
     assert [name for name, _ in found] == ["dead", "forgotten"], found
 
 
@@ -506,7 +508,7 @@ class Quiz:
         return self.options[self.correct_index]
 '''
     used = _used_names([source, "Quiz()\n"])
-    found = _unused_symbols(ast.parse(source), used, reexports=set())
+    found = _unused_symbols(ast.parse(source), used)
     assert [name for name, _ in found] == ["correct_option"], found
 
 
@@ -537,5 +539,18 @@ def forgotten():
         'NOTE = "forgotten"\n'
     )
     used = _used_names([product, consumer])
-    found = _unused_symbols(ast.parse(product), used, reexports=set())
+    found = _unused_symbols(ast.parse(product), used)
     assert [name for name, _ in found] == ["is_empty", "is_empty", "forgotten"], found
+
+
+def test_a_name_only_the_facade_reexports_is_reported():
+    """The re-export line is not a use; ``rag_engine.<name>`` elsewhere is."""
+    facade = "from rag.engine.generation import evaluar, generar\n"
+    assert _facade_reexports(facade) == {"evaluar", "generar"}
+    product = "def evaluar():\n    return 1\n\n\ndef generar():\n    return 2\n"
+    consumer = "rag_engine.generar()\n"
+    used = _used_names([product, consumer]) | (
+        _used_names([facade]) - _facade_reexports(facade)
+    )
+    found = _unused_symbols(ast.parse(product), used)
+    assert [name for name, _ in found] == ["evaluar"], found

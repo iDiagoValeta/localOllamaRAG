@@ -62,16 +62,6 @@ from monkeygrab.config.env import read_env_int as _leer_env_int
 from monkeygrab.config.paths import derive_db_paths as _derive_db_paths
 
 
-# Compatibility constants, kept because the CLI and the web UI display them.
-# They no longer gate anything: extraction, reranking and lexical search each
-# import their own library inside the adapter that uses it, and each raises
-# there if it is missing. Nothing in this module needs those libraries, so
-# importing them here only slowed startup for callers that never index.
-
-RERANKER_AVAILABLE = True
-BM25_AVAILABLE = True
-
-
 # GLOBAL CONFIGURATION
 
 
@@ -534,7 +524,6 @@ Guidelines:
 
 
 from rag.engine.history import cargar_historial, guardar_historial, limpiar_historial
-from rag.engine.chunking import dividir_en_chunks, expandir_con_chunks_adyacentes
 from monkeygrab.adapters.reranking.cross_encoder_reranker import resolve_reranker_device
 from monkeygrab.application.keywords import (
     GENERIC_TERMS_BLACKLIST,
@@ -544,17 +533,6 @@ from monkeygrab.application.keywords import (
     tokenize_bm25,
 )
 from rag.engine.retrieval import realizar_busqueda_hibrida
-from rag.engine.context import (
-    _es_continuacion_parrafo,
-    _reunir_parrafos,
-    optimizar_texto_contexto,
-    _marcar_fragmento_incompleto,
-    _texto_fuente_fragmento,
-    _strip_ollama_think_blocks,
-    _normalizar_salida_recomp,
-    construir_contexto_para_modelo,
-    sintetizar_contexto_recomp,
-)
 from rag.engine.debug import guardar_debug_rag
 from rag.engine.generation import (
     OLLAMA_BASE_URL,
@@ -562,9 +540,7 @@ from rag.engine.generation import (
     generar_tokens_respuesta,
     _generar_respuesta_stream,
     preparar_fragmentos_para_generacion,
-    generar_respuesta,
     generar_respuesta_silenciosa,
-    evaluar_pregunta_rag,
 )
 from rag.engine.indexing import (
     index_fingerprint_mismatch,
