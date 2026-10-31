@@ -260,7 +260,7 @@ nohup ollama serve > ollama.log 2>&1 &
 for _ in $(seq 60); do ollama list > /dev/null 2>&1 && break; sleep 1; done
 ollama list > /dev/null 2>&1 || { cat ollama.log; echo "ollama serve did not come up" >&2; exit 1; }
 
-# llama.cpp: install.sh loads embeddinggemma-2 in it to check (b11669 works, b10751 does not).
+# llama.cpp: install.sh loads embeddinggemma-2 in it to check (b11669 is known to work; older builds may not know gemma-embedding2).
 # A shallow clone's --version says "build 1"; that number is not what is checked.
 # Add -DGGML_CUDA=ON to run the embedder on the GPU (needs the CUDA toolkit); the CPU build works.
 git clone --depth 1 --branch b11669 https://github.com/ggml-org/llama.cpp

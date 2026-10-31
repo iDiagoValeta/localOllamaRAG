@@ -25,7 +25,8 @@ for arg in "$@"; do
 Usage: tools/install.sh [--check] [--with-corpus]
   (no option)    install everything, idempotently; records what it creates for uninstall.sh
   --check        report prerequisites and pending steps; downloads and installs nothing
-                 (if the GGUFs are already there it briefly starts llama-server to probe it)
+                 (if the GGUFs are already there it starts llama-server to probe it, which can take
+                 up to LLAMA_PROBE_TIMEOUT seconds, default 120)
   --with-corpus  also fetch the three PDF corpora (slow, optional)
 USAGE
       exit 0 ;;

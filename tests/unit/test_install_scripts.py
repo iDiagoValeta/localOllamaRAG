@@ -288,7 +288,7 @@ def test_probe_reports_the_observed_reason_and_upgrades_only_when_the_log_says_s
             os.kill(int((tmp_path / "pid").read_text()), 0)
 
 
-@pytest.mark.parametrize("value", ["abc", "0", "-5", "1.5"])
+@pytest.mark.parametrize("value", ["abc", "0", "08", "-5", "1.5"])
 def test_probe_rejects_a_bad_timeout_before_starting_anything(tmp_path, value):
     fake = tmp_path / "llama-server"
     fake.write_text("#!/usr/bin/env bash\ntouch started\n", encoding="utf-8")
@@ -326,13 +326,14 @@ def test_a_signal_during_the_probe_leaves_no_orphan_and_no_temp_log(tmp_path, si
     fake.chmod(0o755)
     scratch = tmp_path / "tmp"
     scratch.mkdir()
+    marker = tmp_path / "caller-exit-trap-ran"
     env = _env(tmp_path)
     env.update(
         LLAMA_SERVER_BIN=str(fake), FAKE_MODE="never-healthy", LLAMA_PROBE_TIMEOUT="60",
         FAKE_PIDFILE=str(tmp_path / "pid"), TMPDIR=str(scratch),
     )
     script = subprocess.Popen(
-        ["bash", "-c", f". '{TOOLS / '_common.sh'}'; llama_probe m p"],
+        ["bash", "-c", f"trap 'touch \"{marker}\"' EXIT; . '{TOOLS / '_common.sh'}'; llama_probe m p"],
         env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     try:
@@ -350,6 +351,7 @@ def test_a_signal_during_the_probe_leaves_no_orphan_and_no_temp_log(tmp_path, si
     with pytest.raises(ProcessLookupError):
         os.kill(server_pid, 0)
     assert list(scratch.iterdir()) == [], "the temp log must be removed"
+    assert marker.exists(), "the caller's own EXIT trap must still run after the signal"
 
 
 def test_check_reports_the_probe_pending_until_the_ggufs_exist(tmp_path):

@@ -25,7 +25,7 @@ MMPROJ_FILE="mmproj-embeddinggemma-2-Q8_0.gguf"
 MMPROJ_SHA256="c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f"
 
 # llama.cpp builds known to load architecture gemma-embedding2 (b11669 does,
-# b10751 does not). Informational only: the number --version prints is the
+# older builds may not). Informational only: the number --version prints is the
 # commit count of the clone, so a shallow `git clone --depth 1 --branch b11669`
 # reports "build 1". Whether a binary works is decided by llama_probe.
 KNOWN_GOOD_LLAMA_BUILD=11669
@@ -54,6 +54,7 @@ llama_build() {
 # State of the probe in flight, global so the signal trap can reach it.
 _PROBE_PID=""
 _PROBE_LOG=""
+_PROBE_PREVIOUS_TRAPS=""
 
 # Stops the probe's llama-server (TERM, then KILL after a short grace) and
 # removes its temp log. Idempotent: it runs from the INT/TERM handlers and
@@ -76,6 +77,26 @@ _probe_cleanup() {
   _PROBE_LOG=""
 }
 
+# The single way out of the probe: stop the server, remove the log, give the
+# caller its traps back, then leave. $1 is an exit status for the signal
+# handlers (the exit then runs the caller's own EXIT trap), "exit" when the
+# shell is already exiting (the caller's EXIT trap is run by hand, because a
+# trap installed while an EXIT trap is running never fires), or empty on a
+# normal return.
+_probe_finish() {
+  _probe_cleanup
+  trap - EXIT INT TERM
+  if [ -n "$_PROBE_PREVIOUS_TRAPS" ]; then eval "$_PROBE_PREVIOUS_TRAPS"; fi
+  _PROBE_PREVIOUS_TRAPS=""
+  case "${1-}" in
+    "") ;;
+    exit)
+      eval "set -- $(trap -p EXIT)"
+      if [ -n "${3-}" ]; then eval "$3"; fi ;;
+    *) exit "$1" ;;
+  esac
+}
+
 # Capability probe: start the llama-server on a free local port with the real
 # model and projector, wait (bounded by wall clock) for /health, require
 # /props to report vision, then stop it. This is what "can serve
@@ -84,23 +105,25 @@ _probe_cleanup() {
 # not. Ctrl+C or TERM during the probe stops the server it started.
 llama_probe() {
   local model="$1" mmproj="$2" timeout="${LLAMA_PROBE_TIMEOUT:-120}"
-  local port pid reason="" props deadline previous_traps
-  if ! [[ "$timeout" =~ ^[0-9]+$ ]] || [ "$timeout" -eq 0 ]; then
+  local port pid reason="" props deadline
+  # No leading zero: bash would read "08" as a bad octal number and abort.
+  if ! [[ "$timeout" =~ ^[1-9][0-9]*$ ]]; then
     printf 'error: LLAMA_PROBE_TIMEOUT must be a positive number of seconds, got "%s"\n' "$timeout" >&2
     return 1
   fi
   port="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
-  previous_traps="$(trap -p EXIT INT TERM)"
-  # Before the server starts, so a signal in the gap cannot orphan it.
+  _PROBE_PREVIOUS_TRAPS="$(trap -p EXIT INT TERM)"
+  # Installed before the server starts. A non-interactive shell starts async
+  # children with SIGINT ignored, which is why the handlers kill it by pid.
   _PROBE_LOG="$(mktemp)"
-  trap '_probe_cleanup' EXIT
-  trap '_probe_cleanup; exit 130' INT
-  trap '_probe_cleanup; exit 143' TERM
-  # A non-interactive shell starts async children with SIGINT ignored, which
-  # is why the handlers above kill it by pid instead of relying on Ctrl+C.
+  trap '_probe_finish exit' EXIT
+  trap '_probe_finish 130' INT
+  trap '_probe_finish 143' TERM
   "$LLAMA_SERVER" -m "$model" --mmproj "$mmproj" --embedding --port "$port" -b 2048 -ub 2048 >"$_PROBE_LOG" 2>&1 &
-  pid=$!
-  _PROBE_PID=$pid
+  # Bash runs a trap between statements, so a signal landing between the fork
+  # above and this assignment (one statement wide) could still orphan the server.
+  _PROBE_PID=$!
+  pid=$_PROBE_PID
   deadline=$(( $(date +%s) + timeout ))
   while :; do
     if ! kill -0 "$pid" 2>/dev/null; then reason="it exited during startup"; break; fi
@@ -125,7 +148,7 @@ llama_probe() {
       # An upgrade is only advice when the log says the architecture is unknown;
       # otherwise it would send someone to rebuild a binary that is fine.
       if grep -qi 'unknown model architecture' "$_PROBE_LOG"; then
-        printf 'This llama.cpp does not know architecture gemma-embedding2: use a newer build (b%s does, b10751 does not).\n' "$KNOWN_GOOD_LLAMA_BUILD"
+        printf 'This llama.cpp does not know architecture gemma-embedding2: use a newer build (b%s is known to work; older ones may not know it).\n' "$KNOWN_GOOD_LLAMA_BUILD"
       elif [[ "$reason" == */props\ reports* ]]; then
         printf 'Check that %s is the projector for the model and that this llama-server supports --mmproj.\n' "$(basename "$mmproj")"
       elif [[ "$reason" == /health* ]]; then
@@ -134,9 +157,7 @@ llama_probe() {
       printf 'Last lines of its output:\n'; tail -n 15 "$_PROBE_LOG" | sed 's/^/  /'
     } >&2
   fi
-  _probe_cleanup
-  trap - EXIT INT TERM
-  if [ -n "$previous_traps" ]; then eval "$previous_traps"; fi
+  _probe_finish
   [ -z "$reason" ]
 }
 
