@@ -450,3 +450,25 @@ class TestSurvivingWhatItDiagnoses:
         assert "MinerU" in message
         assert "2" in message
         assert "ImportError" in message
+
+
+class TestPrintFlag:
+    """``--print`` is how the shell scripts read the product's configuration."""
+
+    def test_models_prints_the_configured_tags_one_per_line(self, monkeypatch, tmp_path, capsys):
+        _saved_settings(monkeypatch, tmp_path, {"rag": "custom:7b"})
+        for var in setup.OLLAMA_ROLE_VARS.values():
+            monkeypatch.delenv(var, raising=False)
+        assert setup.main(["--print", "models"]) == 0
+        assert capsys.readouterr().out.split() == sorted({"custom:7b", setup.DEFAULT_OLLAMA_MODEL})
+
+    def test_ollama_url_adds_the_scheme_ollama_host_omits(self, monkeypatch, capsys):
+        monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+        monkeypatch.setenv("OLLAMA_HOST", "10.0.0.5:11434")
+        assert setup.main(["--print", "ollama-url"]) == 0
+        assert capsys.readouterr().out.strip() == "http://10.0.0.5:11434"
+
+    def test_embedder_url_is_the_configured_endpoint_without_trailing_slash(self, monkeypatch, capsys):
+        monkeypatch.setenv("MONKEYGRAB_EMBEDDER_URL", "http://127.0.0.1:18091/")
+        assert setup.main(["--print", "embedder-url"]) == 0
+        assert capsys.readouterr().out.strip() == "http://127.0.0.1:18091"

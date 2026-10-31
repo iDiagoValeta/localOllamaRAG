@@ -91,7 +91,7 @@ tests/
                              no-infra CI job; each module docstring says why it lives here
 harness/                  Configuration search harness (issue #31); not product — see harness/README.md
 packaging/                PyInstaller desktop app build (see §3)
-tools/                    Repo tooling, not product: setup_environments.py (both venvs), fetch_corpus.py (the corpora) + diagnostics/
+tools/                    Repo tooling, not product: setup_environments.py (both venvs), fetch_corpus.py (the corpora), install.sh / run.sh / uninstall.sh (Linux one-command flow, #559) + diagnostics/
 assets/                   Images the READMEs embed
 docs/design/               Architecture design docs; current: 2026-07-26-monkeygrab-v2.md
 docs/README.md             Documentation standard
@@ -236,6 +236,7 @@ Items 1–5 of §6 apply here too. What differs:
 
 ```bash
 # Setup (both interpreters; --check verifies without installing)
+tools/install.sh && tools/run.sh               # Linux: install and launch in two commands (tools/uninstall.sh undoes it)
 python tools/setup_environments.py             # .venv + .venv-mineru, then check
 python tools/fetch_corpus.py                   # the three corpora from rag/docs/corpus_manifest.json (--check: report only)
 python tools/check_branch_policy.py <head> <base>  # is this PR's head/base pair allowed by gitflow

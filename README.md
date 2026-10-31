@@ -223,6 +223,72 @@ placeholder — and nothing answerable.
 
 ## Running it
 
+### Linux: three commands
+
+```bash
+tools/install.sh      # checks prerequisites, pulls the model, downloads the embedder, builds both venvs and the web UI
+tools/run.sh          # starts the embedder's llama-server and the web UI at http://localhost:5000; Ctrl+C stops both
+tools/uninstall.sh    # removes what install.sh created, and nothing else
+```
+
+`install.sh` is idempotent and reports every missing prerequisite before it
+changes anything (`--check` only reports; `--with-corpus` also fetches the PDF
+corpora). It never installs anything that needs root. Those prerequisites are,
+on a fresh Ubuntu 24.04 with an NVIDIA GPU and its driver (`nvidia-smi` must
+list the card):
+
+```bash
+# A bare container is already root and has no sudo: this makes the commands below work in both cases.
+SUDO=""; [ "$(id -u)" -eq 0 ] || SUDO=sudo
+
+$SUDO apt update
+$SUDO apt install -y python3 python3-venv git curl ca-certificates zstd pciutils \
+  build-essential cmake libgl1 libglib2.0-0
+
+# Node 22.12+ with corepack (vitest needs it): the web UI builds with pnpm, pinned in package.json.
+# Download the NodeSource setup script, read it, then run it.
+curl -fsSLo nodesource_setup.sh https://deb.nodesource.com/setup_24.x
+$SUDO bash nodesource_setup.sh && $SUDO apt install -y nodejs && $SUDO corepack enable
+
+# Ollama (same: download install.sh from ollama.com, read it, run it).
+curl -fsSLo ollama_install.sh https://ollama.com/install.sh
+sh ollama_install.sh
+
+# Ollama's server must be answering before install.sh runs. With systemd it is
+# already a service; without it (a container) start it yourself and wait for it:
+nohup ollama serve > ollama.log 2>&1 &
+for _ in $(seq 60); do ollama list > /dev/null 2>&1 && break; sleep 1; done
+ollama list > /dev/null 2>&1 || { cat ollama.log; echo "ollama serve did not come up" >&2; exit 1; }
+
+# llama.cpp: install.sh loads embeddinggemma-2 in it to check (b11669 is known to work; older builds may not know gemma-embedding2).
+# A shallow clone's --version says "build 1"; that number is not what is checked.
+# Add -DGGML_CUDA=ON to run the embedder on the GPU (needs the CUDA toolkit); the CPU build works.
+git clone --depth 1 --branch b11669 https://github.com/ggml-org/llama.cpp
+cmake -S llama.cpp -B llama.cpp/build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CURL=OFF -DCMAKE_BUILD_TYPE=Release
+cmake --build llama.cpp/build --target llama-server -j"$(nproc)"
+$SUDO install llama.cpp/build/bin/llama-server /usr/local/bin/
+
+git clone https://github.com/iDiagoValeta/localOllamaRAG && cd localOllamaRAG
+```
+
+`install.sh` pulls the model the roles resolve to (`gemma4:e4b` by default),
+downloads `embeddinggemma-2-Q8_0.gguf` and `mmproj-embeddinggemma-2-Q8_0.gguf`
+into `~/.local/share/monkeygrab/models` checking their
+sha256, runs `tools/setup_environments.py` and builds the frontend. It records
+what it created in `~/.local/state/monkeygrab/install-manifest.tsv`
+(both locations can be moved, see `tools/_common.sh`): `uninstall.sh` removes exactly those entries (both
+venvs, `node_modules` and `dist`, the downloaded GGUFs, the Ollama models
+`install.sh` pulled itself, and the indices and caches the install produced),
+asks first unless given `--yes`, and leaves Ollama, its other models and
+anything that existed before the install alone. `run.sh` reuses a llama-server
+that already answers on the embedder's port and stops only the one it started.
+
+The network is needed at run time too: the first indexing and the first query
+download the MinerU and BGE reranker weights from Hugging Face into its cache,
+which `uninstall.sh` leaves in place.
+
+### Manual steps (any platform)
+
 Requires [Python 3.10+](https://www.python.org/downloads/),
 [Ollama](https://ollama.com/download) running locally with at least a generator
 model pulled, and the
