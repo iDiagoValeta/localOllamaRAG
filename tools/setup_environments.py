@@ -15,6 +15,13 @@ tree of its own.
 Usage:
     python tools/setup_environments.py            # build both, then check
     python tools/setup_environments.py --check    # check only, install nothing
+    python tools/setup_environments.py --print models        # the Ollama tags the roles resolve to
+    python tools/setup_environments.py --print ollama-url    # the Ollama endpoint the pipeline uses
+    python tools/setup_environments.py --print embedder-url  # the llama-server endpoint it uses
+
+The ``--print`` values exist for ``tools/install.sh`` / ``run.sh``: the shell
+scripts ask this file what the product is configured to use instead of keeping
+a second copy of the defaults, which is how two copies drift.
 
 Teardown is one line and always has been::
 
@@ -429,7 +436,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         action="store_true",
         help="Verify without installing anything. Answers 'is this machine set up?'.",
     )
+    parser.add_argument(
+        "--print",
+        dest="print_what",
+        choices=("models", "ollama-url", "embedder-url"),
+        help="Print one configured value (one per line) and exit; builds and checks nothing.",
+    )
     args = parser.parse_args(argv)
+
+    if args.print_what:
+        config = AppConfig.from_env()
+        values = {
+            "models": _configured_models(),
+            "ollama-url": [config.models.ollama.base_url],
+            "embedder-url": [config.models.embedding.base_url.rstrip("/")],
+        }[args.print_what]
+        print("\n".join(values))
+        return 0
 
     if not args.check:
         build_product_venv()
