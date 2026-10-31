@@ -62,6 +62,12 @@ TORCH_PIN = "torch==2.6.0"
 TORCHVISION_PIN = "torchvision==0.21.0"
 TORCH_INDEX = "https://download.pytorch.org/whl/cu124"
 
+# Pinned because every gate row in docs/model-history.md was measured on 3.4.5,
+# the version is part of the index fingerprint (#426), and 4.x dropped the `-p`
+# option the adapter passes (#573): an unpinned install breaks every indexing run.
+MINERU_VERSION = "3.4.5"
+MINERU_PIN = f"mineru[core]=={MINERU_VERSION}"
+
 OLLAMA_ROLE_VARS = {
     "rag": "OLLAMA_RAG_MODEL",
     "chat": "OLLAMA_CHAT_MODEL",
@@ -128,7 +134,7 @@ def build_isolated_venv() -> None:
         [python, "-m", "pip", "install", TORCH_PIN, TORCHVISION_PIN, "--index-url", TORCH_INDEX],
         label="installing CUDA torch",
     )
-    _run([python, "-m", "pip", "install", "mineru[core]"], label="installing MinerU")
+    _run([python, "-m", "pip", "install", MINERU_PIN], label="installing MinerU")
 
 
 def _check_interpreter(venv: Path, label: str) -> Tuple[bool, str]:
@@ -167,6 +173,23 @@ def _check_cuda() -> Tuple[bool, str]:
     return True, f"CUDA: {info['device']} (torch {info['torch']})"
 
 
+def _isolated_mineru_version() -> Optional[str]:
+    """The ``mineru`` distribution version installed in ``.venv-mineru``, or ``None``.
+
+    Read from the package metadata by the venv's own interpreter rather than
+    from the binary's ``--version`` output: the pin is a distribution version,
+    and this is the value pip recorded when it installed it.
+    """
+    python = _venv_python(ISOLATED_VENV)
+    if not python.exists():
+        return None
+    probe = "import importlib.metadata as m; print(m.version('mineru'))"
+    result = subprocess.run([str(python), "-c", probe], capture_output=True, text=True, timeout=120)
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
+
+
 def _check_mineru_binary() -> Tuple[bool, str]:
     for candidate in (ISOLATED_VENV / "bin" / "mineru", ISOLATED_VENV / "Scripts" / "mineru.exe"):
         if candidate.exists():
@@ -183,6 +206,15 @@ def _check_mineru_binary() -> Tuple[bool, str]:
                 # half-built venv) is not an installed MinerU; reporting it as
                 # present is what issue #385 fixed.
                 return False, f"MinerU: {candidate} --version exited {result.returncode} ({version})"
+            # A runnable binary of another version is not the one the adapter
+            # was measured on: 4.x dropped the -p option (issue #573).
+            installed = _isolated_mineru_version()
+            if installed != MINERU_VERSION:
+                return False, (
+                    f"MinerU: .venv-mineru has {installed or 'no mineru distribution'}, "
+                    f"but the pin is {MINERU_VERSION}. Rebuild it with: "
+                    "rm -rf .venv-mineru && python tools/setup_environments.py"
+                )
             return True, f"MinerU: {version}"
     return False, f"MinerU: no binary under {ISOLATED_VENV}"
 
