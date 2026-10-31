@@ -788,7 +788,7 @@ def _decoding_metrics(stats: Dict[str, Any]) -> Dict[str, Any]:
     the one shape that cannot be summed by accident.
 
     tokens_per_second is derived here rather than left to each reader: the
-    same division already lives in generation.generar_respuesta for the debug
+    same division already lives in monkeygrab.application.answer for the debug
     dump, and two copies of one formula is how the two ends up disagreeing.
     """
     eval_count = stats.get("eval_count")

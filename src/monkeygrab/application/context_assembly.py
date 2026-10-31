@@ -1,14 +1,9 @@
 """context_assembly -- fragment text cleanup and final context-string formatting.
 
-Moved verbatim from ``rag/engine/context.py`` (all pure string transforms;
-no I/O, no Ollama). ``build_context_for_model`` takes ``Sequence[Fragment]``
-instead of the original's ``List[Dict]`` -- same fields, read via
-``Fragment.doc``/``Fragment.metadata`` instead of dict keys.
-
-``rag.engine.context.sintetizar_contexto_recomp`` itself (the function that
-calls an LLM to synthesize a facts briefing) is not moved here -- prompting
-an LLM is orchestration, owned by the ``Answer`` use case, which composes
-these pure helpers around a ``ChatModel`` port call.
+All pure string transforms; no I/O, no Ollama. RECOMP synthesis (the call
+that asks an LLM for a facts briefing) is not here: prompting an LLM is
+orchestration, owned by the ``Answer`` use case, which composes these pure
+helpers around a ``ChatModel`` port call.
 """
 
 import re
@@ -109,8 +104,7 @@ def reunir_parrafos(texto: str) -> str:
 def optimize_context_text(texto: str) -> str:
     """Remove PDF noise (box artifacts, footers, double spacing).
 
-    Moved from ``rag.engine.context.optimizar_texto_contexto``. Typical
-    savings are 30-50% of characters.
+    Typical savings are 30-50% of characters.
 
     Args:
         texto: Raw text extracted from a PDF chunk.
@@ -209,8 +203,7 @@ def build_context_for_model(
 ) -> Tuple[str, Dict[str, Any]]:
     """Build the context string for the RAG model from retrieved fragments.
 
-    Moved from ``rag.engine.context.construir_contexto_para_modelo``. Output
-    format per fragment::
+    Output format per fragment::
 
         --- [Fragment N] ---
         [Fragment Context]            <- only if Contextual Retrieval summary exists
@@ -299,10 +292,7 @@ def strip_citation_markers(texto: str) -> str:
 
 
 def strip_ollama_think_blocks(text: str) -> str:
-    """Remove ``<think>...</think>`` wrappers often emitted by Qwen-style Ollama models.
-
-    Moved from ``rag.engine.context._strip_ollama_think_blocks``.
-    """
+    """Remove ``<think>...</think>`` wrappers often emitted by Qwen-style Ollama models."""
     if not text:
         return text
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
@@ -312,10 +302,7 @@ RECOMP_FACTS_HEADER = "## Facts relevant to the question"
 
 
 def normalize_recomp_output(texto: str) -> str:
-    """Ensure a RECOMP briefing has the expected markdown header when possible.
-
-    Moved from ``rag.engine.context._normalizar_salida_recomp``.
-    """
+    """Ensure a RECOMP briefing has the expected markdown header when possible."""
     t = texto.strip()
     if not t:
         return t

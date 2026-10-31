@@ -1,12 +1,10 @@
 """text_chunking -- hierarchical markdown chunking and neighbor-id expansion.
 
-Both functions are a literal port of ``rag/engine/chunking.py``, with every
-``cfg.*`` read replaced by an explicit parameter -- the structural fix for
-the stale-default-argument bug documented in
+Config arrives as explicit parameters, never a module global -- the
+structural fix for the stale-default-argument bug documented in
 ``tests/characterization/test_stale_default_config_bug.py`` (a function that
-wants config now takes it as a required parameter, so there is no default to
-go stale against). Equivalence with the original is asserted field-for-field
-in ``tests/unit/application/test_text_chunking_equivalence.py``.
+wants config takes it as a required parameter, so there is no default to go
+stale against).
 
 Every surprising behavior documented by
 ``tests/characterization/test_chunking.py`` is reproduced on purpose, not
@@ -14,8 +12,8 @@ fixed here: the raw-truncation fallback when every recursively-split piece
 of every section falls below ``min_chunk_length``, the unreachable
 bold-pseudo-header branch, and overlap being taken from the previous
 *chunk's rendered text* (header included) rather than its body. Fixing any
-of these would break the equivalence this migration exists to prove; see the
-inline comments at each site for the specific characterization test that
+of these changes how every corpus is chunked, so it is a decision, not a
+cleanup; see the inline comments at each site for the specific characterization test that
 pins it.
 """
 
@@ -30,11 +28,9 @@ from monkeygrab.domain.chunk_metadata import ChunkMetadata
 class TextChunk:
     """One chunk of split text, before positional metadata (page, index) exists.
 
-    Mirrors the ``{"text": ..., "header": ...}`` dicts
-    ``rag.engine.chunking.dividir_en_chunks`` returns. Not a ``monkeygrab.
-    domain.Chunk``: that entity requires a ``ChunkMetadata`` (source, page,
-    chunk index) that only ``IndexCorpus`` can assign once it knows this
-    piece's position within the document.
+    Not a ``monkeygrab.domain.Chunk``: that entity requires a
+    ``ChunkMetadata`` (source, page, chunk index) that only ``IndexCorpus``
+    can assign once it knows this piece's position within the document.
 
     Attributes:
         text: The chunk's text, header already prepended when a header applies.
@@ -56,9 +52,6 @@ def split_markdown_into_chunks(
     Uses a recursive separator strategy to break content at natural
     boundaries (paragraphs, sentences, commas, spaces). Each chunk preserves
     its nearest Markdown header for context.
-
-    Literal port of ``rag.engine.chunking.dividir_en_chunks``; every
-    ``cfg.MIN_CHUNK_LENGTH`` read becomes the ``min_chunk_length`` parameter.
 
     Args:
         texto: Source text to split.
@@ -206,11 +199,6 @@ def adjacent_chunk_ids(
     metadata: ChunkMetadata, n_neighbors: int = 1, previous_page_total: Optional[int] = None
 ) -> List[str]:
     """Build IDs for neighboring chunks (same-page and cross-page) for context expansion.
-
-    Literal port of ``rag.engine.chunking.expandir_con_chunks_adyacentes``.
-    The original also takes a ``chunk_id`` parameter, but its body never
-    reads it (every id it builds is derived from ``metadata`` alone) -- it is
-    dropped here rather than reproduced as unused.
 
     Args:
         metadata: Position/format of the anchor chunk.

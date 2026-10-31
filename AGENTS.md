@@ -42,10 +42,10 @@ evaluation hooks that had already been deleted.
 4. **Follow the code patterns in §6** when writing new code in `rag/`; §7 lists what `src/monkeygrab/` does differently.
 5. **Do not modify any `requirements.txt`** without confirmation — versions are pinned.
 6. **Do not flip pipeline flags** (`USAR_RECOMP_SYNTHESIS`, `USAR_RERANKER`, etc.) without agreement — they affect latency, cost and evaluation results.
-7. **Preserve `rag/chat_pdfs.py` public API.** It is consumed verbatim by `rag/web/app.py` (as `rag_engine`) and `tests/`. Renaming a symbol breaks them at once. The authoritative list is the re-export block at the end of that file; the groups are:
-   - **Constants:** paths and collection names, model roles, every pipeline flag and numeric parameter, both system prompts, plus the `*_AVAILABLE` compatibility constants the UIs display.
-   - **Pipeline entry points:** `indexar_documentos`, `realizar_busqueda_hibrida`, `preparar_fragmentos_para_generacion`, `generar_respuesta`, `generar_respuesta_silenciosa`, `generar_tokens_respuesta`, `evaluar_pregunta_rag`.
-   - **Support:** context assembly, debug dumps, chat history, `obtener_documentos_indexados`, and the text helpers re-exported from `monkeygrab.application.keywords` (`STOPWORDS`, `extract_keywords`, ...).
+7. **Preserve `rag/chat_pdfs.py` public API.** It is consumed verbatim by `rag/web/app.py` (as `rag_engine`), the headless service, the evaluation gate and `tests/`. Renaming a symbol breaks them at once. The API is what those callers use, not a list to keep alive: a name nothing reaches beyond the facade is dead code and gets removed, and `tests/unit/test_no_dead_code.py` fails on one. The authoritative list is the re-export block at the end of that file; the groups are:
+   - **Constants:** paths and collection names, model roles, every pipeline flag and numeric parameter, both system prompts.
+   - **Pipeline entry points:** `indexar_documentos`, `realizar_busqueda_hibrida`, `preparar_fragmentos_para_generacion`, `generar_respuesta_silenciosa`, `generar_tokens_respuesta`.
+   - **Support:** debug dumps, chat history, `obtener_documentos_indexados`, and the text helpers re-exported from `monkeygrab.application.keywords` (`STOPWORDS`, `extract_keywords`, ...).
    - **Runtime switches (web control panel):** `get_pipeline_flags`, `set_pipeline_flags`, `set_docs_folder_runtime`, `MODEL_ROLE_VARS`, `MODEL_ROLE_ENV_VARS`, `get_model_roles`, `set_model_roles_runtime`, the path derivation helper `_derivar_paths_db`, and the persisted-choice API: `cargar_ajustes_persistidos`, `guardar_ajustes_persistidos`, `resolver_carpeta_store`, `STORE_IDS`.
 
    The web API adds `/api/ollama[/start|/models]`, `/api/models`, `/api/stores` (GET) and `/api/stores/select` (POST). There are exactly three fixed language stores — `en` (English, default), `es` (Castellano), `ca` (Valencià) — each bound to `rag/docs/<id>/`. They always exist, possibly empty; there is no create/delete/hide/restore and no user-created stores. `settings.json` persists `active_store`, the model roles and the pipeline flags, falling back to the defaults for anything unknown. The web app reads it at startup (`rag/engine/settings.py`). Precedence is environment > `settings.json` > module defaults, so an exported `OLLAMA_*_MODEL` or `DOCS_FOLDER` still describes the run that declares it. A save never writes an env-pinned role or store over the stored choice: the override lasts for this run, and unsetting the variable restores what the user picked rather than finding it erased. The active store is selectable, and documents can be viewed, added and removed per store.
@@ -77,7 +77,7 @@ src/monkeygrab/          Hexagonal core (see src/monkeygrab/README.md)
   adapters/                Port implementations: MinerU, embeddinggemma-2 (llama-server), FAISS, Ollama, BM25, BGE
 rag/                      Web interface and pipeline entry points
   chat_pdfs.py              Public facade + global config (see §1 rule 7)
-  engine/                    wiring, retrieval, indexing, context, generation, chunking, debug, history, settings
+  engine/                    wiring, retrieval, indexing, generation, study, sources, debug, history, settings
   headless/                  Headless HTTP service for other apps (Daimon): health, service, app
   web/                       Flask backend + React frontend (pnpm; frontend/dist gitignored)
   docs/                      Corpus PDFs (es/, ca/, en/): identity versioned in corpus_manifest.json,
@@ -111,9 +111,8 @@ docs/README.md             Documentation standard
 - **`rag/engine/` is wiring, not logic.** Each module builds adapters, calls a
   use case, and converts between domain entities and the dicts the interfaces
   consume. Pure context assembly lives in
-  `src/monkeygrab/application/context_assembly.py`; `rag/engine/context.py` is
-  a compatibility facade that adapts legacy dicts and re-exports the helper
-  names.
+  `src/monkeygrab/application/context_assembly.py` and chunking in
+  `src/monkeygrab/application/text_chunking.py`; `rag/engine/` keeps no copy.
 - `Answer` exposes `select_evidence` / `build_user_message` / `stream`
   separately as well as a composing `run`. The split is load-bearing: the web
   layer sends cited sources before the first token, so it cannot have prompt
@@ -239,7 +238,7 @@ python tools/fetch_corpus.py                   # the three corpora from rag/docs
 python tools/check_branch_policy.py <head> <base>  # is this PR's head/base pair allowed by gitflow
 
 # Web
-python rag/web/app.py                          # http://localhost:5000 (ES/EN/VAL UI + corpus selector via POST /api/corpus)
+python rag/web/app.py                          # http://localhost:5000 (ES/EN/VAL UI + store selector via POST /api/stores/select)
 
 # Frontend (pnpm only — package.json pins packageManager, CI enforces --frozen-lockfile)
 cd rag/web/frontend && pnpm install && pnpm run build

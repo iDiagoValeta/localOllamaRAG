@@ -1,9 +1,7 @@
 """Routes that mutate the index are serialized against each other (issue #394).
 
 ``_state["indexing"]`` used to be checked outside ``_indexing_lock``, so two
-reindexes could both pass the check; ``add_only`` uploads indexed without ever
-marking the flag and read ``CARPETA_DOCS`` twice, so a store switch in the
-middle saved the PDF in one store and indexed another; ``DELETE /api/docs``
+reindexes could both pass the check; ``DELETE /api/docs``
 resolved the file and the collection at different instants; and a
 ``/api/clear`` during a streaming chat was undone when the generator persisted
 the turn it had just deleted.
@@ -41,18 +39,6 @@ class _FakeStore:
         self.deleted.append(source)
         self.documents = [name for name in self.documents if name != source]
         return 1
-
-
-class _CountingFolder:
-    """``CARPETA_DOCS`` stand-in that counts how many times it is resolved."""
-
-    def __init__(self, path):
-        self.path = str(path)
-        self.reads = 0
-
-    def __fspath__(self):
-        self.reads += 1
-        return self.path
 
 
 class _FlagLock:
@@ -113,12 +99,6 @@ def _pdf(filename):
     return {"file": (io.BytesIO(b"%PDF-1.4\n"), filename)}
 
 
-def _wire_upload_indexer(monkeypatch, store):
-    monkeypatch.setattr(web, "_get_collection", lambda: store)
-    monkeypatch.setattr(web.rag_engine, "obtener_documentos_indexados", lambda coll: [])
-    monkeypatch.setattr(web, "_collection_document_details", lambda coll: [])
-
-
 def test_reindex_while_a_run_is_in_progress_starts_nothing_and_writes_nothing(
     client, docs_folder, monkeypatch
 ):
@@ -134,7 +114,7 @@ def test_reindex_while_a_run_is_in_progress_starts_nothing_and_writes_nothing(
     assert not docs_folder.exists() or list(docs_folder.iterdir()) == []
 
 
-def test_a_second_corpus_switch_is_rejected_while_the_first_runs(
+def test_a_second_store_switch_is_rejected_while_the_first_runs(
     client, docs_folder, monkeypatch
 ):
     """The claim must be visible before the switch finishes.
@@ -153,6 +133,8 @@ def test_a_second_corpus_switch_is_rejected_while_the_first_runs(
         return store
 
     monkeypatch.setattr(web, "_get_collection", _slow_collection)
+    monkeypatch.setattr(web.rag_engine, "resolver_carpeta_store", lambda name: f"/stores/{name}")
+    monkeypatch.setattr(web.rag_engine, "guardar_ajustes_persistidos", lambda: None)
     monkeypatch.setattr(web.rag_engine, "reset_vector_store_cache", lambda: None)
     monkeypatch.setattr(
         web.rag_engine,
@@ -166,13 +148,13 @@ def test_a_second_corpus_switch_is_rejected_while_the_first_runs(
 
     def _first_request():
         with web.app.test_client() as c:
-            first["response"] = c.post("/api/corpus", json={"preset": "en"})
+            first["response"] = c.post("/api/stores/select", json={"name": "en"})
 
     thread = threading.Thread(target=_first_request)
     thread.start()
     try:
         assert entered.wait(5), "the first switch never reached the store"
-        response = client.post("/api/corpus", json={"preset": "es"})
+        response = client.post("/api/stores/select", json={"name": "es"})
     finally:
         release.set()
         thread.join(5)
@@ -180,66 +162,7 @@ def test_a_second_corpus_switch_is_rejected_while_the_first_runs(
     assert response.status_code == 409
     assert response.json["error"] == "indexing_in_progress"
     assert first["response"].status_code == 200
-    assert switched == [str(ROOT / "rag" / "docs" / "en")]
-
-
-def test_add_only_owns_the_indexing_slot_while_it_runs(client, docs_folder, monkeypatch):
-    """The synchronous branch never marked ``indexing`` before this fix."""
-    entered = threading.Event()
-    release = threading.Event()
-    _wire_upload_indexer(monkeypatch, _FakeStore())
-
-    def _blocking_index(folder, coll, solo_archivos=None, **_kwargs):
-        entered.set()
-        release.wait(5)
-        return 1
-
-    monkeypatch.setattr(web.rag_engine, "indexar_documentos", _blocking_index)
-
-    result = {}
-
-    def _request():
-        with web.app.test_client() as c:
-            result["response"] = c.post(
-                "/api/upload?add_only=1",
-                data=_pdf("paper.pdf"),
-                content_type="multipart/form-data",
-            )
-
-    thread = threading.Thread(target=_request)
-    thread.start()
-    try:
-        assert entered.wait(5)
-        assert web._state["indexing"] is True
-    finally:
-        release.set()
-        thread.join(5)
-
-    assert result["response"].status_code == 200
-    assert web._state["indexing"] is False
-
-
-def test_add_only_resolves_the_docs_folder_once(client, tmp_path, monkeypatch):
-    """A second read could land after a store switch, indexing another folder."""
-    folder = _CountingFolder(tmp_path / "docs")
-    monkeypatch.setattr(web.rag_engine, "CARPETA_DOCS", folder)
-    monkeypatch.setitem(web._state, "indexing", False)
-    monkeypatch.setitem(web._state, "indexing_failed_files", [])
-    _wire_upload_indexer(monkeypatch, _FakeStore())
-    indexed = []
-    monkeypatch.setattr(
-        web.rag_engine,
-        "indexar_documentos",
-        lambda target, coll, solo_archivos=None, **_kw: indexed.append(target) or 0,
-    )
-
-    response = client.post(
-        "/api/upload?add_only=1", data=_pdf("paper.pdf"), content_type="multipart/form-data"
-    )
-
-    assert response.status_code == 200
-    assert folder.reads == 1
-    assert indexed == [folder.path]
+    assert switched == ["/stores/en"]
 
 
 def test_delete_doc_deletes_the_chunks_while_holding_the_lock(client, tmp_path, monkeypatch):
