@@ -404,11 +404,24 @@ def _python_strings(source: str) -> str:
     )
 
 
+def _is_frontend_test(path: Path) -> bool:
+    """``*.test.ts(x)``, ``*.spec.ts(x)`` and anything under ``__tests__``."""
+    infixes = path.name.split(".")[1:-1]
+    return "__tests__" in path.parts or "test" in infixes or "spec" in infixes
+
+
+def _frontend_files() -> List[Path]:
+    """Frontend sources that count as consumers: tests are not, as in Python."""
+    return [
+        path
+        for path in sorted(_FRONTEND_SRC.rglob("*"))
+        if path.suffix in {".ts", ".tsx"} and not _is_frontend_test(path)
+    ]
+
+
 def _all_frontend_code() -> str:
     return "\n".join(
-        _frontend_code(path.read_text(encoding="utf-8"))
-        for path in sorted(_FRONTEND_SRC.rglob("*"))
-        if path.suffix in {".ts", ".tsx"}
+        _frontend_code(path.read_text(encoding="utf-8")) for path in _frontend_files()
     )
 
 
@@ -419,8 +432,12 @@ def _uncalled_api_members(code: str) -> List[str]:
     "requested" long after the UI stopped calling it (issue #557). knip does
     not flag unused object members, hence this check.
     """
-    body = re.search(r"(?ms)^const api = \{\n(.*?)^\};", code)
-    members = re.findall(r"(?m)^  (\w+):", body.group(1)) if body else []
+    body = re.search(r"(?ms)^(?:export )?const api(?:: [\w<>\[\], ]+)? = \{\n(.*?)^\};", code)
+    if not body:
+        # Silence here would turn the whole check into a pass; a renamed or
+        # reshaped object has to be noticed and this pattern updated.
+        raise AssertionError("no `const api = {...}` object found in the frontend sources")
+    members = re.findall(r"(?m)^  (\w+):", body.group(1))
     return [name for name in members if not re.search(rf"\bapi\.{name}\b", code)]
 
 
@@ -559,7 +576,6 @@ def test_the_route_consumers_are_not_accidentally_empty():
 
 def test_every_api_member_of_the_frontend_is_called():
     code = _all_frontend_code()
-    assert "init" in re.findall(r"(?m)^  (\w+):", code), "the api object was not found"
     uncalled = _uncalled_api_members(code)
     assert not uncalled, (
         "Members of the `api` object in App.tsx that no `api.<name>` call reaches:\n"
@@ -751,6 +767,54 @@ def test_an_api_member_nothing_calls_is_reported():
         "await api.init();\n"
     )
     assert _uncalled_api_members(code) == ["stats"]
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    ["const api = {", "export const api = {", "const api: Api = {"],
+)
+def test_the_api_object_is_found_in_each_declaration_form(declaration):
+    code = f"{declaration}\n  stats: () => 1,\n  init: () => 2,\n}};\napi.init();\n"
+    assert _uncalled_api_members(code) == ["stats"]
+
+
+def test_a_missing_api_object_fails_instead_of_passing():
+    """A renamed object must not make the member check vacuously green."""
+    with pytest.raises(AssertionError):
+        _uncalled_api_members("const client = {\n  init: () => 1,\n};\n")
+
+
+def test_frontend_test_files_are_not_consumers():
+    """A route or member reached only from a test is dead, as in the Python gate."""
+    root = _FRONTEND_SRC
+    for name in (
+        "a.test.ts",
+        "a.test.tsx",
+        "a.spec.ts",
+        "a.spec.tsx",
+        "__tests__/a.ts",
+        "lib/__tests__/deep/a.tsx",
+    ):
+        assert _is_frontend_test(root / name), name
+    for name in ("App.tsx", "lib/types.ts", "contest.ts", "test.ts", "latest.tsx"):
+        assert not _is_frontend_test(root / name), name
+
+
+def test_a_route_reached_only_by_a_frontend_test_is_reported(tmp_path, monkeypatch):
+    """End to end over a throwaway src/: the test's URL does not vouch for the
+    route and its ``api.<name>`` call does not vouch for the member."""
+    (tmp_path / "__tests__").mkdir()
+    (tmp_path / "App.tsx").write_text(
+        "const API_BASE = '/api';\nconst api = {\n  stats: () =>\n"
+        "    fetch(`${API_BASE}/stats`),\n};\n"
+    )
+    (tmp_path / "App.test.tsx").write_text("api.stats();\n")
+    (tmp_path / "__tests__" / "b.ts").write_text("fetch('/api/stats');\n")
+    monkeypatch.setattr(sys.modules[__name__], "_FRONTEND_SRC", tmp_path)
+    code = _all_frontend_code()
+    assert _uncalled_api_members(code) == ["stats"]
+    assert _unrequested_routes(["/api/other"], code) == ["/api/other"]
+    assert "api.stats();" not in code and "fetch('/api/stats')" not in code
 
 
 def test_method_shortcut_decorators_register_routes_too():
