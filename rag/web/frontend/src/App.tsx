@@ -22,7 +22,7 @@ import type {
   StudyKind,
   VectorStore,
 } from './lib/types';
-import { fill, normalizeLang, STRINGS } from './lib/i18n';
+import { fill, normalizeLang, STRINGS, type Strings } from './lib/i18n';
 import { MarkdownContent } from './components/Markdown';
 import { StudyArtifactView } from './components/StudyArtifactView';
 import { ShimmerText } from './components/ShimmerText';
@@ -36,6 +36,28 @@ import { SettingsOverlay } from './components/SettingsOverlay';
 // =============================================================================
 
 const API_BASE = '/api';
+
+// Failure codes the UI says in the user's language. A route's `code` (or, for
+// the older routes, an `error` that is already a code) is the contract; the
+// `error` prose is Spanish for clients without i18n, so it is only the
+// fallback for a code not listed here (issue #555). A Map, so a code named
+// like an Object.prototype member cannot resolve to something inherited.
+const ERROR_CODE_KEYS = new Map<string, keyof Strings>([
+  ['invalid_filename', 'errInvalidFilename'],
+  ['indexing_in_progress', 'corpusConflict'],
+  ['invalid_flag_value', 'settingsSaveError'],
+]);
+
+function apiErrorText(
+  strings: Strings,
+  body: { code?: unknown; error?: unknown } | null | undefined,
+  fallback: string,
+): string {
+  const code = typeof body?.code === 'string' ? body.code : body?.error;
+  const key = typeof code === 'string' ? ERROR_CODE_KEYS.get(code) : undefined;
+  if (key) return strings[key];
+  return typeof body?.error === 'string' && body.error ? body.error : fallback;
+}
 
 const api = {
   init: () =>
@@ -524,7 +546,7 @@ export default function App() {
       setFingerprintStale(result.fingerprint_stale || false);
     } else {
       setSettings(prev => ({ ...prev, [key]: previousVal }));
-      setSettingsError(result?.error || T.settingsSaveError);
+      setSettingsError(apiErrorText(T, result, T.settingsSaveError));
     }
   }, [settings, lang]);
 
@@ -549,7 +571,7 @@ export default function App() {
       } else if (result.ok) {
         setDocuments(result.documents || []);
       } else {
-        setSettingsError(fill(T.reindexError, { error: result.error }));
+        setSettingsError(fill(T.reindexError, { error: apiErrorText(T, result, T.unknownError) }));
       }
     } catch {
       setSettingsError(T.reindexConnError);
@@ -578,7 +600,7 @@ export default function App() {
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           role: 'system',
-          content: fill(T.deleteError, { error: result.error }),
+          content: fill(T.deleteError, { error: apiErrorText(T, result, T.unknownError) }),
           mode,
           isError: true,
         }]);
@@ -1060,7 +1082,7 @@ export default function App() {
         setRetryTrigger(t => t + 1);
       } else {
         setIsIndexing(false);
-        setIndexingError(result.error || T.indexingFailed);
+        setIndexingError(apiErrorText(T, result, T.indexingFailed));
       }
     } catch {
       setIsIndexing(false);

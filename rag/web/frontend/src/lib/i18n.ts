@@ -4,6 +4,7 @@ export const STRINGS = {
   es: {
     tabDocs: 'Documentos', tabPipeline: 'Pipeline RAG',
     corpusError: 'No se pudo cambiar el almacén.',
+    errInvalidFilename: 'Nombre de archivo no válido: debe ser un PDF sin carpetas en la ruta.',
     corpusConflict: 'Hay indexación en curso; espera un momento.',
     corpusConnError: '✗ Error de conexión al cambiar el corpus.',
     collection: 'Colección ({n} docs)', noDocs: 'No hay documentos indexados',
@@ -92,6 +93,7 @@ export const STRINGS = {
   en: {
     tabDocs: 'Documents', tabPipeline: 'RAG Pipeline',
     corpusError: 'Could not switch store.',
+    errInvalidFilename: 'Invalid file name: it must be a PDF with no folders in the path.',
     corpusConflict: 'Indexing in progress; please wait.',
     corpusConnError: '✗ Connection error while switching corpus.',
     collection: 'Collection ({n} docs)', noDocs: 'No documents indexed',
@@ -180,6 +182,7 @@ export const STRINGS = {
   ca: {
     tabDocs: 'Documents', tabPipeline: 'Pipeline RAG',
     corpusError: 'No s\'ha pogut canviar el magatzem.',
+    errInvalidFilename: 'Nom de fitxer no vàlid: ha de ser un PDF sense carpetes a la ruta.',
     corpusConflict: 'Hi ha indexació en curs; espera un moment.',
     corpusConnError: '✗ Error de connexió en canviar el corpus.',
     collection: "Col·lecció ({n} docs)", noDocs: 'No hi ha documents indexats',
