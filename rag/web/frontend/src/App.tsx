@@ -281,6 +281,12 @@ export default function App() {
   }, []);
   const T = STRINGS[lang];
 
+  // The page language drives how a screen reader pronounces the text; the
+  // static index.html says "en" whatever the UI shows (issue #555).
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
+
   const [mode, setMode] = useState<Mode>('rag');
   const [input, setInput] = useState('');
   // Study mode. The artifact kind is a control (three fixed choices); the
