@@ -165,7 +165,7 @@ Pasos, cada uno su propio issue:
 
 0. **Casos y runner, sin código de producto.** Tipo `figure_answer`, en un
    fichero propio (`tests/eval/figure_answer_cases.jsonl`) y no en
-   `gold_cases.jsonl`: el denominador 156 y el suelo 0,82 no se mueven, y las
+   `gold_cases.jsonl`: el denominador 156 y el suelo 0,91 no se mueven, y las
    filas de `docs/model-history.md` siguen siendo comparables. Es el mismo
    patrón que `probe_cases_lang.jsonl`. Brazos: control (todo apagado, el
    producto actual) y B (`USAR_DESCRIPCION_IMAGEN=true`, colección aislada
