@@ -67,15 +67,18 @@ store is never overwritten or merged, so uploads and deletions survive upgrades.
 - **Ollama** running locally with the desired models.
 - **The `llama-server` embedder**: the `llama-server` binary from
   [llama.cpp](https://github.com/ggml-org/llama.cpp) plus the GGUF conversion of
-  [`google/embeddinggemma-2`](https://huggingface.co/google/embeddinggemma-2),
+  [`google/embeddinggemma-2`](https://huggingface.co/google/embeddinggemma-2)
+  (`embeddinggemma-2-Q8_0.gguf` and `mmproj-embeddinggemma-2-Q8_0.gguf` from
+  [`ggml-org/embeddinggemma-2-GGUF`](https://huggingface.co/ggml-org/embeddinggemma-2-GGUF)),
   running with embeddings enabled on the default port:
 
   ```bash
-  llama-server -m embeddinggemma-2.gguf --embedding --port 8091 -b 2048 -ub 2048
+  llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf --embedding --port 8091 -b 2048 -ub 2048
   ```
 
-  The batch flags match the root README: with the default 512-token physical
-  batch, a long chunk is rejected with HTTP 500 during indexing (issue #487).
+  The flags match the root README: with the default 512-token physical batch, a
+  long chunk is rejected with HTTP 500 during indexing (issue #487), and without
+  `--mmproj` image embeddings fail with HTTP 500 (issue #565).
 
   `MONKEYGRAB_EMBEDDER_URL` defaults to `http://127.0.0.1:8091`; point it at
   another host/port if the server listens elsewhere. The server is a

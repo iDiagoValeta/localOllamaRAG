@@ -38,6 +38,7 @@ Dependencies:
 """
 
 
+import json
 import os
 import shutil
 import sys
@@ -288,15 +289,50 @@ def _log_boot_warning(message: str) -> str:
 
 # EMBEDDER HEALTH
 
+# The command the root README documents. Without --mmproj the server cannot
+# embed images and answers them with HTTP 500 (issue #565).
+_EMBEDDER_COMMAND = (
+    "llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf "
+    "--embedding --port {port} -b 2048 -ub 2048"
+)
+
+
 def _embedder_warning_message(health_url: str, reason: str) -> str:
     """One line naming the failing endpoint, why, and how to start llama-server."""
     port = urllib.parse.urlsplit(health_url).port or 8091
     return (
         f"Embedder (llama-server) is not reachable at {health_url}: {reason}. "
-        "Start it with `llama-server -m <embeddinggemma-2.gguf> --embedding "
-        f"--port {port} -b 2048 -ub 2048`, or point MONKEYGRAB_EMBEDDER_URL at a running server. "
+        f"Start it with `{_EMBEDDER_COMMAND.format(port=port)}`, "
+        "or point MONKEYGRAB_EMBEDDER_URL at a running server. "
         "MonkeyGrab will open, but indexing and retrieval fail until the "
         "embedder answers."
+    )
+
+
+def _embedder_vision_warning(base_url: str) -> str:
+    """Return a warning when the embedder cannot embed images, else ``""``.
+
+    ``/props`` reports ``modalities.vision`` false for a server started without
+    ``--mmproj``, which would otherwise surface as HTTP 500 at the first PDF
+    with a figure (issue #565).
+    """
+    props_url = f"{base_url}/props"
+    try:
+        with urllib.request.urlopen(  # nosec B310 -- local endpoint from app config
+            props_url, timeout=_EMBEDDER_HEALTH_TIMEOUT_SECONDS
+        ) as response:
+            props = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        return _embedder_warning_message(props_url, str(exc))
+    modalities = props.get("modalities") if isinstance(props, dict) else None
+    if isinstance(modalities, dict) and modalities.get("vision") is True:
+        return ""
+    port = urllib.parse.urlsplit(base_url).port or 8091
+    return (
+        f"Embedder (llama-server) at {base_url} reports no vision support in /props, "
+        "so image embeddings (USAR_EMBEDDINGS_IMAGEN) fail with HTTP 500. "
+        f"Restart it with --mmproj: `{_EMBEDDER_COMMAND.format(port=port)}`. "
+        "MonkeyGrab will open, but indexing a PDF with figures fails until then."
     )
 
 
@@ -308,7 +344,8 @@ def _embedder_warning() -> str:
     question with a message far from the missing prerequisite (issue #342).
 
     Returns:
-        An empty string when ``GET <base_url>/health`` answers 200, otherwise a
+        An empty string when ``GET <base_url>/health`` answers 200 (and, with
+        image embeddings on, ``/props`` reports vision support), otherwise a
         one-line explanation naming the endpoint and how to start it.
 
     Raises:
@@ -321,7 +358,8 @@ def _embedder_warning() -> str:
 
     # The same AppConfig the embedding adapter resolves, so the check can never
     # name a different server from the one the pipeline will call.
-    base_url = AppConfig.from_env().models.embedding.base_url.rstrip("/")
+    config = AppConfig.from_env()
+    base_url = config.models.embedding.base_url.rstrip("/")
     health_url = f"{base_url}/health"
     try:
         with urllib.request.urlopen(  # nosec B310 -- local endpoint from app config
@@ -334,6 +372,8 @@ def _embedder_warning() -> str:
         return _embedder_warning_message(health_url, str(exc))
     if status != 200:
         return _embedder_warning_message(health_url, f"HTTP {status}")
+    if config.flags.usar_embeddings_imagen:
+        return _embedder_vision_warning(base_url)
     return ""
 
 

@@ -260,13 +260,46 @@ def _check_ollama() -> Tuple[bool, str]:
     return True, f"Ollama: reachable at {base_url}, all {len(wanted)} configured model(s) present"
 
 
+# The command the root README documents. Without --mmproj the server cannot
+# embed images and answers them with HTTP 500 (issue #565).
+_EMBEDDER_COMMAND = (
+    "llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf "
+    "--embedding --port {port} -b 2048 -ub 2048"
+)
+
+
 def _embedder_failure(health_url: str, reason: str) -> str:
     """One line naming the failing endpoint and how to start llama-server."""
     port = urllib.parse.urlsplit(health_url).port or 8091
     return (
         f"Embedder: llama-server is not reachable at {health_url} ({reason}). "
-        f"Start it with `llama-server -m <embeddinggemma-2.gguf> --embedding --port {port} "
-        "-b 2048 -ub 2048`."
+        f"Start it with `{_EMBEDDER_COMMAND.format(port=port)}`."
+    )
+
+
+def _embedder_vision_problem(base_url: str) -> str:
+    """Explain why the embedder cannot embed images, or return ``""`` when it can.
+
+    A server started without ``--mmproj`` answers ``/health`` and text
+    embeddings normally, then fails every figure with HTTP 500 at indexing
+    time; ``/props`` reports it up front as ``modalities.vision`` false.
+    """
+    props_url = f"{base_url}/props"
+    try:
+        with urllib.request.urlopen(  # nosec B310 -- local endpoint from app config
+            props_url, timeout=_EMBEDDER_HEALTH_TIMEOUT_SECONDS
+        ) as response:
+            props = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        return _embedder_failure(props_url, str(exc))
+    modalities = props.get("modalities") if isinstance(props, dict) else None
+    if isinstance(modalities, dict) and modalities.get("vision") is True:
+        return ""
+    port = urllib.parse.urlsplit(base_url).port or 8091
+    return (
+        f"Embedder: llama-server at {base_url} reports no vision support in /props, so "
+        "image embeddings (USAR_EMBEDDINGS_IMAGEN) fail with HTTP 500. Restart it with "
+        f"--mmproj: `{_EMBEDDER_COMMAND.format(port=port)}`."
     )
 
 
@@ -277,9 +310,11 @@ def _check_embedder() -> Tuple[bool, str]:
     build it. It still has to be checked, because every indexing and retrieval
     run embeds through it, and "all components present" was a claim made
     without asking. The URL comes from ``AppConfig`` so this can never name a
-    different server from the one the pipeline calls.
+    different server from the one the pipeline calls. When image embeddings are
+    on, ``/props`` must also report vision support (issue #565).
     """
-    base_url = AppConfig.from_env().models.embedding.base_url.rstrip("/")
+    config = AppConfig.from_env()
+    base_url = config.models.embedding.base_url.rstrip("/")
     health_url = f"{base_url}/health"
     try:
         with urllib.request.urlopen(  # nosec B310 -- local endpoint from app config
@@ -292,6 +327,10 @@ def _check_embedder() -> Tuple[bool, str]:
         return False, _embedder_failure(health_url, str(exc))
     if status != 200:
         return False, _embedder_failure(health_url, f"HTTP {status}")
+    if config.flags.usar_embeddings_imagen:
+        problem = _embedder_vision_problem(base_url)
+        if problem:
+            return False, problem
     return True, f"Embedder: llama-server reachable at {health_url}"
 
 

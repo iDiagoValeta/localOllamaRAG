@@ -238,9 +238,10 @@ class TestReporting:
 class TestEmbedderCheck:
     """Issue #385: a prerequisite this script does not build still gets checked."""
 
-    def _config(self, monkeypatch, base_url):
+    def _config(self, monkeypatch, base_url, images=False):
         config = SimpleNamespace(
-            models=SimpleNamespace(embedding=SimpleNamespace(base_url=base_url))
+            models=SimpleNamespace(embedding=SimpleNamespace(base_url=base_url)),
+            flags=SimpleNamespace(usar_embeddings_imagen=images),
         )
         monkeypatch.setattr(setup, "AppConfig", SimpleNamespace(from_env=lambda: config))
 
@@ -302,6 +303,64 @@ class TestEmbedderCheck:
         assert "http://embedder.example:9000/health" in message
         assert "llama-server" in message
         assert "-b 2048 -ub 2048" in message
+        assert "--mmproj mmproj-embeddinggemma-2-Q8_0.gguf" in message
+
+    def _serve(self, monkeypatch, props):
+        """Double ``/health`` (200) and ``/props`` (``props`` as JSON)."""
+        calls = []
+
+        class _Reply:
+            status = 200
+
+            def __init__(self, body):
+                self._body = body
+
+            def read(self):
+                return self._body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        def fake_urlopen(url, timeout):
+            calls.append(url)
+            return _Reply(json.dumps(props).encode("utf-8"))
+
+        monkeypatch.setattr(setup.urllib.request, "urlopen", fake_urlopen)
+        return calls
+
+    def test_a_server_with_vision_passes_when_image_embeddings_are_on(self, monkeypatch):
+        self._config(monkeypatch, "http://embedder.example:9000", images=True)
+        calls = self._serve(monkeypatch, {"modalities": {"vision": True}})
+
+        passed, _message = setup._check_embedder()
+
+        assert passed
+        assert calls == [
+            "http://embedder.example:9000/health",
+            "http://embedder.example:9000/props",
+        ]
+
+    def test_a_server_without_vision_fails_when_image_embeddings_are_on(self, monkeypatch):
+        self._config(monkeypatch, "http://embedder.example:9000", images=True)
+        self._serve(monkeypatch, {"modalities": {"vision": False}})
+
+        passed, message = setup._check_embedder()
+
+        assert not passed
+        assert "--mmproj mmproj-embeddinggemma-2-Q8_0.gguf" in message
+        assert "USAR_EMBEDDINGS_IMAGEN" in message
+
+    def test_a_server_without_vision_passes_when_image_embeddings_are_off(self, monkeypatch):
+        self._config(monkeypatch, "http://embedder.example:9000", images=False)
+        calls = self._serve(monkeypatch, {"modalities": {"vision": False}})
+
+        passed, _message = setup._check_embedder()
+
+        assert passed
+        assert calls == ["http://embedder.example:9000/health"]
 
 
 class TestSurvivingWhatItDiagnoses:

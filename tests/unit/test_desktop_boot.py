@@ -7,6 +7,7 @@ fast gate. ``_boot`` is exercised with a fake window and a stubbed server: no
 pywebview, no Flask, no listening socket.
 """
 
+import json
 import os
 import sys
 import types
@@ -18,8 +19,12 @@ import rag.web.desktop as desktop
 class _Response:
     """Minimal stand-in for ``urllib.request.urlopen``'s context manager."""
 
-    def __init__(self, status=200):
+    def __init__(self, status=200, body=b"{}"):
         self.status = status
+        self._body = body
+
+    def read(self):
+        return self._body
 
     def __enter__(self):
         return self
@@ -28,15 +33,21 @@ class _Response:
         return False
 
 
-def _stub_urlopen(monkeypatch, *, status=200, error=None):
-    """Replace ``urlopen`` and return the ``(url, timeout)`` calls it saw."""
+_VISION = {"modalities": {"vision": True}}
+
+
+def _stub_urlopen(monkeypatch, *, status=200, error=None, props=_VISION):
+    """Replace ``urlopen`` and return the ``(url, timeout)`` calls it saw.
+
+    ``/props`` answers ``props`` (a server started with ``--mmproj`` by default).
+    """
     calls = []
 
     def _urlopen(url, timeout):
         calls.append((url, timeout))
         if error is not None:
             raise error
-        return _Response(status)
+        return _Response(status, json.dumps(props).encode("utf-8"))
 
     monkeypatch.setattr(desktop.urllib.request, "urlopen", _urlopen)
     return calls
@@ -51,7 +62,11 @@ def test_the_health_probe_uses_the_appconfig_embedder_url(monkeypatch):
 
     assert desktop._embedder_warning() == ""
 
-    assert calls == [("http://embedder.example:9000/health", desktop._EMBEDDER_HEALTH_TIMEOUT_SECONDS)]
+    timeout = desktop._EMBEDDER_HEALTH_TIMEOUT_SECONDS
+    assert calls == [
+        ("http://embedder.example:9000/health", timeout),
+        ("http://embedder.example:9000/props", timeout),
+    ]
 
 
 def test_the_probe_timeout_is_short(monkeypatch):
@@ -74,7 +89,37 @@ def test_a_dead_embedder_yields_an_actionable_message(monkeypatch):
     assert "llama-server" in message
     assert "--embedding" in message
     assert "-b 2048 -ub 2048" in message
+    assert "--mmproj mmproj-embeddinggemma-2-Q8_0.gguf" in message
     assert "MONKEYGRAB_EMBEDDER_URL" in message
+
+
+# EMBEDDER VISION CHECK (#565)
+
+
+def test_a_server_without_vision_warns_when_image_embeddings_are_on(monkeypatch):
+    monkeypatch.setenv("USAR_EMBEDDINGS_IMAGEN", "1")
+    _stub_urlopen(monkeypatch, props={"modalities": {"vision": False}})
+
+    message = desktop._embedder_warning()
+
+    assert "--mmproj mmproj-embeddinggemma-2-Q8_0.gguf" in message
+    assert "USAR_EMBEDDINGS_IMAGEN" in message
+
+
+def test_a_server_without_vision_is_fine_when_image_embeddings_are_off(monkeypatch):
+    monkeypatch.setenv("MONKEYGRAB_EMBEDDER_URL", "http://embedder.example:9000")
+    monkeypatch.setenv("USAR_EMBEDDINGS_IMAGEN", "0")
+    calls = _stub_urlopen(monkeypatch, props={"modalities": {"vision": False}})
+
+    assert desktop._embedder_warning() == ""
+    assert [url for url, _timeout in calls] == ["http://embedder.example:9000/health"]
+
+
+def test_a_server_with_vision_is_fine_when_image_embeddings_are_on(monkeypatch):
+    monkeypatch.setenv("USAR_EMBEDDINGS_IMAGEN", "1")
+    _stub_urlopen(monkeypatch, props={"modalities": {"vision": True}})
+
+    assert desktop._embedder_warning() == ""
 
 
 def test_a_non_200_health_response_counts_as_down(monkeypatch):
