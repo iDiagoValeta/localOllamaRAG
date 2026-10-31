@@ -394,20 +394,28 @@ def _run_mineru(
 _EXCEPTION_LINE = re.compile(r"[A-Za-z_][\w.]*(?:Error|Exception): .*")
 
 
+_FAILURE_TAIL_LINES = 8
+
+
 def _failure_cause(output: str) -> str:
-    """The last ``SomeError: message`` in MinerU's output, else its last line.
+    """The last ``SomeError: message`` in MinerU's output, else its last lines.
 
     MinerU logs through loguru, whose tracebacks print every local (tensors
     included), so the exception that explains the failure sits at the end of
     thousands of characters. The first line of the raised error is what the
     web shows the user (issue #420); it has to be the cause.
+
+    Without an exception line the cause is the last ``_FAILURE_TAIL_LINES``
+    non-empty lines, joined onto one line so the web still shows them: a Rich
+    error box (the MinerU CLI's usage errors) ends in its border, and the
+    message ("No such option: -p") sits above it (issue #573).
     """
     lines = [line.strip() for line in output.splitlines() if line.strip()]
     for line in reversed(lines):
         match = _EXCEPTION_LINE.search(line)
         if match:
             return match.group(0)
-    return lines[-1] if lines else "no output"
+    return " | ".join(lines[-_FAILURE_TAIL_LINES:]) if lines else "no output"
 
 # Content-list parsing
 
