@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Fixed
+
+- The documented embedder command loads the multimodal projector (`--mmproj`), and the setup check, the desktop boot and the evaluation gate's preflight fail when image embeddings are on and `/props` reports no vision support; without it a fresh install failed on the first PDF with a figure (#565).
+
 ## [4.2.0] - 2026-10-31
 
 [Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.2.0).

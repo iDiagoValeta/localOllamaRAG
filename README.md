@@ -227,12 +227,17 @@ Requires [Python 3.10+](https://www.python.org/downloads/),
 [Ollama](https://ollama.com/download) running locally with at least a generator
 model pulled, and the
 [`embeddinggemma-2`](https://huggingface.co/google/embeddinggemma-2) embedder
-behind a local `llama-server` — start it with
-`llama-server -m embeddinggemma-2.gguf --embedding --port 8091 -b 2048 -ub 2048` from
-[llama.cpp](https://github.com/ggml-org/llama.cpp), the default address of
-`MONKEYGRAB_EMBEDDER_URL`. The batch flags matter: with the default 512-token
-physical batch a longer chunk is rejected with HTTP 500 and indexing stops
-(issue #487). Drop PDFs into `rag/docs/en/` — the index builds
+behind a local `llama-server` — download `embeddinggemma-2-Q8_0.gguf` and
+`mmproj-embeddinggemma-2-Q8_0.gguf` from the Hugging Face repo
+[`ggml-org/embeddinggemma-2-GGUF`](https://huggingface.co/ggml-org/embeddinggemma-2-GGUF)
+and start it with
+`llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf --embedding --port 8091 -b 2048 -ub 2048`
+from [llama.cpp](https://github.com/ggml-org/llama.cpp), the default address of
+`MONKEYGRAB_EMBEDDER_URL`. Two things in that command matter. Without `--mmproj` the
+server cannot embed images, and indexing a PDF with a figure stops on HTTP 500
+while `USAR_EMBEDDINGS_IMAGEN` is on (its default, issue #565). With the default
+512-token physical batch a longer chunk is rejected with HTTP 500 and indexing
+stops (issue #487). Drop PDFs into `rag/docs/en/` — the index builds
 itself on first run.
 
 Build the web interface once before the first run. Its `dist/` folder is

@@ -145,7 +145,10 @@ something is missing:
    fixed auxiliary model used for query decomposition, contextual retrieval
    and RECOMP) is installed, then checks the embedder (`llama-server`) answers
    `GET <MONKEYGRAB_EMBEDDER_URL>/health` and identifies embeddinggemma-2 in
-   its `GET /props` (`model_path` or `model_alias`). BGE is not an Ollama role.
+   its `GET /props` (`model_path` or `model_alias`). While image embeddings are
+   on (`USAR_EMBEDDINGS_IMAGEN`, the default) that `/props` must also report
+   `modalities.vision` true, which needs `--mmproj`; the gate stops otherwise
+   (issue #565). BGE is not an Ollama role.
 2. Downloads any missing blind-set arXiv papers (reusing `fetch_papers.py`)
    and stages them under `blind_docs/<paper-slug>.pdf`.
 3. Indexes whatever is not already indexed -- dev-set papers for each of the three
