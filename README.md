@@ -184,8 +184,8 @@ supersedes it.
 
 ### Low-VRAM variant (4 GB)
 
-`main` is the full pipeline: reranker, RECOMP synthesis and the default
-generator. A trimmed variant for 4 GB GPUs (a ~3 GB Q4 generator,
+`main` is the full pipeline: reranker, the default generator and RECOMP
+synthesis available as a switch (off by default). A trimmed variant for 4 GB GPUs (a ~3 GB Q4 generator,
 embeddinggemma-2 on the CPU, reranker and RECOMP off) lives on the
 [`rag-lite`](https://github.com/iDiagoValeta/localOllamaRAG/tree/rag-lite)
 branch, where it is selected with `MONKEYGRAB_PROFILE=lite`. Its measured runs
@@ -209,7 +209,7 @@ interface and apply to the next query without a restart.
 | **Reranking** | A cross-encoder reads query and chunk together and re-scores the shortlist. |
 | **Threshold** | Drops anything below the reranker's relevance floor, so a question with no answer in the corpus returns nothing rather than the least-bad chunk. Applies only when reranking ran — without its scores there is nothing to threshold on. |
 | **Neighbour expansion** | Pulls in adjacent chunks of the top hits, recovering sentences cut by the chunk boundary. |
-| **RECOMP synthesis** | Compresses the evidence into a facts briefing before generation, following [RECOMP](https://arxiv.org/abs/2310.04408). |
+| **RECOMP synthesis** | Off by default. Compresses the evidence into a facts briefing before generation, following [RECOMP](https://arxiv.org/abs/2310.04408). On the gold set it trades a few cases for others of the same number and makes each answer about 4.7x slower ([measurements](docs/model-history.md)). |
 
 At indexing time, [contextual retrieval](https://www.anthropic.com/news/contextual-retrieval)
 optionally prepends a short situational summary to each chunk so it can be found

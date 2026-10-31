@@ -50,7 +50,7 @@ _FLAG_MAP = [
     ("USAR_RERANKER", "usar_reranker", True),
     ("EXPANDIR_CONTEXTO", "expandir_contexto", True),
     ("USAR_OPTIMIZACION_CONTEXTO", "usar_optimizacion_contexto", True),
-    ("USAR_RECOMP_SYNTHESIS", "usar_recomp_synthesis", True),
+    ("USAR_RECOMP_SYNTHESIS", "usar_recomp_synthesis", False),
     ("USAR_EMBEDDINGS_IMAGEN", "usar_embeddings_imagen", True),
     ("USAR_DESCRIPCION_IMAGEN", "usar_descripcion_imagen", False),
     ("LOGGING_METRICAS", "logging_metricas", True),

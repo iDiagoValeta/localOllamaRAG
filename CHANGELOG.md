@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Changed
+
+- RECOMP synthesis is off by default (`USAR_RECOMP_SYNTHESIS=false`). With every role on `gemma4:e4b` it scored 145 and 143 of 156 against 144 and 143 without it, while each answer took about 11 s instead of 2.3 s. A choice saved in the web UI or an exported variable still wins (#571).
+
 ### Fixed
 
 - Adding PDFs from the UI indexes only the new files (`POST /api/docs`) instead of clearing the store and re-embedding every document; a file with the name of an indexed document replaces it. `POST /api/reindex` no longer takes files and stays the full rebuild (#554).

@@ -15,7 +15,7 @@ export function useSettings(T: Strings, setFingerprintStale: (stale: boolean) =>
     reranker: true,
     expandContext: true,
     optimizeContext: true,
-    recompSynthesis: true,
+    recompSynthesis: false,
   });
 
   const toggleSetting = useCallback(async (key: keyof PipelineSettings) => {
