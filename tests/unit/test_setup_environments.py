@@ -301,6 +301,7 @@ class TestEmbedderCheck:
         assert not passed
         assert "http://embedder.example:9000/health" in message
         assert "llama-server" in message
+        assert "-b 2048 -ub 2048" in message
 
 
 class TestSurvivingWhatItDiagnoses:

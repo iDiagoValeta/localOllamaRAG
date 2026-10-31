@@ -235,8 +235,14 @@ physical batch a longer chunk is rejected with HTTP 500 and indexing stops
 (issue #487). Drop PDFs into `rag/docs/en/` — the index builds
 itself on first run.
 
+Build the web interface once before the first run. Its `dist/` folder is
+gitignored, so a fresh clone has none, and without it `/` answers 503. Then start
+the app with the `.venv` interpreter that `tools/setup_environments.py` builds
+(`.venv\Scripts\python.exe` on Windows):
+
 ```bash
-python rag/web/app.py      # web UI at http://localhost:5000
+(cd rag/web/frontend && pnpm install && pnpm run build)
+.venv/bin/python rag/web/app.py      # web UI at http://localhost:5000
 ```
 
 ### Headless service (for another application)

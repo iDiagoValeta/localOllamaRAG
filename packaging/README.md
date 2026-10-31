@@ -71,8 +71,11 @@ store is never overwritten or merged, so uploads and deletions survive upgrades.
   running with embeddings enabled on the default port:
 
   ```bash
-  llama-server -m embeddinggemma-2.gguf --embedding --port 8091
+  llama-server -m embeddinggemma-2.gguf --embedding --port 8091 -b 2048 -ub 2048
   ```
+
+  The batch flags match the root README: with the default 512-token physical
+  batch, a long chunk is rejected with HTTP 500 during indexing (issue #487).
 
   `MONKEYGRAB_EMBEDDER_URL` defaults to `http://127.0.0.1:8091`; point it at
   another host/port if the server listens elsewhere. The server is a

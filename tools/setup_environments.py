@@ -265,7 +265,8 @@ def _embedder_failure(health_url: str, reason: str) -> str:
     port = urllib.parse.urlsplit(health_url).port or 8091
     return (
         f"Embedder: llama-server is not reachable at {health_url} ({reason}). "
-        f"Start it with `llama-server -m <embeddinggemma-2.gguf> --embedding --port {port}`."
+        f"Start it with `llama-server -m <embeddinggemma-2.gguf> --embedding --port {port} "
+        "-b 2048 -ub 2048`."
     )
 
 
