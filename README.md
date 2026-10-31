@@ -245,7 +245,7 @@ $SUDO apt update
 $SUDO apt install -y python3 python3-venv git curl ca-certificates zstd pciutils \
   build-essential cmake libgl1 libglib2.0-0
 
-# Node 22+ with corepack: the web UI builds with pnpm, pinned in package.json.
+# Node 22.12+ with corepack (vitest needs it): the web UI builds with pnpm, pinned in package.json.
 # Download the NodeSource setup script, read it, then run it.
 curl -fsSLo nodesource_setup.sh https://deb.nodesource.com/setup_24.x
 $SUDO bash nodesource_setup.sh && $SUDO apt install -y nodejs && $SUDO corepack enable
