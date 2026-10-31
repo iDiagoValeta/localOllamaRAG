@@ -294,9 +294,8 @@ question for a few short sub-queries: the decomposer runs with `keep_alive=0`
 so each question unloads and reloads the generator (the gate's ~7 s per case
 in retrieval is the same pattern on Ling, also unloaded after every call).
 RECOMP on `gemma4:e4b` took about 14.6 s per answer here, under the contention
-described below. Python glue is nil,
-so rewriting the
-orchestration buys nothing. The generation figures, though, are not the gate's:
+described below. Python glue is nil, so rewriting the orchestration buys
+nothing. The generation figures, though, are not the gate's:
 the probe keeps the reranker resident next to the generator, PyTorch reported
 an out-of-memory retry while loading it, and answers took 9-13 s against the
 gate's 2.3 s, so the probe measured a card under contention, which is the
