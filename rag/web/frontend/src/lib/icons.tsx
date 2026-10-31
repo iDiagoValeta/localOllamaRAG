@@ -1,7 +1,7 @@
 import type { SVGProps } from 'react';
 
 // Central icon set — Phosphor, aliased to the names the app already uses, so
-// swapping the import source in App.tsx flips the whole icon language at once.
+// swapping the import source in the components flips the whole icon language at once.
 // Chosen for a less generic, more technical look than the previous set:
 //  - Translate  → languages (was a generic "Languages")
 //  - FileMagnifyingGlass → view/open a PDF (was a generic eye)

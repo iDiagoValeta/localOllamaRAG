@@ -174,7 +174,8 @@ presented as pipeline coverage, and vice versa:
   against test doubles (`architecture` job — must import nothing but the
   standard library, since it exercises `domain`/`ports`/`config`/`application`
   and the harness's own fake-evaluator tests), frontend build
-  (`pnpm install --frozen-lockfile` + `pnpm run lint` + `pnpm run build`), and
+  (`pnpm install --frozen-lockfile` + `pnpm run lint` + `pnpm run test` +
+  `pnpm run knip` + `pnpm run build`), and
   the full `pytest` suite with real dependencies but a doubled/absent Ollama
   server (`engine` job — Ollama-dependent tests skip themselves when no
   server answers).
@@ -242,6 +243,7 @@ python rag/web/app.py                          # http://localhost:5000 (ES/EN/VA
 
 # Frontend (pnpm only — package.json pins packageManager, CI enforces --frozen-lockfile)
 cd rag/web/frontend && pnpm install && pnpm run build
+cd rag/web/frontend && pnpm run test           # vitest + Testing Library over the real App, fetch faked
 
 # Tests / CI gates
 pytest                                          # full suite (unit + characterization + eval grader + harness + loose tests)
