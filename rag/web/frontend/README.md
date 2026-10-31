@@ -23,6 +23,22 @@ pnpm install
 pnpm run dev      # Vite on http://localhost:3000 — proxies /api → :5000
 ```
 
+## Layout
+
+```
+src/App.tsx          composition only: the hooks, the blocking screens, the layout
+src/hooks/           one concern each (useChat, useCorpusActions, useServerSession, ...)
+src/components/      what is drawn (Sidebar, ChatHeader, MessageList, Composer, ...)
+src/lib/api.ts       every /api call, and apiErrorText (backend error codes -> i18n)
+src/lib/stream.ts    the server-sent-events parser behind chat and RAG answers
+```
+
+State that two hooks share (the conversation, the active corpus, the indexing
+state) is created in `App.tsx` and handed down, so no hook reaches into
+another's state. State lives in the hooks, not in the components, because the
+chat column unmounts while a panel or a PDF is open and must come back as it
+was.
+
 ## Tests
 
 ```bash

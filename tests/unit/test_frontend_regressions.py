@@ -22,6 +22,8 @@ FRONTEND = ROOT / "rag" / "web" / "frontend" / "src"
 APP = FRONTEND / "App.tsx"
 I18N = FRONTEND / "lib" / "i18n.ts"
 PDF_PANE = FRONTEND / "components" / "PdfPane.tsx"
+CHAT_HOOK = FRONTEND / "hooks" / "useChat.ts"
+SESSION_HOOK = FRONTEND / "hooks" / "useServerSession.ts"
 
 
 def _read(path: Path) -> str:
@@ -90,8 +92,8 @@ def test_question_too_short_error_is_translated() -> None:
     missing there falls back to ``data.message``, which the backend writes in
     Spanish regardless of the UI language.
     """
-    mapped = re.search(r"\bquestion_too_short:\s*T\.(\w+)", _read(APP))
-    assert mapped, "App.tsx does not map the question_too_short error code"
+    mapped = re.search(r"\bquestion_too_short:\s*T\.(\w+)", _read(CHAT_HOOK))
+    assert mapped, "useChat.ts does not map the question_too_short error code"
 
     key = mapped.group(1)
     for lang, lang_keys in _locale_keys().items():
@@ -123,9 +125,9 @@ def test_init_poller_reloads_stores_when_indexing_finishes() -> None:
     never re-runs; the poller's success branch is the only place that can
     refresh the rows without the user switching store.
     """
-    source = _read(APP)
+    source = _read(SESSION_HOOK)
     ok_branch = re.search(r"if \(initData\.ok\) \{(.*?)\n        \} else \{", source, re.S)
-    assert ok_branch, "could not locate the successful init branch in App.tsx"
+    assert ok_branch, "could not locate the successful init branch in useServerSession.ts"
     assert "loadStores()" in ok_branch.group(1), (
         "the init poller does not reload the store list on success"
     )

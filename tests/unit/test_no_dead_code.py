@@ -79,7 +79,7 @@ Tests are not consumers, as everywhere else in this file. Paths outside
 ``/api/`` (the page, the bundle, the logos) are requested by the browser
 itself, not by a string in the frontend, so they are not checked. The match
 is by path only, not by HTTP method: ``GET`` and ``POST`` on one path are kept
-alive by either caller. The ``api`` object in ``App.tsx`` is where those strings
+alive by either caller. The ``api`` object in ``lib/api.ts`` is where those strings
 live, so a member of it that no ``api.<name>`` call reaches is reported too:
 its URL would otherwise vouch for a route nobody requests.
 
@@ -593,7 +593,7 @@ def test_every_api_member_of_the_frontend_is_called():
     uncalled = _uncalled_api_members(code)
     assert "init" in _api_members(code)  # the parse is alive, not vacuously empty
     assert not uncalled, (
-        "Members of the `api` object in App.tsx that no `api.<name>` call reaches:\n"
+        "Members of the `api` object in lib/api.ts that no `api.<name>` call reaches:\n"
         + "\n".join(f"  api.{name}" for name in uncalled)
         + "\nDelete the member: its URL would keep a dead route looking requested."
     )
