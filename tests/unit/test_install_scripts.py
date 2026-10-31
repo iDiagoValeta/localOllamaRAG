@@ -44,24 +44,71 @@ def _env(tmp_path):
     return env
 
 
-def test_uninstall_refuses_paths_that_could_wipe_the_machine(tmp_path):
+def _dry_run(tmp_path, entries):
+    """Run ``uninstall.sh --dry-run`` against a manifest of ``entries``."""
     state = tmp_path / "state"
-    state.mkdir()
-    victim = tmp_path / "victim"
-    victim.mkdir()
-    (state / "install-manifest.tsv").write_text(
-        f"repo\t{REPO_ROOT}\npath\t/\npath\t{Path.home()}\npath\t{victim}\n",
-        encoding="utf-8",
-    )
-    result = subprocess.run(
+    state.mkdir(exist_ok=True)
+    lines = [f"repo\t{REPO_ROOT}"] + [f"path\t{entry}" for entry in entries]
+    (state / "install-manifest.tsv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return subprocess.run(
         [str(TOOLS / "uninstall.sh"), "--dry-run"],
         capture_output=True, text=True, env=_env(tmp_path),
     )
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "/",
+        "//",
+        f"{Path.home()}",
+        f"{Path.home()}/",
+        f"{Path.home()}/.ssh",
+        "/usr/lib",
+        "/a/../..",
+        f"{REPO_ROOT}/../outside",
+        f"{REPO_ROOT}/..",
+        "relative/path",
+        "./rag/vector_db",
+    ],
+)
+def test_uninstall_refuses_paths_outside_what_install_creates(tmp_path, entry):
+    result = _dry_run(tmp_path, [entry])
     assert result.returncode == 0, result.stderr
-    assert "REFUSED (unsafe path in manifest): /\n" in result.stdout
-    assert f"REFUSED (unsafe path in manifest): {Path.home()}\n" in result.stdout
-    assert str(victim) in result.stdout
-    assert victim.exists(), "--dry-run must never delete"
+    assert f"REFUSED (unsafe path in manifest): {entry}\n" in result.stdout
+
+
+def test_uninstall_accepts_entries_it_may_own_and_normalises_them(tmp_path):
+    models = tmp_path / "models"
+    models.mkdir()
+    (models / "a.gguf").write_text("x", encoding="utf-8")
+    result = _dry_run(
+        tmp_path,
+        [
+            f"{models}/a.gguf",
+            f"{models}//sub/../a.gguf/",
+            f"{REPO_ROOT}/.venv/",
+            f"{REPO_ROOT}/rag/vector_db",
+            str(tmp_path / "state" / "llama-server.log"),
+        ],
+    )
+    assert result.returncode == 0, result.stderr
+    assert "REFUSED" not in result.stdout, result.stdout
+    # trailing slashes and ".." are normalised in the plan
+    assert f"  {models}/a.gguf\n" in result.stdout
+    assert f"  {REPO_ROOT}/.venv (already gone)\n" in result.stdout or f"  {REPO_ROOT}/.venv\n" in result.stdout
+    assert (models / "a.gguf").exists(), "--dry-run must never delete"
+
+
+def test_uninstall_refuses_a_symlink_that_leaves_the_checkout(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    link = tmp_path / "models" / "link"
+    link.parent.mkdir()
+    link.symlink_to(outside)
+    result = _dry_run(tmp_path, [str(link)])
+    assert f"REFUSED (unsafe path in manifest): {link}\n" in result.stdout
+    assert outside.exists()
 
 
 def test_uninstall_refuses_another_checkouts_manifest(tmp_path):
@@ -96,3 +143,29 @@ def test_llama_build_reads_both_version_spellings(tmp_path, banner, expected):
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == expected
+
+
+@pytest.mark.parametrize(
+    "url, host, port",
+    [
+        ("http://127.0.0.1:8091", "127.0.0.1", "8091"),
+        ("http://localhost", "localhost", "80"),
+        ("https://example.org/v1", "example.org", "443"),
+        ("http://[::1]:9000", "[::1]", "9000"),
+    ],
+)
+def test_url_host_and_port_default_by_scheme(tmp_path, url, host, port):
+    result = subprocess.run(
+        ["bash", "-c", f". '{TOOLS / '_common.sh'}'; url_host '{url}'; url_port '{url}'"],
+        capture_output=True, text=True, env=_env(tmp_path),
+    )
+    assert result.stdout.split() == [host, port], result.stderr
+
+
+@pytest.mark.parametrize("script", ENTRY_POINTS)
+def test_help_prints_a_usage_block(script):
+    result = subprocess.run(
+        [str(TOOLS / script), "--help"], capture_output=True, text=True
+    )
+    assert result.returncode == 0
+    assert result.stdout.startswith("Usage: tools/"), result.stdout

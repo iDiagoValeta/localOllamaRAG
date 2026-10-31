@@ -20,7 +20,14 @@ for arg in "$@"; do
   case "$arg" in
     --check) CHECK_ONLY=1 ;;
     --with-corpus) WITH_CORPUS=1 ;;
-    -h|--help) sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)
+      cat <<'USAGE'
+Usage: tools/install.sh [--check] [--with-corpus]
+  (no option)    install everything, idempotently; records what it creates for uninstall.sh
+  --check        report prerequisites and pending steps, change nothing
+  --with-corpus  also fetch the three PDF corpora (slow, optional)
+USAGE
+      exit 0 ;;
     *) die "unknown option: $arg (see --help)" ;;
   esac
 done
@@ -97,7 +104,7 @@ claim_manifest() {
   if [ -f "$MANIFEST" ]; then
     local owner
     owner="$(awk -F'\t' '$1 == "repo" { print $2; exit }' "$MANIFEST")"
-    [ "$owner" = "$REPO_ROOT" ] \
+    [ "$(real_path "$owner")" = "$REPO_ROOT" ] \
       || die "$MANIFEST belongs to another checkout ($owner). Run its tools/uninstall.sh first, or set MONKEYGRAB_STATE_DIR."
   fi
   manifest_add repo "$REPO_ROOT"
@@ -138,6 +145,7 @@ download_embedder_file() {
     return
   fi
   claim_path "$dest"
+  claim_path "$dest.part"
   say "$file: downloading from huggingface.co/$HF_REPO"
   # .part + resume: a dropped connection resumes instead of restarting a
   # 600 MB download, and a half file never sits under the final name.
@@ -161,13 +169,17 @@ download_embedder_file() {
 # this install produced without touching an index someone built before it.
 claim_runtime_state() {
   local data_dir="${MONKEYGRAB_DATA_DIR:-$REPO_ROOT/rag}"
-  data_dir="$(cd "$data_dir" 2>/dev/null && pwd || printf '%s' "$data_dir")"
+  # Absolute even when the directory does not exist yet: a relative claim
+  # would resolve against whatever directory uninstall.sh runs from.
+  data_dir="$(real_path "$data_dir")"
   claim_path "$data_dir/vector_db"
   claim_path "$data_dir/debug_rag"
   claim_path "$data_dir/historial_chat.json"
   claim_path "$REPO_ROOT/.mineru_cache"
+  claim_path "$STATE_DIR/llama-server.log"
 }
 
+export_ollama_host
 check_prerequisites
 
 if [ "$CHECK_ONLY" -eq 1 ]; then

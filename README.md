@@ -238,26 +238,33 @@ on a fresh Ubuntu 24.04 with an NVIDIA GPU and its driver (`nvidia-smi` must
 list the card):
 
 ```bash
-sudo apt update
-sudo apt install -y python3 python3-venv git curl ca-certificates zstd pciutils \
+# A bare container is already root and has no sudo: this makes the commands below work in both cases.
+SUDO=""; [ "$(id -u)" -eq 0 ] || SUDO=sudo
+
+$SUDO apt update
+$SUDO apt install -y python3 python3-venv git curl ca-certificates zstd pciutils \
   build-essential cmake libgl1 libglib2.0-0
 
 # Node 22+ with corepack: the web UI builds with pnpm, pinned in package.json.
 # Download the NodeSource setup script, read it, then run it.
 curl -fsSLo nodesource_setup.sh https://deb.nodesource.com/setup_24.x
-sudo bash nodesource_setup.sh && sudo apt install -y nodejs && sudo corepack enable
+$SUDO bash nodesource_setup.sh && $SUDO apt install -y nodejs && $SUDO corepack enable
 
-# Ollama (same: download install.sh from ollama.com, read it, run it), then keep
-# its server running with `ollama serve` in another shell, or as a service.
+# Ollama (same: download install.sh from ollama.com, read it, run it).
 curl -fsSLo ollama_install.sh https://ollama.com/install.sh
 sh ollama_install.sh
+
+# Ollama's server must be answering before install.sh runs. With systemd it is
+# already a service; without it (a container) start it yourself and wait for it:
+nohup ollama serve > ollama.log 2>&1 &
+until ollama list > /dev/null 2>&1; do sleep 1; done
 
 # llama.cpp: install.sh needs build b11669 or newer (b10751 cannot load embeddinggemma-2).
 # Add -DGGML_CUDA=ON to run the embedder on the GPU (needs the CUDA toolkit); the CPU build works.
 git clone --depth 1 --branch b11669 https://github.com/ggml-org/llama.cpp
 cmake -S llama.cpp -B llama.cpp/build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CURL=OFF -DCMAKE_BUILD_TYPE=Release
 cmake --build llama.cpp/build --target llama-server -j"$(nproc)"
-sudo install llama.cpp/build/bin/llama-server /usr/local/bin/
+$SUDO install llama.cpp/build/bin/llama-server /usr/local/bin/
 
 git clone https://github.com/iDiagoValeta/localOllamaRAG && cd localOllamaRAG
 ```
@@ -273,6 +280,10 @@ venvs, `node_modules` and `dist`, the downloaded GGUFs, the Ollama models
 asks first unless given `--yes`, and leaves Ollama, its other models and
 anything that existed before the install alone. `run.sh` reuses a llama-server
 that already answers on the embedder's port and stops only the one it started.
+
+The network is needed at run time too: the first indexing and the first query
+download the MinerU and BGE reranker weights from Hugging Face into its cache,
+which `uninstall.sh` leaves in place.
 
 ### Manual steps (any platform)
 

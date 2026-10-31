@@ -14,7 +14,14 @@ CHECK_ONLY=0
 for arg in "$@"; do
   case "$arg" in
     --check) CHECK_ONLY=1 ;;
-    -h|--help) sed -n '2,8p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)
+      cat <<'USAGE'
+Usage: tools/run.sh [--check]
+  (no option)  start the embedder's llama-server (unless one already answers) and the
+               web UI at http://localhost:5000; Ctrl+C stops what this script started
+  --check      report whether it could start, start nothing
+USAGE
+      exit 0 ;;
     *) die "unknown option: $arg (see --help)" ;;
   esac
 done

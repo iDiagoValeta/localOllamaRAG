@@ -467,3 +467,8 @@ class TestPrintFlag:
         monkeypatch.setenv("OLLAMA_HOST", "10.0.0.5:11434")
         assert setup.main(["--print", "ollama-url"]) == 0
         assert capsys.readouterr().out.strip() == "http://10.0.0.5:11434"
+
+    def test_embedder_url_is_the_configured_endpoint_without_trailing_slash(self, monkeypatch, capsys):
+        monkeypatch.setenv("MONKEYGRAB_EMBEDDER_URL", "http://127.0.0.1:18091/")
+        assert setup.main(["--print", "embedder-url"]) == 0
+        assert capsys.readouterr().out.strip() == "http://127.0.0.1:18091"

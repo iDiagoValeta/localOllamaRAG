@@ -19,7 +19,15 @@ for arg in "$@"; do
   case "$arg" in
     --yes|-y) ASSUME_YES=1 ;;
     --dry-run) DRY_RUN=1 ;;
-    -h|--help) sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)
+      cat <<'USAGE'
+Usage: tools/uninstall.sh [--yes] [--dry-run]
+  (no option)  show the plan from the install manifest, ask, then remove it
+  --yes        skip the confirmation question
+  --dry-run    show the plan only, remove nothing
+Run it with the same MONKEYGRAB_DATA_DIR / MONKEYGRAB_MODELS_DIR as the install.
+USAGE
+      exit 0 ;;
     *) die "unknown option: $arg (see --help)" ;;
   esac
 done
@@ -30,17 +38,43 @@ if [ ! -f "$MANIFEST" ]; then
 fi
 
 owner="$(awk -F'\t' '$1 == "repo" { print $2; exit }' "$MANIFEST")"
-[ "$owner" = "$REPO_ROOT" ] \
+[ "$(real_path "$owner")" = "$REPO_ROOT" ] \
   || die "the manifest belongs to $owner, not this checkout ($REPO_ROOT). Run that checkout's tools/uninstall.sh."
 
-# A hand-edited or corrupted manifest must not be able to aim rm -rf at the
-# filesystem root or the home directory.
-safe_path() {
-  case "$1" in
-    /*) ;;
-    *) return 1 ;;
+export_ollama_host
+
+# Where a manifest entry may point. Everything is compared after normalising
+# ("..", "//", trailing slashes, symlinks), because a hand-edited manifest is
+# the threat: "$HOME/", "/usr/lib" or "/a/../.." must not reach rm -rf.
+# Strictly under the checkout, the models dir or the state dir, or one of the
+# three files the app itself writes into the data dir.
+DATA_DIR_RESOLVED="$(real_path "${MONKEYGRAB_DATA_DIR:-$REPO_ROOT/rag}")"
+MODELS_DIR_RESOLVED="$(real_path "$MODELS_DIR")"
+STATE_DIR_RESOLVED="$(real_path "$STATE_DIR")"
+
+allowed_target() {
+  local t="$1" root
+  for root in "$REPO_ROOT" "$MODELS_DIR_RESOLVED" "$STATE_DIR_RESOLVED"; do
+    case "$t" in "$root"/*) return 0 ;; esac
+  done
+  case "$t" in
+    "$DATA_DIR_RESOLVED/vector_db"|"$DATA_DIR_RESOLVED/debug_rag"|"$DATA_DIR_RESOLVED/historial_chat.json") return 0 ;;
   esac
-  [ "$1" != "/" ] && [ "$1" != "$HOME" ] && [ "$(awk -F/ '{ print NF - 1 }' <<< "$1")" -ge 2 ]
+  return 1
+}
+
+# Both the lexical and the symlink-resolved form must be allowed, so a link
+# inside the checkout cannot smuggle the deletion out of it.
+safe_path() {
+  case "$1" in /*) ;; *) return 1 ;; esac
+  allowed_target "$(norm_path "$1")" && allowed_target "$(real_path "$1")"
+}
+
+# rmdir only ever removes an empty directory, but it is still held to the
+# models dir it was recorded for.
+safe_dir() {
+  case "$1" in /*) ;; *) return 1 ;; esac
+  [ "$(real_path "$1")" = "$MODELS_DIR_RESOLVED" ]
 }
 
 paths=(); dirs=(); models=()
@@ -57,8 +91,8 @@ done < "$MANIFEST"
 say "Will remove (from $MANIFEST):"
 for p in "${paths[@]+"${paths[@]}"}"; do
   if ! safe_path "$p"; then say "  REFUSED (unsafe path in manifest): $p"
-  elif [ -e "$p" ] || [ -L "$p" ]; then say "  $p"
-  else say "  $p (already gone)"; fi
+  elif [ -e "$p" ] || [ -L "$p" ]; then say "  $(norm_path "$p")"
+  else say "  $(norm_path "$p") (already gone)"; fi
 done
 for d in "${dirs[@]+"${dirs[@]}"}"; do say "  $d (only if empty afterwards)"; done
 for m in "${models[@]+"${models[@]}"}"; do say "  Ollama model $m (ollama rm)"; done
@@ -81,11 +115,12 @@ failed=0
 
 for p in "${paths[@]+"${paths[@]}"}"; do
   safe_path "$p" || { printf 'path\t%s\n' "$p" >> "$remaining"; failed=1; continue; }
-  rm -rf -- "$p" || { printf 'path\t%s\n' "$p" >> "$remaining"; failed=1; }
+  rm -rf -- "$(norm_path "$p")" || { printf 'path\t%s\n' "$p" >> "$remaining"; failed=1; }
 done
 
 for d in "${dirs[@]+"${dirs[@]}"}"; do
-  safe_path "$d" || continue
+  safe_dir "$d" || { warn "refusing directory entry outside the models dir: $d"; continue; }
+  d="$(real_path "$d")"
   rmdir -- "$d" 2>/dev/null || true
   # The default models dir sits in a monkeygrab/ directory install may have created too.
   if [ "$(basename "$d")" = "models" ] && [ "$(basename "$(dirname "$d")")" = "monkeygrab" ]; then

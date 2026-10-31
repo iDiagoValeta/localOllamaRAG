@@ -6,7 +6,8 @@
 # the manifest is read and written. Two copies of any of it would drift apart,
 # and uninstall would then leave behind what install created.
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# -P: the manifest compares real paths, so a symlinked checkout must not differ from itself.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
 # Both locations are overridable from the environment (MONKEYGRAB_MODELS_DIR,
 # MONKEYGRAB_STATE_DIR). Shell-only knobs: no Python code reads them, which is
@@ -49,9 +50,31 @@ llama_build() {
   printf '%s\n' "$out" | sed -n -E 's/.*build ([0-9]+).*/\1/p; s/^version: ([0-9]+) .*/\1/p' | head -n 1
 }
 
-# host:port of the embedder endpoint, for the health probe and for --port.
-url_host() { local u="${1#*://}"; u="${u%%/*}"; printf '%s\n' "${u%:*}"; }
-url_port() { local u="${1#*://}"; u="${u%%/*}"; printf '%s\n' "${u##*:}"; }
+# Host and port of an endpoint URL. A URL without an explicit port gets the
+# scheme default instead of echoing the host back as if it were a port.
+url_host() {
+  local a="${1#*://}"; a="${a%%/*}"
+  if [[ "$a" =~ ^(.*):[0-9]+$ ]]; then printf '%s\n' "${BASH_REMATCH[1]}"; else printf '%s\n' "$a"; fi
+}
+url_port() {
+  local a="${1#*://}"; a="${a%%/*}"
+  if [[ "$a" =~ :([0-9]+)$ ]]; then printf '%s\n' "${BASH_REMATCH[1]}"
+  elif [[ "$1" == https://* ]]; then printf '443\n'
+  else printf '80\n'; fi
+}
+
+# `ollama pull/show/rm` read OLLAMA_HOST while the product reads OLLAMA_BASE_URL
+# first; exporting the product's resolved URL makes the CLI talk to the very
+# server the reachability check asked.
+export_ollama_host() {
+  local url
+  if url="$(config_value ollama-url 2>/dev/null)"; then OLLAMA_HOST="$url"; export OLLAMA_HOST; fi
+}
+
+# Lexical and symlink-resolved forms of a path, absolute and without "..",
+# "//" or trailing slashes. Both must pass the allow-list in uninstall.sh.
+norm_path() { realpath -m -s -- "$1"; }
+real_path() { realpath -m -- "$1"; }
 
 # Manifest: tab-separated "kind<TAB>value" lines. Kinds: repo, path, dir,
 # ollama-model. Only what install.sh itself created is ever written, which is
