@@ -16,12 +16,26 @@ port 3000 and proxies API calls to Flask.
 ## Run locally
 
 > [!IMPORTANT]
-> **Prerequisites:** Node.js 20+, and the Flask backend running (`python rag/web/app.py`).
+> **Prerequisites:** Node.js 22.12+ (vitest's floor), and the Flask backend running (`python rag/web/app.py`).
 
 ```bash
 pnpm install
 pnpm run dev      # Vite on http://localhost:3000 — proxies /api → :5000
 ```
+
+## Tests
+
+```bash
+pnpm run test     # vitest + Testing Library, jsdom, no network
+```
+
+`tests/` renders the real `App` against a fake backend (`tests/backend.ts`
+answers every `/api` route; a route nobody declared fails the test). They
+pin behaviour a refactor must not change: store selection, PDF upload, chat
+stream handling, settings toggles and the page language. They live outside
+`src/` on purpose: the structural gates in `tests/unit` scan `src/` for the
+`i18n` keys read and the `api` members called, and a test must not count as
+a consumer.
 
 ## Build for production
 

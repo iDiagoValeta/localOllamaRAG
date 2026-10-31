@@ -5,11 +5,11 @@ frontend's checks are ``tsc --noEmit`` and a Vite build, so a store row left
 stale after a reindex, or a PDF toolbar tooltip still in Spanish under the
 English UI, stays green until someone clicks through the flow by hand.
 
-There is no JavaScript test runner in this repository (``package.json``
-exposes ``lint`` and ``build`` only), and the fast CI gate that runs this
-module installs pytest and nothing else. The checks are therefore structural
-over the TypeScript source, the same approach ``test_env_example_drift.py``
-uses for frontend environment reads. Each assertion names the user-visible
+The frontend's vitest suite (``rag/web/frontend/tests``) pins behaviour by
+rendering the app, but the fast gate that runs this module installs pytest and
+nothing else, so what is pinned here stays structural over the TypeScript
+source, the same approach ``test_env_example_drift.py`` uses for frontend
+environment reads. Each assertion names the user-visible
 symptom it prevents rather than mirroring one particular implementation.
 """
 
