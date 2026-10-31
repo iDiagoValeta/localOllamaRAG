@@ -198,6 +198,11 @@ something is missing:
    the rate minus 0.05, which is 0.82 again. The auxiliary roles stay pinned to `AUX_MODEL`
    (`Ling-3.0-tiny`) for every run, as the experiment standard below requires.
 
+   The floor was raised from 0.82 to 0.91 on 2026-10-31 (issue #550), with the owner's
+   approval. At 0.82 a regression of about 19 cases still passed, against a default stack
+   that measured 148/156 = 0.949 that day and 147/156 on v4.1.0. The new value is the v4.1.0
+   rate minus one run's measured noise of five cases, rounded down: (147 - 5) / 156 = 0.91.
+
 Infrastructure failures leave the run inconclusive. Only an unfiltered gold-set
 run (`case_ids is None`, the CLI) is compared against the baseline. A subset
 (the harness search set / fast tier / empty reachability probe) still reports
