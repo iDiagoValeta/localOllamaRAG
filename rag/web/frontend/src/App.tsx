@@ -41,15 +41,6 @@ const api = {
   init: () =>
     fetch(`${API_BASE}/init`).then(r => r.json()),
 
-  docs: () =>
-    fetch(`${API_BASE}/docs`).then(r => r.json()),
-
-  stats: () =>
-    fetch(`${API_BASE}/stats`).then(r => r.json()),
-
-  topics: () =>
-    fetch(`${API_BASE}/topics`).then(r => r.json()),
-
   setMode: (mode: Mode) =>
     fetch(`${API_BASE}/mode`, {
       method: 'POST',

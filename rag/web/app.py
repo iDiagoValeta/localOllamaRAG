@@ -25,7 +25,6 @@ import getpass
 import subprocess
 import threading
 from urllib.parse import urlsplit
-from collections import Counter
 from typing import Generator, Optional
 
 import requests
@@ -958,38 +957,6 @@ def api_clear():
     return jsonify({"ok": True})
 
 
-@app.route("/api/stats", methods=["GET"])
-def api_stats():
-    """Return database statistics."""
-    coll = _get_collection()
-    docs = rag_engine.obtener_documentos_indexados(coll)
-    return jsonify(
-        {
-            "ok": True,
-            "total_fragments": coll.count(),
-            "documents": docs,
-            "document_details": _collection_document_details(coll),
-            "indexing": _state["indexing"],
-        }
-    )
-
-
-@app.route("/api/docs", methods=["GET"])
-def api_docs():
-    """List indexed documents."""
-    coll = _get_collection()
-    docs = rag_engine.obtener_documentos_indexados(coll)
-    return jsonify(
-        {
-            "ok": True,
-            "documents": docs,
-            "document_details": _collection_document_details(coll),
-            "total_fragments": coll.count(),
-            "indexing": _state["indexing"],
-        }
-    )
-
-
 @app.route("/api/docs/<path:filename>", methods=["DELETE"])
 def api_delete_doc(filename):
     """Delete a document from FAISS and remove the PDF file from disk.
@@ -1036,42 +1003,6 @@ def api_serve_pdf(filename):
         return jsonify({"ok": False, "error": "Archivo inválido"}), 400
     docs_folder = os.path.abspath(rag_engine.CARPETA_DOCS)
     return send_from_directory(docs_folder, filename, mimetype="application/pdf")
-
-
-@app.route("/api/topics", methods=["GET"])
-def api_topics():
-    """Return a summary of indexed content/topics."""
-    coll = _get_collection()
-    docs = rag_engine.obtener_documentos_indexados(coll)
-    docs_data = []
-
-    for doc_name in docs:
-        doc_info = {"name": doc_name}
-        try:
-            fragments = [
-                fragment
-                for fragment in coll.get_page(None, 0)
-                if fragment.metadata.source == doc_name
-            ]
-            if fragments:
-                pages = {fragment.metadata.page for fragment in fragments}
-                doc_info["pages"] = len(pages)
-                doc_info["fragments"] = len(fragments)
-                texto = " ".join(fragment.doc for fragment in fragments[:20])
-                palabras = texto.split()
-                significativas = [
-                    p.strip(".,;:()[]{}\"'-'").lower()
-                    for p in palabras
-                    if len(p) > 5 and p.strip(".,;:()[]{}\"'-'").lower() not in rag_engine.STOPWORDS
-                ]
-                frecuencias = Counter(significativas)
-                top = [w for w, _ in frecuencias.most_common(10)]
-                doc_info["terms"] = ", ".join(top) if top else None
-        except Exception:
-            pass
-        docs_data.append(doc_info)
-
-    return jsonify({"ok": True, "topics": docs_data})
 
 
 # The three Study artifacts share one route because they share one shape:

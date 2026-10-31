@@ -527,7 +527,6 @@ from rag.engine.history import cargar_historial, guardar_historial, limpiar_hist
 from monkeygrab.adapters.reranking.cross_encoder_reranker import resolve_reranker_device
 from monkeygrab.application.keywords import (
     GENERIC_TERMS_BLACKLIST,
-    STOPWORDS,
     extract_keywords,
     is_coherent_query,
     tokenize_bm25,
