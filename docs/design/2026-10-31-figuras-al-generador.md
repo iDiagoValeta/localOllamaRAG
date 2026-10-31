@@ -36,8 +36,8 @@ Generación (`Answer`, `src/monkeygrab/application/answer.py`):
 
 - `select_evidence` no expande figuras (`_is_expandable`) y recorta por
   caracteres, que para una figura son unos pocos.
-- `build_user_message` entrega texto. Con RECOMP activo (por defecto,
-  `USAR_RECOMP_SYNTHESIS=True`) cada fragmento pasa por
+- `build_user_message` entrega texto. Con RECOMP activo
+  (`USAR_RECOMP_SYNTHESIS=True`, apagado por defecto desde #571) cada fragmento pasa por
   `texto_fuente_fragmento` al modelo auxiliar, que es solo texto, y al generador
   llega únicamente el briefing: un placeholder de figura puede perderse
   ahí. Sin RECOMP, `build_context_for_model` emite `--- [Fragment N] ---` más

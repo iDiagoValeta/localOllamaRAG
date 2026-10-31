@@ -611,7 +611,7 @@ def ensure_indexed(
         # this runner from grading answers written off evidence no user's query
         # would have produced.
         # Wired through wiring.answer (issue #260), the same constructor the
-        # product uses: with usar_recomp_synthesis on (the default) the
+        # product uses: with usar_recomp_synthesis on the
         # evidence stage runs the RECOMP synthesis the gate used to skip by
         # building Answer without a recomp_chat_model.
         evidence = wiring.answer(store, config)
