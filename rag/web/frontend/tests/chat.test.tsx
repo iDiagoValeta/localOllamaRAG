@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { callsTo, done, installBackend, openStream, sseResponse, token } from './backend';
 import { renderApp, T } from './render';
 
@@ -132,6 +132,15 @@ describe('chat stream handling', () => {
     const user = await renderApp();
     await user.type(composer(), 'first{Enter}');
     await waitFor(() => expect(composer().disabled).toBe(true));
+
+    // A disabled textarea swallows typing, so a second send has to be forced
+    // through events the browser would not deliver: that is what the
+    // `isLoading` guard in handleSend exists for (a stale or synthetic Enter).
+    fireEvent.change(composer(), { target: { value: 'second' } });
+    expect(composer().value).toBe('second');
+    fireEvent.keyDown(composer(), { key: 'Enter' });
+    await act(async () => {});
+
     expect(callsTo('POST', '/rag')).toHaveLength(1);
   });
 
