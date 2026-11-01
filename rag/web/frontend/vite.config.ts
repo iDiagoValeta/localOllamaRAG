@@ -1,7 +1,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {defineConfig} from 'vitest/config';
 
 export default defineConfig(() => {
   return {
@@ -21,6 +21,14 @@ export default defineConfig(() => {
         },
       },
       hmr: process.env.DISABLE_HMR !== 'true',
+    },
+    test: {
+      // jsdom, because the tests render the real App; the suite lives outside
+      // src/ so the structural gates that scan src/ (i18n keys read, api
+      // members called) never count a test as a consumer.
+      environment: 'jsdom',
+      include: ['tests/**/*.test.{ts,tsx}'],
+      setupFiles: ['tests/setup.ts'],
     },
     build: {
       // Output: rag/web/zip/dist/ — Flask serves it

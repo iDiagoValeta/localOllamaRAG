@@ -145,7 +145,10 @@ something is missing:
    fixed auxiliary model used for query decomposition, contextual retrieval
    and RECOMP) is installed, then checks the embedder (`llama-server`) answers
    `GET <MONKEYGRAB_EMBEDDER_URL>/health` and identifies embeddinggemma-2 in
-   its `GET /props` (`model_path` or `model_alias`). BGE is not an Ollama role.
+   its `GET /props` (`model_path` or `model_alias`). While image embeddings are
+   on (`USAR_EMBEDDINGS_IMAGEN`, the default) that `/props` must also report
+   `modalities.vision` true, which needs `--mmproj`; the gate stops otherwise
+   (issue #565). BGE is not an Ollama role.
 2. Downloads any missing blind-set arXiv papers (reusing `fetch_papers.py`)
    and stages them under `blind_docs/<paper-slug>.pdf`.
 3. Indexes whatever is not already indexed -- dev-set papers for each of the three
@@ -194,6 +197,11 @@ something is missing:
    `gemma4:e4b` scored 136/156 = 0.872 on `20260911T094107Z`, and the rule sets the floor at
    the rate minus 0.05, which is 0.82 again. The auxiliary roles stay pinned to `AUX_MODEL`
    (`Ling-3.0-tiny`) for every run, as the experiment standard below requires.
+
+   The floor was raised from 0.82 to 0.91 on 2026-10-31 (issue #550), with the owner's
+   approval. At 0.82 a regression of about 19 cases still passed, against a default stack
+   that measured 148/156 = 0.949 that day and 147/156 on v4.1.0. The new value is the v4.1.0
+   rate minus one run's measured noise of five cases, rounded down: (147 - 5) / 156 = 0.91.
 
 Infrastructure failures leave the run inconclusive. Only an unfiltered gold-set
 run (`case_ids is None`, the CLI) is compared against the baseline. A subset

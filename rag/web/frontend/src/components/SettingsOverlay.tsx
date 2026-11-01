@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Database, FileUp, Loader2, Ollama,
   Power, RefreshCw, X,
@@ -44,8 +44,7 @@ export interface SettingsOverlayProps {
   // answer still streaming (issue #404).
   isAnswering: boolean;
   indexingProgress: IndexingProgress | null;
-  pendingReindexFiles: File[];
-  setPendingReindexFiles: React.Dispatch<React.SetStateAction<File[]>>;
+  isAddingDocs: boolean;
   reindexFileInputRef: React.RefObject<HTMLInputElement | null>;
   handleReindex: () => void;
 
@@ -72,8 +71,7 @@ export function SettingsOverlay({
   isReindexing,
   isAnswering,
   indexingProgress,
-  pendingReindexFiles,
-  setPendingReindexFiles,
+  isAddingDocs,
   reindexFileInputRef,
   handleReindex,
   strings,
@@ -84,6 +82,41 @@ export function SettingsOverlay({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Dialog focus contract: move focus in on open, hand it back to whoever
+  // opened it on close. Without it a keyboard user keeps tabbing through the
+  // page behind the panel and loses their place when it closes (issue #555).
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+    return () => opener?.focus();
+  }, []);
+
+  // Not aria-modal: the sidebar stays usable beside the panel. Tab wraps at
+  // the panel's ends instead of walking out into the sidebar and chat, but
+  // only while focus is already inside, so a click on the sidebar tabs (which
+  // switch panels) still behaves normally.
+  const keepTabInside = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Tab') return;
+    const panel = e.currentTarget;
+    // Unrendered elements (display:none) match the selector but cannot take
+    // focus, so a hidden one at either end would turn the wrap into a no-op.
+    const focusable = Array.from(panel.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )).filter(el => el.getClientRects().length > 0);
+    if (!focusable.length) { e.preventDefault(); return; }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey && (active === first || active === panel)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
 
   const renderModelsPanel = () => (
     <div className="mx-auto w-full max-w-4xl space-y-4">
@@ -169,7 +202,7 @@ export function SettingsOverlay({
 
   const renderPipelinePanel = () => (
     <div className="mx-auto w-full max-w-4xl space-y-4">
-      {(settingsError || isReindexing) && (
+      {(settingsError || isReindexing || isAddingDocs) && (
         <div className={`border px-3 py-2 text-xs rounded-xl ${settingsError ? 'border-danger/20 bg-danger/10 text-danger' : 'border-edge bg-surface-raised text-ink'}`}>
           {settingsError ? (
             <span>{settingsError}</span>
@@ -187,7 +220,7 @@ export function SettingsOverlay({
               </div>
             </div>
           ) : (
-            <span>{strings.reindexingStatus}</span>
+            <span>{isAddingDocs ? strings.addingPdfsStatus : strings.reindexingStatus}</span>
           )}
         </div>
       )}
@@ -228,27 +261,16 @@ export function SettingsOverlay({
               <button
                 className="flex flex-1 flex-col items-center justify-center gap-1 border border-dashed border-edge px-4 py-3 text-sm text-ink-muted transition-all hover:border-divider hover:bg-field hover:text-ink disabled:opacity-50 group rounded-xl"
                 onClick={() => reindexFileInputRef.current?.click()}
-                disabled={isReindexing || isAnswering}
+                disabled={isReindexing || isAddingDocs || isAnswering}
               >
-                <FileUp className="h-5 w-5 group-hover:text-ink" />
-                <span className="font-medium">
-                  {pendingReindexFiles.length ? `${pendingReindexFiles.length} PDF(s)` : strings.addPdfs}
-                </span>
+                {isAddingDocs ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileUp className="h-5 w-5 group-hover:text-ink" />}
+                <span className="font-medium">{strings.addPdfs}</span>
               </button>
-              {pendingReindexFiles.length > 0 && (
-                <button
-                  className="px-3 text-ink-muted transition-all hover:bg-danger/10 hover:text-danger rounded-xl"
-                  onClick={() => { setPendingReindexFiles([]); if (reindexFileInputRef.current) reindexFileInputRef.current.value = ''; }}
-                  title={strings.remove}
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              )}
             </div>
             <button
               className="flex items-center justify-center gap-2 bg-field border border-edge text-ink px-6 py-3 text-sm font-semibold hover:bg-surface hover:border-divider disabled:opacity-50 sm:min-w-[10rem] rounded-xl transition-all"
               onClick={handleReindex}
-              disabled={isReindexing || isAnswering}
+              disabled={isReindexing || isAddingDocs || isAnswering}
             >
               {isReindexing ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
               {strings.reindexBtn}
@@ -260,13 +282,20 @@ export function SettingsOverlay({
   );
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 relative">
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-labelledby="settings-dialog-title"
+      tabIndex={-1}
+      onKeyDown={keepTabInside}
+      className="flex-1 flex flex-col min-w-0 relative focus:outline-none"
+    >
       <header className="h-20 border-b border-divider flex items-center justify-between gap-3 px-6 bg-surface-raised z-10">
         <div className="flex items-center gap-2 min-w-0">
           {mainPanel === 'models'
             ? <Ollama className="w-5 h-5 flex-shrink-0 text-ink" />
             : <Database className="w-5 h-5 flex-shrink-0 text-ink" />}
-          <h2 className="t-h2 text-ink truncate">{mainPanel === 'models' ? strings.tabModels : strings.tabPipeline}</h2>
+          <h2 id="settings-dialog-title" className="t-h2 text-ink truncate">{mainPanel === 'models' ? strings.tabModels : strings.tabPipeline}</h2>
         </div>
         <button
           type="button"

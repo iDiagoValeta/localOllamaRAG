@@ -31,6 +31,9 @@ import run_eval
 # What a correctly started llama-server reports: the GGUF it loaded.
 _EMBEDDINGGEMMA_PATH = "/models/embeddinggemma-2-300m-Q8_0.gguf"
 
+# ``/props`` of a server started with ``--mmproj``, which image embeddings need.
+_VISION = {"modalities": {"vision": True}}
+
 
 class _RequestException(Exception):
     """Stand-in for requests.RequestException, which run_eval catches."""
@@ -55,11 +58,13 @@ def _stub_requests(monkeypatch, response=None, error=None, props=None):
     """Plant a fake ``requests`` module and return the URLs it was asked for.
 
     ``props`` is the ``/props`` body (defaults to a server correctly serving
-    embeddinggemma-2); pass a ``_Response`` instead to fake an HTTP or JSON
+    embeddinggemma-2 with its multimodal projector loaded); pass a ``_Response`` instead to fake an HTTP or JSON
     failure on that endpoint.
     """
     calls = []
-    props = _Response(200, {"model_path": _EMBEDDINGGEMMA_PATH}) if props is None else props
+    props = (
+        _Response(200, {"model_path": _EMBEDDINGGEMMA_PATH, **_VISION}) if props is None else props
+    )
     fake_module = types.ModuleType("requests")
     fake_module.RequestException = _RequestException
 
@@ -96,7 +101,8 @@ def test_the_url_comes_from_appconfig_not_a_fresh_env_read(monkeypatch):
     config = SimpleNamespace(
         models=SimpleNamespace(
             embedding=SimpleNamespace(base_url="http://from-config.example:2222")
-        )
+        ),
+        flags=SimpleNamespace(usar_embeddings_imagen=True),
     )
     monkeypatch.setattr(run_eval, "AppConfig", SimpleNamespace(from_env=lambda: config))
     calls = _stub_requests(monkeypatch, _Response(200))
@@ -112,7 +118,7 @@ def test_the_url_comes_from_appconfig_not_a_fresh_env_read(monkeypatch):
 def test_the_served_model_path_is_returned_for_the_run_artifact(monkeypatch):
     monkeypatch.setenv("MONKEYGRAB_EMBEDDER_URL", "http://embedder.example:9000")
     _stub_requests(
-        monkeypatch, _Response(200), props={"model_path": _EMBEDDINGGEMMA_PATH}
+        monkeypatch, _Response(200), props={"model_path": _EMBEDDINGGEMMA_PATH, **_VISION}
     )
 
     assert run_eval.preflight_embedder() == _EMBEDDINGGEMMA_PATH
@@ -128,6 +134,7 @@ def test_the_alias_identifies_the_model_when_the_path_does_not(monkeypatch):
         props={
             "model_path": "/models/model.gguf",
             "model_alias": "EmbeddingGemma-2-300M",
+            **_VISION,
         },
     )
 
@@ -207,3 +214,52 @@ def test_an_unreachable_embedder_is_a_setup_error_that_says_how_to_start_it(monk
     assert "http://embedder.example:9000" in message
     assert "llama-server" in message
     assert "--embedding" in message
+    assert "-b 2048 -ub 2048" in message
+    assert "--mmproj mmproj-embeddinggemma-2-Q8_0.gguf" in message
+
+
+# Issue #565: a server started without --mmproj answers /health and text
+# embeddings, then fails every figure with HTTP 500 mid-run.
+
+_NO_VISION = {"model_path": _EMBEDDINGGEMMA_PATH, "modalities": {"vision": False}}
+
+
+def test_a_server_without_vision_passes_when_image_embeddings_are_off(monkeypatch):
+    monkeypatch.setenv("MONKEYGRAB_EMBEDDER_URL", "http://embedder.example:9000")
+    monkeypatch.setenv("USAR_EMBEDDINGS_IMAGEN", "0")
+    _stub_requests(monkeypatch, _Response(200), props=_NO_VISION)
+
+    assert run_eval.preflight_embedder() == _EMBEDDINGGEMMA_PATH
+
+
+def test_a_server_without_vision_fails_when_image_embeddings_are_on(monkeypatch):
+    monkeypatch.setenv("MONKEYGRAB_EMBEDDER_URL", "http://embedder.example:9000")
+    monkeypatch.setenv("USAR_EMBEDDINGS_IMAGEN", "1")
+    _stub_requests(monkeypatch, _Response(200), props=_NO_VISION)
+
+    with pytest.raises(run_eval.EvalSetupError) as exc:
+        run_eval.preflight_embedder()
+
+    message = str(exc.value)
+    assert "--mmproj mmproj-embeddinggemma-2-Q8_0.gguf" in message
+    assert "USAR_EMBEDDINGS_IMAGEN" in message
+    assert "http://embedder.example:9000" in message
+
+
+def test_a_props_that_reports_no_modalities_counts_as_no_vision(monkeypatch):
+    monkeypatch.setenv("MONKEYGRAB_EMBEDDER_URL", "http://embedder.example:9000")
+    monkeypatch.setenv("USAR_EMBEDDINGS_IMAGEN", "1")
+    _stub_requests(monkeypatch, _Response(200), props={"model_path": _EMBEDDINGGEMMA_PATH})
+
+    with pytest.raises(run_eval.EvalSetupError) as exc:
+        run_eval.preflight_embedder()
+
+    assert "--mmproj" in str(exc.value)
+
+
+def test_a_server_with_vision_passes_when_image_embeddings_are_on(monkeypatch):
+    monkeypatch.setenv("MONKEYGRAB_EMBEDDER_URL", "http://embedder.example:9000")
+    monkeypatch.setenv("USAR_EMBEDDINGS_IMAGEN", "1")
+    _stub_requests(monkeypatch, _Response(200))
+
+    assert run_eval.preflight_embedder() == _EMBEDDINGGEMMA_PATH

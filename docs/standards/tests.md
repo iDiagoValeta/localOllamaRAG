@@ -4,7 +4,7 @@
 |---|---|---|
 | `tests/unit/` | Domain, ports, config, application plus adapters with doubles | fast `architecture` job |
 | `tests/characterization/` | Pins current pipeline behavior including known bugs, do not edit | fast `engine` job |
-| `tests/eval/` | Gold cases plus grader plus baseline floor, do not weaken | manual full-eval |
+| `tests/eval/` | Gold cases plus grader plus baseline floor, do not weaken | full gate, run locally (see [CONTRIBUTING.md](../../CONTRIBUTING.md)) |
 | `tests/test_*.py` loose | Engine and web wiring that needs real deps | fast `engine` job |
 | `harness/tests/` | Config search with fake evaluators | fast `architecture` job |
 

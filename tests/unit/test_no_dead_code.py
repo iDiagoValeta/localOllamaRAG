@@ -67,6 +67,22 @@ construction, and shrinking the list is a separate change:
   whitelisted "just in case" is how the check stops meaning anything, so the
   staleness test fails when an entry stops corresponding to a real finding.
 
+## Flask routes
+
+The registrar exemption above stops a handler from being reported as a
+*symbol*, and with it stops anyone noticing that no client asks for the route
+(issue #557: ``GET /api/stats``, ``/api/docs`` and ``/api/topics`` survived
+that way). Routes get their own check: every ``/api/...`` route of
+``rag/web/app.py`` must be requested by a string in the frontend sources
+(``rag/web/frontend/src``) or in the headless service (``rag/headless``).
+Tests are not consumers, as everywhere else in this file. Paths outside
+``/api/`` (the page, the bundle, the logos) are requested by the browser
+itself, not by a string in the frontend, so they are not checked. The match
+is by path only, not by HTTP method: ``GET`` and ``POST`` on one path are kept
+alive by either caller. The ``api`` object in ``lib/api.ts`` is where those strings
+live, so a member of it that no ``api.<name>`` call reaches is reported too:
+its URL would otherwise vouch for a route nobody requests.
+
 Modules get the same treatment: a product module no consumer imports is dead
 unless it is an entry point (``__init__.py``, ``__main__.py``, a
 ``if __name__ == "__main__"`` block, or a path named by a workflow, a
@@ -84,6 +100,7 @@ that today's tree happens to be clean.
 import ast
 import io
 import os
+import re
 import sys
 import tokenize
 from pathlib import Path
@@ -326,6 +343,147 @@ def _facade_reexports(source: str) -> Set[str]:
     return imported - used
 
 
+_WEB_APP = _REPO_ROOT / "rag" / "web" / "app.py"
+_FRONTEND_SRC = _REPO_ROOT / "rag" / "web" / "frontend" / "src"
+_HEADLESS = _REPO_ROOT / "rag" / "headless"
+
+
+_ROUTE_DECORATORS = frozenset({"route", "get", "post", "put", "delete", "patch"})
+
+
+def _api_routes(source: str) -> List[str]:
+    """Every ``/api/...`` path registered with ``@<app>.route("...")`` or the
+    method shortcuts ``@<app>.get/post/put/delete/patch("...")``."""
+    routes = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for decorator in node.decorator_list:
+            if (
+                isinstance(decorator, ast.Call)
+                and isinstance(decorator.func, ast.Attribute)
+                and decorator.func.attr in _ROUTE_DECORATORS
+                and decorator.args
+                and isinstance(decorator.args[0], ast.Constant)
+                and isinstance(decorator.args[0].value, str)
+                and decorator.args[0].value.startswith("/api/")
+            ):
+                routes.append(decorator.args[0].value)
+    return routes
+
+
+def _frontend_code(source: str) -> str:
+    """A TypeScript source with comments removed and ``${API_BASE}`` resolved.
+
+    The frontend writes ``fetch(`${API_BASE}/init`)``, so the path a route is
+    matched against only exists once the constant is substituted. Comments are
+    dropped for the reason ``tokenize`` drops them above: ``// /api/init
+    answers ok: false`` discusses a route, it does not request it.
+    """
+    source = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+    source = re.sub(r"(?m)(^|\s)//.*$", r"\1", source)
+    base = re.search(r"const\s+API_BASE\s*=\s*['\"]([^'\"]*)['\"]", source)
+    return source.replace("${API_BASE}", base.group(1)) if base else source
+
+
+def _python_strings(source: str) -> str:
+    """The string literals of a Python source, docstrings excluded."""
+    tree = ast.parse(source)
+    docstrings = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            first = node.body[0] if node.body else None
+            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
+                docstrings.add(id(first.value))
+    return "\n".join(
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and id(node) not in docstrings
+    )
+
+
+def _is_frontend_test(path: Path) -> bool:
+    """``*.test.ts(x)``, ``*.spec.ts(x)`` and anything under ``__tests__``."""
+    infixes = path.name.split(".")[1:-1]
+    # Relative to src/: a checkout under a directory called __tests__ must not
+    # turn every frontend file into a test.
+    relative = path.relative_to(_FRONTEND_SRC).parts
+    return "__tests__" in relative or "test" in infixes or "spec" in infixes
+
+
+def _frontend_files() -> List[Path]:
+    """Frontend sources that count as consumers: tests are not, as in Python."""
+    return [
+        path
+        for path in sorted(_FRONTEND_SRC.rglob("*"))
+        if path.suffix in {".ts", ".tsx"} and not _is_frontend_test(path)
+    ]
+
+
+def _all_frontend_code() -> str:
+    return "\n".join(
+        _frontend_code(path.read_text(encoding="utf-8")) for path in _frontend_files()
+    )
+
+
+def _api_members(code: str) -> List[str]:
+    """Member names of the frontend's ``api`` object; raises when it cannot parse any."""
+    body = re.search(r"(?ms)^(?:export )?const api(?:: [\w<>\[\], ]+)? = \{\n(.*?)^\};", code)
+    if not body:
+        # Silence here would turn the whole check into a pass; a renamed or
+        # reshaped object has to be noticed and this pattern updated.
+        raise AssertionError("no `const api = {...}` object found in the frontend sources")
+    members = re.findall(r"(?m)^  (\w+):", body.group(1))
+    if not members:
+        raise AssertionError(
+            "the `api` object was found but no member matched (expected two-space "
+            "indented `name:` keys); update the pattern instead of passing on nothing"
+        )
+    return members
+
+
+def _uncalled_api_members(code: str) -> List[str]:
+    """Members of the frontend's ``const api = {...}`` that no ``api.<name>`` reaches.
+
+    A declared member carries a URL string, so left alone it keeps a route
+    "requested" long after the UI stopped calling it (issue #557). knip does
+    not flag unused object members, hence this check.
+    """
+    members = _api_members(code)
+    return [name for name in members if not re.search(rf"\bapi\.{name}\b", code)]
+
+
+def _route_consumer_text() -> str:
+    """The code the web routes can be requested from: frontend plus headless."""
+    parts = [_all_frontend_code()]
+    parts += [
+        _python_strings(path.read_text(encoding="utf-8"))
+        for path in sorted(_HEADLESS.glob("*.py"))
+    ]
+    return "\n".join(parts)
+
+
+def _unrequested_routes(routes: Iterable[str], consumer_text: str) -> List[str]:
+    """Routes whose path no string in ``consumer_text`` requests.
+
+    A parameterised route (``/api/docs/<path:filename>``) is requested by any
+    string that starts with its static part, because the frontend appends the
+    value (``/api/docs/${encodeURIComponent(name)}``). A fixed route is
+    requested by its exact path: ``/api/docs`` must not be rescued by the
+    ``/api/docs/...`` URL of its parameterised sibling, so the character after
+    it cannot continue the path.
+    """
+    unrequested = []
+    for route in routes:
+        static, parameterised, _ = route.partition("<")
+        tail = "" if parameterised else r"(?![\w/-])"
+        if not re.search(re.escape(static) + tail, consumer_text):
+            unrequested.append(route)
+    return unrequested
+
+
 def _entry_point_mentions() -> Tuple[str, str]:
     """Names that make a module an entry point: (README+workflows, specs).
 
@@ -421,6 +579,35 @@ def test_no_product_symbol_is_referenced_only_by_its_own_definition(analysis):
         )
         + "\nDelete it, or add \"path:symbol\" to _WHITELIST at the top of "
         "tests/unit/test_no_dead_code.py with the reason it must stay."
+    )
+
+
+def test_the_route_consumers_are_not_accidentally_empty():
+    """Guards the guard: no routes or no consumer text would make the next test vacuous."""
+    assert len(_api_routes(_WEB_APP.read_text(encoding="utf-8"))) > 10
+    assert "/api/init" in _route_consumer_text()
+
+
+def test_every_api_member_of_the_frontend_is_called():
+    code = _all_frontend_code()
+    uncalled = _uncalled_api_members(code)
+    assert "init" in _api_members(code)  # the parse is alive, not vacuously empty
+    assert not uncalled, (
+        "Members of the `api` object in lib/api.ts that no `api.<name>` call reaches:\n"
+        + "\n".join(f"  api.{name}" for name in uncalled)
+        + "\nDelete the member: its URL would keep a dead route looking requested."
+    )
+
+
+def test_no_web_route_is_requested_by_nothing():
+    unrequested = _unrequested_routes(
+        _api_routes(_WEB_APP.read_text(encoding="utf-8")), _route_consumer_text()
+    )
+    assert not unrequested, (
+        "Routes of rag/web/app.py that neither the frontend nor the headless service "
+        "request (tests do not count as consumers):\n"
+        + "\n".join(f"  {route}" for route in unrequested)
+        + "\nDelete the route, or make the caller request it."
     )
 
 
@@ -554,3 +741,136 @@ def test_a_name_only_the_facade_reexports_is_reported():
     )
     found = _unused_symbols(ast.parse(product), used)
     assert [name for name, _ in found] == ["evaluar"], found
+
+
+def test_a_route_nothing_requests_is_reported():
+    """Only ``/api/gone``: ``/api/used`` is built through ``API_BASE``, the
+    parameterised route by its static prefix, and the page is not an API route."""
+    app = (
+        '@app.route("/")\n'
+        "def index(): ...\n"
+        '@app.route("/api/used", methods=["GET"])\n'
+        "def used(): ...\n"
+        '@app.route("/api/gone", methods=["GET"])\n'
+        "def gone(): ...\n"
+        '@app.route("/api/docs/<path:name>", methods=["DELETE"])\n'
+        "def delete(name): ...\n"
+    )
+    frontend = _frontend_code(
+        "const API_BASE = '/api';\n"
+        "// /api/gone is only discussed here\n"
+        "fetch(`${API_BASE}/used`);\n"
+        "fetch(`${API_BASE}/docs/${encodeURIComponent(name)}`);\n"
+    )
+    assert _api_routes(app) == ["/api/used", "/api/gone", "/api/docs/<path:name>"]
+    assert _unrequested_routes(_api_routes(app), frontend) == ["/api/gone"]
+
+
+def test_an_api_member_nothing_calls_is_reported():
+    """``stats`` is declared and never called; ``init`` is called, and a comment
+    mentioning ``api.stats`` does not count as a call."""
+    code = _frontend_code(
+        "const API_BASE = '/api';\n"
+        "const api = {\n"
+        "  init: () =>\n"
+        "    fetch(`${API_BASE}/init`),\n"
+        "\n"
+        "  stats: () =>\n"
+        "    fetch(`${API_BASE}/stats`),\n"
+        "};\n"
+        "// api.stats used to be shown here\n"
+        "await api.init();\n"
+    )
+    assert _uncalled_api_members(code) == ["stats"]
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    ["const api = {", "export const api = {", "const api: Api = {"],
+)
+def test_the_api_object_is_found_in_each_declaration_form(declaration):
+    code = f"{declaration}\n  stats: () => 1,\n  init: () => 2,\n}};\napi.init();\n"
+    assert _uncalled_api_members(code) == ["stats"]
+
+
+def test_a_missing_api_object_fails_instead_of_passing():
+    """A renamed object must not make the member check vacuously green."""
+    with pytest.raises(AssertionError):
+        _uncalled_api_members("const client = {\n  init: () => 1,\n};\n")
+
+
+def test_an_api_object_whose_members_do_not_parse_fails_instead_of_passing():
+    """Four-space indentation, quoted keys and method shorthand all parse to
+    nothing; that has to be an error, not an empty list of findings."""
+    for body in ("    stats: () => 1,\n", '  "stats": () => 1,\n', "  stats() { return 1; },\n"):
+        with pytest.raises(AssertionError):
+            _uncalled_api_members(f"const api = {{\n{body}}};\n")
+
+
+def test_a_parent_directory_named_tests_does_not_empty_the_consumers(tmp_path, monkeypatch):
+    src = tmp_path / "__tests__" / "checkout" / "src"
+    src.mkdir(parents=True)
+    (src / "App.tsx").write_text("fetch('/api/x');\n")
+    monkeypatch.setattr(sys.modules[__name__], "_FRONTEND_SRC", src)
+    assert _frontend_files() == [src / "App.tsx"]
+
+
+def test_frontend_test_files_are_not_consumers():
+    """A route or member reached only from a test is dead, as in the Python gate."""
+    root = _FRONTEND_SRC
+    for name in (
+        "a.test.ts",
+        "a.test.tsx",
+        "a.spec.ts",
+        "a.spec.tsx",
+        "__tests__/a.ts",
+        "lib/__tests__/deep/a.tsx",
+    ):
+        assert _is_frontend_test(root / name), name
+    for name in ("App.tsx", "lib/types.ts", "contest.ts", "test.ts", "latest.tsx"):
+        assert not _is_frontend_test(root / name), name
+
+
+def test_a_route_reached_only_by_a_frontend_test_is_reported(tmp_path, monkeypatch):
+    """End to end over a throwaway src/: the test's URL does not vouch for the
+    route and its ``api.<name>`` call does not vouch for the member."""
+    (tmp_path / "__tests__").mkdir()
+    (tmp_path / "App.tsx").write_text(
+        "const API_BASE = '/api';\nconst api = {\n  stats: () =>\n"
+        "    fetch(`${API_BASE}/stats`),\n};\n"
+    )
+    (tmp_path / "App.test.tsx").write_text("api.stats();\n")
+    (tmp_path / "__tests__" / "b.ts").write_text("fetch('/api/other');\n")
+    monkeypatch.setattr(sys.modules[__name__], "_FRONTEND_SRC", tmp_path)
+    code = _all_frontend_code()
+    assert _uncalled_api_members(code) == ["stats"]
+    assert _unrequested_routes(["/api/other"], code) == ["/api/other"]
+    assert "api.stats();" not in code
+
+
+def test_method_shortcut_decorators_register_routes_too():
+    """``@app.get("/api/x")`` is a route like ``@app.route``; a bare ``@cache``
+    or a non-/api path is not one."""
+    app = (
+        '@app.get("/api/a")\n'
+        "def a(): ...\n"
+        '@bp.post("/api/b")\n'
+        "def b(): ...\n"
+        '@app.delete("/page")\n'
+        "def c(): ...\n"
+        "@cache\n"
+        "def d(): ...\n"
+    )
+    assert _api_routes(app) == ["/api/a", "/api/b"]
+    assert _unrequested_routes(_api_routes(app), "fetch('/api/a')") == ["/api/b"]
+
+
+def test_a_fixed_route_is_not_kept_alive_by_its_parameterised_sibling():
+    """``/api/docs`` and ``/api/docs/<name>`` are different URLs; a client of the
+    second says nothing about the first, and a headless string counts like the
+    frontend's while its docstring does not."""
+    frontend = "fetch('/api/docs/' + name);"
+    assert _unrequested_routes(["/api/docs"], frontend) == ["/api/docs"]
+    assert _unrequested_routes(["/api/docs"], "fetch('/api/docs?x=1');") == []
+    headless = _python_strings('"""Mentions /api/old."""\nURL = "/api/new"\n')
+    assert _unrequested_routes(["/api/old", "/api/new"], headless) == ["/api/old"]

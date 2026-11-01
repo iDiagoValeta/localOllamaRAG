@@ -49,7 +49,15 @@ def realizar_busqueda_hibrida(
         query_decomposer=wiring.query_decomposer(config) if config.flags.usar_llm_query_decomposition else None,
     )
 
+    # The reranker and the generator do not fit on an 8 GB card together
+    # (issue #584): kept resident, the reranker left the generator on CPU,
+    # and a generator still in its keep_alive made the reranker's reload run
+    # out of memory. Each gets the card in turn; both reload lazily.
+    if config.flags.usar_reranker:
+        wiring.release_ollama_models(config)
     result = use_case.run(pregunta)
+    if config.flags.usar_reranker:
+        wiring.release_reranker()
 
     fragmentos_ranked = [wiring.fragment_to_dict(f) for f in result.fragments]
     metricas = wiring.retrieval_metrics_to_legacy(result.metrics, config)

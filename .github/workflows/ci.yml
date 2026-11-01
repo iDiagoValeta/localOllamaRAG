@@ -108,6 +108,12 @@ jobs:
       - name: Type-check
         working-directory: rag/web/frontend
         run: pnpm run lint
+      - name: Tests (vitest)
+        # The only check that renders the app and drives it: store selection,
+        # upload, the chat stream and the settings toggles run against a faked
+        # backend. tsc and the build prove the code compiles, not that it works.
+        working-directory: rag/web/frontend
+        run: pnpm run test
       - name: Unused code (knip)
         # tsc only sees what it compiles: an export nothing imports or a
         # dependency nothing requires is still dead weight, and nothing else

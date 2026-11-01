@@ -4,6 +4,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-11-01
+
+[Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.3.0).
+
+No reindex needed. RECOMP synthesis is off by default; a choice saved in the web UI or an exported `USAR_RECOMP_SYNTHESIS` still wins. The unused web routes `GET /api/stats`, `GET /api/docs` and `GET /api/topics` are gone.
+
+### Added
+
+- Linux install, launch and uninstall in one command each: `tools/install.sh` (idempotent, `--check` reports only), `tools/run.sh` (starts the embedder's `llama-server` and the web UI, and stops only what it started) and `tools/uninstall.sh` (removes exactly what the install recorded) (#559).
+
+### Changed
+
+- RECOMP synthesis is off by default (`USAR_RECOMP_SYNTHESIS=false`). With every role on `gemma4:e4b` it scored 145 and 143 of 156 against 144 and 143 without it, while each answer took about 11 s instead of 2.3 s. A choice saved in the web UI or an exported variable still wins (#571).
+- The page's `lang` follows the UI language, the settings panel is a labelled dialog that keeps focus inside it, and every JSON error from the web app carries a stable `code` the UI translates (#555).
+- The evaluation gate's floor is 0.91 (142 of 156 cases), up from 0.82 (#550).
+
+### Fixed
+
+- Answers in the web app run the generator on the GPU on an 8 GB card. Retrieval unloads Ollama's models before reranking and releases the reranker afterwards; with both resident, `gemma4:e4b` got 303 MB of 6 GB on the GPU and generated on CPU. Seven warm questions took 10 to 19 s each instead of 10 to 54 s (#584).
+- Adding PDFs from the UI indexes only the new files (`POST /api/docs`) instead of clearing the store and re-embedding every document; a file with the name of an indexed document replaces it. `POST /api/reindex` no longer takes files and stays the full rebuild (#554).
+- The documented embedder command loads the multimodal projector (`--mmproj`), and the setup check, the desktop boot and the evaluation gate's preflight fail when image embeddings are on and `/props` reports no vision support; without it a fresh install failed on the first PDF with a figure (#565).
+- Indexing asks Ollama to unload every configured model before each file's extraction. The contextual model and the image describer stayed resident for `keep_alive` after the first PDF, and MinerU ran out of an 8 GB card on the second (#582).
+- The setup installs MinerU 3.4.5, the version every gate row was measured on; an unpinned install got 4.x, whose CLI dropped `-p`, and every indexing run failed. The extractor's error now carries MinerU's own message (#573).
+
+### Removed
+
+- `GET /api/stats`, `GET /api/docs` and `GET /api/topics`, which nothing called; the dead-code gate now fails on an `/api/` route no frontend source requests (#557).
+
 ## [4.2.0] - 2026-10-31
 
 [Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.2.0).
@@ -75,7 +103,9 @@ embeddinggemma-2 served by llama.cpp replaces Jina CLIP v2 (every 3.x index must
 
 [Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v3.0.0).
 
-[Unreleased]: https://github.com/iDiagoValeta/localOllamaRAG/compare/v4.1.0...develop
+[Unreleased]: https://github.com/iDiagoValeta/localOllamaRAG/compare/v4.3.0...develop
+[4.3.0]: https://github.com/iDiagoValeta/localOllamaRAG/compare/v4.2.0...v4.3.0
+[4.2.0]: https://github.com/iDiagoValeta/localOllamaRAG/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/iDiagoValeta/localOllamaRAG/compare/v4.0.1...v4.1.0
 [4.0.1]: https://github.com/iDiagoValeta/localOllamaRAG/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/iDiagoValeta/localOllamaRAG/compare/v3.0.0...v4.0.0

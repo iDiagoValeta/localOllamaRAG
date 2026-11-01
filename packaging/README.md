@@ -17,9 +17,10 @@ machine does not need the product's Python environment.
 > **The embedder is not bundled either.** Text and images are embedded by
 > `google/embeddinggemma-2` served by a local `llama-server` (see
 > [Target prerequisites](#target-prerequisites)). The app never starts that
-> process; at launch it probes `<MONKEYGRAB_EMBEDDER_URL>/health` and logs a
-> warning when the server is down, so the missing prerequisite is visible before
-> the first indexing run or question.
+> process; at launch it probes `<MONKEYGRAB_EMBEDDER_URL>/health` (and, while
+> image embeddings are on, `/props` for vision support, i.e. `--mmproj`) and logs
+> a warning when the server is down or cannot embed images, so the missing
+> prerequisite is visible before the first indexing run or question.
 
 ## Build
 
@@ -67,12 +68,18 @@ store is never overwritten or merged, so uploads and deletions survive upgrades.
 - **Ollama** running locally with the desired models.
 - **The `llama-server` embedder**: the `llama-server` binary from
   [llama.cpp](https://github.com/ggml-org/llama.cpp) plus the GGUF conversion of
-  [`google/embeddinggemma-2`](https://huggingface.co/google/embeddinggemma-2),
+  [`google/embeddinggemma-2`](https://huggingface.co/google/embeddinggemma-2)
+  (`embeddinggemma-2-Q8_0.gguf` and `mmproj-embeddinggemma-2-Q8_0.gguf` from
+  [`ggml-org/embeddinggemma-2-GGUF`](https://huggingface.co/ggml-org/embeddinggemma-2-GGUF)),
   running with embeddings enabled on the default port:
 
   ```bash
-  llama-server -m embeddinggemma-2.gguf --embedding --port 8091
+  llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf --embedding --port 8091 -b 2048 -ub 2048
   ```
+
+  The flags match the root README: with the default 512-token physical batch, a
+  long chunk is rejected with HTTP 500 during indexing (issue #487), and without
+  `--mmproj` image embeddings fail with HTTP 500 (issue #565).
 
   `MONKEYGRAB_EMBEDDER_URL` defaults to `http://127.0.0.1:8091`; point it at
   another host/port if the server listens elsewhere. The server is a

@@ -99,18 +99,29 @@ def _pdf(filename):
     return {"file": (io.BytesIO(b"%PDF-1.4\n"), filename)}
 
 
-def test_reindex_while_a_run_is_in_progress_starts_nothing_and_writes_nothing(
-    client, docs_folder, monkeypatch
-):
-    """A reindex already running is reported (202), and no uploaded PDF lands."""
+def test_reindex_while_a_run_is_in_progress_starts_nothing(client, monkeypatch):
+    """A reindex already running is reported (202) and clears nothing."""
     monkeypatch.setitem(web._state, "indexing", True)
+    monkeypatch.setattr(web, "_reset_db", lambda: pytest.fail("a running index must not be cleared"))
 
-    response = client.post(
-        "/api/reindex", data=_pdf("paper.pdf"), content_type="multipart/form-data"
-    )
+    response = client.post("/api/reindex")
 
     assert response.status_code == 202
     assert response.json["indexing"] is True
+
+
+def test_upload_while_a_run_is_in_progress_is_rejected_and_writes_nothing(
+    client, docs_folder, monkeypatch
+):
+    """An upload cannot index beside another run: 409, and no PDF lands."""
+    monkeypatch.setitem(web._state, "indexing", True)
+
+    response = client.post(
+        "/api/docs", data=_pdf("paper.pdf"), content_type="multipart/form-data"
+    )
+
+    assert response.status_code == 409
+    assert response.json["code"] == "indexing_in_progress"
     assert not docs_folder.exists() or list(docs_folder.iterdir()) == []
 
 

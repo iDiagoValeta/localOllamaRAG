@@ -21,15 +21,24 @@ than the whole setup.
 Ollama must be running locally with a generator model pulled. MinerU lives in
 an isolated `.venv-mineru/` interpreter; see the root `README.md`.
 
-## Two CI gates, know which one you need
+## Two gates, know which one you need
 
 - **Fast gate** (`ci.yml`, every PR): lint (`ruff`), architecture dependency
   rules, unit suite against test doubles, harness tests, frontend build. No
   GPU, no models.
-- **Full gate** (`full-eval.yml`, manual dispatch on the self-hosted GPU
-  runner): the real pipeline against every gold case. **Required before
-  merging anything that touches retrieval or generation** — the fast gate
-  never exercises a real model.
+- **Full gate** (`tests/eval/run_eval.py`, run locally, not in CI): the real
+  pipeline against every gold case. **Required before merging anything that
+  touches retrieval or generation, and before every release.** The fast gate
+  never exercises a real model. It needs Ollama and a GPU, which no hosted
+  runner has, and no self-hosted runner is registered for this repository, so
+  [`full-eval.yml`](.github/workflows/full-eval.yml) cannot run. Whoever merges
+  the change or cuts the release runs it on a GPU machine:
+
+  ```bash
+  python tests/eval/run_eval.py --models <model...>
+  ```
+
+  Details: [`tests/eval/README.md`](tests/eval/README.md).
 
 ## Workflow
 
@@ -64,8 +73,9 @@ a PR merges. Names, merge strategy and the release procedure:
 
 5. CI green, squash-merge into `develop`, delete the branch. Message shape: [Commits](docs/standards/commits.md).
 6. A change to retrieval or generation also needs the full gate green. Label
-   the issue and the PR `needs-gate`; the gate runs on the self-hosted GPU
-   runner against the topic branch before the squash.
+   the issue and the PR `needs-gate`, run the gate locally against the topic
+   branch before the squash, and put its run id in the PR. The run id is the
+   timestamp in the name of the report it writes under `tests/eval/runs/`.
 
 ### PR standard
 
@@ -74,7 +84,8 @@ A PR description states, in this order:
 1. **Summary** — what changed in product/system terms first, symbols second.
 2. **Issue** — `Fixes #NNN`, or why it doesn't close one.
 3. **Test plan** — how this was verified, honestly: which suites ran locally,
-   whether the full gate is needed/run, what remains as follow-up monitoring.
+   whether the full gate is needed/run (with its run id), what remains as
+   follow-up monitoring.
 
 Keep PRs reviewable: under ~400 changed lines of product code when feasible,
 no unrelated formatting churn, no drive-by refactors of adjacent code.

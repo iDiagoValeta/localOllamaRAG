@@ -74,7 +74,7 @@ largos.
 ## Estados, que no son decoración
 
 `brand` es el único color decorativo del sistema y se usa con cuentagotas: el
-acento del logo y el botón de enviar.
+resaltado de la selección de texto.
 
 Los colores de estado se quedan porque informan de algo real: el error de
 conexión, el servidor de Ollama parado, una indexación fallida. Lo que
@@ -141,8 +141,13 @@ que la superficie plana no se lea como papel en blanco.
 
 ## Lo que no cambia
 
-- **El logo del mono y su naranja.** Es la única marca propia y sobrevive
-  intacta; no se repinta con los tokens.
+- **El logo del mono.** Es la única marca propia y es una imagen, no CSS: no
+  cambia con el tema. Viste de negro, con el fondo en `field` (`#100f0d`) y la
+  sudadera en `composer` (`#262421`), y el aro y las letras en blanco puro, para
+  que no compita con `brand`. El mismo dibujo sirve al README
+  (`assets/logo-light-circular.png`), la barra lateral
+  (`rag/web/frontend/public/logo.png`) y el icono del ejecutable
+  (`packaging/MonkeyGrab.ico`).
 - **La librería de iconos.** Se conserva phosphor, servida desde `src/lib/icons.tsx`. Lo que se unifica
   es su uso: tamaño pequeño, `ink-faint` en reposo.
 - **Layout, endpoints y comportamiento.** Este documento describe cómo se ve la

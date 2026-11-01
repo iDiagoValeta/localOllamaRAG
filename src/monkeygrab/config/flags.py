@@ -54,7 +54,7 @@ class PipelineFlagsConfig:
     usar_reranker: bool = True
     expandir_contexto: bool = True
     usar_optimizacion_contexto: bool = True
-    usar_recomp_synthesis: bool = True
+    usar_recomp_synthesis: bool = False
     usar_embeddings_imagen: bool = True
     usar_descripcion_imagen: bool = False
     logging_metricas: bool = True
