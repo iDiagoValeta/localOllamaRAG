@@ -270,8 +270,9 @@ def _stub_pipeline(monkeypatch, *, ranked, finales, tokens):
     monkeypatch.setattr(service, "_preparar_mensaje_usuario_rag", lambda q, f: f"MSG:{q}")
     seen = []
 
-    def fake_tokens(mensaje, stats=None):
+    def fake_tokens(mensaje, stats=None, model=None, backend=None):
         seen.append(mensaje)
+        seen_models.append((model, backend))
         for t in tokens:
             yield t
         if stats is not None:
@@ -279,6 +280,9 @@ def _stub_pipeline(monkeypatch, *, ranked, finales, tokens):
 
     monkeypatch.setattr(service, "generar_tokens_respuesta", fake_tokens)
     return seen
+
+
+seen_models: list = []
 
 
 def test_answer_stream_yields_tokens_then_done_with_sources(monkeypatch, tmp_path):
@@ -293,6 +297,15 @@ def test_answer_stream_yields_tokens_then_done_with_sources(monkeypatch, tmp_pat
     assert done["metrics"]["fase_contexto"] == {"c": 2}
     assert done["metrics"]["generation"] == {"model": "m", "eval_count": 2}
     assert seen == ["MSG:¿Qué dice el documento?"]
+
+
+def test_answer_stream_hands_the_requested_model_to_generation(monkeypatch):
+    frag = {"metadata": {"source": "a.pdf", "page": 0}, "score_reranker": 0.9}
+    _stub_pipeline(monkeypatch, ranked=[frag], finales=[frag], tokens=["x"])
+    seen_models.clear()
+    list(service.answer_stream(StorePaths("d", "x"), "¿Qué dice el documento?", model="deepseek-flash", backend="openai"))
+    list(service.answer_stream(StorePaths("d", "x"), "¿Qué dice el documento?"))
+    assert seen_models == [("deepseek-flash", "openai"), (None, None)]
 
 
 def test_answer_stream_reports_no_results_without_generating(monkeypatch):
