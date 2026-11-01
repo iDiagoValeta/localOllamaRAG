@@ -48,9 +48,9 @@ web interface, and nothing leaves the machine.
 
 ### See it in action
 
-**Web interface**: four questions in RAG mode over the English store, each answered from a different document, then a citation opened in the PDF viewer. Waits play at 8x; the chip under each answer shows the real time on an 8 GB laptop GPU.
+**Web interface**: four questions in RAG mode over the English store, each answered from a different document, then a citation opened in the PDF viewer. Waits play at 4x; the chip under each answer shows the real time, 16 to 25 s on an 8 GB laptop GPU.
 
-<img width="1280" height="800" alt="MonkeyGrab answering questions over four documents and opening a cited PDF" src="assets/demo.webp" />
+<img width="100%" alt="MonkeyGrab answering questions over four documents and opening a cited PDF" src="assets/demo.webp" />
 
 **LaTeX rendering** (formulas via [KaTeX](https://katex.org/) in the web UI):
 
