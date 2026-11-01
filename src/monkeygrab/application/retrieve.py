@@ -129,6 +129,7 @@ def _filter_by_reranker_threshold(
     rerank_ran: bool,
     threshold: float,
     named_sources: Set[str] = frozenset(),
+    floor: float = 0.0,
 ) -> List[Fragment]:
     """Apply the single reranker relevance threshold.
 
@@ -143,11 +144,20 @@ def _filter_by_reranker_threshold(
             exempt: the fusion-time boost does not survive reranking, which
             replaces the score, so without this a document the user asked
             about by name could vanish from the answer (issue #312).
+        floor: When above 0, replaces the per-fragment ``threshold`` with a
+            per-question decision (``RerankingConfig.relevance_floor``): all
+            fragments pass if the best one reaches the floor, none otherwise
+            (named sources still pass).
 
     Moved from ``rag.engine.generation._filtrar_por_umbral_reranker``.
     """
     if not rerank_ran:
         return list(fragments)
+    if floor > 0:
+        best = max((_relevance_score(f) for f in fragments), default=0.0)
+        if best >= floor:
+            return list(fragments)
+        return [f for f in fragments if f.metadata.source in named_sources]
     return [
         f for f in fragments
         if _relevance_score(f) >= threshold or f.metadata.source in named_sources
@@ -480,7 +490,8 @@ class Retrieve:
         # docstring), and the RRF scores it leaves behind sit well below the
         # reranker-calibrated threshold.
         filtered = _filter_by_reranker_threshold(
-            fused, reranked, config.reranking.score_threshold, mentioned_sources
+            fused, reranked, config.reranking.score_threshold, mentioned_sources,
+            floor=config.reranking.relevance_floor,
         )
         # Matches preparar_fragmentos_para_generacion's `fragmentos_base =
         # list(candidatos[:cfg.TOP_K_FINAL])`: applied after the threshold

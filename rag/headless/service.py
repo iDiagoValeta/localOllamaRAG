@@ -212,7 +212,9 @@ def status_store(paths: StorePaths) -> Dict[str, Any]:
     }
 
 
-def answer_stream(paths: StorePaths, question: str) -> Iterator[Tuple[str, Dict[str, Any]]]:
+def answer_stream(
+    paths: StorePaths, question: str, model: str | None = None, backend: str | None = None
+) -> Iterator[Tuple[str, Dict[str, Any]]]:
     """Retrieve, prepare evidence, then stream the generated answer.
 
     Yields:
@@ -242,7 +244,7 @@ def answer_stream(paths: StorePaths, question: str) -> Iterator[Tuple[str, Dict[
     sources = format_sources(finales)
     message = _preparar_mensaje_usuario_rag(question, finales)
     stats: Dict[str, Any] = {}
-    for token in generar_tokens_respuesta(message, stats):
+    for token in generar_tokens_respuesta(message, stats, model=model, backend=backend):
         yield "token", {"token": token}
     yield "done", {
         "done": True,

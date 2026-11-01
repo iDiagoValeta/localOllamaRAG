@@ -4,6 +4,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Added
+
+- Headless `/stores/<id>/rag` accepts an optional `model` and `backend` (`ollama` or `openai`) per question, so a host such as Daimon can pick who writes each answer while retrieval stays local.
+- `RERANKER_BATCH_SIZE` and `RERANKER_MAX_LENGTH` cap the CrossEncoder's activation peak on a GPU shared with a chat model; unset keeps today's 32 and the model's limit.
+- `RAG_SUELO_SCORE_RERANKER` (off by default): judge a question by its best reranked fragment instead of cutting each fragment at `RAG_UMBRAL_SCORE_RERANKER`, which kept dropping table and multi-part evidence scored 0.03-0.3.
+
+### Fixed
+
+- The reranker is released even when retrieval raises, so a failed query no longer leaves it holding GPU memory.
+
 ## [4.3.0] - 2026-11-01
 
 [Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.3.0).

@@ -305,6 +305,8 @@ TOP_K_FINAL = _leer_env_int("RAG_TOP_K_FINAL", 8)
 N_TOP_PARA_EXPANSION = _leer_env_int("RAG_N_TOP_PARA_EXPANSION", 3)
 
 UMBRAL_SCORE_RERANKER = _leer_env_float("RAG_UMBRAL_SCORE_RERANKER", 0.65)
+# Opt-in: >0 judges the question by its best fragment (RerankingConfig.relevance_floor).
+SUELO_SCORE_RERANKER = _leer_env_float("RAG_SUELO_SCORE_RERANKER", 0.0)
 
 RRF_K = _leer_env_int("RAG_RRF_K", 60)
 BM25_K1 = _leer_env_float("RAG_BM25_K1", 1.5)

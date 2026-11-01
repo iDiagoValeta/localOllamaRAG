@@ -2005,6 +2005,7 @@ _APPCONFIG_OVERRIDE_KEYS = frozenset(
         "retrieval.weight_semantic_rrf",
         "retrieval.weight_bm25_rrf",
         "reranking.score_threshold",
+        "reranking.relevance_floor",
         "context.max_context_chars",
         "flags.usar_contextual_retrieval",
         "flags.usar_embeddings_imagen",

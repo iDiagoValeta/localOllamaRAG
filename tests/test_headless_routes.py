@@ -28,8 +28,10 @@ def _health(ok=True, reason=None):
 
 
 def _service(*, events=None, index=None, status=None, index_error=None, status_error=None,
-             index_gate=None, index_entered=None):
-    def answer_stream(paths, question):
+             index_gate=None, index_entered=None, models_seen=None):
+    def answer_stream(paths, question, model=None, backend=None):
+        if models_seen is not None:
+            models_seen.append((model, backend))
         if len(question) < 10:
             raise QuestionTooShort("short")
         for event in events or []:
@@ -169,6 +171,35 @@ def test_rag_streams_tokens_then_done():
     assert resp.status_code == 200
     assert resp.mimetype == "text/event-stream"
     assert _events(resp.data) == events
+
+
+def test_rag_passes_the_requested_model_to_the_service():
+    seen = []
+    events = [("token", {"token": "Ho"}), ("done", {"done": True, "sources": [], "metrics": {}})]
+    client = _client(service=_service(events=events, models_seen=seen))
+    client.post("/stores/cv1/rag", json={**PATHS, "message": "¿Qué dice el documento?",
+                                         "model": " deepseek-flash ", "backend": "openai"})
+    client.post("/stores/cv1/rag", json={**PATHS, "message": "¿Qué dice el documento?"})
+    assert seen == [("deepseek-flash", "openai"), (None, None)]
+
+
+def test_rag_rejects_an_unknown_backend():
+    seen = []
+    resp = _client(service=_service(models_seen=seen)).post(
+        "/stores/cv1/rag", json={**PATHS, "message": "¿Qué dice el documento?", "model": "m", "backend": "vllm"}
+    )
+    assert resp.status_code == 400
+    assert seen == []
+
+
+@pytest.mark.parametrize("model", ["", "   ", 7, ["m"]])
+def test_rag_rejects_a_malformed_model(model):
+    seen = []
+    resp = _client(service=_service(models_seen=seen)).post(
+        "/stores/cv1/rag", json={**PATHS, "message": "¿Qué dice el documento?", "model": model}
+    )
+    assert resp.status_code == 400
+    assert seen == []
 
 
 def test_rag_without_stream_returns_json():
