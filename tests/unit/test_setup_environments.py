@@ -238,9 +238,10 @@ class TestReporting:
 class TestEmbedderCheck:
     """Issue #385: a prerequisite this script does not build still gets checked."""
 
-    def _config(self, monkeypatch, base_url):
+    def _config(self, monkeypatch, base_url, images=False):
         config = SimpleNamespace(
-            models=SimpleNamespace(embedding=SimpleNamespace(base_url=base_url))
+            models=SimpleNamespace(embedding=SimpleNamespace(base_url=base_url)),
+            flags=SimpleNamespace(usar_embeddings_imagen=images),
         )
         monkeypatch.setattr(setup, "AppConfig", SimpleNamespace(from_env=lambda: config))
 
@@ -301,6 +302,65 @@ class TestEmbedderCheck:
         assert not passed
         assert "http://embedder.example:9000/health" in message
         assert "llama-server" in message
+        assert "-b 2048 -ub 2048" in message
+        assert "--mmproj mmproj-embeddinggemma-2-Q8_0.gguf" in message
+
+    def _serve(self, monkeypatch, props):
+        """Double ``/health`` (200) and ``/props`` (``props`` as JSON)."""
+        calls = []
+
+        class _Reply:
+            status = 200
+
+            def __init__(self, body):
+                self._body = body
+
+            def read(self):
+                return self._body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        def fake_urlopen(url, timeout):
+            calls.append(url)
+            return _Reply(json.dumps(props).encode("utf-8"))
+
+        monkeypatch.setattr(setup.urllib.request, "urlopen", fake_urlopen)
+        return calls
+
+    def test_a_server_with_vision_passes_when_image_embeddings_are_on(self, monkeypatch):
+        self._config(monkeypatch, "http://embedder.example:9000", images=True)
+        calls = self._serve(monkeypatch, {"modalities": {"vision": True}})
+
+        passed, _message = setup._check_embedder()
+
+        assert passed
+        assert calls == [
+            "http://embedder.example:9000/health",
+            "http://embedder.example:9000/props",
+        ]
+
+    def test_a_server_without_vision_fails_when_image_embeddings_are_on(self, monkeypatch):
+        self._config(monkeypatch, "http://embedder.example:9000", images=True)
+        self._serve(monkeypatch, {"modalities": {"vision": False}})
+
+        passed, message = setup._check_embedder()
+
+        assert not passed
+        assert "--mmproj mmproj-embeddinggemma-2-Q8_0.gguf" in message
+        assert "USAR_EMBEDDINGS_IMAGEN" in message
+
+    def test_a_server_without_vision_passes_when_image_embeddings_are_off(self, monkeypatch):
+        self._config(monkeypatch, "http://embedder.example:9000", images=False)
+        calls = self._serve(monkeypatch, {"modalities": {"vision": False}})
+
+        passed, _message = setup._check_embedder()
+
+        assert passed
+        assert calls == ["http://embedder.example:9000/health"]
 
 
 class TestSurvivingWhatItDiagnoses:
@@ -342,9 +402,35 @@ class TestSurvivingWhatItDiagnoses:
             stderr = ""
 
         monkeypatch.setattr(setup.subprocess, "run", lambda *a, **k: _Silent())
+        monkeypatch.setattr(setup, "_isolated_mineru_version", lambda: setup.MINERU_VERSION)
         passed, message = setup._check_mineru_binary()
         assert passed
         assert "printed nothing" in message
+
+    def _runnable_binary(self, monkeypatch, tmp_path, version):
+        """A real executable that reports ``version``, so the check runs unstubbed."""
+        binary = tmp_path / "bin" / "mineru"
+        binary.parent.mkdir(parents=True)
+        binary.write_text(f"#!/bin/sh\necho 'mineru, version {version}'\n", encoding="utf-8")
+        binary.chmod(0o755)
+        monkeypatch.setattr(setup, "ISOLATED_VENV", tmp_path)
+
+    def test_the_pinned_mineru_version_passes(self, monkeypatch, tmp_path):
+        self._runnable_binary(monkeypatch, tmp_path, setup.MINERU_VERSION)
+        monkeypatch.setattr(setup, "_isolated_mineru_version", lambda: setup.MINERU_VERSION)
+        passed, message = setup._check_mineru_binary()
+        assert passed
+        assert setup.MINERU_VERSION in message
+
+    def test_another_mineru_version_fails_with_the_rebuild_command(self, monkeypatch, tmp_path):
+        """Issue #573: a fresh install that resolved MinerU 4.1.3 must say how to fix it."""
+        self._runnable_binary(monkeypatch, tmp_path, "4.1.3")
+        monkeypatch.setattr(setup, "_isolated_mineru_version", lambda: "4.1.3")
+        passed, message = setup._check_mineru_binary()
+        assert not passed
+        assert "4.1.3" in message
+        assert setup.MINERU_VERSION in message
+        assert "rm -rf .venv-mineru && python tools/setup_environments.py" in message
 
     def test_a_binary_that_exits_nonzero_is_not_present(self, monkeypatch, tmp_path):
         """Issue #385: an existing file that cannot run was reported as MinerU."""
@@ -364,3 +450,25 @@ class TestSurvivingWhatItDiagnoses:
         assert "MinerU" in message
         assert "2" in message
         assert "ImportError" in message
+
+
+class TestPrintFlag:
+    """``--print`` is how the shell scripts read the product's configuration."""
+
+    def test_models_prints_the_configured_tags_one_per_line(self, monkeypatch, tmp_path, capsys):
+        _saved_settings(monkeypatch, tmp_path, {"rag": "custom:7b"})
+        for var in setup.OLLAMA_ROLE_VARS.values():
+            monkeypatch.delenv(var, raising=False)
+        assert setup.main(["--print", "models"]) == 0
+        assert capsys.readouterr().out.split() == sorted({"custom:7b", setup.DEFAULT_OLLAMA_MODEL})
+
+    def test_ollama_url_adds_the_scheme_ollama_host_omits(self, monkeypatch, capsys):
+        monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+        monkeypatch.setenv("OLLAMA_HOST", "10.0.0.5:11434")
+        assert setup.main(["--print", "ollama-url"]) == 0
+        assert capsys.readouterr().out.strip() == "http://10.0.0.5:11434"
+
+    def test_embedder_url_is_the_configured_endpoint_without_trailing_slash(self, monkeypatch, capsys):
+        monkeypatch.setenv("MONKEYGRAB_EMBEDDER_URL", "http://127.0.0.1:18091/")
+        assert setup.main(["--print", "embedder-url"]) == 0
+        assert capsys.readouterr().out.strip() == "http://127.0.0.1:18091"

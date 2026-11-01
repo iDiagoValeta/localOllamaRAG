@@ -277,6 +277,15 @@ def _describe_served_model(props: Any) -> str:
     return repr(named) if named else "neither model_path nor model_alias"
 
 
+def _embedder_command(port: int) -> str:
+    """The llama-server command the root README documents, for printed hints."""
+    return (
+        "llama-server -m embeddinggemma-2-Q8_0.gguf "
+        "--mmproj mmproj-embeddinggemma-2-Q8_0.gguf "
+        f"--embedding --port {port} -b 2048 -ub 2048"
+    )
+
+
 def preflight_embedder() -> str:
     """Fail fast if the embedder is not answering or serves the wrong model.
 
@@ -294,7 +303,9 @@ def preflight_embedder() -> str:
     Raises:
         EvalSetupError: The embedder at ``models.embedding.base_url`` does not
             answer ``GET /health`` with HTTP 200, its ``/props`` cannot be
-            read, or the model it reports is not embeddinggemma-2.
+            read, the model it reports is not embeddinggemma-2, or image
+            embeddings are on and ``/props`` reports no vision support
+            (started without ``--mmproj``, issue #565).
     """
     # Deferred for the same reason as in _installed_ollama_models: importing
     # this module must not require requests, because the fast CI gate installs
@@ -304,7 +315,8 @@ def preflight_embedder() -> str:
     # Resolved through AppConfig, like the rest of the gate. Reading
     # MONKEYGRAB_EMBEDDER_URL here by hand could name a different server from
     # the one the embedding adapter will actually call.
-    base_url = AppConfig.from_env().models.embedding.base_url.rstrip("/")
+    config = AppConfig.from_env()
+    base_url = config.models.embedding.base_url.rstrip("/")
     health_url = f"{base_url}/health"
     try:
         response = requests.get(health_url, timeout=5)
@@ -313,9 +325,8 @@ def preflight_embedder() -> str:
         port = urlsplit(base_url).port or 8091
         raise EvalSetupError(
             f"Embedder (llama-server) health check failed at {health_url} ({exc}). "
-            "Start it first with `llama-server -m <embeddinggemma-2.gguf> "
-            f"--embedding --port {port}`, or point MONKEYGRAB_EMBEDDER_URL "
-            "at a running server."
+            f"Start it first with `{_embedder_command(port)}`, "
+            "or point MONKEYGRAB_EMBEDDER_URL at a running server."
         ) from exc
 
     props_url = f"{base_url}/props"
@@ -330,8 +341,7 @@ def preflight_embedder() -> str:
         raise EvalSetupError(
             f"Embedder (llama-server) /props check failed at {props_url} ({exc}). "
             "The gate needs it to verify the served model; start it with "
-            "`llama-server -m <embeddinggemma-2.gguf> --embedding "
-            f"--port {port}`, or point MONKEYGRAB_EMBEDDER_URL at a running server."
+            f"`{_embedder_command(port)}`, or point MONKEYGRAB_EMBEDDER_URL at a running server."
         ) from exc
 
     identity = _embedder_identity(props)
@@ -340,8 +350,20 @@ def preflight_embedder() -> str:
         raise EvalSetupError(
             f"Embedder (llama-server) at {base_url} is not serving "
             f"embeddinggemma-2: /props reports {_describe_served_model(props)}. "
-            "Start it with `llama-server -m <embeddinggemma-2.gguf> --embedding "
-            f"--port {port}`, or point MONKEYGRAB_EMBEDDER_URL at the right server."
+            f"Start it with `{_embedder_command(port)}`, "
+            "or point MONKEYGRAB_EMBEDDER_URL at the right server."
+        )
+
+    # A server started without --mmproj passes every check above and then fails
+    # each figure with HTTP 500 mid-run (issue #565); /props says so up front.
+    modalities = props.get("modalities") if isinstance(props, dict) else None
+    vision = isinstance(modalities, dict) and modalities.get("vision") is True
+    if config.flags.usar_embeddings_imagen and not vision:
+        port = urlsplit(base_url).port or 8091
+        raise EvalSetupError(
+            f"Embedder (llama-server) at {base_url} reports no vision support in /props, "
+            "so image embeddings (USAR_EMBEDDINGS_IMAGEN) fail with HTTP 500. "
+            f"Restart it with --mmproj: `{_embedder_command(port)}`."
         )
     return identity
 
@@ -589,7 +611,7 @@ def ensure_indexed(
         # this runner from grading answers written off evidence no user's query
         # would have produced.
         # Wired through wiring.answer (issue #260), the same constructor the
-        # product uses: with usar_recomp_synthesis on (the default) the
+        # product uses: with usar_recomp_synthesis on the
         # evidence stage runs the RECOMP synthesis the gate used to skip by
         # building Answer without a recomp_chat_model.
         evidence = wiring.answer(store, config)

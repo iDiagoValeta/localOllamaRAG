@@ -25,7 +25,6 @@ import getpass
 import subprocess
 import threading
 from urllib.parse import urlsplit
-from collections import Counter
 from typing import Generator, Optional
 
 import requests
@@ -701,7 +700,15 @@ def _api_init_logic():
 
     # If permanently failed, report error without restarting the loop
     if _state["indexing_failed"]:
-        return {"ok": False, "error": _state["indexing_error"] or "La indexación falló"}, 500
+        return {
+            "ok": False,
+            "code": "indexing_failed",
+            "error": _state["indexing_error"] or "La indexación falló",
+            # The raw exception text, absent when the run left none: it lets
+            # the UI show the cause and otherwise use its own translated line
+            # instead of the Spanish fallback above.
+            "detail": _state["indexing_error"] or None,
+        }, 500
 
     _ensure_indexed()
 
@@ -709,6 +716,7 @@ def _api_init_logic():
         resp = {
             "ok": False,
             "indexing": True,
+            "code": "indexing_in_progress",
             "error": "Indexando documentos, por favor espera...",
         }
         if _state["indexing_progress"]:
@@ -735,6 +743,7 @@ def _api_init_logic():
         return {
             "ok": False,
             "indexing": True,
+            "code": "indexing_in_progress",
             "error": "Iniciando indexación de documentos...",
             **_init_paths_payload(),
         }, 202
@@ -781,7 +790,7 @@ def api_init():
             resp, status = _api_init_logic()
             return jsonify(resp), status
         except Exception as e2:
-            return jsonify({"ok": False, "error": str(e2)}), 500
+            return jsonify({"ok": False, "code": "init_failed", "error": str(e2)}), 500
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -792,7 +801,7 @@ def api_chat():
     stream = data.get("stream", True)
 
     if not pregunta:
-        return jsonify({"ok": False, "error": "Mensaje vacío"}), 400
+        return jsonify({"ok": False, "code": "empty_message", "error": "Mensaje vacío"}), 400
 
     if stream:
 
@@ -819,7 +828,7 @@ def api_chat():
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
-    return jsonify({"ok": False, "error": "Usar stream=true"}), 400
+    return jsonify({"ok": False, "code": "stream_required", "error": "Usar stream=true"}), 400
 
 
 @app.route("/api/rag", methods=["POST"])
@@ -944,7 +953,7 @@ def api_mode():
     data = request.get_json() or {}
     mode = (data.get("mode") or "chat").lower()
     if mode not in ("chat", "rag"):
-        return jsonify({"ok": False, "error": "Modo inválido"}), 400
+        return jsonify({"ok": False, "code": "invalid_mode", "error": "Modo inválido"}), 400
     _state["mode"] = mode
     return jsonify({"ok": True, "mode": mode})
 
@@ -958,38 +967,6 @@ def api_clear():
     return jsonify({"ok": True})
 
 
-@app.route("/api/stats", methods=["GET"])
-def api_stats():
-    """Return database statistics."""
-    coll = _get_collection()
-    docs = rag_engine.obtener_documentos_indexados(coll)
-    return jsonify(
-        {
-            "ok": True,
-            "total_fragments": coll.count(),
-            "documents": docs,
-            "document_details": _collection_document_details(coll),
-            "indexing": _state["indexing"],
-        }
-    )
-
-
-@app.route("/api/docs", methods=["GET"])
-def api_docs():
-    """List indexed documents."""
-    coll = _get_collection()
-    docs = rag_engine.obtener_documentos_indexados(coll)
-    return jsonify(
-        {
-            "ok": True,
-            "documents": docs,
-            "document_details": _collection_document_details(coll),
-            "total_fragments": coll.count(),
-            "indexing": _state["indexing"],
-        }
-    )
-
-
 @app.route("/api/docs/<path:filename>", methods=["DELETE"])
 def api_delete_doc(filename):
     """Delete a document from FAISS and remove the PDF file from disk.
@@ -999,7 +976,7 @@ def api_delete_doc(filename):
     """
     filename = _safe_pdf_basename(filename)
     if not filename:
-        return jsonify({"ok": False, "error": "Nombre de archivo inválido"}), 400
+        return jsonify({"ok": False, "code": "invalid_filename", "error": "Nombre de archivo inválido"}), 400
     # The background indexer adds chunks outside _indexing_lock, so the lock
     # alone let a delete land mid-run and the indexer re-add the document it
     # removed (issue #453). Claim the turn like every other index mutation.
@@ -1019,7 +996,7 @@ def api_delete_doc(filename):
                 docs = rag_engine.obtener_documentos_indexados(coll)
                 return jsonify({"ok": True, "documents": docs, "total_fragments": coll.count()})
             except Exception as e:
-                return jsonify({"ok": False, "error": str(e)}), 500
+                return jsonify({"ok": False, "code": "delete_failed", "error": str(e)}), 500
     finally:
         _release_indexing()
 
@@ -1033,45 +1010,9 @@ def api_serve_pdf(filename):
     """
     filename = _safe_pdf_basename(filename)
     if not filename:
-        return jsonify({"ok": False, "error": "Archivo inválido"}), 400
+        return jsonify({"ok": False, "code": "invalid_filename", "error": "Archivo inválido"}), 400
     docs_folder = os.path.abspath(rag_engine.CARPETA_DOCS)
     return send_from_directory(docs_folder, filename, mimetype="application/pdf")
-
-
-@app.route("/api/topics", methods=["GET"])
-def api_topics():
-    """Return a summary of indexed content/topics."""
-    coll = _get_collection()
-    docs = rag_engine.obtener_documentos_indexados(coll)
-    docs_data = []
-
-    for doc_name in docs:
-        doc_info = {"name": doc_name}
-        try:
-            fragments = [
-                fragment
-                for fragment in coll.get_page(None, 0)
-                if fragment.metadata.source == doc_name
-            ]
-            if fragments:
-                pages = {fragment.metadata.page for fragment in fragments}
-                doc_info["pages"] = len(pages)
-                doc_info["fragments"] = len(fragments)
-                texto = " ".join(fragment.doc for fragment in fragments[:20])
-                palabras = texto.split()
-                significativas = [
-                    p.strip(".,;:()[]{}\"'-'").lower()
-                    for p in palabras
-                    if len(p) > 5 and p.strip(".,;:()[]{}\"'-'").lower() not in rag_engine.STOPWORDS
-                ]
-                frecuencias = Counter(significativas)
-                top = [w for w, _ in frecuencias.most_common(10)]
-                doc_info["terms"] = ", ".join(top) if top else None
-        except Exception:
-            pass
-        docs_data.append(doc_info)
-
-    return jsonify({"ok": True, "topics": docs_data})
 
 
 # The three Study artifacts share one route because they share one shape:
@@ -1176,20 +1117,22 @@ def api_study():
         rag_engine.MalformedOutlineError,
         rag_engine.MalformedQuizError,
     ) as exc:
-        return jsonify({"ok": False, "kind": "malformed", "error": str(exc)[:400]}), 422
+        return jsonify({"ok": False, "kind": "malformed", "code": "study_malformed", "error": str(exc)[:400]}), 422
     except ValueError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify({"ok": False, "code": "study_invalid_request", "error": str(exc)}), 400
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)[:400]}), 500
+        return jsonify({"ok": False, "code": "study_failed", "error": str(exc)[:400]}), 500
 
     return jsonify({"ok": True, "kind": kind, "artifact": artifact})
 
 
 @app.route("/api/reindex", methods=["POST"])
 def api_reindex():
-    """Re-index everything with the current pipeline settings.
+    """Clear the store and re-index every document with the current pipeline settings.
 
-    Accepts optional PDF files to add before re-indexing.
+    This is the explicit full rebuild (a pipeline setting changed, or a failed
+    run is being retried). Adding documents goes through ``POST /api/docs``,
+    which leaves what is already indexed alone.
     """
     if not _try_begin_indexing():
         # Same answer as before #394: a reindex already running is the
@@ -1204,22 +1147,6 @@ def api_reindex():
         ), 202
 
     try:
-        files = request.files.getlist("file") or []
-        uploads = []
-        for f in files:
-            # Validate every name before writing anything: an invalid one must
-            # not leave the earlier files of the same request on disk.
-            filename = _safe_pdf_basename(f.filename) if f else ""
-            if not filename:
-                _release_indexing()
-                return jsonify({"ok": False, "error": "Nombre de archivo inválido"}), 400
-            uploads.append((f, filename))
-
-        folder = os.path.abspath(rag_engine.CARPETA_DOCS)
-        for f, filename in uploads:
-            os.makedirs(folder, exist_ok=True)
-            f.save(os.path.join(folder, filename))
-
         _reset_db()
         # Reset failure and empty state to allow new indexing
         _state["indexing_failed"] = False
@@ -1227,7 +1154,7 @@ def api_reindex():
         _state["indexing_done_empty"] = False
     except Exception as e:
         _release_indexing()
-        return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "code": "reindex_failed", "error": str(e)}), 500
 
     _hand_over_indexing()
     return jsonify(
@@ -1240,6 +1167,116 @@ def api_reindex():
             "progress": _state["indexing_progress"],
         }
     ), 202
+
+
+@app.route("/api/docs", methods=["POST"])
+def api_add_docs():
+    """Save the uploaded PDFs and index only them, leaving the store as it is.
+
+    A file whose name is already indexed replaces that document: the PDF on
+    disk is overwritten, so keeping the old chunks would leave the store
+    answering from text the folder no longer holds. Indexing is synchronous;
+    the response lists the files that did not land in ``failed_files`` rather
+    than reporting them as added (issue #323).
+    """
+    # The slot, not the lock, serializes this against every other index
+    # mutation and any store switch; holding the lock for the whole embedding
+    # pass would stall every request that needs the collection.
+    if not _try_begin_indexing():
+        return jsonify(
+            {"ok": False, "code": "indexing_in_progress", "error": "indexing_in_progress"}
+        ), 409
+    try:
+        files = request.files.getlist("file") or []
+        if not files:
+            return jsonify(
+                {"ok": False, "code": "no_file", "error": "No se envió ningún archivo"}
+            ), 400
+        uploads = []
+        for f in files:
+            # Validate every name before writing anything: an invalid one must
+            # not leave the earlier files of the same request on disk.
+            filename = _safe_pdf_basename(f.filename) if f else ""
+            if not filename:
+                return jsonify(
+                    {"ok": False, "code": "invalid_filename", "error": "Nombre de archivo inválido"}
+                ), 400
+            uploads.append((f, filename))
+
+        # Resolve the folder and the store once: reading them per file is how a
+        # store switch used to save a PDF into one store and index another.
+        with _indexing_lock:
+            folder = os.path.abspath(rag_engine.CARPETA_DOCS)
+            coll = _get_collection()
+        os.makedirs(folder, exist_ok=True)
+        saved = []
+        for f, filename in uploads:
+            f.save(os.path.join(folder, filename))
+            if filename not in saved:
+                saved.append(filename)
+
+        failed_files = []
+
+        def _on_file_failed(filename, _error):
+            failed_files.append(filename)
+
+        failure = None
+        try:
+            # Chunk ids are positional ({source}_pag{p}_chunk{c}), so re-adding
+            # a replaced file without removing its old chunks trips the store's
+            # duplicate-id guard (issue #324).
+            for filename in saved:
+                coll.delete_source(filename)
+            rag_engine.indexar_documentos(
+                folder, coll, solo_archivos=saved, silent=True, on_file_failed=_on_file_failed
+            )
+        except Exception as e:
+            failure = e
+
+        # From the first delete on the store has changed whatever happened
+        # next, so every answer below carries its current state: the UI would
+        # otherwise keep listing a replaced document whose chunks are gone.
+        try:
+            documents = rag_engine.obtener_documentos_indexados(coll)
+        except Exception:
+            # Unknown is not empty: the answer leaves `documents` out so the UI
+            # keeps the list it has instead of blanking a store that has files.
+            documents = None
+        if failure is not None:
+            # An indexer that raised (every file failed, or something broke
+            # mid-run) cannot name the files it lost: what is not in the store
+            # is what did not land, and with the store unreadable, all of them.
+            failed_files = [
+                name for name in saved if documents is None or name not in documents
+            ]
+        landed = [name for name in saved if name not in failed_files]
+        # Merge into the earlier warning instead of replacing it: files from a
+        # previous run that are still missing stay reported (issue #323).
+        previous = [n for n in _state["indexing_failed_files"] if n not in landed]
+        _state["indexing_failed_files"] = previous + [n for n in failed_files if n not in previous]
+        if coll.count() > 0:
+            _state["indexing_done_empty"] = False
+        payload = {
+            "ok": not failed_files and failure is None,
+            "files": landed,
+            "failed_files": failed_files,
+            "total_fragments": coll.count(),
+        }
+        if documents is not None:
+            payload["documents"] = documents
+        if failure is not None:
+            payload["code"] = "upload_failed"
+            payload["error"] = str(failure)
+        elif failed_files:
+            payload["code"] = "upload_index_failed"
+            payload["error"] = (
+                f"{len(failed_files)} fichero(s) no se pudieron indexar: {', '.join(failed_files)}"
+            )
+        return jsonify(payload), (500 if "code" in payload else 200)
+    except Exception as e:
+        return jsonify({"ok": False, "code": "upload_failed", "error": str(e)}), 500
+    finally:
+        _release_indexing()
 
 
 _SETTINGS_MAP = {
@@ -1321,7 +1358,7 @@ def api_ollama_start():
     try:
         version = _start_ollama_process()
     except Exception as e:
-        return jsonify({"ok": False, "running": False, "error": str(e)}), 500
+        return jsonify({"ok": False, "running": False, "code": "ollama_start_failed", "error": str(e)}), 500
     return jsonify({"ok": version is not None, "running": version is not None, "version": version})
 
 
@@ -1333,7 +1370,7 @@ def api_ollama_models():
     try:
         return jsonify({"ok": True, "models": _ollama_models()})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e), "models": []}), 500
+        return jsonify({"ok": False, "code": "ollama_models_failed", "error": str(e), "models": []}), 500
 
 
 @app.route("/api/models", methods=["GET"])
@@ -1359,7 +1396,7 @@ def api_models_post():
     try:
         roles = rag_engine.set_model_roles_runtime(overrides)
     except ValueError as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        return jsonify({"ok": False, "code": "invalid_model_roles", "error": str(e)}), 400
 
     rag_engine.guardar_ajustes_persistidos()
     # The contextual role only enters index_recipe while contextual retrieval

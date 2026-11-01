@@ -15,6 +15,13 @@ tree of its own.
 Usage:
     python tools/setup_environments.py            # build both, then check
     python tools/setup_environments.py --check    # check only, install nothing
+    python tools/setup_environments.py --print models        # the Ollama tags the roles resolve to
+    python tools/setup_environments.py --print ollama-url    # the Ollama endpoint the pipeline uses
+    python tools/setup_environments.py --print embedder-url  # the llama-server endpoint it uses
+
+The ``--print`` values exist for ``tools/install.sh`` / ``run.sh``: the shell
+scripts ask this file what the product is configured to use instead of keeping
+a second copy of the defaults, which is how two copies drift.
 
 Teardown is one line and always has been::
 
@@ -61,6 +68,12 @@ ISOLATED_VENV = REPO_ROOT / ".venv-mineru"
 TORCH_PIN = "torch==2.6.0"
 TORCHVISION_PIN = "torchvision==0.21.0"
 TORCH_INDEX = "https://download.pytorch.org/whl/cu124"
+
+# Pinned because every gate row in docs/model-history.md was measured on 3.4.5,
+# the version is part of the index fingerprint (#426), and 4.x dropped the `-p`
+# option the adapter passes (#573): an unpinned install breaks every indexing run.
+MINERU_VERSION = "3.4.5"
+MINERU_PIN = f"mineru[core]=={MINERU_VERSION}"
 
 OLLAMA_ROLE_VARS = {
     "rag": "OLLAMA_RAG_MODEL",
@@ -128,7 +141,7 @@ def build_isolated_venv() -> None:
         [python, "-m", "pip", "install", TORCH_PIN, TORCHVISION_PIN, "--index-url", TORCH_INDEX],
         label="installing CUDA torch",
     )
-    _run([python, "-m", "pip", "install", "mineru[core]"], label="installing MinerU")
+    _run([python, "-m", "pip", "install", MINERU_PIN], label="installing MinerU")
 
 
 def _check_interpreter(venv: Path, label: str) -> Tuple[bool, str]:
@@ -167,6 +180,23 @@ def _check_cuda() -> Tuple[bool, str]:
     return True, f"CUDA: {info['device']} (torch {info['torch']})"
 
 
+def _isolated_mineru_version() -> Optional[str]:
+    """The ``mineru`` distribution version installed in ``.venv-mineru``, or ``None``.
+
+    Read from the package metadata by the venv's own interpreter rather than
+    from the binary's ``--version`` output: the pin is a distribution version,
+    and this is the value pip recorded when it installed it.
+    """
+    python = _venv_python(ISOLATED_VENV)
+    if not python.exists():
+        return None
+    probe = "import importlib.metadata as m; print(m.version('mineru'))"
+    result = subprocess.run([str(python), "-c", probe], capture_output=True, text=True, timeout=120)
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
+
+
 def _check_mineru_binary() -> Tuple[bool, str]:
     for candidate in (ISOLATED_VENV / "bin" / "mineru", ISOLATED_VENV / "Scripts" / "mineru.exe"):
         if candidate.exists():
@@ -183,6 +213,15 @@ def _check_mineru_binary() -> Tuple[bool, str]:
                 # half-built venv) is not an installed MinerU; reporting it as
                 # present is what issue #385 fixed.
                 return False, f"MinerU: {candidate} --version exited {result.returncode} ({version})"
+            # A runnable binary of another version is not the one the adapter
+            # was measured on: 4.x dropped the -p option (issue #573).
+            installed = _isolated_mineru_version()
+            if installed != MINERU_VERSION:
+                return False, (
+                    f"MinerU: .venv-mineru has {installed or 'no mineru distribution'}, "
+                    f"but the pin is {MINERU_VERSION}. Rebuild it with: "
+                    "rm -rf .venv-mineru && python tools/setup_environments.py"
+                )
             return True, f"MinerU: {version}"
     return False, f"MinerU: no binary under {ISOLATED_VENV}"
 
@@ -260,12 +299,46 @@ def _check_ollama() -> Tuple[bool, str]:
     return True, f"Ollama: reachable at {base_url}, all {len(wanted)} configured model(s) present"
 
 
+# The command the root README documents. Without --mmproj the server cannot
+# embed images and answers them with HTTP 500 (issue #565).
+_EMBEDDER_COMMAND = (
+    "llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf "
+    "--embedding --port {port} -b 2048 -ub 2048"
+)
+
+
 def _embedder_failure(health_url: str, reason: str) -> str:
     """One line naming the failing endpoint and how to start llama-server."""
     port = urllib.parse.urlsplit(health_url).port or 8091
     return (
         f"Embedder: llama-server is not reachable at {health_url} ({reason}). "
-        f"Start it with `llama-server -m <embeddinggemma-2.gguf> --embedding --port {port}`."
+        f"Start it with `{_EMBEDDER_COMMAND.format(port=port)}`."
+    )
+
+
+def _embedder_vision_problem(base_url: str) -> str:
+    """Explain why the embedder cannot embed images, or return ``""`` when it can.
+
+    A server started without ``--mmproj`` answers ``/health`` and text
+    embeddings normally, then fails every figure with HTTP 500 at indexing
+    time; ``/props`` reports it up front as ``modalities.vision`` false.
+    """
+    props_url = f"{base_url}/props"
+    try:
+        with urllib.request.urlopen(  # nosec B310 -- local endpoint from app config
+            props_url, timeout=_EMBEDDER_HEALTH_TIMEOUT_SECONDS
+        ) as response:
+            props = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError) as exc:
+        return _embedder_failure(props_url, str(exc))
+    modalities = props.get("modalities") if isinstance(props, dict) else None
+    if isinstance(modalities, dict) and modalities.get("vision") is True:
+        return ""
+    port = urllib.parse.urlsplit(base_url).port or 8091
+    return (
+        f"Embedder: llama-server at {base_url} reports no vision support in /props, so "
+        "image embeddings (USAR_EMBEDDINGS_IMAGEN) fail with HTTP 500. Restart it with "
+        f"--mmproj: `{_EMBEDDER_COMMAND.format(port=port)}`."
     )
 
 
@@ -276,9 +349,11 @@ def _check_embedder() -> Tuple[bool, str]:
     build it. It still has to be checked, because every indexing and retrieval
     run embeds through it, and "all components present" was a claim made
     without asking. The URL comes from ``AppConfig`` so this can never name a
-    different server from the one the pipeline calls.
+    different server from the one the pipeline calls. When image embeddings are
+    on, ``/props`` must also report vision support (issue #565).
     """
-    base_url = AppConfig.from_env().models.embedding.base_url.rstrip("/")
+    config = AppConfig.from_env()
+    base_url = config.models.embedding.base_url.rstrip("/")
     health_url = f"{base_url}/health"
     try:
         with urllib.request.urlopen(  # nosec B310 -- local endpoint from app config
@@ -291,6 +366,10 @@ def _check_embedder() -> Tuple[bool, str]:
         return False, _embedder_failure(health_url, str(exc))
     if status != 200:
         return False, _embedder_failure(health_url, f"HTTP {status}")
+    if config.flags.usar_embeddings_imagen:
+        problem = _embedder_vision_problem(base_url)
+        if problem:
+            return False, problem
     return True, f"Embedder: llama-server reachable at {health_url}"
 
 
@@ -357,7 +436,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         action="store_true",
         help="Verify without installing anything. Answers 'is this machine set up?'.",
     )
+    parser.add_argument(
+        "--print",
+        dest="print_what",
+        choices=("models", "ollama-url", "embedder-url"),
+        help="Print one configured value (one per line) and exit; builds and checks nothing.",
+    )
     args = parser.parse_args(argv)
+
+    if args.print_what:
+        config = AppConfig.from_env()
+        values = {
+            "models": _configured_models(),
+            "ollama-url": [config.models.ollama.base_url],
+            "embedder-url": [config.models.embedding.base_url.rstrip("/")],
+        }[args.print_what]
+        print("\n".join(values))
+        return 0
 
     if not args.check:
         build_product_venv()

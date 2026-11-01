@@ -170,7 +170,7 @@ USAR_BUSQUEDA_HIBRIDA = _leer_env_bool("USAR_BUSQUEDA_HIBRIDA", True)
 USAR_RERANKER = _leer_env_bool("USAR_RERANKER", True)
 EXPANDIR_CONTEXTO = _leer_env_bool("EXPANDIR_CONTEXTO", True)
 USAR_OPTIMIZACION_CONTEXTO = _leer_env_bool("USAR_OPTIMIZACION_CONTEXTO", True)
-USAR_RECOMP_SYNTHESIS = _leer_env_bool("USAR_RECOMP_SYNTHESIS", True)
+USAR_RECOMP_SYNTHESIS = _leer_env_bool("USAR_RECOMP_SYNTHESIS", False)
 USAR_EMBEDDINGS_IMAGEN = _leer_env_bool("USAR_EMBEDDINGS_IMAGEN", True)
 # Index-time; requires a vision-capable OLLAMA_CHAT_MODEL and a fresh index.
 USAR_DESCRIPCION_IMAGEN = _leer_env_bool("USAR_DESCRIPCION_IMAGEN", False)
@@ -494,7 +494,7 @@ Orchestrated by `realizar_busqueda_hibrida`. Core is semantic (vector) search; o
 * **OPTIONAL:**
     * **Context Optimization** (`USAR_OPTIMIZACION_CONTEXTO`): Cleans PDF artifacts (headers, footers, noise) before sending to the LLM.
     * **Neighbor Expansion** (`EXPANDIR_CONTEXTO`): Retrieves adjacent chunks to provide continuous context.
-    * **RECOMP Synthesis** (`USAR_RECOMP_SYNTHESIS`): Uses `MODELO_RECOMP`, configured through `OLLAMA_RECOMP_MODEL` and separate from `MODELO_RAG`, to summarize/synthesize the context instead of feeding raw chunks (default: True).
+    * **RECOMP Synthesis** (`USAR_RECOMP_SYNTHESIS`): Uses `MODELO_RECOMP`, configured through `OLLAMA_RECOMP_MODEL` and separate from `MODELO_RAG`, to summarize/synthesize the context instead of feeding raw chunks (default: False, issue #571).
 
 ---
 
@@ -527,7 +527,6 @@ from rag.engine.history import cargar_historial, guardar_historial, limpiar_hist
 from monkeygrab.adapters.reranking.cross_encoder_reranker import resolve_reranker_device
 from monkeygrab.application.keywords import (
     GENERIC_TERMS_BLACKLIST,
-    STOPWORDS,
     extract_keywords,
     is_coherent_query,
     tokenize_bm25,

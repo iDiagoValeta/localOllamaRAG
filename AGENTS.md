@@ -45,7 +45,7 @@ evaluation hooks that had already been deleted.
 7. **Preserve `rag/chat_pdfs.py` public API.** It is consumed verbatim by `rag/web/app.py` (as `rag_engine`), the headless service, the evaluation gate and `tests/`. Renaming a symbol breaks them at once. The API is what those callers use, not a list to keep alive: a name nothing reaches beyond the facade is dead code and gets removed, and `tests/unit/test_no_dead_code.py` fails on one. The authoritative list is the re-export block at the end of that file; the groups are:
    - **Constants:** paths and collection names, model roles, every pipeline flag and numeric parameter, both system prompts.
    - **Pipeline entry points:** `indexar_documentos`, `realizar_busqueda_hibrida`, `preparar_fragmentos_para_generacion`, `generar_respuesta_silenciosa`, `generar_tokens_respuesta`.
-   - **Support:** debug dumps, chat history, `obtener_documentos_indexados`, and the text helpers re-exported from `monkeygrab.application.keywords` (`STOPWORDS`, `extract_keywords`, ...).
+   - **Support:** debug dumps, chat history, `obtener_documentos_indexados`, and the text helpers re-exported from `monkeygrab.application.keywords` (`extract_keywords`, ...).
    - **Runtime switches (web control panel):** `get_pipeline_flags`, `set_pipeline_flags`, `set_docs_folder_runtime`, `MODEL_ROLE_VARS`, `MODEL_ROLE_ENV_VARS`, `get_model_roles`, `set_model_roles_runtime`, the path derivation helper `_derivar_paths_db`, and the persisted-choice API: `cargar_ajustes_persistidos`, `guardar_ajustes_persistidos`, `resolver_carpeta_store`, `STORE_IDS`.
 
    The web API adds `/api/ollama[/start|/models]`, `/api/models`, `/api/stores` (GET) and `/api/stores/select` (POST). There are exactly three fixed language stores — `en` (English, default), `es` (Castellano), `ca` (Valencià) — each bound to `rag/docs/<id>/`. They always exist, possibly empty; there is no create/delete/hide/restore and no user-created stores. `settings.json` persists `active_store`, the model roles and the pipeline flags, falling back to the defaults for anything unknown. The web app reads it at startup (`rag/engine/settings.py`). Precedence is environment > `settings.json` > module defaults, so an exported `OLLAMA_*_MODEL` or `DOCS_FOLDER` still describes the run that declares it. A save never writes an env-pinned role or store over the stored choice: the override lasts for this run, and unsetting the variable restores what the user picked rather than finding it erased. The active store is selectable, and documents can be viewed, added and removed per store.
@@ -91,7 +91,7 @@ tests/
                              no-infra CI job; each module docstring says why it lives here
 harness/                  Configuration search harness (issue #31); not product — see harness/README.md
 packaging/                PyInstaller desktop app build (see §3)
-tools/                    Repo tooling, not product: setup_environments.py (both venvs), fetch_corpus.py (the corpora) + diagnostics/
+tools/                    Repo tooling, not product: setup_environments.py (both venvs), fetch_corpus.py (the corpora), install.sh / run.sh / uninstall.sh (Linux one-command flow, #559) + diagnostics/
 assets/                   Images the READMEs embed
 docs/design/               Architecture design docs; current: 2026-07-26-monkeygrab-v2.md
 docs/README.md             Documentation standard
@@ -174,17 +174,20 @@ presented as pipeline coverage, and vice versa:
   against test doubles (`architecture` job — must import nothing but the
   standard library, since it exercises `domain`/`ports`/`config`/`application`
   and the harness's own fake-evaluator tests), frontend build
-  (`pnpm install --frozen-lockfile` + `pnpm run lint` + `pnpm run build`), and
+  (`pnpm install --frozen-lockfile` + `pnpm run lint` + `pnpm run test` +
+  `pnpm run knip` + `pnpm run build`), and
   the full `pytest` suite with real dependencies but a doubled/absent Ollama
   server (`engine` job — Ollama-dependent tests skip themselves when no
   server answers).
-- **Full gate** (`.github/workflows/full-eval.yml`, `workflow_dispatch` only,
-  self-hosted GPU runner with Ollama installed): runs the real pipeline —
+- **Full gate** (run locally, not in CI: `python tests/eval/run_eval.py --models <model...>`
+  on a GPU machine with Ollama and the embedder; `.github/workflows/full-eval.yml` has no
+  runner registered and cannot run): runs the real pipeline:
   Ollama generation, embeddings from the active embedder, hybrid BM25+semantic retrieval,
   BGE reranking — against every case in `tests/eval/gold_cases.jsonl`
   via `tests/eval/run_eval.py`, and fails if the pass rate drops below
-  `tests/eval/baseline_min_pass_rate.txt`. This is the gate that must be
-  green, together with the fast gate, before merging any change to retrieval
+  `tests/eval/baseline_min_pass_rate.txt`. Whoever merges a retrieval or generation
+  change, or cuts a release, runs it, and the run id goes in the PR. This is the gate
+  that must be green, together with the fast gate, before merging any change to retrieval
   or generation (design doc §7.2/7.3) — the fast gate alone never exercises
   the real model or retrieval path.
 
@@ -233,6 +236,7 @@ Items 1–5 of §6 apply here too. What differs:
 
 ```bash
 # Setup (both interpreters; --check verifies without installing)
+tools/install.sh && tools/run.sh               # Linux: install and launch in two commands (tools/uninstall.sh undoes it)
 python tools/setup_environments.py             # .venv + .venv-mineru, then check
 python tools/fetch_corpus.py                   # the three corpora from rag/docs/corpus_manifest.json (--check: report only)
 python tools/check_branch_policy.py <head> <base>  # is this PR's head/base pair allowed by gitflow
@@ -242,6 +246,7 @@ python rag/web/app.py                          # http://localhost:5000 (ES/EN/VA
 
 # Frontend (pnpm only — package.json pins packageManager, CI enforces --frozen-lockfile)
 cd rag/web/frontend && pnpm install && pnpm run build
+cd rag/web/frontend && pnpm run test           # vitest + Testing Library over the real App, fetch faked
 
 # Tests / CI gates
 pytest                                          # full suite (unit + characterization + eval grader + harness + loose tests)

@@ -46,19 +46,15 @@ web interface, and nothing leaves the machine.
 - **Multimodal** — [MinerU](https://github.com/opendatalab/MinerU) preserves document structure, while [embeddinggemma-2](https://huggingface.co/google/embeddinggemma-2) makes text and images searchable in the same semantic space.
 - **Two interfaces** — [Flask](https://flask.palletsprojects.com/) + [React](https://react.dev/) web app, and a packaged Windows desktop app.
 
-<details>
-<summary><strong>See it in action</strong></summary>
-<br/>
+### See it in action
 
-**Web interface**
+**Web interface**: four questions in RAG mode over the English store, each answered from a different document, then a citation opened in the PDF viewer. Waits play at 4x; the chip under each answer shows the real time, 16 to 25 s on an 8 GB laptop GPU.
 
-https://github.com/user-attachments/assets/f5f8fa1d-b193-4f94-85c2-8f903afa2348
+<img width="100%" alt="MonkeyGrab answering questions over four documents and opening a cited PDF" src="assets/demo.webp" />
 
 **LaTeX rendering** (formulas via [KaTeX](https://katex.org/) in the web UI):
 
-<img width="918" height="563" alt="LaTeX rendering in the web UI" src="assets/latexRender.png" />
-
-</details>
+<img width="1100" height="700" alt="LaTeX rendering in the web UI" src="assets/latexRender.png" />
 
 ---
 
@@ -184,8 +180,8 @@ supersedes it.
 
 ### Low-VRAM variant (4 GB)
 
-`main` is the full pipeline: reranker, RECOMP synthesis and the default
-generator. A trimmed variant for 4 GB GPUs (a ~3 GB Q4 generator,
+`main` is the full pipeline: reranker, the default generator and RECOMP
+synthesis available as a switch (off by default). A trimmed variant for 4 GB GPUs (a ~3 GB Q4 generator,
 embeddinggemma-2 on the CPU, reranker and RECOMP off) lives on the
 [`rag-lite`](https://github.com/iDiagoValeta/localOllamaRAG/tree/rag-lite)
 branch, where it is selected with `MONKEYGRAB_PROFILE=lite`. Its measured runs
@@ -209,7 +205,7 @@ interface and apply to the next query without a restart.
 | **Reranking** | A cross-encoder reads query and chunk together and re-scores the shortlist. |
 | **Threshold** | Drops anything below the reranker's relevance floor, so a question with no answer in the corpus returns nothing rather than the least-bad chunk. Applies only when reranking ran — without its scores there is nothing to threshold on. |
 | **Neighbour expansion** | Pulls in adjacent chunks of the top hits, recovering sentences cut by the chunk boundary. |
-| **RECOMP synthesis** | Compresses the evidence into a facts briefing before generation, following [RECOMP](https://arxiv.org/abs/2310.04408). |
+| **RECOMP synthesis** | Off by default. Compresses the evidence into a facts briefing before generation, following [RECOMP](https://arxiv.org/abs/2310.04408). On the gold set it trades a few cases for others of the same number and makes each answer about 4.7x slower ([measurements](docs/model-history.md)). |
 
 At indexing time, [contextual retrieval](https://www.anthropic.com/news/contextual-retrieval)
 optionally prepends a short situational summary to each chunk so it can be found
@@ -223,20 +219,97 @@ placeholder — and nothing answerable.
 
 ## Running it
 
+### Linux: three commands
+
+```bash
+tools/install.sh      # checks prerequisites, pulls the model, downloads the embedder, builds both venvs and the web UI
+tools/run.sh          # starts the embedder's llama-server and the web UI at http://localhost:5000; Ctrl+C stops both
+tools/uninstall.sh    # removes what install.sh created, and nothing else
+```
+
+`install.sh` is idempotent and reports every missing prerequisite before it
+changes anything (`--check` only reports; `--with-corpus` also fetches the PDF
+corpora). It never installs anything that needs root. Those prerequisites are,
+on a fresh Ubuntu 24.04 with an NVIDIA GPU and its driver (`nvidia-smi` must
+list the card):
+
+```bash
+# A bare container is already root and has no sudo: this makes the commands below work in both cases.
+SUDO=""; [ "$(id -u)" -eq 0 ] || SUDO=sudo
+
+$SUDO apt update
+$SUDO apt install -y python3 python3-venv git curl ca-certificates zstd pciutils \
+  build-essential cmake libgl1 libglib2.0-0
+
+# Node 22.12+ with corepack (vitest needs it): the web UI builds with pnpm, pinned in package.json.
+# Download the NodeSource setup script, read it, then run it.
+curl -fsSLo nodesource_setup.sh https://deb.nodesource.com/setup_24.x
+$SUDO bash nodesource_setup.sh && $SUDO apt install -y nodejs && $SUDO corepack enable
+
+# Ollama (same: download install.sh from ollama.com, read it, run it).
+curl -fsSLo ollama_install.sh https://ollama.com/install.sh
+sh ollama_install.sh
+
+# Ollama's server must be answering before install.sh runs. With systemd it is
+# already a service; without it (a container) start it yourself and wait for it:
+nohup ollama serve > ollama.log 2>&1 &
+for _ in $(seq 60); do ollama list > /dev/null 2>&1 && break; sleep 1; done
+ollama list > /dev/null 2>&1 || { cat ollama.log; echo "ollama serve did not come up" >&2; exit 1; }
+
+# llama.cpp: install.sh loads embeddinggemma-2 in it to check (b11669 is known to work; older builds may not know gemma-embedding2).
+# A shallow clone's --version says "build 1"; that number is not what is checked.
+# Add -DGGML_CUDA=ON to run the embedder on the GPU (needs the CUDA toolkit); the CPU build works.
+git clone --depth 1 --branch b11669 https://github.com/ggml-org/llama.cpp
+cmake -S llama.cpp -B llama.cpp/build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CURL=OFF -DCMAKE_BUILD_TYPE=Release
+cmake --build llama.cpp/build --target llama-server -j"$(nproc)"
+$SUDO install llama.cpp/build/bin/llama-server /usr/local/bin/
+
+git clone https://github.com/iDiagoValeta/localOllamaRAG && cd localOllamaRAG
+```
+
+`install.sh` pulls the model the roles resolve to (`gemma4:e4b` by default),
+downloads `embeddinggemma-2-Q8_0.gguf` and `mmproj-embeddinggemma-2-Q8_0.gguf`
+into `~/.local/share/monkeygrab/models` checking their
+sha256, runs `tools/setup_environments.py` and builds the frontend. It records
+what it created in `~/.local/state/monkeygrab/install-manifest.tsv`
+(both locations can be moved, see `tools/_common.sh`): `uninstall.sh` removes exactly those entries (both
+venvs, `node_modules` and `dist`, the downloaded GGUFs, the Ollama models
+`install.sh` pulled itself, and the indices and caches the install produced),
+asks first unless given `--yes`, and leaves Ollama, its other models and
+anything that existed before the install alone. `run.sh` reuses a llama-server
+that already answers on the embedder's port and stops only the one it started.
+
+The network is needed at run time too: the first indexing and the first query
+download the MinerU and BGE reranker weights from Hugging Face into its cache,
+which `uninstall.sh` leaves in place.
+
+### Manual steps (any platform)
+
 Requires [Python 3.10+](https://www.python.org/downloads/),
 [Ollama](https://ollama.com/download) running locally with at least a generator
 model pulled, and the
 [`embeddinggemma-2`](https://huggingface.co/google/embeddinggemma-2) embedder
-behind a local `llama-server` — start it with
-`llama-server -m embeddinggemma-2.gguf --embedding --port 8091 -b 2048 -ub 2048` from
-[llama.cpp](https://github.com/ggml-org/llama.cpp), the default address of
-`MONKEYGRAB_EMBEDDER_URL`. The batch flags matter: with the default 512-token
-physical batch a longer chunk is rejected with HTTP 500 and indexing stops
-(issue #487). Drop PDFs into `rag/docs/en/` — the index builds
+behind a local `llama-server` — download `embeddinggemma-2-Q8_0.gguf` and
+`mmproj-embeddinggemma-2-Q8_0.gguf` from the Hugging Face repo
+[`ggml-org/embeddinggemma-2-GGUF`](https://huggingface.co/ggml-org/embeddinggemma-2-GGUF)
+and start it with
+`llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf --embedding --port 8091 -b 2048 -ub 2048`
+from [llama.cpp](https://github.com/ggml-org/llama.cpp), the default address of
+`MONKEYGRAB_EMBEDDER_URL`. Two things in that command matter. Without `--mmproj` the
+server cannot embed images, and indexing a PDF with a figure stops on HTTP 500
+while `USAR_EMBEDDINGS_IMAGEN` is on (its default, issue #565). With the default
+512-token physical batch a longer chunk is rejected with HTTP 500 and indexing
+stops (issue #487). Drop PDFs into `rag/docs/en/` — the index builds
 itself on first run.
 
+Build the web interface once before the first run. Its `dist/` folder is
+gitignored, so a fresh clone has none, and without it `/` answers 503. Then start
+the app with the `.venv` interpreter that `tools/setup_environments.py` builds
+(`.venv\Scripts\python.exe` on Windows):
+
 ```bash
-python rag/web/app.py      # web UI at http://localhost:5000
+(cd rag/web/frontend && pnpm install && pnpm run build)
+.venv/bin/python rag/web/app.py      # web UI at http://localhost:5000
 ```
 
 ### Headless service (for another application)
@@ -474,15 +547,17 @@ executable; without it, indexing and retrieval fail visibly. See
 
 ## Development
 
-Two CI gates, deliberately not one. The **fast gate**
+Two gates, deliberately not one. The **fast gate**
 ([`ci.yml`](.github/workflows/ci.yml)) runs on every pull request: lint, the
 architecture dependency rules, the unit suite against test doubles, and the
-frontend build — no GPU, no models, no network. The **full gate**
-([`full-eval.yml`](.github/workflows/full-eval.yml)) is launched manually on a
-self-hosted GPU runner and executes the real pipeline
-against a corpus of hand-verified gold cases and fails if the pass rate drops
-below the recorded baseline. It is required before merging anything that touches
-retrieval or generation, because the fast gate never exercises a real model.
+frontend build, with no GPU, no models and no network. The **full gate** executes the
+real pipeline against a corpus of hand-verified gold cases and fails if the pass
+rate drops below the recorded baseline. It runs locally on a GPU machine with
+Ollama, not in CI: no hosted runner has a GPU, and no self-hosted runner is
+registered for this repository, so [`full-eval.yml`](.github/workflows/full-eval.yml)
+cannot run. It is required before merging anything that touches retrieval or
+generation, and before each release, because the fast gate never exercises a
+real model. Whoever merges or releases puts the run id in the PR.
 
 ```bash
 pytest                                              # full suite, no GPU required

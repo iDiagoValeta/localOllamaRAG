@@ -253,6 +253,76 @@ answers are comparable; its tokens/s and s/answer are not.
 | `gemma4:e4b`, with #482/#485/#486 (2026-10-20), graded before #492 | 122 / 136 (89.7%), 131 / 136 (96.3%) with the #492 grader | 140 / 156 (89.7%), 149 / 156 (95.5%) with the #492 grader | 37.6 | 29 *(of 124)* | 14.66 *(of 124)* | 0.79 | 0 | 0 | ~72% CPU (varies) | `20261020T230552Z` |
 | `gemma4:e4b`, with #482/#485/#486 plus #492/#493 (2026-10-21), graded by #492 | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 38.2 | 27 *(of 124)* | 13.89 *(of 124)* | 0.71 | 0 | 0 | ~72% CPU | `20261021T000639Z` |
 | `gemma4:e4b`, release v4.1.0 on a rebuilt index (2026-10-21), graded by #492 | 129 / 136 (94.9%) | 147 / 156 (94.2%) | 59.0 | 28 *(of 124)* | 10.62 *(of 124)* | 0.48 | 0 | 0 | GPU | `20261021T192157Z` |
+| `gemma4:e4b`, v4.2.0 (`977f796`, 2026-10-31), RECOMP on | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 56.7 | 28 *(of 124)* | 9.48 *(of 124)* | 0.49 | 0 | 0 | GPU | `20261031T114027Z` |
+| `gemma4:e4b`, same commit and index, `USAR_RECOMP_SYNTHESIS=false` | 126 / 136 (92.6%) | 144 / 156 (92.3%) | 57.3 | 36 *(of 124)* | 2.32 *(of 124)* | 0.63 | 0 | 0 | GPU | `20261031T122733Z` |
+| `gemma4:e4b`, `82f1c0f`, every role on `gemma4:e4b`, RECOMP on | 127 / 136 (93.4%) | 145 / 156 (92.9%) | 61.9 | 28 *(of 124)* | 10.89 *(of 124)* | 0.46 | 0 | 0 | GPU | `20261031T141025Z` |
+| `gemma4:e4b`, same, RECOMP off | 126 / 136 (92.6%) | 144 / 156 (92.3%) | 58.6 | 36 *(of 124)* | 2.33 *(of 124)* | 0.61 | 0 | 0 | GPU | `20261031T144105Z` |
+| `gemma4:e4b`, same, RECOMP on (repeat) | 126 / 136 (92.6%) | 143 / 156 (91.7%) | 61.9 | 28 *(of 124)* | 11.00 *(of 124)* | 0.46 | 0 | 0 | GPU | `20261031T152957Z` |
+| `gemma4:e4b`, same, RECOMP off (repeat) | 125 / 136 (91.9%) | 143 / 156 (91.7%) | 58.7 | 36 *(of 124)* | 2.29 *(of 124)* | 0.61 | 0 | 0 | GPU | `20261031T160037Z` |
+
+The two 2026-10-31 rows are issue #548: same commit, same stored index, run
+back to back, differing only in RECOMP. Without it an answer takes 2.32 s
+instead of 9.48 s: the synthesis call, not decoding, was three quarters of the
+wait. The score moves by 4 cases (`compare_runs.py`: 4 up, 8 down, 144
+unchanged), inside the five-case noise of one run but in the unfavourable
+direction, and all 8 lost cases are `factual_number`. One run each, so this
+says RECOMP costs 7 s per answer and buys somewhere between nothing and about
+eight cases; it does not settle which. Part of the RECOMP-off run overlapped a
+CPU-heavy build in a container on the same machine (generation stayed on the
+GPU throughout).
+
+What these two rows measure is the gate's RECOMP, not the product's: the gate
+runs the `chat`, `contextual` and `recomp` roles on `AUX_MODEL`
+(Ling-3.0-tiny, recorded in each artifact's `conditions.config`), while the
+product runs all four roles on `gemma4:e4b`. So the 7 s is Ling's synthesis
+plus loading it next to the generator; a product answer pays for a
+`gemma4:e4b` synthesis instead (the probe below).
+
+The four `82f1c0f` rows are issue #571: the same gate with
+`OLLAMA_AUX_MODEL=gemma4:e4b`, so every role runs on `gemma4:e4b` as in the
+product (recorded in each artifact's `conditions.config`), alternating RECOMP
+on and off twice, back to back on the same index. With the product's
+synthesizer RECOMP buys nothing measurable: 145 and 143 with it, 144 and 143
+without, while an answer takes 10.9-11.0 s instead of 2.3 s. The repeats agree
+on which cases move: without RECOMP, `distillation-temperature`,
+`everest-deaths`, `llama-65b-dimension` and `vit-imagenet-top1` pass in both
+pairs and `gw-snr`, `higgs-mass`, `llama-65b-hellaswag`, `supernovae-lab` and
+`vgg-batch-size` fail in both, so RECOMP trades one set of cases for another
+of the same size rather than adding any. Between two runs of the same
+configuration 3 to 6 cases flip, which bounds the noise.
+
+A fifth run kept the decomposer resident (the configured `keep_alive`, 120 s,
+instead of 0, on the unmerged branch `probe/issue-571-resident-decomposer`) with the reranker moved to the CPU to make room for it. It was
+stopped after 61 cases: retrieval took a median 132 s per case against 10.7 s
+for the same 61 cases with the reranker on the GPU, so moving the reranker off
+the card costs far more than the decomposer reload it saves.
+
+`tools/diagnostics/phase_timings.py --eval-dev-set` split the same commit by
+port on 8 cases (6 reaching the generator), with the product's role
+configuration (every role on `gemma4:e4b`), run right after the gate with the
+embedder's `--mmproj` offloaded to the GPU (1.2 GB):
+
+| Phase | RECOMP on | RECOMP off |
+|---|---|---|
+| query decomposition (5 calls) | 44.5 s | 44.0 s |
+| reranking (8 calls) | 25.8 s | 27.5 s |
+| RECOMP synthesis (6 calls) | 87.3 s | n/a |
+| answer generation (6 calls) | 52.8 s | 59.6 s |
+| embedding, FAISS, BM25 | 0.8 s | 0.6 s |
+| Python glue | 0.02 s | 0.02 s |
+
+Two readings hold and one does not. Query decomposition costs about 9 s per
+question for a few short sub-queries: the decomposer runs with `keep_alive=0`
+(`rag/engine/wiring.py`, issue #164) on the same `gemma4:e4b` the answer uses,
+so each question unloads and reloads the generator (the gate's ~7 s per case
+in retrieval is the same pattern on Ling, also unloaded after every call).
+RECOMP on `gemma4:e4b` took about 14.6 s per answer here, under the contention
+described below. Python glue is nil, so rewriting the orchestration buys
+nothing. The generation figures, though, are not the gate's:
+the probe keeps the reranker resident next to the generator, PyTorch reported
+an out-of-memory retry while loading it, and answers took 9-13 s against the
+gate's 2.3 s, so the probe measured a card under contention, which is the
+product's own interleaving but not a clean timing.
 
 The `20261021T000639Z` row is the gate for #493, and it reads one case below
 the `20261020T230552Z` row once both are graded by #492: 148 against 149, the
@@ -305,6 +375,53 @@ cannot be audited after the fact.
 Of the 17 failures in `20261017T142753Z`, 9 are correct answers the grader does
 not accept (`\%`, `\,`, `^2` against `²`, unit and range variants; issue #367),
 and 2 come from MinerU dropping `code` blocks (issue #366).
+
+## Generators on Ollama 0.40.13 (issue #549, 2026-10-31)
+
+One gate invocation on `82f1c0f` against Ollama 0.40.13, run in the
+`ollama/ollama:0.40.13` container because the host's 0.33.2 cannot load the
+newer candidates and upgrading it needs root. Same index, 180 s budget,
+`AUX_MODEL` = `Ling-3.0-tiny`, RECOMP on (the default when it ran, before
+#571 turned it off), embeddinggemma-2 on the GPU with `--mmproj`. Retrieval is
+shared, so every model answered from the same evidence.
+
+| Model | Answered | Overall | tokens/s | tokens/answer | s/answer | decode s/answer | Budget hit | Infra | Placement | Run |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `gemma4:e4b` *(default)* | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 134.9 | 28 *(of 124)* | 8.75 *(of 124)* | 0.20 | 0 | 0 | GPU | `20261031T204122Z` |
+| `nemotron-3.5-bolt:e4b` | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 94.2 | 25 *(of 124)* | 13.20 *(of 124)* | 0.24 | 0 | 0 | GPU | `20261031T204122Z` |
+| `qwen3.5:9b` | 127 / 136 (93.4%) | 145 / 156 (92.9%) | 18.8 | 55 *(of 124)* | 12.57 *(of 124)* | 2.96 | 0 | 0 | ~41% CPU (varies) | `20261031T204122Z` |
+| `qwen3.5:4b` | 126 / 136 (92.6%) | 144 / 156 (92.3%) | 71.1 | 65 *(of 124)* | 8.46 *(of 124)* | 0.94 | 0 | 0 | GPU | `20261031T204122Z` |
+| `gemma4:e4b`, release v4.3.0 (`7c1b2f7`, 2026-11-01), RECOMP off, host Ollama | 127 / 136 (93.4%) | 145 / 156 (92.9%) | 49.2 | 37 *(of 124)* | 2.58 *(of 124)* | 0.77 | 0 | 0 | ~64% CPU | `20261101T122242Z` |
+
+The runtime is the gain, not a new generator. `gemma4:e4b` scores what it
+scored on 0.33.2 under the same configuration (`20261031T114027Z`, 148/156;
+two cases up, `llama-65b-hellaswag` and `att-study-outline-ca`, two down,
+`dpo-no-sampling` and `gw-final-mass`, inside the noise measured for #571)
+and decodes at 134.9 tokens/s against 56.7. s/answer barely moves (8.75
+against 9.48) because RECOMP's Ling call dominates it; with RECOMP off the
+generator's share is most of the wait, so the faster decode is what an answer
+now feels.
+
+`nemotron-3.5-bolt:e4b`, NVIDIA's post-training of the default, ties it on
+answers (it trades `dpo-no-sampling` for `gaudi-dieta`) and is slower on every
+speed column, so it does not replace it. Both `qwen3.5` sizes score below the
+default and answer at twice its length; the 9B does not fit beside the
+reranker and spills to the CPU. None earned a place, and all three were
+deleted after the run.
+
+Not measured: the `qwen3.5` `-mtp` variants (multi-token prediction changes
+speed, not answers, and neither size is competitive on answers), and
+`bonsai-2:4b`, whose download failed twice with a TLS certificate error from
+the registry's storage host.
+
+The v4.3.0 row is the release gate: the product defaults (RECOMP off since
+#571), on the host's own Ollama 0.40.13 rather than the container. Its 145
+sits with the RECOMP-off runs on 0.33.2 (144 and 143), and its 2.58 s per
+answer with theirs. The model ran about 64% on the CPU, which is why it
+decodes at 49 tokens/s instead of 135: the gate builds `Retrieve` directly
+and keeps the reranker resident, so the per-query GPU handoff of #584, which
+only the web path runs, never applies here. The figure measures answers, not
+the product's speed.
 
 ## Lite profile (4 GB of VRAM)
 
