@@ -50,13 +50,13 @@ web interface, and nothing leaves the machine.
 <summary><strong>See it in action</strong></summary>
 <br/>
 
-**Web interface**
+**Web interface**: four questions in RAG mode over the English store, each answered from a different document, then a citation opened in the PDF viewer. Waits play at 8x; the chip under each answer shows the real time on an 8 GB laptop GPU.
 
-https://github.com/user-attachments/assets/f5f8fa1d-b193-4f94-85c2-8f903afa2348
+<img width="1280" height="800" alt="MonkeyGrab answering questions over four documents and opening a cited PDF" src="assets/demo.webp" />
 
 **LaTeX rendering** (formulas via [KaTeX](https://katex.org/) in the web UI):
 
-<img width="918" height="563" alt="LaTeX rendering in the web UI" src="assets/latexRender.png" />
+<img width="1100" height="700" alt="LaTeX rendering in the web UI" src="assets/latexRender.png" />
 
 </details>
 
