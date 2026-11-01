@@ -34,12 +34,12 @@ the fixed stack: MinerU, the image extractor, embeddinggemma-2 and FAISS.
 The consequence worth knowing: the web app, desktop wrapper and evaluation
 gate execute the same indexing, retrieval and generation implementations.
 
-The Cross-Encoder reranker is cached, and `release_reranker()`
-drops its GPU weights on demand -- called from `/api/settings` when the
-reranker flag is turned off, since nothing will use it again until it is
-turned back on. It is deliberately not called on the per-query retrieval
-path itself: `wiring.rag_chat_model()`'s docstring has the measurement that
-decision rests on.
+The Cross-Encoder reranker is cached, but its GPU weights are not kept
+between questions: retrieval unloads Ollama's models before it runs and
+calls `release_reranker()` after it, because the reranker and `gemma4:e4b`
+do not fit on an 8 GB card together (issue #584). `/api/settings` also
+releases it when the reranker flag is turned off.
+`wiring.rag_chat_model()`'s docstring has the measurement.
 
 [`engine/settings.py`](engine/settings.py) owns the other half of that
 agreement: the model roles, active store and pipeline flags the web control
