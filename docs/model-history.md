@@ -391,6 +391,7 @@ shared, so every model answered from the same evidence.
 | `nemotron-3.5-bolt:e4b` | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 94.2 | 25 *(of 124)* | 13.20 *(of 124)* | 0.24 | 0 | 0 | GPU | `20261031T204122Z` |
 | `qwen3.5:9b` | 127 / 136 (93.4%) | 145 / 156 (92.9%) | 18.8 | 55 *(of 124)* | 12.57 *(of 124)* | 2.96 | 0 | 0 | ~41% CPU (varies) | `20261031T204122Z` |
 | `qwen3.5:4b` | 126 / 136 (92.6%) | 144 / 156 (92.3%) | 71.1 | 65 *(of 124)* | 8.46 *(of 124)* | 0.94 | 0 | 0 | GPU | `20261031T204122Z` |
+| `gemma4:e4b`, release v4.3.0 (`7c1b2f7`, 2026-11-01), RECOMP off, host Ollama | 127 / 136 (93.4%) | 145 / 156 (92.9%) | 49.2 | 37 *(of 124)* | 2.58 *(of 124)* | 0.77 | 0 | 0 | ~64% CPU | `20261101T122242Z` |
 
 The runtime is the gain, not a new generator. `gemma4:e4b` scores what it
 scored on 0.33.2 under the same configuration (`20261031T114027Z`, 148/156;
@@ -412,6 +413,15 @@ Not measured: the `qwen3.5` `-mtp` variants (multi-token prediction changes
 speed, not answers, and neither size is competitive on answers), and
 `bonsai-2:4b`, whose download failed twice with a TLS certificate error from
 the registry's storage host.
+
+The v4.3.0 row is the release gate: the product defaults (RECOMP off since
+#571), on the host's own Ollama 0.40.13 rather than the container. Its 145
+sits with the RECOMP-off runs on 0.33.2 (144 and 143), and its 2.58 s per
+answer with theirs. The model ran about 64% on the CPU, which is why it
+decodes at 49 tokens/s instead of 135: the gate builds `Retrieve` directly
+and keeps the reranker resident, so the per-query GPU handoff of #584, which
+only the web path runs, never applies here. The figure measures answers, not
+the product's speed.
 
 ## Lite profile (4 GB of VRAM)
 
