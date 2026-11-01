@@ -211,12 +211,11 @@ The profile selects the pieces; it does not install them. Two are needed:
 
    `-ngl 0` keeps it on the CPU, leaving the whole 4 GB for the generator.
 
-Measured on the gold set (RTX 4060 Laptop): **130/156 and 129/156** over two
-runs, against the 0.82 floor, with the generator's process peaking at
-**2602 MiB** of VRAM and the embedding server at 0 MiB, ~1.2 s per answer.
-The Q6_K build of the same model (`hf.co/unsloth/gemma-4-E2B-it-GGUF:Q6_K`)
-scored 132/156 at 3340 MiB. The current default, the Qwen3 instruct build
-above, scored 141/156 at 3354 MiB on 2026-10-21. Runs and conditions are in
+Measured on the gold set (RTX 4060 Laptop) with the default above:
+**148/156** against the 0.91 floor on 2026-11-01, about 3.9 s per answer.
+Its process peaked at **3354 MiB** of VRAM when last sampled (2026-10-21),
+with the embedding server on the CPU. Runs, conditions and the Gemma-4-E2B
+builds it replaced are in
 [`docs/model-history.md`](docs/model-history.md#lite-profile-4-gb-of-vram).
 
 ---

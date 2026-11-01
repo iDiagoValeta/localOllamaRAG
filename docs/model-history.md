@@ -445,6 +445,7 @@ same 180 s budget, `USAR_DESCRIPCION_IMAGEN=false` exported over
 | `hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0`, rag-lite at #448 (2026-10-20) | off | 114 / 136 (83.8%) | 132 / 156 (84.6%) | 103.6 | 30 *(of 124)* | 1.12 *(of 124)* | 0.29 | 0 | 0 | GPU | `20261020T040541Z` |
 | `qwen3:4b-instruct-2507-q4_K_M` | off | 123 / 136 (90.4%) | 141 / 156 (90.4%) | 63.8 | 136 *(of 124)* | 3.69 *(of 124)* | 2.08 | 0 | 0 | GPU | `20261021T022603Z` |
 | `qwen3:4b-instruct-2507-q4_K_M`, rag-lite synced with develop (#501, 2026-10-21), graded by #492 | off | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 64.2 | 142 *(of 124)* | 3.76 *(of 124)* | 2.18 | 0 | 0 | GPU | `20261021T154355Z` |
+| `qwen3:4b-instruct-2507-q4_K_M`, rag-lite synced with v4.3.0 (#596, 2026-11-01), Ollama 0.40.13 | off | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 60.3 | 142 *(of 124)* | 3.92 *(of 124)* | 2.35 | 0 | 0 | GPU | `20261101T125722Z` |
 
 The `20261021T022603Z` row is the profile default since 2026-10-21: only
 `OLLAMA_RAG_MODEL` moved to Qwen3, while chat, contextual, RECOMP and AUX stay
@@ -459,6 +460,12 @@ The `20261021T154355Z` row is the same default after #501 brought rag-lite up
 to date with develop, on an index rebuilt from scratch (#366 and #426 change
 what it stores): 148/156 against the 144/156 the `20261021T022603Z` run scores
 under the same grader. It also peaked at **3354 MiB** per process.
+
+The `20261101T125722Z` row is the same default after #596 brought rag-lite up
+to v4.3.0 (MinerU pinned, the embedder's `--mmproj`, model unloading before
+extraction, the per-query GPU handoff), on the existing index and Ollama
+0.40.13: 148/156 again, which clears develop's 0.91 floor (#550) that the sync
+brought to this branch. VRAM was not sampled in this run.
 
 The `20261020T040541Z` row was the profile default on `rag-lite` after the
 2026-10-20 syncs (#423-#448), until the Qwen3 row replaced it, on the same
