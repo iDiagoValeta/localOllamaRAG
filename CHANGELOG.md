@@ -10,6 +10,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ### Fixed
 
+- Answers in the web app run the generator on the GPU on an 8 GB card. Retrieval unloads Ollama's models before reranking and releases the reranker afterwards; with both resident, `gemma4:e4b` got 303 MB of 6 GB on the GPU and generated on CPU. Seven warm questions took 10 to 19 s each instead of 10 to 54 s (#584).
 - Adding PDFs from the UI indexes only the new files (`POST /api/docs`) instead of clearing the store and re-embedding every document; a file with the name of an indexed document replaces it. `POST /api/reindex` no longer takes files and stays the full rebuild (#554).
 - The documented embedder command loads the multimodal projector (`--mmproj`), and the setup check, the desktop boot and the evaluation gate's preflight fail when image embeddings are on and `/props` reports no vision support; without it a fresh install failed on the first PDF with a figure (#565).
 - Indexing asks Ollama to unload every configured model before each file's extraction. The contextual model and the image describer stayed resident for `keep_alive` after the first PDF, and MinerU ran out of an 8 GB card on the second (#582).

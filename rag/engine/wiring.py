@@ -368,15 +368,13 @@ def rag_chat_model(config: AppConfig) -> ChatModel:
     The unloader is wired in here because this model runs last, but it only
     reaches other Ollama-served roles (query decomposer, RECOMP, contextual)
     via keep_alive=0 -- it has no path to the embedder's worker process or
-    the reranker's in-process CUDA weights (issue #239), so neither is
-    implied to be free by the time this model loads. Both stay resident
-    across queries by design: #25's 2026-07-29 measurement found
-    embedder+reranker+a small Ollama model coexisting at 7514 of 8188 MiB
-    with 2-5s of contention, not the multi-minute stall once feared, so
-    reloading either on every query traded a measured, small cost for an
-    unmeasured one. ``release_embedder`` and ``release_reranker`` exist for
-    callers who know a reload is due anyway (a failed re-index; the reranker
-    flag being turned off) rather than for the per-query path itself.
+    the reranker's in-process CUDA weights (issue #239). The embedder stays
+    resident across queries. The reranker does not: ``realizar_busqueda_hibrida``
+    unloads Ollama's models before retrieval and releases the reranker after
+    it (issue #584). #25's 2026-07-29 measurement had a small Ollama model
+    coexisting with both; ``gemma4:e4b`` does not. On the 8 GB card with the
+    reranker resident it got 303 MB of 6 GB on the GPU and generated on CPU,
+    10 to 54 s per answer, against 10 to 19 s with the GPU handed over in turn.
     """
     ollama = config.models.ollama
     return chat_model_for_role(
@@ -510,13 +508,11 @@ def release_reranker() -> None:
 
     Issue #239: the reranker loads once and its weights stayed resident for
     the rest of the process's life, since nothing ever called
-    ``CrossEncoderReranker.release()``. Not wired into the per-query
-    retrieval path itself -- see ``rag_chat_model``'s docstring for why that
-    would trade a measured, small VRAM-contention cost for an unmeasured
-    latency one on every question. Exists for callers who know the reranker
-    will not be needed again soon: today, that is ``/api/settings`` turning
-    ``USAR_RERANKER`` off (``rag/web/app.py``), where the alternative is
-    weights held for nothing until the flag is turned back on.
+    ``CrossEncoderReranker.release()``. ``realizar_busqueda_hibrida`` calls
+    it after every retrieval so the generator fits on an 8 GB card (issue
+    #584; ``rag_chat_model``'s docstring has the measurement), and
+    ``/api/settings`` calls it when ``USAR_RERANKER`` is turned off
+    (``rag/web/app.py``).
 
     Safe to call before ``reranker()`` has ever built one (the cache slot is
     still empty) and after weights are already released -- both leave
