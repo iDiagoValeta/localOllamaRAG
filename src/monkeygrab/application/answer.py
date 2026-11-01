@@ -17,8 +17,8 @@ Persisting the debug dump itself stays a caller concern
 
 RECOMP synthesis lives here because ``Answer``'s use-case description
 explicitly includes "sintetizar contexto (opcional)" and no equivalent exists
-anywhere else -- skipping it would leave the use case unable to reproduce today's
-default pipeline (``USAR_RECOMP_SYNTHESIS`` defaults ``True``). Its silent
+anywhere else -- skipping it would leave the use case unable to reproduce the
+pipeline with ``USAR_RECOMP_SYNTHESIS`` on (off by default since issue #571). Its silent
 fallback-to-raw-context on failure is kept as an explicit, visible decision
 in ``_synthesize_recomp`` (three separate conditions -- LLM call failure,
 empty synthesis, missing header -- each falls back to

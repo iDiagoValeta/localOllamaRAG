@@ -5,11 +5,11 @@ frontend's checks are ``tsc --noEmit`` and a Vite build, so a store row left
 stale after a reindex, or a PDF toolbar tooltip still in Spanish under the
 English UI, stays green until someone clicks through the flow by hand.
 
-There is no JavaScript test runner in this repository (``package.json``
-exposes ``lint`` and ``build`` only), and the fast CI gate that runs this
-module installs pytest and nothing else. The checks are therefore structural
-over the TypeScript source, the same approach ``test_env_example_drift.py``
-uses for frontend environment reads. Each assertion names the user-visible
+The frontend's vitest suite (``rag/web/frontend/tests``) pins behaviour by
+rendering the app, but the fast gate that runs this module installs pytest and
+nothing else, so what is pinned here stays structural over the TypeScript
+source, the same approach ``test_env_example_drift.py`` uses for frontend
+environment reads. Each assertion names the user-visible
 symptom it prevents rather than mirroring one particular implementation.
 """
 
@@ -22,6 +22,8 @@ FRONTEND = ROOT / "rag" / "web" / "frontend" / "src"
 APP = FRONTEND / "App.tsx"
 I18N = FRONTEND / "lib" / "i18n.ts"
 PDF_PANE = FRONTEND / "components" / "PdfPane.tsx"
+CHAT_HOOK = FRONTEND / "hooks" / "useChat.ts"
+SESSION_HOOK = FRONTEND / "hooks" / "useServerSession.ts"
 
 
 def _read(path: Path) -> str:
@@ -90,8 +92,8 @@ def test_question_too_short_error_is_translated() -> None:
     missing there falls back to ``data.message``, which the backend writes in
     Spanish regardless of the UI language.
     """
-    mapped = re.search(r"\bquestion_too_short:\s*T\.(\w+)", _read(APP))
-    assert mapped, "App.tsx does not map the question_too_short error code"
+    mapped = re.search(r"\bquestion_too_short:\s*T\.(\w+)", _read(CHAT_HOOK))
+    assert mapped, "useChat.ts does not map the question_too_short error code"
 
     key = mapped.group(1)
     for lang, lang_keys in _locale_keys().items():
@@ -123,9 +125,9 @@ def test_init_poller_reloads_stores_when_indexing_finishes() -> None:
     never re-runs; the poller's success branch is the only place that can
     refresh the rows without the user switching store.
     """
-    source = _read(APP)
+    source = _read(SESSION_HOOK)
     ok_branch = re.search(r"if \(initData\.ok\) \{(.*?)\n        \} else \{", source, re.S)
-    assert ok_branch, "could not locate the successful init branch in App.tsx"
+    assert ok_branch, "could not locate the successful init branch in useServerSession.ts"
     assert "loadStores()" in ok_branch.group(1), (
         "the init poller does not reload the store list on success"
     )

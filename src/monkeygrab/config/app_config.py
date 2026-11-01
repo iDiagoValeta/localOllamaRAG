@@ -228,7 +228,7 @@ class AppConfig:
             usar_reranker=env.read_env_bool("USAR_RERANKER", True),
             expandir_contexto=env.read_env_bool("EXPANDIR_CONTEXTO", True),
             usar_optimizacion_contexto=env.read_env_bool("USAR_OPTIMIZACION_CONTEXTO", True),
-            usar_recomp_synthesis=env.read_env_bool("USAR_RECOMP_SYNTHESIS", True),
+            usar_recomp_synthesis=env.read_env_bool("USAR_RECOMP_SYNTHESIS", False),
             usar_embeddings_imagen=env.read_env_bool("USAR_EMBEDDINGS_IMAGEN", True),
             usar_descripcion_imagen=env.read_env_bool("USAR_DESCRIPCION_IMAGEN", False),
             logging_metricas=env.read_env_bool("LOGGING_METRICAS", True),

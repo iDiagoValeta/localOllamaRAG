@@ -132,7 +132,9 @@ El gate rápido se ejecuta en cada pull request y push a `main`. Comprueba lint,
 límites arquitectónicos, pruebas unitarias, caracterización y compilación del
 frontend sin descargar modelos.
 
-El gate completo se lanza manualmente en un runner propio con GPU y Ollama.
+El gate completo se ejecuta en local, en una máquina con GPU y Ollama
+(`python tests/eval/run_eval.py`): el workflow `full-eval` existe, pero no hay
+ningún runner propio registrado (issue #551).
 Ejecuta la composición real sobre casos verificados del corpus de desarrollo y
 un conjunto ciego de artículos de arXiv. Incluye preguntas factuales,
 recuperación de figuras y recuperación de tablas.

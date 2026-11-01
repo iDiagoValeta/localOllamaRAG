@@ -7,7 +7,7 @@ Summary of what ships, in product terms.
 ## Checklist
 
 - [ ] Version bumped where packaging reads it; `CHANGELOG.md` `Unreleased` moved under this version with its date
-- [ ] Full gate (`full-eval.yml`) run on this branch: pass rate ______ (floor ______), run link ______
+- [ ] Full gate run locally on this branch (`python tests/eval/run_eval.py`): pass rate ______ (floor ______), run id ______
 - [ ] `docs/model-history.md` has the row for this run
 - [ ] README and architecture docs match the shipped behaviour
 - [ ] Migration notes written if an index fingerprint, a setting or an API changed

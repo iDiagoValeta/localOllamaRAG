@@ -136,6 +136,7 @@ def indexar_documentos(
             logging.info("Processing: %s", archivo)
 
         ruta_pdf = os.path.join(carpeta, archivo)
+        wiring.release_ollama_models(config)
         try:
             result = use_case.run(ruta_pdf, archivo)
             total_chunks += result.chunks_indexed

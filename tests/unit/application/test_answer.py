@@ -138,7 +138,7 @@ def test_raw_context_used_when_recomp_disabled():
 def test_raw_context_used_when_no_recomp_model_wired_in():
     fragments = [_fragment("a.pdf_pag0_chunk0", doc="Evidence.")]
     rag_model = FakeChatModel()
-    config = _config(**{"flags.expandir_contexto": False})  # usar_recomp_synthesis stays True (default)
+    config = _config(**{"flags.usar_recomp_synthesis": True, "flags.expandir_contexto": False})
 
     result = Answer(FakeVectorStore(), rag_model, config, recomp_chat_model=None).run("q?", fragments)
 
@@ -149,7 +149,7 @@ def test_recomp_synthesis_used_when_output_is_well_formed():
     fragments = [_fragment("a.pdf_pag0_chunk0", doc="Evidence about the topic.")]
     rag_model = FakeChatModel()
     recomp_model = FakeChatModel(response="## Facts relevant to the question\n- A grounded fact.")
-    config = _config(**{"flags.expandir_contexto": False})
+    config = _config(**{"flags.usar_recomp_synthesis": True, "flags.expandir_contexto": False})
 
     result = Answer(FakeVectorStore(), rag_model, config, recomp_chat_model=recomp_model).run(
         "question?", fragments
@@ -168,7 +168,7 @@ def test_recomp_prompt_strips_citation_markers_but_keeps_numeric_notation():
     )]
     rag_model = FakeChatModel()
     recomp_model = FakeChatModel(response="## Facts relevant to the question\n- A grounded fact.")
-    config = _config(**{"flags.expandir_contexto": False, "flags.usar_optimizacion_contexto": False})
+    config = _config(**{"flags.usar_recomp_synthesis": True, "flags.expandir_contexto": False, "flags.usar_optimizacion_contexto": False})
 
     Answer(FakeVectorStore(), rag_model, config, recomp_chat_model=recomp_model).run(
         "question?", fragments
@@ -185,7 +185,7 @@ def test_recomp_falls_back_to_raw_context_when_output_missing_header():
     fragments = [_fragment("a.pdf_pag0_chunk0", doc="Evidence about the topic.")]
     rag_model = FakeChatModel()
     recomp_model = FakeChatModel(response="Some prose without the expected markdown header at all.")
-    config = _config(**{"flags.expandir_contexto": False})
+    config = _config(**{"flags.usar_recomp_synthesis": True, "flags.expandir_contexto": False})
 
     result = Answer(FakeVectorStore(), rag_model, config, recomp_chat_model=recomp_model).run(
         "question?", fragments
@@ -203,7 +203,7 @@ def test_recomp_falls_back_to_raw_context_when_output_too_short():
     fragments = [_fragment("a.pdf_pag0_chunk0", doc="Evidence about the topic.")]
     rag_model = FakeChatModel()
     recomp_model = FakeChatModel(response="short")
-    config = _config(**{"flags.expandir_contexto": False})
+    config = _config(**{"flags.usar_recomp_synthesis": True, "flags.expandir_contexto": False})
 
     result = Answer(FakeVectorStore(), rag_model, config, recomp_chat_model=recomp_model).run(
         "question?", fragments
@@ -219,7 +219,7 @@ def test_recomp_falls_back_to_raw_context_on_model_failure():
     fragments = [_fragment("a.pdf_pag0_chunk0", doc="Evidence about the topic.")]
     rag_model = FakeChatModel()
     recomp_model = FakeChatModel(raises=True)
-    config = _config(**{"flags.expandir_contexto": False})
+    config = _config(**{"flags.usar_recomp_synthesis": True, "flags.expandir_contexto": False})
 
     result = Answer(FakeVectorStore(), rag_model, config, recomp_chat_model=recomp_model).run(
         "question?", fragments
