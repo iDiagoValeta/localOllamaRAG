@@ -253,3 +253,19 @@ def test_isolated_python_prefers_the_first_existing_candidate(monkeypatch):
 
     monkeypatch.setattr(Path, "is_file", lambda self: str(self) == posix)
     assert composition.isolated_python() == posix
+
+
+def test_docling_is_chosen_only_by_name_and_a_typo_raises(monkeypatch):
+    built = []
+    _install_stub_module(monkeypatch, "monkeygrab.adapters.extraction.docling_extractor",
+                         DoclingExtractor=lambda: built.append("docling") or "docling")
+    _install_stub_module(monkeypatch, "monkeygrab.adapters.extraction.mineru_extractor",
+                         MineruExtractor=lambda: built.append("mineru") or "mineru")
+    monkeypatch.setenv("MONKEYGRAB_PDF_EXTRACTOR", "docling")
+    composition.build_extractor(None)
+    monkeypatch.delenv("MONKEYGRAB_PDF_EXTRACTOR")
+    composition.build_extractor(None)
+    assert built == ["docling", "mineru"]
+    monkeypatch.setenv("MONKEYGRAB_PDF_EXTRACTOR", "doclin")
+    with pytest.raises(ValueError, match="doclin"):
+        composition.build_extractor(None)

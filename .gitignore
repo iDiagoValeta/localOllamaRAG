@@ -15,6 +15,7 @@ __pycache__/
 venv/
 .venv/
 .venv-mineru/
+.venv-docling/
 *.egg-info/
 .eggs/
 .pytest_cache/

@@ -6,6 +6,7 @@ runtime and builds the rest of what the use cases need: a chat model per role,
 and the reranker and BM25 index it caches between queries.
 """
 
+import os
 from pathlib import Path
 from typing import NamedTuple
 
@@ -46,10 +47,23 @@ def isolated_python() -> str:
 
 
 def build_extractor(config: AppConfig) -> PdfExtractor:
+    """The PDF extractor: MinerU by default, Docling with ``MONKEYGRAB_PDF_EXTRACTOR=docling``.
+
+    An unknown value raises instead of falling back: a typo must not index a
+    corpus with an extractor nobody chose.
+    """
     del config
     from monkeygrab.adapters.extraction.by_suffix_extractor import BySuffixExtractor
-    from monkeygrab.adapters.extraction.mineru_extractor import MineruExtractor
     from monkeygrab.adapters.extraction.text_extractor import TextFileExtractor
+
+    choice = os.environ.get("MONKEYGRAB_PDF_EXTRACTOR", "mineru").strip().lower() or "mineru"
+    if choice == "docling":
+        from monkeygrab.adapters.extraction.docling_extractor import DoclingExtractor
+
+        return BySuffixExtractor(DoclingExtractor(), TextFileExtractor())
+    if choice != "mineru":
+        raise ValueError(f"MONKEYGRAB_PDF_EXTRACTOR must be 'mineru' or 'docling', not {choice!r}")
+    from monkeygrab.adapters.extraction.mineru_extractor import MineruExtractor
 
     return BySuffixExtractor(MineruExtractor(), TextFileExtractor())
 
