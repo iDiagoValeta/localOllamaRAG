@@ -44,7 +44,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Directories that are installed, generated or vendored -- not this repo's code.
 _SKIP_DIRS = frozenset(
-    {".venv", ".venv-mineru", "venv", "node_modules", "__pycache__", ".git", "build", "dist"}
+    {".venv", ".venv-mineru", ".venv-docling", "venv", "node_modules", "__pycache__", ".git", "build", "dist"}
 )
 
 # Statements after which nothing in the same block can run. `sys.exit()` and

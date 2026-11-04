@@ -117,6 +117,7 @@ _EXCLUDED_DIR_NAMES = {
     "build",
     ".venv",
     ".venv-mineru",
+    ".venv-docling",
     ".pytest_cache",
     ".ruff_cache",
 }
