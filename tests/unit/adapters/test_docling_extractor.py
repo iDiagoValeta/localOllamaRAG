@@ -8,9 +8,9 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pytest  # noqa: E402
+import pytest
 
-from monkeygrab.adapters.extraction.docling_extractor import DoclingExtractor  # noqa: E402
+from monkeygrab.adapters.extraction.docling_extractor import DoclingExtractor
 
 FAKE_SHIM = """
 import json, sys
