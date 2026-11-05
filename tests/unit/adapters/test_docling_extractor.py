@@ -80,3 +80,29 @@ def test_without_the_isolated_interpreter_it_says_how_to_install_it(tmp_path):
 def test_a_missing_pdf_raises_file_not_found(tmp_path):
     with pytest.raises(FileNotFoundError):
         _extractor(tmp_path, []).extract(str(tmp_path / "missing.pdf"))
+
+
+def test_a_malformed_result_is_not_cached(tmp_path):
+    shim = tmp_path / "shim.py"
+    shim.write_text("import sys\nopen(sys.argv[2], 'w').write('{\"page\": ')\n", encoding="utf-8")
+    extractor = DoclingExtractor(python=sys.executable, cache_dir=tmp_path / "cache", shim=shim)
+    with pytest.raises(RuntimeError, match="unreadable"):
+        extractor.extract(str(_pdf(tmp_path)))
+    assert not list((tmp_path / "cache").glob("*.json"))
+
+
+def test_upgrading_docling_misses_the_cache(tmp_path):
+    env = tmp_path / "venv"
+    (env / "bin").mkdir(parents=True)
+    python = env / "bin" / "python"
+    python.symlink_to(sys.executable)
+    site = env / "lib" / "python3.12" / "site-packages"
+    (site / "docling-2.1.0.dist-info").mkdir(parents=True)
+    shim = tmp_path / "shim.py"
+    shim.write_text(f"PAGES = {json.dumps([{'page': 1, 'text': 'Uno'}])}\n{FAKE_SHIM}", encoding="utf-8")
+    extractor = DoclingExtractor(python=str(python), cache_dir=tmp_path / "cache", shim=shim)
+    pdf = _pdf(tmp_path)
+    extractor.extract(str(pdf))
+    (site / "docling-2.1.0.dist-info").rename(site / "docling-2.2.0.dist-info")
+    extractor.extract(str(pdf))
+    assert len(list((tmp_path / "cache").glob("*.json"))) == 2

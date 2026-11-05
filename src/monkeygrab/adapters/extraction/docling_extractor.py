@@ -43,12 +43,32 @@ def _default_cache_dir() -> Path:
     return Path(os.environ.get("DOCLING_CACHE_DIR", _PROJECT_ROOT / "rag" / "cache" / "docling"))
 
 
-def _cache_key(pdf_path: Path, shim: Path) -> str:
+def _docling_version(python: Path) -> str:
+    """The installed docling distributions next to ``python``, so an upgrade misses the cache."""
+    env = python.parent.parent
+    found = sorted(
+        d.name
+        for pattern in ("lib/python*/site-packages/docling*.dist-info", "Lib/site-packages/docling*.dist-info")
+        for d in env.glob(pattern)
+    )
+    return ",".join(found)
+
+
+def _cache_key(pdf_path: Path, shim: Path, python: Path) -> str:
     digest = hashlib.sha256()
     digest.update(pdf_path.read_bytes())
     digest.update(shim.read_bytes())
     digest.update(os.environ.get("DOCLING_OCR", "0").encode())
+    digest.update(_docling_version(python).encode())
     return digest.hexdigest()[:16]
+
+
+def _read_pages(path: Path) -> List[ExtractedPage]:
+    """The shim's JSON as pages; raises ValueError if it is not a list of {page, text}."""
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, list):
+        raise ValueError("expected a list of pages")
+    return [ExtractedPage(page=int(entry["page"]) - 1, text=str(entry["text"])) for entry in raw]
 
 
 class DoclingExtractor:
@@ -85,7 +105,7 @@ class DoclingExtractor:
             )
 
         self._cache_dir.mkdir(parents=True, exist_ok=True)
-        out = self._cache_dir / f"{pdf.stem}-{_cache_key(pdf, self._shim)}.json"
+        out = self._cache_dir / f"{pdf.stem}-{_cache_key(pdf, self._shim, self._python)}.json"
         if not out.is_file():
             partial = out.with_suffix(".partial")
             try:
@@ -106,10 +126,12 @@ class DoclingExtractor:
                 )
             partial.replace(out)
 
-        raw = json.loads(out.read_text(encoding="utf-8"))
-        pages = [
-            ExtractedPage(page=int(entry["page"]) - 1, text=str(entry["text"])) for entry in raw
-        ]
+        try:
+            pages = _read_pages(out)
+        except (ValueError, KeyError, TypeError) as exc:
+            # A malformed result must not stay cached: every later call would fail the same way.
+            out.unlink(missing_ok=True)
+            raise RuntimeError(f"Docling wrote an unreadable result for {pdf}: {exc}") from exc
         if not any(page.text.strip() for page in pages):
             out.unlink(missing_ok=True)
             raise RuntimeError(f"Docling extracted no text from {pdf}")
