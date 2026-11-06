@@ -41,7 +41,7 @@ def test_every_file_is_extracted_with_ollama_models_released(tmp_path, monkeypat
     monkeypatch.setattr(wiring, "release_ollama_models", lambda _config: events.append(("unload", None)))
     monkeypatch.setattr(indexing, "IndexCorpus", _RecordingIndexCorpus)
     monkeypatch.setattr(indexing, "build_extractor", lambda _config: None)
-    monkeypatch.setattr(indexing, "_extractor_version", lambda: None)
+    monkeypatch.setattr(indexing, "_extractor_version", lambda _config: None)
     for name in ("a.pdf", "b.pdf"):
         (tmp_path / name).write_bytes(b"%PDF-1.4")
 
