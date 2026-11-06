@@ -1,6 +1,6 @@
 """Indexing entry point for the web app.
 
-Wires the fixed extraction, embedding and storage adapters and runs
+Wires the configured extraction, embedding and storage adapters and runs
 ``monkeygrab.application.index_corpus.IndexCorpus`` over a folder of PDFs.
 Chunking, contextual enrichment and direct image embedding live in the use
 case; what remains here is folder iteration and progress reporting.
@@ -10,10 +10,12 @@ import logging
 import os
 from typing import Callable, List, Optional
 
+from monkeygrab.adapters.extraction.docling_extractor import installed_version as docling_installed_version
 from monkeygrab.adapters.extraction.mineru_extractor import installed_version as mineru_installed_version
 from monkeygrab.adapters.extraction.text_extractor import TEXT_SUFFIXES
 from monkeygrab.application.index_corpus import IndexCorpus
 from monkeygrab.application.index_fingerprint import compute_index_fingerprint, fingerprint_is_stale
+from monkeygrab.config.app_config import AppConfig
 from monkeygrab.composition import build_extractor, build_image_extractor
 from monkeygrab.ports.vector_store import VectorStore
 from rag.engine import wiring
@@ -189,24 +191,30 @@ def indexar_documentos(
         )
 
     if solo_archivos is None:
-        collection.write_fingerprint(compute_index_fingerprint(config, _extractor_version()))
+        collection.write_fingerprint(compute_index_fingerprint(config, _extractor_version(config)))
 
     return total_chunks
 
 
-def _extractor_version() -> Optional[str]:
-    """MinerU's version for the fingerprint, or ``None`` when it is not installed.
+def _extractor_version(config: AppConfig) -> Optional[str]:
+    """The configured PDF extractor's version for the fingerprint, or ``None`` when it is not installed.
 
-    Upgrading MinerU in place changes what a reindex would store (issue #426),
+    Upgrading the extractor in place changes what a reindex would store (issue #426),
     so the version is part of the fingerprint whenever it can be read. A
-    machine without MinerU -- a text-only headless corpus, a query-only
+    machine without the extractor -- a text-only headless corpus, a query-only
     install -- cannot read it; it then writes and checks the fingerprint
     without the version, consistently, instead of failing a stage that never
-    ran MinerU. Indexing a PDF still hard-fails on a missing MinerU in the
+    ran it. Indexing a PDF still hard-fails on a missing extractor in the
     adapter itself, so this is not a silent fallback of the extraction.
+
+    Args:
+        config: ``config.chunking.pdf_extractor`` names the extractor to ask.
     """
+    installed_version = (
+        docling_installed_version if config.chunking.pdf_extractor == "docling" else mineru_installed_version
+    )
     try:
-        return mineru_installed_version()
+        return installed_version()
     except RuntimeError:
         return None
 
@@ -237,7 +245,7 @@ def index_fingerprint_mismatch(collection: VectorStore) -> bool:
     """
     try:
         config = wiring.app_config_from_runtime()
-        expected = compute_index_fingerprint(config, _extractor_version())
+        expected = compute_index_fingerprint(config, _extractor_version(config))
         return fingerprint_is_stale(collection.read_fingerprint(), expected)
     except Exception:
         return False

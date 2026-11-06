@@ -161,6 +161,14 @@ def test_recipe_is_json_serializable_and_names_the_fixed_stack():
     assert recipe["embedding"].startswith("google/embeddinggemma-2")
 
 
+def test_switching_the_pdf_extractor_invalidates():
+    """An index built by MinerU must not be reused once Docling extracts, or vice versa."""
+    base = AppConfig()
+    docling = dataclasses.replace(base, chunking=dataclasses.replace(base.chunking, pdf_extractor="docling"))
+    assert index_recipe(docling)["extractor"] == "docling"
+    assert compute_index_fingerprint(base) != compute_index_fingerprint(docling)
+
+
 # fingerprint_is_stale -- the product-facing tri-state read of a comparison
 # (match / mismatch / unknown), as opposed to run_eval.should_rebuild's binary
 # "rebuild unless proven identical" (tests/eval/run_eval.py). The product must

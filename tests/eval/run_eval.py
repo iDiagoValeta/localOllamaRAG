@@ -635,7 +635,7 @@ def ensure_indexed(
         evidence = wiring.answer(store, config)
 
         print(
-            f"[index] {label}: stack={_stack_slug()} chunks={store.count()}",
+            f"[index] {label}: stack={_stack_slug(config.chunking.pdf_extractor)} chunks={store.count()}",
             flush=True,
         )
         return retrieve, evidence, stack
@@ -704,9 +704,14 @@ def _fragment_to_dict(fragment) -> Dict[str, Any]:
     return fragment_to_dict(fragment)
 
 
-def _stack_slug() -> str:
-    """Name the extraction/embedding/store stack in logs and report file names."""
-    return "mineru-eg2-faiss"
+def _stack_slug(pdf_extractor: str) -> str:
+    """Name the extraction/embedding/store stack in logs and report file names.
+
+    Args:
+        pdf_extractor: ``ChunkingConfig.pdf_extractor`` of the run, so a
+            Docling run is never filed under MinerU's name.
+    """
+    return f"{pdf_extractor}-eg2-faiss"
 
 
 def _eval_app_config(
@@ -2012,6 +2017,7 @@ _APPCONFIG_OVERRIDE_KEYS = frozenset(
         "chunking.chunk_overlap",
         "chunking.min_chunk_length",
         "chunking.contextual_doc_chars",
+        "chunking.pdf_extractor",
         "retrieval.n_semantic_results",
         "retrieval.n_keyword_results",
         "retrieval.top_k_rerank_candidates",
@@ -2425,7 +2431,9 @@ def evaluate(
         chat_override = (config_overrides or {}).get("models.chat")
         if chat_override:
             required_models.add(chat_override)
-    stack_slug = _stack_slug()
+    stack_slug = _stack_slug(
+        (config_overrides or {}).get("chunking.pdf_extractor") or AppConfig.from_env().chunking.pdf_extractor
+    )
 
     # Computed before any case runs, so phase 1/2 can stream records to disk
     # as they are produced (issue #219) -- the final report_path is still

@@ -1,4 +1,4 @@
-"""Composition root for the fixed multimodal stack: MinerU, embeddinggemma-2 and FAISS.
+"""Composition root for the multimodal stack: MinerU or Docling, embeddinggemma-2 and FAISS.
 
 Every builder takes the immutable ``AppConfig`` and returns the port the use
 cases consume. ``rag.engine.wiring`` derives that config from the mutable
@@ -6,7 +6,6 @@ runtime and builds the rest of what the use cases need: a chat model per role,
 and the reranker and BM25 index it caches between queries.
 """
 
-import os
 from pathlib import Path
 from typing import NamedTuple
 
@@ -47,22 +46,22 @@ def isolated_python() -> str:
 
 
 def build_extractor(config: AppConfig) -> PdfExtractor:
-    """The PDF extractor: MinerU by default, Docling with ``MONKEYGRAB_PDF_EXTRACTOR=docling``.
+    """Build the document extractor: PDFs through the configured extractor, text files read directly.
 
-    An unknown value raises instead of falling back: a typo must not index a
-    corpus with an extractor nobody chose.
+    Args:
+        config: ``config.chunking.pdf_extractor`` names the PDF extractor,
+            MinerU by default or Docling (``MONKEYGRAB_PDF_EXTRACTOR``).
+
+    Returns:
+        A suffix-dispatching extractor.
     """
-    del config
     from monkeygrab.adapters.extraction.by_suffix_extractor import BySuffixExtractor
     from monkeygrab.adapters.extraction.text_extractor import TextFileExtractor
 
-    choice = os.environ.get("MONKEYGRAB_PDF_EXTRACTOR", "mineru").strip().lower() or "mineru"
-    if choice == "docling":
+    if config.chunking.pdf_extractor == "docling":
         from monkeygrab.adapters.extraction.docling_extractor import DoclingExtractor
 
         return BySuffixExtractor(DoclingExtractor(), TextFileExtractor())
-    if choice != "mineru":
-        raise ValueError(f"MONKEYGRAB_PDF_EXTRACTOR must be 'mineru' or 'docling', not {choice!r}")
     from monkeygrab.adapters.extraction.mineru_extractor import MineruExtractor
 
     return BySuffixExtractor(MineruExtractor(), TextFileExtractor())
@@ -71,16 +70,21 @@ def build_extractor(config: AppConfig) -> PdfExtractor:
 def build_image_extractor(config: AppConfig) -> ImageExtractor:
     """Build the image extractor used when image embeddings are enabled.
 
+    Same extractor as ``build_extractor``, so choosing Docling never starts
+    MinerU: each pair shares one run per PDF through its cache.
+
     Args:
-        config: Current config; the current extractor has nothing to read from
-            it yet, but it takes the same argument as the other builders so
-            callers do not special-case it.
+        config: ``config.chunking.pdf_extractor`` names the extractor.
 
     Returns:
-        MinerU's image extractor, restricted to PDFs.
+        The configured extractor's image adapter, restricted to PDFs.
     """
-    del config
     from monkeygrab.adapters.extraction.by_suffix_extractor import PdfOnlyImageExtractor
+
+    if config.chunking.pdf_extractor == "docling":
+        from monkeygrab.adapters.extraction.docling_extractor import DoclingImageExtractor
+
+        return PdfOnlyImageExtractor(DoclingImageExtractor())
     from monkeygrab.adapters.extraction.mineru_extractor import MineruImageExtractor
 
     return PdfOnlyImageExtractor(MineruImageExtractor())

@@ -84,6 +84,8 @@ INDEX_TIME_KEYS: frozenset = frozenset({
     "chunking.chunk_overlap",
     "chunking.min_chunk_length",
     "chunking.contextual_doc_chars",
+    # The extractor decides every stored character.
+    "chunking.pdf_extractor",
     # Conditional recipe members: index_recipe reads models.contextual only
     # while usar_contextual_retrieval runs, and models.chat only while
     # usar_descripcion_imagen runs. A static set cannot carry that condition,

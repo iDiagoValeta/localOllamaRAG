@@ -20,6 +20,7 @@ import pytest
 
 from monkeygrab.application.index_fingerprint import index_recipe
 from monkeygrab.config.app_config import AppConfig
+from monkeygrab.config.chunking import PDF_EXTRACTORS
 from harness import search_space
 
 
@@ -148,6 +149,10 @@ def _perturbed(value):
     if isinstance(value, float):
         return value + 0.1
     if isinstance(value, str):
+        # A closed choice (the PDF extractor) rejects an invented value, so it
+        # moves to another allowed choice instead.
+        if value in PDF_EXTRACTORS:
+            return next(choice for choice in PDF_EXTRACTORS if choice != value)
         return value + "-probe"
     raise AssertionError(f"no perturbation defined for {value!r}")
 

@@ -12,7 +12,7 @@ ports/         Protocols the application layer depends on (PdfExtractor, Embedde
 application/   use cases: IndexCorpus, Retrieve, Answer, Study, + pure helpers (rrf_fusion,
                text_chunking, context_assembly, keywords)
 config/        AppConfig — immutable, built once via from_env(), changed via with_overrides() (never mutated)
-adapters/      port implementations (MinerU, embeddinggemma-2 over llama-server, FAISS, Ollama, BM25, CrossEncoder)
+adapters/      port implementations (MinerU or Docling, embeddinggemma-2 over llama-server, FAISS, Ollama, BM25, CrossEncoder)
 ```
 
 Dependency rule: `application` → `domain`/`ports`/`config`; `ports` → `domain`;
@@ -32,7 +32,7 @@ not by convention.
 ## Current wiring (read before assuming more than this)
 
 **All three stages run through the core.** `rag/engine/indexing.py` runs
-`IndexCorpus` with MinerU, embeddinggemma-2 and FAISS.
+`IndexCorpus` with the configured extractor (MinerU or Docling), embeddinggemma-2 and FAISS.
 `rag/engine/retrieval.py` runs `Retrieve` and
 `rag/engine/generation.py` runs `Answer`. `tests/eval/run_eval.py` constructs
 the same use cases, so the evaluation gate and the shipped product cannot
@@ -46,9 +46,11 @@ web app calls it to warn when a stored index no longer matches the active
 config, and leave reindexing to the user rather than triggering it — an hour
 of MinerU + embedding must never start silently. A store with no recorded
 fingerprint (every index built before this feature existed) reads as unknown,
-not stale. The wiring adds the installed MinerU version to the recipe when it
-can read it (issue #426); without MinerU both the write and the check leave it
-out, so a query-only machine does not read every store as stale.
+not stale. The recipe names the PDF extractor (`ChunkingConfig.pdf_extractor`),
+so switching between MinerU and Docling invalidates the index, and the wiring
+adds that extractor's installed version when it can read it (issue #426);
+without it both the write and the check leave it out, so a query-only machine
+does not read every store as stale.
 
 Each entry point under `rag/engine/` is wiring plus conversion between the
 domain entities the core speaks and the dicts the interfaces consume. None of
@@ -84,7 +86,9 @@ queries.
 A dependency that does not fit the product's pinned stack runs outside it
 rather than downgrading the product environment. MinerU runs as an external
 CLI from its own isolated interpreter (`.venv-mineru`), never a product Python
-dependency. embeddinggemma-2 runs in an external `llama-server` the adapter
+dependency, and Docling the same way, through `tools/docling_extract.py` in
+`.venv-docling`. Each extractor serves both the text and the image port from
+one run per PDF, so choosing Docling never starts MinerU. embeddinggemma-2 runs in an external `llama-server` the adapter
 reaches over HTTP (`adapters/embedding/llama_server_embedder.py`). Both
 adapters stay pure stdlib, so their unit tests never need either runtime.
 
