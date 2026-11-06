@@ -63,6 +63,7 @@ _FIELD_MAP = [
     ("retrieval.weight_bm25_rrf", "PESO_BM25_RRF"),
     ("retrieval.min_question_length", "MIN_LONGITUD_PREGUNTA_RAG"),
     ("reranking.score_threshold", "UMBRAL_SCORE_RERANKER"),
+    ("reranking.relevance_floor", "SUELO_SCORE_RERANKER"),
     ("context.max_context_chars", "MAX_CONTEXTO_CHARS"),
     ("flags.usar_contextual_retrieval", "USAR_CONTEXTUAL_RETRIEVAL"),
     ("flags.usar_llm_query_decomposition", "USAR_LLM_QUERY_DECOMPOSITION"),

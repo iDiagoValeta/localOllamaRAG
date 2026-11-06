@@ -51,3 +51,33 @@ def test_reranker_is_released_after_retrieval(monkeypatch, usar_reranker, expect
     retrieval.realizar_busqueda_hibrida("question", collection=None)
 
     assert events == expected
+
+
+def test_reranker_is_released_when_retrieval_fails(monkeypatch):
+    events = []
+
+    class _FailingRetrieve:
+        def __init__(self, *_a, **_kw):
+            pass
+
+        def run(self, _question):
+            events.append("run")
+            raise RuntimeError("CUDA out of memory")
+
+    config = AppConfig().with_overrides(**{
+        "flags.usar_reranker": True,
+        "flags.usar_busqueda_hibrida": False,
+        "flags.usar_llm_query_decomposition": False,
+        "flags.logging_metricas": False,
+    })
+    monkeypatch.setattr(wiring, "app_config_from_runtime", lambda: config)
+    monkeypatch.setattr(wiring, "embedder", lambda _config: None)
+    monkeypatch.setattr(wiring, "reranker", lambda _config: None)
+    monkeypatch.setattr(wiring, "release_ollama_models", lambda _config: events.append("unload"))
+    monkeypatch.setattr(wiring, "release_reranker", lambda: events.append("release"))
+    monkeypatch.setattr(retrieval, "Retrieve", _FailingRetrieve)
+
+    with pytest.raises(RuntimeError):
+        retrieval.realizar_busqueda_hibrida("question", collection=None)
+
+    assert events == ["unload", "run", "release"]
