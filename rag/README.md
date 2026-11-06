@@ -29,7 +29,7 @@ required ports and run `IndexCorpus`, `Retrieve` and `Answer` from
 package's mutable runtime configuration and the immutable `AppConfig` the core
 expects. That config is what the composition root
 ([`monkeygrab/composition.py`](../src/monkeygrab/composition.py)) uses to build
-the fixed stack: MinerU, the image extractor, embeddinggemma-2 and FAISS.
+the stack: MinerU or Docling for text and figures (`MONKEYGRAB_PDF_EXTRACTOR`), embeddinggemma-2 and FAISS.
 
 The consequence worth knowing: the web app, desktop wrapper and evaluation
 gate execute the same indexing, retrieval and generation implementations.
