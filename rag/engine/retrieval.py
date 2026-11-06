@@ -55,9 +55,13 @@ def realizar_busqueda_hibrida(
     # out of memory. Each gets the card in turn; both reload lazily.
     if config.flags.usar_reranker:
         wiring.release_ollama_models(config)
-    result = use_case.run(pregunta)
-    if config.flags.usar_reranker:
-        wiring.release_reranker()
+    try:
+        result = use_case.run(pregunta)
+    finally:
+        # Also when the run raises (a CUDA OOM in the reranker itself): left
+        # resident, the reranker kept ~2 GB and every later query failed too.
+        if config.flags.usar_reranker:
+            wiring.release_reranker()
 
     fragmentos_ranked = [wiring.fragment_to_dict(f) for f in result.fragments]
     metricas = wiring.retrieval_metrics_to_legacy(result.metrics, config)

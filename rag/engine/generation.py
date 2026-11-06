@@ -118,7 +118,12 @@ def _preparar_mensaje_usuario_rag(
     return mensaje
 
 
-def generar_tokens_respuesta(mensaje_usuario: str, stats: Optional[Dict[str, Any]] = None):
+def generar_tokens_respuesta(
+    mensaje_usuario: str,
+    stats: Optional[Dict[str, Any]] = None,
+    model: Optional[str] = None,
+    backend: Optional[str] = None,
+):
     """Yield the generator's answer token by token.
 
     Args:
@@ -126,11 +131,22 @@ def generar_tokens_respuesta(mensaje_usuario: str, stats: Optional[Dict[str, Any
         stats: When given, the timing and token counts of the final streamed
             chunk are copied into it, so the debug dump can report decoding
             speed.
+        model: Generator for this answer only, in place of the configured
+            ``rag`` role. Lets a caller such as Daimon answer each question
+            with the model its user picked, without restarting the service.
+        backend: Backend that serves ``model`` (``"ollama"`` or
+            ``"openai"``), in place of the configured ``rag_backend``. A model
+            name only means something to its own backend: Daimon's picker
+            names models its OpenAI-compatible proxy serves.
 
     Yields:
         Answer text, one streamed chunk at a time.
     """
     config = wiring.app_config_from_runtime()
+    if model:
+        config = config.with_overrides(**{"models.rag": model})
+    if backend:
+        config = config.with_overrides(**{"models.rag_backend": backend})
     use_case = wiring.answer(_NO_COLLECTION, config)
 
     for chunk in use_case.stream(mensaje_usuario):

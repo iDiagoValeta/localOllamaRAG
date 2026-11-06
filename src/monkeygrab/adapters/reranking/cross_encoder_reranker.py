@@ -48,6 +48,15 @@ def resolve_reranker_device(override: Optional[str] = None) -> Tuple[str, bool]:
     return "cpu", False
 
 
+def _positive_int(raw: Optional[str]) -> Optional[int]:
+    """A positive integer read from an environment value, or None when unset or invalid."""
+    try:
+        value = int((raw or "").strip())
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
 class CrossEncoderReranker:
     """Re-scores retrieval candidates with a Cross-Encoder loaded once, lazily.
 
@@ -84,8 +93,15 @@ class CrossEncoderReranker:
 
     def _load(self, device: str) -> CrossEncoder:
         model_kwargs = {"torch_dtype": "float16"} if device == "cuda" else {}
+        extra = {}
+        max_length = _positive_int(os.getenv("RERANKER_MAX_LENGTH"))
+        if max_length is not None:
+            # Caps the tokens scored per (query, chunk) pair; unset keeps the
+            # model's own limit. On an 8 GB card shared with a chat model the
+            # activations of long pairs are what runs out of memory.
+            extra["max_length"] = max_length
         with contextlib.redirect_stderr(io.StringIO()):
-            return CrossEncoder(self._model_name, device=device, model_kwargs=model_kwargs)
+            return CrossEncoder(self._model_name, device=device, model_kwargs=model_kwargs, **extra)
 
     def _ensure_model(self) -> CrossEncoder:
         if self._model is not None:
@@ -169,7 +185,10 @@ class CrossEncoderReranker:
         try:
             with contextlib.redirect_stderr(io.StringIO()):
                 ranks = model.rank(
-                    query, texts, top_k=min(top_k, len(texts)), return_documents=False
+                    query, texts, top_k=min(top_k, len(texts)), return_documents=False,
+                    # Smaller batches lower the activation peak on a shared GPU
+                    # at little cost in speed; unset keeps sentence-transformers' 32.
+                    batch_size=_positive_int(os.getenv("RERANKER_BATCH_SIZE")) or 32,
                 )
         except Exception as exc:
             raise RuntimeError(

@@ -30,15 +30,16 @@ class FakeCrossEncoder:
 
     instances = []
 
-    def __init__(self, model_name_or_path, device, model_kwargs):
+    def __init__(self, model_name_or_path, device, model_kwargs, **extra):
         self.model_name = model_name_or_path
         self.device = device
         self.model_kwargs = model_kwargs
+        self.extra = extra
         self.rank_calls = []
         FakeCrossEncoder.instances.append(self)
 
-    def rank(self, query, documents, top_k, return_documents):
-        self.rank_calls.append({"query": query, "documents": documents, "top_k": top_k})
+    def rank(self, query, documents, top_k, return_documents, batch_size=32):
+        self.rank_calls.append({"query": query, "documents": documents, "top_k": top_k, "batch_size": batch_size})
         # Return highest corpus_id first with a made-up descending score.
         return [
             {"corpus_id": i, "score": 1.0 - i * 0.1}
@@ -60,6 +61,28 @@ def _patch_crossencoder(monkeypatch, factory=None):
 def _force_cpu(monkeypatch):
     # Deterministic across dev machines with/without a GPU.
     monkeypatch.setenv("RERANKER_DEVICE", "cpu")
+
+
+def test_batch_size_and_max_length_come_from_the_environment(monkeypatch):
+    _patch_crossencoder(monkeypatch)
+    _force_cpu(monkeypatch)
+    monkeypatch.setenv("RERANKER_BATCH_SIZE", "8")
+    monkeypatch.setenv("RERANKER_MAX_LENGTH", "1024")
+    CrossEncoderReranker().rerank("q", [_fragment("a")], top_k=1)
+    model = FakeCrossEncoder.instances[0]
+    assert model.extra == {"max_length": 1024}
+    assert model.rank_calls[0]["batch_size"] == 8
+
+
+def test_without_tuning_env_the_reranker_keeps_its_defaults(monkeypatch):
+    _patch_crossencoder(monkeypatch)
+    _force_cpu(monkeypatch)
+    monkeypatch.delenv("RERANKER_BATCH_SIZE", raising=False)
+    monkeypatch.setenv("RERANKER_MAX_LENGTH", "nope")
+    CrossEncoderReranker().rerank("q", [_fragment("a")], top_k=1)
+    model = FakeCrossEncoder.instances[0]
+    assert model.extra == {}
+    assert model.rank_calls[0]["batch_size"] == 32
 
 
 def test_reranker_uses_fixed_bge_model(monkeypatch):
