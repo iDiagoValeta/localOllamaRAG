@@ -108,6 +108,9 @@ _FIELDS_WITHOUT_ENGINE_COUNTERPART = {
     "models.embedding.base_url",
     "models.embedding.dimensions",
     "models.embedding.timeout",
+    # The PDF extractor selector, like the embedder's: no module global, the
+    # extractors are built from AppConfig alone (composition.build_extractor).
+    "chunking.pdf_extractor",
 }
 
 

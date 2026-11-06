@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Added
+
+- Docling as an alternative PDF extractor for both text and figures, chosen with `MONKEYGRAB_PDF_EXTRACTOR=docling` and run from its own `.venv-docling`; MinerU stays the default. The extractor is part of the index fingerprint, so switching it asks for a reindex instead of reusing the other extractor's index (#604).
+
 ## [4.3.0] - 2026-11-01
 
 [Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.3.0).

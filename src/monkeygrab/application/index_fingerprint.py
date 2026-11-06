@@ -25,12 +25,6 @@ from typing import Any, Dict, Optional
 
 from monkeygrab.config.app_config import AppConfig
 
-# The fixed multimodal stack. Not read from config because it is not
-# configurable (docs/design/2026-07-26-monkeygrab-v2.md). Bump by hand when the
-# extractor or the embedding model is replaced -- exactly the kind of change
-# that has to invalidate every index built before it.
-_EXTRACTOR_ID = "mineru"
-
 # Bumped BY HAND when the code that turns a recipe into stored content
 # changes -- never for a configuration change, since every config value this
 # module cares about already has its own recipe key and invalidates on its
@@ -82,7 +76,7 @@ def index_recipe(config: AppConfig, extractor_version: Optional[str] = None) -> 
     Args:
         config: The configuration an index was, or would be, built under.
         extractor_version: The installed extractor's own version string, when
-            the caller can read it. Upgrading MinerU in place changes the
+            the caller can read it. Upgrading the extractor in place changes the
             chunks a reindex would store without moving any config value
             (issue #426). The application layer cannot ask the binary itself
             (dependency rule), so the wiring layer passes it in; ``None``
@@ -93,7 +87,10 @@ def index_recipe(config: AppConfig, extractor_version: Optional[str] = None) -> 
         A JSON-serializable dict describing that recipe.
     """
     recipe: Dict[str, Any] = {
-        "extractor": _EXTRACTOR_ID,
+        # The extractor decides every stored character, so switching it must
+        # invalidate the index. "mineru" is the value every index built before
+        # the choice existed recorded, which keeps their fingerprints valid.
+        "extractor": config.chunking.pdf_extractor,
         "embedding": _embedding_id(config),
         "chunk_size": config.chunking.chunk_size,
         "chunk_overlap": config.chunking.chunk_overlap,

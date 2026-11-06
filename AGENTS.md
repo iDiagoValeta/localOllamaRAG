@@ -74,7 +74,7 @@ src/monkeygrab/          Hexagonal core (see src/monkeygrab/README.md)
   ports/                   Protocols the application layer depends on
   application/             Use cases (IndexCorpus, Retrieve, Answer) + pure helpers
   config/                  AppConfig — immutable, from_env() / with_overrides()
-  adapters/                Port implementations: MinerU, embeddinggemma-2 (llama-server), FAISS, Ollama, BM25, BGE
+  adapters/                Port implementations: MinerU or Docling, embeddinggemma-2 (llama-server), FAISS, Ollama, BM25, BGE
 rag/                      Web interface and pipeline entry points
   chat_pdfs.py              Public facade + global config (see §1 rule 7)
   engine/                    wiring, retrieval, indexing, generation, study, sources, debug, history, settings

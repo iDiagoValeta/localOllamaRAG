@@ -194,6 +194,7 @@ class AppConfig:
             chunk_overlap=env.read_env_int("RAG_CHUNK_OVERLAP", 400),
             min_chunk_length=env.read_env_int("RAG_MIN_CHUNK_LENGTH", 150),
             contextual_doc_chars=env.read_env_int("CONTEXTUAL_DOC_CHARS", 24000),
+            pdf_extractor=env.read_env_str("MONKEYGRAB_PDF_EXTRACTOR", "mineru").strip().lower(),
         )
 
         retrieval = RetrievalConfig(

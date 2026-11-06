@@ -467,7 +467,7 @@ _EXTERNAL_SCHEMES = ("http://", "https://", "mailto:", "#")
 # matching when the corpora grew, which is why it is here and not in the
 # original list.
 _NOT_REPO_MARKDOWN = frozenset(
-    {".venv", ".venv-mineru", "venv", "node_modules", ".git", ".mineru_cache"}
+    {".venv", ".venv-mineru", ".venv-docling", "venv", "node_modules", ".git", ".mineru_cache"}
 )
 
 

@@ -123,6 +123,7 @@ _SKIP_DIRS = frozenset(
         ".git",
         ".venv",
         ".venv-mineru",
+        ".venv-docling",
         "venv",
         "node_modules",
         "__pycache__",

@@ -100,11 +100,21 @@ def test_without_mineru_the_version_is_left_out_on_both_sides(tmp_path, monkeypa
 
     indexing.indexar_documentos(str(tmp_path), store, silent=True)
 
-    assert indexing._extractor_version() is None
+    assert indexing._extractor_version(config) is None
     # The real write path, not a hand-built fingerprint: a version added on
     # write only would make every store built without MinerU read as stale.
     assert store.read_fingerprint() == compute_index_fingerprint(config)
     assert not indexing.index_fingerprint_mismatch(store)
+
+
+def test_the_version_comes_from_the_configured_extractor(monkeypatch):
+    config = wiring.app_config_from_runtime()
+    docling = config.with_overrides(**{"chunking.pdf_extractor": "docling"})
+    _version(monkeypatch, "3.5.0")
+    monkeypatch.setattr(indexing, "docling_installed_version", lambda: "docling-2.147.0.dist-info")
+
+    assert indexing._extractor_version(config) == "3.5.0"
+    assert indexing._extractor_version(docling) == "docling-2.147.0.dist-info"
 
 
 def test_installed_version_turns_a_vanishing_binary_into_runtime_error(monkeypatch, tmp_path):

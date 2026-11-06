@@ -156,7 +156,7 @@ The rest of the stack is not an Ollama model:
 | **Lexical search** | [Okapi BM25](https://github.com/dorianbrown/rank_bm25), always on when hybrid search is | — |
 | **Embeddings** | [`google/embeddinggemma-2`](https://huggingface.co/google/embeddinggemma-2) via a local `llama-server` | `MONKEYGRAB_EMBEDDER_URL` |
 | **Vector store** | [FAISS](https://github.com/facebookresearch/faiss), exact cosine search | fixed |
-| **PDF extraction** | [MinerU](https://github.com/opendatalab/MinerU), structured text, tables and figures | fixed |
+| **PDF extraction** | [MinerU](https://github.com/opendatalab/MinerU) (default) or [Docling](https://github.com/docling-project/docling), structured text, tables and figures | `MONKEYGRAB_PDF_EXTRACTOR` |
 
 > [!NOTE]
 > MinerU is an external CLI that runs in an isolated interpreter, because its
@@ -458,6 +458,14 @@ project's own install instructions.
 > (`hybrid_auto/` rather than 2.x's `auto/`) — the adapter finds it either
 > way. See [`src/monkeygrab/README.md`](src/monkeygrab/README.md) for how the
 isolation is used.
+
+Docling, the alternative extractor (`MONKEYGRAB_PDF_EXTRACTOR=docling`), runs
+the same way from `.venv-docling` at the project root (or `DOCLING_PYTHON`).
+It is optional and not built by the setup script:
+
+```bash
+uv venv --python 3.12 .venv-docling && uv pip install --python .venv-docling/bin/python "docling==2.147.0"
+```
 
 Both environments can be built and verified in one command:
 

@@ -511,6 +511,28 @@ why Q4_0 is the profile default. For the record, the reranker this profile
 leaves off measured 2640 MiB on the GPU scoring 200 candidates, and ~70 s for
 40 candidates on the CPU.
 
+## PDF extractor: Docling against MinerU (issue #604)
+
+Same lite profile, same generator and embedder, both arms indexed from cold
+caches into fresh stores on 2026-11-06, one after the other: MinerU 3.4.5
+(the default) and Docling 2.147.0 for both text and figures
+(`MONKEYGRAB_PDF_EXTRACTOR=docling`). The embedder ran with
+`CUDA_VISIBLE_DEVICES=` so it held no GPU memory at all, which makes its
+share of indexing slower than with the README command; it is the same share in
+both arms. Memory was sampled every 0.5 s: RSS of the gate's process tree,
+VRAM through `nvidia-smi`. A 4 GB card cannot hold MinerU's indexing peak.
+
+| Extractor | Overall | Answered | Indexing, 58 PDFs | Peak RAM, indexing | Peak VRAM, indexing | Run |
+|---|---|---|---|---|---|---|
+| MinerU 3.4.5 | 148 / 156 (94.9%) | 129 / 136 | 3539 s | 10337 MiB | 4146 MiB | `20261106T222844Z` |
+| Docling 2.147.0 | 144 / 156 (92.3%) | 125 / 136 | 2075 s | 5810 MiB | 1888 MiB | `20261106T211327Z` |
+
+An earlier Docling run the same day, with another process holding 1.9 GiB of
+the GPU and the generator 22% on the CPU, scored 142 / 156. Two cases fail
+under Docling and pass under MinerU in every run on record
+(`relativitat-michelson`, `vit-overview-figure`); one goes the other way
+(`higgs-diphoton-figure`). The rest of the gap is inside one run's noise.
+
 ## Embedder A/B (issue #292)
 
 Same stored chunks, same 144 non-study gold questions, image pixels included

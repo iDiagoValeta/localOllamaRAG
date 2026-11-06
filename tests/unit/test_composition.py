@@ -16,6 +16,8 @@ Covered:
   llama-server embedder, both inner extractors to the suffix router).
 - ``build_image_extractor`` wraps MinerU's image extractor in the PDF-only
   router used by the indexing path.
+- With ``pdf_extractor="docling"`` both builders use Docling and never
+  construct a MinerU adapter.
 - ``isolated_python`` raises ``FileNotFoundError`` with an actionable
   message naming both conventional ``.venv-mineru`` layouts when neither
   exists, and returns the existing candidate otherwise.
@@ -34,6 +36,7 @@ import pytest
 
 from monkeygrab import composition
 from monkeygrab.config.app_config import AppConfig
+from monkeygrab.config.chunking import ChunkingConfig
 from monkeygrab.config.models import EmbeddingRuntimeConfig
 from monkeygrab.ports.embedder import Embedder
 from monkeygrab.ports.image_extractor import ImageExtractor
@@ -253,3 +256,43 @@ def test_isolated_python_prefers_the_first_existing_candidate(monkeypatch):
 
     monkeypatch.setattr(Path, "is_file", lambda self: str(self) == posix)
     assert composition.isolated_python() == posix
+
+
+def _docling_config():
+    return AppConfig(chunking=ChunkingConfig(pdf_extractor="docling"))
+
+
+def test_docling_builds_both_text_and_images_without_mineru(monkeypatch):
+    """Choosing Docling must not start MinerU for the figures (it used to)."""
+    built = []
+
+    def _refuse(*_args, **_kwargs):
+        raise AssertionError("MinerU built while Docling is the configured extractor")
+
+    _install_stub_module(
+        monkeypatch,
+        "monkeygrab.adapters.extraction.docling_extractor",
+        DoclingExtractor=lambda: built.append("text") or "text",
+        DoclingImageExtractor=lambda: built.append("images") or "images",
+    )
+    _install_stub_module(
+        monkeypatch,
+        "monkeygrab.adapters.extraction.mineru_extractor",
+        MineruExtractor=_refuse,
+        MineruImageExtractor=_refuse,
+    )
+    composition.build_extractor(_docling_config())
+    composition.build_image_extractor(_docling_config())
+    assert built == ["text", "images"]
+
+
+def test_an_unknown_extractor_is_rejected_by_the_config():
+    with pytest.raises(ValueError, match="MONKEYGRAB_PDF_EXTRACTOR.*doclin"):
+        ChunkingConfig(pdf_extractor="doclin")
+
+
+def test_the_extractor_is_read_from_the_environment(monkeypatch):
+    monkeypatch.setenv("MONKEYGRAB_PDF_EXTRACTOR", " Docling ")
+    assert AppConfig.from_env().chunking.pdf_extractor == "docling"
+    monkeypatch.delenv("MONKEYGRAB_PDF_EXTRACTOR")
+    assert AppConfig.from_env().chunking.pdf_extractor == "mineru"
