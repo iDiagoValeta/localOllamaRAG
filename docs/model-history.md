@@ -423,6 +423,61 @@ and keeps the reranker resident, so the per-query GPU handoff of #584, which
 only the web path runs, never applies here. The figure measures answers, not
 the product's speed.
 
+## webAI generators and `gemma4:26b` (issue #611, 2026-11-07)
+
+Three paired gate invocations on `8b6bd79`, host Ollama 0.40.13, the product
+flags (RECOMP off, no image description), embeddinggemma-2 on the CPU so the
+generator and the reranker have the whole card. Retrieval is 18/20 in every
+run. `twil-8b` is webAI's `TwIL-8B` GGUF imported with its own chat template,
+since the repository ships no Ollama manifest. Placement comes from sampling
+`ollama ps` during the run, which the artifact does not record.
+
+| Model | Answered | Overall | tokens/s | tokens/answer | s/answer | decode s/answer | Budget hit | Infra | Placement | Run |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `gemma4:e4b` *(default)* | 124 / 136 (91.2%) | 142 / 156 (91.0%) | 57.9 | 36 *(of 124)* | 2.21 *(of 124)* | 0.62 | 0 | 0 | GPU | `20261107T125554Z` |
+| `hf.co/webAI-Official/Air-26B-A4B-gguf` | 131 / 136 (96.3%) | 149 / 156 (95.5%) | 24.1 | 31 *(of 124)* | 9.39 *(of 124)* | 1.40 | 0 | 0 | not recorded | `20261107T125554Z` |
+| `hf.co/webAI-Official/TwIL-LM3-Pro:Q4_K_M` | 123 / 136 (90.4%) | 141 / 156 (90.4%) | 78.5 | 21 *(of 124)* | 1.80 *(of 124)* | 0.28 | 0 | 0 | GPU | `20261107T125554Z` |
+| `twil-8b:q4_k_m-balanced` | 127 / 136 (93.4%) | 145 / 156 (92.9%) | 17.6 | 70 *(of 124)* | 7.42 *(of 124)* | 4.05 | 0 | 0 | ~20% CPU | `20261107T125554Z` |
+| `gemma4:e4b` *(default)* | 124 / 136 (91.2%) | 142 / 156 (91.0%) | 58.5 | 36 *(of 124)* | 2.21 *(of 124)* | 0.62 | 0 | 0 | GPU | `20261107T134238Z` |
+| `hf.co/webAI-Official/Air-26B-A4B-gguf` | 131 / 136 (96.3%) | 149 / 156 (95.5%) | 30.1 | 32 *(of 124)* | 8.78 *(of 124)* | 1.08 | 0 | 0 | ~5% CPU | `20261107T134238Z` |
+| `gemma4:26b` | 133 / 136 (97.8%) | 151 / 156 (96.8%) | 45.8 | 30 *(of 124)* | 10.64 *(of 124)* | 0.68 | 0 | 0 | ~20% CPU | `20261107T150201Z` |
+| `gemma4:e4b` *(default)* | 126 / 136 (92.6%) | 144 / 156 (92.3%) | 58.1 | 37 *(of 124)* | 2.17 *(of 124)* | 0.63 | 0 | 0 | GPU | `20261107T150201Z` |
+| `hf.co/webAI-Official/Air-26B-A4B-gguf` | 131 / 136 (96.3%) | 149 / 156 (95.5%) | 30.1 | 31 *(of 124)* | 8.76 *(of 124)* | 1.05 | 0 | 0 | ~5% CPU | `20261107T150201Z` |
+
+The 26B-A4B family is the first generator in this file that beats the
+default by more than the noise, and it does so on the same cases every
+time. Air answered 131 in all three runs against the default's 124-126, and
+`gemma4:26b`, the base Air is quantized from, answered 133 beside it. Five
+cases the default fails pass with Air in all three runs:
+`higgs-mass`, `llama-65b-hellaswag`, `gpt3-context-window`,
+`att-study-outline-ca` and `sistemasolar-masa-sol`. `gemma4:26b` recovers
+the same five, plus `gw-snr`, `tabla-sintetizados` and both `planck-sigma8`
+translations, and fails only `planck-h0-tension`, `machupicchu-restaurado`
+and `basquet-naixement`.
+
+The price is the wait, not the decode. Both decode an answer in about a
+second, but the median answer takes 9-11 s against 2.2 s, four to five times
+the default, because the 18 GB model (14 GB for Air's quantization) cannot
+sit in 8 GB beside the reranker and the prompt is processed partly on the
+CPU. The gate keeps the reranker resident (see the v4.3.0 row above), so the
+web path's GPU handoff may shorten this; that is not measured. Whether
+seven cases are worth that wait is a product decision, so the default stays
+`gemma4:e4b` until it is taken.
+
+Licensing separates the two. webAI's models (`TwIL-8B`, `TwIL-LM3-Pro`,
+`Air-26B-A4B`) ship under the webAI Non-Commercial License 1.0;
+`gemma4:26b` is Apache 2.0 and scored two cases higher, so Air has no
+advantage to offer.
+
+`TwIL-8B` is three cases above the default in one run, inside the noise, at
+3.4 times the wait: it reasons at length (70 tokens per answer, 4 s of
+decode) and failed all four study summaries. `TwIL-LM3-Pro` ties the default
+and is the fastest row here at 1.8 s; it is a candidate for the lite profile,
+not measured there. Neither earned a place in this profile. Not measured:
+webAI's ColVec (a multi-vector visual retriever, not a generator), the
+Meridian LoRAs (built for webAI's own runtime) and the older `TwIL-LM` /
+`TwIL-LM2`.
+
 ## Lite profile (4 GB of VRAM)
 
 Issue #292. Measured on the `rag-lite` branch with `MONKEYGRAB_PROFILE=lite`, so these rows differ from the table
