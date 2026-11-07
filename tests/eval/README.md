@@ -148,7 +148,11 @@ something is missing:
    its `GET /props` (`model_path` or `model_alias`). While image embeddings are
    on (`USAR_EMBEDDINGS_IMAGEN`, the default) that `/props` must also report
    `modalities.vision` true, which needs `--mmproj`; the gate stops otherwise
-   (issue #565). BGE is not an Ollama role.
+   (issue #565). BGE is not an Ollama role, so while reranking is on
+   (`USAR_RERANKER`) the gate loads it on its device and scores one pair, then
+   releases it: a CUDA that cannot initialise, such as after a driver upgrade
+   without a reboot, stops the run here instead of failing every retrieval
+   case (issue #610).
 2. Downloads any missing blind-set arXiv papers (reusing `fetch_papers.py`)
    and stages them under `blind_docs/<paper-slug>.pdf`.
 3. Indexes whatever is not already indexed -- dev-set papers for each of the three
