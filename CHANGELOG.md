@@ -7,6 +7,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Added
 
 - Docling as an alternative PDF extractor for both text and figures, chosen with `MONKEYGRAB_PDF_EXTRACTOR=docling` and run from its own `.venv-docling`; MinerU stays the default. The extractor is part of the index fingerprint, so switching it asks for a reindex instead of reusing the other extractor's index (#604).
+
+## [4.4.0] - 2026-11-07
+
+[Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.4.0).
+
+No reindex needed and no default changes: every new setting is off or keeps today's value when unset.
+
+### Added
+
 - Headless `/stores/<id>/rag` accepts an optional `model` and `backend` (`ollama` or `openai`) per question, so a host such as Daimon can pick who writes each answer while retrieval stays local.
 - `RERANKER_BATCH_SIZE` and `RERANKER_MAX_LENGTH` cap the CrossEncoder's activation peak on a GPU shared with a chat model; unset keeps today's 32 and the model's limit.
 - `RAG_SUELO_SCORE_RERANKER` (off by default): judge a question by its best reranked fragment instead of cutting each fragment at `RAG_UMBRAL_SCORE_RERANKER`, which kept dropping table and multi-part evidence scored 0.03-0.3.
@@ -14,6 +23,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Fixed
 
 - The reranker is released even when retrieval raises, so a failed query no longer leaves it holding GPU memory.
+- The evaluation gate loads the reranker before indexing, so a CUDA that cannot initialise (a driver upgraded without a reboot) stops the run in seconds instead of failing every retrieval case.
+- The `run-local` skill's frontmatter parses again, and a test keeps every skill parseable.
 
 ## [4.3.0] - 2026-11-01
 
