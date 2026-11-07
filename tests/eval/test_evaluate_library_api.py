@@ -92,7 +92,7 @@ def _capture_run_all_cases(monkeypatch, seen_cases):
 
 @pytest.fixture(autouse=True)
 def _stub_pipeline(monkeypatch):
-    """Fake the Ollama and embedder preflights, blind-set staging and the
+    """Fake the Ollama, embedder and reranker preflights, blind-set staging and the
     post-index paper check.
 
     Model roles (set_model_roles_runtime) and pipeline flags
@@ -106,6 +106,7 @@ def _stub_pipeline(monkeypatch):
     """
     monkeypatch.setattr(run_eval, "preflight_ollama", lambda *_a, **_kw: None)
     monkeypatch.setattr(run_eval, "preflight_embedder", lambda *_a, **_kw: None)
+    monkeypatch.setattr(run_eval, "preflight_reranker", lambda *_a, **_kw: None)
     monkeypatch.setattr(run_eval, "stage_blind_papers", lambda cases: {})
     monkeypatch.setattr(run_eval, "verify_all_papers_indexed", lambda *_a, **_kw: None)
     # write_report=True now also builds the "conditions" block (issue #222),
@@ -885,3 +886,21 @@ def test_models_chat_override_not_preflighted_when_query_decomposition_is_off(mo
     )
 
     assert preflight_calls == [{"m", run_eval.AUX_MODEL}]
+
+
+@pytest.mark.parametrize("usar_reranker", [True, False])
+def test_reranker_is_preflighted_only_when_the_run_reranks(monkeypatch, usar_reranker):
+    """Issue #610: a CUDA that cannot load the reranker must stop the run
+    before indexing, and a run without reranking must not load it at all."""
+    calls = []
+    monkeypatch.setattr(run_eval, "preflight_reranker", lambda: calls.append(True))
+    _capture_ensure_indexed(monkeypatch, [])
+    _capture_run_all_cases(monkeypatch, [])
+
+    evaluate(
+        models=["m"], case_ids=[_DEV_CASE_ID],
+        config_overrides={"flags.usar_reranker": usar_reranker},
+        write_report=False,
+    )
+
+    assert calls == ([True] if usar_reranker else [])
