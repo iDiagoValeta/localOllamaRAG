@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-11-07
+
+[Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.4.0).
+
+No reindex needed and no default changes: every new setting is off or keeps today's value when unset.
+
 ### Added
 
 - Headless `/stores/<id>/rag` accepts an optional `model` and `backend` (`ollama` or `openai`) per question, so a host such as Daimon can pick who writes each answer while retrieval stays local.
@@ -14,6 +20,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 - The reranker is released even when retrieval raises, so a failed query no longer leaves it holding GPU memory.
 - The evaluation gate loads the reranker before indexing, so a CUDA that cannot initialise (a driver upgraded without a reboot) stops the run in seconds instead of failing every retrieval case.
+- The `run-local` skill's frontmatter parses again, and a test keeps every skill parseable.
 
 ## [4.3.0] - 2026-11-01
 
