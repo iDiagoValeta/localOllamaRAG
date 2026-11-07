@@ -13,6 +13,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Fixed
 
 - The reranker is released even when retrieval raises, so a failed query no longer leaves it holding GPU memory.
+- The evaluation gate loads the reranker before indexing, so a CUDA that cannot initialise (a driver upgraded without a reboot) stops the run in seconds instead of failing every retrieval case.
 
 ## [4.3.0] - 2026-11-01
 
