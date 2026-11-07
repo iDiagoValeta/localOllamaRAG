@@ -368,6 +368,45 @@ def preflight_embedder() -> str:
     return identity
 
 
+def preflight_reranker(reranker: Optional[Any] = None) -> None:
+    """Fail fast if the Cross-Encoder cannot load and score on its device.
+
+    Ollama and the embedder answering says nothing about the reranker, which
+    loads in this process through PyTorch. A driver upgraded without a reboot
+    leaves Ollama working while PyTorch's NVML init fails, and the run then
+    recorded an infrastructure error on every retrieval case for 25 minutes
+    (issue #610). Scoring one pair loads the weights on exactly the device the
+    run will use, then they are released so phase 1 starts from an empty card.
+
+    Args:
+        reranker: The reranker to probe. Defaults to a fresh
+            CrossEncoderReranker, the same adapter ``ensure_indexed`` builds.
+
+    Raises:
+        EvalSetupError: The model failed to load or to score. No fallback to
+            the CPU: the hard-fail policy (AGENTS.md rule 8) applies here too.
+    """
+    from monkeygrab.domain.chunk_metadata import ChunkMetadata
+    from monkeygrab.domain.fragment import Fragment
+
+    if reranker is None:
+        # Deferred: importing this module must not pull in sentence-transformers.
+        from monkeygrab.adapters.reranking.cross_encoder_reranker import CrossEncoderReranker
+
+        reranker = CrossEncoderReranker()
+    probe = Fragment(doc="preflight", metadata=ChunkMetadata(source="preflight", page=0))
+    try:
+        reranker.rerank("preflight", [probe], top_k=1)
+    except Exception as exc:
+        raise EvalSetupError(
+            f"Reranker preflight failed ({exc}). If CUDA reports an NVML or driver "
+            "mismatch, the NVIDIA driver was upgraded without a reboot: reboot, "
+            "or run with USAR_RERANKER=false to measure without reranking."
+        ) from exc
+    finally:
+        reranker.release()
+
+
 # CORPUS STAGING
 
 
@@ -2005,6 +2044,7 @@ _APPCONFIG_OVERRIDE_KEYS = frozenset(
         "retrieval.weight_semantic_rrf",
         "retrieval.weight_bm25_rrf",
         "reranking.score_threshold",
+        "reranking.relevance_floor",
         "context.max_context_chars",
         "flags.usar_contextual_retrieval",
         "flags.usar_embeddings_imagen",
@@ -2431,6 +2471,9 @@ def evaluate(
         # Heavy import (FAISS, sentence-transformers, rank-bm25...) only
         # after the cheap network/model preflight has already passed.
         import rag.chat_pdfs as rag
+
+        if (config_overrides or {}).get("flags.usar_reranker", rag.USAR_RERANKER):
+            preflight_reranker()
 
         with _scoped_model_roles(
             rag, {"chat": AUX_MODEL, "contextual": AUX_MODEL, "recomp": AUX_MODEL}

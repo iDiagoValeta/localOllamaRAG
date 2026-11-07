@@ -212,6 +212,7 @@ class AppConfig:
 
         reranking = RerankingConfig(
             score_threshold=env.read_env_float("RAG_UMBRAL_SCORE_RERANKER", 0.65),
+            relevance_floor=env.read_env_float("RAG_SUELO_SCORE_RERANKER", 0.0),
         )
 
         context = ContextConfig(

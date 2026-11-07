@@ -18,6 +18,7 @@ from flask import Flask, Response, abort, jsonify, request, stream_with_context
 # module-level side effect, so it must be the first project import here.
 import rag.chat_pdfs  # noqa: F401
 from monkeygrab.config.app_config import AppConfig
+from monkeygrab.config.models import CHAT_BACKENDS
 from rag.engine import wiring
 from rag.headless import health as health_module
 from rag.headless import service as service_module
@@ -227,8 +228,19 @@ def create_app(
         if not isinstance(raw_stream, bool):
             abort(400, description="stream must be a boolean")
         stream = raw_stream
+        # Optional per-question generator (Daimon's model picker). Absent means
+        # the configured rag role, as before.
+        raw_model = body.get("model")
+        if raw_model is not None and (not isinstance(raw_model, str) or not raw_model.strip()):
+            abort(400, description="model must be a non-empty string")
+        model = raw_model.strip() if raw_model is not None else None
+        backend = body.get("backend")
+        if backend is not None and backend not in CHAT_BACKENDS:
+            abort(400, description=f"backend must be one of {', '.join(CHAT_BACKENDS)}")
         try:
-            events: Iterator[Tuple[str, Dict[str, Any]]] = service.answer_stream(paths, question)
+            events: Iterator[Tuple[str, Dict[str, Any]]] = service.answer_stream(
+                paths, question, model=model, backend=backend
+            )
         except QuestionTooShort:
             return jsonify({"ok": False, "error": "question_too_short",
                             "message": "Pregunta demasiado corta. Formula una pregunta concreta."}), 400

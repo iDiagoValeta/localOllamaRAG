@@ -1,6 +1,6 @@
 ---
 name: run-local
-description: Use when launching MonkeyGrab locally, verifying a running instance is actually healthy, or diagnosing a start that fails or runs oddly slowly. Covers Ollama not answering, missing model roles, a stale frontend build, a port already taken, and the two shapes of VRAM contention between the generator and the reranker: a CUDA out-of-memory, or a silent fallback to CPU.
+description: Use when launching MonkeyGrab locally, verifying a running instance is actually healthy, or diagnosing a start that fails or runs oddly slowly. Covers Ollama not answering, missing model roles, a stale frontend build, a port already taken, and the two shapes of VRAM contention between the generator and the reranker (a CUDA out-of-memory, or a silent fallback to CPU).
 ---
 
 # Run MonkeyGrab locally
