@@ -130,7 +130,7 @@ python tests/eval/fetch_papers.py 1512.03385         # fetch one paper by id
 Single, self-sufficient command -- no manual indexing, no machine-specific paths:
 
 ```bash
-python tests/eval/run_eval.py                                 # default: gemma4:e4b
+python tests/eval/run_eval.py                                 # default: qwen3:4b-instruct-2507-q4_K_M
 python tests/eval/run_eval.py --models gemma4:e2b gemma4:e4b   # different generator model set
 python tests/eval/run_eval.py --update-baseline                # also raise the baseline if green
 ```
@@ -194,7 +194,7 @@ something is missing:
    `--models` entry: the file holds one number, calibrated on the gate's
    default generator.
 
-   That default is `run_eval.DEFAULT_MODELS`: `gemma4:e4b` unless `OLLAMA_RAG_MODEL` says
+   That default is `run_eval.DEFAULT_MODELS`: `qwen3:4b-instruct-2507-q4_K_M` unless `OLLAMA_RAG_MODEL` says
    otherwise -- the product's own default, so a no-argument `python tests/eval/run_eval.py`,
    the `full-eval` workflow and the configuration harness (`harness/evaluator.real_evaluate`,
    which passes `DEFAULT_MODELS`) all measure what a user runs. Decided 2026-09-12 (issue
@@ -202,7 +202,9 @@ something is missing:
    set with (7.5 s per answer against 11.8 s). The floor did not move with the switch:
    `gemma4:e4b` scored 136/156 = 0.872 on `20260911T094107Z`, and the rule sets the floor at
    the rate minus 0.05, which is 0.82 again. The auxiliary roles stay pinned to `AUX_MODEL`
-   (`Ling-3.0-tiny`) for every run, as the experiment standard below requires.
+   (`Ling-3.0-tiny`) for every run, as the experiment standard below requires. Since issue
+   #628 the default is `qwen3:4b-instruct-2507-q4_K_M`, which scored 152/156 = 0.974 on
+   `20261115T122809Z`; the floor set in #550 (0.91) stays.
 
    The floor was raised from 0.82 to 0.91 on 2026-10-31 (issue #550), with the owner's
    approval. At 0.82 a regression of about 19 cases still passed, against a default stack

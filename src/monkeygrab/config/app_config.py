@@ -151,7 +151,7 @@ class AppConfig:
         Raises:
             ValueError: If any environment variable is set to an invalid value.
         """
-        rag_model = env.read_env_str("OLLAMA_RAG_MODEL", "gemma4:e4b")
+        rag_model = env.read_env_str("OLLAMA_RAG_MODEL", "qwen3:4b-instruct-2507-q4_K_M")
         models = ModelsConfig(
             rag=rag_model,
             chat=env.read_env_str("OLLAMA_CHAT_MODEL", "gemma4:e4b"),

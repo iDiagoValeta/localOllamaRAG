@@ -60,11 +60,11 @@ class OpenAICompatRuntimeConfig:
 class ModelsConfig:
     """Ollama generation roles plus the embedder endpoint."""
 
-    rag: str = "gemma4:e4b"
+    rag: str = "qwen3:4b-instruct-2507-q4_K_M"
     chat: str = "gemma4:e4b"
     contextual: str = "gemma4:e4b"
     recomp: str = "gemma4:e4b"
-    desc: str = "gemma4"
+    desc: str = "qwen3"
     ollama: OllamaRuntimeConfig = OllamaRuntimeConfig()
     rag_backend: str = "ollama"
     chat_backend: str = "ollama"
