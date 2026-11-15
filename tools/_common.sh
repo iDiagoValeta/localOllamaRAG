@@ -119,7 +119,7 @@ llama_probe() {
   trap '_probe_finish exit' EXIT
   trap '_probe_finish 130' INT
   trap '_probe_finish 143' TERM
-  "$LLAMA_SERVER" -m "$model" --mmproj "$mmproj" --embedding --port "$port" -b 2048 -ub 2048 >"$_PROBE_LOG" 2>&1 &
+  "$LLAMA_SERVER" -m "$model" --mmproj "$mmproj" --no-mmproj-offload --embedding --port "$port" -b 2048 -ub 2048 >"$_PROBE_LOG" 2>&1 &
   # Bash runs a trap between statements, so a signal landing between the fork
   # above and this assignment (one statement wide) could still orphan the server.
   _PROBE_PID=$!

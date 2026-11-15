@@ -81,14 +81,7 @@ OLLAMA_ROLE_VARS = {
     "contextual": "OLLAMA_CONTEXTUAL_MODEL",
     "recomp": "OLLAMA_RECOMP_MODEL",
 }
-# Per role, the module defaults of rag/chat_pdfs.py. The chat role stays on a
-# vision model because it also describes figures at indexing (issue #628).
-DEFAULT_OLLAMA_MODELS = {
-    "rag": "qwen3:4b-instruct-2507-q4_K_M",
-    "chat": "gemma4:e4b",
-    "contextual": "gemma4:e4b",
-    "recomp": "gemma4:e4b",
-}
+DEFAULT_OLLAMA_MODEL = "qwen3:4b-instruct-2507-q4_K_M"
 
 OK = "  ok   "
 FAIL = " FAIL  "
@@ -282,7 +275,7 @@ def _configured_models() -> List[str]:
     saved = _saved_roles()
     return sorted(
         {
-            os.getenv(var) or saved.get(role) or DEFAULT_OLLAMA_MODELS[role]
+            os.getenv(var) or saved.get(role) or DEFAULT_OLLAMA_MODEL
             for role, var in OLLAMA_ROLE_VARS.items()
         }
     )
@@ -309,7 +302,7 @@ def _check_ollama() -> Tuple[bool, str]:
 # The command the root README documents. Without --mmproj the server cannot
 # embed images and answers them with HTTP 500 (issue #565).
 _EMBEDDER_COMMAND = (
-    "llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf "
+    "llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf --no-mmproj-offload "
     "--embedding --port {port} -b 2048 -ub 2048"
 )
 

@@ -73,11 +73,11 @@ def _saved_settings(monkeypatch, tmp_path, roles):
 
 
 class TestConfiguredModels:
-    def test_defaults_to_each_roles_module_default(self, monkeypatch, tmp_path):
+    def test_defaults_to_one_model_for_all_four_roles(self, monkeypatch, tmp_path):
         _no_saved_settings(monkeypatch, tmp_path)
         for var in setup.OLLAMA_ROLE_VARS.values():
             monkeypatch.delenv(var, raising=False)
-        assert setup._configured_models() == sorted(set(setup.DEFAULT_OLLAMA_MODELS.values()))
+        assert setup._configured_models() == [setup.DEFAULT_OLLAMA_MODEL]
 
     def test_the_environment_decides_and_duplicates_collapse(self, monkeypatch, tmp_path):
         _no_saved_settings(monkeypatch, tmp_path)
@@ -115,15 +115,14 @@ class TestSavedRolesArePartOfThePrecedence:
         _saved_settings(monkeypatch, tmp_path, {"rag": "  ", "chat": "saved:model"})
         for var in setup.OLLAMA_ROLE_VARS.values():
             monkeypatch.delenv(var, raising=False)
-        expected = {"saved:model", *(setup.DEFAULT_OLLAMA_MODELS[r] for r in ("rag", "contextual", "recomp"))}
-        assert setup._configured_models() == sorted(expected)
+        assert setup._configured_models() == [setup.DEFAULT_OLLAMA_MODEL, "saved:model"]
 
     def test_a_corrupt_settings_file_leaves_the_defaults_standing(self, monkeypatch, tmp_path):
         monkeypatch.setenv("MONKEYGRAB_DATA_DIR", str(tmp_path))
         (tmp_path / "settings.json").write_text("{not json", encoding="utf-8")
         for var in setup.OLLAMA_ROLE_VARS.values():
             monkeypatch.delenv(var, raising=False)
-        assert setup._configured_models() == sorted(set(setup.DEFAULT_OLLAMA_MODELS.values()))
+        assert setup._configured_models() == [setup.DEFAULT_OLLAMA_MODEL]
 
     def test_a_saved_role_that_is_not_pulled_is_reported_missing(self, monkeypatch, tmp_path):
         """The false negative: green while the run is going to fail at first use."""
@@ -145,8 +144,7 @@ class TestSavedRolesArePartOfThePrecedence:
 
         passed, message = setup._check_ollama()
         assert passed
-        for default in setup.DEFAULT_OLLAMA_MODELS.values():
-            assert default not in message
+        assert setup.DEFAULT_OLLAMA_MODEL not in message
 
 
 class TestSettingsLocationDrift:
@@ -165,8 +163,8 @@ class TestSettingsLocationDrift:
 
     def test_the_product_still_defaults_every_role_to_the_model_this_script_names(self):
         source = (REPO_ROOT / "rag" / "chat_pdfs.py").read_text(encoding="utf-8")
-        for role, var in setup.OLLAMA_ROLE_VARS.items():
-            assert f'os.getenv("{var}", "{setup.DEFAULT_OLLAMA_MODELS[role]}")' in source
+        for var in setup.OLLAMA_ROLE_VARS.values():
+            assert f'os.getenv("{var}", "{setup.DEFAULT_OLLAMA_MODEL}")' in source
 
     def test_the_path_lands_on_the_repo_settings_file_by_default(self, monkeypatch):
         monkeypatch.delenv("MONKEYGRAB_DATA_DIR", raising=False)
@@ -462,8 +460,7 @@ class TestPrintFlag:
         for var in setup.OLLAMA_ROLE_VARS.values():
             monkeypatch.delenv(var, raising=False)
         assert setup.main(["--print", "models"]) == 0
-        expected = {"custom:7b", *(setup.DEFAULT_OLLAMA_MODELS[r] for r in ("chat", "contextual", "recomp"))}
-        assert capsys.readouterr().out.split() == sorted(expected)
+        assert capsys.readouterr().out.split() == sorted({"custom:7b", setup.DEFAULT_OLLAMA_MODEL})
 
     def test_ollama_url_adds_the_scheme_ollama_host_omits(self, monkeypatch, capsys):
         monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)

@@ -18,7 +18,7 @@ import logging
 import threading
 from typing import Any, Dict, Optional
 
-from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel
+from monkeygrab.adapters.chat.ollama_chat import OllamaChatModel, ollama_model_capabilities
 from monkeygrab.adapters.chat.ollama_model_unloader import OllamaModelUnloader
 from monkeygrab.adapters.chat.openai_compat_chat import OpenAICompatChatModel
 from monkeygrab.adapters.lexical.bm25_index import Bm25LexicalIndex
@@ -355,6 +355,31 @@ def release_embedder() -> None:
         _close_quietly(instance)
 
 
+def shares_generator(config: AppConfig, role: str) -> bool:
+    """Whether ``role`` runs on the generator's own Ollama model.
+
+    The default since issue #630: every role on the generator, so one runner
+    serves them all and a question loads nothing after the first.
+    """
+    models = config.models
+    return (
+        getattr(models, role) == models.rag
+        and getattr(models, f"{role}_backend") == "ollama"
+        and models.rag_backend == "ollama"
+    )
+
+
+def role_num_ctx(config: AppConfig, role: str, own_num_ctx: int) -> int:
+    """The context a role asks Ollama for: the generator's when it shares its model.
+
+    Ollama reloads a runner whose context differs from the request's (2.3 s
+    for ``qwen3:4b-instruct-2507`` on the 8 GB laptop, issue #630), so a role
+    on the generator's model asks for the generator's context and reuses the
+    resident runner instead of replacing it.
+    """
+    return config.models.ollama.rag_num_ctx if shares_generator(config, role) else own_num_ctx
+
+
 def rag_chat_model(config: AppConfig) -> ChatModel:
     """Build the model that writes the final answer.
 
@@ -369,12 +394,11 @@ def rag_chat_model(config: AppConfig) -> ChatModel:
     reaches other Ollama-served roles (query decomposer, RECOMP, contextual)
     via keep_alive=0 -- it has no path to the embedder's worker process or
     the reranker's in-process CUDA weights (issue #239). The embedder stays
-    resident across queries. The reranker does not: ``realizar_busqueda_hibrida``
-    unloads Ollama's models before retrieval and releases the reranker after
-    it (issue #584). #25's 2026-07-29 measurement had a small Ollama model
-    coexisting with both; ``gemma4:e4b`` does not. On the 8 GB card with the
-    reranker resident it got 303 MB of 6 GB on the GPU and generated on CPU,
-    10 to 54 s per answer, against 10 to 19 s with the GPU handed over in turn.
+    resident across queries, and the reranker stays beside the generator when
+    the measured free memory lets it (``realizar_busqueda_hibrida``, issue
+    #630). When it does not, the two take the GPU in turn (issue #584): with
+    the reranker resident, ``gemma4:e4b`` got 303 MB of 6 GB on the GPU and
+    generated on CPU, 10 to 54 s per answer, against 10 to 19 s handed over.
     """
     ollama = config.models.ollama
     return chat_model_for_role(
@@ -393,7 +417,7 @@ def recomp_chat_model(config: AppConfig) -> ChatModel:
     return chat_model_for_role(
         config, "recomp",
         options=RECOMP_SAMPLING_OPTIONS,
-        num_ctx=ollama.recomp_num_ctx,
+        num_ctx=role_num_ctx(config, "recomp", ollama.recomp_num_ctx),
         keep_alive=ollama.keep_alive,
         generation_deadline=ollama.generation_deadline,
     )
@@ -406,16 +430,17 @@ def query_decomposer(config: AppConfig) -> ChatModel:
     should explore different angles on the question, and identical phrasings
     would add nothing to retrieve.
     """
-    # keep_alive is 0 because query decomposition is an auxiliary pre-retrieval
-    # step immediately followed by Cross-Encoder reranking; keeping the chat
-    # model resident alongside the reranker exhausts VRAM on
-    # 8 GB cards (issue #164).
+    # On the generator's model it uses the generator's runner and keeps it
+    # loaded for the answer (issue #630). A separate model is dropped at once
+    # (keep_alive 0): resident beside the reranker it exhausted an 8 GB card
+    # (issue #164).
     ollama = config.models.ollama
+    shared = shares_generator(config, "chat")
     return chat_model_for_role(
         config, "chat",
         options=QUERY_DECOMPOSER_SAMPLING_OPTIONS,
-        num_ctx=ollama.query_num_ctx,
-        keep_alive=0,
+        num_ctx=role_num_ctx(config, "chat", ollama.query_num_ctx),
+        keep_alive=ollama.keep_alive if shared else 0,
         generation_deadline=ollama.generation_deadline,
     )
 
@@ -503,14 +528,62 @@ def reranker(config: AppConfig) -> CrossEncoderReranker:
     return _reranker_cache["reranker"]
 
 
+class _RoomMakingReranker:
+    """The reranker, unloading Ollama's models first only when it would not fit.
+
+    Wraps rather than decides once before retrieval because query
+    decomposition runs inside ``Retrieve.run``, before reranking, and on the
+    generator's model it loads the generator (issue #630).
+    """
+
+    def __init__(self, inner: CrossEncoderReranker, config: AppConfig):
+        self._inner = inner
+        self._config = config
+
+    def rerank(self, query, fragments, top_k):
+        if self._inner.needs_room():
+            release_ollama_models(self._config)
+        return self._inner.rerank(query, fragments, top_k)
+
+
+def room_making_reranker(config: AppConfig) -> _RoomMakingReranker:
+    """The cached reranker, making room on the GPU before it scores if it must."""
+    return _RoomMakingReranker(reranker(config), config)
+
+
+def chat_role_sees_images(config: AppConfig) -> bool:
+    """Whether the chat role's model accepts images (the figure describer's need).
+
+    True for the OpenAI backend, whose server cannot be asked: its own error
+    is what the user will see.
+    """
+    if config.models.chat_backend != "ollama":
+        return True
+    caps = ollama_model_capabilities(config.models.ollama.base_url, config.models.chat)
+    return "vision" in caps
+
+
+def generator_resident_on_gpu(config: AppConfig) -> bool:
+    """Whether Ollama already holds the generator entirely on the GPU.
+
+    False for the OpenAI backend: its server's memory is not visible here.
+    """
+    if config.models.rag_backend != "ollama":
+        return False
+    unloader = OllamaModelUnloader(config.models, base_url=config.models.ollama.base_url)
+    return unloader.is_resident_on_gpu(config.models.rag)
+
+
 def release_reranker() -> None:
     """Drop the cached reranker's GPU weights, keeping the singleton slot.
 
     Issue #239: the reranker loads once and its weights stayed resident for
     the rest of the process's life, since nothing ever called
     ``CrossEncoderReranker.release()``. ``realizar_busqueda_hibrida`` calls
-    it after every retrieval so the generator fits on an 8 GB card (issue
-    #584; ``rag_chat_model``'s docstring has the measurement), and
+    it after a retrieval that leaves the generator off the GPU, so the
+    generator then loads onto a free card (issues #584 and #630;
+    ``rag_chat_model``'s docstring has the measurement),
+    ``indexar_documentos`` before each file's extraction, and
     ``/api/settings`` calls it when ``USAR_RERANKER`` is turned off
     (``rag/web/app.py``).
 
@@ -703,9 +776,11 @@ def retrieval_metrics_to_legacy(metrics: Dict[str, Any], config: AppConfig) -> D
 __all__ = [
     "answer",
     "app_config_from_runtime",
+    "chat_role_sees_images",
     "embedder",
     "fragment_from_dict",
     "fragment_to_dict",
+    "generator_resident_on_gpu",
     "lexical_index",
     "metadata_to_dict",
     "query_decomposer",
@@ -716,5 +791,7 @@ __all__ = [
     "release_reranker",
     "reset_vector_store_cache",
     "retrieval_metrics_to_legacy",
+    "role_num_ctx",
+    "room_making_reranker",
     "vector_store",
 ]

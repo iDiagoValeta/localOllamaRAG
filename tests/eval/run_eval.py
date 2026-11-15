@@ -283,7 +283,7 @@ def _embedder_command(port: int) -> str:
     """The llama-server command the root README documents, for printed hints."""
     return (
         "llama-server -m embeddinggemma-2-Q8_0.gguf "
-        "--mmproj mmproj-embeddinggemma-2-Q8_0.gguf "
+        "--mmproj mmproj-embeddinggemma-2-Q8_0.gguf --no-mmproj-offload "
         f"--embedding --port {port} -b 2048 -ub 2048"
     )
 

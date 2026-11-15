@@ -71,3 +71,30 @@ class OllamaModelUnloader:
                 # failing (model already gone, transient network error, ...)
                 # must never block the caller's own generation.
                 logging.debug("Ollama unload %s: %s", name, exc)
+
+    def is_resident_on_gpu(self, name: str) -> bool:
+        """Whether Ollama holds ``name`` loaded and entirely in GPU memory.
+
+        A model Ollama split across GPU and CPU counts as not resident: it is
+        the shape that generates several times slower, and the one a caller
+        must reload onto a freed card rather than keep.
+
+        Args:
+            name: Model tag; a bare name means ``:latest``, as in Ollama.
+
+        Returns:
+            False also when Ollama cannot be asked: a caller deciding whether
+            to keep memory occupied must not assume the best.
+        """
+        wanted = name if ":" in name else f"{name}:latest"
+        try:
+            response = requests.get(f"{self._base_url}/api/ps", timeout=self._timeout)
+            response.raise_for_status()
+            loaded = response.json().get("models", [])
+        except Exception as exc:
+            logging.debug("Ollama /api/ps: %s", exc)
+            return False
+        return any(
+            m.get("name") == wanted and m.get("size_vram", 0) >= m.get("size", 1)
+            for m in loaded
+        )

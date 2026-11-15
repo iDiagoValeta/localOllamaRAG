@@ -939,7 +939,9 @@ def test_describe_comparability_names_the_role_that_drifted(tmp_path):
     entries = list(ledger_mod.read_history(tmp_path))
     info = loop.describe_ledger_comparability(AppConfig(), entries, search_set_ids=("a",))
     assert info["comparable_search_set_states"] == 0
-    assert info["incomparable_reasons"] == ["models.chat: this launch 'gemma4:e4b', ledger 'gemma4:e2b'"]
+    assert info["incomparable_reasons"] == [
+        f"models.chat: this launch '{AppConfig().models.chat}', ledger 'gemma4:e2b'"
+    ]
 
 
 def test_describe_comparability_explains_fast_tier_only_history(tmp_path):
