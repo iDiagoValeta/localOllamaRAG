@@ -107,7 +107,9 @@ what each actually requires.
 1. Pick a paper already in the corpus, or a new `arxiv_id`.
 2. Read the actual page with the `Read` tool's `pages` parameter (or any PDF viewer) — do not
    trust a remembered fact.
-3. Write the question and the literal(s) exactly as confirmed, plus `verified_pages`.
+3. Write the question and the literal(s) exactly as confirmed, plus `verified_pages`. Write a
+   decimal with a dot even when the page uses a comma: `grade.py` reads an answer's comma as a
+   dot, so `99.86` accepts both spellings and `99,86` only one.
 4. Prefer literals that start and end with a letter or digit — `grade.py`'s word-boundary match
    anchors on alphanumeric transitions, so a literal starting with punctuation matches looser
    than intended (documented in `grade._contains_token`).
