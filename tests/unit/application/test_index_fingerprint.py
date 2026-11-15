@@ -145,8 +145,12 @@ def test_default_app_config_fingerprint_is_pinned():
     and after _RECIPE_VERSION became 2 (code blocks indexed, #366; 1-based
     figure placeholder, #375):
         compute_index_fingerprint(AppConfig()) == "2d135aadd64b8c13"
+
+    and after the contextual role defaulted to the generator,
+    qwen3:4b-instruct-2507-q4_K_M (issue #630):
+        compute_index_fingerprint(AppConfig()) == "fe84919b87d34336"
     """
-    assert compute_index_fingerprint(AppConfig()) == "2d135aadd64b8c13"
+    assert compute_index_fingerprint(AppConfig()) == "fe84919b87d34336"
 
 
 def test_fingerprint_is_short_hex():

@@ -34,11 +34,16 @@ the stack: MinerU or Docling for text and figures (`MONKEYGRAB_PDF_EXTRACTOR`), 
 The consequence worth knowing: the web app, desktop wrapper and evaluation
 gate execute the same indexing, retrieval and generation implementations.
 
-The Cross-Encoder reranker is cached, but its GPU weights are not kept
-between questions: retrieval unloads Ollama's models before it runs and
-calls `release_reranker()` after it, because the reranker and `gemma4:e4b`
-do not fit on an 8 GB card together (issue #584). `/api/settings` also
-releases it when the reranker flag is turned off.
+Every Ollama role defaults to the generator, and a role on the generator's
+model asks for the generator's context (`wiring.role_num_ctx`), so one runner
+serves query decomposition, RECOMP, chat and the answer without reloading
+(issue #630). The Cross-Encoder reranker is cached and stays beside that
+runner when the measured free VRAM allows it: it unloads Ollama's models
+first only when it would not fit (`wiring.room_making_reranker`), and
+retrieval releases it afterwards only when the generator is not already
+entirely on the GPU, in which case the generator is reloaded onto the freed
+card (issue #584). Indexing releases it before each file's extraction and
+`/api/settings` when the reranker flag is turned off.
 `wiring.rag_chat_model()`'s docstring has the measurement.
 
 [`engine/settings.py`](engine/settings.py) owns the other half of that

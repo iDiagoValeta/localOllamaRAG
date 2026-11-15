@@ -129,12 +129,23 @@ def test_unset_variables_keep_every_role_on_the_local_server(monkeypatch):
     assert endpoints == {"http://localhost:11434"}
 
 
-def test_query_decomposer_uses_zero_keep_alive(monkeypatch):
-    """Query decomposition runs immediately before Cross-Encoder reranking;
-    holding VRAM on 8 GB cards causes CUDA OOM (issue #164)."""
+def test_query_decomposer_on_another_model_uses_zero_keep_alive(monkeypatch):
+    """A separate decomposition model resident beside the Cross-Encoder
+    reranker caused CUDA OOM on 8 GB cards (issue #164)."""
+    wiring = _wiring_with_env(monkeypatch)
+    config = wiring.app_config_from_runtime().with_overrides(**{"models.chat": "other:1b"})
+    assert wiring.query_decomposer(config)._keep_alive == 0
+
+
+def test_query_decomposer_on_the_generators_model_reuses_its_runner(monkeypatch):
+    """Same model, same context, kept loaded: the answer finds it resident (issue #630)."""
     wiring = _wiring_with_env(monkeypatch)
     config = wiring.app_config_from_runtime()
-    assert wiring.query_decomposer(config)._keep_alive == 0
+    ollama = config.models.ollama
+    decomposer = wiring.query_decomposer(config)
+    assert config.models.chat == config.models.rag
+    assert decomposer._keep_alive == ollama.keep_alive
+    assert decomposer._num_ctx == ollama.rag_num_ctx
 
 
 if __name__ == "__main__":

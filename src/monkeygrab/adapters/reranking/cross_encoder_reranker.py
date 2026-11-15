@@ -17,6 +17,19 @@ from monkeygrab.domain.fragment import Fragment
 
 _MODEL_NAME = "BAAI/bge-reranker-v2-m3"
 
+# Pairs scored per forward pass. Measured on an RTX 4060 Laptop with 200
+# corpus chunks (issue #630): 8 peaks at 1.41 GB reserved against 2.26 GB for
+# sentence-transformers' default of 32, ranks the same top 8 and runs faster
+# (4.4 s against 5.3 s), because shorter batches pad less.
+_DEFAULT_BATCH_SIZE = 8
+
+# Same measurement: fp16 weights take about 1.1 GB and each pair in a batch
+# adds about 40 MB of activations at the corpus's 2,000-character chunks.
+_WEIGHTS_BYTES = 1100 * 2**20
+_ACTIVATION_BYTES_PER_PAIR = 40 * 2**20
+# Room left for the allocator's rounding and whatever loads next.
+_VRAM_MARGIN_BYTES = 256 * 2**20
+
 
 def resolve_reranker_device(override: Optional[str] = None) -> Tuple[str, bool]:
     """Decide which device the Cross-Encoder should load on.
@@ -46,6 +59,10 @@ def resolve_reranker_device(override: Optional[str] = None) -> Tuple[str, bool]:
     except ImportError:
         pass
     return "cpu", False
+
+
+def _batch_size() -> int:
+    return _positive_int(os.getenv("RERANKER_BATCH_SIZE")) or _DEFAULT_BATCH_SIZE
 
 
 def _positive_int(raw: Optional[str]) -> Optional[int]:
@@ -124,6 +141,26 @@ class CrossEncoderReranker:
                     f"{device!r}: {exc}"
                 ) from exc
 
+    def needs_room(self) -> bool:
+        """Whether the next ``rerank`` would not fit in the GPU's free memory.
+
+        Measured free memory, not the card's total: what else is resident
+        (a generator, the embedder, the desktop) decides whether the
+        reranker fits, and that changes from one question to the next. A
+        loaded model only needs its activations; an unloaded one needs its
+        weights too. Always False off the GPU.
+        """
+        device = self._loaded_device or self._resolve_device()[0]
+        if device != "cuda":
+            return False
+        import torch
+
+        free, _total = torch.cuda.mem_get_info()
+        needed = _ACTIVATION_BYTES_PER_PAIR * _batch_size() + _VRAM_MARGIN_BYTES
+        if self._model is None:
+            needed += _WEIGHTS_BYTES
+        return free < needed
+
     def release(self) -> None:
         """Drop the loaded model and return its GPU memory.
 
@@ -186,9 +223,7 @@ class CrossEncoderReranker:
             with contextlib.redirect_stderr(io.StringIO()):
                 ranks = model.rank(
                     query, texts, top_k=min(top_k, len(texts)), return_documents=False,
-                    # Smaller batches lower the activation peak on a shared GPU
-                    # at little cost in speed; unset keeps sentence-transformers' 32.
-                    batch_size=_positive_int(os.getenv("RERANKER_BATCH_SIZE")) or 32,
+                    batch_size=_batch_size(),
                 )
         except Exception as exc:
             raise RuntimeError(

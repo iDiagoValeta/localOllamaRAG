@@ -23,6 +23,20 @@ from monkeygrab.ports.model_unloader import ModelUnloader
 _DEFAULT_BASE_URL = DEFAULT_OLLAMA_BASE_URL
 
 
+def ollama_model_capabilities(base_url: str, name: str, *, timeout: float = 10) -> list:
+    """What Ollama says a model can do (``completion``, ``vision``, ...).
+
+    Raises:
+        RuntimeError: Ollama did not answer or does not know the model.
+    """
+    try:
+        response = requests.post(f"{base_url}/api/show", json={"model": name}, timeout=timeout)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Ollama could not describe model {name!r}: {exc}") from exc
+    return response.json().get("capabilities") or []
+
+
 @lru_cache(maxsize=None)
 def ollama_client_for(base_url: str, *, timeout: Optional[float] = None) -> ollama.Client:
     """Return the shared ``ollama.Client`` for one endpoint (and timeout).

@@ -107,3 +107,39 @@ def test_posts_to_the_configured_base_url_and_timeout(monkeypatch):
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+class _Response:
+    def __init__(self, models):
+        self._models = models
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {"models": self._models}
+
+
+@pytest.mark.parametrize("loaded, expected", [
+    ([{"name": "gen:4b", "size": 100, "size_vram": 100}], True),
+    ([{"name": "gen:4b", "size": 100, "size_vram": 40}], False),  # split across GPU and CPU
+    ([{"name": "other:1b", "size": 10, "size_vram": 10}], False),
+    ([], False),
+])
+def test_resident_on_gpu_means_loaded_and_entirely_in_vram(monkeypatch, loaded, expected):
+    monkeypatch.setattr(module.requests, "get", lambda url, timeout: _Response(loaded))
+    assert OllamaModelUnloader(_models()).is_resident_on_gpu("gen:4b") is expected
+
+
+def test_a_bare_name_matches_ollamas_latest_tag(monkeypatch):
+    loaded = [{"name": "gen:latest", "size": 1, "size_vram": 1}]
+    monkeypatch.setattr(module.requests, "get", lambda url, timeout: _Response(loaded))
+    assert OllamaModelUnloader(_models()).is_resident_on_gpu("gen")
+
+
+def test_an_unreachable_ollama_is_not_assumed_resident(monkeypatch):
+    def _down(url, timeout):
+        raise ConnectionError("refused")
+
+    monkeypatch.setattr(module.requests, "get", _down)
+    assert OllamaModelUnloader(_models()).is_resident_on_gpu("gen:4b") is False
