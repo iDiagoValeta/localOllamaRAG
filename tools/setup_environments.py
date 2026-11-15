@@ -81,7 +81,14 @@ OLLAMA_ROLE_VARS = {
     "contextual": "OLLAMA_CONTEXTUAL_MODEL",
     "recomp": "OLLAMA_RECOMP_MODEL",
 }
-DEFAULT_OLLAMA_MODEL = "gemma4:e4b"
+# Per role, the module defaults of rag/chat_pdfs.py. The chat role stays on a
+# vision model because it also describes figures at indexing (issue #628).
+DEFAULT_OLLAMA_MODELS = {
+    "rag": "qwen3:4b-instruct-2507-q4_K_M",
+    "chat": "gemma4:e4b",
+    "contextual": "gemma4:e4b",
+    "recomp": "gemma4:e4b",
+}
 
 OK = "  ok   "
 FAIL = " FAIL  "
@@ -275,7 +282,7 @@ def _configured_models() -> List[str]:
     saved = _saved_roles()
     return sorted(
         {
-            os.getenv(var) or saved.get(role) or DEFAULT_OLLAMA_MODEL
+            os.getenv(var) or saved.get(role) or DEFAULT_OLLAMA_MODELS[role]
             for role, var in OLLAMA_ROLE_VARS.items()
         }
     )

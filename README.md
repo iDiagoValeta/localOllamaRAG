@@ -267,7 +267,8 @@ $SUDO install llama.cpp/build/bin/llama-server /usr/local/bin/
 git clone https://github.com/iDiagoValeta/localOllamaRAG && cd localOllamaRAG
 ```
 
-`install.sh` pulls the model the roles resolve to (`gemma4:e4b` by default),
+`install.sh` pulls the models the roles resolve to (`qwen3:4b-instruct-2507-q4_K_M` for answers and
+`gemma4:e4b` for the other roles by default),
 downloads `embeddinggemma-2-Q8_0.gguf` and `mmproj-embeddinggemma-2-Q8_0.gguf`
 into `~/.local/share/monkeygrab/models` checking their
 sha256, runs `tools/setup_environments.py` and builds the frontend. It records

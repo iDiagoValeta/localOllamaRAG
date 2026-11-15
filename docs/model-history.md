@@ -549,7 +549,9 @@ and passes every study quiz; `qwen3.5:0.8b` scores close to it on facts but
 fails every study case, and `qwen3.5:2b` fails four of five quizzes. Every
 other model under 2B stays under 85. None replaces the default here; the choice of
 `lfm3:1.7b` or `qwen3:4b-instruct-2507` as default is a product decision,
-not taken by this run. All candidates except those two were deleted after
+not taken by this run. It was taken on 2026-11-15: `qwen3:4b-instruct-2507`
+is the default `rag` role since issue #628, and the other roles stay on
+`gemma4:e4b`. All candidates except those two were deleted after
 the run.
 
 Four answers in this run state the expected value in a spelling the grader
