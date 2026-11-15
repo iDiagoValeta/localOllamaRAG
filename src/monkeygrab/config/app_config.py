@@ -151,12 +151,12 @@ class AppConfig:
         Raises:
             ValueError: If any environment variable is set to an invalid value.
         """
-        rag_model = env.read_env_str("OLLAMA_RAG_MODEL", "gemma4:e4b")
+        rag_model = env.read_env_str("OLLAMA_RAG_MODEL", "qwen3:4b-instruct-2507-q4_K_M")
         models = ModelsConfig(
             rag=rag_model,
-            chat=env.read_env_str("OLLAMA_CHAT_MODEL", "gemma4:e4b"),
-            contextual=env.read_env_str("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b"),
-            recomp=env.read_env_str("OLLAMA_RECOMP_MODEL", "gemma4:e4b"),
+            chat=env.read_env_str("OLLAMA_CHAT_MODEL", "qwen3:4b-instruct-2507-q4_K_M"),
+            contextual=env.read_env_str("OLLAMA_CONTEXTUAL_MODEL", "qwen3:4b-instruct-2507-q4_K_M"),
+            recomp=env.read_env_str("OLLAMA_RECOMP_MODEL", "qwen3:4b-instruct-2507-q4_K_M"),
             desc=env.read_env_str("MODELO_DESC", infer_model_description(rag_model)),
             ollama=OllamaRuntimeConfig(
                 rag_num_ctx=env.read_env_int("OLLAMA_RAG_NUM_CTX", 16384),

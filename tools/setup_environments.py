@@ -81,7 +81,7 @@ OLLAMA_ROLE_VARS = {
     "contextual": "OLLAMA_CONTEXTUAL_MODEL",
     "recomp": "OLLAMA_RECOMP_MODEL",
 }
-DEFAULT_OLLAMA_MODEL = "gemma4:e4b"
+DEFAULT_OLLAMA_MODEL = "qwen3:4b-instruct-2507-q4_K_M"
 
 OK = "  ok   "
 FAIL = " FAIL  "
@@ -302,7 +302,7 @@ def _check_ollama() -> Tuple[bool, str]:
 # The command the root README documents. Without --mmproj the server cannot
 # embed images and answers them with HTTP 500 (issue #565).
 _EMBEDDER_COMMAND = (
-    "llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf "
+    "llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf --no-mmproj-offload "
     "--embedding --port {port} -b 2048 -ub 2048"
 )
 

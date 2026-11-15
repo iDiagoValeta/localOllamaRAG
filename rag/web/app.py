@@ -375,7 +375,9 @@ def _chat_stream(pregunta: str) -> Generator[str, None, None]:
         # Capped like the RAG role (#254): an unbounded answer holds the
         # model's only slot for as long as it keeps writing (issue #371).
         options={"temperature": 0.7, "top_p": 0.9, "num_predict": 4096},
-        num_ctx=8192,
+        # The generator's context when chat runs on its model, so switching
+        # between chat and RAG questions reuses one runner (issue #630).
+        num_ctx=wiring.role_num_ctx(config, "chat", 8192),
         keep_alive=ollama.keep_alive,
         generation_deadline=ollama.generation_deadline,
     )

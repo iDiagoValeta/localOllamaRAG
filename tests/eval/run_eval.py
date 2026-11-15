@@ -113,9 +113,11 @@ OLLAMA_BASE_URL = read_env_ollama_base_url()
 # The product's own default generator (rag/chat_pdfs.py MODELO_RAG), so a
 # no-argument run states something about what ships. Until 2026-09-12 this
 # was Ling-3.0-tiny, the faster model the 0.82 floor was first set with
-# (issue #242); gemma4:e4b clears that floor at 136/156 = 0.872 on
-# 20260911T094107Z, so the floor did not move. Other models can be measured
-DEFAULT_MODELS = [os.getenv("OLLAMA_RAG_MODEL", "gemma4:e4b")]
+# (issue #242); gemma4:e4b cleared that floor at 136/156 = 0.872 on
+# 20260911T094107Z, so the floor did not move. Since issue #628 the default is
+# qwen3:4b-instruct-2507 (152/156 on 20261115T122809Z, above the 0.91 floor
+# set in #550). Other models can be measured
+DEFAULT_MODELS = [os.getenv("OLLAMA_RAG_MODEL", "qwen3:4b-instruct-2507-q4_K_M")]
 
 # Model used for the auxiliary Ollama roles during this run: query
 # decomposition, contextual-retrieval enrichment and RECOMP synthesis. Kept
@@ -281,7 +283,7 @@ def _embedder_command(port: int) -> str:
     """The llama-server command the root README documents, for printed hints."""
     return (
         "llama-server -m embeddinggemma-2-Q8_0.gguf "
-        "--mmproj mmproj-embeddinggemma-2-Q8_0.gguf "
+        "--mmproj mmproj-embeddinggemma-2-Q8_0.gguf --no-mmproj-offload "
         f"--embedding --port {port} -b 2048 -ub 2048"
     )
 

@@ -4,6 +4,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+## [4.5.0] - 2026-11-15
+
+[Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.5.0).
+
+The default generator changes, and stores indexed with contextual retrieval on under the old default contextual model must be reindexed once.
+
+### Changed
+
+- The default RAG generator is `qwen3:4b-instruct-2507-q4_K_M`: 152 of 156 on the gate against `gemma4:e4b`'s 149, at a quarter of the download, and 4.2 s per answer against 2.5 s. A role saved in the web UI or an exported `OLLAMA_RAG_MODEL` still wins (#628).
+- Every Ollama role defaults to the generator, and the pipeline keeps it, the reranker and the embedder resident together on an 8 GB card when the measured free VRAM allows it, instead of loading three models per question. Measured on the web path with 8 warm questions: no generator reload per question (three model loads before), retrieval 4.0 s instead of 11.9 s, peak 7.2 GB of 7.8 usable with all three resident. The embedder's image projector runs on the CPU (`--no-mmproj-offload` in every documented and scripted command), which frees 740 MB at the cost of 1.5 s instead of 0.1 s per figure while indexing. Stores indexed with contextual retrieval on under the old default contextual model read stale once and must be reindexed. Image description now needs a vision model chosen for the chat role, and indexing refuses to start without one (#630).
+- The reranker scores 8 pairs per batch by default instead of 32: the same top 8, a 1.4 GB peak instead of 2.3 GB, and faster (#630).
+
+### Fixed
+
+- Grader reads a number MinerU spaced inside LaTeX math (`$1 2 6 . 0$`) as KaTeX renders it; gate figures recorded before 2026-11-15 understate models that copy that math, see `docs/model-history.md` (#621).
+- Gold literals `sistemasolar-masa-sol` and `catala-llengua-habitual` are written with a decimal dot, so a correct answer is accepted with either decimal mark (#623).
+- Grader accepts a gold literal written with dot thousands (`299.792.458`, `1.000 W/m²`) in any spelling of the same value: a space, a LaTeX thin or control space, or no separator; the LaTeX control space `\ ` reads as a space (#625).
+
 ## [4.4.0] - 2026-11-07
 
 [Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.4.0).

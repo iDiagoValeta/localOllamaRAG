@@ -103,6 +103,15 @@ def indexar_documentos(
 
     image_describer = None
     if config.flags.usar_descripcion_imagen:
+        # The chat role describes figures and defaults to the text-only
+        # generator (issue #630). Ollama rejects every image it is sent with a
+        # bare 400, file after file, so the choice is refused here once.
+        if not wiring.chat_role_sees_images(config):
+            raise ValueError(
+                f"Image description needs a vision model in the chat role, and "
+                f"{config.models.chat!r} has none: choose one (gemma4:e4b) or turn "
+                "image description off."
+            )
         image_describer = wiring.chat_model_for_role(
             config, "chat",
             options={"temperature": 0.1, "num_predict": 400},
@@ -137,6 +146,9 @@ def indexar_documentos(
 
         ruta_pdf = os.path.join(carpeta, archivo)
         wiring.release_ollama_models(config)
+        # Kept beside the generator after a question (issue #630); MinerU
+        # needs the card.
+        wiring.release_reranker()
         try:
             result = use_case.run(ruta_pdf, archivo)
             total_chunks += result.chunks_indexed

@@ -292,7 +292,7 @@ def _log_boot_warning(message: str) -> str:
 # The command the root README documents. Without --mmproj the server cannot
 # embed images and answers them with HTTP 500 (issue #565).
 _EMBEDDER_COMMAND = (
-    "llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf "
+    "llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf --no-mmproj-offload "
     "--embedding --port {port} -b 2048 -ub 2048"
 )
 
