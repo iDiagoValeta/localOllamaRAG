@@ -47,6 +47,19 @@ runs (one of them `gemma4:e4b` in `20261107T173536Z`, which lands at 150 of
 156); `catala-llengua-habitual` gains none, since every stored answer wrote
 the Catalan comma.
 
+**Grader change on 2026-11-15 (issue #625).** From that date a gold literal
+written with dot thousands (`299.792.458`, `1.000 W/m²`) also accepts the
+same value with a space, a LaTeX thin space, a LaTeX control space (`\ `) or
+no separator, and `\ ` is read as a space everywhere. Re-grading every stored
+run turns 20 rejected answers into passes and none the other way; all 20 are
+the right value. In `20261115T122809Z` that is one case each for
+`qwen3:1.7b` (`relativitat-llum`), `gemma4:e4b` and `qwen3.5:2b`
+(`solar-superficie`) and `llama3.2:1b` (`solar-constant`), so each of those
+rows in "Small generators" gains one answered and one overall case, and no
+ranking changes. `gemma4:e4b` gains the same `solar-superficie` case in four
+earlier runs (`20261031T122733Z`, `20261031T160037Z`, `20261107T125554Z`,
+`20261107T134238Z`), not in the v4.4.0 release run `20261107T173536Z`.
+
 Four qualifications, all of them measured rather than assumed. Skipping them
 turns this log into a ranking, which it is not.
 
