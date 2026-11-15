@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+## [4.5.0] - 2026-11-15
+
+[Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.5.0).
+
+The default generator changes, and stores indexed with contextual retrieval on under the old default contextual model must be reindexed once.
+
 ### Changed
 
 - The default RAG generator is `qwen3:4b-instruct-2507-q4_K_M`: 152 of 156 on the gate against `gemma4:e4b`'s 149, at a quarter of the download, and 4.2 s per answer against 2.5 s. A role saved in the web UI or an exported `OLLAMA_RAG_MODEL` still wins (#628).

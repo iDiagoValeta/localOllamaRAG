@@ -567,6 +567,17 @@ is the default `rag` role since issue #628, and every other role since
 issue #630. All candidates except those two were deleted after
 the run.
 
+The release gate of v4.5.0 (`20261115T171314Z`) ran the product defaults
+after #630: `qwen3:4b-instruct-2507` in every role, kept resident beside the
+reranker and the embedder. It ran on the tree that `develop` and the release
+branch ship (`9646f7b`); the release branch only adds this row and the
+changelog date. It answers the same 135, and 153 overall because the
+retrieval cases gained one:
+
+| Model | Answered | Overall | tokens/s | tokens/answer | s/answer | decode s/answer | Budget hit | Infra | Placement | Run |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `qwen3:4b-instruct-2507-q4_K_M` *(default)*, release v4.5.0 (tree `9646f7b`, 2026-11-15), every role on the generator | 135 / 136 (99.3%) | 153 / 156 (98.1%) | 56.2 | 142 *(of 124)* | 4.05 *(of 124)* | 2.52 | 0 | 0 | GPU | `20261115T171314Z` |
+
 Four answers in this run state the expected value in a spelling the grader
 does not read against a dot-thousands literal (issue #625): `qwen3:1.7b` on
 `relativitat-llum`, `gemma4:e4b` and `qwen3.5:2b` on `solar-superficie`,
