@@ -114,6 +114,12 @@ _WHITESPACE_RE = re.compile(r"\s+")
 # value 1000 times smaller.
 _DOT_THOUSANDS_RE = re.compile(r"(?<![\d.,])[1-9]\d{0,2}(?:\.\d{3})+(?![\d.])")
 
+
+def _collapse_dot_thousands(text: str) -> str:
+    """Drop the dots of every well-formed dot-thousands grouping ("3.000" -> "3000")."""
+    return _DOT_THOUSANDS_RE.sub(lambda match: match.group(0).replace(".", ""), text)
+
+
 # Space as thousands separator ("100 000", including the space a LaTeX thin
 # space becomes in _strip_markup), collapsed after the dot reading so an
 # answer written "3.000" meets a literal spelled "3 000" on equal terms.
@@ -141,9 +147,10 @@ def _strip_markup(text: str) -> str:
     s = _MATH_SPAN_RE.sub(lambda m: _MATH_DIGIT_SPACING_RE.sub("", m.group(0)), s)
     s = _MARKDOWN_EMPHASIS_RE.sub("", s)
     s = s.replace("$", "")  # LaTeX math delimiters
-    # Escaped percent and thin space are typesetting: "70\\%" is "70%",
-    # "100\\,000" is "100 000" (issue #367).
-    s = s.replace("\\%", "%").replace("\\,", " ")
+    # Escaped percent, thin space and control space are typesetting: "70\\%"
+    # is "70%", "100\\,000" is "100 000" (issue #367) and "1\\ 000" is
+    # "1 000" (issue #625).
+    s = s.replace("\\%", "%").replace("\\,", " ").replace("\\ ", " ")
     s = _LATEX_SIZING_RE.sub("", s)
     # Before the braces go, or the command name is left glued to its content.
     s = _LATEX_TEXT_STYLE_RE.sub("", s)
@@ -202,7 +209,7 @@ def _normalize_dot_thousands(text: str) -> str:
         Normalized text, safe to compare or search with token matching.
     """
     s = _strip_markup(text)
-    s = _DOT_THOUSANDS_RE.sub(lambda match: match.group(0).replace(".", ""), s)
+    s = _collapse_dot_thousands(s)
     s = _DECIMAL_COMMA_RE.sub(".", s)
     s = _THOUSANDS_SPACE_RE.sub("", s)
     s = _WHITESPACE_RE.sub(" ", s).strip()
@@ -352,8 +359,10 @@ def grade_answer(answer: str, case: Dict[str, Any]) -> Dict[str, Any]:
     haystack_thousands = _normalize(answer)
     haystack_decimal = _normalize_decimal_comma(answer)
     # A third reading for Spanish/Catalan thousands dots. Its literal is
-    # collapsed with the same space rule first, so "3 000 anys" is looked up
-    # as "3000 anys" and neither spelling needs a rule of its own.
+    # collapsed with the same dot and space rules first, so "3 000 anys" and
+    # "3.000 anys" are both looked up as "3000 anys" and meet "3000", "3 000"
+    # and "3.000" alike (issues #367, #625). The literal is read exactly as
+    # the answer is: "1.366" is 1366 in this reading and 1.366 in the others.
     haystack_dot_thousands = _normalize_dot_thousands(answer)
 
     def _present(literal: str) -> bool:
@@ -363,7 +372,8 @@ def grade_answer(answer: str, case: Dict[str, Any]) -> Dict[str, Any]:
         ):
             return True
         return _contains_token(
-            haystack_dot_thousands, _THOUSANDS_SPACE_RE.sub("", literal)
+            haystack_dot_thousands,
+            _THOUSANDS_SPACE_RE.sub("", _collapse_dot_thousands(literal)),
         )
 
     # required_all demands every literal be present, which buys precision

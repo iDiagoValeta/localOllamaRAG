@@ -624,6 +624,36 @@ def test_math_digit_collapsing_does_not_accept_a_different_value(answer, literal
     assert not grade_answer(answer, {"accepted_answers": [literal]})["pass"]
 
 
+# Issue #625: a gold literal written with dot thousands met the same value
+# spelled with a space, a LaTeX thin or control space, or no separator at all.
+# Verbatim from the gate run 20261115T122809Z (tests/eval/runs/, local).
+_ISSUE_625_ANSWERS = [
+    ('relativitat-llum', '$ c = 299\\,792\\,458 \\, \\text{m/s} $', ['299.792.458']),
+    ('solar-superficie', '$1.000\\ \\text{W/m}^2$', ['1.000 W/m²']),
+    ('solar-superficie', '$$1\\ 000 \\text{ W/m}^2$$', ['1.000 W/m²']),
+    ('solar-constant', '1366 W/m²', ['1.366 W/m²']),
+]
+
+
+@pytest.mark.parametrize(("case_id", "answer", "accepted"), _ISSUE_625_ANSWERS)
+def test_dot_thousands_literal_accepts_every_spelling_of_its_value(case_id, answer, accepted):
+    assert grade_answer(answer, {"accepted_answers": accepted})["pass"], case_id
+
+
+@pytest.mark.parametrize(
+    ("answer", "literal"),
+    [
+        ("1.001 W/m²", "1.000 W/m²"),
+        ("$1\\ 001 \\text{ W/m}^2$", "1.000 W/m²"),
+        ("299.792.457", "299.792.458"),
+        ("$299\\,792\\,457$", "299.792.458"),
+        ("1366 W/m²", "1.365 W/m²"),
+    ],
+)
+def test_dot_thousands_literal_does_not_accept_a_different_value(answer, literal):
+    assert not grade_answer(answer, {"accepted_answers": [literal]})["pass"]
+
+
 def test_a_literal_ending_in_a_non_word_character_keeps_matching_glued_text():
     """Monotonicity: a match the old ``\\b...\\b`` pattern accepted must stay
     accepted. ``\\b`` sits between ``%`` and a letter, so "67%de" used to

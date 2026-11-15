@@ -12,6 +12,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 - Grader reads a number MinerU spaced inside LaTeX math (`$1 2 6 . 0$`) as KaTeX renders it; gate figures recorded before 2026-11-15 understate models that copy that math, see `docs/model-history.md` (#621).
 - Gold literals `sistemasolar-masa-sol` and `catala-llengua-habitual` are written with a decimal dot, so a correct answer is accepted with either decimal mark (#623).
+- Grader accepts a gold literal written with dot thousands (`299.792.458`, `1.000 W/m²`) in any spelling of the same value: a space, a LaTeX thin or control space, or no separator; the LaTeX control space `\ ` reads as a space (#625).
 
 ## [4.4.0] - 2026-11-07
 
