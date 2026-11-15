@@ -66,12 +66,12 @@ def _force_cpu(monkeypatch):
 def test_batch_size_and_max_length_come_from_the_environment(monkeypatch):
     _patch_crossencoder(monkeypatch)
     _force_cpu(monkeypatch)
-    monkeypatch.setenv("RERANKER_BATCH_SIZE", "8")
+    monkeypatch.setenv("RERANKER_BATCH_SIZE", "4")
     monkeypatch.setenv("RERANKER_MAX_LENGTH", "1024")
     CrossEncoderReranker().rerank("q", [_fragment("a")], top_k=1)
     model = FakeCrossEncoder.instances[0]
     assert model.extra == {"max_length": 1024}
-    assert model.rank_calls[0]["batch_size"] == 8
+    assert model.rank_calls[0]["batch_size"] == 4
 
 
 def test_without_tuning_env_the_reranker_keeps_its_defaults(monkeypatch):
@@ -82,7 +82,45 @@ def test_without_tuning_env_the_reranker_keeps_its_defaults(monkeypatch):
     CrossEncoderReranker().rerank("q", [_fragment("a")], top_k=1)
     model = FakeCrossEncoder.instances[0]
     assert model.extra == {}
-    assert model.rank_calls[0]["batch_size"] == 32
+    # 8, not sentence-transformers' 32: same top 8, lower peak, faster (issue #630).
+    assert model.rank_calls[0]["batch_size"] == 8
+
+
+class _FakeCuda:
+    def __init__(self, free):
+        self.free = free
+
+    def mem_get_info(self):
+        return self.free, 8 * 2**30
+
+
+def _with_free_vram(monkeypatch, free_mib):
+    import torch
+
+    monkeypatch.setattr(torch, "cuda", _FakeCuda(free_mib * 2**20))
+    monkeypatch.setenv("RERANKER_DEVICE", "cuda")
+    monkeypatch.delenv("RERANKER_BATCH_SIZE", raising=False)
+
+
+@pytest.mark.parametrize("free_mib, needs_room", [(1000, True), (2000, False)])
+def test_an_unloaded_reranker_needs_room_for_weights_and_activations(monkeypatch, free_mib, needs_room):
+    """1.1 GB of weights + 8 x 40 MB of activations + 256 MB margin = ~1.7 GB."""
+    _with_free_vram(monkeypatch, free_mib)
+    assert CrossEncoderReranker().needs_room() is needs_room
+
+
+@pytest.mark.parametrize("free_mib, needs_room", [(400, True), (700, False)])
+def test_a_loaded_reranker_only_needs_room_for_activations(monkeypatch, free_mib, needs_room):
+    _with_free_vram(monkeypatch, free_mib)
+    reranker = CrossEncoderReranker()
+    reranker._model = object()
+    reranker._loaded_device = "cuda"
+    assert reranker.needs_room() is needs_room
+
+
+def test_a_cpu_reranker_never_needs_gpu_room(monkeypatch):
+    _force_cpu(monkeypatch)
+    assert CrossEncoderReranker().needs_room() is False
 
 
 def test_reranker_uses_fixed_bge_model(monkeypatch):

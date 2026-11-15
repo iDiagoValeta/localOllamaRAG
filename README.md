@@ -298,7 +298,7 @@ $SUDO install llama.cpp/build/bin/llama-server /usr/local/bin/
 git clone https://github.com/iDiagoValeta/localOllamaRAG && cd localOllamaRAG
 ```
 
-`install.sh` pulls the model the roles resolve to (`gemma4:e4b` by default),
+`install.sh` pulls the model the roles resolve to (`qwen3:4b-instruct-2507-q4_K_M` by default),
 downloads `embeddinggemma-2-Q8_0.gguf` and `mmproj-embeddinggemma-2-Q8_0.gguf`
 into `~/.local/share/monkeygrab/models` checking their
 sha256, runs `tools/setup_environments.py` and builds the frontend. It records
@@ -324,13 +324,16 @@ behind a local `llama-server` — download `embeddinggemma-2-Q8_0.gguf` and
 `mmproj-embeddinggemma-2-Q8_0.gguf` from the Hugging Face repo
 [`ggml-org/embeddinggemma-2-GGUF`](https://huggingface.co/ggml-org/embeddinggemma-2-GGUF)
 and start it with
-`llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf --embedding --port 8091 -b 2048 -ub 2048`
+`llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf --no-mmproj-offload --embedding --port 8091 -b 2048 -ub 2048`
 from [llama.cpp](https://github.com/ggml-org/llama.cpp), the default address of
-`MONKEYGRAB_EMBEDDER_URL`. Two things in that command matter. Without `--mmproj` the
+`MONKEYGRAB_EMBEDDER_URL`. Three things in that command matter. Without `--mmproj` the
 server cannot embed images, and indexing a PDF with a figure stops on HTTP 500
 while `USAR_EMBEDDINGS_IMAGEN` is on (its default, issue #565). With the default
 512-token physical batch a longer chunk is rejected with HTTP 500 and indexing
-stops (issue #487). Drop PDFs into `rag/docs/en/` — the index builds
+stops (issue #487). `--no-mmproj-offload` keeps the image projector on the CPU:
+it only runs while indexing figures (1.5 s per image instead of 0.1 s), and the
+740 MB it frees is what lets the generator, the reranker and the embedder stay
+on an 8 GB card together (issue #630). Drop PDFs into `rag/docs/en/` — the index builds
 itself on first run.
 
 Build the web interface once before the first run. Its `dist/` folder is

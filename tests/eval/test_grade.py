@@ -8,6 +8,7 @@ rather than at eval-run time.
 """
 
 import json
+import re
 import sys
 
 import pytest
@@ -373,6 +374,26 @@ def test_gold_cases_have_required_fields_for_their_type():
             )
 
 
+def test_gold_decimal_comma_literals_also_accept_the_dot_spelling():
+    """The grader reads an answer's decimal comma as a dot, never a literal's.
+
+    So a literal written "99,86" rejects an answer "99.86" with the same
+    value, while "99.86" accepts both spellings (issue #623). A thousands
+    comma ("14,200,000") is a different thing and stays out.
+    """
+    decimal_comma = re.compile(r"\d,(?!\d{3}(?!\d))\d")
+    for case in _load_gold_cases():
+        accepted = case.get("accepted_answers") or []
+        groups = [accepted] + [[literal] for literal in case.get("required_all") or []]
+        for group in groups:
+            for literal in group:
+                if decimal_comma.search(literal):
+                    answer = literal.replace(",", ".")
+                    assert grade_answer(answer, {"accepted_answers": group})["pass"], (
+                        f"{case['id']}: {literal!r} rejects {answer!r}; write it with a dot"
+                    )
+
+
 def test_gold_cases_cover_all_three_languages_and_all_case_types():
     """Guards the corpus shape the design doc asks for:
     numeric facts, concepts, figure retrieval, table retrieval, study artifacts,
@@ -553,6 +574,83 @@ def test_typesetting_variants_of_a_correct_answer_pass(case_id, answer, accepted
     ],
 )
 def test_typesetting_rules_do_not_accept_a_different_value(answer, literal):
+    assert not grade_answer(answer, {"accepted_answers": [literal]})["pass"]
+
+
+# Issue #621: MinerU spaces every character of a number inside LaTeX math and
+# the generator copies it. KaTeX ignores math-mode whitespace, so the user
+# reads the right value; the grader did not. Verbatim from the gate run
+# 20261107T173536Z (tests/eval/runs/, local).
+_ISSUE_621_ANSWERS = [
+    ('higgs-mass', 'The ATLAS Collaboration reports that the newly observed particle has a measured mass of $1 2 6 . 0 \\pm 0 . 4 (\\mathrm { s t a t } ) \\pm 0 . 4 (\\mathrm { s y s } )$ GeV.', ['126.0', '126']),
+    ('gpt3-context-window', 'All models use a context window of $n _ { \\mathrm { c t x } } = 2 0 4 8$ tokens.', ['2048']),
+    ('planck-sigma8-ca', "Segons el fragment que proporciona les restriccions de l'enllaç de Planck en combinació amb BAO, el valor mesurat per $\\sigma_8$ és $$ \\sigma _ { 8 } = 0 . 8 1 1 \\pm 0 . 0 1 9 $$ (amb un nivell de confiança del $68 \\%$).", ['0.811']),
+]
+
+
+@pytest.mark.parametrize(("case_id", "answer", "accepted"), _ISSUE_621_ANSWERS)
+def test_digits_spaced_inside_math_read_as_rendered(case_id, answer, accepted):
+    assert grade_answer(answer, {"accepted_answers": accepted})["pass"], case_id
+
+
+@pytest.mark.parametrize(
+    ("answer", "literal"),
+    [
+        # The two gold literals spelled with a thousands space must keep
+        # matching once the space inside math is gone.
+        ("unos $100 000$ millones de toneladas", "100 000 millones"),
+        ("fa uns $3 000$ anys", "3 000 anys"),
+    ],
+)
+def test_math_digit_collapsing_keeps_thousands_space_literals(answer, literal):
+    assert grade_answer(answer, {"accepted_answers": [literal]})["pass"]
+
+
+@pytest.mark.parametrize(
+    ("answer", "literal"),
+    [
+        # Outside math the spaces are rendered, so these stay separate numbers.
+        ("values 1 2 3", "123"),
+        ("between $1$ and $2$", "12"),
+        # Collapsing must not open a way around the decimal guards.
+        ("a score of $2 8 . 4$", "28"),
+        ("a score of $2 8 . 4$", "4"),
+        # KaTeX renders a space after a math-mode comma: a list, not a number.
+        ("the pair $( 1 , 2 )$", "12"),
+        ("the pair $( 1 , 2 )$", "1.2"),
+    ],
+)
+def test_math_digit_collapsing_does_not_accept_a_different_value(answer, literal):
+    assert not grade_answer(answer, {"accepted_answers": [literal]})["pass"]
+
+
+# Issue #625: a gold literal written with dot thousands met the same value
+# spelled with a space, a LaTeX thin or control space, or no separator at all.
+# Verbatim from the gate run 20261115T122809Z (tests/eval/runs/, local).
+_ISSUE_625_ANSWERS = [
+    ('relativitat-llum', '$ c = 299\\,792\\,458 \\, \\text{m/s} $', ['299.792.458']),
+    ('solar-superficie', '$1.000\\ \\text{W/m}^2$', ['1.000 W/m²']),
+    ('solar-superficie', '$$1\\ 000 \\text{ W/m}^2$$', ['1.000 W/m²']),
+    ('solar-constant', '1366 W/m²', ['1.366 W/m²']),
+]
+
+
+@pytest.mark.parametrize(("case_id", "answer", "accepted"), _ISSUE_625_ANSWERS)
+def test_dot_thousands_literal_accepts_every_spelling_of_its_value(case_id, answer, accepted):
+    assert grade_answer(answer, {"accepted_answers": accepted})["pass"], case_id
+
+
+@pytest.mark.parametrize(
+    ("answer", "literal"),
+    [
+        ("1.001 W/m²", "1.000 W/m²"),
+        ("$1\\ 001 \\text{ W/m}^2$", "1.000 W/m²"),
+        ("299.792.457", "299.792.458"),
+        ("$299\\,792\\,457$", "299.792.458"),
+        ("1366 W/m²", "1.365 W/m²"),
+    ],
+)
+def test_dot_thousands_literal_does_not_accept_a_different_value(answer, literal):
     assert not grade_answer(answer, {"accepted_answers": [literal]})["pass"]
 
 
