@@ -6,7 +6,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ### Changed
 
-- The default RAG generator is `qwen3:4b-instruct-2507-q4_K_M`: 152 of 156 on the gate against `gemma4:e4b`'s 149, at a quarter of the download, and 4.2 s per answer against 2.5 s. The chat, contextual and RECOMP roles stay on `gemma4:e4b`, because the chat role also describes figures and needs vision. A role saved in the web UI or an exported `OLLAMA_RAG_MODEL` still wins (#628).
+- The default RAG generator is `qwen3:4b-instruct-2507-q4_K_M`: 152 of 156 on the gate against `gemma4:e4b`'s 149, at a quarter of the download, and 4.2 s per answer against 2.5 s. A role saved in the web UI or an exported `OLLAMA_RAG_MODEL` still wins (#628).
+- Every Ollama role defaults to the generator, and the pipeline keeps it, the reranker and the embedder resident together on an 8 GB card when the measured free VRAM allows it, instead of loading three models per question. Measured on the web path with 8 warm questions: no generator reload per question (three model loads before), retrieval 4.0 s instead of 11.9 s, peak 7.2 GB of 7.8 usable with all three resident. The embedder's image projector runs on the CPU (`--no-mmproj-offload` in every documented and scripted command), which frees 740 MB at the cost of 1.5 s instead of 0.1 s per figure while indexing. Stores indexed with contextual retrieval on under the old default contextual model read stale once and must be reindexed. Image description now needs a vision model chosen for the chat role, and indexing refuses to start without one (#630).
+- The reranker scores 8 pairs per batch by default instead of 32: the same top 8, a 1.4 GB peak instead of 2.3 GB, and faster (#630).
 
 ### Fixed
 

@@ -132,9 +132,9 @@ def _inferir_descripcion_modelo(nombre_modelo: str) -> str:
 # Model roles and Ollama runtime
 
 MODELO_RAG = os.getenv("OLLAMA_RAG_MODEL", "qwen3:4b-instruct-2507-q4_K_M")
-MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "gemma4:e4b")
-MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "gemma4:e4b")
-MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "gemma4:e4b")
+MODELO_CHAT = os.getenv("OLLAMA_CHAT_MODEL", "qwen3:4b-instruct-2507-q4_K_M")
+MODELO_CONTEXTUAL = os.getenv("OLLAMA_CONTEXTUAL_MODEL", "qwen3:4b-instruct-2507-q4_K_M")
+MODELO_RECOMP = os.getenv("OLLAMA_RECOMP_MODEL", "qwen3:4b-instruct-2507-q4_K_M")
 MODELO_DESC = os.getenv("MODELO_DESC", _inferir_descripcion_modelo(MODELO_RAG))
 
 OLLAMA_RAG_NUM_CTX = _leer_env_int("OLLAMA_RAG_NUM_CTX", 16384)

@@ -74,7 +74,7 @@ store is never overwritten or merged, so uploads and deletions survive upgrades.
   running with embeddings enabled on the default port:
 
   ```bash
-  llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf --embedding --port 8091 -b 2048 -ub 2048
+  llama-server -m embeddinggemma-2-Q8_0.gguf --mmproj mmproj-embeddinggemma-2-Q8_0.gguf --no-mmproj-offload --embedding --port 8091 -b 2048 -ub 2048
   ```
 
   The flags match the root README: with the default 512-token physical batch, a

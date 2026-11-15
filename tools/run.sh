@@ -69,16 +69,17 @@ else
     [ -f "$MODELS_DIR/$f" ] || die "$MODELS_DIR/$f missing. Run tools/install.sh first."
   done
   if [ "$CHECK_ONLY" -eq 1 ]; then
-    say "Would start: $LLAMA_SERVER -m $MODELS_DIR/$EMBEDDER_FILE --mmproj $MODELS_DIR/$MMPROJ_FILE --embedding --port $embedder_port -b 2048 -ub 2048"
+    say "Would start: $LLAMA_SERVER -m $MODELS_DIR/$EMBEDDER_FILE --mmproj $MODELS_DIR/$MMPROJ_FILE --no-mmproj-offload --embedding --port $embedder_port -b 2048 -ub 2048"
   else
     trap cleanup EXIT
     trap 'exit 130' INT
     trap 'exit 143' TERM
     mkdir -p "$STATE_DIR"
     say "Starting llama-server on port $embedder_port (log: $log_file)"
-    # The README's command. --mmproj is required for image embeddings and the
-    # 2048 batch sizes for chunks longer than the 512-token default.
-    "$LLAMA_SERVER" -m "$MODELS_DIR/$EMBEDDER_FILE" --mmproj "$MODELS_DIR/$MMPROJ_FILE" \
+    # The README's command. --mmproj is required for image embeddings, the
+    # 2048 batch sizes for chunks longer than the 512-token default, and the
+    # projector stays on the CPU so the answer path fits in 8 GB (issue #630).
+    "$LLAMA_SERVER" -m "$MODELS_DIR/$EMBEDDER_FILE" --mmproj "$MODELS_DIR/$MMPROJ_FILE" --no-mmproj-offload \
       --embedding --port "$embedder_port" -b 2048 -ub 2048 >"$log_file" 2>&1 &
     llama_pid=$!
     for _ in $(seq 1 120); do
