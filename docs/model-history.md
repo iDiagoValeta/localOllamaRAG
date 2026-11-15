@@ -499,6 +499,64 @@ webAI's ColVec (a multi-vector visual retriever, not a generator), the
 Meridian LoRAs (built for webAI's own runtime) and the older `TwIL-LM` /
 `TwIL-LM2`.
 
+## Small generators, 0.27B to 2B (issue #626, 2026-11-15)
+
+One paired gate invocation on `56bcc96`, host Ollama 0.40.13, the product
+flags (RECOMP off, no image description), `AUX_MODEL` = `Ling-3.0-tiny`,
+embeddinggemma-2 on the CPU. Retrieval is 17/20, shared by every model. The
+grader and gold include #621 and #623, so these rows are comparable with each
+other and with the re-graded figures quoted in that note, not with older
+rows. Every candidate is a dense model of at most 2B parameters, Q4_K_M or the
+Ollama default quantization; the size in brackets is the download.
+`granite4:1b` (only unquantized in Ollama, 3.3 GB) and the MoE models with
+about 1B active parameters (they occupy the card like their total size) were
+left out.
+
+| Model | Answered | Overall | tokens/s | tokens/answer | s/answer | decode s/answer | Budget hit | Infra | Placement | Run |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `qwen3:4b-instruct-2507-q4_K_M` (2.5 GB) | 135 / 136 (99.3%) | 152 / 156 (97.4%) | 54.7 | 138 *(of 124)* | 4.21 *(of 124)* | 2.58 | 0 | 0 | GPU | `20261115T122809Z` |
+| `gemma4:e4b` *(default)* (9.6 GB) | 132 / 136 (97.1%) | 149 / 156 (95.5%) | 49.8 | 36 *(of 124)* | 2.51 *(of 124)* | 0.73 | 0 | 0 | GPU | `20261115T122809Z` |
+| `lfm3:1.7b` (1.1 GB) | 130 / 136 (95.6%) | 147 / 156 (94.2%) | 138.8 | 166 *(of 124)* | 1.75 *(of 124)* | 1.19 | 0 | 0 | GPU | `20261115T122809Z` |
+| `qwen3:1.7b` (1.4 GB) | 121 / 136 (89.0%) | 138 / 156 (88.5%) | 107.5 | 94 *(of 124)* | 1.77 *(of 124)* | 0.86 | 0 | 0 | GPU | `20261115T122809Z` |
+| `qwen3.5:2b` (2.7 GB) | 113 / 136 (83.1%) | 130 / 156 (83.3%) | 80.0 | 102 *(of 124)* | 1.98 *(of 124)* | 1.31 | 0 | 0 | GPU | `20261115T122809Z` |
+| `qwen3:0.6b` (522 MB) | 106 / 136 (77.9%) | 123 / 156 (78.8%) | 179.0 | 63 *(of 124)* | 0.90 *(of 124)* | 0.33 | 0 | 0 | GPU | `20261115T122809Z` |
+| `qwen3.5:0.8b` (1.3 GB) | 100 / 136 (73.5%) | 117 / 156 (75.0%) | 160.7 | 95 *(of 124)* | 1.13 *(of 124)* | 0.59 | 0 | 0 | GPU | `20261115T122809Z` |
+| `llama3.2:1b` (1.3 GB) | 83 / 136 (61.0%) | 100 / 156 (64.1%) | 120.7 | 258 *(of 124)* | 2.66 *(of 124)* | 2.15 | 0 | 0 | GPU | `20261115T122809Z` |
+| `hf.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF:Q4_K_M` (730 MB) | 75 / 136 (55.1%) | 92 / 156 (59.0%) | 216.0 | 86 *(of 124)* | 0.84 *(of 124)* | 0.40 | 0 | 0 | GPU | `20261115T122809Z` |
+| `granite4:350m` (708 MB) | 67 / 136 (49.3%) | 84 / 156 (53.8%) | 179.7 | 222 *(of 124)* | 1.54 *(of 124)* | 1.23 | 0 | 0 | GPU | `20261115T122809Z` |
+| `smollm2:1.7b` (1.8 GB) | 50 / 136 (36.8%) | 67 / 156 (42.9%) | 77.0 | 252 *(of 124)* | 4.38 *(of 124)* | 3.17 | 0 | 0 | GPU | `20261115T122809Z` |
+| `hf.co/LiquidAI/LFM2.5-230M-GGUF:Q4_K_M` (153 MB) | 41 / 136 (30.1%) | 58 / 156 (37.2%) | 568.6 | 117 *(of 124)* | 0.35 *(of 124)* | 0.20 | 0 | 0 | GPU | `20261115T122809Z` |
+| `gemma3:1b` (806 MB) | 34 / 136 (25.0%) | 51 / 156 (32.7%) | 147.1 | 22 *(of 124)* | 0.64 *(of 124)* | 0.15 | 0 | 0 | GPU | `20261115T122809Z` |
+| `smollm2:360m` (725 MB) | 32 / 136 (23.5%) | 49 / 156 (31.4%) | 177.2 | 304 *(of 124)* | 2.16 *(of 124)* | 1.72 | 0 | 0 | GPU | `20261115T122809Z` |
+| `gemma3:270m` (291 MB) | 23 / 136 (16.9%) | 40 / 156 (25.6%) | 281.5 | 58 *(of 124)* | 0.43 *(of 124)* | 0.21 | 0 | 0 | GPU | `20261115T122809Z` |
+
+`lfm3:1.7b` is the first model under 2B parameters within the noise of the
+default: 130 against 132, a ninth of the download, in 1.75 s per answer
+against 2.51. It matches the default on the Spanish and Catalan cases (66 against 65)
+and loses three English ones. Of its six misses, two are the default's own
+(`planck-h0-tension`, `att-study-outline-ca`) and three are a number copied
+wrong from evidence that held the right one (`gw-final-mass` as
+`6.2 × 10^4`, `planck-h0` as `6.74`, `adam-stepsize` as `0.0001`). It
+answers at length, 166 tokens against the default's 36. It ships under the
+LFM Open License v1.0, not Apache 2.0.
+
+`qwen3:4b-instruct-2507` answered 135, the highest figure in this file,
+missing one number case, at 1.7 times the default's wait and a quarter of
+its download. One run; it has not been repeated.
+
+Below 1.7B the drop is steep and uneven. `qwen3:0.6b` keeps 106 at 0.9 s
+and passes every study quiz; `qwen3.5:0.8b` scores close to it on facts but
+fails every study case, and `qwen3.5:2b` fails four of five quizzes. Every
+other model under 2B stays under 85. None replaces the default here; the choice of
+`lfm3:1.7b` or `qwen3:4b-instruct-2507` as default is a product decision,
+not taken by this run. All candidates except those two were deleted after
+the run.
+
+Four answers in this run state the expected value in a spelling the grader
+does not read against a dot-thousands literal (issue #625): `qwen3:1.7b` on
+`relativitat-llum`, `gemma4:e4b` and `qwen3.5:2b` on `solar-superficie`,
+`llama3.2:1b` on `solar-constant`. One case each, so no ranking changes.
+
 ## Lite profile (4 GB of VRAM)
 
 Issue #292. Measured on the `rag-lite` branch with `MONKEYGRAB_PROFILE=lite`, so these rows differ from the table
