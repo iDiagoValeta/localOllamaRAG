@@ -29,6 +29,16 @@ normalization, 2 from two gold cases that gained a phrasing variant
 to the grader. Every row dated before it was graded without these rules:
 compare it with a later row only after adding those cases back, or re-run it.
 
+**Grader change on 2026-11-15 (issue #621).** From that date `grade.py`
+drops whitespace between digits and decimal points inside LaTeX math, where
+KaTeX does not render it: MinerU writes `$1 2 6 . 0$` and generators copy
+it. Re-grading every stored run turns 39 rejected answers into passes and
+none the other way; all 39 are the right value. On `gemma4:e4b` that is 3 to
+4 cases per run (the v4.4.0 release run `20261107T173536Z` goes from 145 to
+149 of 156), concentrated in `planck-sigma8-es`, `planck-sigma8-ca`,
+`higgs-mass` and `gpt3-context-window`. Rows dated before it understate
+every model that copies MinerU's math verbatim.
+
 Four qualifications, all of them measured rather than assumed. Skipping them
 turns this log into a ranking, which it is not.
 
