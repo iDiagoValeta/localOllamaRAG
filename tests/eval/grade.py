@@ -56,6 +56,17 @@ from typing import Any, Dict, Mapping, Sequence
 # affects matching.
 _MARKDOWN_EMPHASIS_RE = re.compile(r"[*_`]+")
 
+# A LaTeX math span, display ($$...$$) before inline ($...$) so the inner
+# dollars of a display span are never read as two inline ones.
+_MATH_SPAN_RE = re.compile(r"\$\$.+?\$\$|\$.+?\$", re.DOTALL)
+
+# Whitespace between digits and decimal points. MinerU writes a number inside
+# math one character at a time ("1 2 6 . 0") and generators copy it; KaTeX
+# ignores math-mode whitespace, so the user reads "126.0" (issue #621).
+# Commas stay out: KaTeX renders a space after a math-mode comma, so
+# "( 1 , 2 )" is a pair, not a number.
+_MATH_DIGIT_SPACING_RE = re.compile(r"(?<=[\d.])\s+(?=[\d.])")
+
 # LaTeX sizing commands (\left(, \right]) carry no literal content.
 _LATEX_SIZING_RE = re.compile(r"\\(left|right)")
 
@@ -126,6 +137,8 @@ def _strip_markup(text: str) -> str:
         see ``_normalize`` and ``_normalize_decimal_comma``.
     """
     s = text or ""
+    # Before the delimiters go: only inside math is the spacing unrendered.
+    s = _MATH_SPAN_RE.sub(lambda m: _MATH_DIGIT_SPACING_RE.sub("", m.group(0)), s)
     s = _MARKDOWN_EMPHASIS_RE.sub("", s)
     s = s.replace("$", "")  # LaTeX math delimiters
     # Escaped percent and thin space are typesetting: "70\\%" is "70%",

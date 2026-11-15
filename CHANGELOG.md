@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+### Fixed
+
+- Grader reads a number MinerU spaced inside LaTeX math (`$1 2 6 . 0$`) as KaTeX renders it; gate figures recorded before 2026-11-15 understate models that copy that math, see `docs/model-history.md` (#621).
+
 ## [4.4.0] - 2026-11-07
 
 [Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.4.0).
