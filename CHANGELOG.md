@@ -7,6 +7,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Fixed
 
 - Grader reads a number MinerU spaced inside LaTeX math (`$1 2 6 . 0$`) as KaTeX renders it; gate figures recorded before 2026-11-15 understate models that copy that math, see `docs/model-history.md` (#621).
+- Gold literals `sistemasolar-masa-sol` and `catala-llengua-habitual` are written with a decimal dot, so a correct answer is accepted with either decimal mark (#623).
 
 ## [4.4.0] - 2026-11-07
 

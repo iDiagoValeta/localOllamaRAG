@@ -39,6 +39,14 @@ none the other way; all 39 are the right value. On `gemma4:e4b` that is 3 to
 `higgs-mass` and `gpt3-context-window`. Rows dated before it understate
 every model that copies MinerU's math verbatim.
 
+The same day two gold literals moved from a decimal comma to a dot
+(issue #623), a change to the gold set rather than to the grader: the grader
+reads an answer's comma as a dot but never a literal's, so `99,86` rejected
+`99.86`. `sistemasolar-masa-sol` gains 13 correct answers across the stored
+runs (one of them `gemma4:e4b` in `20261107T173536Z`, which lands at 150 of
+156); `catala-llengua-habitual` gains none, since every stored answer wrote
+the Catalan comma.
+
 Four qualifications, all of them measured rather than assumed. Skipping them
 turns this log into a ranking, which it is not.
 

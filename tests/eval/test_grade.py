@@ -8,6 +8,7 @@ rather than at eval-run time.
 """
 
 import json
+import re
 import sys
 
 import pytest
@@ -371,6 +372,26 @@ def test_gold_cases_have_required_fields_for_their_type():
             assert case.get("accepted_answers") or case.get("required_all"), (
                 f"{cid}: factual case needs 'accepted_answers' or 'required_all'"
             )
+
+
+def test_gold_decimal_comma_literals_also_accept_the_dot_spelling():
+    """The grader reads an answer's decimal comma as a dot, never a literal's.
+
+    So a literal written "99,86" rejects an answer "99.86" with the same
+    value, while "99.86" accepts both spellings (issue #623). A thousands
+    comma ("14,200,000") is a different thing and stays out.
+    """
+    decimal_comma = re.compile(r"\d,(?!\d{3}(?!\d))\d")
+    for case in _load_gold_cases():
+        accepted = case.get("accepted_answers") or []
+        groups = [accepted] + [[literal] for literal in case.get("required_all") or []]
+        for group in groups:
+            for literal in group:
+                if decimal_comma.search(literal):
+                    answer = literal.replace(",", ".")
+                    assert grade_answer(answer, {"accepted_answers": group})["pass"], (
+                        f"{case['id']}: {literal!r} rejects {answer!r}; write it with a dot"
+                    )
 
 
 def test_gold_cases_cover_all_three_languages_and_all_case_types():
