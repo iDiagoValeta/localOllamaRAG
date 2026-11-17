@@ -84,6 +84,12 @@ with its own reason -- never by skipping a directory or file wholesale:
   a gate knob for tuning a measurement run, not a product configuration
   variable a ``.env`` deployment would ever set.
 
+- The training knobs of ``training/scripts/`` (``RUN``, ``DATA``, ``KD``,
+  ``KD_ALPHA``, ``EPOCHS``, ...) -- that folder trains the rag-lite generator
+  in its own venv and is never imported by the product; each knob is an
+  argument of one experiment, passed on the command line by
+  ``training/scripts/run_exp.sh``, not a deployment setting.
+
 Nothing today is "documented but legitimately never read" -- that is what
 ``dead`` in ``test_every_documented_env_var_is_read_by_code`` catches, and
 as of this writing it is empty. If a genuine case shows up later (a flag
@@ -120,6 +126,8 @@ _EXCLUDED_DIR_NAMES = {
     ".venv-docling",
     ".pytest_cache",
     ".ruff_cache",
+    # training/vendor/llama.cpp, cloned for the GGUF conversion: third-party code.
+    "vendor",
 }
 
 # See the module docstring's "Scope boundary" section for why each of these
@@ -132,6 +140,11 @@ _CODE_READS_NOT_DOCUMENTED = {
     "LOCALAPPDATA",
     "XDG_DATA_HOME",
     "PYTORCH_CUDA_ALLOC_CONF",
+    # training/scripts/: per-experiment arguments, see the module docstring.
+    "BASE", "BETA", "DATA", "DEV_DOCS_JSON", "EPOCHS", "EVAL_STEPS", "KD", "KD_ALPHA",
+    "LLAMA_CPP_DIR", "LR", "MAX_LEN", "MAX_STEPS", "NEW_DOCS_ONLY", "N_ROWS", "OUT",
+    "PER_DOC", "PROBES", "R", "RPO_ALPHA", "RUN", "SAMPLES", "SFT_DATA", "TEACHER_HF",
+    "TOPK",
 }
 
 # monkeygrab.config.env's typed readers, plus rag/chat_pdfs.py's own

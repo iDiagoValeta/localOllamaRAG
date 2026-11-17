@@ -115,6 +115,21 @@ media/
 .codex/*
 .cursor/
 
+# Training workspace (training/README.md): the code, the experiment log and the
+# run records are versioned; the corpus it fetches, the data it generates, the
+# weights it trains and the per-step logs are not. They are large, rebuilt by
+# the scripts, and the trained model is published on Hugging Face instead.
+training/vendor/
+training/docs/
+training/data/
+training/models/
+training/alignment/*/
+training/runs/*.log
+training/runs/*.pid
+training/runs/deveval.jsonl
+training/runs/*/live.jsonl
+training/runs/*/dpo.jsonl
+
 # Agent instructions are versioned at the root so any clone (or CI runner)
 # picks them up; the copies and session state that agent tools drop in nested
 # directories are not. Only the root ones count: CLAUDE.md is the one line

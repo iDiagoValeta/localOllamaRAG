@@ -583,6 +583,38 @@ does not read against a dot-thousands literal (issue #625): `qwen3:1.7b` on
 `relativitat-llum`, `gemma4:e4b` and `qwen3.5:2b` on `solar-superficie`,
 `llama3.2:1b` on `solar-constant`. One case each, so no ranking changes.
 
+## A distilled 0.6B for the lite profile (2026-11-16 to 2026-11-17)
+
+`qwen3:0.6b` fine-tuned on MonkeyGrab's own prompts and distilled from
+`qwen3:4b-instruct-2507`, to give the 4 GB build an answer model that keeps
+most of the 4B's accuracy. Published as
+[`hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M`](https://huggingface.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF);
+recipe, scripts and every run in [`training/`](../training/README.md).
+Paired gate invocations on `9b8de3c`, host Ollama 0.40.13, `AUX_MODEL` =
+`Ling-3.0-tiny`, embeddinggemma-2 on 8091, KV cache q8_0, `rag_num_ctx`
+16384. Retrieval is 18/20 in every run. Answered cases only, since the
+retrieval cases do not reach the generator; VRAM is the peak `size_vram`
+Ollama reported for the model.
+
+| Model | Answered | Study | s/case (median, with retrieval) | VRAM | Runs |
+|---|---|---|---|---|---|
+| `qwen3:4b-instruct-2507-q4_K_M` | 135 / 136 | 12 / 12 | 9.6 | 3.90 GB | `20261116T212506Z` |
+| `MonkeyGrab-Qwen3-0.6B-RAG` Q4_K_M (`sft-kd2`) | 126 to 127 / 136 | 12 / 12 | 6.2 to 6.6 | 1.52 GB | six runs, `20261116T212506Z` to `20261117T133043Z` |
+| `qwen3:0.6b`, stock | 103 to 105 / 136 | 10 / 12 | 6.4 | | `20261116T074659Z`, `20261116T214411Z` |
+
+Eight cases short of the teacher at 39% of its memory, and 22 above the
+stock model it was trained from. The remaining misses are mostly a number
+read wrong from a table. Variants measured against it in the same runs and
+not kept: DPO on graded on-policy samples (126), a teacher weight of 0.8
+(117), a third epoch (126), Q5_K_M (125) and Q8_0 (126) weights, and a
+q4_0 KV cache, which breaks it on long contexts (57).
+
+The 8 GB build keeps `qwen3:4b-instruct-2507`: it fits beside the reranker
+and the embedder there and answers eight more cases. The distilled model is
+the lite profile's default on `rag-lite` (#641), with the reranker turned back
+on there: on that profile's 8k context and without reranked evidence it
+answered 115 and fell under the floor; with the reranker, 125 (143/156).
+
 ## Lite profile (4 GB of VRAM)
 
 Issue #292. Measured on the `rag-lite` branch with `MONKEYGRAB_PROFILE=lite`, so these rows differ from the table
@@ -611,7 +643,7 @@ same 180 s budget, `USAR_DESCRIPCION_IMAGEN=false` exported over
 
 The `20261117T140034Z` row is the profile default since 2026-11-17 (#641):
 a Qwen3-0.6B distilled from `qwen3:4b-instruct-2507` on this product's prompts
-(`training/` on `develop`, and the develop gate rows in "A distilled 0.6B for
+(`training/`, and the develop gate rows in "A distilled 0.6B for
 the lite profile" above), with the BGE reranker turned back on. Without the
 reranker (`20261117T134700Z`) it answered 115 and fell under the 0.91 floor:
 it was trained on reranked evidence, and the 8k context of this profile

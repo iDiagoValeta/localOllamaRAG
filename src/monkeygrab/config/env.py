@@ -183,7 +183,7 @@ def read_env_choice(name: str, default: str, choices: tuple[str, ...]) -> str:
 # variables. "lite" targets a 4 GB GPU (issue #292, measured on an RTX 4060)
 # and embeddinggemma-2 runs on the CPU at 0 MiB. The generator is a
 # Qwen3-0.6B distilled from qwen3:4b-instruct-2507 on this product's own
-# prompts for this build (issue #641, training/ on develop): 1058 MiB per
+# prompts for this build (issue #641, training/): 1058 MiB per
 # process against the 4B's 3354 MiB. It was trained on reranked evidence, and
 # without the reranker it fell to 115/136 answered (85.3%, under the 0.91
 # floor); with it, 125/136 and 143/156 (91.7%) at 1630 MiB for the reranker,

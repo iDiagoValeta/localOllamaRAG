@@ -182,8 +182,8 @@ supersedes it.
 
 `MONKEYGRAB_PROFILE=lite` applies a bundle of defaults for a 4 GB GPU: the
 generator becomes a Qwen3-0.6B distilled for this build from the standard
-generator (about 1 GB of VRAM; how it was trained is in `training/` on
-`develop`), embeddinggemma-2 runs on the CPU, the BGE reranker stays on (the
+generator (about 1 GB of VRAM; how it was trained is in
+[`training/`](training/README.md)), embeddinggemma-2 runs on the CPU, the BGE reranker stays on (the
 0.6B falls under the gate floor without it) and RECOMP synthesis is turned off
 (a 2B model's synthesis lost the figures its answer needed). An explicitly exported variable always wins over the profile. The
 profile only seeds defaults, not exports, so a model or flag chosen in the web
