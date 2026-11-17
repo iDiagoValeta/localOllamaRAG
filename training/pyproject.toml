@@ -1,0 +1,16 @@
+[project]
+name = "qwen06-rag-sft"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = ["torch", "transformers", "peft", "accelerate", "safetensors", "sentencepiece", "gguf", "numpy"]
+
+[tool.uv]
+exclude-newer = "2026-11-01T00:00:00Z"
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu129" }
+
+[[tool.uv.index]]
+name = "pytorch-cu129"
+url = "https://download.pytorch.org/whl/cu129"
+explicit = true
