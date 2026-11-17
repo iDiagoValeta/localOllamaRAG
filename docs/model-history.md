@@ -611,7 +611,9 @@ q4_0 KV cache, which breaks it on long contexts (57).
 
 The 8 GB build keeps `qwen3:4b-instruct-2507`: it fits beside the reranker
 and the embedder there and answers eight more cases. The distilled model is
-the lite profile's default.
+the lite profile's default on `rag-lite` (#641), with the reranker turned back
+on there: on that profile's 8k context and without reranked evidence it
+answered 115 and fell under the floor; with the reranker, 125 (143/156).
 
 ## Lite profile (4 GB of VRAM)
 
