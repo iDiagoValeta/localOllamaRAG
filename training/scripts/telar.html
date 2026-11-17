@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Telar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f7f3ea; --card: #fffdf7; --rule: #e4dccb; --ink: #2b2a33; --muted: #857f72;
+    --weld: #e3cf7a; --ochre: #c8962e; --madder: #b8442f; --indigo: #2e4a7d; --sage: #6f8a64;
+    --serif: "Fraunces", "Iowan Old Style", Georgia, serif;
+    --sans: "IBM Plex Sans", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.45 var(--sans); }
+  body::before { /* faint linen texture: two crossed hairline gratings */
+    content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .35;
+    background-image: repeating-linear-gradient(0deg, transparent 0 3px, rgba(120,100,60,.05) 3px 4px),
+                      repeating-linear-gradient(90deg, transparent 0 3px, rgba(120,100,60,.04) 3px 4px);
+  }
+  header { display: flex; align-items: baseline; gap: 18px; padding: 22px 28px 6px; flex-wrap: wrap; }
+  h1 { font: 600 34px/1 var(--serif); margin: 0; letter-spacing: -.5px; }
+  h1 em { font-style: normal; color: var(--madder); }
+  .sub { color: var(--muted); font-family: var(--serif); font-size: 16px; }
+  .spacer { flex: 1; }
+  select, button { font: 13px var(--sans); color: var(--ink); background: var(--card); border: 1px solid var(--rule);
+                   border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  button:hover, select:hover { border-color: var(--muted); }
+  button.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .pill { font: 12px var(--mono); padding: 3px 10px; border-radius: 99px; border: 1px solid var(--rule); background: var(--card); }
+  .pill.live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+                       background: var(--madder); margin-right: 7px; animation: beat 1.4s infinite; vertical-align: 1px; }
+  @keyframes beat { 50% { opacity: .2; } }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 1px; margin: 10px 28px 0;
+           background: var(--rule); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+  .stat { background: var(--card); padding: 9px 13px; }
+  .stat b { display: block; font: 500 19px var(--mono); }
+  .stat span { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .6px; }
+  .vbar { height: 5px; background: var(--rule); border-radius: 3px; margin-top: 5px; position: relative; overflow: hidden; }
+  .vbar i { position: absolute; inset: 0 auto 0 0; background: var(--indigo); }
+  .vbar u { position: absolute; inset: 0 auto 0 0; background: var(--ochre); opacity: .45; }
+  main { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 18px; padding: 16px 28px; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 16px 16px; position: relative; }
+  .card h2 { font: 600 18px var(--serif); margin: 0 0 2px; }
+  .card .hint { color: var(--muted); font-size: 12.5px; margin: 0 0 10px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .chips button { padding: 2px 9px; font: 12px var(--mono); }
+  #loomWrap { position: relative; margin-top: 10px; }
+  canvas { display: block; width: 100%; }
+  #tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--paper); font: 12px var(--mono);
+         padding: 6px 9px; border-radius: 6px; opacity: 0; transition: opacity .1s; white-space: nowrap; z-index: 9; }
+  .legend { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .legend .ramp { height: 9px; width: 160px; border-radius: 2px; border: 1px solid var(--rule); }
+  svg text { font: 11px var(--mono); fill: var(--muted); }
+  .right { display: grid; gap: 18px; align-content: start; }
+  .tabs button { font: 12px var(--mono); }
+  .q { font: 17px/1.35 var(--serif); margin: 8px 0 10px; }
+  .tokens { font: 14px/2 var(--sans); }
+  .tokens span { border-radius: 3px; padding: 1px 0; transition: background .25s; }
+  .said { border-left: 3px solid var(--indigo); padding: 4px 0 4px 11px; margin: 10px 0 0; font-size: 14px; }
+  .said.before { border-color: var(--rule); color: var(--muted); }
+  .said small { display: block; font: 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  footer { position: sticky; bottom: 0; background: color-mix(in srgb, var(--paper) 88%, transparent); backdrop-filter: blur(6px);
+           border-top: 1px solid var(--rule); padding: 10px 28px; display: flex; gap: 14px; align-items: center; }
+  input[type=range] { flex: 1; accent-color: var(--madder); }
+  #stepLabel { font: 13px var(--mono); min-width: 150px; text-align: right; }
+  .empty { padding: 80px 28px; text-align: center; font: 18px var(--serif); color: var(--muted); }
+  kbd { font: 11px var(--mono); border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--card); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Te<em>l</em>ar</h1>
+  <div class="sub" id="sub">un modelo pequeño aprende a responder</div>
+  <div class="spacer"></div>
+  <span class="pill" id="status">conectando</span>
+  <select id="runSel" title="Ejecución"></select>
+</header>
+<div class="stats" id="stats"></div>
+<div id="app">
+<main>
+  <section class="card">
+    <h2>El telar de LoRA</h2>
+    <p class="hint">Cada hilo vertical es una proyección adaptada (7 por capa, 28 capas). Cada pasada de trama es un paso del optimizador.
+      El tinte mide cuánto se ha separado la matriz de su peso original, ‖ΔW‖ / ‖W‖. Pasa el ratón para leer un hilo; pulsa para seguirlo.</p>
+    <div class="row">
+      <div class="chips row" id="projChips"></div>
+      <div class="spacer"></div>
+      <div class="row tabs"><button id="mWeave" class="on">cambio acumulado</button><button id="mGrad">gradiente del paso</button></div>
+    </div>
+    <div id="loomWrap"><canvas id="loom" height="520"></canvas></div>
+    <div class="legend"><span id="lo">menos</span><span class="ramp" id="ramp"></span><span id="hi">más</span><span class="spacer"></span><span id="pinInfo"></span></div>
+    <svg id="profile" width="100%" height="96"></svg>
+    <svg id="thread" width="100%" height="0"></svg>
+  </section>
+  <div class="right">
+    <section class="card">
+      <h2>El hilo de la pérdida</h2>
+      <p class="hint">Entrenamiento (fino), media móvil (grueso), validación (puntos rojos) y tasa de aprendizaje (sombra ocre).</p>
+      <svg id="loss" width="100%" height="230"></svg>
+    </section>
+    <section class="card">
+      <h2>La voz del modelo</h2>
+      <p class="hint">La respuesta del maestro, teñida por la sorpresa del alumno en cada token: <span id="surpriseLegend"></span></p>
+      <div class="row tabs" id="probeTabs"></div>
+      <div class="q" id="probeQ"></div>
+      <div class="tokens" id="probeTokens"></div>
+      <div class="said" id="saidNow"></div>
+      <div class="said before" id="saidBefore"></div>
+      <svg id="probeNll" width="100%" height="60" style="margin-top:12px"></svg>
+    </section>
+    <section class="card">
+      <h2>La memoria de la tarjeta</h2>
+      <p class="hint">Pico de VRAM de PyTorch por paso (añil) y ocupación total del dispositivo (ocre) frente a los 8 GB.</p>
+      <svg id="vram" width="100%" height="120"></svg>
+    </section>
+  </div>
+</main>
+</div>
+<footer>
+  <button id="play" title="Reproducir (espacio)">▶</button>
+  <button id="follow" class="on" title="Seguir el último paso">en vivo</button>
+  <input type="range" id="scrub" min="0" max="0" value="0">
+  <span id="stepLabel">paso 0</span>
+  <span class="hint"><kbd>←</kbd> <kbd>→</kbd></span>
+</footer>
+<div id="tip"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const INKS = ["#f7f3ea", "#e3cf7a", "#c8962e", "#b8442f", "#2e4a7d", "#1d2b4a"];
+const S = { run: null, offset: 0, meta: null, steps: [], evals: [], done: false, cursor: 0, follow: true,
+            playing: false, mode: "weave", proj: null, pin: null, probe: 0, lastEvent: 0 };
+
+// Colour
+const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const RAMP = INKS.map(hex);
+function ramp(t) {
+  t = Math.max(0, Math.min(1, t)) * (RAMP.length - 1);
+  const i = Math.min(RAMP.length - 2, Math.floor(t)), f = t - i, a = RAMP[i], b = RAMP[i + 1];
+  return `rgb(${a.map((v, k) => Math.round(v + (b[k] - v) * f)).join(",")})`;
+}
+$("ramp").style.background = `linear-gradient(90deg, ${INKS.join(",")})`;
+$("surpriseLegend").innerHTML = ["seguro", "dudoso", "sorprendido"].map((w, i) =>
+  `<span style="background:${surpriseColor(i * 2.4)};padding:0 4px;border-radius:3px">${w}</span>`).join(" ");
+function surpriseColor(nll) {
+  const t = Math.min(1, nll / 5);
+  return `rgba(${t < .5 ? "200,150,46" : "184,68,47"}, ${0.08 + t * 0.62})`;
+}
+const fmt = (x, d = 3) => x == null ? "–" : Number(x).toLocaleString("es-ES", { maximumFractionDigits: d, minimumFractionDigits: d });
+const gib = (b) => b == null ? "–" : (b / 2 ** 30).toLocaleString("es-ES", { maximumFractionDigits: 2, minimumFractionDigits: 2 }) + " GB";
+
+// Data
+async function loadRuns() {
+  const runs = await (await fetch("/runs")).json();
+  if (!runs.length) { $("app").innerHTML = `<div class="empty">Aún no hay ninguna ejecución. Lanza <code>d_train.py</code> y vuelve.</div>`; return; }
+  $("runSel").innerHTML = runs.map((r) => `<option>${r}</option>`).join("");
+  $("runSel").onchange = () => select($("runSel").value);
+  select(runs[0]);
+}
+function select(run) {
+  Object.assign(S, { run, offset: 0, meta: null, steps: [], evals: [], done: false, cursor: 0, pin: null, probe: 0 });
+  poll();
+}
+async function poll() {
+  const run = S.run;
+  try {
+    const r = await (await fetch(`/live?run=${encodeURIComponent(run)}&from=${S.offset}`)).json();
+    if (run !== S.run) return;
+    S.offset = r.next;
+    for (const line of r.lines) ingest(JSON.parse(line));
+    if (r.lines.length) { S.lastEvent = Date.now(); if (S.follow) S.cursor = lastStep(); draw(); }
+  } catch (e) { $("status").textContent = "sin conexión"; }
+  clearTimeout(S.timer);
+  if (!S.done) S.timer = setTimeout(poll, 2000);
+  status();
+}
+function ingest(e) {
+  if (e.type === "meta") { S.meta = e; buildChips(); buildTabs(); }
+  else if (e.type === "step") S.steps.push(e);
+  else if (e.type === "eval") S.evals.push(e);
+  else if (e.type === "done") S.done = true;
+}
+const lastStep = () => S.steps.length ? S.steps[S.steps.length - 1].step : 0;
+const stepAt = (s) => { let best = null; for (const e of S.steps) { if (e.step <= s) best = e; else break; } return best; };
+const evalAt = (s) => { let best = null; for (const e of S.evals) if (e.step <= s) best = e; return best; };
+
+function status() {
+  const el = $("status");
+  if (S.done) { el.className = "pill"; el.textContent = "terminado"; }
+  else if (Date.now() - S.lastEvent < 60000 && S.steps.length) { el.className = "pill live"; el.textContent = "tejiendo"; }
+  else { el.className = "pill"; el.textContent = S.meta ? "esperando pasos" : "esperando"; }
+}
+
+// Controls
+function buildChips() {
+  const P = S.meta.proj, short = { q_proj: "q", k_proj: "k", v_proj: "v", o_proj: "o", gate_proj: "gate", up_proj: "up", down_proj: "down" };
+  $("projChips").innerHTML = `<button data-p="" class="on">todas</button>` + P.map((p, i) => `<button data-p="${i}">${short[p] || p}</button>`).join("");
+  $("projChips").querySelectorAll("button").forEach((b) => b.onclick = () => {
+    S.proj = b.dataset.p === "" ? null : +b.dataset.p;
+    $("projChips").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    draw();
+  });
+  $("sub").textContent = `${S.meta.base.split("/").pop()} aprende de ${S.meta.teacher}, LoRA r=${S.meta.r} sobre ${fmt(S.meta.trainable, 0)} parámetros`;
+}
+function buildTabs() {
+  $("probeTabs").innerHTML = S.meta.probes.map((p, i) => `<button data-i="${i}" class="${i === S.probe ? "on" : ""}">${p.lang}</button>`).join("");
+  $("probeTabs").querySelectorAll("button").forEach((b) => b.onclick = () => {
+    S.probe = +b.dataset.i; $("probeTabs").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); draw();
+  });
+}
+$("mWeave").onclick = () => { S.mode = "weave"; $("mWeave").classList.add("on"); $("mGrad").classList.remove("on"); draw(); };
+$("mGrad").onclick = () => { S.mode = "grads"; $("mGrad").classList.add("on"); $("mWeave").classList.remove("on"); draw(); };
+$("scrub").oninput = (e) => { S.cursor = +e.target.value; setFollow(S.cursor >= lastStep()); draw(); };
+$("follow").onclick = () => { setFollow(!S.follow); if (S.follow) { S.cursor = lastStep(); draw(); } };
+function setFollow(v) { S.follow = v; $("follow").classList.toggle("on", v); }
+$("play").onclick = togglePlay;
+function togglePlay() {
+  S.playing = !S.playing; $("play").textContent = S.playing ? "❚❚" : "▶";
+  if (!S.playing) return;
+  setFollow(false);
+  if (S.cursor >= lastStep()) S.cursor = 0;
+  const tick = () => {
+    if (!S.playing) return;
+    S.cursor = Math.min(lastStep(), S.cursor + Math.max(1, Math.round(lastStep() / 240)));
+    draw();
+    if (S.cursor >= lastStep()) { S.playing = false; $("play").textContent = "▶"; setFollow(!S.done); return; }
+    requestAnimationFrame(() => setTimeout(tick, 30));
+  };
+  tick();
+}
+addEventListener("keydown", (e) => {
+  if (e.target.tagName === "SELECT") return;
+  if (e.key === " ") { e.preventDefault(); togglePlay(); }
+  if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+    S.cursor = Math.max(0, Math.min(lastStep(), S.cursor + (e.key === "ArrowRight" ? 1 : -1)));
+    setFollow(S.cursor >= lastStep()); draw();
+  }
+});
+
+// Drawing
+let raf = 0;
+function draw() { cancelAnimationFrame(raf); raf = requestAnimationFrame(render); }
+function render() {
+  if (!S.meta) return;
+  $("scrub").max = lastStep(); $("scrub").value = S.cursor;
+  $("stepLabel").textContent = `paso ${S.cursor} de ${S.meta.max_steps}`;
+  stats(); loom(); profile(); thread(); lossChart(); voice(); vramChart();
+}
+
+function stats() {
+  const e = stepAt(S.cursor), ev = evalAt(S.cursor), done = S.steps.length;
+  const secs = done ? S.steps.reduce((a, s) => a + s.sec, 0) / done : 0;
+  const eta = secs * Math.max(0, S.meta.max_steps - lastStep());
+  const total = S.meta.vram_total;
+  const cells = [
+    ["paso", `${S.cursor}<small style="color:var(--muted)">/${S.meta.max_steps}</small>`],
+    ["época", fmt(e?.epoch, 2)],
+    ["pérdida", fmt(e?.loss)],
+    ["validación", fmt(ev?.eval_loss)],
+    ["tokens/s", fmt(e?.tok_s, 0)],
+    ["resta", S.done ? "hecho" : eta ? `${Math.floor(eta / 60)} min ${Math.round(eta % 60)} s` : "–"],
+    ["VRAM pico", `${gib(e?.vram_peak)}<div class="vbar"><u style="width:${100 * (e?.vram_device || 0) / total}%"></u><i style="width:${100 * (e?.vram_peak || 0) / total}%"></i></div>`],
+  ];
+  $("stats").innerHTML = cells.map(([k, v]) => `<div class="stat"><span>${k}</span><b>${v}</b></div>`).join("");
+}
+
+function fitCanvas(c, h) {
+  const dpr = devicePixelRatio || 1, w = c.clientWidth;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); c.style.height = h + "px"; }
+  const ctx = c.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); return [ctx, w, h];
+}
+function geometry(w) {
+  const L = S.meta.layers, P = S.meta.proj.length, projs = S.proj == null ? [...Array(P).keys()] : [S.proj];
+  const gap = projs.length > 1 ? 3 : 1, cw = (w - 30 - gap * (L - 1)) / (L * projs.length);
+  return { L, P, projs, gap, cw, x0: 30 };
+}
+function scaleFor(key) {
+  let lo = Infinity, hi = 0;
+  for (const s of S.steps) for (const v of s[key] || []) { if (v > 0) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }
+  if (!hi) return () => 0;
+  // ΔW grows roughly linearly from zero (LoRA B starts at 0): a log scale
+  // saturates after a few steps and hides which layers move most.
+  if (key === "weave") return (v) => Math.pow(Math.max(0, v) / hi, 0.6);
+  lo = Math.max(lo, hi / 1e3);
+  const span = Math.log(hi / lo) || 1;
+  return (v) => v <= 0 ? 0 : Math.max(0, Math.log(v / lo) / span);
+}
+function loom() {
+  const H = 520, [ctx, w] = fitCanvas($("loom"), H), g = geometry(w), N = Math.max(S.meta.max_steps, 1);
+  const top = 14, rh = (H - top - 18) / N, key = S.mode, sc = scaleFor(key);
+  ctx.clearRect(0, 0, w, H);
+  // Unwoven warp: faint threads where no step has landed yet.
+  ctx.fillStyle = "rgba(133,127,114,.18)";
+  for (let l = 0; l < g.L; l++) for (let j = 0; j < g.projs.length; j++) {
+    ctx.fillRect(colX(g, l, j) + g.cw / 2 - .5, top, 1, H - top - 18);
+  }
+  for (const s of S.steps) {
+    if (s.step > S.cursor) break;
+    const vals = s[key]; if (!vals || !vals.length) continue;
+    const y = top + (s.step - 1) * rh;
+    for (let l = 0; l < g.L; l++) for (let j = 0; j < g.projs.length; j++) {
+      ctx.fillStyle = ramp(sc(vals[l * g.P + g.projs[j]]));
+      ctx.fillRect(colX(g, l, j), y, Math.max(1, g.cw - (g.projs.length > 1 ? .4 : 1)), Math.max(1, rh + .3));
+    }
+  }
+  // Shuttle: where the weft is now.
+  const yc = top + S.cursor * rh;
+  ctx.strokeStyle = "#b8442f"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(g.x0 - 6, yc); ctx.lineTo(w, yc); ctx.stroke();
+  ctx.fillStyle = "#b8442f"; ctx.beginPath(); ctx.moveTo(g.x0 - 10, yc - 5); ctx.lineTo(g.x0 - 2, yc); ctx.lineTo(g.x0 - 10, yc + 5); ctx.fill();
+  if (S.pin) {
+    const j = g.projs.indexOf(S.pin.p);
+    if (j >= 0) { ctx.strokeStyle = "#2b2a33"; ctx.lineWidth = 1; ctx.strokeRect(colX(g, S.pin.l, j) - .5, top - 4, g.cw + 1, H - top - 14); }
+  }
+  ctx.fillStyle = "#857f72"; ctx.font = "10px IBM Plex Mono, monospace"; ctx.textAlign = "center";
+  for (let l = 0; l < g.L; l += 3) ctx.fillText(l, colX(g, l, 0) + g.cw * g.projs.length / 2, H - 4);
+  ctx.textAlign = "right";
+  for (const s of [0, Math.round(N / 2), N]) ctx.fillText(s, g.x0 - 12, top + s * rh + 3);
+  $("lo").textContent = S.mode === "weave" ? "intacto" : "quieto"; $("hi").textContent = S.mode === "weave" ? "muy cambiado" : "empuje fuerte";
+}
+const colX = (g, l, j) => g.x0 + l * (g.cw * g.projs.length + g.gap) + j * g.cw;
+function hit(ev) {
+  const c = $("loom"), r = c.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+  const g = geometry(c.clientWidth), block = g.cw * g.projs.length + g.gap;
+  const l = Math.floor((x - g.x0) / block), j = Math.floor((x - g.x0 - l * block) / g.cw);
+  if (l < 0 || l >= g.L || j < 0 || j >= g.projs.length) return null;
+  const N = Math.max(S.meta.max_steps, 1), step = Math.max(1, Math.min(N, Math.ceil((y - 14) / ((520 - 32) / N))));
+  return { l, p: g.projs[j], step };
+}
+$("loom").onmousemove = (ev) => {
+  const h = S.meta && hit(ev), tip = $("tip");
+  if (!h) { tip.style.opacity = 0; return; }
+  const s = S.steps.find((e) => e.step === h.step), v = s && s[S.mode][h.l * S.meta.proj.length + h.p];
+  tip.innerHTML = `capa ${h.l}, ${S.meta.proj[h.p]}<br>paso ${h.step}: ${v == null ? "sin tejer" : (S.mode === "weave" ? fmt(v * 100, 3) + " % de ‖W‖" : "‖g‖ " + fmt(v, 5))}`;
+  tip.style.left = ev.clientX + 14 + "px"; tip.style.top = ev.clientY + 12 + "px"; tip.style.opacity = 1;
+};
+$("loom").onmouseleave = () => $("tip").style.opacity = 0;
+$("loom").onclick = (ev) => {
+  const h = hit(ev); if (!h) return;
+  S.pin = S.pin && S.pin.l === h.l && S.pin.p === h.p ? null : { l: h.l, p: h.p }; draw();
+};
+
+function svg(el, h) { el.innerHTML = ""; el.setAttribute("height", h); return [el.clientWidth || el.parentNode.clientWidth, h]; }
+function add(el, tag, attrs, text) { const n = document.createElementNS(NS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (text != null) n.textContent = text; el.appendChild(n); return n; }
+function path(pts) { return pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(""); }
+
+function profile() {
+  const el = $("profile"), [w, h] = svg(el, 96), s = stepAt(S.cursor), g = geometry($("loom").clientWidth);
+  add(el, "text", { x: 0, y: 11 }, "perfil por capa en el paso actual");
+  if (!s) return;
+  const P = S.meta.proj.length, means = [...Array(g.L).keys()].map((l) => g.projs.reduce((a, j) => a + s[S.mode][l * P + j], 0) / g.projs.length);
+  const mx = Math.max(...means) || 1, top = 18;
+  means.forEach((m, l) => {
+    const bh = (h - top - 4) * m / mx, x = colX(g, l, 0), bw = g.cw * g.projs.length;
+    add(el, "rect", { x, y: h - 4 - bh, width: bw, height: bh, rx: 1.5, fill: S.pin && S.pin.l === l ? "#b8442f" : "#2e4a7d", opacity: .8 });
+  });
+}
+
+function thread() {
+  const el = $("thread");
+  if (!S.pin) { el.innerHTML = ""; el.setAttribute("height", 0); $("pinInfo").textContent = ""; return; }
+  const [w, h] = svg(el, 90), P = S.meta.proj.length, idx = S.pin.l * P + S.pin.p, key = S.mode;
+  $("pinInfo").textContent = `siguiendo capa ${S.pin.l}, ${S.meta.proj[S.pin.p]} (pulsa otra vez para soltar)`;
+  const pts = S.steps.filter((s) => s.step <= S.cursor).map((s) => {
+    const sorted = [...s[key]].sort((a, b) => a - b); return [s.step, s[key][idx], sorted[sorted.length >> 1]];
+  });
+  if (!pts.length) return;
+  const mx = Math.max(...pts.map((p) => Math.max(p[1], p[2]))) || 1, N = S.meta.max_steps, X = (s) => 30 + (w - 34) * s / N, Y = (v) => h - 14 - (h - 24) * v / mx;
+  add(el, "path", { d: path(pts.map((p) => [X(p[0]), Y(p[2])])), fill: "none", stroke: "#857f72", "stroke-dasharray": "3 3" });
+  add(el, "path", { d: path(pts.map((p) => [X(p[0]), Y(p[1])])), fill: "none", stroke: "#b8442f", "stroke-width": 2 });
+  add(el, "text", { x: 30, y: 10 }, "este hilo (rojo) frente a la mediana de todos (gris)");
+}
+
+function lossChart() {
+  const el = $("loss"), [w, h] = svg(el, 230), N = S.meta.max_steps, pad = { l: 36, r: 8, t: 10, b: 20 };
+  const pts = S.steps.filter((s) => s.loss != null);
+  if (!pts.length) { add(el, "text", { x: pad.l, y: 30 }, "esperando el primer paso"); return; }
+  const ev = S.evals.filter((e) => e.eval_loss != null);
+  const all = pts.map((p) => p.loss).concat(ev.map((e) => e.eval_loss));
+  const lo = Math.min(...all) * .9, hi = Math.max(...all) * 1.04;
+  const X = (s) => pad.l + (w - pad.l - pad.r) * s / N, Y = (v) => pad.t + (h - pad.t - pad.b) * (1 - (v - lo) / (hi - lo));
+  const lrMax = Math.max(...pts.map((p) => p.lr || 0)) || 1;
+  add(el, "path", { d: path([[X(pts[0].step), h - pad.b], ...pts.map((p) => [X(p.step), h - pad.b - 46 * (p.lr || 0) / lrMax]), [X(pts[pts.length - 1].step), h - pad.b]]), fill: "#c8962e", opacity: .16 });
+  for (let i = 0; i <= 3; i++) { const v = lo + (hi - lo) * i / 3; add(el, "line", { x1: pad.l, x2: w - pad.r, y1: Y(v), y2: Y(v), stroke: "#e4dccb" }); add(el, "text", { x: 2, y: Y(v) + 3 }, fmt(v, 2)); }
+  add(el, "path", { d: path(pts.map((p) => [X(p.step), Y(p.loss)])), fill: "none", stroke: "#2b2a33", "stroke-width": .8, opacity: .45 });
+  let m = pts[0].loss; const ema = pts.map((p) => { m = .85 * m + .15 * p.loss; return [X(p.step), Y(m)]; });
+  add(el, "path", { d: path(ema), fill: "none", stroke: "#2e4a7d", "stroke-width": 2.4, "stroke-linecap": "round" });
+  for (const e of ev) add(el, "circle", { cx: X(e.step), cy: Y(e.eval_loss), r: 4, fill: "#b8442f", stroke: "#fffdf7", "stroke-width": 1.5 });
+  add(el, "line", { x1: X(S.cursor), x2: X(S.cursor), y1: pad.t, y2: h - pad.b, stroke: "#b8442f", "stroke-width": 1 });
+  add(el, "text", { x: pad.l, y: h - 4 }, "0"); add(el, "text", { x: w - pad.r, y: h - 4, "text-anchor": "end" }, N);
+}
+
+function voice() {
+  const p = S.meta.probes[S.probe]; if (!p) return;
+  const ev = evalAt(S.cursor), first = S.evals[0], mine = ev && ev.probes.find((x) => x.id === p.id);
+  $("probeQ").textContent = p.question;
+  $("probeTokens").innerHTML = p.tokens.map((t, i) => {
+    const n = mine ? mine.nll[i] : null;
+    const safe = t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, " ");
+    return `<span title="${n == null ? "" : "sorpresa " + fmt(n, 2) + " nats"}" style="background:${n == null ? "transparent" : surpriseColor(n)}">${safe}</span>`;
+  }).join("");
+  const firstSaid = first && first.probes.find((x) => x.id === p.id);
+  $("saidNow").innerHTML = `<small>dice ahora, paso ${ev ? ev.step : "–"}</small>${escape(mine ? mine.generated : "aún nada")}`;
+  $("saidBefore").innerHTML = `<small>decía antes de entrenar</small>${escape(firstSaid ? firstSaid.generated : "–")}`;
+  const el = $("probeNll"), [w, h] = svg(el, 60), N = S.meta.max_steps;
+  const pts = S.evals.map((e) => { const x = e.probes.find((q) => q.id === p.id); return [e.step, x.nll.reduce((a, b) => a + b, 0) / x.nll.length]; });
+  if (pts.length < 1) return;
+  const mx = Math.max(...pts.map((q) => q[1])) || 1, X = (s) => 30 + (w - 34) * s / N, Y = (v) => h - 6 - (h - 26) * v / mx;
+  add(el, "text", { x: 0, y: 10 }, "sorpresa media de la respuesta del maestro");
+  add(el, "path", { d: path(pts.map((q) => [X(q[0]), Y(q[1])])), fill: "none", stroke: "#b8442f", "stroke-width": 2 });
+  for (const q of pts) add(el, "circle", { cx: X(q[0]), cy: Y(q[1]), r: q[0] <= S.cursor ? 3 : 2, fill: q[0] <= S.cursor ? "#b8442f" : "#e4dccb" });
+}
+const escape = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+
+function vramChart() {
+  const el = $("vram"), [w, h] = svg(el, 120), N = S.meta.max_steps, total = S.meta.vram_total, budget = 8e9;
+  const top = Math.max(total, budget), X = (s) => 36 + (w - 40) * s / N, Y = (v) => h - 16 - (h - 26) * v / top;
+  for (const g of [2, 4, 6, 8]) { add(el, "line", { x1: 36, x2: w, y1: Y(g * 2 ** 30), y2: Y(g * 2 ** 30), stroke: "#e4dccb" }); add(el, "text", { x: 2, y: Y(g * 2 ** 30) + 3 }, g + " GB"); }
+  add(el, "line", { x1: 36, x2: w, y1: Y(budget), y2: Y(budget), stroke: "#b8442f", "stroke-dasharray": "4 3" });
+  const pts = S.steps.filter((s) => s.step <= S.cursor); if (!pts.length) return;
+  const area = (k, fill, op) => add(el, "path", { d: path([[X(pts[0].step), Y(0)], ...pts.map((p) => [X(p.step), Y(p[k])]), [X(pts[pts.length - 1].step), Y(0)]]), fill, opacity: op });
+  area("vram_device", "#c8962e", .28); area("vram_peak", "#2e4a7d", .55);
+}
+
+addEventListener("resize", draw);
+setInterval(status, 5000);
+loadRuns();
+</script>
+</body>
+</html>

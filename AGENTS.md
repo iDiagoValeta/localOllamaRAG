@@ -90,6 +90,7 @@ tests/
   test_*.py (loose)          tests coupled to the engine/web stack that cannot join the
                              no-infra CI job; each module docstring says why it lives here
 harness/                  Configuration search harness (issue #31); not product — see harness/README.md
+training/                 Training of the rag-lite 0.6B generator; not product, own uv venv — see training/README.md
 packaging/                PyInstaller desktop app build (see §3)
 tools/                    Repo tooling, not product: setup_environments.py (both venvs), fetch_corpus.py (the corpora), install.sh / run.sh / uninstall.sh (Linux one-command flow, #559) + diagnostics/
 assets/                   Images the READMEs embed
