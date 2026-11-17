@@ -578,6 +578,16 @@ retrieval cases gained one:
 |---|---|---|---|---|---|---|---|---|---|---|
 | `qwen3:4b-instruct-2507-q4_K_M` *(default)*, release v4.5.0 (tree `9646f7b`, 2026-11-15), every role on the generator | 135 / 136 (99.3%) | 153 / 156 (98.1%) | 56.2 | 142 *(of 124)* | 4.05 *(of 124)* | 2.52 | 0 | 0 | GPU | `20261115T171314Z` |
 
+The release gate of v4.6.0 (`20261117T154405Z`) ran the same defaults on
+the tree `develop` and the release branch ship (`6a9f5fb`); the release only
+adds `training/` and frontend dependency bumps, so it measures the same
+pipeline as v4.5.0. `OLLAMA_AUX_MODEL` was set to the generator, so every role
+ran on it as in the product:
+
+| Model | Answered | Overall | tokens/s | tokens/answer | s/answer | decode s/answer | Budget hit | Infra | Placement | Run |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `qwen3:4b-instruct-2507-q4_K_M` *(default)*, release v4.6.0 (tree `6a9f5fb`, 2026-11-17), every role on the generator | 135 / 136 (99.3%) | 153 / 156 (98.1%) | 64.4 | 136 *(of 124)* | 3.59 *(of 124)* | 2.12 | 0 | 0 | GPU | `20261117T154405Z` |
+
 Four answers in this run state the expected value in a spelling the grader
 does not read against a dot-thousands literal (issue #625): `qwen3:1.7b` on
 `relativitat-llum`, `gemma4:e4b` and `qwen3.5:2b` on `solar-superficie`,
@@ -611,9 +621,10 @@ q4_0 KV cache, which breaks it on long contexts (57).
 
 The 8 GB build keeps `qwen3:4b-instruct-2507`: it fits beside the reranker
 and the embedder there and answers eight more cases. The distilled model is
-the lite profile's default on `rag-lite` (#641), with the reranker turned back
-on there: on that profile's 8k context and without reranked evidence it
-answered 115 and fell under the floor; with the reranker, 125 (143/156).
+the lite profile's model on `rag-lite` in every Ollama role (#641, #643),
+with the reranker turned back on there: on that profile's 8k context and
+without reranked evidence it answered 115 and fell under the floor; with the
+reranker, 126 (143/156) at 2676 MiB for the runner and the reranker together.
 
 ## Lite profile (4 GB of VRAM)
 
