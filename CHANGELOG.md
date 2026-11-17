@@ -7,6 +7,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Added
 
 - Docling as an alternative PDF extractor for both text and figures, chosen with `MONKEYGRAB_PDF_EXTRACTOR=docling` and run from its own `.venv-docling`; MinerU stays the default. The extractor is part of the index fingerprint, so switching it asks for a reindex instead of reusing the other extractor's index (#604).
+- `training/`: how the `rag-lite` answer model was built, a Qwen3-0.6B fine-tuned on MonkeyGrab's prompts and distilled from `qwen3:4b-instruct-2507`. 126 to 127 of 136 answered on six paired gates against 135 for the teacher, at 1.52 GB of VRAM against 3.90 GB. It contains the scripts, the full experiment log with timings and the run manifest, and the model is published at `hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF`. Not product code; the 8 GB build keeps `qwen3:4b-instruct-2507`.
+
+### Changed
+
+- The lite profile answers with `hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M`, the distilled 0.6B, instead of `qwen3:4b-instruct-2507-q4_K_M`, and keeps the BGE reranker on: 143/156 on the lite gate at 1058 MiB for the generator against 148/156 at 3354 MiB. Without the reranker the 0.6B answered 133/156, under the 0.91 floor (#641).
 
 ## [4.5.0] - 2026-11-15
 

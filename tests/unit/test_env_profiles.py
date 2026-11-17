@@ -15,9 +15,10 @@ from monkeygrab.config.app_config import AppConfig
 from monkeygrab.config.env import PROFILES, apply_profile, is_env_pinned
 
 
-def test_lite_profile_turns_off_reranker_and_recomp():
+def test_lite_profile_keeps_reranker_and_turns_off_recomp():
     assert "lite" in PROFILES
-    assert PROFILES["lite"]["USAR_RERANKER"] == "false"
+    # The distilled 0.6B generator falls under the gate floor without reranked evidence (#641).
+    assert PROFILES["lite"]["USAR_RERANKER"] == "true"
     assert PROFILES["lite"]["USAR_RECOMP_SYNTHESIS"] == "false"
 
 
@@ -105,7 +106,7 @@ def test_lite_profile_values_drive_from_env(monkeypatch):
     cfg = AppConfig.from_env()
 
     assert cfg.models.embedding.dimensions == 512
-    assert cfg.flags.usar_reranker is False
+    assert cfg.flags.usar_reranker is True
     assert cfg.flags.usar_recomp_synthesis is False
     assert cfg.models.ollama.rag_num_ctx == 8192
     assert cfg.models.ollama.recomp_num_ctx == 4096

@@ -180,21 +180,24 @@ def read_env_choice(name: str, default: str, choices: tuple[str, ...]) -> str:
 
 # Hardware profiles seed the environment with the exports one machine class
 # needs, so the operator sets a single MONKEYGRAB_PROFILE instead of a wall of
-# variables. "lite" targets a 4 GB GPU (issue #292, measured on an RTX 4060):
-# the qwen3:4b-instruct-2507-q4_K_M generator peaks at 3354 MiB per process
-# over a full gate run (2026-10-21) and embeddinggemma-2 runs on the CPU at
-# 0 MiB. It replaces the Gemma-4-E2B Q4_0 generator on 141/156 against 132/156
-# on the same grader; the plain qwen3:4b was rejected because its reasoning
-# leaked into the answer text (issue #411). Only the RAG role was measured, so
-# the other roles stay on Gemma-4-E2B Q4_0. The BGE reranker stays off: it
-# peaked at 2640 MiB on the GPU for 200 candidates, and took ~70 s for 40 on
-# the CPU. RECOMP is off too: with a 2B generator the synthesis step dropped
-# the very figures the answer needed, and skipping it raised the gate from
-# 126/156 to 130/156 while cutting each answer from ~9 s to ~1.5 s.
+# variables. "lite" targets a 4 GB GPU (issue #292, measured on an RTX 4060)
+# and embeddinggemma-2 runs on the CPU at 0 MiB. The generator is a
+# Qwen3-0.6B distilled from qwen3:4b-instruct-2507 on this product's own
+# prompts for this build (issue #641, training/): 1058 MiB per
+# process against the 4B's 3354 MiB. It was trained on reranked evidence, and
+# without the reranker it fell to 115/136 answered (85.3%, under the 0.91
+# floor); with it, 125/136 and 143/156 (91.7%) at 1630 MiB for the reranker,
+# 5.1 s per question with retrieval instead of 3.2 s (2026-11-17). The 4B with the reranker off
+# answered 130/136 but left a 4 GB card no room beside it. The reranker makes
+# its own room when free VRAM is short (CrossEncoderReranker.needs_room). Only
+# the RAG role was measured, so the other roles stay on Gemma-4-E2B Q4_0.
+# RECOMP is off: with a 2B generator the synthesis step dropped the very
+# figures the answer needed, and skipping it raised the gate from 126/156 to
+# 130/156 while cutting each answer from ~9 s to ~1.5 s.
 PROFILES: Dict[str, Dict[str, str]] = {
     "lite": {
         "MONKEYGRAB_EMBEDDER_DIM": "512",
-        "OLLAMA_RAG_MODEL": "qwen3:4b-instruct-2507-q4_K_M",
+        "OLLAMA_RAG_MODEL": "hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M",
         "OLLAMA_CHAT_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
         "OLLAMA_CONTEXTUAL_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
         "OLLAMA_RECOMP_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
@@ -204,7 +207,7 @@ PROFILES: Dict[str, Dict[str, str]] = {
         "OLLAMA_CONTEXTUAL_NUM_CTX": "8192",
         "CONTEXTUAL_DOC_CHARS": "12000",
         "MAX_CONTEXTO_CHARS": "16000",
-        "USAR_RERANKER": "false",
+        "USAR_RERANKER": "true",
         "USAR_RECOMP_SYNTHESIS": "false",
     },
 }
