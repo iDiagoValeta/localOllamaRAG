@@ -181,8 +181,9 @@ supersedes it.
 ### Low-VRAM variant (4 GB)
 
 `main` is the full pipeline: reranker, the default generator and RECOMP
-synthesis available as a switch (off by default). A trimmed variant for 4 GB GPUs (a ~3 GB Q4 generator,
-embeddinggemma-2 on the CPU, reranker and RECOMP off) lives on the
+synthesis available as a switch (off by default). A trimmed variant for 4 GB GPUs (a 0.6B generator
+distilled from the default one for that build, about 1 GB of VRAM, see [`training/`](training/README.md);
+embeddinggemma-2 on the CPU, RECOMP off) lives on the
 [`rag-lite`](https://github.com/iDiagoValeta/localOllamaRAG/tree/rag-lite)
 branch, where it is selected with `MONKEYGRAB_PROFILE=lite`. Its measured runs
 are in [`docs/model-history.md`](docs/model-history.md#lite-profile-4-gb-of-vram).

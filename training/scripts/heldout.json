@@ -1,0 +1,126 @@
+{
+ "en": {
+  "arxiv": [
+   [
+    "1502.03167",
+    "batch-norm.pdf"
+   ],
+   [
+    "1406.2661",
+    "gan.pdf"
+   ],
+   [
+    "2106.09685",
+    "lora.pdf"
+   ],
+   [
+    "1301.3781",
+    "word2vec.pdf"
+   ],
+   [
+    "1409.0473",
+    "bahdanau-attention.pdf"
+   ],
+   [
+    "2203.15556",
+    "chinchilla.pdf"
+   ],
+   [
+    "1910.10683",
+    "t5.pdf"
+   ],
+   [
+    "2005.11401",
+    "rag-lewis.pdf"
+   ],
+   [
+    "1607.06450",
+    "layer-norm.pdf"
+   ],
+   [
+    "1505.04597",
+    "unet.pdf"
+   ],
+   [
+    "1506.02640",
+    "yolo.pdf"
+   ],
+   [
+    "2001.08361",
+    "scaling-laws.pdf"
+   ],
+   [
+    "2201.11903",
+    "chain-of-thought.pdf"
+   ],
+   [
+    "1707.06347",
+    "ppo.pdf"
+   ],
+   [
+    "1608.06993",
+    "densenet.pdf"
+   ]
+  ],
+  "wikipedia": [
+   "Mitochondrion",
+   "Volcano",
+   "Byzantine Empire",
+   "Insulin",
+   "Great Wall of China",
+   "Black hole",
+   "Leonardo da Vinci",
+   "Ancient Egypt",
+   "Vaccine",
+   "Earthquake",
+   "Silk Road",
+   "Honey bee",
+   "Tea",
+   "Moon"
+  ]
+ },
+ "es": {
+  "wikipedia": [
+   "Imperio incaico",
+   "Volcán",
+   "Federico García Lorca",
+   "Sistema nervioso",
+   "Energía nuclear",
+   "Río Amazonas",
+   "Guerra civil española",
+   "Alhambra",
+   "Gran Muralla china",
+   "Agujero negro",
+   "Leonardo da Vinci",
+   "Antiguo Egipto",
+   "Vacuna",
+   "Terremoto",
+   "Ruta de la Seda",
+   "Pablo Picasso",
+   "Camino de Santiago",
+   "Apis mellifera"
+  ]
+ },
+ "ca": {
+  "wikipedia": [
+   "Pompeu Fabra i Poch",
+   "Delta de l'Ebre",
+   "Sistema nerviós",
+   "Volcà",
+   "Joan Miró i Ferrà",
+   "Pirineus",
+   "Guerra de Successió Espanyola",
+   "Ramon Llull",
+   "Gran Muralla Xinesa",
+   "Forat negre",
+   "Leonardo da Vinci",
+   "Antic Egipte",
+   "Vacuna",
+   "Terratrèmol",
+   "Ruta de la Seda",
+   "Antoni Tàpies",
+   "Castell (torre humana)",
+   "Pau Casals i Defilló"
+  ]
+ }
+}

@@ -4,6 +4,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 
 ## [Unreleased]
 
+## [4.6.0] - 2026-11-17
+
+[Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.6.0).
+
+No reindex needed and no default changes on this build.
+
+### Added
+
+- `training/`: how the `rag-lite` answer model was built, a Qwen3-0.6B fine-tuned on MonkeyGrab's prompts and distilled from `qwen3:4b-instruct-2507`. 126 to 127 of 136 answered on six paired gates against 135 for the teacher, at 1.52 GB of VRAM against 3.90 GB. It contains the scripts, the full experiment log with timings and the run manifest, and the model is published at `hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF`. Not product code; the 8 GB build keeps `qwen3:4b-instruct-2507`.
+
 ## [4.5.0] - 2026-11-15
 
 [Release notes](https://github.com/iDiagoValeta/localOllamaRAG/releases/tag/v4.5.0).

@@ -578,10 +578,53 @@ retrieval cases gained one:
 |---|---|---|---|---|---|---|---|---|---|---|
 | `qwen3:4b-instruct-2507-q4_K_M` *(default)*, release v4.5.0 (tree `9646f7b`, 2026-11-15), every role on the generator | 135 / 136 (99.3%) | 153 / 156 (98.1%) | 56.2 | 142 *(of 124)* | 4.05 *(of 124)* | 2.52 | 0 | 0 | GPU | `20261115T171314Z` |
 
+The release gate of v4.6.0 (`20261117T154405Z`) ran the same defaults on
+the tree `develop` and the release branch ship (`6a9f5fb`); the release only
+adds `training/` and frontend dependency bumps, so it measures the same
+pipeline as v4.5.0. `OLLAMA_AUX_MODEL` was set to the generator, so every role
+ran on it as in the product:
+
+| Model | Answered | Overall | tokens/s | tokens/answer | s/answer | decode s/answer | Budget hit | Infra | Placement | Run |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `qwen3:4b-instruct-2507-q4_K_M` *(default)*, release v4.6.0 (tree `6a9f5fb`, 2026-11-17), every role on the generator | 135 / 136 (99.3%) | 153 / 156 (98.1%) | 64.4 | 136 *(of 124)* | 3.59 *(of 124)* | 2.12 | 0 | 0 | GPU | `20261117T154405Z` |
+
 Four answers in this run state the expected value in a spelling the grader
 does not read against a dot-thousands literal (issue #625): `qwen3:1.7b` on
 `relativitat-llum`, `gemma4:e4b` and `qwen3.5:2b` on `solar-superficie`,
 `llama3.2:1b` on `solar-constant`. One case each, so no ranking changes.
+
+## A distilled 0.6B for the lite profile (2026-11-16 to 2026-11-17)
+
+`qwen3:0.6b` fine-tuned on MonkeyGrab's own prompts and distilled from
+`qwen3:4b-instruct-2507`, to give the 4 GB build an answer model that keeps
+most of the 4B's accuracy. Published as
+[`hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M`](https://huggingface.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF);
+recipe, scripts and every run in [`training/`](../training/README.md).
+Paired gate invocations on `9b8de3c`, host Ollama 0.40.13, `AUX_MODEL` =
+`Ling-3.0-tiny`, embeddinggemma-2 on 8091, KV cache q8_0, `rag_num_ctx`
+16384. Retrieval is 18/20 in every run. Answered cases only, since the
+retrieval cases do not reach the generator; VRAM is the peak `size_vram`
+Ollama reported for the model.
+
+| Model | Answered | Study | s/case (median, with retrieval) | VRAM | Runs |
+|---|---|---|---|---|---|
+| `qwen3:4b-instruct-2507-q4_K_M` | 135 / 136 | 12 / 12 | 9.6 | 3.90 GB | `20261116T212506Z` |
+| `MonkeyGrab-Qwen3-0.6B-RAG` Q4_K_M (`sft-kd2`) | 126 to 127 / 136 | 12 / 12 | 6.2 to 6.6 | 1.52 GB | six runs, `20261116T212506Z` to `20261117T133043Z` |
+| `qwen3:0.6b`, stock | 103 to 105 / 136 | 10 / 12 | 6.4 | | `20261116T074659Z`, `20261116T214411Z` |
+
+Eight cases short of the teacher at 39% of its memory, and 22 above the
+stock model it was trained from. The remaining misses are mostly a number
+read wrong from a table. Variants measured against it in the same runs and
+not kept: DPO on graded on-policy samples (126), a teacher weight of 0.8
+(117), a third epoch (126), Q5_K_M (125) and Q8_0 (126) weights, and a
+q4_0 KV cache, which breaks it on long contexts (57).
+
+The 8 GB build keeps `qwen3:4b-instruct-2507`: it fits beside the reranker
+and the embedder there and answers eight more cases. The distilled model is
+the lite profile's model on `rag-lite` in every Ollama role (#641, #643),
+with the reranker turned back on there: on that profile's 8k context and
+without reranked evidence it answered 115 and fell under the floor; with the
+reranker, 126 (143/156) at 2676 MiB for the runner and the reranker together.
 
 ## Lite profile (4 GB of VRAM)
 
