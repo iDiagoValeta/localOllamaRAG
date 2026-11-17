@@ -189,8 +189,12 @@ def read_env_choice(name: str, default: str, choices: tuple[str, ...]) -> str:
 # floor); with it, 125/136 and 143/156 (91.7%) at 1630 MiB for the reranker,
 # 5.1 s per question with retrieval instead of 3.2 s (2026-11-17). The 4B with the reranker off
 # answered 130/136 but left a 4 GB card no room beside it. The reranker makes
-# its own room when free VRAM is short (CrossEncoderReranker.needs_room). Only
-# the RAG role was measured, so the other roles stay on Gemma-4-E2B Q4_0.
+# its own room when free VRAM is short (CrossEncoderReranker.needs_room). Every
+# other Ollama role runs on the same model (issue #643, develop's rule since
+# #631: no auxiliary model unless everything fits at once). Gemma-4-E2B Q4_0
+# held 2452 MiB for decomposition and overlapped the reranker at 4082 MiB;
+# with one model the peak is 2676 MiB, the gate 126/136 and 143/156, and a
+# question takes 2.9 s instead of 5.1 s.
 # RECOMP is off: with a 2B generator the synthesis step dropped the very
 # figures the answer needed, and skipping it raised the gate from 126/156 to
 # 130/156 while cutting each answer from ~9 s to ~1.5 s.
@@ -198,10 +202,10 @@ PROFILES: Dict[str, Dict[str, str]] = {
     "lite": {
         "MONKEYGRAB_EMBEDDER_DIM": "512",
         "OLLAMA_RAG_MODEL": "hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M",
-        "OLLAMA_CHAT_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
-        "OLLAMA_CONTEXTUAL_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
-        "OLLAMA_RECOMP_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
-        "OLLAMA_AUX_MODEL": "hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0",
+        "OLLAMA_CHAT_MODEL": "hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M",
+        "OLLAMA_CONTEXTUAL_MODEL": "hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M",
+        "OLLAMA_RECOMP_MODEL": "hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M",
+        "OLLAMA_AUX_MODEL": "hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M",
         "OLLAMA_RAG_NUM_CTX": "8192",
         "OLLAMA_RECOMP_NUM_CTX": "4096",
         "OLLAMA_CONTEXTUAL_NUM_CTX": "8192",

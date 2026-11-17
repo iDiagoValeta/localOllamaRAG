@@ -18,7 +18,7 @@ adapter on its own).
 | Build | Answer model | Why |
 |---|---|---|
 | `develop` / `main` (8 GB GPU) | `qwen3:4b-instruct-2507-q4_K_M` | 135/136 answered on the gate; it fits an 8 GB card with the reranker and the embedder resident |
-| `rag-lite` (4 GB GPU, `MONKEYGRAB_PROFILE=lite`) | this model, with the reranker on | a 4 GB card cannot hold the 4B generator next to anything else; the 0.6B keeps most of its accuracy at a third of the memory. It was trained on reranked evidence: on the lite profile it answers 125/136 with the reranker and 115 without, under the gate floor |
+| `rag-lite` (4 GB GPU, `MONKEYGRAB_PROFILE=lite`) | this model in every Ollama role, with the reranker on | a 4 GB card cannot hold the 4B generator next to anything else; the 0.6B keeps most of its accuracy at a third of the memory. It was trained on reranked evidence: on the lite profile it answers 126/136 with the reranker (2676 MiB together) and 115 without, under the gate floor |
 
 The 8 GB build does not switch: on that card the teacher fits and answers
 eight more gate cases. The student exists for the machines where it does not.

@@ -12,6 +12,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follo
 ### Changed
 
 - The lite profile answers with `hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M`, the distilled 0.6B, instead of `qwen3:4b-instruct-2507-q4_K_M`, and keeps the BGE reranker on: 143/156 on the lite gate at 1058 MiB for the generator against 148/156 at 3354 MiB. Without the reranker the 0.6B answered 133/156, under the 0.91 floor (#641).
+- Every Ollama role of the lite profile (chat, query decomposition, contextual, RECOMP) runs on the distilled 0.6B instead of Gemma-4-E2B, so one runner stays loaded: 2676 MiB peak with the reranker instead of 4082 MiB, 143/156 on the lite gate, 2.9 s per question instead of 5.1 s. Stores indexed with contextual retrieval on under Gemma read stale once and must be reindexed (#643).
 
 ## [4.5.0] - 2026-11-15
 
