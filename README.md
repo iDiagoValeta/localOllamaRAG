@@ -181,21 +181,22 @@ supersedes it.
 ### Low-VRAM variant (4 GB)
 
 `MONKEYGRAB_PROFILE=lite` applies a bundle of defaults for a 4 GB GPU: the
-generator becomes a ~3 GB Q4 model, embeddinggemma-2 runs on the CPU, and the
-BGE reranker and RECOMP synthesis are turned off (the reranker alone peaked at
-2.6 GB of VRAM, and a 2B model's synthesis lost the figures its answer
-needed). An explicitly exported variable always wins over the profile. The
+generator becomes a Qwen3-0.6B distilled for this build from the standard
+generator (about 1 GB of VRAM; how it was trained is in `training/` on
+`develop`), embeddinggemma-2 runs on the CPU, the BGE reranker stays on (the
+0.6B falls under the gate floor without it) and RECOMP synthesis is turned off
+(a 2B model's synthesis lost the figures its answer needed). An explicitly exported variable always wins over the profile. The
 profile only seeds defaults, not exports, so a model or flag chosen in the web
 UI and saved to `settings.json` still applies over them.
 
 The profile selects the pieces; it does not install them. Two are needed:
 
-1. The models, pulled through Ollama. The RAG generator is the instruct build
-   of Qwen3 4B; the chat, contextual, RECOMP and auxiliary roles stay on
-   Gemma-4-E2B:
+1. The models, pulled through Ollama. The RAG generator is
+   [MonkeyGrab-Qwen3-0.6B-RAG](https://huggingface.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF);
+   the chat, contextual, RECOMP and auxiliary roles stay on Gemma-4-E2B:
 
    ```bash
-   ollama pull qwen3:4b-instruct-2507-q4_K_M
+   ollama pull hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M
    ollama pull hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0
    ```
 
@@ -209,13 +210,16 @@ The profile selects the pieces; it does not install them. Two are needed:
      -c 8192 -ub 8192 -b 8192
    ```
 
-   `-ngl 0` keeps it on the CPU, leaving the whole 4 GB for the generator.
+   `-ngl 0` keeps it on the CPU, leaving the GPU to the generator and the
+   reranker.
 
 Measured on the gold set (RTX 4060 Laptop) with the default above:
-**148/156** against the 0.91 floor on 2026-11-01, about 3.9 s per answer.
-Its process peaked at **3354 MiB** of VRAM when last sampled (2026-10-21),
-with the embedding server on the CPU. Runs, conditions and the Gemma-4-E2B
-builds it replaced are in
+**143/156** against the 0.91 floor on 2026-11-17, 0.6 s per answer (5.1 s per
+question with retrieval and reranking).
+The generator's process peaked at **1058 MiB** of VRAM and the reranker at
+**1630 MiB**; the Gemma-4-E2B runner that decomposes each question peaks at
+2452 MiB while it is loaded. Runs, conditions and the models it replaced
+(`qwen3:4b-instruct-2507`, 148/156 at 3354 MiB without the reranker) are in
 [`docs/model-history.md`](docs/model-history.md#lite-profile-4-gb-of-vram).
 
 ---

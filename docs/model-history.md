@@ -606,8 +606,28 @@ same 180 s budget, `USAR_DESCRIPCION_IMAGEN=false` exported over
 | `qwen3:4b-instruct-2507-q4_K_M` | off | 123 / 136 (90.4%) | 141 / 156 (90.4%) | 63.8 | 136 *(of 124)* | 3.69 *(of 124)* | 2.08 | 0 | 0 | GPU | `20261021T022603Z` |
 | `qwen3:4b-instruct-2507-q4_K_M`, rag-lite synced with develop (#501, 2026-10-21), graded by #492 | off | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 64.2 | 142 *(of 124)* | 3.76 *(of 124)* | 2.18 | 0 | 0 | GPU | `20261021T154355Z` |
 | `qwen3:4b-instruct-2507-q4_K_M`, rag-lite synced with v4.3.0 (#596, 2026-11-01), Ollama 0.40.13 | off | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 60.3 | 142 *(of 124)* | 3.92 *(of 124)* | 2.35 | 0 | 0 | GPU | `20261101T125722Z` |
+| `hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M`, distilled for this profile (#641, 2026-11-17) | off | 115 / 136 (84.6%) | 133 / 156 (85.3%) | 217.8 | 28 *(of 124)* | 0.61 *(of 124)* | 0.13 | 0 | 0 | GPU | `20261117T134700Z` |
+| `hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M`, **reranker on** (#641, 2026-11-17) | off | 125 / 136 (91.9%) | **143 / 156 (91.7%)** | 219.1 | 26 *(of 124)* | 0.61 *(of 124)* | 0.12 | 0 | 0 | GPU | `20261117T140034Z` |
 
-The `20261021T022603Z` row is the profile default since 2026-10-21: only
+The `20261117T140034Z` row is the profile default since 2026-11-17 (#641):
+a Qwen3-0.6B distilled from `qwen3:4b-instruct-2507` on this product's prompts
+(`training/` on `develop`, and the develop gate rows in "A distilled 0.6B for
+the lite profile" above), with the BGE reranker turned back on. Without the
+reranker (`20261117T134700Z`) it answered 115 and fell under the 0.91 floor:
+it was trained on reranked evidence, and the 8k context of this profile
+leaves less of it. With the reranker it answers 125, five fewer than the 4B
+default it replaces, and passes the floor. Sampled every 0.5 s with
+`nvidia-smi` (embedder on the GPU for this run, so it is left out): the
+generator's runner peaked at **1058 MiB** against the 4B's 3354 MiB, the
+reranker's process at **1630 MiB**, and the Gemma-4-E2B runner that
+decomposes each question at 2452 MiB while loaded. On this 8 GB card the
+reranker and the decomposition runner coexisted once (4082 MiB together); on
+a 4 GB card the reranker unloads Ollama first when free VRAM is short
+(`CrossEncoderReranker.needs_room`), which this run could not exercise.
+Median 5.1 s per question with retrieval, against 3.2 s without the
+reranker.
+
+The `20261021T022603Z` row was the profile default from 2026-10-21 to 2026-11-17: only
 `OLLAMA_RAG_MODEL` moved to Qwen3, while chat, contextual, RECOMP and AUX stay
 on `gemma-4-E2B Q4_0`. It peaked at **3354 MiB** per process over the full
 gate, and its answers carried no reasoning text; the plain `qwen3:4b` leaked
