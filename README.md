@@ -191,14 +191,17 @@ UI and saved to `settings.json` still applies over them.
 
 The profile selects the pieces; it does not install them. Two are needed:
 
-1. The models, pulled through Ollama. The RAG generator is
-   [MonkeyGrab-Qwen3-0.6B-RAG](https://huggingface.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF);
-   the chat, contextual, RECOMP and auxiliary roles stay on Gemma-4-E2B:
+1. The model, pulled through Ollama:
+   [MonkeyGrab-Qwen3-0.6B-RAG](https://huggingface.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF)
+   serves every role (answers, chat, query decomposition, contextual
+   retrieval and RECOMP), so one runner stays loaded:
 
    ```bash
    ollama pull hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M
-   ollama pull hf.co/ggml-org/gemma-4-E2B-it-GGUF:Q4_0
    ```
+
+   Image description needs a vision model in the chat role; it is off by
+   default, and turning it on means choosing one.
 
 2. The CPU embedding server -- [llama.cpp](https://github.com/ggml-org/llama.cpp)
    build b11669 or newer, serving the GGUFs from
@@ -214,11 +217,11 @@ The profile selects the pieces; it does not install them. Two are needed:
    reranker.
 
 Measured on the gold set (RTX 4060 Laptop) with the default above:
-**143/156** against the 0.91 floor on 2026-11-17, 0.6 s per answer (5.1 s per
-question with retrieval and reranking).
-The generator's process peaked at **1058 MiB** of VRAM and the reranker at
-**1630 MiB**; the Gemma-4-E2B runner that decomposes each question peaks at
-2452 MiB while it is loaded. Runs, conditions and the models it replaced
+**143/156** against the 0.91 floor on 2026-11-17, 126 of the 136 answered
+cases, 0.6 s per answer (2.9 s per question with retrieval and reranking).
+The Ollama runner peaked at **1058 MiB** of VRAM and the reranker at
+**1630 MiB**, **2676 MiB** together, with the embedding server on the CPU.
+Runs, conditions and the models it replaced
 (`qwen3:4b-instruct-2507`, 148/156 at 3354 MiB without the reranker) are in
 [`docs/model-history.md`](docs/model-history.md#lite-profile-4-gb-of-vram).
 

@@ -611,9 +611,10 @@ q4_0 KV cache, which breaks it on long contexts (57).
 
 The 8 GB build keeps `qwen3:4b-instruct-2507`: it fits beside the reranker
 and the embedder there and answers eight more cases. The distilled model is
-the lite profile's default on `rag-lite` (#641), with the reranker turned back
-on there: on that profile's 8k context and without reranked evidence it
-answered 115 and fell under the floor; with the reranker, 125 (143/156).
+the lite profile's model on `rag-lite` in every Ollama role (#641, #643),
+with the reranker turned back on there: on that profile's 8k context and
+without reranked evidence it answered 115 and fell under the floor; with the
+reranker, 126 (143/156) at 2676 MiB for the runner and the reranker together.
 
 ## Lite profile (4 GB of VRAM)
 
@@ -639,9 +640,24 @@ same 180 s budget, `USAR_DESCRIPCION_IMAGEN=false` exported over
 | `qwen3:4b-instruct-2507-q4_K_M`, rag-lite synced with develop (#501, 2026-10-21), graded by #492 | off | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 64.2 | 142 *(of 124)* | 3.76 *(of 124)* | 2.18 | 0 | 0 | GPU | `20261021T154355Z` |
 | `qwen3:4b-instruct-2507-q4_K_M`, rag-lite synced with v4.3.0 (#596, 2026-11-01), Ollama 0.40.13 | off | 130 / 136 (95.6%) | 148 / 156 (94.9%) | 60.3 | 142 *(of 124)* | 3.92 *(of 124)* | 2.35 | 0 | 0 | GPU | `20261101T125722Z` |
 | `hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M`, distilled for this profile (#641, 2026-11-17) | off | 115 / 136 (84.6%) | 133 / 156 (85.3%) | 217.8 | 28 *(of 124)* | 0.61 *(of 124)* | 0.13 | 0 | 0 | GPU | `20261117T134700Z` |
-| `hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M`, **reranker on** (#641, 2026-11-17) | off | 125 / 136 (91.9%) | **143 / 156 (91.7%)** | 219.1 | 26 *(of 124)* | 0.61 *(of 124)* | 0.12 | 0 | 0 | GPU | `20261117T140034Z` |
+| `hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M`, **reranker on** (#641, 2026-11-17) | off | 125 / 136 (91.9%) | 143 / 156 (91.7%) | 219.1 | 26 *(of 124)* | 0.61 *(of 124)* | 0.12 | 0 | 0 | GPU | `20261117T140034Z` |
+| `hf.co/nadiva1243/MonkeyGrab-Qwen3-0.6B-RAG-GGUF:Q4_K_M`, reranker on, **every role on it** (#643, 2026-11-17) | off | 126 / 136 (92.6%) | **143 / 156 (91.7%)** | 215.9 | 26 *(of 124)* | 0.59 *(of 124)* | 0.12 | 0 | 0 | GPU | `20261117T155231Z` |
 
-The `20261117T140034Z` row is the profile default since 2026-11-17 (#641):
+The `20261117T155231Z` row is the profile default since 2026-11-17 (#643):
+the same model in every Ollama role, including `OLLAMA_AUX_MODEL`, so query
+decomposition runs on the 0.6B instead of Gemma-4-E2B. That is develop's rule
+since #631 (no auxiliary model unless everything fits at once): with Gemma
+the decomposition runner (2452 MiB) and the reranker overlapped at 4082 MiB,
+more than a 4 GB card holds. With one model there was a single runner for
+the whole gate, peaking at **1058 MiB**, beside the reranker at 1630 MiB:
+**2676 MiB** together. Answers 126 (study 12/12), one more than with Gemma;
+the retrieval cases drop one figure case to 17/20, so the total is the same
+143/156. Median 2.87 s per question with retrieval, against 5.1 s, because
+no model is reloaded. Chat mode and contextual retrieval now run on the 0.6B
+too; the gate measures neither (contextual retrieval is off in it), and
+stores indexed with contextual retrieval on under Gemma read stale once.
+
+The `20261117T140034Z` row was the profile default for part of 2026-11-17 (#641):
 a Qwen3-0.6B distilled from `qwen3:4b-instruct-2507` on this product's prompts
 (`training/`, and the develop gate rows in "A distilled 0.6B for
 the lite profile" above), with the BGE reranker turned back on. Without the
