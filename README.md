@@ -32,6 +32,8 @@
   <a href="#development">Development</a>
 </p>
 
+> **Context.** Started in February 2026 as the code base of my final degree project in Computer Engineering at UPV, while I was working as an AI and back-end developer at Grupo CEU, and still under active development. It is the local, multilingual RAG system that the academic write-up (repo academic-monkeygrab) describes, and the later tooling in this repo (CI, tests, an evaluation harness, agent skills) comes from working with coding agents.
+
 ---
 
 ## Overview
